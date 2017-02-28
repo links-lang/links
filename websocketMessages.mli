@@ -10,4 +10,4 @@ type incoming_websocket_message =
   (* Accept on a server access point *)
   | APAccept of (process_id * apid)
   (* Send a message to a remote channel. *)
-  | ChanSend of (channel_id * Value.t)
+  | ChanSend of (channel_id * (Value.delegated_chan list) * Value.t)

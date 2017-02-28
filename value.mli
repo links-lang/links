@@ -103,6 +103,8 @@ and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and env
     deriving (Show)
 
+type delegated_chan = (chan * (t list))
+
 val set_request_data : env -> RequestData.request_data -> env
 val toplevel_cont : continuation
 

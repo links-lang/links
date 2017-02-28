@@ -25,6 +25,10 @@ let websocket_req assoc_list =
       AccessPointID.of_string (get_and_unbox_str "serverAPID") in
     (blocked_pid, server_apid) in
 
+  let parse_deleg_entry entry =
+    let chan = Value.unbox_channel @@ List.assoc "chan" entry in
+    let buf = Value.unbox_list @@ List.assoc "buffer" entry in
+    (chan, buf) in
 
   match opcode with
     | "CLIENT_TO_CLIENT" ->
@@ -47,8 +51,12 @@ let websocket_req assoc_list =
         let remote_ep =
           ChannelID.of_string -<- Value.unbox_string @@
           List.assoc "remoteEP" assoc_list in
+        let deleg_set =
+          (List.assoc "delegatedSessions" assoc_list
+            |> Value.unbox_list
+            |> List.map (parse_deleg_entry -<- Value.unbox_record)) in
         let msg = List.assoc "msg" assoc_list in
-        ChanSend (remote_ep, msg)
+        ChanSend (remote_ep, deleg_set, msg)
     | _ -> failwith "Invalid opcode in websocket message"
 %}
 

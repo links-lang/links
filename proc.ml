@@ -419,7 +419,7 @@ struct
           Session.ap_request_from_client client_id blocked_pid_on_client apid
       | APAccept (blocked_pid_on_client, apid) ->
           Session.ap_accept_from_client client_id blocked_pid_on_client apid
-      | ChanSend (chan_id, v) ->
+      | ChanSend (chan_id, _, v) ->
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Proc.resolve_external_processes v;
           Session.send v chan_id

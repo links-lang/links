@@ -205,11 +205,12 @@ struct
        else
          let program = (globals @ locals, main) in
          Debug.print "Running client program.";
-         lazy (Irtojs.generate_program_page
-                 ~cgi_env:cgi_args
-                 (Lib.nenv, Lib.typing_env)
-                 program)
-         <|measure_as|> "irtojs"
+         let res =
+           lazy (Irtojs.generate_program_page
+                   ~cgi_env:cgi_args
+                   (Lib.nenv, Lib.typing_env)
+                   program) in
+         measure_as res "irtojs"
      else
        let program = locals, main in
        Debug.print "Running server program";

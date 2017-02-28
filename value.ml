@@ -275,6 +275,7 @@ and env = {
 }
   deriving (Show)
 
+type delegated_chan = (chan * (t list))
 
 let set_request_data env rd = { env with request_data = rd }
 

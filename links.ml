@@ -60,12 +60,12 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let (globals, _) = program in
   Webserver.init (valenv, nenv, tyenv) globals;
 
-  let valenv, v = lazy (Eval.run_program valenv program) <|measure_as|> "run_program" in
-  lazy (printer t v) <|measure_as|> "print";
+  let valenv, v = lazy (Eval.run_program valenv program) <||measure_as||> "run_program" in
+  lazy (printer t v) <||measure_as||> "print";
   valenv, v
 
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
-  lazy (process_program ~printer (valenv, nenv, tyenv) (program, t)) <|measure_as|> "process_program"
+  lazy (process_program ~printer (valenv, nenv, tyenv) (program, t)) <||measure_as||> "process_program"
 
 (** Read Links source code, then optimise and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
@@ -77,7 +77,7 @@ let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
      Env.String.extend nenv nenv',
      Types.extend_typing_environment tyenv tyenv'), v
   in
-  let evaluate_inner x =   lazy (evaluate_inner x) <|measure_as|> "evaluate" in
+  let evaluate_inner x =   lazy (evaluate_inner x) <||measure_as||> "evaluate" in
   handle_errors evaluate_inner
 
 
@@ -330,7 +330,7 @@ let run_file prelude envs filename =
 
 
 let run_file prelude envs filename =
-  lazy (run_file prelude envs filename) <|measure_as|> ("run_file "^filename)
+  lazy (run_file prelude envs filename) <||measure_as||> ("run_file "^filename)
 
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s =
@@ -446,7 +446,7 @@ let main () =
 
   lazy (for_each
           !to_precompile
-          (Errors.display_fatal (Loader.precompile_cache (nenv, tyenv)))) <|measure_as|> "precompile";
+          (Errors.display_fatal (Loader.precompile_cache (nenv, tyenv)))) <||measure_as||> "precompile";
   if !to_precompile <> [] then Settings.set_value BS.interacting false;
   for_each !file_list (run_file prelude envs);
   if Settings.get_value BS.interacting then
