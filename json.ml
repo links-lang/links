@@ -1,3 +1,4 @@
+open ProcessTypes
 open Utility
 
 let show_json = Settings.add_bool("show_json", false, `User)
@@ -58,10 +59,10 @@ let jsonize_location : Ir.location -> string = function
 (** collect all of the pids and event handlers that occur in a value *)
 module PidsAndEventHandlers =
 struct
-  type t = IntSet.t * IntSet.t
+  type t = PidSet.t * IntSet.t
 
-  let add_pid : int -> t -> t =
-    fun pid (ps, es) -> IntSet.add pid ps, es
+  let add_pid : process_id -> t -> t =
+    fun pid (ps, es) -> PidSet.add pid ps, es
   let add_event_handler : int -> t -> t =
     fun event_handler (ps, es) -> ps, IntSet.add event_handler es
 
@@ -76,8 +77,10 @@ struct
     | `Record [] -> env
     | `Record ((_, v)::fs) -> value (value env v) (`Record fs)
     | `List vs -> values env vs
+    | `AccessPointID _ -> env
     | `Pid (pid, `Client) -> add_pid pid env
     | `Pid (_pid, _) -> assert false
+    | `SessionChannel _ -> env
     | `Socket _ -> assert false
 
   and values : t -> Value.t list -> t = fun env -> function
@@ -104,24 +107,24 @@ struct
 end
 
 (* sets of client processes and event handlers that need to be serialized *)
-type json_state = {processes: IntSet.t; handlers: IntSet.t}
-let empty_state = {processes = IntSet.empty; handlers = IntSet.empty}
-let add_pid : int -> json_state -> json_state =
-  fun pid state -> {state with processes = IntSet.add pid state.processes}
-let pid_state : int -> json_state =
+type json_state = {processes: PidSet.t; handlers: IntSet.t}
+let empty_state = {processes = PidSet.empty; handlers = IntSet.empty}
+let add_pid : process_id -> json_state -> json_state =
+  fun pid state -> {state with processes = PidSet.add pid state.processes}
+let pid_state : process_id -> json_state =
   fun pid -> add_pid pid empty_state
 let add_event_handler : int -> json_state -> json_state =
   fun h state -> {state with handlers = IntSet.add h state.handlers}
-let merge_states s1 s2 = {processes = IntSet.union s1.processes s2.processes;
+let merge_states s1 s2 = {processes = PidSet.union s1.processes s2.processes;
                           handlers =  IntSet.union s1.handlers s2.handlers}
-let diff_state s1 s2 = {processes = IntSet.diff s1.processes s2.processes;
+let diff_state s1 s2 = {processes = PidSet.diff s1.processes s2.processes;
                         handlers = IntSet.diff s1.handlers s2.handlers}
 
 
-type auxiliary = [`Process of int | `Handler of int]
+type auxiliary = [`Process of process_id | `Handler of int]
 let auxiliaries_of_state : json_state -> auxiliary list =
   fun state -> List.map (fun i -> `Handler i) (IntSet.elements state.handlers)
-             @ List.map (fun i -> `Process i) (IntSet.elements state.processes)
+             @ List.map (fun i -> `Process i) (PidSet.elements state.processes)
 
 let rec jsonize_value : Value.t -> string * json_state =
   function
@@ -155,9 +158,13 @@ let rec jsonize_value : Value.t -> string * json_state =
   | `List (elems) ->
     let ss, state = jsonize_values elems in
       "[" ^ String.concat "," ss ^ "]", state
+  | `AccessPointID apid -> "{\"apid\":" ^ (AccessPointID.to_json apid) ^ "}", empty_state
   | `Pid (pid, `Client) ->
-    "{\"pid\":" ^ string_of_int pid ^ "}", pid_state pid
+    "{\"pid\":" ^ (ProcessID.to_json pid) ^ "}", pid_state pid
   | `Pid (_pid, _) -> failwith "Cannot yet jsonize non-client proceses"
+  | `SessionChannel (ep1, ep2) ->
+      "{\"_sessEP1\":" ^ ChannelID.to_json ep1 ^
+      ",\"_sessEP2\":" ^ ChannelID.to_json ep2 ^ "}", empty_state
   | `Socket _ -> failwith "Cannot jsonize sockets"
 and jsonize_primitive : Value.primitive_value -> string * json_state = function
   | `Bool value -> string_of_bool value, empty_state
@@ -210,7 +217,7 @@ let jsonize_value_with : json_state -> Value.t -> string * json_state =
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
 
-let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t * string IntMap.t) -> (string IntMap.t * string IntMap.t) =
+let rec resolve_auxiliaries : json_state -> auxiliary list -> (string PidMap.t * string IntMap.t) -> (string PidMap.t * string IntMap.t) =
   fun state pids ((pmap, hmap) as maps) ->
     match pids with
     | [] -> maps
@@ -225,7 +232,7 @@ let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t *
           let ms, mstate = jsonize_value (`List messages) in
 
           let s =
-            "{\"pid\":" ^ string_of_int pid ^ "," ^
+            "{\"pid\":" ^ (ProcessID.to_json pid) ^ "," ^
             " \"process\":" ^ ps ^ "," ^
             " \"messages\":" ^ ms ^ "}" in
 
@@ -234,7 +241,7 @@ let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t *
           resolve_auxiliaries
             (merge_states state new_state)
             (auxs @ auxiliaries_of_state (diff_state new_state state))
-            (IntMap.add pid s pmap, hmap)
+            (PidMap.add pid s pmap, hmap)
         | None -> (* this process is already active on the client *)
           resolve_auxiliaries state auxs maps
       end
@@ -253,8 +260,8 @@ let rec resolve_auxiliaries : json_state -> auxiliary list -> (string IntMap.t *
 (* serialise the json_state as a string *)
 let resolve_state : json_state -> string =
   fun state ->
-    let pmap, hmap = resolve_auxiliaries state (auxiliaries_of_state state) (IntMap.empty, IntMap.empty) in
-    "{\"processes\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
+    let pmap, hmap = resolve_auxiliaries state (auxiliaries_of_state state) (PidMap.empty, IntMap.empty) in
+    "{\"processes\":" ^ "[" ^ String.concat "," (PidMap.to_list (fun _ s -> s) pmap) ^ "]" ^ "," ^
      "\"handlers\":" ^ "[" ^ String.concat "," (IntMap.to_list (fun _ s -> s) hmap) ^ "]}"
 
 (* FIXME: Currently we only send inactive client processes if they

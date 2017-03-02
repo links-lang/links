@@ -1,6 +1,7 @@
 open Webserver_types
 open Ir
 open Lwt
+open ProcessTypes
 open Utility
 open Proc
 
@@ -253,14 +254,13 @@ struct
     (* start of session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
       let apid = Session.new_access_point () in
-        apply_cont cont env (`Int apid)
+        apply_cont cont env (`AccessPointID apid)
     | `PrimitiveFunction ("accept", _), [ap] ->
-      let apid = Value.unbox_int ap in
-      let (c, d), blocked = Session.accept apid in
-      let boxed_chan =
-        (Value.box_pair (Value.box_int c) (Value.box_int d)) in
+      let apid = Value.unbox_apid ap in
+      let (c, d) as ch, blocked = Session.accept apid in
+      let boxed_chan = Value.box_channel ch in
 
-      Debug.print ("accepting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
+      Debug.print ("accepting: (" ^ ChannelID.to_string c ^ ", " ^ ChannelID.to_string d ^ ")");
         if blocked then
           begin
             (* block my end of the channel *)
@@ -278,11 +278,11 @@ struct
             apply_cont cont env boxed_chan
           end
     | `PrimitiveFunction ("request", _), [ap] ->
-      let apid = Value.unbox_int ap in
-      let (c, d), blocked = Session.request apid in
-      let boxed_chan =
-        (Value.box_pair (Value.box_int c) (Value.box_int d)) in
-      Debug.print ("requesting: (" ^ string_of_int c ^ ", " ^ string_of_int d ^ ")");
+      let apid = Value.unbox_apid ap in
+      let (c, d) as ch, blocked = Session.request apid in
+      let boxed_chan = Value.box_channel ch in
+
+      Debug.print ("requesting: (" ^ ChannelID.to_string c ^ ", " ^ ChannelID.to_string d ^ ")");
       if blocked then
         begin
           (* block my end of the channel *)
@@ -301,7 +301,7 @@ struct
         end
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
-      let (outp, _) = Session.unbox_chan chan in
+      let (outp, _) = Value.unbox_channel chan in
       Session.send v outp;
       begin
         match Session.unblock outp with
@@ -312,18 +312,25 @@ struct
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
-        let (out', in') = Session.unbox_chan' chan in
-        let inp = in' in
+        let unboxed_chan = Value.unbox_channel chan in
+        let (_out, inp) = unboxed_chan in
           match Session.receive inp with
           | Some v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
             apply_cont cont env (Value.box_pair v chan)
           | None ->
+            (* Here, we have to extend the environment with a fresh variable
+             * representing the channel, since we can't create an IR application
+             * involving a Value.t (only an Ir.value).
+             * This *should* be safe, but still feels a bit unsatisfactory.
+             * It would be nice to refine this further. *)
+            let fresh_var = Var.fresh_raw_var () in
+            let extended_env = Value.bind fresh_var (chan, `Local) env in
             let grab_frame =
-              Value.expr_to_contframe env (Lib.prim_appln "receive" [`Extend (StringMap.add "1" (`Constant (`Int out'))
-                                                                                (StringMap.add "2" (`Constant (`Int in'))
-                                                                                   StringMap.empty), None)])
+              Value.expr_to_contframe extended_env
+                (Lib.prim_appln "receive" [`Variable fresh_var])
             in
+              let inp = (snd unboxed_chan) in
               Session.block inp (Proc.get_current_pid ());
               Proc.block (fun () -> apply_cont (grab_frame::cont) env (`Record []))
       end
@@ -334,8 +341,8 @@ struct
                       Proc.awaken pid
         | None     -> () in
       Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
-      let (out1, in1) = Session.unbox_chan chanl in
-      let (out2, in2) = Session.unbox_chan chanr in
+      let (out1, in1) = Value.unbox_channel chanl in
+      let (out2, in2) = Value.unbox_channel chanr in
       Session.link (out1, in1) (out2, in2);
       unblock out1;
       unblock out2;
@@ -526,7 +533,7 @@ struct
     | `Select (name, v) ->
       let chan = value env v in
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
-      let (outp, _) = Session.unbox_chan chan in
+      let (outp, _) = Value.unbox_channel chan in
       Session.send (Value.box_string name) outp;
       begin
         match Session.unblock outp with
@@ -538,7 +545,7 @@ struct
       begin
         let chan = value env v in
         Debug.print("choosing from: " ^ Value.string_of_value chan);
-        let (_, in') = Session.unbox_chan' chan in
+        let (_, in') = Value.unbox_channel chan in
         let inp = in' in
           match Session.receive inp with
           | Some v ->

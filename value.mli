@@ -1,5 +1,6 @@
 (*pp deriving *)
 (* Values and environments *)
+open ProcessTypes
 
 class type otherfield
  = object method show : string end
@@ -63,6 +64,9 @@ type primitive_value = [
 
 module Show_primitive_value : Deriving_Show.Show with type a = primitive_value
 
+type chan = channel_id * channel_id (* a channel is a pair of ports *)
+  deriving(Show)
+
 (* jcheney: Added value function component to PrimitiveFunction *)
 type t = [
 | primitive_value
@@ -73,7 +77,9 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
-| `Pid of int * Sugartypes.location
+| `AccessPointID of apid
+| `Pid of process_id * Sugartypes.location
+| `SessionChannel of chan
 | `Socket of in_channel * out_channel
 ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
@@ -124,10 +130,14 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
-val box_pid : int * Sugartypes.location -> t
-val unbox_pid : t -> int * Sugartypes.location
+val box_pid : process_id * Sugartypes.location -> t
+val unbox_pid : t -> process_id * Sugartypes.location
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
+val box_channel : chan -> t
+val unbox_channel : t -> chan
+val box_apid : apid -> t
+val unbox_apid : t -> apid
 
 val intmap_of_record : t -> t Utility.intmap option
 
