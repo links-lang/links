@@ -54,6 +54,7 @@ SOURCES = $(OPC)                                \
           multipart.ml                          \
           notfound.ml                           \
           utility.ml                            \
+					processTypes.mli processTypes.ml      \
           env.mli env.ml                        \
           settings.mli settings.ml              \
           basicsettings.ml                      \

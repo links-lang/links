@@ -1,16 +1,14 @@
 (** Data structures/utilities for process management *)
 open Utility
 open Lwt
+open ProcessTypes
 
 type abort_type = string * string
 exception Aborted of abort_type
 
 module Proc =
 struct
-  (** The abstract type of process identifiers *)
-  type pid = int
-
-  let main_process_pid = 0
+  let main_process_pid = ProcessTypes.main_process_pid
   let main_running = ref true
 
   (*
@@ -23,9 +21,9 @@ struct
   type thread = unit -> thread_result Lwt.t (* Thunked to avoid changing evalir.  Because I'm laaaaaaaaaaaaazy. *)
 
   type scheduler_state =
-      { blocked : (pid, unit Lwt.u) Hashtbl.t;
-        client_processes : (pid, Value.t * bool) Hashtbl.t;
-        angels : (pid, unit Lwt.t) Hashtbl.t;
+      { blocked : (process_id, unit Lwt.u) Hashtbl.t;
+        client_processes : (process_id, Value.t * bool) Hashtbl.t;
+        angels : (process_id, unit Lwt.t) Hashtbl.t;
         step_counter : int ref }
 
   let state = {
@@ -51,23 +49,7 @@ struct
     prerr_endline ("blocked processes : " ^
                      string_of_int (Hashtbl.length state.blocked))
 
-  (** [fresh_pid()] returns a new globally-fresh process ID.
-    Proposal: if server-spawned processes are ever implemented;
-    server-spawned processes have even PIDs, client-spawned ones have
-    odd PIDs.
-   *)
-  let fresh_pid =
-    let current_pid = (ref 0 : pid ref) in
-    fun () ->
-    begin
-      incr current_pid;
-      !current_pid
-    end
-
-  (** Convert a PID into a string. *)
-  let string_of_pid = string_of_int
-
-  (** retrieve the body of a client process (for transmission to the
+    (** retrieve the body of a client process (for transmission to the
       client if it hasn't already been) *)
   let lookup_client_process pid =
     let v, active =
@@ -99,7 +81,7 @@ struct
     match Hashtbl.lookup state.blocked pid with
     | None -> () (* process not blocked *)
     | Some doorbell ->
-      Debug.print ("Awakening blocked process " ^ string_of_int pid);
+        Debug.print ("Awakening blocked process " ^ (ProcessID.to_string pid));
       Hashtbl.remove state.blocked pid;
       Lwt.wakeup doorbell ()
 
@@ -132,14 +114,15 @@ struct
       blocking suspended (i.e. runnable) processes *)
   let block pstate =
     let pid = get_current_pid () in
-    Debug.print ("Blocking process " ^ string_of_int pid);
+    Debug.print ("Blocking process " ^ (ProcessID.to_string pid));
     let (t, u) = Lwt.wait () in
     Hashtbl.add state.blocked pid u;
     t >>= pstate
 
   (** Given a process state, create a new process and return its identifier. *)
   let create_process angel pstate =
-    let new_pid = fresh_pid () in
+    (* Unsafe is fine -- we're running in atomic mode *)
+    let new_pid = ProcessID.create_unsafe () in
     if angel then
       begin
         let (t, w) = Lwt.task () in
@@ -153,7 +136,7 @@ struct
 
   (** Create a new client process and return its identifier *)
   let create_client_process func =
-    let new_pid = fresh_pid () in
+    let new_pid = ProcessID.create_unsafe () in
     Hashtbl.add state.client_processes new_pid (func, false);
     new_pid
 
@@ -161,7 +144,7 @@ struct
     let pid = get_current_pid () in
     (* This process is only actually finished if we're not executing atomically *)
     if not (!atomic) then
-      Debug.print ("Finishing process " ^ string_of_int pid);
+      Debug.print ("Finishing process " ^ (ProcessID.to_string pid));
     if pid == main_process_pid then
       main_running := false
     else if Hashtbl.mem state.angels pid then
@@ -178,7 +161,7 @@ struct
     let pid = get_current_pid () in
     (* This process is only actually finished if we're not executing atomically *)
     if not (!atomic) then
-      Debug.print ("Finishing process " ^ string_of_int pid);
+      Debug.print ("Finishing process " ^ (ProcessID.to_string pid));
     if pid == main_process_pid then
       main_running := false
     else if Hashtbl.mem state.angels pid then
@@ -211,14 +194,14 @@ struct
     snd v
 end
 
-exception UnknownProcessID of Proc.pid (* This wouldn't be necessary if pid's were properly abstract.. *)
+exception UnknownProcessID of ProcessTypes.process_id
 
 module Mailbox =
 struct
-  let message_queues : (Proc.pid, Value.t Queue.t) Hashtbl.t = Hashtbl.create 10000
+  let message_queues : (process_id, Value.t Queue.t) Hashtbl.t = Hashtbl.create 10000
 
   (* Create the main process's message queue *)
-  let _ = Hashtbl.add message_queues 0 (Queue.create ())
+  let _ = Hashtbl.add message_queues ProcessTypes.main_process_pid (Queue.create ())
 
   (** Given a PID, return its next queued message (under [Some]) or [None]. *)
   let pop_message_for pid =
@@ -258,10 +241,7 @@ struct
 end
 
 module Session = struct
-  type apid = int              (* access point id *)
-  type portid = int
-  type pid = int               (* process id *)
-  type chan = portid * portid  (* a channel is a pair of ports *)
+  type chan = Value.chan
 
   type ap_state = Balanced | Accepting of chan list | Requesting of chan list
 
@@ -269,19 +249,13 @@ module Session = struct
 
   let access_points = (Hashtbl.create 10000 : (apid, ap_state) Hashtbl.t)
 
-  let buffers = (Hashtbl.create 10000 : (portid, Value.t Queue.t) Hashtbl.t)
-  let blocked = (Hashtbl.create 10000 : (portid, pid) Hashtbl.t)
-  let forward = (Hashtbl.create 10000 : (portid, portid Unionfind.point) Hashtbl.t)
+  let buffers = (Hashtbl.create 10000 : (channel_id, Value.t Queue.t) Hashtbl.t)
+  let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
+  let forward = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
 
-  let generator () =
-    let i = ref 0 in
-      fun () -> incr i; !i
-
-  let fresh_apid = generator ()
-  let fresh_portid = generator ()
   let fresh_chan () =
-    let outp = fresh_portid () in
-    let inp = fresh_portid () in
+    let outp = ChannelID.create_unsafe () in
+    let inp = ChannelID.create_unsafe () in
       (outp, inp)
 
   let new_channel () =
@@ -293,7 +267,7 @@ module Session = struct
       c
 
   let new_access_point () =
-    let apid = fresh_apid () in
+    let apid = AccessPointID.create_unsafe () in
       Hashtbl.add access_points apid Balanced;
       apid
 
@@ -331,15 +305,15 @@ module Session = struct
   let forward inp outp =
     Unionfind.union (Hashtbl.find forward inp) (Hashtbl.find forward outp)
 
-  let block portid pid =
-    let portid = find_active portid in
-      Hashtbl.add blocked portid pid
-  let unblock portid =
-    let portid = find_active portid in
-      if Hashtbl.mem blocked portid then
+  let block channel_id pid =
+    let channel_id = find_active channel_id in
+      Hashtbl.add blocked channel_id pid
+  let unblock channel_id =
+    let channel_id = find_active channel_id in
+      if Hashtbl.mem blocked channel_id then
         begin
-          let pid = Hashtbl.find blocked portid in
-            Hashtbl.remove blocked portid;
+          let pid = Hashtbl.find blocked channel_id in
+            Hashtbl.remove blocked channel_id;
             Some pid
         end
       else
@@ -368,12 +342,4 @@ module Session = struct
       Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
       forward in1 out2;
       forward in2 out1
-
-  let unbox_port = Value.unbox_int
-  let unbox_chan' chan =
-    let (outp, inp) = Value.unbox_pair chan in
-      (Value.unbox_int outp, Value.unbox_int inp)
-  let unbox_chan chan =
-    let (outp, inp) = Value.unbox_pair chan in
-      (unbox_port outp, unbox_port inp)
 end

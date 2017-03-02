@@ -1,6 +1,7 @@
 (*pp deriving *)
 open Utility
 open Notfound
+open ProcessTypes
 
 let serialiser = Settings.add_string ("serialiser", "Dump", `User)
 
@@ -230,6 +231,9 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
     let magic = "out_channel"
    end)
 
+type chan = channel_id * channel_id
+  deriving(Show)
+
 (*jcheney: Added function component to PrimitiveFunction *)
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
@@ -241,7 +245,9 @@ and t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
-| `Pid of int * Sugartypes.location
+| `AccessPointID of apid
+| `Pid of process_id * Sugartypes.location
+| `SessionChannel of chan
 | `Socket of in_channel * out_channel
 ]
 and env = {
@@ -350,7 +356,9 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
+      | `AccessPointID _ -> assert false
       | `Pid (_pid, _location) -> assert false
+      | `SessionChannel _ -> assert false
       | `Socket (_inc, _outc) -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
@@ -470,7 +478,9 @@ and string_of_value : t -> string = function
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
-  | `Pid (pid, location) -> string_of_int pid ^ "@" ^ Sugartypes.string_of_location location
+  | `Pid (pid, location) -> (ProcessID.to_string pid) ^ "@" ^ Sugartypes.string_of_location location
+  | `AccessPointID apid -> "APID: " ^ (AccessPointID.to_string apid)
+  | `SessionChannel c -> string_of_channel c
   | `Socket (_, _) -> "<socket>"
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
@@ -502,7 +512,10 @@ and string_of_cont : continuation -> string =
       "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
     in
       "[" ^ mapstrcat ", " frame cont ^ "]"
-
+and string_of_channel (ep1, ep2) =
+  let ep1_str = ChannelID.to_string ep1 in
+  let ep2_str = ChannelID.to_string ep2 in
+  "Session channel. EP1: " ^ ep1_str ^ ", EP2: " ^ ep2_str
 
 (* let string_of_cont : continuation -> string = *)
 (*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
@@ -572,6 +585,14 @@ let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p
   | _ -> failwith "Type error unboxing socket"
+let box_channel c = `SessionChannel c
+let unbox_channel = function
+  | `SessionChannel c -> c
+  | _ -> failwith "Type error unboxing session channel"
+let box_apid apid = `AccessPointID apid
+let unbox_apid = function
+  | `AccessPointID apid -> apid
+  | _ -> failwith "Type error unboxing apid"
 
 let intmap_of_record = function
   | `Record members ->
