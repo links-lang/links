@@ -62,10 +62,14 @@ Signatures on top-level variables
 sig x : Int var x = 3; x
 stdout : 3 : Int
 
-Value restriction
+Value restriction [1]
 sig f : (a) -> a var f = id(id); f
 stderr : @..*
 exit : 1
+
+Value restriction [2]
+sig foo : () {:a|r}~> a fun foo() {var x = recv(); x} foo
+stdout : fun : () {:a|_}~> a
 
 Overly general signatures
 sig id : (a) -> b fun id(x) {x}

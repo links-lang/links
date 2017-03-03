@@ -57,10 +57,9 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
 
                WARNING: this behaviour might not always be what we want
 
-                 1) Its imperative nature seems a bit dodgey.
-                    Note that this function is called by the
-                    get_type_variables function as well as by
-                    generalise.
+                 1) Its imperative nature seems a bit dodgey.  Note
+                    that this function is called by the
+                    get_quantifiers function as well as by generalise.
 
                  2) We might alternatively rigidify the quantifiers
                     during generalisation.
@@ -181,7 +180,6 @@ let type_variables_of_type_args =
            end
        | `Presence _ | `Row _ -> assert false)
 
-let get_type_variables bound_vars = type_variables_of_type_args -<- (get_type_args `All bound_vars)
 let get_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_type_args `All bound_vars)
 (* let get_row_var_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_row_var_type_args `All bound_vars) *)
 (* let get_presence_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_presence_type_args `All bound_vars) *)
@@ -274,10 +272,6 @@ let generalise_rigid = generalise `Rigid
 
 (** generalise both rigid and flexible type variables *)
 let generalise = generalise `All
-
-let get_type_variables : environment -> datatype -> tyvar_wrapper list =
-  fun env t ->
-    get_type_variables (env_type_vars env) t
 
 let get_quantifiers : environment -> datatype -> quantifier list =
   fun env t ->
