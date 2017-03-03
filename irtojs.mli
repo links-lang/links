@@ -1,5 +1,9 @@
 (* JavaScript code generation *)
 
+val generate_program_defs :
+  (Var.var Env.String.t * Types.typing_environment) ->
+  Ir.binding list -> string list
+
 val generate_program_page : ?cgi_env:(string * string) list ->
   (Var.var Env.String.t * Types.typing_environment) ->
   Ir.program ->  string

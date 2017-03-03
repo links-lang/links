@@ -24,7 +24,7 @@ fun run ((action=action, l=l, r=r)) {
    </html>
 }
 
-fun mainpage(_) {
+fun mainpage(_, _) {
   page
    <html>
     <body>

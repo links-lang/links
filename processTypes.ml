@@ -27,7 +27,6 @@ let get_and_increment_id : unit -> int Lwt.t = fun () ->
     Lwt.return (get_and_increment_id_unsafe ()))
 
   (*
-let _ = ignore @@ Nocrypto_entropy_lwt.initialize (
 module Random_string_name = struct
   type t = string
   let gen_random_int = fun () -> Nocrypto.Rng.Int.gen max_int
