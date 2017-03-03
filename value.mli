@@ -149,7 +149,7 @@ val string_of_primitive : primitive_value -> string
 val string_of_tuple : (string * t) list -> string
 val string_of_cont : continuation -> string
 
-val pprint_value : t -> string
+val p_value: Format.formatter -> t -> unit
 
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string

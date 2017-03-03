@@ -16,10 +16,23 @@ type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  print_string (Value.pprint_value value);
-  print_endline (if Settings.get_value(BS.printing_types) then
-		   " : "^ Types.string_of_datatype rtype
-                 else "")
+  if Settings.get_value Basicsettings.new_pretty_printer then
+    begin
+      let open Format in
+      let (width, _height) = ANSITerminal.size () in
+      pp_set_margin std_formatter width;
+      fprintf std_formatter "@[%a@;<1 4>: %s@]" Value.p_value value (if Settings.get_value(BS.printing_types) then
+		                                                       Types.string_of_datatype rtype
+                                                                     else "");
+      pp_print_newline std_formatter ()
+    end
+  else
+    begin
+      print_string (Value.string_of_value value);
+      print_endline (if Settings.get_value(BS.printing_types) then
+		       " : "^ Types.string_of_datatype rtype
+                     else "")
+    end
 
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =

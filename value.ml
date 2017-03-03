@@ -530,10 +530,13 @@ and string_of_channel (ep1, ep2) =
  *)
 open Format
 
+let keywords = StringSet.from_list (List.map fst Lexer.keywords)
+
 let rec p_value (ppf : formatter) : t -> 'a = function
   | `Bool true -> fprintf ppf "true"
   | `Bool false -> fprintf ppf "false"
   | `Int i -> fprintf ppf "%i" i
+  | `Float f -> fprintf ppf "%s" (string_of_float' f)
   | `Char c -> fprintf ppf "'%c'" c
   | `String s -> fprintf ppf "\"%s\"" s
   | `Record fields -> begin
@@ -544,12 +547,11 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
                p_list_elements ppf l
-  | `FunctionPtr (x, fvs) as v ->
-     if Settings.get_value Basicsettings.printing_functions
-     then failwith ("New pretty printer is incomplete :/ "^string_of_value v)
-     else fprintf ppf "fun"
   | `ClientFunction n -> fprintf ppf "%s" n
-  | v -> failwith ("New pretty printer is incomplete :/ "^string_of_value v)
+  | `Variant (label, `Record []) -> fprintf ppf "%s" label
+  (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
+  | `Variant (label, (`Record _ as value)) -> fprintf ppf "%s@[%a@]" label p_value value
+  | `Variant (label, value) -> fprintf ppf "%s(@[%a)@]" label p_value value
   (* | _ -> fprintf ppf "not implemented" *)
 and p_record_fields ppf = function
   | [] -> fprintf ppf ""
@@ -561,9 +563,7 @@ and p_record_fields ppf = function
                           p_value v;
                   p_record_fields ppf xs
 and p_record_label ppf = function
-  (* TODO can we get a list of keywords from the lexer? *)
-  | "client" -> fprintf ppf "\"client\""
-  | "table" -> fprintf ppf "\"table\""
+  | s when StringSet.mem s keywords -> fprintf ppf "\"%s\"" s
   (* TODO labels with spaces and other "weird" characters that would confuse the lexer. *)
   | s -> fprintf ppf "%s" s
 and p_list_elements ppf = function
@@ -585,15 +585,6 @@ and p_tuple_elements ppf = function
   | [v] -> fprintf ppf "%a" p_value v
   | v::vs -> fprintf ppf "%a,@ " p_value v;
              p_tuple_elements ppf vs
-
-
-let mypprint : t -> string = fun v ->
-  (* TODO make this configurable / read actual terminal width *)
-  pp_set_margin str_formatter (Settings.get_value Basicsettings.terminal_width);
-  p_value str_formatter v;
-  flush_str_formatter ()
-
-let pprint_value v = if Settings.get_value Basicsettings.new_pretty_printer then mypprint v else string_of_value v
 
 (* let string_of_cont : continuation -> string = *)
 (*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
