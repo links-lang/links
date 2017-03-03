@@ -1,6 +1,7 @@
 %{
-open ProcessTypes
 open Utility
+open ProcessTypes
+
 (* let unparse_label = function *)
 (*   | `Char c -> String.make 1 c *)
 (*   | `List (`Char _::_) as s -> Value.unbox_string s *)
@@ -9,7 +10,6 @@ open Utility
 (* BUG: need to unescape strings
    (where they are escaped in json.ml)
 *)
-
 %}
 
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
@@ -20,7 +20,6 @@ open Utility
 
 %start parse_json
 %type <Value.t> parse_json
-
 %%
 
 parse_json:
@@ -32,15 +31,31 @@ object_:
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
                             | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
+                            | ["_clientAPID", apid_str; "_clientId", cid_str]
+                            | ["_clientId", cid_str; "_clientAPID", apid_str] ->
+                                let apid = AccessPointID.of_string @@ Value.unbox_string apid_str in
+                                let cid = ClientID.of_string @@ Value.unbox_string cid_str in
+                                `AccessPointID (`ClientAccessPoint (cid, apid))
+                            | ["_serverAPID", apid_str] ->
+                                let apid = AccessPointID.of_string @@ Value.unbox_string apid_str in
+                                `AccessPointID (`ServerAccessPoint (apid))
+                            | ["_serverPid", v] ->
+                                `Pid (`ServerPid (ProcessID.of_string (Value.unbox_string v)))
+                            | ["_clientPid", pid_str; "_clientId", client_id_str]
+                            | ["_clientId", client_id_str; "_clientPid", pid_str] ->
+                                let client_id = ClientID.of_string (Value.unbox_string client_id_str) in
+                                let pid = ProcessID.of_string (Value.unbox_string pid_str) in
+                                `Pid (`ClientPid (client_id, pid))
+                            | ["_clientSpawnLoc", client_id_str] ->
+                                let client_id = ClientID.of_string (Value.unbox_string client_id_str) in
+                                `SpawnLocation (`ClientSpawnLoc (client_id))
+                            | ["_serverSpawnLoc", _] ->
+                                `SpawnLocation (`ServerSpawnLoc)
                             | ["_sessEP1", ep1_str; "_sessEP2", ep2_str]
                             | ["_sessEP2", ep2_str; "_sessEP1", ep1_str] ->
                                 let ep1 = ChannelID.of_string @@ Value.unbox_string ep1_str in
                                 let ep2 = ChannelID.of_string @@ Value.unbox_string ep2_str in
                                 `SessionChannel (ep1, ep2)
-                            | ["apid", apid] ->
-                                `AccessPointID (AccessPointID.of_string @@ Value.unbox_string apid)
-                            | ["pid", pid] ->
-                                `Pid (ProcessID.of_string @@ Value.unbox_string pid, `Client)
                             | ["_db", db] ->
                                 begin
                                   match db with
