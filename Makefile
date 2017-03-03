@@ -54,7 +54,7 @@ SOURCES = $(OPC)                                \
           multipart.ml                          \
           notfound.ml                           \
           utility.ml                            \
-					processTypes.mli processTypes.ml      \
+		  processTypes.mli processTypes.ml      \
           env.mli env.ml                        \
           settings.mli settings.ml              \
           basicsettings.ml                      \
@@ -103,17 +103,18 @@ SOURCES = $(OPC)                                \
           desugarFuns.mli desugarFuns.ml                 \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
-	  desugarCP.mli desugarCP.ml                     \
+					desugarCP.mli desugarCP.ml                     \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \
-          proc.mli proc.ml                      \
           jsonparse.mly                         \
           jsonlex.mll                           \
           js.ml                                 \
-          json.ml                               \
+          json.mli json.ml                      \
+          proc.mli proc.ml                      \
+					resolveJsonState.mli resolveJsonState.ml \
           database.mli database.ml              \
           linksregex.ml                         \
 	  lib.mli lib.ml                        \

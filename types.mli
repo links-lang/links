@@ -71,13 +71,13 @@ module Print : sig
   val default_policy : unit -> policy
 end
 
-
-val process        : Abstype.t
-val list           : Abstype.t
-val event          : Abstype.t
-val dom_node       : Abstype.t
-val access_point   : Abstype.t
-val socket         : Abstype.t
+val process      : Abstype.t
+val list         : Abstype.t
+val event        : Abstype.t
+val dom_node     : Abstype.t
+val access_point : Abstype.t
+val socket       : Abstype.t
+val spawn_location : Abstype.t
 
 type ('t, 'r) session_type_basis =
     [ `Input of 't * 't
@@ -118,6 +118,12 @@ type session_type = (typ, row) session_type_basis
   deriving (Show)
 
 type datatype = typ
+      deriving (Show)
+
+type tyvar_wrapper_contents = [`Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var]
+      deriving (Show)
+
+type tyvar_wrapper = int * freedom * tyvar_wrapper_contents
       deriving (Show)
 
 (* base kind stuff *)
