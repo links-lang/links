@@ -13,10 +13,16 @@ sig
 
   val get_current_pid : unit -> process_id
 
-  val lookup_client_process : process_id -> Value.t option
+  (* val lookup_client_process : client_id -> process_id -> Value.t option *)
 
-  val create_process : bool -> thread -> process_id
-  val create_client_process : Value.t -> process_id
+  val create_process : bool -> thread -> process_id Lwt.t
+  val create_client_process : client_id -> Value.t ->
+    process_id Lwt.t
+
+  val get_and_mark_pending_processes : client_id -> (process_id * Value.t) list
+
+  val resolve_external_processes : Value.t -> unit
+
   val awaken : process_id -> unit
 
   val finish : Value.env * Value.t -> thread_result Lwt.t
@@ -31,23 +37,31 @@ sig
   val run : (unit -> 'a Lwt.t) -> 'a
 end
 
-module Mailbox :
+module type MAILBOX =
 sig
   val pop_message_for : process_id -> Value.t option
-  val pop_all_messages_for : process_id -> Value.t list
+  val pop_all_messages_for :
+    client_id -> process_id-> Value.t list
   val pop_message : unit -> Value.t option
-  val send_message : Value.t -> process_id -> unit
+
+  val send_client_message : Value.t -> client_id ->  process_id -> unit
+  val send_server_message : Value.t -> process_id -> unit
 end
 
 exception UnknownProcessID of process_id
+exception UnknownClientID of client_id
 
-module Session :
+module type SESSION =
 sig
   type chan = Value.chan
 
-  val new_access_point : unit -> apid
-  val accept : apid -> chan * bool
-  val request : apid -> chan * bool
+  val new_server_access_point : unit -> apid Lwt.t
+  val new_client_access_point : client_id -> apid Lwt.t
+
+  val get_and_mark_pending_aps : client_id -> apid list
+
+  val accept : apid -> (chan * bool) Lwt.t
+  val request : apid -> (chan * bool) Lwt.t
 
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
@@ -57,3 +71,6 @@ sig
 
   val link : chan -> chan -> unit
 end
+
+module Mailbox : MAILBOX
+module Session : SESSION

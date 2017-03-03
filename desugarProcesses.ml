@@ -19,7 +19,8 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `Spawn (`Wait, _location, body, Some inner_eff) ->
+    | `Spawn (`Wait, spawn_loc, body, Some inner_eff) ->
+        assert (spawn_loc = `NoSpawnLocation);
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
 
@@ -34,27 +35,38 @@ object (o : 'self_type)
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp)])
         in
           (o, e, body_type)
-    | `Spawn (k, _location, body, Some inner_eff) ->
+    | `Spawn (k, spawn_loc, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
         let process_type = `Application (Types.process, [`Row inner_eff]) in
 
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
+        let (o, spawn_loc) = o#given_spawn_location spawn_loc in
         let (o, body, body_type) = o#phrase body in
         let o = o#with_effects outer_eff in
 
-        let spawn_location, spawn_fun =
+        let spawn_loc_phr =
+          match spawn_loc with
+            | `ExplicitSpawnLocation phr -> phr
+            | `SpawnClient -> (`FnAppl ((`Var "there", dp), [(`TupleLit [], dp)]), dp)
+            | `NoSpawnLocation -> (`FnAppl ((`Var "here", dp), [(`TupleLit [], dp)]), dp) in
+
+        let spawn_fun =
           match k with
-          | `Client -> `Client, "spawnClient"
-          | `Demon  -> `Unknown, "spawn"
-          | `Angel  -> `Unknown, "spawnAngel"
+          | `Demon  -> "spawnAt"
+          | `Angel  -> "spawnAngelAt"
           | `Wait   -> assert false in
+
+        (* At this point, the location in the funlit doesn't matter -- we'll have an explicit
+         * location in the form of spawn_loc_phr. It was useless before anyway, given that it
+         * corresponded to the spawn type. *)
 
         let e : phrasenode =
           `FnAppl
             ((`TAppl ((`Var spawn_fun, dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
-             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), spawn_location), dp)])
+             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp);
+              spawn_loc_phr])
         in
           (o, e, process_type)
     | `Receive (cases, Some t) ->
