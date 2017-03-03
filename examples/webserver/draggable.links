@@ -49,7 +49,7 @@ fun draggableList(id, items)
 
 }
 
-fun mainPage(_) {
+fun mainPage(pg, loc) {
   page
    <html>
    <body>
