@@ -14,8 +14,6 @@ module type NAME = sig
   module Show_t : Deriving_Show.Show with type a = t
 end
 
-let _ = ignore @@ Nocrypto_entropy_lwt.initialize ()
-
 let name_source : int ref = ref 0
 let name_mutex = Lwt_mutex.create ()
 
