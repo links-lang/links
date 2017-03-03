@@ -231,10 +231,27 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
     let magic = "out_channel"
    end)
 
-type chan = channel_id * channel_id
-  deriving(Show)
+type spawn_location = [
+  | `ClientSpawnLoc of client_id
+  | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
+]
+  deriving (Show)
 
-(*jcheney: Added function component to PrimitiveFunction *)
+type dist_pid = [
+  | `ClientPid of (client_id * process_id)
+  | `ServerPid of process_id (* Again, will need a server address here later *)
+]
+  deriving (Show)
+
+type access_point = [
+  | `ClientAccessPoint of (client_id * apid)
+  | `ServerAccessPoint of apid
+]
+  deriving (Show)
+
+type chan = (channel_id * channel_id)
+  deriving (Show)
+
 type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and t = [
 | primitive_value
@@ -245,10 +262,11 @@ and t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientFunction of string
 | `Continuation of continuation
-| `AccessPointID of apid
-| `Pid of process_id * Sugartypes.location
+| `Pid of dist_pid
+| `AccessPointID of access_point
 | `SessionChannel of chan
 | `Socket of in_channel * out_channel
+| `SpawnLocation of spawn_location
 ]
 and env = {
   all : (t * Ir.scope) Utility.intmap;
@@ -257,6 +275,7 @@ and env = {
 }
   deriving (Show)
 
+type delegated_chan = (chan * (t list))
 
 let set_request_data env rd = { env with request_data = rd }
 
@@ -269,7 +288,7 @@ let request_data env = env.request_data
 let empty_env = {
   all = IntMap.empty;
   globals = IntMap.empty;
-  request_data = RequestData.new_request_data ()
+  request_data = RequestData.new_empty_request_data ()
 }
 let bind name (v,scope) env =
   (* Maintains globals as submap of global bindings. *)
@@ -356,10 +375,11 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
-      | `AccessPointID _ -> assert false
-      | `Pid (_pid, _location) -> assert false
-      | `SessionChannel _ -> assert false
-      | `Socket (_inc, _outc) -> assert false (* wheeee! *)
+      | `Pid _ -> assert false (* mmmmm *)
+      | `Socket (_inc, _outc) -> assert false
+      | `SessionChannel _ -> assert false (* mmmmm *)
+      | `AccessPointID _ -> assert false (* mmmmm *)
+      | `SpawnLocation _sl -> assert false (* wheeee! *)
 and compress_env env : compressed_env =
   List.rev
     (fold
@@ -478,10 +498,14 @@ and string_of_value : t -> string = function
   | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
   | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
   | `Continuation cont -> "Continuation" ^ string_of_cont cont
-  | `Pid (pid, location) -> (ProcessID.to_string pid) ^ "@" ^ Sugartypes.string_of_location location
-  | `AccessPointID apid -> "APID: " ^ (AccessPointID.to_string apid)
-  | `SessionChannel c -> string_of_channel c
+  | `Pid dist_pid -> "Pid " ^ (string_of_dist_pid dist_pid)
   | `Socket (_, _) -> "<socket>"
+  | `SessionChannel c -> "Session channel " ^ (string_of_channel c)
+  | `SpawnLocation sl -> "Spawn location: " ^
+    (match sl with
+       | `ClientSpawnLoc cid -> "client " ^ (ClientID.to_string cid)
+       | `ServerSpawnLoc -> "server")
+  | (`AccessPointID _) as apid -> string_of_access_point apid
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_int value
@@ -512,10 +536,22 @@ and string_of_cont : continuation -> string =
       "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
     in
       "[" ^ mapstrcat ", " frame cont ^ "]"
+
+and string_of_dist_pid = function
+  | `ServerPid i -> "Server (" ^ (ProcessID.to_string i) ^ ")"
+  | `ClientPid (cid, i) ->
+      "Client num " ^ (ClientID.to_string cid) ^ ", process " ^ (ProcessID.to_string i)
 and string_of_channel (ep1, ep2) =
   let ep1_str = ChannelID.to_string ep1 in
   let ep2_str = ChannelID.to_string ep2 in
   "Session channel. EP1: " ^ ep1_str ^ ", EP2: " ^ ep2_str
+
+and string_of_access_point = function
+  | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
+      "Client access point on client " ^ (ClientID.to_string cid) ^ ", " ^
+      "APID: " ^ (AccessPointID.to_string apid)
+  | `AccessPointID (`ServerAccessPoint (apid)) ->
+      "Server access point " ^ (AccessPointID.to_string apid)
 
 (* let string_of_cont : continuation -> string = *)
 (*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
@@ -577,23 +613,26 @@ let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
-let box_pid (pid, _location) = `Pid (pid, `Unknown)
+let box_pid dist_pid = `Pid dist_pid
 let unbox_pid = function
-  | `Pid (pid, location) -> (pid, location)
+  | `Pid dist_pid -> dist_pid
   | _ -> failwith "Type error unboxing pid"
 let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p
   | _ -> failwith "Type error unboxing socket"
-let box_channel c = `SessionChannel c
+let box_spawn_loc sl = `SpawnLocation sl
+let unbox_spawn_loc = function
+  | `SpawnLocation sl -> sl
+  | _ -> failwith "Type error unboxing spawn location"
+let box_channel ch = `SessionChannel ch
 let unbox_channel = function
-  | `SessionChannel c -> c
+  | `SessionChannel x -> x
   | _ -> failwith "Type error unboxing session channel"
-let box_apid apid = `AccessPointID apid
-let unbox_apid = function
-  | `AccessPointID apid -> apid
-  | _ -> failwith "Type error unboxing apid"
-
+let box_access_point ap = `AccessPointID ap
+let unbox_access_point = function
+  | `AccessPointID x -> x
+  | _ -> failwith "Type error unboxing access point"
 let intmap_of_record = function
   | `Record members ->
       Some(IntMap.from_alist(
@@ -681,6 +720,18 @@ let expr_to_contframe env expr =
    (Var.dummy_var : Ir.var),
    (env           : env),
    (([], expr)    : Ir.computation))
+
+let rec get_contained_channels v =
+  let get_list_contained_channels xs =
+    List.fold_left (fun acc x -> (get_contained_channels x) @ acc) [] xs in
+
+  match v with
+    | `List xs -> get_list_contained_channels xs
+    | `Record xs -> get_list_contained_channels @@ List.map snd xs
+    | `Variant (_, x) -> get_contained_channels x
+    | `FunctionPtr (_, (Some x)) -> get_contained_channels x
+    | `SessionChannel c -> [c]
+    | _ -> []
 
 let rec value_of_xml xs = `List (List.map value_of_xmlitem xs)
 and value_of_xmlitem =

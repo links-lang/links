@@ -1,7 +1,6 @@
 open Webserver_types
 open Ir
 open Lwt
-open ProcessTypes
 open Utility
 open Proc
 
@@ -62,20 +61,34 @@ struct
         Value.find var env
       | Some v -> v
 
-   let serialize_call_to_client (continuation, name, arg) =
-     Json.jsonize_call continuation name arg
+   let serialize_call_to_client req_data (continuation, name, args) =
+     let open Json in
+     let client_id = RequestData.get_client_id req_data in
+     let st = List.fold_left
+       (fun st_acc arg -> ResolveJsonState.add_val_event_handlers arg st_acc)
+       (JsonState.empty client_id) args in
+     let st = ResolveJsonState.add_ap_information client_id st in
+     let st = ResolveJsonState.add_process_information client_id st in
+     Json.jsonize_call st continuation name args
 
-   let client_call : string -> Value.continuation -> Value.t list -> Proc.thread_result Lwt.t =
-     fun name cont args ->
-       if not(Settings.get_value Basicsettings.web_mode) then
-         failwith "Can't make client call outside web mode.";
-       if not(Proc.singlethreaded()) then
-         failwith "Remaining procs on server at client call!";
-       Debug.print("Making client call to " ^ name);
-(*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
-       let call_package = Utility.base64encode
-                            (serialize_call_to_client (cont, name, args)) in
-       Proc.abort ("text/plain", call_package)
+   let client_call :
+     RequestData.request_data ->
+     string ->
+     Value.continuation ->
+     Value.t list ->
+     Proc.thread_result Lwt.t =
+
+       fun req_data name cont args ->
+         if not(Settings.get_value Basicsettings.web_mode) then
+           failwith "Can't make client call outside web mode.";
+         if not(Proc.singlethreaded()) then
+           failwith "Remaining procs on server at client call!";
+         Debug.print("Making client call to " ^ name);
+  (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
+         let call_package =
+           Utility.base64encode @@
+             serialize_call_to_client req_data (cont, name, args) in
+         Proc.abort ("text/plain", call_package)
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
@@ -170,7 +183,13 @@ struct
       (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
       (* end *)
     | `Coerce (v, _) -> value env v
-
+  and apply_access_point cont env : Value.spawn_location -> Proc.thread_result Lwt.t = function
+      | `ClientSpawnLoc cid ->
+          Session.new_client_access_point cid >>= fun apid ->
+          apply_cont cont env (`AccessPointID (`ClientAccessPoint (cid, apid)))
+      | `ServerSpawnLoc ->
+          Session.new_server_access_point () >>= fun apid ->
+          apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
   and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function
     | `FunctionPtr (f, fvs), ps ->
@@ -189,46 +208,63 @@ struct
       apply_cont cont env (`String (string_of_int key))
     (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
+        let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_SendWrapper" cont [pid; msg]
+           client_call req_data "_SendWrapper" cont [pid; msg]
         else
-          let (pid, _location) = Value.unbox_pid pid in
-            (try
-               Mailbox.send_message msg pid;
-               Proc.awaken pid
-             with
+          let unboxed_pid = Value.unbox_pid pid in
+          (try
+             match unboxed_pid with
+              (* Send a message to a process which lives on the server *)
+              | `ServerPid serv_pid ->
+                  Lwt.return @@ Mailbox.send_server_message msg serv_pid
+              (* Send a message to a process which lives on another client *)
+              | `ClientPid (client_id, process_id) ->
+                  Lwt.return @@ Mailbox.send_client_message msg client_id process_id
+           with
                  UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)
-                   failwith("Couldn't deliver message because destination process has no mailbox."));
+                   failwith("Couldn't deliver message because destination process has no mailbox.")) >>= fun _ ->
             apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("spawn",_), [func] ->
+    | `PrimitiveFunction ("spawnAt",_), [func; loc] ->
+        let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_spawnWrapper" cont [func]
+            client_call req_data "_spawnWrapper" cont [func; loc]
         else
           begin
-            let var = Var.dummy_var in
-            let cont' = (`Local, var, Value.empty_env,
-                         ([], `Apply (`Variable var, []))) in
-            let new_pid = Proc.create_process false (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
-            let location = `Unknown in
-            apply_cont cont env (`Pid (new_pid, location))
+            match loc with
+              | `SpawnLocation (`ClientSpawnLoc client_id) ->
+                  Proc.create_client_process client_id func >>= fun new_pid ->
+                  apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
+              | `SpawnLocation (`ServerSpawnLoc) ->
+                  begin
+                    let var = Var.dummy_var in
+                    let cont' = (`Local, var, Value.empty_env,
+                                 ([], `Apply (`Variable var, []))) in
+                    Proc.create_process false
+                      (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) >>= fun new_pid ->
+                    apply_cont cont env (`Pid (`ServerPid new_pid))
+                  end
+              | _ -> assert false
           end
-    | `PrimitiveFunction ("spawnClient",_), [func] ->
-      let new_pid = Proc.create_client_process func in
-      apply_cont cont env (`Pid (new_pid, `Client))
-    | `PrimitiveFunction ("spawnAngel",_), [func] ->
+    | `PrimitiveFunction ("spawnAngelAt",_), [func; loc] ->
+        let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_spawnWrapper" cont [func]
+            client_call req_data "_spawnWrapper" cont [func; loc]
         else
           begin
-            (* if Settings.get_value Basicsettings.web_mode then *)
-            (*   failwith("Can't spawn at the server in web mode."); *)
-            let var = Var.dummy_var in
-            let cont' = (`Local, var, Value.empty_env,
-                         ([], `Apply (`Variable var, []))) in
-            let new_pid = Proc.create_process true (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) in
-            let location = `Unknown in
-            apply_cont cont env (`Pid (new_pid, location))
+            match loc with
+              | `SpawnLocation (`ClientSpawnLoc client_id) ->
+                  Proc.create_client_process client_id func >>= fun new_pid ->
+                  apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
+              | `SpawnLocation (`ServerSpawnLoc) ->
+                  let var = Var.dummy_var in
+                  let cont' = (`Local, var, Value.empty_env,
+                               ([], `Apply (`Variable var, []))) in
+                  Proc.create_process true
+                    (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) >>= fun new_pid ->
+                  apply_cont cont env (`Pid (`ServerPid new_pid))
+              | _ -> assert false
           end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
@@ -237,8 +273,9 @@ struct
            scheduler choose a different thread.  *)
 (*         if (Settings.get_value Basicsettings.web_mode) then *)
 (*             Debug.print("receive in web server mode--not implemented."); *)
+        let req_data = Value.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-           client_call "_recvWrapper" cont []
+           client_call req_data "_recvWrapper" cont []
         else
         begin match Mailbox.pop_message () with
             Some message ->
@@ -253,68 +290,65 @@ struct
     (* end of mailbox stuff *)
     (* start of session stuff *)
     | `PrimitiveFunction ("new", _), [] ->
-      let apid = Session.new_access_point () in
-        apply_cont cont env (`AccessPointID apid)
+        apply_access_point cont env `ServerSpawnLoc
+    | `PrimitiveFunction ("newAP", _), [loc] ->
+        let unboxed_loc = Value.unbox_spawn_loc loc in
+        apply_access_point cont env unboxed_loc
+    | `PrimitiveFunction ("newClientAP", _), [] ->
+        (* Really this should be desugared properly into "there"... *)
+        let client_id = RequestData.get_client_id @@ Value.request_data env in
+        apply_access_point cont env (`ClientSpawnLoc client_id)
+    | `PrimitiveFunction ("newServerAP", _), [] ->
+        apply_access_point cont env `ServerSpawnLoc
     | `PrimitiveFunction ("accept", _), [ap] ->
-      let apid = Value.unbox_apid ap in
-      let (c, d) as ch, blocked = Session.accept apid in
-      let boxed_chan = Value.box_channel ch in
-
-      Debug.print ("accepting: (" ^ ChannelID.to_string c ^ ", " ^ ChannelID.to_string d ^ ")");
-        if blocked then
-          begin
-            (* block my end of the channel *)
-            Session.block c (Proc.get_current_pid ());
-            Proc.block (fun () -> apply_cont cont env boxed_chan)
-          end
-        else
-          begin
-            (* unblock the other end of the channel *)
-            begin
-              match (Session.unblock d) with
-              | Some pid -> Proc.awaken pid
-              | None     -> assert false
-            end;
-            apply_cont cont env boxed_chan
-          end
+      let ap = Value.unbox_access_point ap in
+      begin
+        match ap with
+          | `ClientAccessPoint _ ->
+              (* TODO: Work out the semantics of this *)
+              failwith "Cannot *yet* accept on a client AP on the server"
+          | `ServerAccessPoint apid ->
+              Session.accept apid >>= fun ((c, _) as ch, blocked) ->
+              let boxed_channel = Value.box_channel ch in
+              Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
+              if blocked then
+                  (* block my end of the channel *)
+                  (Session.block c (Proc.get_current_pid ());
+                   Proc.block (fun () -> apply_cont cont env boxed_channel))
+              else
+                (* other end will have been unblocked in proc *)
+                apply_cont cont env boxed_channel
+      end
     | `PrimitiveFunction ("request", _), [ap] ->
-      let apid = Value.unbox_apid ap in
-      let (c, d) as ch, blocked = Session.request apid in
-      let boxed_chan = Value.box_channel ch in
-
-      Debug.print ("requesting: (" ^ ChannelID.to_string c ^ ", " ^ ChannelID.to_string d ^ ")");
-      if blocked then
-        begin
-          (* block my end of the channel *)
-          Session.block c (Proc.get_current_pid ());
-          Proc.block (fun () -> apply_cont cont env boxed_chan)
-        end
-      else
-        begin
-          begin
-            (* unblock the other end of the channel *)
-            match Session.unblock d with
-            | Some pid -> Proc.awaken pid
-            | None     -> assert false
-          end;
-          apply_cont cont env boxed_chan
-        end
+      let ap = Value.unbox_access_point ap in
+      begin
+        match ap with
+          | `ClientAccessPoint _ ->
+              (* TODO: Work out the semantics of this *)
+              failwith "Cannot *yet* request from a client-spawned AP on the server"
+          | `ServerAccessPoint apid ->
+              Session.request apid >>= fun ((c, _) as ch, blocked) ->
+              let boxed_channel = Value.box_channel ch in
+              if blocked then
+                (* block my end of the channel *)
+                (Session.block c (Proc.get_current_pid ());
+                Proc.block (fun () -> apply_cont cont env boxed_channel))
+              else
+                (* Otherwise, other end will have been unblocked in proc.ml,
+                 * return new channel EP *)
+                apply_cont cont env boxed_channel
+      end
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let (outp, _) = Value.unbox_channel chan in
       Session.send v outp;
-      begin
-        match Session.unblock outp with
-          Some pid -> Proc.awaken pid
-        | None     -> ()
-      end;
       apply_cont cont env chan
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
         let unboxed_chan = Value.unbox_channel chan in
-        let (_out, inp) = unboxed_chan in
-          match Session.receive inp with
+        let (_outp, inp) = unboxed_chan in
+        match Session.receive inp with
           | Some v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
             apply_cont cont env (Value.box_pair v chan)
@@ -370,12 +404,14 @@ struct
          Webs.start env >>= fun () ->
          apply_cont cont env (`Record [])
        end
-    (*****************)
+        (*****************)
     | `PrimitiveFunction (n,None), args ->
        apply_cont cont env (Lib.apply_pfun n args (Value.request_data env))
     | `PrimitiveFunction (_, Some code), args ->
        apply_cont cont env (Lib.apply_pfun_by_code code args (Value.request_data env))
-    | `ClientFunction name, args -> client_call name cont args
+    | `ClientFunction name, args ->
+        let req_data = Value.request_data env in
+        client_call req_data name cont args
     | `Continuation c,      [p] -> apply_cont c env p
     | `Continuation _,       _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"
@@ -533,21 +569,17 @@ struct
     | `Select (name, v) ->
       let chan = value env v in
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
-      let (outp, _) = Value.unbox_channel chan in
+      let ch = Value.unbox_channel chan in
+      let (outp, _inp) = ch in
       Session.send (Value.box_string name) outp;
-      begin
-        match Session.unblock outp with
-          Some pid -> Proc.awaken pid
-        | None     -> ()
-      end;
+      OptionUtils.opt_iter Proc.awaken (Session.unblock outp);
       apply_cont cont env chan
     | `Choice (v, cases) ->
       begin
         let chan = value env v in
         Debug.print("choosing from: " ^ Value.string_of_value chan);
-        let (_, in') = Value.unbox_channel chan in
-        let inp = in' in
-          match Session.receive inp with
+        let (_, inp) = Value.unbox_channel chan in
+        match Session.receive inp with
           | Some v ->
             Debug.print ("chose: " ^ Value.string_of_value v);
             let label = Value.unbox_string v in

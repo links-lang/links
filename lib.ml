@@ -315,9 +315,23 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "self",
-  (`PFun (fun _ _ -> `Pid (Proc.get_current_pid(), `Unknown)),
+  (`PFun (fun _ _ -> `Pid (`ServerPid (Proc.get_current_pid()))),
    datatype "() ~e~> Process ({ |e })",
    IMPURE);
+
+  "here",
+  (`PFun (fun _ _ -> `SpawnLocation (`ServerSpawnLoc)),
+    datatype "() ~> Location",
+    IMPURE
+  );
+
+  "there",
+  (`PFun (fun req_data _ ->
+    let client_id = RequestData.get_client_id req_data in
+    `SpawnLocation (`ClientSpawnLoc client_id)),
+    datatype "() ~> Location",
+    IMPURE
+  );
 
   "haveMail",
   (`PFun(fun _ ->
@@ -338,10 +352,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "spawn",
-  (* This should also be a primitive, as described in the ICFP paper. *)
-  (* And now it is *)
   (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
+  datatype "(() ~e~@ _) ~> Process ({ |e })",
+  IMPURE);
+
+  "spawnAt",
+  (`PFun (fun _ -> assert false),
+   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
    IMPURE);
 
   "spawnClient",
@@ -354,11 +371,15 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
+  "spawnAngelAt",
+  (`PFun (fun _ -> assert false),
+   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
+   IMPURE);
+
   "spawnWait",
   (`Client,
    datatype "(() ~> a) ~> a",
    IMPURE);
-
 
   (* If we add more effects then spawn and spawnWait shouldn't
      necessarily mask them, so we might want to change their types to
@@ -392,6 +413,21 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* access points *)
   "new",
+  (`PFun (fun _ -> assert false),
+   datatype "forall s::Type(Any, Session).() ~> AP(s)",
+   IMPURE);
+
+  "newAP",
+  (`PFun (fun _ -> assert false),
+   datatype "forall s::Type(Any, Session). (Location) ~> AP(s)",
+   IMPURE);
+
+  "newClientAP",
+  (`PFun (fun _ -> assert false),
+   datatype "forall s::Type(Any, Session).() ~> AP(s)",
+   IMPURE);
+
+  "newServerAP",
   (`PFun (fun _ -> assert false),
    datatype "forall s::Type(Any, Session).() ~> AP(s)",
    IMPURE);
@@ -1529,12 +1565,16 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),
-     datatype "(String,(String) ~> a) ~> ()",
+     datatype "(String, (String, Location) ~> a) ~> ()",
      IMPURE);
     "servePages",
     (`PFun (fun _ -> assert false),
      datatype "() ~> ()",
-     IMPURE)
+     IMPURE);
+    "serveWebsockets",
+    (`PFun (fun _ -> assert false),
+    datatype "(String) ~> ()",
+    IMPURE)
 ]
 
 (* HACK
