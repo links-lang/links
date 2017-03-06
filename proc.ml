@@ -190,7 +190,7 @@ struct
 
   (** Given a process state, create a new process and return its identifier. *)
   let create_process angel pstate =
-    ProcessID.create () >>= fun new_pid ->
+    let new_pid = ProcessID.create () in
     if angel then
       begin
         let (t, w) = Lwt.task () in
@@ -204,7 +204,7 @@ struct
 
   (** Create a new client process and return its identifier *)
   let create_client_process client_id func =
-    ProcessID.create () >>= fun new_pid ->
+    let new_pid = ProcessID.create () in
     let client_table =
       try Hashtbl.find state.client_processes client_id
       with
@@ -322,8 +322,8 @@ module type SESSION =
 sig
   type chan = Value.chan
 
-  val new_server_access_point : unit -> apid Lwt.t
-  val new_client_access_point : client_id -> apid Lwt.t
+  val new_server_access_point : unit -> apid
+  val new_client_access_point : client_id -> apid
 
   val get_and_mark_pending_aps : client_id -> apid list
 
@@ -406,7 +406,6 @@ struct
     Jsonparse.parse_websocket_request Jsonlex.jsonlex
       (Lexing.from_string json_str)
 
-  (* FIXME: This currently isn't threadsafe. "atomically" is buggering up. *)
   let decode_and_handle client_id data =
     match decode_message data with
       | ClientToClient (cid, pid, msg) ->
@@ -660,14 +659,14 @@ and Session : SESSION = struct
 
   (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)
   let fresh_chan () =
-    ChannelID.create () >>= fun outp ->
-    ChannelID.create () >>= fun inp ->
-      Lwt.return (outp, inp)
+    let outp = ChannelID.create () in
+    let inp = ChannelID.create () in
+    (outp, inp)
 
   (** Creates a new channel, adds endpoints into the required
    * hashtables (output port, input port, forwarding) *)
   let new_channel () =
-    fresh_chan () >>= fun c ->
+    let c = fresh_chan () in
       let (outp, inp) = c in
       (* Firstly, create the buffers *)
       Hashtbl.add buffers outp (Queue.create ());
@@ -681,21 +680,21 @@ and Session : SESSION = struct
       (* Finally, add to the link table -- although this is defunct at the moment *)
       Hashtbl.add forward outp (Unionfind.fresh outp);
       Hashtbl.add forward inp (Unionfind.fresh inp);
-      Lwt.return c
+      c
 
   let new_server_access_point () =
-    AccessPointID.create () >>= fun apid ->
+    let apid = AccessPointID.create () in
       Hashtbl.add access_points apid Balanced;
-      Lwt.return apid
+      apid
 
   let new_client_access_point cid =
-    AccessPointID.create () >>= fun apid ->
-      begin
-      match Hashtbl.lookup client_access_points cid with
-        | Some aps -> Hashtbl.replace client_access_points cid ((apid, false) :: aps)
-        | None -> Hashtbl.add client_access_points cid [(apid, false)]
-      end;
-      Lwt.return apid
+    let apid = AccessPointID.create () in
+    begin
+    match Hashtbl.lookup client_access_points cid with
+      | Some aps -> Hashtbl.replace client_access_points cid ((apid, false) :: aps)
+      | None -> Hashtbl.add client_access_points cid [(apid, false)]
+    end;
+    apid
 
   let get_and_mark_pending_aps cid =
     match Hashtbl.lookup client_access_points cid with
@@ -732,11 +731,11 @@ and Session : SESSION = struct
       let res =
         match state with
         | Balanced             ->
-            new_channel () >>= fun ch ->
+            let ch = new_channel () in
             let r = make_req ch in
             Lwt.return (ch, Accepting [r], true)
         | Accepting rs         ->
-            new_channel () >>= fun ch ->
+            let ch =  new_channel () in
             let r = make_req ch in
             Lwt.return (ch, Accepting (rs @ [r]), true)
         | Requesting [req]       ->
@@ -794,11 +793,11 @@ and Session : SESSION = struct
       let res =
         match state with
         | Balanced            ->
-            new_channel () >>= fun ch ->
+            let ch = new_channel () in
             let r = make_req ch in
             Lwt.return (ch, Requesting [r], true)
         | Requesting rs       ->
-            new_channel () >>= fun ch ->
+            let ch = new_channel () in
             let r = make_req ch in
             Lwt.return (ch, Requesting (rs @ [r]), true)
         | Accepting [r]       ->

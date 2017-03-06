@@ -1,11 +1,12 @@
 (*pp deriving *)
-open Lwt
 open Utility
 
+(* Should be safe to not have an explicit lock due to the co-operative
+ * nature of the scheduling, since things shouldn't be pre-empted mid
+ * counter update. *)
 module type NAME = sig
   type t
-  val create : unit -> t Lwt.t
-  val create_unsafe : unit -> t
+  val create : unit -> t
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val to_string : t -> string
@@ -15,16 +16,11 @@ module type NAME = sig
 end
 
 let name_source : int ref = ref 0
-let name_mutex = Lwt_mutex.create ()
 
-let get_and_increment_id_unsafe = fun () ->
+let get_and_increment_id = fun () ->
     let ret = !name_source in
     incr name_source;
     ret
-
-let get_and_increment_id : unit -> int Lwt.t = fun () ->
-  Lwt_mutex.with_lock name_mutex (fun () ->
-    Lwt.return (get_and_increment_id_unsafe ()))
 
   (*
 module Random_string_name = struct
@@ -78,15 +74,11 @@ struct
 
   let make_name_with_id id = NameInfo.prefix ^ (string_of_int id)
 
-  let create_name () =
-    (get_and_increment_id ()) >>= fun id ->
-    Lwt.return (make_name_with_id id)
+  let create () =
+    let open Pervasives in
+    get_and_increment_id ()
+    |> make_name_with_id
 
-  let create_name_unsafe () =
-    make_name_with_id (get_and_increment_id_unsafe ())
-
-  let create = create_name
-  let create_unsafe = create_name_unsafe
   let compare n1 n2 = Pervasives.compare n1 n2
   let equal n1 n2 = (compare n1 n2) = 0
   let to_string n = n

@@ -186,10 +186,10 @@ struct
     | `Coerce (v, _) -> value env v
   and apply_access_point cont env : Value.spawn_location -> Proc.thread_result Lwt.t = function
       | `ClientSpawnLoc cid ->
-          Session.new_client_access_point cid >>= fun apid ->
+          let apid = Session.new_client_access_point cid in
           apply_cont cont env (`AccessPointID (`ClientAccessPoint (cid, apid)))
       | `ServerSpawnLoc ->
-          Session.new_server_access_point () >>= fun apid ->
+          let apid = Session.new_server_access_point () in
           apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
   and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function

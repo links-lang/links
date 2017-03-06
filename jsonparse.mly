@@ -13,6 +13,7 @@ open WebsocketMessages
 *)
 
 let websocket_req assoc_list =
+  let open Pervasives in
   let opcode = Value.unbox_string @@ List.assoc "opcode" assoc_list in
   (* If we add more opcodes in, we might have to push these inwards *)
   let get_field field = List.assoc field assoc_list in

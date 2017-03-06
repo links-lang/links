@@ -96,8 +96,8 @@ module type SESSION =
 sig
   type chan = Value.chan
 
-  val new_server_access_point : unit -> apid Lwt.t
-  val new_client_access_point : client_id -> apid Lwt.t
+  val new_server_access_point : unit -> apid
+  val new_client_access_point : client_id -> apid
 
   val get_and_mark_pending_aps : client_id -> apid list
 

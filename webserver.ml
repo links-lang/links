@@ -54,7 +54,7 @@ struct
           Debug.print ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
           Debug.print ("Decoded client ID: " ^ decoded_client_id);
-          Lwt.return (ClientID.of_string decoded_client_id)
+          ClientID.of_string decoded_client_id
       | None -> failwith "Client ID expected but not found."
 
 
@@ -155,7 +155,7 @@ struct
         | ((dir, s, Right (valenv, v)) :: _rest) when (dir && is_prefix_of s path) || (s = path) ->
            Debug.print (Printf.sprintf "Matched case %s\n" s);
            let (_, nenv, tyenv) = !env in
-           get_or_make_client_id cgi_args >>= fun (cid) ->
+           let cid = get_or_make_client_id cgi_args in
            let req_data = RequestData.new_request_data cgi_args cookies cid !websocket_connection_path in
            let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
            Webif.do_request
