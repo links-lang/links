@@ -336,7 +336,6 @@ sig
   val unblock : channel_id -> process_id option
 
   val send : Value.t -> channel_id -> unit Lwt.t
-  val send_remote : Value.t -> client_id -> channel_id -> unit Lwt.t
   val receive : channel_id -> Value.t option
 
   val link : chan -> chan -> unit
@@ -418,10 +417,10 @@ struct
           Session.ap_request_from_client client_id blocked_pid_on_client apid
       | APAccept (blocked_pid_on_client, apid) ->
           Session.ap_accept_from_client client_id blocked_pid_on_client apid
-      | ChanSend (chan_id, _, v) ->
+      | ChanSend (chan_id, request_id, deleg_chans, v) ->
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Proc.resolve_external_processes v;
-          Session.send v chan_id
+          Session.send_from_remote client_id request_id deleg_chans v chan_id
 
     let recvLoop client_id frame =
     let open Frame in
@@ -610,9 +609,24 @@ end
 
 and Session : SESSION = struct
 
-  type buffer = Value.t Queue.t
-  type delegation_buffer = buffer
   type value_list = Value.t list
+
+  type outgoing_message =
+    | SessionMessage of Value.t
+    | SessionMessageWithChannels of (request_id * (channel_id * value_list) list * Value.t)
+
+  (* Two states:
+    * - PendingFurtherResponses (...): waiting for further lost messages.
+    *   - Either pending the first response, or
+    *   - Awaiting the response to a request generated from a previous response.
+    * - GoodToGo (...): stable -- not awaiting any more lost messages, safe to complete the delegation
+   *)
+  type lost_message_state =
+    | PendingFurtherResponses of (channel_id * value_list) list
+    | GoodToGo of (channel_id * value_list) list
+
+  type buffer = Value.t Queue.t
+  type outgoing_message_buffer = outgoing_message Queue.t
 
   type channel_state =
     | Local (* Receive endpoint resides on the server *)
@@ -624,7 +638,7 @@ and Session : SESSION = struct
      * are messages that have been sent to the first client after delegation started
      * but before the server received the message to start delegating the channel.
      * *)
-    | Delegating of (value_list * buffer * channel_id)
+    | Delegating of (value_list * buffer)
 
   (* Send channel ID * Receive channel ID *)
   (* Invariant: receive endpoint must reside on the same VM. *)
@@ -651,6 +665,13 @@ and Session : SESSION = struct
 
   (* States of all endpoints: local, remote, or in the process of delegating? *)
   let endpoint_states = (Hashtbl.create 10000 : (channel_id, channel_state) Hashtbl.t)
+
+  (* Buffers for outgoing messages: messages which can't be delivered yet as we're waiting on
+   * a lost message response *)
+  let outgoing_buffers = (Hashtbl.create 10000 : (channel_id, outgoing_message_buffer) Hashtbl.t)
+
+  (* Requests which are pending a lost message response *)
+  let pending_glm_requests = (Hashtbl.create 10000 : (request, lost_message_state) Hashtbl.t)
 
   (* Buffers of all channels _where the receive endpoint is on this server_ *)
   let buffers = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
@@ -821,7 +842,7 @@ and Session : SESSION = struct
                   Lwt.return (ch, Accepting rs, false)
             end
         | Accepting []        ->
-            assert false (* TODO: check that this is impossible *)
+            assert false
       in
         res >>= fun (c, state', blocked) ->
         Hashtbl.replace access_points apid state';
@@ -837,6 +858,34 @@ and Session : SESSION = struct
       Websockets.send_ap_response cid pid ch
     else
       Lwt.return ()
+
+  (* (chan * (Value.t list)) *)
+  (* We are delegating a list of channels from a remote client endpoint
+   * to a single recipient endpoint.
+   * In each case, we will want to set the endpoint state to delegating, and
+   * store the received buffer.
+   * Finally, we will want to send the lost message request to the client.
+   * *)
+  let resolve_delegated_chans deleg_chans from_client_id request_id recipient_endpoint =
+    let resolve_chan (ch_id, vals) =
+      match Hashtbl.lookup endpoint_states ch_id with
+        | Some (Remote cid) ->
+            (* Update endpoint states to show that this channel is in the process
+             * of being delegated, store the initial list of values, and create a queue
+             * to catch further messages sent to this channel while delegation is taking place. *)
+            assert (ClientID.equal from_client_id cid);
+            Hashtbl.replace endpoint_states ch_id
+              (Delegating (vals, Queue.empty ()))
+        | Some (_) -> failwith "Trying to do remote delegation on non-remote channel"
+        | None -> failwith "Unable to delegate: unknown client ID"
+      in
+    (* Process all channels, setting them to Delegating. *)
+    List.iter resolve_chan deleg_chans;
+    (* Create an entry in the pending_glm_requests table for this request *)
+    let request_key = (from_client_id, request_id) in
+    Hashtbl.replace pending_glm_requests request_key (PendingFurtherResponses []);
+    (* Finally, request the lost messages, and wait for the response. *)
+    Websocket.send_lost_message_request (List.map fst deleg_chans) request_id from_client_id
 
   let find_active p =
     Unionfind.find (Hashtbl.find forward p)
@@ -861,9 +910,84 @@ and Session : SESSION = struct
       let p = find_active send_port in
       Queue.push msg (Hashtbl.find buffers p)
 
-  let send_remote v client_id session_ep  =
-    Websockets.deliver_session_message client_id session_ep v
+  let send_all_possible_messages client_id session_ep =
+      let rec loop buf = function
+        | [] -> Lwt.return []
+        | (SessionMessage v) :: msgs ->
+            (* Plain session messages can always be delivered. *)
+            Websockets.deliver_session_message client_id session_ep v >>= fun _ ->
+            loop msgs
+        | ((SessionMessageWithChannels (req_id, chans, v)) :: msgs) as buf ->
+            (* We can only send this message (and the remainder of the buffer) if
+             * the status of req_id is GoodToGo. *)
+            begin
+              match Hashtbl.find pending_glm_requests req_id with
+                | PendingFurtherResponses _ ->
+                    (* We can't go any further until we have further lost messages. *)
+                    Lwt.return buf
+                | GoodToGo lost_msg_table ->
+                    let chans = merge_lost_messages lost_msg_table chans in
+                    Websocket.deliver_session_delegation_message
+                      client_id session_ep chans v >>= fun _ ->
+                    loop msgs
+            end in
+      let buf =
+        OptionUtils.from_option [] (Hashtbl.lookup outgoing_buffers session_ep) in
+      loop buf >>= fun new_buf ->
+      Hashtbl.replace outgoing_buffers session_ep new_buf;
+      Lwt.return ()
 
+  (* Queue in outgoing buffer, send as many as possible *)
+  let send_remote v client_id session_ep  =
+    let outgoing_session_buffer =
+      OptionUtils.from_option [] (Hashtbl.lookup outgoing_buffers session_ep) in
+    let outgoing_session_buffer = outgoing_session_buffer @ [(SessionMessage v)] in
+    Hashtbl.replace outgoing_buffers session_ep outgoing_session_buffer;
+    send_all_possible_messages client_id session_ep
+
+  (* Queue message with some delegated channels in the outgoing buffer, send as
+   * many messages as possible. *)
+  let send_remote_with_deleg chans v client_id request_id session_ep =
+    let outgoing_session_buffer =
+      OptionUtils.from_option [] (Hashtbl.lookup outgoing_buffers session_ep) in
+    let to_queue = SessionMessageWithChannels (req_id, chans, v) in
+    let outgoing_session_buffer = outgoing_session_buffer @ [to_queue] in
+    Hashtbl.replace outgoing_buffers session_ep outgoing_session_buffer;
+    send_all_possible_messages client_id session_ep
+
+  let send_local_with_deleg deleg_chans msg send_port =
+    (* Will need to:
+      *   - Request lost messages
+      *   - Wait for response, maybe needing to check recursively
+      *   - When all have arrived, update server's buffers, then unblock process.
+      *
+      * This will likely mean generalising the buffer queue? Or could we get away
+      * without doing that?
+      * We also need to actually put a remote -> local channel as Delegating, weirdly,
+      * since we're waiting on lost messages.
+      * Unfortunate that this isn't just a trivial case!
+      *
+      * I think the key to this is to have the internal buffer augmented as outgoing_message,
+      * with "receive" unwrapping to ensure that sessions are actually ready.
+      * Local -> Local delegation can just sidestep this altogether.
+     *)
+    failwith "not yet"
+
+  let send_from_remote client_id req_id deleg_chans msg send_port =
+    (* If we're not delegating anything, then we can just do a straightforward send *)
+    if List.empty deleg_chans then
+      send msg send_port
+    else
+      Session.resolve_delegated_chans deleg_chans client_id req_id chan_id >>= fun _ ->
+      match Hashtbl.find endpoint_states send_port with
+        | Local -> send_local_with_deleg deleg_chans msg send_port
+        | Remote cid -> send_remote_with_deleg chans msg client_id req_id chan_id
+        | Delegating (received_vals, buf) ->
+            (* We're sending a channel to a channel which is in the process of being delegated.
+             * I think this will mean that we need to generalise (at least) the delegating
+             * queue to take into account SessionMessageWithChannels messages.
+             * It's likely we'll have to do the same for local buffers too, actually. *)
+            failwith "hm..."
 
   let send msg send_port =
     match Hashtbl.find endpoint_states send_port with
@@ -872,7 +996,7 @@ and Session : SESSION = struct
           OptionUtils.opt_iter Proc.awaken (Session.unblock send_port);
           Lwt.return ()
       | Remote client_id -> send_remote msg client_id send_port
-      | Delegating (_init_buf, buf, _cid) -> Lwt.return @@ Queue.push msg buf
+      | Delegating (_init_buf, buf) -> Lwt.return @@ Queue.push msg buf
 
   let receive recv_port =
       (* Debug.print ("Receiving on: " ^ string_of_int p); *)

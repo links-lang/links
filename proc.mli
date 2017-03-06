@@ -48,8 +48,7 @@ module type WEBSOCKETS =
       Conduit_lwt_unix.flow ->
       (Cohttp.Response.t * Cohttp_lwt_body.t) Lwt.t
 
-    (** Sends a message to the given PID.
-     * The string is a JSONised value -- should abstract this furhter *)
+    (** Sends a message to the given PID. *)
     val deliver_process_message :
       client_id ->
       process_id ->

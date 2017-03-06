@@ -12,4 +12,4 @@ type incoming_websocket_message =
   (* Send a message to a remote channel. *)
   | ChanSend of (channel_id * (Value.delegated_chan list) * Value.t)
   (* Deliver lost messages *)
-  | LostMessages of (channel_id * (Value.t list))
+  | LostMessages of (request_id * ((channel_id * Value.t list) list))

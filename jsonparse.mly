@@ -27,9 +27,12 @@ let websocket_req assoc_list =
     (blocked_pid, server_apid) in
 
   let parse_deleg_entry entry =
-    let chan = Value.unbox_channel @@ List.assoc "chan" entry in
+    let chan_id =
+      List.assoc "chan" entry
+      |> Value.unbox_string
+      |> ChannelID.of_string in
     let buf = Value.unbox_list @@ List.assoc "buffer" entry in
-    (chan, buf) in
+    (chan_id, buf) in
 
   match opcode with
     | "CLIENT_TO_CLIENT" ->
