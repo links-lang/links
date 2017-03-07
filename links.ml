@@ -19,8 +19,21 @@ let print_value rtype value =
   if Settings.get_value Basicsettings.new_pretty_printer then
     begin
       let open Format in
-      let (width, _height) = ANSITerminal.size () in
+      let (width, _height) = try ANSITerminal.size () with _ -> (80, 24) in
       pp_set_margin std_formatter width;
+      pp_set_tags std_formatter (Settings.get_value Basicsettings.print_colors);
+      pp_set_mark_tags std_formatter (Settings.get_value Basicsettings.print_colors);
+      pp_set_formatter_tag_functions
+        std_formatter
+        {mark_open_tag = (function
+                          | "constructor" -> "\x1b[32m"
+                          | "recordlabel" -> "\x1b[35m"
+                          | "string" -> "\x1b[36m"
+                          | _ -> "");
+         mark_close_tag  = (fun _ -> "\x1b[39m");
+         print_open_tag  = ignore;
+         print_close_tag = ignore;
+        };
       fprintf std_formatter "@[%a@;<1 4>: %s@]" Value.p_value value (if Settings.get_value(BS.printing_types) then
 		                                                       Types.string_of_datatype rtype
                                                                      else "");

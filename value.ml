@@ -538,27 +538,43 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `Int i -> fprintf ppf "%i" i
   | `Float f -> fprintf ppf "%s" (string_of_float' f)
   | `Char c -> fprintf ppf "'%c'" c
-  | `String s -> fprintf ppf "\"%s\"" s
+  | `String s -> fprintf ppf "@{<string>\"%s\"@}" s
   | `Record fields -> begin
       try p_tuple ppf fields
       with Not_tuple ->
         fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields) end
   | `List [] -> fprintf ppf "[]"
+  | `List ((`XML _)::_ as _elems) as l -> fprintf ppf "%s" (string_of_value l) (* TODO print pretty *)
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
                p_list_elements ppf l
   | `ClientFunction n -> fprintf ppf "%s" n
-  | `Variant (label, `Record []) -> fprintf ppf "%s" label
+  | `PrimitiveFunction (name, _op) -> fprintf ppf "%s" name
+  | `Variant (label, `Record []) -> fprintf ppf "@{<constructor>%s@}" label
   (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
-  | `Variant (label, (`Record _ as value)) -> fprintf ppf "%s@[%a@]" label p_value value
-  | `Variant (label, value) -> fprintf ppf "%s(@[%a)@]" label p_value value
-  (* | _ -> fprintf ppf "not implemented" *)
+  | `Variant (label, (`Record _ as value)) -> fprintf ppf "@{<constructor>%s@}@[%a@]" label p_value value
+  | `Variant (label, value) -> fprintf ppf "@{<constructor>%s@}(@[%a)@]" label p_value value
+  | `FunctionPtr (x, fvs) -> if Settings.get_value Basicsettings.printing_functions then
+                               match fvs with
+                               | None -> fprintf ppf "%i" x (* ^ opt_app string_of_value "" fvs *)
+                               | Some t -> fprintf ppf "%i%a" x p_value t
+                             else
+                               fprintf ppf "fun"
+  | `Socket _ -> fprintf ppf "<socket>"
+  | `Table (_, name, _, _) -> fprintf ppf "(table %s)" name
+  | `Database (_, params) -> fprintf ppf "(database %s" params
+  (* TODO? *)
+  | `SessionChannel c -> fprintf ppf "%s" (string_of_channel c)
+  | `AccessPointID apid -> fprintf ppf "APID: %s" (AccessPointID.to_string apid)
+  | `XML x -> fprintf ppf "%s" (string_of_item x) (* TODO *)
+  | `Continuation cont -> fprintf ppf "Continuation%s" (string_of_cont cont)
+  | `Pid (pid, location) -> fprintf ppf "%s@@%s" (ProcessID.to_string pid) (Sugartypes.string_of_location location)
 and p_record_fields ppf = function
   | [] -> fprintf ppf ""
-  | [(l, v)] -> fprintf ppf "@[%a = %a@]"
+  | [(l, v)] -> fprintf ppf "@[@{<recordlabel>%a@} = %a@]"
                         p_record_label l
                         p_value v
-  | (l, v)::xs -> fprintf ppf "%a = %a,@ "
+  | (l, v)::xs -> fprintf ppf "@{<recordlabel>%a@} = %a,@ "
                           p_record_label l
                           p_value v;
                   p_record_fields ppf xs
