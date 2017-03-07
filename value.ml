@@ -544,7 +544,8 @@ let rec p_value (ppf : formatter) : t -> 'a = function
       with Not_tuple ->
         fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields) end
   | `List [] -> fprintf ppf "[]"
-  | `List ((`XML _)::_ as _elems) as l -> fprintf ppf "%s" (string_of_value l) (* TODO print pretty *)
+  | `List ((`XML _)::_ as elems) ->
+     fprintf ppf "@[<hv>%a@]" (pp_print_list p_value) elems
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
                p_list_elements ppf l
@@ -566,7 +567,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   (* TODO? *)
   | `SessionChannel c -> fprintf ppf "%s" (string_of_channel c)
   | `AccessPointID apid -> fprintf ppf "APID: %s" (AccessPointID.to_string apid)
-  | `XML x -> fprintf ppf "%s" (string_of_item x) (* TODO *)
+  | `XML xml -> fprintf ppf "%a" (p_xml ~close_tags:false) xml
   | `Continuation cont -> fprintf ppf "Continuation%s" (string_of_cont cont)
   | `Pid (pid, location) -> fprintf ppf "%s@@%s" (ProcessID.to_string pid) (Sugartypes.string_of_location location)
 and p_record_fields ppf = function
@@ -601,9 +602,34 @@ and p_tuple_elements ppf = function
   | [v] -> fprintf ppf "%a" p_value v
   | v::vs -> fprintf ppf "%a,@ " p_value v;
              p_tuple_elements ppf vs
-
-(* let string_of_cont : continuation -> string = *)
-(*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
+(* Is this function needed? *)
+and p_xml ?(close_tags=false) ppf = function
+  | x -> fprintf ppf "%a" (p_xmlitem ~close_tags:close_tags) x
+and p_xmlitem ?(close_tags=false) ppf = function
+  | Attr (k, v) -> let escape = Str.global_replace (Str.regexp "\"") "\\\"" in
+                   fprintf ppf "@{<xmlattr>%s@}=\"%s\"" k (escape v)
+  | Text s -> fprintf ppf "%s" (xml_escape s)
+  | Node (tag, children) ->
+     begin
+       match attrs children, nodes children with
+       | [], [] when not close_tags ->
+          fprintf ppf "<@{<xmltag>%s@}/>" tag
+       | attrs, [] when not close_tags ->
+          fprintf ppf "@[<hv 2><@{<xmltag>%s@}@ @[<hv>%a@]/>@]"
+                  tag
+                  (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
+       | [], nodes ->
+          fprintf ppf "@[<hv 4><@{<xmltag>%s@}>@,%a@;<0 -4></@{<xmltag>%s@}>@]"
+                  tag
+                  (pp_print_list (p_xml ~close_tags:close_tags)) nodes
+                  tag
+       | attrs, nodes ->
+          fprintf ppf "@[<hv 4><@{<xmltag>%s@}@;<1 -2>@[<hv>%a@]>@,%a@;<0 -4></@{<xmltag>%s@}>@]"
+                  tag
+                  (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
+                  (pp_print_list (p_xml ~close_tags:close_tags)) nodes
+                  tag
+     end
 
 (** {1 Record manipulations} *)
 
