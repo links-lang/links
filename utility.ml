@@ -920,4 +920,9 @@ let time_seconds() = int_of_float (Unix.time())
 let time_milliseconds() = int_of_float (Unix.gettimeofday() *. 1000.0)
 
 let queue_as_list q =
-  Queue.fold (fun acc x -> x :: acc) [] q |> List.rev
+  List.rev @@ Queue.fold (fun acc x -> x :: acc) [] q
+
+let queue_from_list xs =
+  let q = Queue.create () in
+  List.iter (fun x -> Queue.add x q) xs;
+  q
