@@ -3,6 +3,7 @@ open Utility
 open Lwt
 open ProcessTypes
 open WebsocketMessages
+open Pervasives
 
 type abort_type = string * string
 exception Aborted of abort_type
@@ -421,6 +422,8 @@ struct
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Proc.resolve_external_processes v;
           Session.send_from_remote client_id request_id deleg_chans v chan_id
+      | LostMessages (req_id, lost_msgs, new_chans) ->
+          Session.handle_lost_message_response req_id lost_msgs new_chans
 
     let recvLoop client_id frame =
     let open Frame in
@@ -611,22 +614,15 @@ and Session : SESSION = struct
 
   type value_list = Value.t list
 
-  type outgoing_message =
-    | SessionMessage of Value.t
-    | SessionMessageWithChannels of (request_id * (channel_id * value_list) list * Value.t)
+  type request_id = int
+  type request = (client_id * chan_id * request_id)
 
-  (* Two states:
-    * - PendingFurtherResponses (...): waiting for further lost messages.
-    *   - Either pending the first response, or
-    *   - Awaiting the response to a request generated from a previous response.
-    * - GoodToGo (...): stable -- not awaiting any more lost messages, safe to complete the delegation
-   *)
-  type lost_message_state =
-    | PendingFurtherResponses of (channel_id * value_list) list
-    | GoodToGo of (channel_id * value_list) list
+  type session_message =
+    | SessionMessage of Value.t
+    | SessionMessageWithChannels of (request * (channel_id * value_list) list * Value.t)
 
   type buffer = Value.t Queue.t
-  type outgoing_message_buffer = outgoing_message Queue.t
+  type session_message_buffer = session_message Queue.t
 
   type channel_state =
     | Local (* Receive endpoint resides on the server *)
@@ -638,7 +634,7 @@ and Session : SESSION = struct
      * are messages that have been sent to the first client after delegation started
      * but before the server received the message to start delegating the channel.
      * *)
-    | Delegating of (value_list * buffer)
+    | Delegating of (session_message list * session_message_buffer)
 
   (* Send channel ID * Receive channel ID *)
   (* Invariant: receive endpoint must reside on the same VM. *)
@@ -666,17 +662,176 @@ and Session : SESSION = struct
   (* States of all endpoints: local, remote, or in the process of delegating? *)
   let endpoint_states = (Hashtbl.create 10000 : (channel_id, channel_state) Hashtbl.t)
 
-  (* Buffers for outgoing messages: messages which can't be delivered yet as we're waiting on
-   * a lost message response *)
-  let outgoing_buffers = (Hashtbl.create 10000 : (channel_id, outgoing_message_buffer) Hashtbl.t)
-
-  (* Requests which are pending a lost message response *)
-  let pending_glm_requests = (Hashtbl.create 10000 : (request, lost_message_state) Hashtbl.t)
-
   (* Buffers of all channels _where the receive endpoint is on this server_ *)
-  let buffers = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
+  let buffers = (Hashtbl.create 10000 : (channel_id, session_message_buffer) Hashtbl.t)
   let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
   let forward = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
+
+
+  (* Data structures and functions pertinent to session delegation *)
+  module Delegation = struct
+
+    type destination = channel_state
+
+    (* Two states:
+      * - PendingFurtherResponses (...): waiting for further lost messages.
+      *   - Either pending the first response, or
+      *   - Awaiting the response to a request generated from a previous response.
+      * - GoodToGo (...): stable -- not awaiting any more lost messages, safe to complete the delegation
+     *)
+    type lost_message_state =
+      | PendingFurtherResponses of (channel_id * value_list) list
+      | GoodToGo of (channel_id * value_list) list
+
+    (* Buffers for outgoing messages: messages which can't be delivered to a client yet as we're waiting on
+     * a lost message response *)
+    let outgoing_buffers = (Hashtbl.create 10000 : (channel_id, session_message_buffer) Hashtbl.t)
+
+    (* Requests which are pending a lost message response *)
+    let pending_glm_requests = (Hashtbl.create 10000 : (request, lost_message_state) Hashtbl.t)
+
+
+    (* (chan * (Value.t list)) *)
+    (* We are delegating a list of channels from a remote client endpoint
+     * to a single recipient endpoint.
+     * In each case, we will want to set the endpoint state to delegating, and
+     * store the received buffer.
+     * Finally, we will want to send the lost message request to the client.
+     * *)
+    let resolve_delegated_chans deleg_chans from_client_id request_id recipient_endpoint =
+      let resolve_chan (ch_id, vals) =
+        match Hashtbl.lookup endpoint_states ch_id with
+          | Some (Remote cid) ->
+              (* Update endpoint states to show that this channel is in the process
+               * of being delegated, store the initial list of values, and create a queue
+               * to catch further messages sent to this channel while delegation is taking place. *)
+              assert (ClientID.equal from_client_id cid);
+              Hashtbl.replace endpoint_states ch_id
+                (* Even if the buffer contains channels, the lost messages will have to
+                 * be returned before this channel can be delivered. Thus, it's perfectly safe
+                 * to treat everything as a plain session message. *)
+                (Delegating (List.map (fun v -> SessionMessage v) vals), Queue.empty ())
+          | Some (_) -> failwith "Trying to do remote delegation on non-remote channel"
+          | None -> failwith "Unable to delegate: unknown channel ID"
+        in
+      (* Process all channels, setting them to Delegating. *)
+      List.iter resolve_chan deleg_chans;
+      (* Create an entry in the pending_glm_requests table for this request *)
+      let request_key = (from_client_id, request_id) in
+      Hashtbl.replace pending_glm_requests request_key (PendingFurtherResponses []);
+      (* Finally, request the lost messages, and wait for the response. *)
+      Websocket.send_lost_message_request (List.map fst deleg_chans) request_id from_client_id
+
+
+    (* Queue message with some delegated channels in the outgoing buffer, send as
+     * many messages as possible. *)
+    let send_remote_with_deleg chans v client_id request_id carrier_ep =
+      let outgoing_session_buffer =
+        OptionUtils.from_option [] (Hashtbl.lookup outgoing_buffers carrier_ep) in
+      let to_queue = SessionMessageWithChannels (req_id, chans, v) in
+      let outgoing_session_buffer = outgoing_session_buffer @ [to_queue] in
+      Hashtbl.replace outgoing_buffers carrier_ep outgoing_session_buffer;
+      send_all_possible_messages client_id carrier_ep
+
+    let send_local_with_deleg deleg_chans msg send_port =
+      (* Will need to:
+        *   - Request lost messages
+        *   - Wait for response, maybe needing to check recursively
+        *   - When all have arrived, update server's buffers, then unblock process.
+        *
+        * This will likely mean generalising the buffer queue? Or could we get away
+        * without doing that?
+        * We also need to actually put a remote -> local channel as Delegating, weirdly,
+        * since we're waiting on lost messages.
+        * Unfortunate that this isn't just a trivial case!
+        *
+        * I think the key to this is to have the internal buffer augmented as session_message,
+        * with "receive" unwrapping to ensure that sessions are actually ready.
+        * Local -> Local delegation can just sidestep this altogether.
+       *)
+      failwith "not yet"
+
+
+    let change_channel_state chan_id new_state =
+      Hashtbl.replace endpoint_states chan_id new_state
+
+    let handle_lost_message_response req lost_msgs new_chans =
+      let (_, chan_id, _) = req in
+      (* Firstly, grab the existing state from the pending_glm_requests HT. *)
+      let pending_glm_state = Hashtbl.lookup req pending_glm_requests in
+      let cur_chan_state =
+        match pending_glm_state with
+          | PendingFurtherResponses chs -> chs
+          | _ ->
+              (* This shouldn't happen -- no responses should come back after
+               * we finalise the GLM state, since we won't have made any more
+               * requests. *)
+              failwith "Trying to handle lost messages when state is GoodToGo!" in
+
+      (* Check to ensure that we've not already got an entry in the GLM table. Erroneous if we do. *)
+      (* TODO: Remove this assertion -- inefficient, but useful for now *)
+      List.iter (fun ch_id -> assert (not @@ List.mem_assoc ch_id cur_chan_state)) new_chans;
+      let merged_msgs = cur_chan_state @ new_chans in
+
+      (* OK, now, if there are more delegated channels in the lost message response,
+       * then we need to send more. If not, we mark the request as GoodToGo,
+       * and attempt to send. *)
+      if (List.empty new_chans) then begin
+          Hashtbl.replace pending_glm_requests req_id (GoodToGo merged_msgs);
+          flush_chan ch_id
+        end
+      else
+        (* Add new entries to GLM table. It should not be the case that any of these
+         * are in the GLM table already. *)
+        List.iter (fun ch_id -> assert (not @@ List.mem_assoc ch_id merged_msgs)) new_chans;
+        (* Append new_chans to current GLM table *)
+        Hashtbl.replace pending_glm_requests req_id (PendingFurtherResponses (merged_msgs @ new_chans));
+        (* Resend GLM request *)
+        Websocket.send_lost_message_request (List.map fst new_chans) request_id from_client_id
+
+    (** Given a request ID and destination:
+      *   - Set each endpoint state to reside at the destination
+      *   - Construct final (chan |-> buffer) mapping from initial buffer + lost messages
+      * Precondition: all lost messages associated with this request should have been delivered
+      *   req_id -> destination -> ((chan_id * buffer) list) *)
+    let delegate_chans req_id destination =
+      (* Fetch the GLM table for the request *)
+      let glm_table =
+        match Hashtbl.find pending_glm_requests req_id with
+          | GoodToGo glm -> glm
+          | _ -> failwith "Trying to delegate channels on unfinished GLM request!" in
+
+      let delegate_chan ch_id =
+        let ch_state = (Hashtbl.find endpoint_states ch_id) in
+        match ch_state with
+          | Delegating (orig_buf, subsequent_buf) ->
+              let lost_msgs = List.assoc ch_id glm_table in
+              (* Set channel to be at the destination *)
+              Hashtbl.replace endpoint_states ch_id destination;
+              (* Delete the local buffer for the chan ID, if it exists *)
+              Hashtbl.delete buffers ch_id;
+              (* Final buffer is original buffer + lost messages + subsequent *)
+              orig_buf @ lost_msgs @ (queue_as_list subsequent_buf)
+          | _ -> failwith "Trying to delegate channel in state other than Delegating!" in
+
+      List.fold_left (fun acc ch_id -> (ch_id, delegate_chan ch_id)) glm_table
+  end
+
+
+  (** Given a session message, checks to see whether all delegation has taken
+   * place and that the message can be safely delivered. *)
+  let is_msg_ready = function
+    | SessionMessage _ -> false
+    | SessionMessageWithChannels (req, _, _) ->
+        begin
+        match Hashtbl.find Delegation.pending_glm_requests req with
+          | PendingFurtherResponses _ -> false
+          | GoodToGo _ -> true
+        end
+
+  let unwrap_session_msg = function
+    | SessionMessage v -> v
+    | SessionMessageWithChannels (_, _, v) -> v
 
   (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)
   let fresh_chan () =
@@ -798,7 +953,6 @@ and Session : SESSION = struct
     else
       Lwt.return ()
 
-
   let request_core : apid -> (client_id * process_id) option -> (chan * bool) Lwt.t =
     fun apid client_info_opt ->
       let make_req ch =
@@ -859,34 +1013,6 @@ and Session : SESSION = struct
     else
       Lwt.return ()
 
-  (* (chan * (Value.t list)) *)
-  (* We are delegating a list of channels from a remote client endpoint
-   * to a single recipient endpoint.
-   * In each case, we will want to set the endpoint state to delegating, and
-   * store the received buffer.
-   * Finally, we will want to send the lost message request to the client.
-   * *)
-  let resolve_delegated_chans deleg_chans from_client_id request_id recipient_endpoint =
-    let resolve_chan (ch_id, vals) =
-      match Hashtbl.lookup endpoint_states ch_id with
-        | Some (Remote cid) ->
-            (* Update endpoint states to show that this channel is in the process
-             * of being delegated, store the initial list of values, and create a queue
-             * to catch further messages sent to this channel while delegation is taking place. *)
-            assert (ClientID.equal from_client_id cid);
-            Hashtbl.replace endpoint_states ch_id
-              (Delegating (vals, Queue.empty ()))
-        | Some (_) -> failwith "Trying to do remote delegation on non-remote channel"
-        | None -> failwith "Unable to delegate: unknown client ID"
-      in
-    (* Process all channels, setting them to Delegating. *)
-    List.iter resolve_chan deleg_chans;
-    (* Create an entry in the pending_glm_requests table for this request *)
-    let request_key = (from_client_id, request_id) in
-    Hashtbl.replace pending_glm_requests request_key (PendingFurtherResponses []);
-    (* Finally, request the lost messages, and wait for the response. *)
-    Websocket.send_lost_message_request (List.map fst deleg_chans) request_id from_client_id
-
   let find_active p =
     Unionfind.find (Hashtbl.find forward p)
 
@@ -908,9 +1034,14 @@ and Session : SESSION = struct
   let send_local msg send_port =
       (* Debug.print ("Sending along: " ^ string_of_int p); *)
       let p = find_active send_port in
-      Queue.push msg (Hashtbl.find buffers p)
+      Queue.push (SessionMessage msg) (Hashtbl.find buffers p)
 
-  let send_all_possible_messages client_id session_ep =
+  let send_all_possible_messages session_ep =
+      let client_id =
+        match Hashtbl.find endpoint_states session_ep with
+          | Remote cid -> cid
+          | _ -> failwith "Cannot call send_all_possible_messages on non-remote EP" in
+
       let rec loop buf = function
         | [] -> Lwt.return []
         | (SessionMessage v) :: msgs ->
@@ -921,14 +1052,18 @@ and Session : SESSION = struct
             (* We can only send this message (and the remainder of the buffer) if
              * the status of req_id is GoodToGo. *)
             begin
-              match Hashtbl.find pending_glm_requests req_id with
+              match Hashtbl.find Delegation.pending_glm_requests req_id with
                 | PendingFurtherResponses _ ->
                     (* We can't go any further until we have further lost messages. *)
                     Lwt.return buf
                 | GoodToGo lost_msg_table ->
-                    let chans = merge_lost_messages lost_msg_table chans in
+                    (* Compute final message tables, and set Delegating to Remote on all
+                     * delegated channels *)
+                    let chan_msg_table =
+                      Delegation.delegate_channels (`Remote client_id) chans lost_message_table in
+                    (* Finally, send the delegation message over. *)
                     Websocket.deliver_session_delegation_message
-                      client_id session_ep chans v >>= fun _ ->
+                      client_id session_ep chan_msg_table v >>= fun _ ->
                     loop msgs
             end in
       let buf =
@@ -945,34 +1080,6 @@ and Session : SESSION = struct
     Hashtbl.replace outgoing_buffers session_ep outgoing_session_buffer;
     send_all_possible_messages client_id session_ep
 
-  (* Queue message with some delegated channels in the outgoing buffer, send as
-   * many messages as possible. *)
-  let send_remote_with_deleg chans v client_id request_id session_ep =
-    let outgoing_session_buffer =
-      OptionUtils.from_option [] (Hashtbl.lookup outgoing_buffers session_ep) in
-    let to_queue = SessionMessageWithChannels (req_id, chans, v) in
-    let outgoing_session_buffer = outgoing_session_buffer @ [to_queue] in
-    Hashtbl.replace outgoing_buffers session_ep outgoing_session_buffer;
-    send_all_possible_messages client_id session_ep
-
-  let send_local_with_deleg deleg_chans msg send_port =
-    (* Will need to:
-      *   - Request lost messages
-      *   - Wait for response, maybe needing to check recursively
-      *   - When all have arrived, update server's buffers, then unblock process.
-      *
-      * This will likely mean generalising the buffer queue? Or could we get away
-      * without doing that?
-      * We also need to actually put a remote -> local channel as Delegating, weirdly,
-      * since we're waiting on lost messages.
-      * Unfortunate that this isn't just a trivial case!
-      *
-      * I think the key to this is to have the internal buffer augmented as outgoing_message,
-      * with "receive" unwrapping to ensure that sessions are actually ready.
-      * Local -> Local delegation can just sidestep this altogether.
-     *)
-    failwith "not yet"
-
   let send_from_remote client_id req_id deleg_chans msg send_port =
     (* If we're not delegating anything, then we can just do a straightforward send *)
     if List.empty deleg_chans then
@@ -981,13 +1088,9 @@ and Session : SESSION = struct
       Session.resolve_delegated_chans deleg_chans client_id req_id chan_id >>= fun _ ->
       match Hashtbl.find endpoint_states send_port with
         | Local -> send_local_with_deleg deleg_chans msg send_port
-        | Remote cid -> send_remote_with_deleg chans msg client_id req_id chan_id
+        | Remote cid -> send_remote_with_deleg deleg_chans msg client_id req_id chan_id
         | Delegating (received_vals, buf) ->
-            (* We're sending a channel to a channel which is in the process of being delegated.
-             * I think this will mean that we need to generalise (at least) the delegating
-             * queue to take into account SessionMessageWithChannels messages.
-             * It's likely we'll have to do the same for local buffers too, actually. *)
-            failwith "hm..."
+            send_to_delegating_chan deleg_chans msg client_id req_id chan_id
 
   let send msg send_port =
     match Hashtbl.find endpoint_states send_port with
@@ -999,13 +1102,26 @@ and Session : SESSION = struct
       | Delegating (_init_buf, buf) -> Lwt.return @@ Queue.push msg buf
 
   let receive recv_port =
-      (* Debug.print ("Receiving on: " ^ string_of_int p); *)
-      let p = find_active recv_port in
-      let buf = Hashtbl.find buffers p in
-      if not (Queue.is_empty buf) then
-        Some (Queue.pop buf)
-      else
-        None
+      match Hashtbl.find endpoint_states recv_port with
+        | Local ->
+          (* Debug.print ("Receiving on: " ^ string_of_int p); *)
+          let p = find_active recv_port in
+          let buf = Hashtbl.find buffers p in
+          if not (Queue.is_empty buf) then
+            let peek_msg = Queue.peek buf in
+            if is_msg_ready peek_msg then
+              Some (Queue.pop buf |> unwrap_session_msg)
+            else None
+          else
+            None
+        | Remote _ ->
+            (* If this happens, something has gone seriously wrong
+             * internally. *)
+            failwith "Cannot receive on remote port!"
+        | Delegating _ ->
+            (* This shouldn't be possible. Before a process has unblocked,
+             * delegation should have completed. *)
+            failwith "Cannot receive on channel in process of delegation!"
 
   (* Currently: all four of these should be server endpoints.
    * Eventually we'll have to do something a bit cleverer... *)

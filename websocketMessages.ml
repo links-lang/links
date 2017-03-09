@@ -11,5 +11,6 @@ type incoming_websocket_message =
   | APAccept of (process_id * apid)
   (* Send a message to a remote channel. *)
   | ChanSend of (channel_id * (Value.delegated_chan list) * Value.t)
-  (* Deliver lost messages *)
-  | LostMessages of (request_id * ((channel_id * Value.t list) list))
+  (* Deliver lost messages: request ID, lost messages, new set of delegated channels which
+   * need to have lost messages retrieved *)
+  | LostMessages of (request_id * ((channel_id * Value.t list) list) * (Value.delegated_chan list))
