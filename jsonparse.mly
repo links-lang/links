@@ -26,15 +26,7 @@ let websocket_req assoc_list =
       AccessPointID.of_string (get_and_unbox_str "serverAPID") in
     (blocked_pid, server_apid) in
 
-  let parse_deleg_entry entry =
-    let chan_id =
-      List.assoc "chan" entry
-      |> Value.unbox_string
-      |> ChannelID.of_string in
-    let buf = Value.unbox_list @@ List.assoc "buffer" entry in
-    (chan_id, buf) in
-
-  match opcode with
+    match opcode with
     | "CLIENT_TO_CLIENT" ->
         let pid = ProcessID.of_string (get_and_unbox_str "destPid") in
         let msg = get_field "msg" in
@@ -52,6 +44,12 @@ let websocket_req assoc_list =
         let (pid, apid) = parse_srv_ap_msg () in
         APAccept (pid, apid)
     | "REMOTE_SESSION_SEND" ->
+        let parse_deleg_entry entry =
+          let chan =
+            List.assoc "chan" entry |> Value.unbox_channel in
+          let buf = Value.unbox_list @@ List.assoc "buffer" entry in
+          (chan, buf) in
+
         let remote_ep =
           List.assoc "remoteEP" assoc_list
             |> Value.unbox_string

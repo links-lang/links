@@ -339,7 +339,8 @@ sig
 
   val send : Value.t -> channel_id -> unit Lwt.t
   val send_to_remote : Value.t -> client_id -> channel_id -> unit Lwt.t
-  val handle_send_from_remote : Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
+  val handle_send_from_remote :
+    client_id -> Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
   val receive : channel_id -> Value.t option
 
   val link : chan -> chan -> unit
@@ -424,7 +425,7 @@ struct
       | ChanSend (chan_id, deleg_chans, v) ->
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Proc.resolve_external_processes v;
-          Session.handle_send_from_remote deleg_chans v chan_id
+          Session.handle_send_from_remote client_id deleg_chans v chan_id
 
     let recvLoop client_id frame =
     let open Frame in
@@ -493,9 +494,9 @@ struct
 
   let deliver_session_message client_id session_ep deleg_chans v =
     let json_val = Json.jsonize_value v in
-    let print_deleg_chan (chan_id, msgs) =
+    let print_deleg_chan (chan, msgs) =
       let str_buf = (List.map (Json.jsonize_value) msgs) |> String.concat "," in
-      "{\"ep_id\":" ^ (ChannelID.to_json chan_id) ^ ", \"buf\": [" ^ str_buf  ^ "]}" in
+      "{\"ep_id\":" ^ (ChannelID.to_json (snd chan)) ^ ", \"buf\": [" ^ str_buf  ^ "]}" in
     let deleg_chans_json = List.map print_deleg_chan deleg_chans |> String.concat "," in
 
     let json_str =
@@ -649,7 +650,7 @@ and Session : SESSION = struct
   (* Buffers of all channels _where the receive endpoint is on this server_ *)
   let buffers = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
   let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
-  let forward = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
+  let forward_tbl = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
 
   (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)
   let fresh_chan () =
@@ -672,8 +673,8 @@ and Session : SESSION = struct
       Hashtbl.add endpoint_states inp Local;
 
       (* Finally, add to the link table -- although this is defunct at the moment *)
-      Hashtbl.add forward outp (Unionfind.fresh outp);
-      Hashtbl.add forward inp (Unionfind.fresh inp);
+      Hashtbl.add forward_tbl outp (Unionfind.fresh outp);
+      Hashtbl.add forward_tbl inp (Unionfind.fresh inp);
       c
 
   let new_server_access_point () =
@@ -832,10 +833,10 @@ and Session : SESSION = struct
       Lwt.return ()
 
   let find_active p =
-    Unionfind.find (Hashtbl.find forward p)
+    Unionfind.find (Hashtbl.find forward_tbl p)
 
   let forward inp outp =
-    Unionfind.union (Hashtbl.find forward inp) (Hashtbl.find forward outp)
+    Unionfind.union (Hashtbl.find forward_tbl inp) (Hashtbl.find forward_tbl outp)
 
   let block portid pid =
     let portid = find_active portid in
@@ -849,6 +850,25 @@ and Session : SESSION = struct
           Some pid
       | None -> None
 
+
+  (* Sets the location of the *send* endpoint of a delegated channel created
+   * on a client CID to Remote(cid).
+   * If both ends are in the same message and subsequently sent to a client then
+   * not to worry -- they'll both be set correctly (atomically) in the send step. *)
+  let record_chan_locations owner_cid chans =
+    List.iter (fun (ch, _) ->
+      Hashtbl.replace endpoint_states (fst ch) (Remote owner_cid)) chans
+
+(*
+   let get_or_create_buffer p =
+    match Hashtbl.lookup buffers p with
+      | Some q -> q
+      | None ->
+          let q = Queue.create () in
+          Hashtbl.replace buffers p q;
+          q
+*)
+
   let send_local msg send_port =
     (* Debug.print ("Sending along: " ^ string_of_int p); *)
     let p = find_active send_port in
@@ -857,18 +877,22 @@ and Session : SESSION = struct
   let send_local_with_deleg deleg_chans msg chan_id =
     (* FIXME: Dumb for now -- this will not handle lost messages. Sad! *)
     (* Set all delegated chans to Local, store the buffers *)
-    List.iter (fun (chan_id, buf) ->
-      Hashtbl.replace endpoint_states chan_id Local;
-      Hashtbl.replace buffers chan_id (queue_from_list buf)) deleg_chans;
+    List.iter (fun (chan, buf) ->
+      let chan_ep = snd chan in
+      Debug.print @@ "Updating buffer for " ^ (ChannelID.to_string chan_ep);
+      Hashtbl.replace endpoint_states chan_ep Local;
+      Hashtbl.replace forward_tbl chan_ep (Unionfind.fresh chan_ep);
+      Hashtbl.replace buffers chan_ep (queue_from_list buf)) deleg_chans;
+
     Lwt.return @@ send_local msg chan_id
 
   let send_to_remote v client_id session_ep  =
     Websockets.deliver_session_message client_id session_ep [] v
 
   let send_to_remote_with_deleg deleg_chans msg dest_client_id dest_chan_id =
-    List.iter (fun (chan_id, _buf) ->
-      Hashtbl.replace endpoint_states chan_id (Remote dest_client_id)) deleg_chans;
-    Websockets.deliver_session_message dest_client_id dest_chan_id [] msg
+    List.iter (fun (chan, _buf) ->
+      Hashtbl.replace endpoint_states (snd chan) (Remote dest_client_id)) deleg_chans;
+    Websockets.deliver_session_message dest_client_id dest_chan_id deleg_chans msg
 
   let send msg send_port =
     match Hashtbl.find endpoint_states send_port with
@@ -880,20 +904,28 @@ and Session : SESSION = struct
           (* Note that we only want the buffer associated with the "receive port" *)
           let deleg_chans =
             Value.get_contained_channels msg
-            |> List.map (fun (_, cid) -> (cid, Hashtbl.find buffers cid |> queue_as_list)) in
+            |> List.map (fun ((_, ep2) as ch) -> (ch, Hashtbl.find buffers ep2 |> queue_as_list)) in
           send_to_remote_with_deleg deleg_chans msg client_id send_port
 
-  let handle_send_from_remote deleg_chans msg send_port =
+  (* Handles a remote session send:
+   *  - owner_cid: client ID of the client sending the request
+   *  - deleg_chans: channels sent in the message, which require delegation
+   *  - msg: message to send
+   *  - send_port: remote channel endpoint to which the message should be sent *)
+  let handle_send_from_remote owner_cid deleg_chans msg send_port =
     (* If we're not delegating anything, then we can just do a straightforward send *)
     if (List.length deleg_chans) = 0 then
       send msg send_port
     else
+      begin
+      record_chan_locations owner_cid deleg_chans;
       match Hashtbl.find endpoint_states send_port with
         | Local ->
             send_local_with_deleg deleg_chans msg send_port >>= fun _ ->
             OptionUtils.opt_iter Proc.awaken (Session.unblock send_port);
             Lwt.return ()
         | Remote cid -> send_to_remote_with_deleg deleg_chans msg cid send_port
+      end
 
   let receive recv_port =
       match Hashtbl.find endpoint_states recv_port with

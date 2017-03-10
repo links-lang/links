@@ -111,7 +111,8 @@ sig
 
   val send : Value.t -> channel_id -> unit Lwt.t
   val send_to_remote : Value.t -> client_id -> channel_id -> unit Lwt.t
-  val handle_send_from_remote : Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
+  val handle_send_from_remote :
+    client_id -> Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
   val receive : channel_id -> Value.t option
 
   val link : chan -> chan -> unit
