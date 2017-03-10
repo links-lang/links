@@ -47,7 +47,10 @@ let websocket_req assoc_list =
         let parse_deleg_entry entry =
           let chan =
             List.assoc "chan" entry |> Value.unbox_channel in
-          let buf = Value.unbox_list @@ List.assoc "buffer" entry in
+          let buf =
+            List.assoc "buffer" entry
+            |> Value.unbox_list
+            |> List.rev in (* Client representation of a buffer is reversed... *)
           (chan, buf) in
 
         let remote_ep =

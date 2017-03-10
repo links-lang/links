@@ -494,8 +494,13 @@ struct
 
   let deliver_session_message client_id session_ep deleg_chans v =
     let json_val = Json.jsonize_value v in
+
     let print_deleg_chan (chan, msgs) =
-      let str_buf = (List.map (Json.jsonize_value) msgs) |> String.concat "," in
+      (* Client representation of a buffer is the reverse of the server one, alas *)
+      let str_buf =
+        List.map (Json.jsonize_value) msgs
+        |> List.rev
+        |> String.concat "," in
       "{\"ep_id\":" ^ (ChannelID.to_json (snd chan)) ^ ", \"buf\": [" ^ str_buf  ^ "]}" in
     let deleg_chans_json = List.map print_deleg_chan deleg_chans |> String.concat "," in
 
