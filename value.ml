@@ -544,7 +544,7 @@ and string_of_dist_pid = function
 and string_of_channel (ep1, ep2) =
   let ep1_str = ChannelID.to_string ep1 in
   let ep2_str = ChannelID.to_string ep2 in
-  "Session channel. EP1: " ^ ep1_str ^ ", EP2: " ^ ep2_str
+  "EP1: " ^ ep1_str ^ ", EP2: " ^ ep2_str
 
 and string_of_access_point = function
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
