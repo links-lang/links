@@ -1,0 +1,107 @@
+open ChatSessions
+open ChatClient
+
+## clientHandler loop: Reads incoming requests from the client, dispatches
+## each command to the serverLoop which will broadcast to other session clients.
+fun clientHandler(clientToServerChan, serverToClientChan, loopPid) {
+
+  fun clientHandlerLoop(incomingMessageChan) {
+    offer(clientSession) {
+      case ChatMessage(clientSession) ->
+        var (msg, clientSession) = receive(clientSession);
+        loopPid ! BroadcastMessage(msg);
+        clientHandler(clientSession, loopPid)
+      case ChangeTopic(newTopic) ->
+        var (msg, clientSession) = receive(clientSession);
+        loopPid ! BroadcastChangeTopic(newTopic);
+        clientHandler(clientSession, loopPid)
+    }
+  }
+
+  # Get the name and incoming message channel of the new client
+  var (name, clientToServerChan) = receive(clientToServerChan);
+
+  # Get the current topic and nicks
+  var (topic, nicks) =
+    spawnWait {
+      loopPid ! GetServerState(self());
+      receive { case st -> st }
+    };
+
+  # Send topic, nicks, and outgoing channel
+  var wrappedNicks = map(fun(s) { Nickname(s) }, nicks);
+  var clientToServerChan = send(wrappedNicks, topic, serverToClientChan);
+
+  # Register with the main loop, and recurse
+  loopPid ! NewClient(name, clientToServerChan);
+
+  clientHandlerLoop(clientToServerChan)
+}
+
+
+fun acceptor(ap, loopPid) {
+  # Accept a new client
+  var incomingMessageChan = accept(ap);
+
+  # Fork off the client handler,
+  var outgoingMessageChan = fork(
+    fun (outgoingMessageChan) {
+      clientHandler(incomingMessageChan, outgoingMessageChan, loopPid)
+  });
+  acceptor(ap, loopPid)
+}
+
+
+fun mapCh(f, chans) {
+  fun broadcastInner(xs) {
+    switch (xs) {
+      case [] -> []
+      case chan :: xs ->
+        var chan = f(chan);
+        chan :: broadcastInner(xs)
+    }
+  }
+  broadcastInner(chans)
+}
+
+fun broadcastChatMessage(senderName, msg, participants) {
+  fun f(chan) {
+    var chan = select(IncomingChatMessage, chan);
+    send((senderName, msg), chan);
+  }
+  mapCh(f, participants)
+}
+
+fun broadcastChangeTopic(topic, participants) {
+  fun f(chan) {
+    var chan = select(NewTopic, chan);
+    send(topic, chan);
+  }
+  mapCh(f, participants)
+}
+
+fun serverLoop(topic, nicks, chans) {
+  receive {
+    case BroadcastMessage(nick, msg) ->
+      var chans = broadcastChatMessage(nick, msg, participants);
+      serverLoop(topic, nicks, chans)
+    case BroadcastChangeTopic(newTopic) ->
+      var serverState = broadcastChangeTopic(newTopic, chans);
+      serverLoop(newTopic, nicks, serverState)
+    case NewClient(nick, sessionChan) ->
+      serverLoop(topic, nick :: nicks, sessionChan :: chans)
+    case GetServerState(pid) ->
+      pid ! (topic, nicks)
+      serverLoop(topic, nicks, chans)
+  }
+}
+
+fun main() {
+  var clientAP = new();
+  var _ = spawn(acceptor(clientAP));
+  addRoute("/", ChatClient.mainPage);
+  serveWebsockets("/ws/");
+  servePages()
+}
+
+main()

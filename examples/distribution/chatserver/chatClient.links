@@ -1,0 +1,33 @@
+open ChatSessions
+
+fun handleTextSubmit() {
+  # .........
+}
+
+fun chatBox(pid) {
+  fun handleSubmit() {
+    var textNode = domGet
+    pid ! SubmitMessage()
+  }
+
+
+  <#>
+    <div id="msgs" style="visibility:hidden; overflow-y:scroll; width:400px; height:400px;"></div>
+    <div>
+      <form l:onsubmit="{handleSubmit()}">
+        <input type="text" style="width:400px">
+      </form>
+    </div>
+  </#>
+}
+
+fun mainPage() {
+  # oh dear, Simon attempts front-end webdev
+
+  page
+    <html>
+      <head><title>Links chat</title></head>
+      <h1>Links Chat!</h1>
+      <div id="main"></div>
+    </html>
+}
