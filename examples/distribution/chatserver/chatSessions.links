@@ -1,21 +1,39 @@
 # ChatSessions module -- contains the session types for chat interactions
 
-typename Nickname = [| Nickname : String |]
-typename ChatMessage = [| ChatMessage : String |]
-typename Topic = [| Topic : String |]
+typename Nickname = [| Nickname : String |];
+typename Message = [| Message : String |];
+typename Topic = [| Topic : String |];
 
 # Client sends messages along this
 typename ServerToClientChannel =
-  [+| IncomingChatMessage : !(Nickname, ChatMessage) . ServerToClientChannel,
+  [+| IncomingChatMessage : !(Nickname, Message) . ServerToClientChannel,
       NewUser : !(Nickname) . ServerToClientChannel,
       NewTopic : !(Topic) . ServerToClientChannel,
       UserLeft : !(Nickname) .ServerToClientChannel
-  |+]
+  |+];
 
-typename ChatServer = ?(Nickname) . !(Topic, [Nickname], ServerToClientChannel) . ReceiveCommand
 typename ReceiveCommand =
-  [&| ChatMessage : ?(ChatMessage) . ReceiveCommand,
-      ChangeTopic : ?(Topic). ReceiveCommand |&]
+  [&| ChatMessage : ?(Message) . ReceiveCommand,
+      ChangeTopic : ?(Topic). ReceiveCommand |&];
+typename ChatServer = ?(Nickname) . !(Topic, [Nickname], ~ServerToClientChannel) . ReceiveCommand;
 
 
 
+# This should probably end up in the prelude...
+typename SessionList(a :: Session) =
+  mu x . [| Nil | SessionCons : (a, x) |];
+
+sig mapCh :
+  forall s1::Type(Any, Session), s2::Type(Any, Session).
+    (((s1) ~> s2), SessionList(s1)) ~%e~> SessionList(s2)
+fun mapCh(f, chans) {
+  fun mapInner(xs) {
+    switch (xs) {
+      case Nil -> Nil
+      case SessionCons(chan, xs) ->
+        var chan = f(chan);
+        SessionCons(chan, mapInner(xs))
+    }
+  }
+  mapInner(chans)
+}

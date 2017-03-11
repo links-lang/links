@@ -1,25 +1,35 @@
 open ChatSessions
 open ChatClient
 
+#  typename LoopProc =
+#    Process({ hear:[|BroadcastMessage : Message | BroadcastChangeTopic: Topic
+#                    | GetServerState : Process ({ hear:(Topic, [Nickname]) })
+#                    | NewClient : (Nickname, ServerToClientChannel)  |]});
+
 ## clientHandler loop: Reads incoming requests from the client, dispatches
 ## each command to the serverLoop which will broadcast to other session clients.
-fun clientHandler(clientToServerChan, serverToClientChan, loopPid) {
+# Alas, we can't make this an inner function at the moment since we need a type
+# annotation, and type annotations are broken for inner functions at the moment
+#sig clientHandlerLoop :
+#  forall a::Any. (ReceiveCommand, LoopProc) ~> a
+fun clientHandlerLoop(nick, clientToServerChan, loopPid) {
 
-  fun clientHandlerLoop(incomingMessageChan) {
-    offer(clientSession) {
-      case ChatMessage(clientSession) ->
-        var (msg, clientSession) = receive(clientSession);
-        loopPid ! BroadcastMessage(msg);
-        clientHandler(clientSession, loopPid)
-      case ChangeTopic(newTopic) ->
-        var (msg, clientSession) = receive(clientSession);
-        loopPid ! BroadcastChangeTopic(newTopic);
-        clientHandler(clientSession, loopPid)
-    }
+  offer(clientToServerChan) {
+    case ChatMessage(clientToServerChan) ->
+      var (msg, clientToServerChan) = receive(clientToServerChan);
+      loopPid ! BroadcastMessage(nick, msg);
+      clientHandlerLoop(nick, clientToServerChan, loopPid)
+    case ChangeTopic(clientToServerChan) ->
+      var (newTopic, clientToServerChan) = receive(clientToServerChan);
+      loopPid ! BroadcastChangeTopic(newTopic);
+      clientHandlerLoop(nick, clientToServerChan, loopPid)
   }
+}
 
-  # Get the name and incoming message channel of the new client
-  var (name, clientToServerChan) = receive(clientToServerChan);
+
+# Process that is spawned to handle
+#sig clientHandler : forall a::Any.(ChatServer, ~ServerToClientChannel, LoopProc) ~> a
+fun clientHandler(nick, chatServerRecvEnd, serverToClientRecvEnd, loopPid) {
 
   # Get the current topic and nicks
   var (topic, nicks) =
@@ -29,77 +39,122 @@ fun clientHandler(clientToServerChan, serverToClientChan, loopPid) {
     };
 
   # Send topic, nicks, and outgoing channel
-  var wrappedNicks = map(fun(s) { Nickname(s) }, nicks);
-  var clientToServerChan = send(wrappedNicks, topic, serverToClientChan);
+  #var wrappedNicks = map(fun(s) { Nickname(s) }, nicks);
+  var chatServerRecvEnd =
+    send((topic, nicks, serverToClientRecvEnd), chatServerRecvEnd);
 
-  # Register with the main loop, and recurse
-  loopPid ! NewClient(name, clientToServerChan);
-
-  clientHandlerLoop(clientToServerChan)
+  clientHandlerLoop(nick, chatServerRecvEnd, loopPid)
 }
 
+fun clientSendHandler(s) {
+  receive {
+    case DeliverMessage(nick, msg) ->
+      var s = select IncomingChatMessage s;
+      var s = send((nick, msg), s);
+      clientSendHandler(s)
+    case DeliverNewUser(nick) ->
+      var s = select NewUser s;
+      var s = send(nick, s);
+      clientSendHandler(s)
+    case DeliverNewTopic(topic) ->
+      var s = select NewTopic s;
+      var s = send(topic, s);
+      clientSendHandler(s)
+    case DeliverUserLeft(nick) ->
+      var s = select UserLeft s;
+      var s = send(nick, s);
+      clientSendHandler(s)
+  }
+}
+
+#sig broadcastChatMessage: (Nickname, Message, [])
+#  ~%e~> SessionList(ServerToClientChannel)
+#fun broadcastChatMessage(senderName, msg, chans) {
+#  fun f(chan) {
+#   var chan = select IncomingChatMessage chan;
+#    send((senderName, msg), chan)
+#  }
+#  mapCh(f, chans)
+#}
+
+#sig broadcastChangeTopic : (Topic, [ServerToClientChannel]) ~%e~> [ServerToClientChannel]
+#fun broadcastChangeTopic(topic, participants) {
+#  fun f(chan) {
+#    var chan = select NewTopic chan;
+#    send(topic, chan)
+#  }
+#  mapCh(f, participants)
+#}
+
+
+
+
+
+# lol
+#typename Msg = (ChatSessions.Message);
+#typename Top = (ChatSessions.Topic);
+#typename Nick = (ChatSessions.Nickname);
+#typename SrvToClientChan = (ChatSessions.ServerToClientChannel);
+#sig serverLoop :
+#  forall a::Any.(Topic, [Nickname], SessionList(ServerToClientChannel))
+#    { hear:[|BroadcastMessage : Msg | BroadcastChangeTopic: Top
+#                  | GetServerState : Process ({ hear:(Top, [Nick]) })
+#                  | NewClient : (Nick, SrvToClientChan) |]}~>
+#    a
+
+fun broadcastMessage(msg, pids) {
+  switch(pids) {
+    case [] -> ()
+    case pid :: pids -> pid ! msg; broadcastMessage(msg, pids)
+  }
+}
+
+
+fun serverLoop(topic, nicks, pids) {
+  receive {
+    case BroadcastMessage(nick, msg) ->
+      #var chans = broadcastChatMessage(nick, msg, chans);
+      broadcastMessage(DeliverMessage(nick, msg), pids);
+      serverLoop(topic, nicks, pids)
+    case BroadcastChangeTopic(newTopic) ->
+      broadcastMessage(DeliverNewTopic(topic), pids);
+ #     var chans = broadcastChangeTopic(newTopic, chans);
+      serverLoop(newTopic, nicks, pids)
+    case NewClient(nick, pid) ->
+      serverLoop(topic, nick :: nicks, pid :: pids)
+    case GetServerState(pid) ->
+    #  pid ! (topic, nicks);
+      serverLoop(topic, nicks, pids)
+  }
+}
 
 fun acceptor(ap, loopPid) {
   # Accept a new client
-  var incomingMessageChan = accept(ap);
+  var clientToServerRecvEnd = accept(ap);
+
+  # Get the name and incoming message channel of the new client
+  # FIXME: Blocking operation in acceptor loop....
+  var (name, clientToServerRecvEnd) = receive(clientToServerRecvEnd);
 
   # Fork off the client handler,
-  var outgoingMessageChan = fork(
-    fun (outgoingMessageChan) {
-      clientHandler(incomingMessageChan, outgoingMessageChan, loopPid)
+  var serverToClientSendEnd = linFork(
+    linfun (serverToClientRecvEnd) {
+      clientHandler(name, clientToServerRecvEnd, serverToClientRecvEnd, loopPid)
   });
+
+  # For off client send handler
+  var clientSendHandlerPid = spawn { clientSendHandler(serverToClientSendEnd) };
+
+  # Register with the main loop, and recurse
+  loopPid ! NewClient(name, clientSendHandlerPid);
   acceptor(ap, loopPid)
 }
 
-
-fun mapCh(f, chans) {
-  fun broadcastInner(xs) {
-    switch (xs) {
-      case [] -> []
-      case chan :: xs ->
-        var chan = f(chan);
-        chan :: broadcastInner(xs)
-    }
-  }
-  broadcastInner(chans)
-}
-
-fun broadcastChatMessage(senderName, msg, participants) {
-  fun f(chan) {
-    var chan = select(IncomingChatMessage, chan);
-    send((senderName, msg), chan);
-  }
-  mapCh(f, participants)
-}
-
-fun broadcastChangeTopic(topic, participants) {
-  fun f(chan) {
-    var chan = select(NewTopic, chan);
-    send(topic, chan);
-  }
-  mapCh(f, participants)
-}
-
-fun serverLoop(topic, nicks, chans) {
-  receive {
-    case BroadcastMessage(nick, msg) ->
-      var chans = broadcastChatMessage(nick, msg, participants);
-      serverLoop(topic, nicks, chans)
-    case BroadcastChangeTopic(newTopic) ->
-      var serverState = broadcastChangeTopic(newTopic, chans);
-      serverLoop(newTopic, nicks, serverState)
-    case NewClient(nick, sessionChan) ->
-      serverLoop(topic, nick :: nicks, sessionChan :: chans)
-    case GetServerState(pid) ->
-      pid ! (topic, nicks)
-      serverLoop(topic, nicks, chans)
-  }
-}
-
 fun main() {
-  var clientAP = new();
-  var _ = spawn(acceptor(clientAP));
-  addRoute("/", ChatClient.mainPage);
+  var (clientAP:AP(ChatServer)) = new();
+  var loopPid = spawn { serverLoop(Topic("Hello, ABCD!"), [], []) };
+  var _ = spawn { acceptor(clientAP, loopPid) };
+  addRoute("/", fun (_, _) { ChatClient.mainPage(clientAP) } );
   serveWebsockets("/ws/");
   servePages()
 }

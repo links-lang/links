@@ -1,33 +1,160 @@
+
 open ChatSessions
 
-fun handleTextSubmit() {
-  # .........
-}
+module DomFunctions {
+  var nickname_box_id = "name_box";
+  var chat_box_id = "chat_box";
 
-fun chatBox(pid) {
-  fun handleSubmit() {
-    var textNode = domGet
-    pid ! SubmitMessage()
+  fun getInputContents(dom_id) {
+    var textNode = getNodeById(dom_id);
+    domGetAttributeFromRef(textNode, "text")
+  }
+
+  fun clearInput(dom_id) {
+    var textNode = getNodeById(dom_id);
+    var _ = domSetAttributeFromRef(textNode, "text", "");
+    ()
+  }
+
+}
+open DomFunctions
+
+module Components {
+  fun displayChatBox(topic, nicks, incomingMsgChan, outgoingMsgChan) {
+    var Topic(topicStr) = topic;
+
+    fun addChatMsg(nick, msg) {
+      var msgsNode = getNodeById("msgs");
+      var to_add = <#><p><b>{stringToXml(nick)}</b>: {stringToXml(msg)}</p></#>;
+      appendChildren(to_add, msgsNode)
+    }
+
+    fun addNewUser(nick) {
+      var msgsNode = getNodeById("msgs");
+      var to_add = <#><p><b>{stringToXml(nick)}</b> just joined</p></#>;
+      appendChildren(to_add, msgsNode)
+    }
+
+    fun changeTopic(topic) {
+      var topicNode = getNodeById("topic");
+      var to_add = <#><p><b>Topic: </b>{stringToXml(topic)}</p></#>;
+      replaceChildren(to_add, topicNode)
+    }
+
+    fun removeUser(nick) {
+      var msgsNode = getNodeById("msgs");
+      var to_add = <#><p><b>{stringToXml(nick)}</b> just left</p></#>;
+      appendChildren(to_add, msgsNode)
+    }
+
+
+    fun incomingMsgLoop(s) {
+      offer(s) {
+        case IncomingChatMessage(s) ->
+          var ((Nickname(nick), Message(chatmsg)), s) = receive(s);
+          addChatMsg(nick, chatmsg);
+          incomingMsgLoop(s)
+        case NewUser(s) ->
+          var (Nickname(nick), s) = receive(s);
+          addNewUser(nick);
+          incomingMsgLoop(s)
+        case NewTopic(s) ->
+          var (Topic(topic), s) = receive(s);
+          changeTopic(topic);
+          incomingMsgLoop(s);
+        case UserLeft(s) ->
+          var (Nickname(nick), s) = receive(s);
+          removeUser(nick); # Poor Nick
+          incomingMsgLoop(s)
+      }
+    }
+
+    fun outgoingMsgLoop(s) {
+      fun isTopicCmd(s) {
+        (charAt(s, 0) == '/') &&
+        (strlen(s) > 6) &&
+        (strsub(s, 1, 6) == "/topic ")
+      }
+
+      fun getTopic(s) {
+        strsub(s, 6, strlen(s))
+      }
+
+      receive {
+        case str ->
+          if (isTopicCmd(str)) {
+            var s = select ChangeTopic s;
+            var s = send(Topic(getTopic(str)), s);
+            outgoingMsgLoop(s)
+          } else {
+            var s = select ChatMessage s;
+            var s = send(Message(str), s);
+            outgoingMsgLoop(s)
+          }
+      }
+    }
+
+    fun chatBox(outgoingHandlerPid) {
+      fun handleSubmit() {
+        outgoingHandlerPid ! getInputContents(chat_box_id);
+        clearInput(chat_box_id)
+      }
+
+      <#>
+        <div id="chatBox">
+          <div id="topic"><p><b>Topic: </b>{stringToXml(topicStr)}</p></div>
+          <div id="msgs" style="visibility:hidden; overflow-y:scroll; width:400px; height:400px;"></div>
+          <div>
+            <form l:onsubmit="{handleSubmit()}">
+              <input id="chat_box" type="text" style="width:400px"></input>
+            </form>
+          </div>
+        </div>
+      </#>
+    }
+
+
+    # Firstly, spawn the incoming and outgoing message handlers
+    var outgoingHandler = spawnClient { outgoingMsgLoop(outgoingMsgChan) };
+    var incomingHandler = spawnClient { incomingMsgLoop(incomingMsgChan) };
+
+    # Finally, remove the name request box, put the chatbox in, and we can get going
+    replaceChildren(chatBox(outgoingHandler), getNodeById("main"))
   }
 
 
-  <#>
-    <div id="msgs" style="visibility:hidden; overflow-y:scroll; width:400px; height:400px;"></div>
-    <div>
-      <form l:onsubmit="{handleSubmit()}">
-        <input type="text" style="width:400px">
-      </form>
-    </div>
-  </#>
+
+  fun nameBox(ap) {
+    fun handleSubmitName() {
+        var s = request(ap);
+        var nick = getInputContents(nickname_box_id);
+        clearInput(nickname_box_id);
+        var s = send(Nickname(nick), s);
+        var ((topic, nicks, incomingMsgChan), s) = receive(s);
+        displayChatBox(topic, nicks, incomingMsgChan, s)
+    }
+
+    <#>
+      <div id="nameBox">
+        <p>Nickname:</p>
+        <form l:onsubmit="{handleSubmitName()}">
+          <input id="name_box" type="text"></input>
+        </form>
+      </div>
+    </#>
+  }
 }
 
-fun mainPage() {
-  # oh dear, Simon attempts front-end webdev
+open Components
 
+fun mainPage(ap) {
+  # oh dear, Simon attempts front-end webdev
   page
     <html>
       <head><title>Links chat</title></head>
       <h1>Links Chat!</h1>
-      <div id="main"></div>
+      <div id="main">
+        { nameBox(ap) }
+      </div>
     </html>
 }
