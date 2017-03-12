@@ -77,9 +77,10 @@ fun serverLoop(topic, nicks, pids) {
       broadcastMessage(DeliverMessage(nick, msg), pids);
       serverLoop(topic, nicks, pids)
     case BroadcastChangeTopic(newTopic) ->
-      broadcastMessage(DeliverNewTopic(topic), pids);
+      broadcastMessage(DeliverNewTopic(newTopic), pids);
       serverLoop(newTopic, nicks, pids)
     case NewClient(nick, pid) ->
+      broadcastMessage(DeliverNewUser(nick), pids);
       serverLoop(topic, nick :: nicks, pid :: pids)
     case GetServerState(pid) ->
       pid ! (topic, nicks);
@@ -118,6 +119,7 @@ fun main() {
   var loopPid = spawn { serverLoop(Topic("Hello, ABCD!"), [], []) };
   var _ = spawn { acceptor(clientAP, loopPid) };
   addRoute("/", fun (_, _) { ChatClient.mainPage(clientAP) } );
+  addStaticRoute("/css", "css", [("css", "text/css")]);
   serveWebsockets("/ws/");
   servePages()
 }

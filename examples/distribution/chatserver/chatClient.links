@@ -23,28 +23,33 @@ module Components {
   fun displayChatBox(topic, nicks, incomingMsgChan, outgoingMsgChan) {
     var Topic(topicStr) = topic;
 
-    fun addChatMsg(nick, msg) {
+    fun addToMsgBox(xml) {
       var msgsNode = getNodeById("msgs");
+      appendChildren(xml, msgsNode);
+      var scrollHeight = domGetPropertyFromRef(msgsNode, "scrollHeight");
+      var _ = domSetPropertyFromRef(msgsNode, "scrollTop", scrollHeight);
+      ()
+    }
+
+    fun addChatMsg(nick, msg) {
       var to_add = <#><p><b>{stringToXml(nick)}</b>: {stringToXml(msg)}</p></#>;
-      appendChildren(to_add, msgsNode)
+      addToMsgBox(to_add)
     }
 
     fun addNewUser(nick) {
-      var msgsNode = getNodeById("msgs");
       var to_add = <#><p><b>{stringToXml(nick)}</b> just joined</p></#>;
-      appendChildren(to_add, msgsNode)
+      addToMsgBox(to_add)
     }
 
     fun changeTopic(topic) {
       var topicNode = getNodeById("topic");
-      var to_add = <#><p><b>Topic: </b>{stringToXml(topic)}</p></#>;
+      var to_add = <#><p><span class="lead"><b>Topic: </b>{stringToXml(topicStr)}</span></p></#>;
       replaceChildren(to_add, topicNode)
     }
 
     fun removeUser(nick) {
-      var msgsNode = getNodeById("msgs");
       var to_add = <#><p><b>{stringToXml(nick)}</b> just left</p></#>;
-      appendChildren(to_add, msgsNode)
+      addToMsgBox(to_add)
     }
 
 
@@ -52,6 +57,7 @@ module Components {
       offer(s) {
         case IncomingChatMessage(s) ->
           var ((Nickname(nick), Message(chatmsg)), s) = receive(s);
+          debug("Received incoming chat message (" ^^ chatmsg ^^ ") from (" ^^ nick ^^ ")");
           addChatMsg(nick, chatmsg);
           incomingMsgLoop(s)
         case NewUser(s) ->
@@ -72,12 +78,12 @@ module Components {
     fun outgoingMsgLoop(s) {
       fun isTopicCmd(s) {
         (charAt(s, 0) == '/') &&
-        (strlen(s) > 6) &&
-        (strsub(s, 1, 6) == "/topic ")
+        (strlen(s) > 8) &&
+        (strsub(s, 0, 7) == "/topic ")
       }
 
       fun getTopic(s) {
-        strsub(s, 6, strlen(s))
+        strsub(s, 7, strlen(s) - 7)
       }
 
       receive {
@@ -102,11 +108,11 @@ module Components {
 
       <#>
         <div id="chatBox">
-          <div id="topic"><p><b>Topic: </b>{stringToXml(topicStr)}</p></div>
-          <div id="msgs" style="visibility:hidden; overflow-y:scroll; width:400px; height:400px;"></div>
+          <div id="topic"><p><span class="lead"><b>Topic: </b>{stringToXml(topicStr)}</span></p></div>
+          <div id="msgs" style="overflow-y:scroll; width:100%; height:400px;"></div>
           <div>
             <form l:onsubmit="{handleSubmit()}">
-              <input id="chat_box" type="text" style="width:400px"></input>
+              <input id="chat_box" type="text" style="width:100%"></input>
             </form>
           </div>
         </div>
@@ -155,10 +161,37 @@ fun mainPage(ap) {
   # oh dear, Simon attempts front-end webdev
   page
     <html>
-      <head><title>Links chat</title></head>
-      <h1>Links Chat!</h1>
-      <div id="main">
-        { nameBox(ap) }
+      <head>
+        <title>Links chat</title>
+        <link href="http://fonts.googleapis.com/css?family=Merriweather:400,300italic,300" rel="stylesheet" type="text/css"></link>
+        <link href="http://fonts.googleapis.com/css?family=Kotta+One" rel="stylesheet" type="text/css"></link>
+        <link href="http://fonts.googleapis.com/css?family=Lora" rel="stylesheet" type="text/css"></link>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
+          integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous"></link>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"
+          integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+        <link href="css/abcd.css" rel="stylesheet"></link>
+      </head>
+
+      <div class="navbar-wrapper">
+        <div class="container">
+          <div id="navbar" class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+          </div>
+        </div>
+      </div>
+
+      <div class ="jumbotron">
+        <div class="container">
+          <h1>Links Session-Typed Chat</h1>
+          <hr>...complete with totally original stylesheet</hr>
+        </div>
+      </div>
+
+
+      <div id="main" class="container marketing">
+        <div class="row featurette">
+          { nameBox(ap) }
+        </div>
       </div>
     </html>
 }
