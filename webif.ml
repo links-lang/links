@@ -177,9 +177,11 @@ struct
           (IntMap.bindings (Value.get_parameters env));
         Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
+        (*
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
            assert(false));
+           *)
         let json_state = resolve_json_state req_data r in
         Lwt.return
           ("text/plain",

@@ -613,6 +613,10 @@ let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
   | _ -> failwith ("Match failure in pair conversion")
+let box_variant : string -> t -> t = fun l v -> `Variant (l, v)
+let unbox_variant : t -> (string * t) = function
+  | `Variant x -> x
+  | _ -> failwith ("Type error unboxing variant")
 let box_pid dist_pid = `Pid dist_pid
 let unbox_pid = function
   | `Pid dist_pid -> dist_pid

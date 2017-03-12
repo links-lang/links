@@ -3,6 +3,7 @@ open Ir
 open Lwt
 open Utility
 open Proc
+open Pervasives
 
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
@@ -82,8 +83,8 @@ struct
        fun req_data name cont args ->
          if not(Settings.get_value Basicsettings.web_mode) then
            failwith "Can't make client call outside web mode.";
-         if not(Proc.singlethreaded()) then
-           failwith "Remaining procs on server at client call!";
+         (*if not(Proc.singlethreaded()) then
+           failwith "Remaining procs on server at client call!"; *)
          Debug.print("Making client call to " ^ name);
   (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
          let call_package =
@@ -579,7 +580,7 @@ struct
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
       let ch = Value.unbox_channel chan in
       let (outp, _inp) = ch in
-      Session.send (Value.box_string name) outp >>= fun _ ->
+      Session.send (Value.box_variant name (Value.box_unit ())) outp >>= fun _ ->
       OptionUtils.opt_iter Proc.awaken (Session.unblock outp);
       apply_cont cont env chan
     | `Choice (v, cases) ->
@@ -589,8 +590,9 @@ struct
         let (_, inp) = Value.unbox_channel chan in
         match Session.receive inp with
           | Some v ->
-            Debug.print ("chose: " ^ Value.string_of_value v);
-            let label = Value.unbox_string v in
+            let label = fst @@ Value.unbox_variant v in
+            Debug.print ("chose label: " ^ label);
+
               begin
                 match StringMap.lookup label cases with
                 | Some ((var,_), body) ->

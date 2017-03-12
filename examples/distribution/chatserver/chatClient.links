@@ -7,12 +7,12 @@ module DomFunctions {
 
   fun getInputContents(dom_id) {
     var textNode = getNodeById(dom_id);
-    domGetAttributeFromRef(textNode, "text")
+    domGetPropertyFromRef(textNode, "value")
   }
 
   fun clearInput(dom_id) {
     var textNode = getNodeById(dom_id);
-    var _ = domSetAttributeFromRef(textNode, "text", "");
+    var _ = domSetPropertyFromRef(textNode, "value", "");
     ()
   }
 
@@ -130,14 +130,18 @@ module Components {
         var nick = getInputContents(nickname_box_id);
         clearInput(nickname_box_id);
         var s = send(Nickname(nick), s);
+        debug("sent nick");
         var ((topic, nicks, incomingMsgChan), s) = receive(s);
+        debug("received data");
         displayChatBox(topic, nicks, incomingMsgChan, s)
     }
+
+    var handler = spawnClient { receive { case _ -> handleSubmitName() } };
 
     <#>
       <div id="nameBox">
         <p>Nickname:</p>
-        <form l:onsubmit="{handleSubmitName()}">
+        <form l:onsubmit="{handler ! ()}">
           <input id="name_box" type="text"></input>
         </form>
       </div>

@@ -90,7 +90,8 @@ object_:
 | LBRACE members RBRACE { match $2 with
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
-                            | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
+                            | ["_value", v; "_label", l] ->
+                                Value.box_variant (Value.unbox_string l) v
                             | ["_clientAPID", apid_str; "_clientId", cid_str]
                             | ["_clientId", cid_str; "_clientAPID", apid_str] ->
                                 let apid = AccessPointID.of_string @@ Value.unbox_string apid_str in
