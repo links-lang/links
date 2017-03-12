@@ -5,6 +5,11 @@ OPAM tool, available from:
 
   https://opam.ocaml.org/
 
+First run the following command to install the required version of
+OCaml 4.04.0:
+
+  $ opam switch 4.04.0
+
 If you wish to use Links' database functionality, you should first
 install PostgreSQL, the supported DBMS.
 
