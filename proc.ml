@@ -693,6 +693,8 @@ and Session : SESSION = struct
 
   type ap_state = Balanced | Accepting of ap_req list | Requesting of ap_req list
 
+  type delegation_request = channel_id * Value.delegated_chan list * Value.t
+
   let flip_chan (outp, inp) = (inp, outp)
 
   (* Access points *)
@@ -723,6 +725,8 @@ and Session : SESSION = struct
     delegating_channels := (ChannelIDSet.remove c (!delegating_channels))
   let is_channel_delegating c =
     ChannelIDSet.mem c (!delegating_channels)
+
+  (* TODO HERE: Outgoing buffers *)
 
   let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
   let forward_tbl = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
@@ -959,6 +963,10 @@ and Session : SESSION = struct
     (* Debug.print ("Sending along: " ^ string_of_int p); *)
     let p = find_active send_port in
     Queue.push msg (Hashtbl.find buffers p)
+
+
+  let delegation_can_proceed =
+    List.for_all (fun c -> not (List.is_channel_delegating (snd c)))
 
   let send_local_with_deleg client_id deleg_chans msg chan_id =
     List.iter (fun (chan, buf) ->
