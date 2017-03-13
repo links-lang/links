@@ -84,11 +84,9 @@ fun serverLoop(topic, nicks, pids) {
 }
 
 fun handleNewClient(clientToServerRecvEnd, loopPid) {
-  debug("in handleNewClient");
   # Get the name and incoming message channel of the new client
   var (name, clientToServerRecvEnd) = receive(clientToServerRecvEnd);
 
-  debug("after receive in handleNewClient");
   # Fork off the client handler,
   var serverToClientSendEnd = linFork(
     linfun (serverToClientRecvEnd) {
@@ -100,16 +98,12 @@ fun handleNewClient(clientToServerRecvEnd, loopPid) {
 
   # Register with the main loop, and recurse
   loopPid ! NewClient(name, clientSendHandlerPid);
-  debug("after send in handleNewClient");
 }
 
 fun acceptor(ap, loopPid) server {
   # Accept a new client
-  debug("start of acceptor");
   var clientToServerRecvEnd = accept(ap);
-  debug("after accept");
   var _ = spawn { handleNewClient(clientToServerRecvEnd, loopPid) };
-  debug("after spawn");
   acceptor(ap, loopPid)
 }
 
