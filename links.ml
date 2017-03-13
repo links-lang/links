@@ -16,38 +16,38 @@ type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  if Settings.get_value Basicsettings.new_pretty_printer then
-    begin
-      let open Format in
-      let (width, _height) = try ANSITerminal.size () with _ -> (80, 24) in
-      pp_set_margin std_formatter width;
-      pp_set_tags std_formatter (Settings.get_value Basicsettings.print_colors);
-      pp_set_mark_tags std_formatter (Settings.get_value Basicsettings.print_colors);
-      pp_set_formatter_tag_functions
-        std_formatter
-        {mark_open_tag = (function
-                          | "xmltag" -> "\x1b[32m"
-                          | "constructor" -> "\x1b[32m"
-                          | "xmlattr" -> "\x1b[35m"
-                          | "recordlabel" -> "\x1b[35m"
-                          (* | "string" -> "\x1b[36m" *)
-                          | _ -> "");
-         mark_close_tag  = (fun _ -> "\x1b[39m");
-         print_open_tag  = ignore;
-         print_close_tag = ignore;
-        };
-      fprintf std_formatter "@[%a@;<1 4>: %s@]" Value.p_value value (if Settings.get_value(BS.printing_types) then
-		                                                       Types.string_of_datatype rtype
-                                                                     else "");
-      pp_print_newline std_formatter ()
-    end
-  else
-    begin
+  if Settings.get_value Basicsettings.web_mode || not (Settings.get_value Basicsettings.print_pretty || Settings.get_value Basicsettings.interacting)
+  then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get_value(BS.printing_types) then
 		       " : "^ Types.string_of_datatype rtype
                      else "")
     end
+  else
+    let (width, _height) = try ANSITerminal.size () with _ -> (80, 24) in
+    let open Format in
+    pp_set_margin std_formatter width;
+    pp_set_tags std_formatter (Settings.get_value Basicsettings.print_colors);
+    pp_set_mark_tags std_formatter (Settings.get_value Basicsettings.print_colors);
+    pp_set_formatter_tag_functions
+      std_formatter
+      {mark_open_tag = (function
+                        | "xmltag" -> "\x1b[32m"
+                        | "constructor" -> "\x1b[32m"
+                        | "xmlattr" -> "\x1b[35m"
+                        | "recordlabel" -> "\x1b[35m"
+                        (* | "string" -> "\x1b[36m" *)
+                        | _ -> "");
+       mark_close_tag  = (fun _ -> "\x1b[39m");
+       print_open_tag  = ignore;
+       print_close_tag = ignore;
+      };
+    fprintf std_formatter "@[%a@;<1 4>: %s@]"
+            Value.p_value value
+            (if Settings.get_value(BS.printing_types) then
+	       Types.string_of_datatype rtype
+             else "");
+    pp_print_newline std_formatter ()
 
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
