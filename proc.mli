@@ -67,9 +67,24 @@ module type WEBSOCKETS =
       client_id ->
       channel_id ->
       Value.delegated_chan list->
+      bool ->
       Value.t ->
       unit Lwt.t
 
+  (** Sends a lost message request for carrier channel `channel_id`,
+   * given a list of delegated endpoints `channel_id list` *)
+  val get_lost_messages :
+      client_id ->
+      channel_id ->
+      channel_id list ->
+      unit Lwt.t
+
+  (** Deliver lost messages *)
+  val deliver_lost_messages :
+      client_id ->
+      channel_id ->
+      (channel_id * Value.t list) list ->
+      unit Lwt.t
   end
 
 module type MAILBOX =
@@ -111,9 +126,14 @@ sig
 
   val send : Value.t -> channel_id -> unit Lwt.t
   val send_to_remote : Value.t -> client_id -> channel_id -> unit Lwt.t
+
   val handle_send_from_remote :
     client_id -> Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
+
   val receive : channel_id -> Value.t option
+
+  val handle_lost_message_response :
+    channel_id -> ((channel_id * (Value.t list)) list) -> unit Lwt.t
 
   val link : chan -> chan -> unit
 end

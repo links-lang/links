@@ -305,8 +305,25 @@ module type WEBSOCKETS =
       client_id ->
       channel_id ->
       Value.delegated_chan list ->
+      bool ->
       Value.t ->
       unit Lwt.t
+
+  (** Sends a lost message request for carrier channel `channel_id`,
+   * given a list of delegated endpoints `channel_id list` *)
+  val get_lost_messages :
+      client_id ->
+      channel_id ->
+      channel_id list ->
+      unit Lwt.t
+
+  (** Deliver lost messages *)
+  val deliver_lost_messages :
+      client_id ->
+      channel_id ->
+      (channel_id * Value.t list) list ->
+      unit Lwt.t
+
   end
 
 module type MAILBOX =
@@ -343,6 +360,9 @@ sig
     client_id -> Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
   val receive : channel_id -> Value.t option
 
+  val handle_lost_message_response :
+    channel_id -> ((channel_id * (Value.t list)) list) -> unit Lwt.t
+
   val link : chan -> chan -> unit
 end
 
@@ -371,8 +391,6 @@ struct
             Hashtbl.add client_buffered_messages cid q;
             q in
     Queue.push str_msg queue
-
-
 
   let register_websocket = Hashtbl.add client_websockets
   let deregister_websocket = Hashtbl.remove client_websockets
@@ -426,6 +444,9 @@ struct
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Proc.resolve_external_processes v;
           Session.handle_send_from_remote client_id deleg_chans v chan_id
+      | LostMessageResponse (carrier_chan_id, lost_message_table) ->
+          Session.handle_lost_message_response carrier_chan_id lost_message_table
+
 
     let recvLoop client_id frame =
     let open Frame in
@@ -492,7 +513,7 @@ struct
       ", \"chan\": " ^ json_ch ^ "}" in
     send_or_buffer_message cid str_val
 
-  let deliver_session_message client_id session_ep deleg_chans v =
+  let deliver_session_message client_id session_ep deleg_chans requires_lost_messages v =
     let json_val = Json.jsonize_value v in
 
     let print_deleg_chan (chan, msgs) =
@@ -508,6 +529,8 @@ struct
       "{\"opcode\":\"SESSION_MESSAGE_DELIVERY\"," ^
         "\"ep_id\":" ^ (ChannelID.to_json session_ep) ^ "," ^
         "\"deleg_chans\": [" ^ deleg_chans_json ^ "], " ^
+        "\"requires_lost_messages\":" ^
+          (string_of_bool requires_lost_messages) ^ "," ^
         "\"msg\":" ^ json_val ^ "}" in
     send_or_buffer_message client_id json_str
 
@@ -522,6 +545,24 @@ struct
        "\"carrier_ep\":" ^ (ChannelID.to_json carrier_chan) ^ "," ^
        "\"ep_ids\":[" ^ chan_ids_json ^ "]}" in
     send_or_buffer_message client_id json_str
+
+  let deliver_lost_messages client_id carrier_channel_id lost_msg_table =
+    let str_buf msgs =
+      List.map (Json.jsonize_value) msgs
+      |> List.rev
+      |> String.concat "," in
+
+    let json_table =
+      List.map (fun (cid, msgs) ->
+        ChannelID.to_json cid ^ ": [" ^ (str_buf msgs) ^ "]") lost_msg_table
+      |> String.concat "," in
+
+    let json_str =
+      "{\"opcode\":\"DELIVER_LOST_MESSAGES\"," ^
+       "\"ep_id\":" ^ (ChannelID.to_json carrier_channel_id) ^ "," ^
+       "\"lost_messages\":{" ^ json_table ^ "}}" in
+    send_or_buffer_message client_id json_str
+
 
   (* Debug *)
   let _send_raw_string wsocket str = send_message wsocket str
@@ -668,7 +709,7 @@ and Session : SESSION = struct
   let buffers = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
 
   (* Pending buffers: messages stored in a delegated channel's buffer *)
-  let pending_buffers = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
+  let pending_buffers = (Hashtbl.create 10000 : (channel_id, Value.t list) Hashtbl.t)
 
   (* Orphan messages: messages which have arrived for a channel before lost messages *)
   let orphans = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
@@ -678,8 +719,10 @@ and Session : SESSION = struct
   let delegating_channels = ref ChannelIDSet.empty
   let add_delegating_channel c =
     delegating_channels := ChannelIDSet.add c (!delegating_channels)
+  let remove_delegating_channel c =
+    delegating_channels := (ChannelIDSet.remove c (!delegating_channels))
   let is_channel_delegating c =
-    Set.mem c (!delegating_channels)
+    ChannelIDSet.mem c (!delegating_channels)
 
   let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
   let forward_tbl = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
@@ -923,21 +966,29 @@ and Session : SESSION = struct
       Debug.print @@ "Updating buffer for " ^ (ChannelID.to_string chan_ep);
       Hashtbl.replace endpoint_states chan_ep Local;
       Hashtbl.replace forward_tbl chan_ep (Unionfind.fresh chan_ep);
-      Hashtbl.replace orphans chan_ep [];
-      Hashtbl.replace pending_buffers chan_ep (queue_from_list buf)) deleg_chans;
-    let lost_msg_eps = List.map snd deleg_chans in
+      Hashtbl.replace orphans chan_ep (Queue.create ());
+      Hashtbl.replace pending_buffers chan_ep buf) deleg_chans;
+    let lost_msg_eps = List.map (snd -<- fst) deleg_chans in
     Websockets.get_lost_messages client_id chan_id lost_msg_eps >>= fun _ ->
     Lwt.return @@ send_local msg chan_id
 
   let send_to_remote v client_id session_ep  =
-    Websockets.deliver_session_message client_id session_ep [] v
+    Websockets.deliver_session_message client_id session_ep [] false v
 
-  let send_to_remote_with_deleg source_client_id deleg_chans msg dest_client_id dest_chan_id =
+  let send_to_remote_with_deleg source_client_id_opt deleg_chans msg dest_client_id dest_chan_id =
     List.iter (fun (chan, _buf) ->
       Hashtbl.replace endpoint_states (snd chan) (Remote dest_client_id)) deleg_chans;
-    let lost_msg_eps = List.map snd deleg_chans in
-    Websockets.get_lost_messages source_client_id dest_chan_id lost_msg_eps >>= fun _ ->
-    Websockets.deliver_session_message dest_client_id dest_chan_id deleg_chans msg
+    let lost_msg_eps = List.map (snd -<- fst) deleg_chans in
+    (* Only need to send a GLM if we're delegating from a client, not the server *)
+    begin
+    match source_client_id_opt with
+      | Some source_cid ->
+          Websockets.get_lost_messages source_cid dest_chan_id lost_msg_eps
+      | None -> Lwt.return ()
+    end >>= fun _ ->
+    let needs_lost_msgs = OptionUtils.is_some source_client_id_opt in
+    Websockets.deliver_session_message dest_client_id dest_chan_id
+      deleg_chans needs_lost_msgs msg
 
   let send msg send_port =
     match Hashtbl.find endpoint_states send_port with
@@ -950,14 +1001,39 @@ and Session : SESSION = struct
           let deleg_chans =
             Value.get_contained_channels msg
             |> List.map (fun ((_, ep2) as ch) -> (ch, Hashtbl.find buffers ep2 |> queue_as_list)) in
-          send_to_remote_with_deleg deleg_chans msg client_id send_port
+          send_to_remote_with_deleg None deleg_chans msg client_id send_port
+
+  let handle_local_lost_messages carrier_channel lost_message_table =
+    (* For each entry in the lost message table, combine with orphans and
+     * pendings, put into buffers, remove from pendings and orphans *)
+    List.iter (fun (ep_id, ep_lost_msgs) ->
+      let ep_orphans = Hashtbl.find orphans ep_id |> Utility.queue_as_list in
+      let ep_orig_buf = Hashtbl.find pending_buffers ep_id in
+      let complete_buf = ep_orig_buf @ ep_lost_msgs @ ep_orphans in
+      Hashtbl.remove orphans ep_id;
+      Hashtbl.remove pending_buffers ep_id;
+      Hashtbl.replace buffers ep_id (queue_from_list complete_buf)) lost_message_table;
+    remove_delegating_channel carrier_channel;
+    (* service_queued_delegation_requests (); *) (* Is this the right place to do this? *)
+    OptionUtils.opt_iter Proc.awaken (Session.unblock carrier_channel)
+
+  let handle_remote_lost_messages cid carrier_channel lost_message_table =
+    remove_delegating_channel carrier_channel;
+    Websockets.deliver_lost_messages cid carrier_channel lost_message_table
+
+  let handle_lost_message_response carrier_channel lost_message_table =
+    match Hashtbl.find endpoint_states carrier_channel with
+      | Local ->
+          Lwt.return @@ handle_local_lost_messages carrier_channel lost_message_table
+      | Remote cid ->
+          handle_remote_lost_messages cid carrier_channel lost_message_table
 
   (* Handles a remote session send:
    *  - owner_cid: client ID of the client sending the request
    *  - deleg_chans: channels sent in the message, which require delegation
    *  - msg: message to send
    *  - send_port: remote channel endpoint to which the message should be sent *)
-  let handle_send_from_remote owner_cid deleg_chans msg send_port =
+  let handle_send_from_remote (owner_cid : client_id) deleg_chans msg send_port =
     (* If we're not delegating anything, then we can just do a straightforward send *)
     if (List.length deleg_chans) = 0 then
       send msg send_port
@@ -966,10 +1042,10 @@ and Session : SESSION = struct
       record_chan_locations owner_cid deleg_chans;
       match Hashtbl.find endpoint_states send_port with
         | Local ->
-            send_local_with_deleg deleg_chans msg send_port >>= fun _ ->
+            send_local_with_deleg owner_cid deleg_chans msg send_port >>= fun _ ->
             OptionUtils.opt_iter Proc.awaken (Session.unblock send_port);
             Lwt.return ()
-        | Remote cid -> send_to_remote_with_deleg deleg_chans msg cid send_port
+        | Remote cid -> send_to_remote_with_deleg (Some owner_cid) deleg_chans msg cid send_port
       end
 
   let receive recv_port =

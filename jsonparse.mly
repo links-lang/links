@@ -63,6 +63,17 @@ let websocket_req assoc_list =
             |> List.map (parse_deleg_entry -<- Value.unbox_record) in
         let msg = List.assoc "msg" assoc_list in
         ChanSend (remote_ep, deleg_set, msg)
+    | "LOST_MESSAGES" ->
+        let carrier_chan = get_and_unbox_str "epID" |> ChannelID.of_string in
+        let unboxed_msgs = get_field "msgs" |> Value.unbox_record in
+
+        let parse_lost_message_entry (chan_str, msgs) =
+          let chan_id = ChannelID.of_string chan_str in
+          let msgs = Value.unbox_list msgs |> List.rev in
+          (chan_id, msgs) in
+
+        let msg_table = List.map parse_lost_message_entry unboxed_msgs in
+        LostMessageResponse (carrier_chan, msg_table)
     | _ -> failwith "Invalid opcode in websocket message"
 %}
 
