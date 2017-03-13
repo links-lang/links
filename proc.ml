@@ -716,6 +716,7 @@ and Session : SESSION = struct
    * *)
   let accept_core : apid -> (client_id * process_id) option -> (chan * bool) Lwt.t =
     fun apid client_info_opt ->
+      Debug.print("in accept_core, APID: " ^ (AccessPointID.to_string apid));
       let state = Hashtbl.find access_points apid in
 
       let make_req ch =
@@ -731,38 +732,49 @@ and Session : SESSION = struct
       let res =
         match state with
         | Balanced             ->
+            Debug.print("accept balanced");
             let ch = new_channel () in
             let r = make_req ch in
-            Lwt.return (ch, Accepting [r], true)
+            Lwt.return (ch, Accepting [r], (fun () -> Lwt.return ()), true)
         | Accepting rs         ->
+            Debug.print("accept accepting");
             let ch =  new_channel () in
             let r = make_req ch in
-            Lwt.return (ch, Accepting (rs @ [r]), true)
+            Lwt.return (ch, Accepting (rs @ [r]), (fun () -> Lwt.return ()), true)
         | Requesting [req]       ->
             begin
             match req with
               | ServerRequest ch ->
-                  OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ snd ch);
-                  Lwt.return (ch, Balanced, false)
+                  Debug.print("accept server 1");
+                  let action =
+                    fun () -> Lwt.return @@ OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ snd ch) in
+                  Lwt.return (ch, Balanced, action, false)
               | ClientRequest (their_cid, their_pid, ch) ->
-                  register_and_notify_peer their_cid their_pid ch >>= fun _ ->
-                  Lwt.return (ch, Balanced, false)
+                  Debug.print("accept client 1");
+                  let action =
+                    fun () -> register_and_notify_peer their_cid their_pid ch in
+                  Lwt.return (ch, Balanced, action, false)
             end
         | Requesting (r :: rs) ->
             begin
             match r with
               | ServerRequest ch ->
-                  OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ snd ch);
-                  Lwt.return (ch, Requesting rs, false)
+                  Debug.print("accept server many");
+                  let action =
+                    fun () -> Lwt.return @@ OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ snd ch) in
+                  Lwt.return (ch, Requesting rs, action, false)
               | ClientRequest (their_cid, their_pid, ch) ->
-                  register_and_notify_peer their_cid their_pid ch >>= fun _ ->
-                  Lwt.return (ch, Requesting rs, false)
+                  Debug.print("accept server many");
+                  let action =
+                    fun () -> register_and_notify_peer their_cid their_pid ch in
+                  Lwt.return (ch, Requesting rs, action, false)
             end
         | Requesting []        ->
-            assert false (* TODO: check that this is impossible *)
+            assert false
       in
-        res >>= fun (c, state', blocked) ->
+        res >>= fun (c, state', action, blocked) ->
         Hashtbl.replace access_points apid state';
+        action () >>= fun _ ->
         Lwt.return (c, blocked)
 
 
@@ -779,6 +791,7 @@ and Session : SESSION = struct
 
   let request_core : apid -> (client_id * process_id) option -> (chan * bool) Lwt.t =
     fun apid client_info_opt ->
+      Debug.print("in request_core, AP: " ^ (AccessPointID.to_string apid));
       let make_req ch =
         match client_info_opt with
           | Some (cid, pid) -> ClientRequest (cid, pid, ch)
@@ -787,43 +800,51 @@ and Session : SESSION = struct
       let register_and_notify_peer their_cid their_pid ch =
         Hashtbl.replace endpoint_states (fst ch) (Remote their_cid);
         Websockets.send_ap_response their_cid their_pid ch in
+      let ep_str (ep1, ep2) = "(" ^ (ChannelID.to_string ep1) ^ "," ^ (ChannelID.to_string ep2) ^ ")" in
 
       let state = Hashtbl.find access_points apid in
       let res =
         match state with
         | Balanced            ->
+            Debug.print ("Request matched balanced");
             let ch = new_channel () in
             let r = make_req ch in
-            Lwt.return (ch, Requesting [r], true)
+            Lwt.return (ch, Requesting [r], (fun () -> Lwt.return ()), true)
         | Requesting rs       ->
+            Debug.print ("Request matched requesting");
             let ch = new_channel () in
             let r = make_req ch in
-            Lwt.return (ch, Requesting (rs @ [r]), true)
+            Lwt.return (ch, Requesting (rs @ [r]), (fun () -> Lwt.return ()), true)
         | Accepting [r]       ->
             begin
             match r with
               | ServerRequest ch ->
-                  OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ fst ch);
-                  Lwt.return (ch, Balanced, false)
+                  Debug.print ("Request matched with ServerRequest " ^ (ep_str ch));
+                  let action = fun () -> Lwt.return @@ OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ fst ch) in
+                  Lwt.return (ch, Balanced, action, false)
               | ClientRequest (their_cid, their_pid, ch) ->
-                  register_and_notify_peer their_cid their_pid ch >>= fun _ ->
-                  Lwt.return (ch, Balanced, false)
+                  Debug.print ("Request matched with ClientRequest " ^ (ep_str ch));
+                  let action = fun () -> register_and_notify_peer their_cid their_pid ch in
+                  Lwt.return (ch, Balanced, action, false)
             end
         | Accepting (r :: rs) ->
             begin
             match r with
               | ServerRequest ch ->
-                  OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ fst ch);
-                  Lwt.return (ch, Accepting rs, false)
+                  Debug.print ("Request Matched with ServerRequest (xs) " ^ (ep_str ch));
+                  let action = fun () -> Lwt.return @@ OptionUtils.opt_iter (Proc.awaken) (Session.unblock @@ fst ch) in
+                  Lwt.return (ch, Accepting rs, action, false)
               | ClientRequest (their_cid, their_pid, ch) ->
-                  register_and_notify_peer their_cid their_pid ch >>= fun _ ->
-                  Lwt.return (ch, Accepting rs, false)
+                  Debug.print ("Request matched with ClientRequest (xs)" ^ (ep_str ch));
+                  let action = fun () -> register_and_notify_peer their_cid their_pid ch in
+                  Lwt.return (ch, Accepting rs, action, false)
             end
         | Accepting []        ->
             assert false
       in
-        res >>= fun (c, state', blocked) ->
+        res >>= fun (c, state', action, blocked) ->
         Hashtbl.replace access_points apid state';
+        action () >>= fun _ ->
         let our_end_of_chan = flip_chan c in
         Lwt.return (our_end_of_chan, blocked)
 
@@ -863,16 +884,6 @@ and Session : SESSION = struct
   let record_chan_locations owner_cid chans =
     List.iter (fun (ch, _) ->
       Hashtbl.replace endpoint_states (fst ch) (Remote owner_cid)) chans
-
-(*
-   let get_or_create_buffer p =
-    match Hashtbl.lookup buffers p with
-      | Some q -> q
-      | None ->
-          let q = Queue.create () in
-          Hashtbl.replace buffers p q;
-          q
-*)
 
   let send_local msg send_port =
     (* Debug.print ("Sending along: " ^ string_of_int p); *)

@@ -1,17 +1,10 @@
 open ChatSessions
 open ChatClient
 
-#  typename LoopProc =
-#    Process({ hear:[|BroadcastMessage : Message | BroadcastChangeTopic: Topic
-#                    | GetServerState : Process ({ hear:(Topic, [Nickname]) })
-#                    | NewClient : (Nickname, ServerToClientChannel)  |]});
-
 ## clientHandler loop: Reads incoming requests from the client, dispatches
 ## each command to the serverLoop which will broadcast to other session clients.
 # Alas, we can't make this an inner function at the moment since we need a type
 # annotation, and type annotations are broken for inner functions at the moment
-#sig clientHandlerLoop :
-#  forall a::Any. (ReceiveCommand, LoopProc) ~> a
 fun clientHandlerLoop(nick, clientToServerChan, loopPid) {
 
   offer(clientToServerChan) {
@@ -27,8 +20,7 @@ fun clientHandlerLoop(nick, clientToServerChan, loopPid) {
 }
 
 
-# Process that is spawned to handle
-#sig clientHandler : forall a::Any.(ChatServer, ~ServerToClientChannel, LoopProc) ~> a
+# Process that is spawned to handle messages from the chat client.
 fun clientHandler(nick, chatServerRecvEnd, serverToClientRecvEnd, loopPid) {
 
   # Get the current topic and nicks
@@ -36,7 +28,6 @@ fun clientHandler(nick, chatServerRecvEnd, serverToClientRecvEnd, loopPid) {
   var (topic, nicks) = receive { case st -> st };
 
   # Send topic, nicks, and outgoing channel
-  #var wrappedNicks = map(fun(s) { Nickname(s) }, nicks);
   var chatServerRecvEnd =
     send((topic, nicks, serverToClientRecvEnd), chatServerRecvEnd);
 
@@ -63,6 +54,8 @@ fun clientSendHandler(s) {
       clientSendHandler(s)
   }
 }
+
+# Broadcasts a given message to the mailboxes of a list of PIDs
 fun broadcastMessage(msg, pids) {
   switch(pids) {
     case [] -> ()
@@ -70,7 +63,9 @@ fun broadcastMessage(msg, pids) {
   }
 }
 
-
+# Main server loop, containing server state. Awaits (non-session) control
+# messages to update the state, or broadcast instructions to send things
+# along session channels.
 fun serverLoop(topic, nicks, pids) {
   receive {
     case BroadcastMessage(nick, msg) ->
@@ -88,29 +83,33 @@ fun serverLoop(topic, nicks, pids) {
   }
 }
 
-fun acceptor(ap, loopPid) server {
-  # Accept a new client
-  var clientToServerRecvEnd = accept(ap);
-
+fun handleNewClient(clientToServerRecvEnd, loopPid) {
+  debug("in handleNewClient");
   # Get the name and incoming message channel of the new client
-  # FIXME: Blocking operation in acceptor loop....
   var (name, clientToServerRecvEnd) = receive(clientToServerRecvEnd);
 
-  debug("before fork");
-
+  debug("after receive in handleNewClient");
   # Fork off the client handler,
   var serverToClientSendEnd = linFork(
     linfun (serverToClientRecvEnd) {
       clientHandler(name, clientToServerRecvEnd, serverToClientRecvEnd, loopPid)
   });
 
-  debug("after fork");
-
-  # For off client send handler
+  # Fork off client send handler
   var clientSendHandlerPid = spawn { clientSendHandler(serverToClientSendEnd) };
 
   # Register with the main loop, and recurse
   loopPid ! NewClient(name, clientSendHandlerPid);
+  debug("after send in handleNewClient");
+}
+
+fun acceptor(ap, loopPid) server {
+  # Accept a new client
+  debug("start of acceptor");
+  var clientToServerRecvEnd = accept(ap);
+  debug("after accept");
+  var _ = spawn { handleNewClient(clientToServerRecvEnd, loopPid) };
+  debug("after spawn");
   acceptor(ap, loopPid)
 }
 
