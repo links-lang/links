@@ -1,4 +1,3 @@
-
 open ChatSessions
 
 module DomFunctions {
@@ -43,7 +42,7 @@ module Components {
 
     fun changeTopic(topic) {
       var topicNode = getNodeById("topic");
-      var to_add = <#><p><span class="lead"><b>Topic: </b>{stringToXml(topicStr)}</span></p></#>;
+      var to_add = <#><p><span class="lead"><b>Topic: </b>{stringToXml(topic)}</span></p></#>;
       replaceChildren(to_add, topicNode)
     }
 

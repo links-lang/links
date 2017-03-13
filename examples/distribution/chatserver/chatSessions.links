@@ -16,24 +16,3 @@ typename ReceiveCommand =
   [&| ChatMessage : ?(Message) . ReceiveCommand,
       ChangeTopic : ?(Topic). ReceiveCommand |&];
 typename ChatServer = ?(Nickname) . !(Topic, [Nickname], ~ServerToClientChannel) . ReceiveCommand;
-
-
-
-# This should probably end up in the prelude...
-typename SessionList(a :: Session) =
-  mu x . [| Nil | SessionCons : (a, x) |];
-
-sig mapCh :
-  forall s1::Type(Any, Session), s2::Type(Any, Session).
-    (((s1) ~> s2), SessionList(s1)) ~%e~> SessionList(s2)
-fun mapCh(f, chans) {
-  fun mapInner(xs) {
-    switch (xs) {
-      case Nil -> Nil
-      case SessionCons(chan, xs) ->
-        var chan = f(chan);
-        SessionCons(chan, mapInner(xs))
-    }
-  }
-  mapInner(chans)
-}
