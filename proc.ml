@@ -1048,17 +1048,22 @@ and Session : SESSION = struct
         | Remote cid -> send_to_remote_with_deleg (Some owner_cid) deleg_chans msg cid send_port
       end
 
+  let can_receive_message msg =
+    let contained_channels = Value.get_contained_channels msg in
+    let is_chan_ready (_, recv_ep) = Hashtbl.mem buffers recv_ep in
+    List.for_all (is_chan_ready) contained_channels
+
   let receive recv_port =
       match Hashtbl.find endpoint_states recv_port with
         | Local ->
           (* Debug.print ("Receiving on: " ^ string_of_int p); *)
           let p = find_active recv_port in
           let buf = Hashtbl.find buffers p in
-          if not (Queue.is_empty buf) then
-            Some (Queue.pop buf)
+          if (not (Queue.is_empty buf)) && (can_receive_message @@ Queue.peek buf) then
+              Some (Queue.pop buf)
           else None
         | Remote _ ->
-            (* If this happens, something has gone seriously wrong
+            (* If this happens, something has gone *seriously* wrong
              * internally. *)
             failwith "Cannot receive on remote port!"
 
