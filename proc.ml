@@ -966,7 +966,7 @@ and Session : SESSION = struct
 
 
   let delegation_can_proceed =
-    List.for_all (fun c -> not (List.is_channel_delegating (snd c)))
+    List.for_all (fun c -> not (is_channel_delegating (snd c)))
 
   let send_local_with_deleg client_id deleg_chans msg chan_id =
     List.iter (fun (chan, buf) ->
