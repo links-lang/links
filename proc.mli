@@ -124,10 +124,8 @@ sig
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
 
-  val send : Value.t -> channel_id -> unit Lwt.t
-  val send_to_remote : Value.t -> client_id -> channel_id -> unit Lwt.t
-
-  val handle_send_from_remote :
+  val send_from_local : Value.t -> channel_id -> unit Lwt.t
+  val send_from_remote :
     client_id -> Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
 
   val receive : channel_id -> Value.t option

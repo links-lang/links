@@ -343,7 +343,7 @@ struct
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let (outp, _) = Value.unbox_channel chan in
-      Session.send v outp >>= fun _ ->
+      Session.send_from_local v outp >>= fun _ ->
       apply_cont cont env chan
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
@@ -580,7 +580,7 @@ struct
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
       let ch = Value.unbox_channel chan in
       let (outp, _inp) = ch in
-      Session.send (Value.box_variant name (Value.box_unit ())) outp >>= fun _ ->
+      Session.send_from_local (Value.box_variant name (Value.box_unit ())) outp >>= fun _ ->
       OptionUtils.opt_iter Proc.awaken (Session.unblock outp);
       apply_cont cont env chan
     | `Choice (v, cases) ->
