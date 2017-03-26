@@ -807,8 +807,7 @@ and Session : SESSION = struct
    * In the case of a client request, an unblock message will be sent.
    * Also updates the AP state.
    * *)
-  let accept_core : apid -> (client_id * process_id) option -> (chan * bool) Lwt.t =
-    fun apid client_info_opt ->
+  let accept_core apid client_info_opt =
       let state = Hashtbl.find access_points apid in
 
       let make_req ch =
@@ -866,23 +865,28 @@ and Session : SESSION = struct
       in
         res >>= fun (c, state', action, blocked) ->
         Hashtbl.replace access_points apid state';
-        action () >>= fun _ ->
-        Lwt.return (c, blocked)
+        Lwt.return (c, action, blocked)
 
 
-  let accept : apid -> (chan * bool) Lwt.t = fun apid -> accept_core apid None
+  let accept : apid -> (chan * bool) Lwt.t = fun apid ->
+    accept_core apid None >>= fun (c, action, blocked) ->
+    action () >>= fun _ ->
+    Lwt.return (c, blocked)
 
   let ap_accept_from_client cid pid apid =
-    accept_core apid (Some (cid, pid)) >>= fun (ch, blocked) ->
+    accept_core apid (Some (cid, pid)) >>= fun (ch, action, blocked) ->
     (* Mark endpoint as remote *)
     Hashtbl.replace endpoint_states (snd ch) (Remote cid);
+    begin
     if not blocked then
       Websockets.send_ap_response cid pid ch
     else
       Lwt.return ()
+    end >>= fun _ ->
+    action ()
 
-  let request_core : apid -> (client_id * process_id) option -> (chan * bool) Lwt.t =
-    fun apid client_info_opt ->
+
+  let request_core apid client_info_opt =
       let make_req ch =
         match client_info_opt with
           | Some (cid, pid) -> ClientRequest (cid, pid, ch)
@@ -937,19 +941,25 @@ and Session : SESSION = struct
       in
         res >>= fun (c, state', action, blocked) ->
         Hashtbl.replace access_points apid state';
-        action () >>= fun _ ->
         let our_end_of_chan = flip_chan c in
-        Lwt.return (our_end_of_chan, blocked)
+        Lwt.return (our_end_of_chan, action, blocked)
 
-  let request : apid -> (chan * bool) Lwt.t = fun apid -> request_core apid None
+  let request : apid -> (chan * bool) Lwt.t = fun apid ->
+    request_core apid None >>= fun (c, action, blocked) ->
+    action () >>= fun _ ->
+    Lwt.return (c, blocked)
 
   let ap_request_from_client cid pid apid =
-    request_core apid (Some (cid, pid)) >>= fun (ch, blocked) ->
+    request_core apid (Some (cid, pid)) >>= fun (ch, action, blocked) ->
     Hashtbl.replace endpoint_states (snd ch) (Remote cid);
+    begin
     if not blocked then
       Websockets.send_ap_response cid pid ch
     else
       Lwt.return ()
+    end >>= fun _ ->
+    action ()
+
 
   let find_active p =
     Unionfind.find (Hashtbl.find forward_tbl p)
