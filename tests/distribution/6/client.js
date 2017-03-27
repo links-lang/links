@@ -34,11 +34,12 @@ function arraysEqual(a, b) {
 
 function delegate() {
   // sending receive end of channel (so ch1)
-  // 1: buffer
-  // 2: lost
-  // 3: orphan
-  tests.sendRemoteSessionMessage(_ws, deleg_ch, [{chan : ch1, buffer : [1]}], ch1);
-  tests.sendRemoteSessionMessage(_ws, ch2, [], 3);
+  // 1, 2: buffer
+  // 3: lost
+  // 4, 5: orphan
+  tests.sendRemoteSessionMessage(_ws, deleg_ch, [{chan : ch1, buffer : [2, 1]}], ch1);
+  tests.sendRemoteSessionMessage(_ws, ch2, [], 5);
+  tests.sendRemoteSessionMessage(_ws, ch2, [], 6);
 }
 
 function handle_incoming(ep_id, msg) {
@@ -66,7 +67,7 @@ function msg_callback(data) {
       let key = ch1._sessEP2;
       console.assert(arraysEqual(parsed.ep_ids, [key]), "bad GLM endpoint");
       let ret = {};
-      ret[key] = [2];
+      ret[key] = [4, 3];
       tests.sendLostMessageResponse(_ws, remote_ep, ret);
       break;
     default:

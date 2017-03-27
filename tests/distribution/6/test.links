@@ -1,4 +1,4 @@
-typename S1 = ?(Int).?(Int).?(Int).End;
+typename S1 = ?(Int).?(Int).?(Int).?(Int).?(Int).?(Int).End;
 typename S2 = ?(S1).End;
 
 module Client {
@@ -19,7 +19,14 @@ module Server {
     debug("Received " ^^ intToString(y));
     var (z, c) = receive(c);
     debug("Received " ^^ intToString(z));
-    var res = x + y + z;
+    var (z2, c) = receive(c);
+    debug("Received " ^^ intToString(z2));
+    var (z3, c) = receive(c);
+    debug("Received " ^^ intToString(z3));
+    var (z4, c) = receive(c);
+    debug("Received " ^^ intToString(z4));
+
+    var res = x + y + z + z2 + z3 + z4;
     debug("Result: " ^^ intToString(res));
     ()
   }
