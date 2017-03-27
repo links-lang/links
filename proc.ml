@@ -992,10 +992,16 @@ and Session : SESSION = struct
 
   let do_local_send awaken msg send_port=
     let p = find_active send_port in
-    Queue.push msg (Hashtbl.find buffers p);
-    if (awaken) then
-      OptionUtils.opt_iter Proc.awaken (Session.unblock send_port)
-    else ()
+    (* We'll either have a local buffer if channel is not in the process of
+     * being delegated, or an entry in the orphans table otherwise. *)
+    match Hashtbl.lookup buffers p with
+      | Some queue ->
+          Queue.push msg queue;
+          if (awaken) then
+            OptionUtils.opt_iter Proc.awaken (Session.unblock send_port)
+          else ()
+      | None ->
+          Queue.push msg (Hashtbl.find orphans p)
 
   let delegate_to_client source_client_id_opt deleg_chans dest_client_id msg send_port =
     (* Update endpoint states for channels *)
