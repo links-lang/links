@@ -47,7 +47,7 @@ function msg_callback(data) {
 
 
 function doActions(client_id, websocket) {
-   console.log(client_id);
+   websocket.on('message', function incoming(data, flags) { msg_callback(data) } );
    _ws = websocket;
    tests.sendRemoteAPRequest(websocket, "cl_0", srvAp);
 }

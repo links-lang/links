@@ -836,9 +836,10 @@ and Session : SESSION = struct
               | ServerRequest ch ->
                   let action =
                     fun () ->
+                      let their_end_of_chan = flip_chan ch in
                       Lwt.return @@
                       OptionUtils.opt_iter (Proc.awaken)
-                        (Session.unblock @@ snd ch) in
+                        (Session.unblock @@ snd their_end_of_chan) in
                   Lwt.return (ch, Balanced, action, false)
               | ClientRequest (their_cid, their_pid, ch) ->
                   let action =
@@ -852,8 +853,9 @@ and Session : SESSION = struct
                   let action =
                     fun () ->
                       Lwt.return @@
+                      let their_end_of_chan = flip_chan ch in
                       OptionUtils.opt_iter (Proc.awaken)
-                        (Session.unblock @@ snd ch) in
+                        (Session.unblock @@ snd their_end_of_chan) in
                   Lwt.return (ch, Requesting rs, action, false)
               | ClientRequest (their_cid, their_pid, ch) ->
                   let action =
@@ -893,7 +895,7 @@ and Session : SESSION = struct
           | None -> ServerRequest ch in
 
       let register_and_notify_peer their_cid their_pid ch =
-        Hashtbl.replace endpoint_states (fst ch) (Remote their_cid);
+        Hashtbl.replace endpoint_states (snd ch) (Remote their_cid);
         Websockets.send_ap_response their_cid their_pid ch in
 
       let state = Hashtbl.find access_points apid in
@@ -914,7 +916,7 @@ and Session : SESSION = struct
                   let action = fun () ->
                     Lwt.return @@
                     OptionUtils.opt_iter (Proc.awaken)
-                      (Session.unblock @@ fst ch) in
+                      (Session.unblock @@ snd ch) in
                   Lwt.return (ch, Balanced, action, false)
               | ClientRequest (their_cid, their_pid, ch) ->
                   let action =
@@ -929,7 +931,7 @@ and Session : SESSION = struct
                     fun () ->
                       Lwt.return @@
                       OptionUtils.opt_iter (Proc.awaken)
-                        (Session.unblock @@ fst ch) in
+                        (Session.unblock @@ snd ch) in
                   Lwt.return (ch, Accepting rs, action, false)
               | ClientRequest (their_cid, their_pid, ch) ->
                   let action =

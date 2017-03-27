@@ -310,7 +310,7 @@ struct
               (* TODO: Work out the semantics of this *)
               failwith "Cannot *yet* accept on a client AP on the server"
           | `ServerAccessPoint apid ->
-              Session.accept apid >>= fun ((c, _) as ch, blocked) ->
+              Session.accept apid >>= fun ((_, c) as ch, blocked) ->
               let boxed_channel = Value.box_channel ch in
               Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
               if blocked then
@@ -329,7 +329,7 @@ struct
               (* TODO: Work out the semantics of this *)
               failwith "Cannot *yet* request from a client-spawned AP on the server"
           | `ServerAccessPoint apid ->
-              Session.request apid >>= fun ((c, _) as ch, blocked) ->
+              Session.request apid >>= fun ((_, c) as ch, blocked) ->
               let boxed_channel = Value.box_channel ch in
               if blocked then
                 (* block my end of the channel *)

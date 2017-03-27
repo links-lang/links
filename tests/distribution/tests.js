@@ -4,7 +4,7 @@ const WebSocket = require("ws");
 let ws_url_base = "ws://localhost:8080/ws/";
 
 module.exports = {
-  make_request : function(url, msg_cb) {
+  make_request : function(url) {
     const browser = new Browser();
     let promise = new Promise(function(resolve, reject) {
       browser.visit(url, function(status) {
@@ -13,7 +13,6 @@ module.exports = {
 
         // Next, make a websocket
         let socket = new WebSocket(ws_url_base + cid);
-        socket.on('message', function incoming(data, flags) { msg_cb(data) } );
         socket.on('open', function open() { resolve( {cid : cid, socket : socket }) });
       });
     });
