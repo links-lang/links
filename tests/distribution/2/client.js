@@ -12,13 +12,9 @@ let sum = 0;
 let _ws = undefined;
 let _chan = undefined;
 
-function do_comm(i, chan) {
-  sum += i;
-  if (step < 1) {
-    step++;
-  } else {
-    tests.sendRemoteSessionMessage(_ws, chan, [], sum);
-  }
+function do_comm(chan) {
+  tests.sendRemoteSessionMessage(_ws, chan, [], 1);
+  tests.sendRemoteSessionMessage(_ws, chan, [], 2);
 }
 
 function handle_incoming(ep_id, msg) {
@@ -34,6 +30,7 @@ function msg_callback(data) {
     case "AP_RESPONSE":
       let chan = parsed.chan;
       _chan = chan;
+      do_comm(chan);
       break;
     case "SESSION_MESSAGE_DELIVERY":
       let ep_id = parsed.ep_id;
@@ -49,9 +46,8 @@ function msg_callback(data) {
 function doActions(client_id, websocket) {
    console.log(client_id);
    _ws = websocket;
-   tests.sendRemoteAPRequest(websocket, "cl_0", srvAp);
+   tests.sendRemoteAPAccept(websocket, "cl_0", srvAp);
 }
-
 
 let promise = tests.make_request(url, msg_callback);
 promise.then(ret => {
