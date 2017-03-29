@@ -39,16 +39,23 @@ let clientA = {
     switch (parsed.opcode) {
       case "AP_RESPONSE":
         clientA.chan = parsed.chan;
+        clientA.send_pre_lost_message();
         break;
       default:
         throw("Unexpected opcode: " + opcode);
     }
   },
 
-  send_messages : function() {
+  send_pre_lost_message : function() {
     tests.sendRemoteSessionMessage(clientA.ws, clientA.chan, [], 1);
+  },
+
+  send_lost_messages : function() {
     tests.sendRemoteSessionMessage(clientA.ws, clientA.chan, [], 2);
     tests.sendRemoteSessionMessage(clientA.ws, clientA.chan, [], 3);
+  },
+
+  send_messages : function() {
     tests.sendRemoteSessionMessage(clientA.ws, clientA.chan, [], 4);
   }
 
@@ -58,6 +65,8 @@ let clientB = {
   carrier_chan: undefined,
   carried_chan: undefined,
   ws : undefined,
+  buf : [],
+  lost_msgs : [],
 
   setup : function(ws) {
     clientB.ws = ws;
@@ -71,13 +80,10 @@ let clientB = {
       case "AP_RESPONSE":
         console.log("In ap response client B");
         if (clientB.carried_chan == undefined) {
-          console.log("in undefined branch");
           clientB.carried_chan = parsed.chan;
           tests.sendRemoteAPAccept(clientB.ws, "clB_0", srvAp1);
         } else {
-          console.log("in delegate branch");
           clientB.carrier_chan = parsed.chan;
-          clientB.delegate();
         }
         break;
       case "GET_LOST_MESSAGES":
@@ -85,11 +91,17 @@ let clientB = {
         let key = parsed.ep_ids[0];
         assert(key != undefined, "key undefined in clB GLM!");
         let ret = {};
-        ret[key] = [];
+        ret[key] = clientB.lost_msgs;
         tests.sendLostMessageResponse(clientB.ws, remote_ep, ret);
+        clientB.lost_msgs = [];
         break;
       case "SESSION_MESSAGE_DELIVERY":
-        throw("Client B shouldn't receive any session messages!");
+        if (clientB.buf != undefined) {
+          clientB.buf.unshift(parsed.msg);
+          clientB.delegate()
+        } else {
+          clientB.lost_msgs.unshift(parsed.msg);
+        }
         break;
     }
   },
@@ -101,12 +113,14 @@ let clientB = {
 
     // Now send carried chan along carrier chan.
     let carried_ep = clientB.carrier_chan._sessEP2;
-    let deleg_dict = [{ chan : clientB.carried_chan, buffer: [] }];
+    let deleg_dict = [{ chan : clientB.carried_chan, buffer: clientB.buf }];
+    clientA.send_lost_messages();
     tests.sendRemoteSessionMessage(clientB.ws,
       clientB.carrier_chan, deleg_dict, clientB.carried_chan);
 
     // We don't have the carried_chan anymore.
-    carried_chan = undefined;
+    clientB.carried_chan = undefined;
+    clientB.buf = undefined;
   }
 
 }
@@ -115,11 +129,19 @@ let clientC = {
   chan : undefined,
   received_chan : undefined,
   ws : undefined,
+  buf : [],
 
   setup : function(ws) {
     clientC.ws = ws;
     ws.on('message', function incoming(data, flags) { clientC.message_callback(data) } );
     tests.sendRemoteAPRequest(ws, "clC_0", srvAp1);
+  },
+
+  deliver_message : function(msg) {
+    clientC.buf.unshift(msg);
+    if (clientC.buf.length == 4) {
+      clientC.print_buf();
+    }
   },
 
   message_callback : function (data) {
@@ -128,20 +150,23 @@ let clientC = {
       case "AP_RESPONSE":
         clientC.chan = parsed.chan;
         break;
+      case "DELIVER_LOST_MESSAGES":
+        let msgs = parsed.lost_messages[clientC.received_chan._sessEP2];
+        let msgs_len = msgs.length;
+        for (var i = 0; i < msgs_len; i++) {
+          clientC.deliver_message(msgs.pop());
+        }
+        break;
       case "SESSION_MESSAGE_DELIVERY":
         if (clientC.received_chan == undefined) {
           let received_chan = parsed.msg;
           clientC.received_chan = received_chan;
           clientC.buf = parsed.deleg_chans[0].buf;
           assert(clientC.received_chan != undefined, "Received chan in C undefined!");
-
           // Now, trigger A sending the messages
           clientA.send_messages();
         } else {
-          clientC.buf.unshift(parsed.msg);
-          if (clientC.buf.length == 4) {
-            clientC.print_buf();
-          }
+          clientC.deliver_message(parsed.msg);
         }
         break;
     }
