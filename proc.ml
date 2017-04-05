@@ -1106,7 +1106,9 @@ and Session : SESSION = struct
    * Returns true if all were sent, false otherwise. *)
   let service_channel c =
     let rec service_channel_inner = function
-      | [] -> Lwt.return []
+      | [] ->
+          Debug.print @@ "Finished servicing channel " ^ (ChannelID.to_string c);
+          Lwt.return []
       | ((cid_opt, chans, msg) :: msgs) as xs ->
           (* If we can send this message, do so, get the wheels in motion, as it were *)
           let chan_ids = List.map (snd -<- fst) chans in
@@ -1119,7 +1121,9 @@ and Session : SESSION = struct
           else
             (* If we're blocked on a channel now, we need to return the
              * remainder of the messages *)
-            Lwt.return xs
+            (Debug.print @@ "Could not finish servicing channel " ^ (ChannelID.to_string c) ^
+               " due to remaining blocked delegations";
+             Lwt.return xs)
           in
     service_channel_inner (Hashtbl.find outgoing_buffers c) >>= fun res ->
     if (List.length res) = 0 then
@@ -1134,6 +1138,7 @@ and Session : SESSION = struct
     let rec service_requests_inner = function
       | [] -> Lwt.return []
       | x :: xs ->
+          Debug.print @@ "Servicing blocked channel " ^ (ChannelID.to_string x);
           service_channel x >>= fun completed ->
           if completed then
             service_requests_inner xs

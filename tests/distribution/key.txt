@@ -10,5 +10,6 @@ Key:
 8. Client-to-client delegation: no lost or orphan messages
 9. Client-to-client delegation: lost messages, no orphan messages
 10. Client-to-client delegation: lost and orphan messages
-11. Client-to-client delegation: Delegation of carrier channel
-12. Client-to-client delegation: Simultaneous delegation
+11. Client-to-client delegation: Delegation of carried channel
+12. Client-to-client delegation: Delegation of carrier channel
+13. Client-to-client delegation: Simultaneous delegation
