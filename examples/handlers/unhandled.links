@@ -13,7 +13,7 @@ fun mainPage(_) {
 }
 
 fun main() server {
-  addRoute("/", mainPage);
+  addRoute("/", fun(_,_) { mainPage(()) });
   servePages()
 }
 

@@ -67,7 +67,7 @@ fun mainPage(_) {
 
 
 fun main() {
-  addRoute("/", mainPage);
+  addRoute("/", fun(_,_) { mainPage(()) });
   servePages()
 }
 
