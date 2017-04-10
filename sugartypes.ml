@@ -167,12 +167,17 @@ type patternnode = [
 and pattern = patternnode * position
     deriving (Show)
 
-type spawn_kind = [ `Client | `Angel | `Demon | `Wait ]
+type spawn_kind = [ `Angel | `Demon | `Wait ]
     deriving (Show)
 
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
+]
+and given_spawn_location = [
+  | `ExplicitSpawnLocation of phrase (* spawnAt function *)
+  | `SpawnClient (* spawnClient function *)
+  | `NoSpawnLocation (* spawn function *)
 ]
 and regex = [
 | `Range     of char * char
@@ -204,7 +209,8 @@ and phrasenode = [
 | `QualifiedVar     of name list
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 | `HandlerLit       of handler_spec * handlerlit 
-| `Spawn            of spawn_kind * location * phrase * Types.row option
+(* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
+| `Spawn            of spawn_kind * given_spawn_location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option
 | `RangeLit         of (phrase * phrase)
 | `ListLit          of phrase list * Types.datatype option
@@ -437,7 +443,7 @@ struct
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | `DoOperation (_, ps, _) -> option_map (union_map phrase) ps
-    | `QualifiedVar _ -> failwith "Freevars for qualified vars not implemented yet"
+    | `QualifiedVar _ -> empty
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with

@@ -21,7 +21,6 @@ let rec strip_poly =
 (** Intermediate language *)
 type code = | Var    of string
             | Lit    of string
-            | DeclareVar of string * code option
             | Fn     of (string list * code)
 
             | LetFun of ((string * string list * code * Ir.location) * code)
@@ -35,7 +34,6 @@ type code = | Var    of string
             | Arr    of (code list)
 
             | Bind   of (string * code * code)
-            | Seq    of (code * code)
 
             | Die    of (string)
             | Nothing
@@ -93,8 +91,7 @@ struct
       | Lit _
       | Call _
       | Dict _
-      | Arr _
-      | Seq _
+      | Arr _     
       | Bind _
       | Die _
       | Nothing as c -> show c
@@ -113,7 +110,6 @@ struct
         | Var s -> s
         | Lit s -> s
         | Fn _ as f -> show_func "" f
-        | DeclareVar (x, c) -> "var "^x^(opt_app (fun c -> " = " ^ show c) "" c)
 
         | LetFun ((name, vars, body, _location), rest) ->
             (show_func name (Fn (vars, body))) ^ show rest
@@ -133,7 +129,6 @@ struct
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
         | Arr elems -> "[" ^ arglist elems ^ "]"
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
-        | Seq (l, r) -> show l ^"; "^ show r
         | Nothing -> ""
         | Die msg -> "error('" ^ msg ^ "', __kappa)"
 end
@@ -174,7 +169,6 @@ struct
       | Call _
       | Dict _
       | Arr _
-      | Seq _
       | Bind _
       | Die _
       | Nothing as c -> show c
@@ -183,19 +177,13 @@ struct
       match c with
         | Var x -> PP.text x
         | Nothing -> PP.text ""
-
-        | DeclareVar (x, c) -> PP.text "var" ^+^ PP.text x
-            ^+^ (opt_app (fun c -> PP.text "=" ^+^ show c) PP.empty c)
-
         | Die msg -> PP.text("error('" ^ msg ^ "', __kappa)")
         | Lit literal -> PP.text literal
-
         | LetFun ((name, vars, body, _location), rest) ->
             (show_func name (Fn (vars, body))) ^^ break ^^ show rest
         | LetRec (defs, rest) ->
             PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs)) ^^
               break ^^ show rest
-
         | Fn _ as f -> show_func "" f
         | Call (Var "LINKS.project", [record; label]) ->
             maybe_parenise record ^^ (brackets (show label))
@@ -230,7 +218,6 @@ struct
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
               break ^^ show body
-        | Seq (l, r) -> vsep [(show l ^^ PP.text ";"); show r]
 
   let show = show ->- PP.pretty 144
 end
@@ -255,11 +242,6 @@ let chrlit ch = Dict ["_c", Lit(string_js_quote(string_of_char ch))]
 (** Return a literal for the JS representation of a Links string. *)
 let chrlistlit = strlit
 
-(* (\** Return a JS literal string from an OCaml character. *\) *)
-(* let chrlit ch = Lit(string_js_quote(string_of_char ch)) *)
-(* (\** Return a literal for the JS representation of a Links string. *\) *)
-(* let chrlistlit s  = Lst(List.map chrlit (explode s)) *)
-
 (* Specialness:
 
    * Top-level boilerplate code to replace the root element and reset the focus
@@ -273,14 +255,6 @@ let chrlistlit = strlit
 
 let ext_script_tag ?(base=get_js_lib_url()) file =
     "  <script type='text/javascript' src=\""^base^file^"\"></script>"
-
-(* DEAD CODE *)
-(* let inline_script file = (\* makes debugging with firebug easier *\) *)
-(*   let file_in = open_in file in *)
-(*   let file_len = in_channel_length file_in in *)
-(*   let file_contents = String.make file_len '\000' in *)
-(*     really_input file_in file_contents 0 file_len; *)
-(*     "  <script type='text/javascript'>" ^file_contents^ "</script>" *)
 
 module Arithmetic :
 sig
@@ -554,7 +528,6 @@ struct
                        List.map (fun x -> Var x) xs_names''),
                  location),
                 code)
-      (* Seq (DeclareVar (Js.var_name_binder fb, Some (Var (snd (name_binder fb)))), code) *)
       | `Server ->
         LetFun ((Js.var_name_binder fb,
                  xs_names'@["__kappa"],
@@ -641,9 +614,6 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
 and generate_special env : Ir.special -> code -> code = fun sp kappa ->
   let gv v = generate_value env v in
     match sp with
-      (* | `App (f, vs) -> *)
-      (*     Call (Var "_yield", *)
-      (*           Call (Var "app", [gv f]) :: [Arr ([gv vs]); kappa]) *)
       | `Wrong _ -> Die "Internal Error: Pattern matching failed" (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | `Database _ | `Table _
           when Settings.get_value js_hide_database_info ->
@@ -831,58 +801,6 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
     | `Module _
     | `Alien _ -> env, (fun code -> code)
 
-(* SL: seems to be dead code *)
-and generate_declaration env : Ir.binding -> (venv * (code -> code)) =
-  function
-    | `Let (_, (_, `Return _)) as binding ->
-        generate_binding env binding
-    | `Let (b, _) ->
-        if not(Settings.get_value (Basicsettings.allow_impure_defs)) then
-          failwith "Top-level definitions must be values"
-        else
-          let (x, x_name) = name_binder b in
-          let env' = VEnv.bind env (x, x_name) in
-            (env',
-             fun code ->
-               Seq (DeclareVar (x_name, None), code))
-    | binding -> generate_binding env binding
-
-(* SL: seems to be dead code *)
-and generate_definition env
-    : Ir.binding -> code -> code =
-  function
-    | `Let (_, (_, `Return _)) -> (fun code -> code)
-    | `Let (b, (_, tc)) ->
-        let (_, x_name) = name_binder b in
-          (fun code ->
-             generate_tail_computation env tc
-               (Fn ([x_name ^ "$"], Bind(x_name, Var (x_name ^ "$"), code))))
-    | `Fun _
-    | `Rec _
-    | `Module _
-    | `Alien _ -> (fun code -> code)
-(* SL: seems to be dead code *)
-and generate_defs env : Ir.binding list -> (venv * (code -> code)) =
-  fun bs ->
-    let rec declare env c =
-      function
-        | [] -> env, c
-        | b :: bs ->
-            let env, c' = generate_declaration env b in
-              declare env (c -<- c') bs in
-    let env, with_declarations = declare env (fun code -> code) bs in
-    let rec define c =
-      function
-        | [] -> c
-        | b :: bs ->
-            let c' = generate_definition env b in
-              define (c -<- c') bs
-    in
-      if Settings.get_value Basicsettings.allow_impure_defs then
-        env, fun code -> with_declarations (define (fun code -> code) bs code)
-      else
-        env, with_declarations
-
 and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
   let (venv, code) = generate_computation env comp (Var "_start") in
   (venv, GenStubs.bindings bs code)
@@ -895,11 +813,13 @@ let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.bindi
       let (x, x_name) = name_binder b in
       (* Debug.print ("let_binding: " ^ x_name); *)
       let varenv = VEnv.bind varenv (x, x_name) in
-      let s, state = Json.jsonize_value_with state (Value.find x valenv) in
+      let value = Value.find x valenv in
+      let jsonized_val = Json.jsonize_value value in
+      let state = ResolveJsonState.add_val_event_handlers value state in
       (state,
        varenv,
        Some x_name,
-       fun code -> Bind (x_name, Lit s, code))
+       fun code -> Bind (x_name, Lit jsonized_val, code))
     | `Fun ((fb, _, _zs, _location) as def) ->
       let (f, f_name) = name_binder fb in
       let varenv = VEnv.bind varenv (f, f_name) in
@@ -1060,8 +980,14 @@ let resolve_toplevel_values : string list -> string =
     String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
 let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
-  (* json state for the final value (event handlers and processes) *)
-  let json_state = Json.jsonize_state v in
+  let open Json in
+  let req_data = Value.request_data valenv in
+  let client_id = RequestData.get_client_id req_data in
+  let json_state = JsonState.empty client_id in
+
+  (* Add the event handlers for the final value to be sent *)
+  let json_state = ResolveJsonState.add_val_event_handlers v json_state in
+    (* Json.jsonize_state req_data v in *)
 
   (* divide HTML into head and body secitions (as we need to augment the head) *)
   let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
@@ -1069,7 +995,14 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
 
   let json_state, venv, let_names, f = generate_toplevel_bindings valenv json_state venv defs in
   let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
-  let js = Json.resolve_state json_state in
+
+  (* Add AP information; mark APs as delivered *)
+  let json_state = ResolveJsonState.add_ap_information client_id json_state in
+
+  (* Add process information to the JSON state; mark all processes as active *)
+  let json_state = ResolveJsonState.add_process_information client_id json_state in
+
+  let state_string = JsonState.to_string json_state in
 
   let printed_code =
     let _venv, code =
@@ -1083,12 +1016,7 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
     ~cgi_env:cgi_env
     ~body:printed_code
     ~html:(Value.string_of_xml ~close_tags:true bs)
-    ~head:(script_tag("  var _jsonState = " ^ js ^ "\n" ^ init_vars) ^ Value.string_of_xml ~close_tags:true hs)
+    ~head:(script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
+      ^ Value.string_of_xml ~close_tags:true hs)
     ~onload:"_startRealPage()"
     []
-
-(* SL: seems to be dead code *)
-let generate_program_defs (nenv, tyenv) bs =
-  let _, venv, _ = initialise_envs (nenv, tyenv) in
-  let _, code = generate_defs venv bs in
-    [show (code Nothing)]

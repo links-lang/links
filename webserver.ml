@@ -1,8 +1,9 @@
-open Webserver_types
 open Cohttp
 open Cohttp_lwt_unix
 open Lwt
+open ProcessTypes
 open Utility
+open Webserver_types
 
 let jslibdir : string Settings.setting = Settings.add_string("jslibdir", "", `User)
 let host_name = Settings.add_string ("host", "0.0.0.0", `User)
@@ -14,11 +15,17 @@ struct
   module Eval = Evalir.Eval(Webserver)
   module Webif = Webif.WebIf(Webserver)
 
-  type routing_table = (bool * string * (string * (string * string) list, Value.env * Value.t) either) list
-  (* type t = routing_table * Ir.binding list * Value.env *)
+  type path = string
+  type mime_type = (string * string)
+  type static_resource = path * mime_type list
+  type request_handler_fn = Value.env * Value.t
+
+  (* Is directory handler * path * handler information *)
+  type routing_table = (bool * string * (static_resource, request_handler_fn) either) list
 
   let rt : routing_table ref = ref []
-  let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref = ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
+  let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref =
+    ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
 
@@ -31,6 +38,25 @@ struct
 
   let add_route is_directory path thread_starter =
     rt := (is_directory, path, thread_starter) :: !rt
+
+  let extract_client_id cgi_args =
+    Utility.lookup "__client_id" cgi_args
+
+  let get_client_id_or_die cgi_args =
+    match extract_client_id cgi_args with
+      | Some client_id ->
+          Debug.print ("Found client ID: " ^ client_id);
+          let decoded_client_id = Utility.base64decode client_id in
+          Debug.print ("Decoded client ID: " ^ decoded_client_id);
+          Lwt.return (ClientID.of_string decoded_client_id)
+      | None -> failwith "Client ID expected but not found."
+
+
+  let get_or_make_client_id cgi_args =
+    if (Webif.should_contain_client_id cgi_args) then
+      get_client_id_or_die cgi_args
+    else
+      ClientID.create ()
 
   let start tl_valenv =
     let is_prefix_of s t = String.length s <= String.length t && s = String.sub t 0 (String.length s) in
@@ -47,7 +73,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt render_cont _ req body =
+    let callback rt render_cont _conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt_body.to_string body >>= fun body_string ->
@@ -62,28 +88,28 @@ struct
         | `GET, _ ->
            List.map (fun (k, vs) -> (k, String.concat "," vs)) (Uri.query (Request.uri req))
         | _, _ -> [] (* FIXME: should possibly do something else here *) in
-      (* Add headers as cgi args. Is this reall what we want to do? *)
+
+      (* Add headers as cgi args. Is this really what we want to do? *)
       let cgi_args = cgi_args @ Header.to_list (Request.headers req) in
       let cookies = Cohttp.Cookie.Cookie_hdr.extract (Request.headers req) in
-
-      let req_data = RequestData.new_request_data () in
-      RequestData.set_cgi_parameters req_data cgi_args;
-      RequestData.set_cookies req_data cookies;
-
       Debug.print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
       List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
+      (* Precondition: valenv has been initialised with the correct request data *)
       let run_page (_dir, _s, (valenv, v)) () =
-        let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
-        Eval.apply (render_cont ()) Value.toplevel_hs req_env (v, [`String path]) >>= fun (valenv, v) -> (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
-        let page = Irtojs.generate_real_client_page
-                     ~cgi_env:cgi_args
-                     (Lib.nenv, Lib.typing_env)
-                     (!prelude @ !globals)          (* hypothesis: local definitions shouldn't matter, they should all end up in valenv... *)
-                     (valenv, v)
-        in
-        Lwt.return ("text/html", page) in
+        let cid = RequestData.get_client_id (Value.request_data valenv) in
+        Eval.apply (render_cont ()) Value.toplevel_hs valenv (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
+        (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)]) >>= fun (valenv, v) ->
+          let page = Irtojs.generate_real_client_page
+                       ~cgi_env:cgi_args
+                       (Lib.nenv, Lib.typing_env)
+                       (* hypothesis: local definitions shouldn't matter,
+                        * they should all end up in valenv... *)
+                       (!prelude @ !globals)
+                       (valenv, v)
+          in
+          Lwt.return ("text/html", page) in
 
       let serve_static base uri_path mime_types =
           let fname =
@@ -118,12 +144,13 @@ struct
         | ((dir, s, Right (valenv, v)) :: _rest) when (dir && is_prefix_of s path) || (s = path) ->
            Debug.print (Printf.sprintf "Matched case %s\n" s);
            let (_, nenv, tyenv) = !env in
+           get_or_make_client_id cgi_args >>= fun (cid) ->
+           let req_data = RequestData.new_request_data cgi_args cookies cid in
            let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
-
            Webif.do_request
              (req_env, nenv, tyenv)
              cgi_args
-             (run_page (dir, s, (valenv, v)))
+             (run_page (dir, s, (req_env, v)))
              (render_cont ())
              (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)
         | ((_, s, _) :: rest) ->

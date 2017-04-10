@@ -23,7 +23,7 @@ fun showAnswer(answer) client {
 	)
 }
 
-fun mainPage(_) {
+fun mainPage(_, _) {
   page
    <html>
     <body>

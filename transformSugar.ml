@@ -214,6 +214,14 @@ class transform (env : Types.typing_environment) =
         let (o, e, t) = option o (fun o -> o#phrase) e
         in (o, (bs, e), t)
 
+    method given_spawn_location :
+      given_spawn_location ->
+      ('self_type * given_spawn_location) = function
+        | `ExplicitSpawnLocation p ->
+            let (o, phr, _phr_ty) = o#phrase p in
+            (o, `ExplicitSpawnLocation phr)
+        | l -> (o, l)
+
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
       function
       | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
@@ -237,7 +245,8 @@ class transform (env : Types.typing_environment) =
 	 (*let (o, hnlit, ht) = o#handlerlit ht hnlit in
 	   let (o, effects) = o#row effects in
            (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)*)
-      | `Spawn (`Wait, location, body, Some inner_effects) ->
+      | `Spawn (`Wait, loc, body, Some inner_effects) ->
+          assert (loc = `NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -245,17 +254,18 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `Spawn (`Wait, location, body, Some inner_effects), body_type)
-      | `Spawn (k, location, body, Some inner_effects) ->
+            (o, `Spawn (`Wait, loc, body, Some inner_effects), body_type)
+      | `Spawn (k, spawn_loc, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
+          let (o, spawn_loc) = o#given_spawn_location spawn_loc in
           let envs = o#backup_envs in
           let (o, inner_effects) = o#row inner_effects in
           let process_type = `Application (Types.process, [`Row inner_effects]) in
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, (`Spawn (k, location, body, Some inner_effects)), process_type)
+            (o, (`Spawn (k, spawn_loc, body, Some inner_effects)), process_type)
       | `Select (l, e) ->
          let (o, e, t) = o#phrase e in
          (o, (`Select (l, e)), TypeUtils.select_type l t)

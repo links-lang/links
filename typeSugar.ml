@@ -238,6 +238,7 @@ sig
 
   val spawn_outer : griper
   val spawn_wait_outer : griper
+  val spawn_location : griper
 
   val query_outer : griper
   val query_base_row : griper
@@ -724,6 +725,9 @@ end
 
     let range_bound ~pos ~t1:_l ~t2:(_, _t) ~error:_ =
       die pos "Range bounds must be integers."
+
+    let spawn_location ~pos ~t1:l ~t2:(_, t) ~error:_ =
+      fixed_type pos "Spawn locations" t l
 
     let spawn_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt; rt];
@@ -2412,7 +2416,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
             `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | `Spawn (`Wait, location, p, _) ->
+        | `Spawn (`Wait, l, p, _) ->
+            assert (l = `NoSpawnLocation);
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             (* TODO: check if pid_type is actually needed somewhere *)
@@ -2425,8 +2430,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
-              `Spawn (`Wait, location, erase p, Some inner_effects), return_type, usages p
-        | `Spawn (k, location, p, _) ->
+              `Spawn (`Wait, l, erase p, Some inner_effects), return_type, usages p
+        | `Spawn (k, given_loc, p, _) ->
+            (* Location -> (() -e-> _) -> Process (e) *)
+            (match given_loc with
+              | `ExplicitSpawnLocation loc_phr ->
+                  let target_ty = `Application (Types.spawn_location, []) in
+                  let t = tc loc_phr in
+                  let _ = unify ~handle:Gripers.spawn_location (pos_and_typ t, no_pos target_ty) in ()
+              | _ -> ());
+
             (* (() -e-> _) -> Process (e) *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
@@ -2439,8 +2452,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let p = type_check (bind_effects context inner_effects) p in
             if not (Types.type_can_be_unl (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-            `Spawn (k, location, erase p, Some inner_effects), pid_type, usages p
-
+            `Spawn (k, given_loc, erase p, Some inner_effects), pid_type, usages p
         | `Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (`Any, `Any) in
             let effects =
@@ -3107,7 +3119,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let empty_context = empty_context (context.Types.effect_row) in
 
     let typed, ctxt, usage = match def with
-      | `Val (_, pat, body, location, datatype) as binding ->
+      | `Val (_, pat, body, location, datatype) ->
           let body = tc body in
           let pat = tpc pat in
           let penv = pattern_env pat in
@@ -3130,9 +3142,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               (* All rigid type variables in bt should appear in the
                  environment *)
               let tyvars = Generalise.get_quantifiers context.var_env bt in
-              if List.exists
-                  (fun ((x, _, _) as q) -> Types.is_rigid_quantifier q)
-                  tyvars
+              if List.exists Types.is_rigid_quantifier tyvars
               then
                 Gripers.value_restriction pos bt
               else

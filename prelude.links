@@ -1041,7 +1041,7 @@ fun sendSuspend(pagef) {
 
 sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
 fun fork(f) {
-  var ap = new();
+  var ap = new ();
   var _ = spawnAngel {
     f(accept(ap))
   };
@@ -1219,5 +1219,5 @@ fun assertEq (actual, expected) server {
 }
 
 #### APP SERVER ####
-sig addRoute : (String, (String) ~> Page) ~> ()
-fun addRoute(path,f) { unsafeAddRoute(path, fun(p){f(p)}) }
+sig addRoute : (String, (String, Location) ~> Page) ~> ()
+fun addRoute(path,f) { unsafeAddRoute(path, fun(p, loc){f(p, loc)}) }

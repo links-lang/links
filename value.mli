@@ -1,5 +1,6 @@
 (*pp deriving *)
 (* Values and environments *)
+open ProcessTypes
 
 class type otherfield
  = object method show : string end
@@ -63,7 +64,26 @@ type primitive_value = [
 
 module Show_primitive_value : Deriving_Show.Show with type a = primitive_value
 
-(* jcheney: Added value function component to PrimitiveFunction *)
+type spawn_location = [
+  | `ClientSpawnLoc of client_id
+  | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
+]
+  deriving (Show)
+
+type dist_pid = [
+  | `ClientPid of (client_id * process_id)
+  | `ServerPid of process_id (* Again, will need a server address here later *)
+]
+  deriving (Show)
+
+type access_point = [
+  | `ClientAccessPoint of (client_id * apid)
+  | `ServerAccessPoint of apid
+]
+  deriving (Show)
+
+type chan = (channel_id * channel_id)
+
 type t = [
 | primitive_value
 | `List of t list
@@ -75,8 +95,11 @@ type t = [
 | `Continuation of continuation * handlers
 | `DeepContinuation of continuation * handlers
 | `ShallowContinuation of delim_continuation * continuation * handlers    
-| `Pid of int * Sugartypes.location
+| `Pid of dist_pid
+| `AccessPointID of access_point
+| `SessionChannel of chan
 | `Socket of in_channel * out_channel
+| `SpawnLocation of spawn_location
 ]
 and frame = (Ir.scope * Ir.var * env * Ir.computation)
 and delim_continuation = frame list (* Delimited continuation *)
@@ -92,6 +115,8 @@ val make_cont_frame   : Ir.scope -> Ir.var -> env -> Ir.computation -> frame
 val append_delim_cont : delim_continuation -> continuation -> continuation
     
 val toplevel_hs   : handlers
+type delegated_chan = (chan * (t list))
+
 val set_request_data : env -> RequestData.request_data -> env
 val toplevel_cont : continuation
 
@@ -136,12 +161,18 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
-val box_pid : int * Sugartypes.location -> t
-val unbox_pid : t -> int * Sugartypes.location
+val box_pid : dist_pid -> t
+val unbox_pid : t -> dist_pid
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
 val box_op : t list -> t -> t
 val box    : t list -> t                              
+val box_spawn_loc : spawn_location -> t
+val unbox_spawn_loc : t -> spawn_location
+val box_channel : chan -> t
+val unbox_channel : t -> chan
+val box_access_point : access_point -> t
+val unbox_access_point : t -> access_point
 
 val intmap_of_record : t -> t Utility.intmap option
 
@@ -162,8 +193,9 @@ val unmarshal_value : env -> string -> t
 val expr_to_contframe : env -> Ir.tail_computation ->
   (Ir.scope * Ir.var * env * Ir.computation)
 
-val value_of_xml : xml -> t
+(* Given a value, retreives a list of channels that are contained inside *)
+val get_contained_channels : t -> chan list
+
 val value_of_xmlitem : xmlitem -> t
 
 val split_html : xml -> xml * xml
-

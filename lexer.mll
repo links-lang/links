@@ -181,9 +181,6 @@ let keywords = [
  "in"       , IN;
  "open"     , OPEN;
  "yields"   , YIELDS;
-(*  "infix"    , INFIX; *)
-(*  "infixl"   , INFIXL; *)
-(*  "infixr"   , INFIXR; *)
  "insert"   , INSERT;
  "linfun"   , LINFUN;
  "module"   , MODULE;
@@ -207,9 +204,10 @@ let keywords = [
  "shallowhandler"  , SHALLOWHANDLER;
  "sig"      , SIG;
  "spawn"    , SPAWN;
- "spawnAngel" , SPAWNANGEL;
  "spawnClient" , SPAWNCLIENT;
- "spawnDemon" , SPAWNDEMON;
+ "spawnAt"  , SPAWNAT;
+ "spawnAngel" , SPAWNANGEL;
+ "spawnAngelAt" , SPAWNANGELAT;
  "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;
  "table"    , TABLE;

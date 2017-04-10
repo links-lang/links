@@ -3,6 +3,7 @@
 open Notfound
 open List
 open Proc
+open ProcessTypes
 
 open Webserver_types
 open Performance
@@ -42,11 +43,6 @@ struct
                  defs
            | _ -> false)
         bs
-
-  (* SL: dead code *)
-
-  (* let serialize_call_to_client (continuation, name, arg) = *)
-  (*   Json.jsonize_call continuation name arg *)
 
   let parse_remote_call (valenv, _, _) cgi_args =
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
@@ -119,6 +115,9 @@ struct
     else
       Cgi.parse_args()
 
+  let should_contain_client_id cgi_args =
+    (is_remote_call cgi_args) || (is_client_return cgi_args)
+
   (* jcheney: lifted from serve_request, to de-clutter *)
   let parse_request env cgi_args  =
     if      (is_remote_call cgi_args)
@@ -142,32 +141,49 @@ struct
     let (cont : Value.continuation) = [[frame]] in (* (Ir.scope * Ir.var * env * Ir.computation) *)
       (bs @ [`Let (xb, ([], body))], tail), cont
 
-  let perform_request valenv run render_cont =
-    function
+  let resolve_json_state req_data v =
+    let client_id = RequestData.get_client_id req_data in
+    let json_state = Json.JsonState.empty client_id in
+    (* Add event handlers *)
+    let json_state = ResolveJsonState.add_val_event_handlers v json_state in
+    (* Add AP and process information *)
+    let json_state = ResolveJsonState.add_ap_information client_id json_state in
+    ResolveJsonState.add_process_information client_id json_state
+
+  let perform_request valenv run render_cont req =
+    let req_data = Value.request_data valenv in
+    let client_id = RequestData.get_client_id req_data in
+    let client_id_str = ClientID.to_string client_id in
+    match req with
       | ServerCont t ->
-        Debug.print("Doing ServerCont");
+        Debug.print("Doing ServerCont for client ID " ^ client_id_str);
         Eval.apply render_cont Value.toplevel_hs valenv (t, []) >>= fun (_, v) -> (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
         Lwt.return ("text/html", Value.string_of_value v)
       | ClientReturn(cont, arg) ->
-        Debug.print("Doing ClientReturn ");
+        Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
+        Proc.resolve_external_processes arg;
         Eval.apply_cont cont Value.toplevel_hs valenv arg >>= fun (_, result) -> (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
-        let result_json = Json.jsonize_value result in
-        Lwt.return ("text/plain",
-                    Utility.base64encode result_json)
+        let json_state = resolve_json_state req_data result in
+        let result_json = Json.jsonize_value_with_state result json_state in
+        Lwt.return ("text/plain", Utility.base64encode result_json)
       | RemoteCall(func, env, args) ->
-        Debug.print("Doing RemoteCall for " ^ Value.string_of_value func);
+        Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
+          ^ ", client ID: " ^ client_id_str);
         (* Debug.print ("func: " ^ Value.Show_t.show func); *)
         (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
+        Proc.resolve_external_processes func;
+        List.iter Proc.resolve_external_processes args;
+        List.iter (Proc.resolve_external_processes -<- fst -<- snd)
+          (IntMap.bindings (Value.get_parameters env));
         Eval.apply Value.toplevel_cont Value.toplevel_hs env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
            assert(false));
-
-        Lwt.return ("text/plain",
-                    (* TODO: we should package up the result with event handlers,
-                       client processes, and client messages *)
-                    Utility.base64encode (Json.jsonize_value r))
+        let json_state = resolve_json_state req_data r in
+        Lwt.return
+          ("text/plain",
+            Utility.base64encode (Json.jsonize_value_with_state r json_state))
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()
@@ -189,11 +205,12 @@ struct
        else
          let program = (globals @ locals, main) in
          Debug.print "Running client program.";
-         lazy (Irtojs.generate_program_page
-                 ~cgi_env:cgi_args
-                 (Lib.nenv, Lib.typing_env)
-                 program)
-         <|measure_as|> "irtojs"
+         let res =
+           lazy (Irtojs.generate_program_page
+                   ~cgi_env:cgi_args
+                   (Lib.nenv, Lib.typing_env)
+                   program) in
+         measure_as res "irtojs"
      else
        let program = locals, main in
        Debug.print "Running server program";
@@ -301,9 +318,9 @@ struct
      * This record is specific to this request. All fields are mutable since the
      * library functions may need to modify the environments, and we don't want
      * to do a state-passing transformation. *)
-    let req_data = RequestData.new_request_data () in
-    RequestData.set_cgi_parameters req_data cgi_args;
-    RequestData.set_cookies req_data cookies;
+    (* Client ID is always 0 in CGI mode. *)
+    let req_data =
+      RequestData.new_request_data cgi_args cookies dummy_client_id in
 
     (* Compute cacheable stuff in one call *)
     let (render_cont, (nenv,tyenv), ((globals : Ir.binding list), ((locals : Ir.binding list), main))) =

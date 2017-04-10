@@ -173,8 +173,9 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE SPAWN SPAWNANGEL SPAWNCLIENT SPAWNDEMON SPAWNWAIT
+%token SWITCH RECEIVE CASE
 %token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER LINEARHANDLE LINEARHANDLER
+%token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP       
 %token LPAREN RPAREN
@@ -447,12 +448,9 @@ perhaps_name:
 |                                                              { None }
 | cp_name                                                      { Some $1 }
 
-/* currently unused */
-/*
 perhaps_exp:
 |                                                              { None }
 | exp                                                          { Some $1 }
-*/
 
 cp_expression:
 | LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
@@ -544,15 +542,19 @@ op:
 | INFIXL9                                                      { $1, pos() }
 | INFIXR9                                                      { $1, pos() }
 
+spawn_expression:
+| SPAWNAT LPAREN exp COMMA block RPAREN                        { `Spawn (`Demon, (`ExplicitSpawnLocation $3), (`Block $5, pos()), None), pos () }
+| SPAWN block                                                  { `Spawn (`Demon, `NoSpawnLocation, (`Block $2, pos()), None), pos () }
+| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { `Spawn (`Angel, (`ExplicitSpawnLocation $3), (`Block $5, pos()), None), pos () }
+| SPAWNANGEL block                                             { `Spawn (`Angel, `NoSpawnLocation, (`Block $2, pos()), None), pos () }
+| SPAWNCLIENT block                                            { `Spawn (`Demon, (`SpawnClient), (`Block $2, pos()), None), pos () }
+| SPAWNWAIT block                                              { `Spawn (`Wait, `NoSpawnLocation, (`Block $2, pos ()), None), pos () }
+
 postfix_expression:
 | primary_expression                                           { $1 }
 | primary_expression POSTFIXOP                                 { `UnaryAppl (([], `Name $2), $1), pos() }
 | block                                                        { `Block $1, pos () }
-| SPAWN perhaps_location block                                 { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
-| SPAWNCLIENT perhaps_location block                           { `Spawn (`Client, $2, (`Block $3, pos()), None), pos () }
-| SPAWNANGEL perhaps_location block                            { `Spawn (`Angel, $2, (`Block $3, pos()), None), pos () }
-| SPAWNDEMON perhaps_location block                            { `Spawn (`Demon, $2, (`Block $3, pos()), None), pos () }
-| SPAWNWAIT perhaps_location block                             { `Spawn (`Wait,  $2, (`Block $3, pos()), None), pos () }
+| spawn_expression                                             { $1 }
 | QUERY block                                                  { `Query (None, (`Block $2, pos ()), None), pos () }
 | QUERY LBRACKET exp RBRACKET block                            { `Query (Some ($3,
                                                                                (`Constant (`Int 0), pos ())),

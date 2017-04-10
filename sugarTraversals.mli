@@ -38,6 +38,7 @@ class map :
     method regexflag       : regexflag -> regexflag
     method regex           : regex -> regex
     method position        : position -> position
+    method given_spawn_location : given_spawn_location -> given_spawn_location
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
     method cp_phrasenode   : cp_phrasenode -> cp_phrasenode
@@ -108,6 +109,7 @@ class fold :
     method regexflag       : regexflag -> 'self
     method regex           : regex -> 'self
     method position        : position -> 'self
+    method given_spawn_location : given_spawn_location -> 'self
     method phrasenode      : phrasenode -> 'self
     method phrase          : phrase -> 'self
     method cp_phrasenode   : cp_phrasenode -> 'self
@@ -180,6 +182,7 @@ object ('self)
   method patternnode     : patternnode -> 'self * patternnode
   method pattern         : pattern -> 'self * pattern
   method phrase          : phrase -> 'self * phrase
+  method given_spawn_location : given_spawn_location -> 'self * given_spawn_location
   method phrasenode      : phrasenode -> 'self * phrasenode
   method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode
   method cp_phrase       : cp_phrase -> 'self * cp_phrase
