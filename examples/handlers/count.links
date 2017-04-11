@@ -27,7 +27,7 @@ fun run(n) client {
 
 
 # Page
-fun mainPage(_) {
+fun mainPage() {
   page
     <html>
       <body>
@@ -41,7 +41,7 @@ fun mainPage(_) {
 
 
 fun main() {
-  addRoute("/", mainPage);
+  addRoute("/", fun (_,_) {mainPage()});
   servePages()
 }
 
