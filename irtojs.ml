@@ -39,6 +39,18 @@ type code = | Var    of string
             | Nothing
   deriving (Show)
 
+type cont_stack =
+  | Cons of code * cont_stack
+  | Reflect of code
+
+let nil = Var "_lsNil"
+let cons x xs = Call (Var "_lsCons", [x; xs])
+
+let rec reify : cont_stack -> code =
+  function
+  | Cons (v, vs) ->
+    cons v (reify vs)
+  | Reflect v -> v
 
 (** IR variable environment *)
 module VEnv = Env.Int
@@ -91,7 +103,7 @@ struct
       | Lit _
       | Call _
       | Dict _
-      | Arr _     
+      | Arr _
       | Bind _
       | Die _
       | Nothing as c -> show c
@@ -354,32 +366,61 @@ let name_binder (x, info) =
   assert (name <> "");
   (x, Js.name_binder (x,info))
 
-let bind_continuation kappa body =
-  match kappa with
-    | Var _ -> body kappa
-    | _ ->
-        (* It is important to generate a unique name for continuation
-           bindings because in the JavaScript code:
 
-           var f = e;
-           var f = function (args) {C[f]};
+(* It is important to generate a unique name for continuation
+   bindings because in the JavaScript code:
 
-           the inner f is bound to function (args) {C[f]} and not e as we
-           might expect in a saner language. (In other words var f =
-           function(args) {body} is just syntactic sugar for function
-           f(args) {body}.)
-        *)
+   var f = e;
+   var f = function (args) {C[f]};
+
+   the inner f is bound to function (args) {C[f]} and not e as we
+   might expect in a saner language. (In other words var f =
+   function(args) {body} is just syntactic sugar for function
+   f(args) {body}.)
+*)
+let bind_continuation kappas body =
+  let rec bind bs ks =
+    fun kappas ->
+      match kappas with
+      | Reflect ((Var _) as v) ->
+        bs, ks, v
+      | Reflect v ->
         let k = "_kappa" ^ (string_of_int (Var.fresh_raw_var ())) in
-          Bind (k, kappa, body (Var k))
+        (fun code -> bs (Bind (k, v, code))), ks, Var k
+      | Cons ((Var _) as v, kappas) ->
+        bind bs (fun kappas -> Cons (v, kappas)) kappas in
+      | Cons (v, kappas) ->
+        let k = "_kappa" ^ (string_of_int (Var.fresh_raw_var ())) in
+        bind (fun code -> bs (Bind (k, v, code)))
+             (fun kappas -> Cons (Var k, kappas)) kappas in
+  let bs, ks, seed = bind (fun code -> code) (fun kappas -> kappas) kappas in
+  bs (body (ks (Reflect seed)))
 
-let apply_yielding (f, args, k) =
-  Call(Var "_yield", f :: (args @ [k]))
+  (* match kappa with *)
+  (*   | Var _ -> body kappa *)
+  (*   | _ -> *)
+  (*       (\* It is important to generate a unique name for continuation *)
+  (*          bindings because in the JavaScript code: *)
 
-let callk_yielding kappa arg =
-  Call(Var "_yieldCont", [kappa; arg])
+  (*          var f = e; *)
+  (*          var f = function (args) {C[f]}; *)
 
-let callk_direct kappa arg =
-  Call(Var "_applyCont", [kappa; arg])
+  (*          the inner f is bound to function (args) {C[f]} and not e as we *)
+  (*          might expect in a saner language. (In other words var f = *)
+  (*          function(args) {body} is just syntactic sugar for function *)
+  (*          f(args) {body}.) *)
+  (*       *\) *)
+  (*       let k = "_kappa" ^ (string_of_int (Var.fresh_raw_var ())) in *)
+  (*         Bind (k, kappa, body (Var k)) *)
+
+let apply_yielding (f, args, kappas) =
+  Call(Var "_yield", f :: (args @ [reify kappas]))
+
+let callk_yielding kappas arg =
+  Call(Var "_yieldCont", [reify kappas; arg])
+
+let callk_direct kappas arg =
+  Call(Var "_applyCont", [reify kappas; arg])
 
 (** [generate]
     Generates JavaScript code for a Links expression
@@ -552,13 +593,13 @@ struct
         code
 end
 
-let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
-  fun tc kappa ->
+let rec generate_tail_computation env : Ir.tail_computation -> cont_stack -> code =
+  fun tc kappas ->
   let gv v = generate_value env v in
-  let gc c kappa = snd (generate_computation env c kappa) in
+  let gc c kappas = snd (generate_computation env c kappas) in
     match tc with
       | `Return v ->
-          callk_yielding kappa (gv v)
+          callk_yielding kappas (gv v)
       | `Apply (f, vs) ->
           let f = strip_poly f in
             begin
@@ -568,27 +609,27 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
                       begin
                         match vs with
                           | [l; r] when Arithmetic.is f_name ->
-                              callk_yielding kappa (Arithmetic.gen (gv l, f_name, gv r))
+                              callk_yielding kappas (Arithmetic.gen (gv l, f_name, gv r))
                           | [l; r] when StringOp.is f_name ->
-                              callk_yielding kappa (StringOp.gen (gv l, f_name, gv r))
+                              callk_yielding kappas (StringOp.gen (gv l, f_name, gv r))
                           | [l; r] when Comparison.is f_name ->
-                              callk_yielding kappa (Comparison.gen (gv l, f_name, gv r))
+                              callk_yielding kappas (Comparison.gen (gv l, f_name, gv r))
                           | [v] when f_name = "negate" || f_name = "negatef" ->
-                              callk_yielding kappa (Unop ("-", gv v))
+                              callk_yielding kappas (Unop ("-", gv v))
                           | _ ->
                               if Lib.is_primitive f_name
                                 && not (List.mem f_name cps_prims)
                                 && Lib.primitive_location f_name <> `Server
                               then
-                                callk_direct kappa (Call (Var ("_" ^ f_name), List.map gv vs))
+                                callk_direct kappas (Call (Var ("_" ^ f_name), List.map gv vs))
                               else
-                                apply_yielding (gv (`Variable f), List.map gv vs, kappa)
+                                apply_yielding (gv (`Variable f), List.map gv vs, kappas)
                       end
                 | _ ->
-                    apply_yielding (gv f, List.map gv vs, kappa)
+                    apply_yielding (gv f, List.map gv vs, kappas)
             end
       | `Special special ->
-          generate_special env special kappa
+          generate_special env special kappas
       | `Case (v, cases, default) ->
           let v = gv v in
           let k, x =
@@ -598,30 +639,30 @@ let rec generate_tail_computation env : Ir.tail_computation -> code -> code =
                   let x = gensym ~prefix:"x" () in
                     (fun e -> Bind (x, v, e)), x
           in
-            bind_continuation kappa
-              (fun kappa ->
+            bind_continuation kappas
+              (fun kappas ->
                  let gen_cont (xb, c) =
                    let (x, x_name) = name_binder xb in
-                     x_name, (snd (generate_computation (VEnv.bind env (x, x_name)) c kappa)) in
+                     x_name, (snd (generate_computation (VEnv.bind env (x, x_name)) c kappas)) in
                  let cases = StringMap.map gen_cont cases in
                  let default = opt_map gen_cont default in
                    k (Case (x, cases, default)))
       | `If (v, c1, c2) ->
-          bind_continuation kappa
-            (fun kappa ->
-               If (gv v, gc c1 kappa, gc c2 kappa))
+          bind_continuation kappas
+            (fun kappas ->
+               If (gv v, gc c1 kappas, gc c2 kappas))
 
-and generate_special env : Ir.special -> code -> code = fun sp kappa ->
+and generate_special env : Ir.special -> cont_stack -> code = fun sp kappas ->
   let gv v = generate_value env v in
     match sp with
       | `Wrong _ -> Die "Internal Error: Pattern matching failed" (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | `Database _ | `Table _
           when Settings.get_value js_hide_database_info ->
-          callk_yielding kappa (Dict [])
+          callk_yielding kappas (Dict [])
       | `Database v ->
-          callk_yielding kappa (Dict [("_db", gv v)])
+          callk_yielding kappas (Dict [("_db", gv v)])
       | `Table (db, table_name, keys, (readtype, _writetype, _needtype)) ->
-          callk_yielding kappa
+          callk_yielding kappas
             (Dict [("_table",
                     Dict [("db", gv db);
                           ("name", gv table_name);
@@ -632,35 +673,53 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `Update _ -> Die "Attempt to run a database update on the client"
       | `Delete _ -> Die "Attempt to run a database delete on the client"
       | `CallCC v ->
-          bind_continuation kappa
-            (fun kappa -> apply_yielding (gv v, [kappa], kappa))
+          bind_continuation kappas
+            (fun kappas -> apply_yielding (gv v, [kappas], kappas))
       | `Select (l, c) ->
-         callk_direct kappa (Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c]))
+         callk_direct kappas (Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c]))
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in
-         bind_continuation kappa
-            (fun kappa ->
+         bind_continuation kappas
+            (fun kappas ->
              let scrutinee = Call (Var "LINKS.project", [Var result; strlit "1"]) in
              let channel = Call (Var "LINKS.project", [Var result; strlit "2"]) in
              let generate_branch (cb, b) =
                let (c, cname) = name_binder cb in
-               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
+               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappas)) in
              let branches = StringMap.map generate_branch bs in
              Call (Var "receive", [gv c; Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]))
       | `DoOperation (name, vs, _t) ->
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
-         in         
-         bind_continuation kappa
-           (fun kappa ->
-             Bind ("hks", Call (Var "_lsTail", [kappa]),
-             Bind ("h", Call (Var "_lsHead", [Var "hks"]),
-                generate_op (Dict [("_label", strlit name); ("_value", box vs)]) (Var "h") kappa)))
+         in
+         bind_continuation kappas
+           (fun kappas ->
+              let bs, k, h, hks =
+                match kappas with
+                | Cons (k, Cons (h, hks)) -> (fun code -> code), k, h, hks
+                | Cons (k, Reflect kks) ->
+                  (fun code ->
+                     Bind ("h", Call (Var "_lsHead", [kks]),
+                     Bind ("hks", Call (Var "_lsTail", [kks]), code))), k, (Var "h"), Reflect (Var "hks")
+                | Reflect ks ->
+                  let bs code =
+                    Bind ("k", Call (Var "_lsHead", [ks]),
+                    Bind ("kks", Call (Var "_lsTail", [ks]),
+                    Bind ("h", Call (Var "_lsHead", [Var "kks"]),
+                    Bind ("hks", Call (Var "_lsTail", [Var "kks"]), code)))) in
+                  bs, Var "k", Var "h", Reflect (Var "hks") in
+              bs
+                (generate_op
+                   (Dict [("_label", strlit name); ("_value", box vs)])
+                   k
+                   h
+                   hks))
+
       | `Handle (m, clauses, _) ->
-         let gb env binder body kappa =
+         let gb env binder body kappas =
                let env' = VEnv.bind env (name_binder binder) in
-               snd (generate_computation env' body kappa)
+               snd (generate_computation env' body kappas)
          in
          let m = gv m in
          let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
@@ -711,7 +770,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                                                                     [Var "_k_prime"; Var "ks"])])]))
                                          (Var "x"));
                                   Var "_hks_prime"])))))))
-           in           
+           in
            Fn (["_z"; "__kappa"],
                Bind ("_k", Call (Var "_lsHead", [Var "__kappa"]),
                Bind ("_hks", Call (Var "_lsTail", [Var "__kappa"]),
@@ -721,20 +780,20 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                            clauses (Var "_k") (Var "_h") (Var "_ks"),
                            Some ("_z", forward (Var "_z") (Var "_k") (Var "_h") (Var "_ks"))))))))
          in
-         Call (m, [Call (Var "_lsCons", [return; Call (Var "_lsCons", [operations; kappa])])])
+         Call (m, [Call (Var "_lsCons", [return; Call (Var "_lsCons", [operations; kappas])])])
 
 and generate_op z h ks =
   apply_yielding (h, [z], ks)
 
-and generate_computation env : Ir.computation -> code -> (venv * code) =
-  fun (bs, tc) kappa ->
+and generate_computation env : Ir.computation -> cont_stack -> (venv * code) =
+  fun (bs, tc) kappas ->
   let rec gbs env c =
     function
       | b :: bs ->
           let env, c' = generate_binding env b in
             gbs env (c -<- c') bs
       | [] ->
-          env, c (generate_tail_computation env tc kappa)
+          env, c (generate_tail_computation env tc kappas)
   in
     gbs env (fun code -> code) bs
 
