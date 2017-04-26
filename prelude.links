@@ -1177,3 +1177,15 @@ fun assertEq (actual, expected) server {
 #### APP SERVER ####
 sig addRoute : (String, (String, Location) ~> Page) ~> ()
 fun addRoute(path,f) { unsafeAddRoute(path, fun(p, loc){f(p, loc)}) }
+
+sig serveThis : (Page) ~> ()
+fun serveThis(p) {
+  addRoute("",fun (_,_) {p});
+  servePages()
+}
+
+sig serveThese : ([(String,Page)]) ~> ()
+fun serveThese(routes) {
+  var _ = map(fun ((s,p)) {addRoute(s,fun (_,_) {p})}, routes);
+  servePages()
+}
