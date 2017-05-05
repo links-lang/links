@@ -196,8 +196,10 @@ struct
         let rec up = function
           | [], _ -> Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
           | ([] as remaining, { as_page = Some (Left (file_path, mime_types)); _ }) :: _, true
-          | (remaining, { as_directory = Some (Left (file_path, mime_types)); _ }) :: _, _ ->
+          | (remaining, { as_directory = Some (Left (file_path, mime_types)); _ }) :: _, true ->
              serve_static file_path (String.concat "/" remaining) mime_types
+          | (remaining, { as_directory = Some (Left (file_path, mime_types)); _ }) :: _, false ->
+             serve_static file_path (String.concat "/" remaining / "index.html") mime_types
           | ([], { as_page = Some (Right (valenv, v)); _ }) :: _, true
           | (_, { as_directory = Some (Right (valenv, v)); _ }) :: _, _ ->
              let (_, nenv, tyenv) = !env in
