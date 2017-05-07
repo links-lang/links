@@ -9,11 +9,6 @@ let top_level_filename module_name =
 let _print_sorted_deps xs =
   print_list (List.map print_list xs)
 
-(* Given a module name and unique AST, try and locate / parse the module file *)
-let parse_module module_name =
-  let (prog, _) = try_parse_file module_name in
-  prog
-
 let assert_no_cycles = function
   | [] -> ()
   | []::_ys -> ()
@@ -76,7 +71,6 @@ let rec add_module_bindings deps dep_map =
     | [module_name]::ys ->
       (try
         let (bindings, _) = StringMap.find module_name dep_map in
-        (* TODO: Fix dummy position to be more meaningful, if necessary *)
         (`Module (module_name, bindings), Sugartypes.dummy_position) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
         (failwith (Printf.sprintf "Trying to find %s in dep map containing keys: %s\n"
@@ -97,7 +91,8 @@ let rec add_dependencies_inner module_name module_prog visited deps dep_map =
     fun (visited_acc, deps_acc, dep_map_acc) name ->
       (* Given the top-level module name, try and parse wrt the paths *)
       let filename = top_level_filename name in
-      let prog = parse_module filename in
+      let (prog, pos_ctx) = try_parse_file filename in
+      let prog = (ResolvePositions.resolve_positions pos_ctx)#program prog in
       let (visited_acc', deps_acc', dep_map_acc') =
         add_dependencies_inner name prog visited_acc [] dep_map_acc in
       (visited_acc', deps_acc @ deps_acc', dep_map_acc')
