@@ -1,5 +1,4 @@
 %{
-open ProcessTypes
 open Utility
 open WebsocketMessages
 
@@ -11,7 +10,6 @@ open WebsocketMessages
 (* BUG: need to unescape strings
    (where they are escaped in json.ml)
 *)
-
 let websocket_req assoc_list =
   let open Pervasives in
   let opcode = Value.unbox_string @@ List.assoc "opcode" assoc_list in

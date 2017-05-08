@@ -81,6 +81,7 @@ SOURCES = $(OPC)                                \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
 					moduleUtils.mli moduleUtils.ml \
+          resolvePositions.mli resolvePositions.ml       \
 					chaser.mli chaser.ml \
 					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
@@ -90,7 +91,6 @@ SOURCES = $(OPC)                                \
           eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
-          resolvePositions.mli resolvePositions.ml       \
           refineBindings.mli refineBindings.ml           \
           desugarLAttributes.mli desugarLAttributes.ml   \
           transformSugar.mli transformSugar.ml           \

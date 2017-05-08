@@ -27,7 +27,7 @@ let new_request_data cgi_params cookies client_id ws_path_opt = {
     http_response_code = ref 200;
     client_id = ref client_id;
     ws_path_opt = ws_path_opt
-  }
+}
 
 let get_cgi_parameters req_data = !(req_data.cgi_parameters)
 let set_cgi_parameters req_data x = req_data.cgi_parameters := x

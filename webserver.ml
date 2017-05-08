@@ -25,6 +25,7 @@ struct
 
   let rt : routing_table ref = ref []
   let websocket_connection_path : (path option) ref = ref None
+
   let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref =
     ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
@@ -54,7 +55,7 @@ struct
           Debug.print ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
           Debug.print ("Decoded client ID: " ^ decoded_client_id);
-          ClientID.of_string decoded_client_id
+          Lwt.return (ClientID.of_string decoded_client_id)
       | None -> failwith "Client ID expected but not found."
 
 
