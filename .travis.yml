@@ -15,7 +15,7 @@ before_install:
   - eval `opam config env`
   - psql -c 'create database links;' -U postgres
 install:
-  - opam install -y deriving lwt postgresql sqlite3 mysql cgi base64 cohttp
+  - opam install -y deriving lwt postgresql sqlite3 mysql cgi base64 cohttp websocket
 script:
   - make -j2 nc
   - make tests
