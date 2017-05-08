@@ -14,7 +14,7 @@ before_install:
   - opam switch 4.04.0
   - eval `opam config env`
   - opam update
-  - opam upgrade
+  - opam upgrade -y
   - psql -c 'create database links;' -U postgres
 install:
   - opam install -y deriving lwt postgresql sqlite3 mysql cgi base64 cohttp websocket
