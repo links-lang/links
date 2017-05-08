@@ -336,20 +336,6 @@ sig
   val send_server_message : Value.t -> process_id -> unit
 end
 
-exception UnknownProcessID of process_id
-exception UnknownClientID of client_id
-
-module type MAILBOX =
-sig
-  val pop_message_for : process_id -> Value.t option
-  val pop_all_messages_for :
-    client_id -> process_id-> Value.t list
-  val pop_message : unit -> Value.t option
-
-  val send_client_message : Value.t -> client_id ->  process_id -> unit
-  val send_server_message : Value.t -> process_id -> unit
-end
-
 module type SESSION =
 sig
   type chan = Value.chan
@@ -791,7 +777,7 @@ and Session : SESSION = struct
   let new_server_access_point () =
     let apid = AccessPointID.create () in
       Hashtbl.add access_points apid Balanced;
-      Lwt.return apid
+      apid
 
   let new_client_access_point cid =
     let apid = AccessPointID.create () in

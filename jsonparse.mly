@@ -1,5 +1,6 @@
 %{
 open Utility
+open ProcessTypes
 open WebsocketMessages
 
 (* let unparse_label = function *)

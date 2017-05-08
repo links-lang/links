@@ -553,13 +553,6 @@ and string_of_access_point = function
   | `AccessPointID (`ServerAccessPoint (apid)) ->
       "Server access point " ^ (AccessPointID.to_string apid)
 
-and string_of_access_point = function
-  | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
-      "Client access point on client " ^ (ClientID.to_string cid) ^ ", " ^
-      "APID: " ^ (AccessPointID.to_string apid)
-  | `AccessPointID (`ServerAccessPoint (apid)) ->
-      "Server access point " ^ (AccessPointID.to_string apid)
-
 (* let string_of_cont : continuation -> string = *)
 (*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
 

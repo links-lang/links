@@ -55,7 +55,7 @@ struct
           Debug.print ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
           Debug.print ("Decoded client ID: " ^ decoded_client_id);
-          Lwt.return (ClientID.of_string decoded_client_id)
+          ClientID.of_string decoded_client_id
       | None -> failwith "Client ID expected but not found."
 
 
