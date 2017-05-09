@@ -252,7 +252,9 @@ type access_point = [
 type chan = (channel_id * channel_id)
   deriving (Show)
 
-type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
+type continuation =
+      | `PureCont of (Ir.scope * Ir.var * Env.t * Ir.computation) list
+      | `GenCont of (Ir.scope * Ir.var * Env.t * Ir.computation) list list
 and t = [
 | primitive_value
 | `List of t list
@@ -280,6 +282,10 @@ type delegated_chan = (chan * (t list))
 let set_request_data env rd = { env with request_data = rd }
 
 let toplevel_cont : continuation = []
+let map_pure_continuation f = function
+  | `PureCont fs  -> `PureCont (f fs)
+  | `GenCont fss  -> `GenCont (List.map f fss)
+
 let request_data env = env.request_data
 
 (** {1 Environment stuff} *)
@@ -324,7 +330,9 @@ type compressed_primitive_value = [
 ]
   deriving (Show, Eq, Typeable, Pickle, Dump)
 
-type compressed_continuation = (Ir.var * compressed_env) list
+type compressed_continuation =
+  | `PureCont of (Ir.var * compressed_env) list
+  | `GenCont  of (Ir.var * compressed_env) list list
 and compressed_t = [
 | compressed_primitive_value
 | `List of compressed_t list
@@ -360,9 +368,10 @@ let localise env var =
 
 
 let rec compress_continuation (cont:continuation) : compressed_continuation =
-  List.map
-    (fun (_scope, var, locals, _body) ->
-       (var, compress_env locals)) cont
+  let compress_frame (_scope, var, locals, _body) ->
+    (var, compress_env locals)
+  in
+  map_pure_continuation compress_frame cont
 and compress_t (v : t) : compressed_t =
   let cv = compress_t in
     match v with
@@ -412,14 +421,14 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
 
 let rec uncompress_continuation globals cont
     : continuation =
-  List.map
-    (fun (var, env) ->
-       let scope = Tables.find Tables.scopes var in
-       let body = Tables.find Tables.cont_defs var in
-       let env = uncompress_env globals env in
-       let locals = localise env var in
-         (scope, var, locals, body))
-    cont
+  let uncompress_frame (var, env) =
+    let scope = Tables.find Tables.scopes var in
+    let body = Tables.find Tables.cont_defs var in
+    let env = uncompress_env globals env in
+    let locals = localise env var in
+    (scope, var, locals, body)
+  in
+  map_pure_continuation uncompress_frame cont
 and uncompress_t globals (v : compressed_t) : t =
   let uv = uncompress_t globals in
     match v with
