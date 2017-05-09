@@ -1,0 +1,15 @@
+-include ./Makefile.config
+
+LINKSBASEMAKEFILE = ./MakefileLinksBase
+include $(LINKSBASEMAKEFILE)
+
+SOURCES :=	$(SOURCES)		\
+		   	unitTestsJson.ml	\
+			
+
+PACKS :=	$(PACKS) oUnit
+
+RESULT  = linksTests
+
+include $(OCAMLMAKEFILE)
+

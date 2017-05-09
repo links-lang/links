@@ -5,6 +5,8 @@
 *.cmxa
 *.cmo
 *.cmi
+*.cmt
+*.cmti
 *.cmx
 *.annot
 *.output
@@ -22,6 +24,14 @@ xmlParser.mli
 ._ncdi
 ._bcdi
 *.links.cache
+
+# oUnit files
+oUnit-json*.log
+oUnit-json*.cache
+
+# Vim temporary and backup files
+.*.swp
+.*.swo
 
 # Emacs temporary and backup files
 \#*
