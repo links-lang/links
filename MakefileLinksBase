@@ -56,8 +56,8 @@ TRASH=*.tmp *.output *.cache
 export TRASH
 
 # Other people's code.
-OPC = 	unionfind.ml unionfind.mli \
-      	getopt.ml getopt.mli PP.ml
+OPC =		unionfind.ml unionfind.mli \
+			getopt.ml getopt.mli PP.ml
 
 
 
