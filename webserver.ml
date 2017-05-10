@@ -170,6 +170,13 @@ struct
           in
         Lwt.return ("text/html", page) in
 
+      let render_servercont_cont valenv v =
+        Irtojs.generate_real_client_page
+          ~cgi_env:cgi_args
+          (Lib.nenv, Lib.typing_env)
+          (!prelude @ !globals)
+          (valenv, v) in
+
       let serve_static base uri_path mime_types =
           let fname =
             let fname = base / uri_path in
@@ -211,6 +218,7 @@ struct
                cgi_args
                (run_page (req_env, v))
                (render_cont ())
+               (render_servercont_cont req_env)
                (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)
           | _ :: t, path_is_file -> up (t, path_is_file) in
         up (Trie.longest_match (Str.split (Str.regexp "/") path) !rt, path.[String.length path - 1] <> '/') in
