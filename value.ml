@@ -252,9 +252,11 @@ type access_point = [
 type chan = (channel_id * channel_id)
   deriving (Show)
 
-type continuation =
-      | `PureCont of (Ir.scope * Ir.var * Env.t * Ir.computation) list
-      | `GenCont of (Ir.scope * Ir.var * Env.t * Ir.computation) list list
+type frame = Ir.scope * Ir.var * env * Ir.computation
+and continuation = [
+  | `PureCont of frame list
+  | `GenCont of frame list list
+  ]
 and t = [
 | primitive_value
 | `List of t list
@@ -281,10 +283,56 @@ type delegated_chan = (chan * (t list))
 
 let set_request_data env rd = { env with request_data = rd }
 
-let toplevel_cont : continuation = []
+module type FRAME = sig
+  type t
+  val of_expr : env -> Ir.tail_computation -> t
+  val make : Ir.scope -> Ir.var -> env -> Ir.computation -> t
+end
+
+module Frame = struct
+  type t = frame
+
+  let make scope var env comp = (scope, var, env, comp)
+  let of_expr env tc =
+    make (`Local : Ir.scope) (Var.dummy_var : Ir.var) (env : env) (([], tc) : Ir.computation)
+end
+
+module type CONTINUATION = sig
+  type t = continuation
+
+  module Frame : FRAME
+
+  val empty : t
+  val (<>)  : t -> t -> t
+  val (&>)  : Frame.t -> t -> t
+
+  val to_string : t -> string
+end
+
+module PureContinuation = struct
+  type t = continuation
+
+  module Frame = Frame
+
+  let empty = `PureCont []
+  let (<>) k k' =
+    match k, k' with
+    | `PureCont xs, `PureCont ys -> `PureCont (xs @ ys)
+    | _ -> assert false
+
+  let (&>) f = function
+    | `PureCont fs -> `PureCont (f :: fs)
+    | _ -> assert false
+
+  let to_string = function
+    | _ -> failwith "Continuation.to_string not yet implemented."
+end
+
+module Continuation = PureContinuation
+
 let map_pure_continuation f = function
-  | `PureCont fs  -> `PureCont (f fs)
-  | `GenCont fss  -> `GenCont (List.map f fss)
+  | `PureCont fs  -> `PureCont (List.map f fs)
+  | `GenCont fss  -> `GenCont (List.map (fun fs -> List.map f fs) fss)
 
 let request_data env = env.request_data
 
@@ -330,9 +378,10 @@ type compressed_primitive_value = [
 ]
   deriving (Show, Eq, Typeable, Pickle, Dump)
 
-type compressed_continuation =
+type compressed_continuation = [
   | `PureCont of (Ir.var * compressed_env) list
   | `GenCont  of (Ir.var * compressed_env) list list
+  ]
 and compressed_t = [
 | compressed_primitive_value
 | `List of compressed_t list
@@ -368,7 +417,7 @@ let localise env var =
 
 
 let rec compress_continuation (cont:continuation) : compressed_continuation =
-  let compress_frame (_scope, var, locals, _body) ->
+  let compress_frame (_scope, var, locals, _body) =
     (var, compress_env locals)
   in
   map_pure_continuation compress_frame cont
@@ -539,12 +588,12 @@ and numberp s = try ignore(int_of_string s); true with _ -> false
 
 and _string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
 
-and string_of_cont : continuation -> string =
-  fun cont ->
-    let frame (_scope, var, _env, body) =
-      "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
-    in
-      "[" ^ mapstrcat ", " frame cont ^ "]"
+and string_of_cont : continuation -> string = Continuation.to_string
+  (* fun cont -> *)
+  (*   let frame (_scope, var, _env, body) = *)
+  (*     "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")" *)
+  (*   in *)
+  (*     "[" ^ mapstrcat ", " frame cont ^ "]" *)
 
 and string_of_dist_pid = function
   | `ServerPid i -> "Server (" ^ (ProcessID.to_string i) ^ ")"
@@ -724,11 +773,11 @@ let unmarshal_value env : string -> t =
 
 (** Return the continuation frame that evaluates the given expression
     in the given environment. *)
-let expr_to_contframe env expr =
-  ((`Local        : Ir.scope),
-   (Var.dummy_var : Ir.var),
-   (env           : env),
-   (([], expr)    : Ir.computation))
+(* let expr_to_contframe env expr = *)
+(*   ((`Local        : Ir.scope), *)
+(*    (Var.dummy_var : Ir.var), *)
+(*    (env           : env), *)
+(*    (([], expr)    : Ir.computation)) *)
 
 let rec get_contained_channels v =
   let get_list_contained_channels xs =

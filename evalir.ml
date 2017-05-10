@@ -599,7 +599,7 @@ struct
     (*****************)
 
   let eval : Value.env -> program -> Proc.thread_result Lwt.t =
-    fun env -> computation env Value.toplevel_cont
+    fun env -> computation env Value.Continuation.empty
 
 
   let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->

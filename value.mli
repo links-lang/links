@@ -99,14 +99,13 @@ type t = [
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
-and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
+and continuation
 and env
     deriving (Show)
 
 type delegated_chan = (chan * (t list))
 
 val set_request_data : env -> RequestData.request_data -> env
-val toplevel_cont : continuation
 
 val empty_env : env
 val bind  : Ir.var -> (t * Ir.scope) -> env -> env
@@ -176,8 +175,8 @@ val marshal_continuation : continuation -> string
 val unmarshal_continuation : env -> string -> continuation
 val unmarshal_value : env -> string -> t
 
-val expr_to_contframe : env -> Ir.tail_computation ->
-  (Ir.scope * Ir.var * env * Ir.computation)
+(* val expr_to_contframe : env -> Ir.tail_computation -> *)
+(*   (Ir.scope * Ir.var * env * Ir.computation) *)
 
 (* Given a value, retreives a list of channels that are contained inside *)
 val get_contained_channels : t -> chan list
@@ -186,3 +185,23 @@ val value_of_xmlitem : xmlitem -> t
 
 val split_html : xml -> xml * xml
 
+(* Continuation *)
+module type FRAME = sig
+  type t
+  val of_expr : env -> Ir.tail_computation -> t
+  val make : Ir.scope -> Ir.var -> env -> Ir.computation -> t
+end
+
+module type CONTINUATION = sig
+  type t = continuation
+
+  module Frame : FRAME
+
+  val empty : t
+  val (<>)  : t -> t -> t
+  val (&>)  : Frame.t -> t -> t
+
+  val to_string : t -> string
+end
+
+module Continuation : CONTINUATION
