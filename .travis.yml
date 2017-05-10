@@ -20,3 +20,4 @@ script:
   - make -j2 nc
   - make tests
   - ./run-tests db-only shredding
+  - ./run-unit-tests

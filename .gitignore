@@ -26,8 +26,8 @@ xmlParser.mli
 *.links.cache
 
 # oUnit files
-oUnit-json*.log
-oUnit-json*.cache
+oUnit-*.log
+oUnit-*.cache
 
 # Vim temporary and backup files
 .*.swp
