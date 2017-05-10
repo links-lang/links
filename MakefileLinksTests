@@ -3,8 +3,9 @@
 LINKSBASEMAKEFILE = ./MakefileLinksBase
 include $(LINKSBASEMAKEFILE)
 
-SOURCES :=	$(SOURCES)		\
+SOURCES :=	$(SOURCES)			\
 				unitTestsJson.ml	\
+				unitTests.ml 		\
 			
 
 PACKS :=	$(PACKS) oUnit

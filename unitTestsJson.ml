@@ -19,9 +19,9 @@ let test_jsonize_value_list_int test_ctx =
 let suite =
    "json" >:::
       [
-         "jsonize_value_list_empty" >:: test_jsonize_value_list_empty;
-         "jsonize_value_list_int" >:: test_jsonize_value_list_int;
+         "jsonize_value" >::: [
+            "list_empty" >:: test_jsonize_value_list_empty;
+            "list_int" >:: test_jsonize_value_list_int;
+         ];
       ];;
 
-let () =
-    run_test_tt_main suite;;
