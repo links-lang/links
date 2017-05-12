@@ -3,6 +3,7 @@ open Ir
 open Lwt
 open Utility
 open Proc
+open ProcessTypes
 
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
@@ -271,6 +272,44 @@ struct
                   apply_cont cont hs env (`Pid (`ServerPid new_pid))
               | _ -> assert false
           end
+    | `PrimitiveFunction ("spawnWait", _), [func] ->
+        let our_pid = Proc.get_current_pid () in
+        (* Create the new process *)
+        let var = Var.dummy_var in
+        let cont' = Value.append_cont_frame
+            (`Local, var, Value.empty_env,
+             ([], `Apply (`Variable var, [])))
+            Value.toplevel_cont
+        in
+        Proc.create_spawnwait_process our_pid
+          (fun () -> apply_cont cont' Value.toplevel_hs env func) >>= fun child_pid ->
+        (* Now, we need to block this process until the spawned process has evaluated to a value.
+         * The idea here is that we have a second function, spawnWait', which grabs the result
+         * from proc.ml. *)
+        let fresh_var = Var.fresh_raw_var () in
+        let extended_env =
+          Value.bind fresh_var (Value.box_pid (`ServerPid child_pid), `Local) env in
+        let grab_frame =
+          Value.expr_to_contframe extended_env
+            (Lib.prim_appln "spawnWait'" [`Variable fresh_var]) in
+
+        (* Now, check to see whether we already have the result; if so, we can
+         * grab and continue. Otherwise, we need to block. *)
+        begin
+          match Proc.get_spawnwait_result child_pid with
+            | Some v -> apply_cont cont hs env v
+            | None ->
+                Proc.block (fun () -> apply_cont (Value.append_cont_frame grab_frame cont) hs env (`Record []))
+        end
+    | `PrimitiveFunction ("spawnWait'", _), [child_pid] ->
+        let unboxed_pid = Value.unbox_pid child_pid in
+        begin
+        match unboxed_pid with
+          | `ServerPid server_pid ->
+              let v = OptionUtils.val_of @@ Proc.get_spawnwait_result server_pid in
+              apply_cont cont hs env v
+          | _ -> assert false
+        end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
            continuation to it.  Otherwise, block the process (put its

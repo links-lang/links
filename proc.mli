@@ -19,6 +19,10 @@ sig
   val create_client_process : client_id -> Value.t ->
     process_id Lwt.t
 
+  val create_spawnwait_process : process_id -> thread -> process_id Lwt.t
+
+  val get_spawnwait_result : process_id -> Value.t option
+
   val get_and_mark_pending_processes : client_id -> (process_id * Value.t) list
 
   val resolve_external_processes : Value.t -> unit
