@@ -269,13 +269,12 @@ struct
           end
     | `PrimitiveFunction ("spawnWait", _), [func] ->
         let our_pid = Proc.get_current_pid () in
-        Debug.print @@ "In spawnWait. Our PID: " ^ (ProcessID.to_string our_pid);
         (* Create the new process *)
         let var = Var.dummy_var in
         let cont' = (`Local, var, Value.empty_env,
                      ([], `Apply (`Variable var, []))) in
         Proc.create_spawnwait_process our_pid
-          (fun () -> Debug.print "running sw proc"; apply_cont (cont'::Value.toplevel_cont) env func) >>= fun child_pid ->
+          (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) >>= fun child_pid ->
         (* Now, we need to block this process until the spawned process has evaluated to a value.
          * The idea here is that we have a second function, spawnWait', which grabs the result
          * from proc.ml. *)
@@ -292,11 +291,9 @@ struct
           match Proc.get_spawnwait_result child_pid with
             | Some v -> apply_cont cont env v
             | None ->
-                Debug.print "about to evaluate block";
                 Proc.block (fun () -> apply_cont (grab_frame::cont) env (`Record []))
         end
     | `PrimitiveFunction ("spawnWait'", _), [child_pid] ->
-        Debug.print "In spawnWait'";
         let unboxed_pid = Value.unbox_pid child_pid in
         begin
         match unboxed_pid with
@@ -325,7 +322,6 @@ struct
                 env (Lib.prim_appln "recv" [])
               in
               Proc.block (fun () ->
-                Debug.print "in unblocked spawnwait cont";
                 apply_cont (recv_frame::cont) env (`Record []))
         end
     (* end of mailbox stuff *)
