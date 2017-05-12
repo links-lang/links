@@ -1640,7 +1640,9 @@ let is_primitive_var var =
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
 
-let typing_env = {Types.var_env = type_env; tycon_env = alias_env; Types.effect_row = Types.make_empty_open_row (`Any, `Any)}
+let typing_env = {Types.var_env = type_env;
+                  tycon_env = alias_env;
+                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 
