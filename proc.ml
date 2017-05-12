@@ -151,7 +151,7 @@ struct
    *)
   let awaken pid =
     match Hashtbl.lookup state.blocked pid with
-    | None -> Debug.print "process not blocked, wtf?"; () (* process not blocked *)
+    | None -> () (* process not blocked *)
     | Some doorbell ->
       Debug.print ("Awakening blocked process " ^ ProcessID.to_string pid);
       Hashtbl.remove state.blocked pid;
@@ -252,8 +252,6 @@ struct
     begin
     match Hashtbl.lookup state.spawnwait_processes pid with
       | Some (parent_pid, _) ->
-          Debug.print ("Finished spawnwait child " ^ ProcessID.to_string pid
-          ^ ", awakening spawnwait parent " ^ ProcessID.to_string parent_pid);
           Hashtbl.replace state.spawnwait_processes pid (parent_pid, (Some (snd r)));
           awaken parent_pid
       | None -> ()
