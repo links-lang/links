@@ -182,7 +182,9 @@ struct
         Hashtbl.add Tables.scopes x `Global;
         Hashtbl.add Tables.cont_defs x ([], tail);
         Hashtbl.add Tables.cont_vars x IntSet.empty;
-        [(`Global, x, Value.empty_env, ([], tail))] in
+        let frame = Value.Continuation.Frame.make `Global x Value.empty_env ([], tail) in
+        Value.Continuation.(frame &> empty)
+      in
 
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
       let ctx = Cohttp_lwt_unix_net.init ~ctx () in

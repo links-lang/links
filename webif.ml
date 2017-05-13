@@ -137,7 +137,8 @@ struct
     let xb, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
     let render_page = Env.String.lookup nenv "renderPage" in
     let tail = `Apply (`Variable render_page, [`Variable x]) in
-    let cont = [(`Global, x, Value.empty_env, ([], tail))] in
+    let frame = Value.Continuation.Frame.make `Global x Value.empty_env ([], tail) in
+    let cont = Value.Continuation.(frame &> empty) in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
   let resolve_json_state req_data v =
@@ -149,7 +150,7 @@ struct
     let json_state = ResolveJsonState.add_ap_information client_id json_state in
     ResolveJsonState.add_process_information client_id json_state
 
-  let perform_request valenv run render_cont req =
+  let perform_request valenv run (render_cont : Value.continuation) req =
     let req_data = Value.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
     let client_id_str = ClientID.to_string client_id in
@@ -174,7 +175,7 @@ struct
         List.iter Proc.resolve_external_processes args;
         List.iter (Proc.resolve_external_processes -<- fst -<- snd)
           (IntMap.bindings (Value.get_parameters env));
-        Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
+        Eval.apply Value.Continuation.empty env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
@@ -333,7 +334,8 @@ struct
 
     Errors.display (lazy (serve_request_program
   			  (valenv, nenv, tyenv)
-  			  (globals, (locals, main), render_cont)
+  			  (globals, (locals, main),
+                           render_cont)
           (fun hdrs bdy -> Lib.print_http_response hdrs bdy req_data)
           cgi_args
           req_data

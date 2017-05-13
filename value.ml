@@ -284,7 +284,7 @@ type delegated_chan = (chan * (t list))
 let set_request_data env rd = { env with request_data = rd }
 
 module type FRAME = sig
-  type t
+  type t = frame
   val of_expr : env -> Ir.tail_computation -> t
   val make : Ir.scope -> Ir.var -> env -> Ir.computation -> t
 end
