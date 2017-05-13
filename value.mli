@@ -98,10 +98,35 @@ type t = [
 | `SessionChannel of chan
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
-]
-and continuation
+  ]
+and frame = Ir.scope * Ir.var * env * Ir.computation
+and continuation = [
+  | `PureCont of frame list
+  | `GenCont of frame list list
+  ]
 and env
     deriving (Show)
+
+(* Continuation *)
+module type FRAME = sig
+  type t = frame
+  val of_expr : env -> Ir.tail_computation -> t
+  val make : Ir.scope -> Ir.var -> env -> Ir.computation -> t
+end
+
+module type CONTINUATION = sig
+  type t = continuation
+
+  module Frame : FRAME
+
+  val empty : t
+  val (<>)  : t -> t -> t
+  val (&>)  : Frame.t -> t -> t
+
+  val to_string : t -> string
+end
+
+module Continuation : CONTINUATION
 
 type delegated_chan = (chan * (t list))
 
@@ -184,24 +209,3 @@ val get_contained_channels : t -> chan list
 val value_of_xmlitem : xmlitem -> t
 
 val split_html : xml -> xml * xml
-
-(* Continuation *)
-module type FRAME = sig
-  type t
-  val of_expr : env -> Ir.tail_computation -> t
-  val make : Ir.scope -> Ir.var -> env -> Ir.computation -> t
-end
-
-module type CONTINUATION = sig
-  type t = continuation
-
-  module Frame : FRAME
-
-  val empty : t
-  val (<>)  : t -> t -> t
-  val (&>)  : Frame.t -> t -> t
-
-  val to_string : t -> string
-end
-
-module Continuation : CONTINUATION
