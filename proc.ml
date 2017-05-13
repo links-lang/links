@@ -37,6 +37,9 @@ struct
         (* external_processes maps client IDs to a set of processes spawned by the client.
          * We don't have values to store for these, and they're always active. *)
         external_processes : (client_id, pid_set) Hashtbl.t;
+        (* spawnwait processes: maps spawned process ID to a pair of parent process
+         * and return value (initially None, becomes Some after process finishes evaluating *)
+        spawnwait_processes : (process_id, (process_id * Value.t option)) Hashtbl.t;
         angels : (process_id, unit Lwt.t) Hashtbl.t;
         step_counter : int ref }
 
@@ -44,6 +47,7 @@ struct
     blocked          = Hashtbl.create 10000;
     client_processes = Hashtbl.create 10000;
     external_processes = Hashtbl.create 10000;
+    spawnwait_processes = Hashtbl.create 10000;
     angels           = Hashtbl.create 10000;
     step_counter     = ref 0 }
 
@@ -201,6 +205,22 @@ struct
       async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
     Lwt.return new_pid
 
+  (** Creates a spawnWait process *)
+  let create_spawnwait_process parent_pid pstate =
+    ProcessID.create () >>= fun new_pid ->
+    Hashtbl.add state.spawnwait_processes new_pid (parent_pid, None);
+    async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
+    Lwt.return new_pid
+
+  (* Grabs the result of a finished spawnWait process *)
+  let get_spawnwait_result child_pid =
+    let (_, res) = Hashtbl.find state.spawnwait_processes child_pid in
+    match res with
+      | Some res ->
+          Hashtbl.remove state.spawnwait_processes child_pid;
+          Some res
+      | None -> None
+
   (** Create a new client process and return its identifier *)
   let create_client_process client_id func =
     ProcessID.create () >>= fun new_pid ->
@@ -227,6 +247,15 @@ struct
         Lwt.wakeup w ();
         Hashtbl.remove state.angels pid
       end;
+    (* Finally check whether we're a spawnWait process: if so,
+     * then we'll need to set the message in the hashtable, and wake up the parent. *)
+    begin
+    match Hashtbl.lookup state.spawnwait_processes pid with
+      | Some (parent_pid, _) ->
+          Hashtbl.replace state.spawnwait_processes pid (parent_pid, (Some (snd r)));
+          awaken parent_pid
+      | None -> ()
+    end;
     Lwt.return r
 
   let abort v =
