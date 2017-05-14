@@ -68,7 +68,7 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   lazy (process_program ~printer (valenv, nenv, tyenv) (program, t)) <|measure_as|> "process_program"
 
 (** Read Links source code, then optimise and run it. *)
-let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
+let evaluate ?(_handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
   let evaluate_inner x =
     let (program, t), (nenv', tyenv') = parse (nenv, tyenv) x in
 
@@ -78,7 +78,7 @@ let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
      Types.extend_typing_environment tyenv tyenv'), v
   in
   let evaluate_inner x =   lazy (evaluate_inner x) <|measure_as|> "evaluate" in
-  handle_errors evaluate_inner
+  evaluate_inner
 
 
 
@@ -167,7 +167,7 @@ let rec directives
           | [filename] ->
               let parse_and_desugar (nenv, tyenv) filename =
                 let (nenv, tyenv), (globals, (locals, main), t) =
-                  Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
+                  Loader.load_file (nenv, tyenv) filename
                 in
                   ((globals @ locals, main), t), (nenv, tyenv) in
               let envs, _ = evaluate parse_and_desugar envs filename in
