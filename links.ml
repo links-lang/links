@@ -68,7 +68,7 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   lazy (process_program ~printer (valenv, nenv, tyenv) (program, t)) <|measure_as|> "process_program"
 
 (** Read Links source code, then optimise and run it. *)
-let evaluate ?(_handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
+let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
   let evaluate_inner x =
     let (program, t), (nenv', tyenv') = parse (nenv, tyenv) x in
 
@@ -78,7 +78,7 @@ let evaluate ?(_handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as env
      Types.extend_typing_environment tyenv tyenv'), v
   in
   let evaluate_inner x =   lazy (evaluate_inner x) <|measure_as|> "evaluate" in
-  evaluate_inner
+  handle_errors evaluate_inner
 
 
 
@@ -216,7 +216,7 @@ let interact envs =
   let rec interact envs =
     let evaluate_replitem parse envs input =
       let _, nenv, tyenv = envs in
-        Errors.display ~default:(fun _ -> envs)
+        (fun e -> try Lazy.force e with _ -> envs)
           (lazy
              (match parse input with
                 | `Definitions (defs, nenv'), tyenv' ->
