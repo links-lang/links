@@ -209,7 +209,7 @@ struct
 
   (** Creates a spawnWait process *)
   let create_spawnwait_process parent_pid pstate =
-    ProcessID.create () >>= fun new_pid ->
+    let new_pid = ProcessID.create () in
     Hashtbl.add state.spawnwait_processes new_pid (parent_pid, None);
     async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
     Lwt.return new_pid
