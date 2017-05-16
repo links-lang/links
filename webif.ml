@@ -150,7 +150,7 @@ struct
     let json_state = ResolveJsonState.add_ap_information client_id json_state in
     ResolveJsonState.add_process_information client_id json_state
 
-  let perform_request valenv run render_cont req =
+  let perform_request valenv run render_cont render_servercont_cont req =
     let req_data = Value.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
     let client_id_str = ClientID.to_string client_id in
@@ -158,7 +158,8 @@ struct
       | ServerCont t ->
         Debug.print("Doing ServerCont for client ID " ^ client_id_str);
         Eval.apply render_cont valenv (t, []) >>= fun (_, v) ->
-        Lwt.return ("text/html", Value.string_of_value v)
+        let res = render_servercont_cont v in
+        Lwt.return ("text/html", res)
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
         Proc.resolve_external_processes arg;
@@ -219,11 +220,11 @@ struct
        let (_env, v) = Eval.run_program valenv program in
        Value.string_of_value v)
 
-  let do_request ((valenv, _, _) as env) cgi_args run render_cont response_printer =
+  let do_request ((valenv, _, _) as env) cgi_args run render_cont render_servercont_cont response_printer =
     let request = parse_request env cgi_args in
     let (>>=) f g = Lwt.bind f g in
     Lwt.catch
-      (fun () -> perform_request valenv run render_cont request )
+      (fun () -> perform_request valenv run render_cont render_servercont_cont request )
       (function
        | Aborted r -> Lwt.return r
        | Failure msg as e ->
@@ -241,9 +242,17 @@ struct
       req_data =
     let valenv' = Value.set_request_data valenv req_data in
     let env = (valenv', env2, env3) in
+    let render_servercont_cont = (fun (v: Value.t) ->
+      Irtojs.generate_real_client_page
+           ~cgi_env:cgi_args
+           (Lib.nenv, Lib.typing_env)
+           (globals @ locals)
+           (valenv, v)) in
+
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
                                    render_cont
+                                   render_servercont_cont
                                    (fun headers body -> Lwt.return (response_printer headers body))
                                    )
 

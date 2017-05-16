@@ -97,10 +97,20 @@ But first you need to do a few things.
      easiest way to do this is to tie fred to your unix username and
      then no separate authentication is required.
 
-  3) Create appropriate databases. Scripts are included to populate
-     tables for some of the examples, but not all of them. We also
-     don't have the actual data. We will make sample database dumps
-     available for the next point release.
+  3) Create appropriate databases. If you are using postgres and you
+  have tied your username to the database as described in 2) then you
+  can use the scripts in examples/dbsetup.
+
+    cd examples/dbsetup
+    ./createdbs
+    ./populatedbs
+
+  Otherwise you can adapt them to your particular database set up.
+
+  Postgresl data dumps for the larger databases (citations and
+  dictionary) can be obtained from a separate repository:
+
+    github.com/links-lang/links-data
 
 ## Documentation
 
