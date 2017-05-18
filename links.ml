@@ -77,7 +77,7 @@ let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
      Env.String.extend nenv nenv',
      Types.extend_typing_environment tyenv tyenv'), v
   in
-  let evaluate_inner x =   lazy (evaluate_inner x) <|measure_as|> "evaluate" in
+  let evaluate_inner x = lazy (evaluate_inner x) <|measure_as|> "evaluate" in
   handle_errors evaluate_inner
 
 
@@ -167,7 +167,7 @@ let rec directives
           | [filename] ->
               let parse_and_desugar (nenv, tyenv) filename =
                 let (nenv, tyenv), (globals, (locals, main), t) =
-                  Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
+                  Loader.load_file (nenv, tyenv) filename
                 in
                   ((globals @ locals, main), t), (nenv, tyenv) in
               let envs, _ = evaluate parse_and_desugar envs filename in
@@ -268,7 +268,7 @@ let interact envs =
                 | `Expression (e, t), _ ->
                     let valenv, _ = process_program envs (e, t) in
                       valenv, nenv, tyenv
-                | `Directive directive, _ -> execute_directive directive envs))
+                | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
       print_string ps1; flush stdout;
 
