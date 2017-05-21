@@ -1,0 +1,50 @@
+sig += : (Ref(Int), Int) ~> ()
+op r += v client {
+  r := (deref(r) + v)
+}
+
+sig incr : (Ref(Int)) ~> ()
+fun incr(i) client {
+    i += 1
+}
+
+sig decr : (Ref(Int)) ~> ()
+fun decr(i) client {
+    i += (-1)
+}
+
+sig worker : () {hear:[|Decrement|Increment|]|_}~> ()
+fun worker() client {
+    var i = ref(0);
+    fun loop() {
+      switch(recv()) {
+        case Decrement -> decr(i)
+        case Increment -> incr(i)
+      };
+      var n = deref(i);
+      ignore(domSetPropertyFromRef(getNodeById("display"), "value", intToString(n)));
+      loop()
+    }
+    loop()
+}
+
+fun runAction(p, act) client {
+    p ! act
+}
+
+fun main() {
+    var p = spawnClient { worker() };
+    page
+     <html>
+      <h2>Increment &amp; decrement</h2>
+      <div>
+        <input type="text" id="display" readonly="readonly" value="0" />
+      </div>
+      <div>
+        <button l:onclick="{runAction(p,Increment)}">+</button>
+        <button l:onclick="{runAction(p,Decrement)}">-</button>
+      </div>
+     </html>
+}
+
+main()
