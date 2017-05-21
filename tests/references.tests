@@ -39,11 +39,15 @@ Aliasing [2]
 { var hello = ref("Hello"); var world = ref("World"); var r1 = ref(hello); var r2 = r1; r2 := world; deref(hello) ^^ deref(deref(r1)) }
 stdout : "HelloWorld" : String
 
-Reference typing [1]
+Reference typing
 { var r1 = ref(42); r1 := "42" }
 stderr : @..*
 exit : 1
 
-Recursion
+Recursion [1]
 { var f = fun(r,n) { if (n == 0) { () } else { deref(r)(r, n-1) } }; f(ref(f), 10) }
 stdout : () : ()
+
+Recursion [2]
+{ var f = fun(r) { r := fun(n) { if (n == 0) { n } else { deref(r)(n-1) } }; deref(r) }; f(ref(fun(_) { 42 }))(10) }
+stdout : 0 : Int
