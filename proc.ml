@@ -1,8 +1,10 @@
 (** Data structures/utilities for process management *)
-open Utility
 open Lwt
 open ProcessTypes
+open Utility
 open WebsocketMessages
+
+(* We want to shadow |>, so this needs to come after Utility. *)
 open Pervasives
 
 type abort_type = string * string
@@ -1061,7 +1063,7 @@ and Session : SESSION = struct
   let get_local_delegated_buffers msg =
     Value.get_contained_channels msg
     |> List.map (fun ((_, ep2) as ch) ->
-        (ch, Hashtbl.find buffers ep2 |> queue_as_list))
+        (ch, Hashtbl.find buffers ep2 |> Queue.to_list))
 
   (* Send which originated on the server *)
   let send_from_local_internal msg send_port =
@@ -1181,12 +1183,12 @@ and Session : SESSION = struct
     (* For each entry in the lost message table, combine with orphans and
      * pendings, put into buffers, remove from pendings and orphans *)
     List.iter (fun (ep_id, ep_lost_msgs) ->
-      let ep_orphans = Hashtbl.find orphans ep_id |> Utility.queue_as_list in
+      let ep_orphans = Hashtbl.find orphans ep_id |> Queue.to_list in
       let ep_orig_buf = Hashtbl.find pending_buffers ep_id in
       let complete_buf = ep_orig_buf @ ep_lost_msgs @ ep_orphans in
       Hashtbl.remove orphans ep_id;
       Hashtbl.remove pending_buffers ep_id;
-      Hashtbl.replace buffers ep_id (queue_from_list complete_buf)) lost_message_table;
+      Hashtbl.replace buffers ep_id (Queue.of_list complete_buf)) lost_message_table;
     remove_delegation_carrier carrier_channel;
     service_pending_requests () >>= fun _ ->
     OptionUtils.opt_iter Proc.awaken (Session.unblock carrier_channel);

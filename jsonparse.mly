@@ -12,6 +12,7 @@ open WebsocketMessages
    (where they are escaped in json.ml)
 *)
 let websocket_req assoc_list =
+  (* Pervasives is opened in order to get "pipe" behaviour of |> *)
   let open Pervasives in
   let opcode = Value.unbox_string @@ List.assoc "opcode" assoc_list in
   (* If we add more opcodes in, we might have to push these inwards *)
