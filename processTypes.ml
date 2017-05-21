@@ -17,7 +17,7 @@ end
 
 let name_source : int ref = ref 0
 
-let get_and_increment_id = fun () ->
+let fresh_name = fun () ->
     let ret = !name_source in
     incr name_source;
     ret
@@ -76,7 +76,7 @@ struct
 
   let create () =
     let open Pervasives in
-    get_and_increment_id ()
+    fresh_name ()
     |> make_name_with_id
 
   let compare n1 n2 = Pervasives.compare n1 n2
