@@ -1,0 +1,53 @@
+Value restriction [1]
+sig r : Ref(Maybe(a)) var r = ref(Nothing);
+stderr : @..*
+exit : 1
+
+Value restriction [2]
+sig r : Ref([|Nothing|]) var r = ref(Nothing);
+stdout : () : ()
+
+Integer reference
+{ var r = ref(40); r := (deref(r) + 2); deref(r) }
+stdout : 42 : Int
+
+Float reference
+{ var r = ref(64.0); r := sqrt(deref(r)); deref(r) }
+stdout : 8.0 : Float
+
+String reference
+{ var foo = "Foo"; var r = ref(foo); r := "Bar"; foo ^^ deref(r) }
+stdout : "FooBar" : String
+
+Referential equality [1]
+{ var r1 = ref(42); var r2 = ref(42); r1 == r2 }
+stdout : false : Bool
+
+Referential equality [2]
+{ var r = ref(42); r == r }
+stdout : true : Bool
+
+Referential equality [3]
+{ var r = ref(42); r == r && { r := (deref(r)-42); r == r } }
+stdout : true : Bool
+
+Aliasing [1]
+{ var r1 = ref("Hello"); var r2 = r1; r2 := "World"; deref(r1) }
+stdout : "World" : String
+
+Aliasing [2]
+{ var hello = ref("Hello"); var world = ref("World"); var r1 = ref(hello); var r2 = r1; r2 := world; deref(hello) ^^ deref(deref(r1)) }
+stdout : "HelloWorld" : String
+
+Reference typing
+{ var r1 = ref(42); r1 := "42" }
+stderr : @..*
+exit : 1
+
+Recursion [1]
+{ var f = fun(r,n) { if (n == 0) { () } else { deref(r)(r, n-1) } }; f(ref(f), 10) }
+stdout : () : ()
+
+Recursion [2]
+{ var f = fun(r) { r := fun(n) { if (n == 0) { n } else { deref(r)(n-1) } }; deref(r) }; f(ref(fun(_) { 42 }))(10) }
+stdout : 0 : Int

@@ -116,6 +116,12 @@ let spawn_location = {
   arity = []
 }
 
+let reference_cell = {
+  Abstype.id = "Ref" ;
+  name = "Ref" ;
+  arity = [`Type, (`Unl, `Any)] (* TODO: Maybe too conservative? Could allow linearity? *)
+}
+
 type ('t, 'r) session_type_basis =
     [ `Input of 't * 't
     | `Output of 't * 't

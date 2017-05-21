@@ -153,6 +153,7 @@ let rec equal l r =
           List.for_all (one_equal_all rfields) lfields && List.for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> equal_lists l r
+    | `Ref r1, `Ref r2 -> r1 == r2
     | l, r ->  failwith ("Comparing "^ string_of_value l ^" with "^ string_of_value r ^" either doesn't make sense or isn't implemented")
 and equal_lists l r =
   match l,r with
@@ -1579,7 +1580,27 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     "serveWebsockets",
     (`PFun (fun _ -> assert false),
     datatype "(String) ~> ()",
-    IMPURE)
+    IMPURE);
+
+    (* Reference cells *)
+    "ref",
+    (p1 (fun x -> box_record ["contents", `Ref (ref x)]),
+     datatype "(a) ~> Ref(a)",
+     IMPURE);
+    "deref",
+    (p1 (fun r ->
+            match unbox_record r with
+            | ["contents", `Ref r] -> !r
+            | _ -> failwith "reference type mismatch"),
+     datatype "(Ref(a)) ~> a",
+     IMPURE);
+    "refmodify",
+    (p2 (fun r x ->
+         match unbox_record r with
+         | ["contents", `Ref r] -> r := x; box_unit ()
+         | _ -> failwith "reference type mismatch"),
+     datatype "(Ref(a), a) ~> ()",
+     IMPURE);
 ]
 
 (* HACK

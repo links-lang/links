@@ -110,7 +110,9 @@ let rec jsonize_value : Value.t -> json_string =
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
       "{\"_clientSpawnLoc\":" ^ (ClientID.to_json client_id) ^ "}"
   | `SpawnLocation (`ServerSpawnLoc) ->
-      "{\"_serverSpawnLoc\": [] }"
+     "{\"_serverSpawnLoc\": [] }"
+  | `Ref r ->
+     "{\"_contents\":" ^ jsonize_value !r ^ "}"
 and jsonize_primitive : Value.primitive_value -> string  = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_int value

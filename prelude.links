@@ -1209,3 +1209,8 @@ fun serveThese(routes) {
   var _ = map(fun ((s,p)) {addRoute(s,fun (_,_) {p()})}, routes);
   servePages()
 }
+
+### Reference cells ###
+infixr 0 :=;
+sig := : (Ref(a), a) ~> ()
+op r := v { refmodify(r, v) }

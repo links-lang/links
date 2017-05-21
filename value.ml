@@ -267,6 +267,7 @@ and t = [
 | `SessionChannel of chan
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
+| `Ref of t ref
 ]
 and env = {
   all : (t * Ir.scope) Utility.intmap;
@@ -333,7 +334,9 @@ and compressed_t = [
 | `FunctionPtr of (Ir.var * compressed_t option)
 | `PrimitiveFunction of string
 | `ClientFunction of string
-| `Continuation of compressed_continuation ]
+| `Continuation of compressed_continuation
+| `Ref of compressed_t
+]
 and compressed_env = (Ir.var * compressed_t) list
   deriving (Show, Eq, Typeable, Dump, Pickle)
 
@@ -375,6 +378,7 @@ and compress_t (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
+      | `Ref r -> `Ref (compress_t !r)
       | `Pid _ -> assert false (* mmmmm *)
       | `Socket (_inc, _outc) -> assert false
       | `SessionChannel _ -> assert false (* mmmmm *)
@@ -431,6 +435,7 @@ and uncompress_t globals (v : compressed_t) : t =
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
+      | `Ref v -> `Ref (ref (uv v))
 and uncompress_env globals env : env =
   try
   List.fold_left
@@ -506,6 +511,7 @@ and string_of_value : t -> string = function
        | `ClientSpawnLoc cid -> "client " ^ (ClientID.to_string cid)
        | `ServerSpawnLoc -> "server")
   | (`AccessPointID _) as apid -> string_of_access_point apid
+  | `Ref r -> string_of_value !r
 and string_of_primitive : primitive_value -> string = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_int value

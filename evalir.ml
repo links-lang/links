@@ -3,7 +3,6 @@ open Ir
 open Lwt
 open Utility
 open Proc
-open ProcessTypes
 
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs

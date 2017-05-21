@@ -1,5 +1,6 @@
 open Draggable
 open Progress
+open Refcells
 
 open Buttons
 open FormsTest
@@ -22,6 +23,7 @@ fun main() {
 
   addRoute("/examples/draggable.links", fun (_, _) {Draggable.main()});
   addRoute("/examples/progress.links", fun (_, _) {Progress.main()});
+  addRoute("/examples/refcells.links", fun (_, _) {Refcells.main()});
 
   addRoute("/examples/buttons.links", fun (_, _) {Buttons.main()});
   addRoute("/examples/formsTest.links", fun (_, _) {FormsTest.main()});

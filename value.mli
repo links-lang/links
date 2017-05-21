@@ -98,6 +98,7 @@ type t = [
 | `SessionChannel of chan
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
+| `Ref of t ref
 ]
 and continuation = (Ir.scope * Ir.var * env * Ir.computation) list
 and env

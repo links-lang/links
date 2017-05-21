@@ -1,6 +1,7 @@
 open DictSuggestUpdate
 open Draggable
 open Progress
+open Refcells
 
 open Factorial
 open DictSuggest
@@ -34,6 +35,7 @@ fun main() {
   addRoute("/examples/dictionary/dictSuggestUpdate.links", fun (_, _){DictSuggestUpdate.main()});
   addRoute("/examples/draggable.links", fun (_, _) {Draggable.main()});
   addRoute("/examples/progress.links", fun (_, _) {Progress.main()});
+  addRoute("/examples/refcells.links", fun (_, _) {Refcells.main()});
 
   addRoute("/examples/factorial.links", fun (_, _) {Factorial.main()});
   addRoute("/examples/dictionary/dictSuggest.links", fun (_, _){DictSuggest.main()});
