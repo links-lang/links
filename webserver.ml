@@ -72,13 +72,21 @@ struct
   type providers = { as_directory: provider; as_page: provider }  (* Really, at least one should be Some *)
   type routing_table = (string, providers) Trie.t
 
-  let websocket_connection_path : (path option) ref = ref None
   let rt : routing_table ref = ref Trie.empty
 
   let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref =
     ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
+
+  (* Keeps track of whether websocket requests are allowed. *)
+  let accepting_websocket_requests = ref false
+  let is_accepting_websocket_requests () =
+    !accepting_websocket_requests
+  let set_accepting_websocket_requests v =
+    accepting_websocket_requests := v
+
+  let ws_url = Settings.get_value Basicsettings.websocket_url
 
   let set_prelude bs =
     prelude := bs
@@ -99,11 +107,6 @@ struct
              else
                { as_directory = None; as_page = Some thread_starter })
             !rt
-
-  let accept_websocket_connections : path -> bool = fun ws_path ->
-    match !websocket_connection_path with
-      | Some _ -> false
-      | None -> (websocket_connection_path := (Some ws_path)); true
 
   let extract_client_id cgi_args =
     Utility.lookup "__client_id" cgi_args
@@ -165,6 +168,8 @@ struct
       (* Precondition: valenv has been initialised with the correct request data *)
       let run_page (valenv, v) () =
         let cid = RequestData.get_client_id (Value.request_data valenv) in
+        let ws_conn_url =
+          if !accepting_websocket_requests then Some (ws_url) else None in
         Eval.apply (render_cont ()) valenv
         (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)]) >>= fun (valenv, v) ->
           let page = Irtojs.generate_real_client_page
@@ -174,15 +179,19 @@ struct
                         * they should all end up in valenv... *)
                        (!prelude @ !globals)
                        (valenv, v)
+                       ws_conn_url
           in
         Lwt.return ("text/html", page) in
 
       let render_servercont_cont valenv v =
+        let ws_conn_url =
+          if !accepting_websocket_requests then Some (ws_url) else None in
         Irtojs.generate_real_client_page
           ~cgi_env:cgi_args
           (Lib.nenv, Lib.typing_env)
           (!prelude @ !globals)
-          (valenv, v) in
+          (valenv, v)
+          ws_conn_url in
 
       let serve_static base uri_path mime_types =
           let fname =
@@ -206,10 +215,7 @@ struct
           Debug.print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
           Server.respond_file ~headers ~fname () in
 
-      let is_websocket_request path =
-        match !websocket_connection_path with
-          | Some ws_url -> is_prefix_of ws_url path
-          | None -> false in
+      let is_websocket_request = is_prefix_of ws_url in
 
       let route rt =
         let rec up = function
@@ -223,7 +229,7 @@ struct
           | (_, { as_directory = Some (Right (valenv, v)); _ }) :: _, _ ->
              let (_, nenv, tyenv) = !env in
              let cid = get_or_make_client_id cgi_args in
-             let req_data = RequestData.new_request_data cgi_args cookies cid !websocket_connection_path in
+             let req_data = RequestData.new_request_data cgi_args cookies cid in
              let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
              Webif.do_request
                (req_env, nenv, tyenv)
@@ -249,9 +255,7 @@ struct
         serve_static linkslib uri_path []
       (* Handle websocket connections *)
       else if (is_websocket_request path) then
-        (* Safe, since this is checked within is_websocket_request, and once set, cannot
-         * be unset *)
-        let websocket_path = OptionUtils.val_of (!websocket_connection_path) in
+        let websocket_path = Settings.get_value Basicsettings.websocket_url in
         let ws_url_length = String.length websocket_path in
         (* TODO: Sanity checking of client ID here *)
         let client_id = ClientID.of_string @@

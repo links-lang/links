@@ -142,3 +142,6 @@ let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `Us
 
 (* Paths to look for .links files in chasing pass *)
 let links_file_paths = Settings.add_string("links_file_paths", "", `User)
+
+(* Base URL for websocket connections *)
+let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)

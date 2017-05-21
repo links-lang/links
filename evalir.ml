@@ -65,10 +65,13 @@ struct
    let serialize_call_to_client req_data (continuation, name, args) =
      let open Json in
      let client_id = RequestData.get_client_id req_data in
-     let conn_url_opt = RequestData.get_websocket_connection_url req_data in
+     let conn_url =
+       if (Webs.is_accepting_websocket_requests ()) then
+         Some (Settings.get_value Basicsettings.websocket_url) else
+         None in
      let st = List.fold_left
        (fun st_acc arg -> ResolveJsonState.add_val_event_handlers arg st_acc)
-       (JsonState.empty client_id conn_url_opt) args in
+       (JsonState.empty client_id conn_url) args in
      let st = ResolveJsonState.add_ap_information client_id st in
      let st = ResolveJsonState.add_process_information client_id st in
      Json.jsonize_call st continuation name args
@@ -442,13 +445,9 @@ struct
          Webs.start env >>= fun () ->
          apply_cont cont env (`Record [])
        end
-    | `PrimitiveFunction ("serveWebsockets", _), [ws_path] ->
-        let path = Value.unbox_string ws_path in
-        let res = Webs.accept_websocket_connections path in
-        if res then
-          apply_cont cont env (`Record [])
-        else
-          eval_error "Attempt to start accepting websocket requests multiple times."
+    | `PrimitiveFunction ("serveWebsockets", _), [] ->
+        Webs.set_accepting_websocket_requests true;
+        apply_cont cont env (`Record [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
        apply_cont cont env (Lib.apply_pfun n args (Value.request_data env))

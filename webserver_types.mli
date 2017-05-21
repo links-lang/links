@@ -1,5 +1,6 @@
 open Utility
 
+type websocket_url = string
 val webs_running : bool Settings.setting
 
 module type WEBSERVER =
@@ -8,10 +9,8 @@ sig
   val set_prelude : Ir.binding list -> unit
   val add_route : bool -> string -> (string * (string * string) list, Value.env * Value.t) either -> unit
 
-  (** Sets up the server to accept incoming websocket requests at the given (relative) path.
-   * Returns true if this was successful (moreover, that the function has not been called before),
-   * and false if not. *)
-  val accept_websocket_connections : string -> bool
-
   val start : Value.env -> unit Lwt.t
+
+  val is_accepting_websocket_requests : unit -> bool
+  val set_accepting_websocket_requests : bool -> unit
 end

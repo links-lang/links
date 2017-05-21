@@ -20,7 +20,7 @@ fun mainPage(serverPid) {
 fun main() {
   var serverPid = spawn { serverProc(0) };
   addRoute("/", fun(_, _) { mainPage(serverPid) });
-  serveWebsockets("/ws/");
+  serveWebsockets();
   servePages()
 }
 

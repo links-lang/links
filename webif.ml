@@ -140,10 +140,14 @@ struct
     let cont = [(`Global, x, Value.empty_env, ([], tail))] in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
+  let get_websocket_url () =
+    if Webs.is_accepting_websocket_requests () then
+      Some (Settings.get_value Basicsettings.websocket_url)
+      else None
+
   let resolve_json_state req_data v =
     let client_id = RequestData.get_client_id req_data in
-    let conn_url_opt = RequestData.get_websocket_connection_url req_data in
-    let json_state = Json.JsonState.empty client_id conn_url_opt in
+    let json_state = Json.JsonState.empty client_id (get_websocket_url ()) in
     (* Add event handlers *)
     let json_state = ResolveJsonState.add_val_event_handlers v json_state in
     (* Add AP and process information *)
@@ -180,7 +184,7 @@ struct
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         (*
         if not(Proc.singlethreaded()) then
-          (prerr_endline "Remaining procs on server after remote call!";
+          (prerr_endline "Remaining  procs on server after remote call!";
            assert(false));
            *)
         let json_state = resolve_json_state req_data r in
@@ -204,6 +208,7 @@ struct
              (Lib.nenv, Lib.typing_env)
              (globals @ locals)
              (valenv, v)
+             (get_websocket_url ())
          end
        else
          let program = (globals @ locals, main) in
@@ -247,7 +252,8 @@ struct
            ~cgi_env:cgi_args
            (Lib.nenv, Lib.typing_env)
            (globals @ locals)
-           (valenv, v)) in
+           (valenv, v)
+           (get_websocket_url ())) in
 
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
@@ -331,7 +337,7 @@ struct
      * to do a state-passing transformation. *)
     (* Client ID is always 0 in CGI mode. *)
     let req_data =
-      RequestData.new_request_data cgi_args cookies dummy_client_id None in
+      RequestData.new_request_data cgi_args cookies dummy_client_id in
 
     (* Compute cacheable stuff in one call *)
     let (render_cont, (nenv,tyenv), (globals, (locals, main))) =

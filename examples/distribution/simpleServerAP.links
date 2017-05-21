@@ -99,7 +99,7 @@ module Setup {
 fun main() {
   var srvAP = new();
   addRoute("/", fun(_, clientLoc) { Setup.mainPage(clientLoc, srvAP) });
-  serveWebsockets("/ws/");
+  serveWebsockets();
   servePages();
 }
 

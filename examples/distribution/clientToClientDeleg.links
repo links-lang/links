@@ -47,7 +47,7 @@ fun main() {
   var ap = new();
   addRoute("/c1", fun(_, _) { Client1.mainPage(ap) });
   addRoute("/c2", fun(_, _) { Client2.mainPage(ap) });
-  serveWebsockets("/ws/");
+  serveWebsockets();
   servePages();
 }
 

@@ -113,7 +113,7 @@ fun main() {
   var _ = spawn { acceptor(clientAP, loopPid) };
   addRoute("/", fun (_, _) { ChatClient.mainPage(clientAP) } );
   addStaticRoute("/css", "css", [("css", "text/css")]);
-  serveWebsockets("/ws/");
+  serveWebsockets();
   servePages()
 }
 
