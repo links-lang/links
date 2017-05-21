@@ -1,7 +1,11 @@
-Value restriction
-sig r : Ref(Maybe(a)) var r = ref(Nothing)
+Value restriction [1]
+sig r : Ref(Maybe(a)) var r = ref(Nothing);
 stderr : @..*
 exit : 1
+
+Value restriction [2]
+sig r : Ref([|Nothing|]) var r = ref(Nothing);
+stdout : () : ()
 
 Integer reference
 { var r = ref(40); r := (deref(r) + 2); deref(r) }
@@ -40,7 +44,6 @@ Reference typing [1]
 stderr : @..*
 exit : 1
 
-Reference typing [2]
-{ var mkref = fun(x : forall a) { ref(x) }; var r = mkref(42); r := "42" }
-stderr : @..*
-exit : 1
+Recursion
+{ var f = fun(r,n) { if (n == 0) { () } else { deref(r)(r, n-1) } }; f(ref(f), 10) }
+stdout : () : ()
