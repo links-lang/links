@@ -7,7 +7,7 @@ let show_json = Settings.add_bool("show_json", false, `User)
 
 (* Type synonyms *)
 type handler_id = int
-type maybe_connection_url = string option
+type websocket_url = string
 
 (* Types *)
 type json_string = string
@@ -177,9 +177,9 @@ let show_aps aps =
   let ap_list = AccessPointIDSet.elements aps in
   String.concat "," (List.map (AccessPointID.to_json) ap_list)
 
-let print_json_state client_id conn_opt procs handlers aps =
+let print_json_state client_id conn_url procs handlers aps =
     let ws_url_data =
-    (match conn_opt with
+    (match conn_url with
        | Some ws_conn_url -> "\"ws_conn_url\":\"" ^ ws_conn_url ^ "\","
        | None -> "") in
   "{\"client_id\":" ^ (ClientID.to_json client_id) ^ "," ^
@@ -193,7 +193,7 @@ let print_json_state client_id conn_opt procs handlers aps =
 module JsonState = struct
   type t = {
     client_id : client_id;
-    ws_conn_url_opt : maybe_connection_url;
+    ws_conn_url : websocket_url option;
     processes: (Value.t * Value.t list) pid_map;
     handlers: Value.t intmap;
     aps: apid_set
@@ -202,7 +202,7 @@ module JsonState = struct
   (** Creates an empty JSON state *)
   let empty cid url = {
     client_id = cid;
-    ws_conn_url_opt = url;
+    ws_conn_url = url;
     processes = PidMap.empty;
     handlers = IntMap.empty;
     aps = AccessPointIDSet.empty
@@ -221,7 +221,7 @@ module JsonState = struct
     { state with aps = AccessPointIDSet.add apid state.aps }
 
   (** Serialises the state as a JSON string *)
-  let to_string s = print_json_state s.client_id s.ws_conn_url_opt s.processes s.handlers s.aps
+  let to_string s = print_json_state s.client_id s.ws_conn_url s.processes s.handlers s.aps
 end
 
 type json_state = JsonState.t

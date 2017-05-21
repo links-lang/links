@@ -2,8 +2,8 @@ open ProcessTypes
 
 (* Type synonyms *)
 type handler_id = int
-type maybe_connection_url = string option
 type json_string = string
+type websocket_url = string
 
 (* Abstract types *)
 module JsonState : sig
@@ -11,7 +11,7 @@ module JsonState : sig
 
   (** Creates a JSON state, given a set of process IDs to spawn, and a set of
    * event handlers to activate *)
-  val empty : client_id -> maybe_connection_url -> t
+  val empty : client_id -> websocket_url option -> t
 
   (** Adds a process and its mailbox to the state *)
   val add_process : process_id -> Value.t -> Value.t list -> t -> t
