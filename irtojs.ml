@@ -339,6 +339,25 @@ struct
       | _ ->  Call(Var (js_name op), [l; r])
 end
 
+module Reference :
+sig
+  val is : string -> bool
+  val gen : (string * code) -> code
+  val gen_assign : (code * string * code) -> code
+end =
+struct
+  let funs =
+    StringMap.from_alist
+      [ "refmodify", "_refmodify";
+        "deref", "_deref";
+        "ref", "_ref" ]
+  let is x = StringMap.mem x funs
+  let js_name f = StringMap.find f funs
+
+  let gen (f_name, v) = Call(Var (js_name f_name), [v])
+  let gen_assign (r, f_name, v) = Call (Var (js_name f_name), [r;v])
+end
+
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
@@ -461,6 +480,10 @@ let rec generate_value env : Ir.value -> code =
                               StringOp.gen (gv l, f_name, gv r)
                           | [l; r] when Comparison.is f_name ->
                               Comparison.gen (gv l, f_name, gv r)
+                          | [l; r] when Reference.is f_name ->
+                              Reference.gen_assign (gv l, f_name, gv r)
+                          | [v] when Reference.is f_name ->
+                              Reference.gen (f_name, gv v)
                           | [v] when f_name = "negate" || f_name = "negatef" ->
                               Unop ("-", gv v)
                           | _ ->

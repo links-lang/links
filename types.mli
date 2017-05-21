@@ -78,6 +78,7 @@ val dom_node     : Abstype.t
 val access_point : Abstype.t
 val socket       : Abstype.t
 val spawn_location : Abstype.t
+val reference_cell : Abstype.t
 
 type ('t, 'r) session_type_basis =
     [ `Input of 't * 't

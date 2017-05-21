@@ -15,5 +15,6 @@ let alias_env : Types.tycon_environment =
       "AP"      , `Abstract Types.access_point;
       "EndBang" , `Alias ([], Types.make_endbang_type);
       "Socket"  , `Abstract Types.socket;
-      "Location", `Abstract Types.spawn_location
+      "Location", `Abstract Types.spawn_location;
+      "Ref"     , `Abstract Types.reference_cell;
     ]

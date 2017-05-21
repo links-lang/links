@@ -29,6 +29,7 @@ let rec event_handlers_from_value : Value.t -> handler_id_set =
     let _ls, vs = List.split fields in
     event_handlers_from_values vs
   | `List (elems) -> event_handlers_from_values elems
+  | `Ref r -> event_handlers_from_value !r
   and event_handlers_from_primitive : Value.primitive_value -> handler_id_set = function
   (* Everything is empty except XML items *)
   | `XML xmlitem -> event_handlers_from_xml xmlitem
