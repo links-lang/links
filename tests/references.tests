@@ -1,0 +1,46 @@
+Value restriction
+sig r : Ref(Maybe(a)) var r = ref(Nothing)
+stderr : @..*
+exit : 1
+
+Integer reference
+{ var r = ref(40); r := (deref(r) + 2); deref(r) }
+stdout : 42 : Int
+
+Float reference
+{ var r = ref(64.0); r := sqrt(deref(r)); deref(r) }
+stdout : 8.0 : Float
+
+String reference
+{ var foo = "Foo"; var r = ref(foo); r := "Bar"; foo ^^ deref(r) }
+stdout : "FooBar" : String
+
+Referential equality [1]
+{ var r1 = ref(42); var r2 = ref(42); r1 == r2 }
+stdout : false : Bool
+
+Referential equality [2]
+{ var r = ref(42); r == r }
+stdout : true : Bool
+
+Referential equality [3]
+{ var r = ref(42); r == r && { r := (deref(r)-42); r == r } }
+stdout : true : Bool
+
+Aliasing [1]
+{ var r1 = ref("Hello"); var r2 = r1; r2 := "World"; deref(r1) }
+stdout : "World" : String
+
+Aliasing [2]
+{ var hello = ref("Hello"); var world = ref("World"); var r1 = ref(hello); var r2 = r1; r2 := world; deref(hello) ^^ deref(deref(r1)) }
+stdout : "HelloWorld" : String
+
+Reference typing [1]
+{ var r1 = ref(42); r1 := "42" }
+stderr : @..*
+exit : 1
+
+Reference typing [2]
+{ var mkref = fun(x : forall a) { ref(x) }; var r = mkref(42); r := "42" }
+stderr : @..*
+exit : 1
