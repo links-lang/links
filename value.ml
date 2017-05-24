@@ -152,27 +152,6 @@ let is_attr = function
 let attrs = List.filter is_attr
 and nodes = List.filter (not -<- is_attr)
 
-let rec string_of_xml : ?close_tags:bool -> xml -> string =
-  fun ?(close_tags=false) x -> String.concat "" (List.map (string_of_item ~close_tags:close_tags) x)
-and string_of_item : ?close_tags:bool -> xmlitem -> string =
-  fun ?(close_tags=false) ->
-    let format_attrs attrs = match String.concat " " (List.map (string_of_item ~close_tags:close_tags) attrs) with
-      | "" -> ""
-      | a -> " " ^ a in
-    let escape = Str.global_replace (Str.regexp "\"") "\\\""  in
-    function
-    | Attr (k, v) -> k ^ "=\"" ^ escape v ^ "\""
-    | Text s -> xml_escape s
-    | Node (tag, children) ->
-      begin
-        let attrs, nodes = attrs children, nodes children in
-        match nodes with
-        | [] when not close_tags ->
-          "<" ^ tag ^ format_attrs attrs ^ "/>"
-        | _  ->
-          "<" ^ tag ^ format_attrs attrs ^ ">" ^ string_of_xml ~close_tags:close_tags nodes ^ "</" ^ tag ^ ">"
-      end
-
 (* split top-level HTML into head and body components *)
 let split_html : xml -> xml * xml =
   function
@@ -191,13 +170,6 @@ let split_html : xml -> xml * xml =
 
 type table = (database * string) * string * string list list * Types.row
   deriving (Show)
-
-(* type number = num *)
-(* module Show_number = Deriving_num.Show_num *)
-(* module Typeable_number = Deriving_num.Typeable_num *)
-(* module Eq_number = Deriving_num.Eq_num *)
-(* module Pickle_number = Deriving_num.Pickle_num *)
-(* module Dump_number = Deriving_num.Dump_num *)
 
 type primitive_value_basis =  [
 | `Bool of bool
@@ -391,9 +363,6 @@ and compress_env env : compressed_env =
        env
        [])
 
-(* let string_of_value : t -> string = *)
-(*   fun v -> Show.show show_compressed_t (compress_t v) *)
-
 let uncompress_primitive_value : compressed_primitive_value -> [> primitive_value] =
   function
     | #primitive_value_basis as v -> v
@@ -440,121 +409,173 @@ and uncompress_env globals env : env =
     env
   with NotFound str -> failwith("In uncompress_env: " ^ str)
 
-let string_as_charlist s : t =
-  `List (List.rev (List.rev_map (fun x -> `Char x) (explode s)))
-
 let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
 
 (** {1 Pretty-printing values} *)
 
-(* let string_of_cont = Show_continuation.show *)
-
+open Format
 exception Not_tuple
 
-exception Match of string
+let keywords = StringSet.from_list (List.map fst Lexer.keywords)
 
-let rec char_of_primchar = function
-    `Char c -> c
-  | o ->
-      raise (Match (Show_t.show o))
-
-and charlist_as_string chlist =
-  match chlist with
-    | `List elems ->
-        Utility.implode (List.rev (List.rev_map char_of_primchar elems))
-    | _ -> raise (Match("Non-string " ^ string_of_value chlist
-                        ^ " used as string."))
-
-and string_of_value : t -> string = function
-  | #primitive_value as p -> string_of_primitive p
-  | `FunctionPtr (x, fvs) ->
-    if Settings.get_value (Basicsettings.printing_functions) then
-      string_of_int x ^ opt_app string_of_value "" fvs
-    else
-      "fun"
-  | `PrimitiveFunction (name,_op) -> name
-  | `ClientFunction (name) -> name
-  (* | `RecFunction(defs, env, var, _scope) -> *)
-  (*     (\* Choose from fancy or simple printing of functions: *\) *)
-  (*     if Settings.get_value(Basicsettings.printing_functions) then *)
-  (*       "{ " ^ (mapstrcat " " *)
-  (*                 (fun (_name, (formals, body, _z)) -> *)
-  (*                    "fun (" ^ String.concat "," (List.map Ir.string_of_var formals) ^ ") {" ^ *)
-  (*                      Ir.string_of_computation body ^ "}") *)
-  (*                 defs) ^ *)
-  (*         " " ^ Ir.string_of_var var ^ " }[" ^ string_of_environment env ^ "]" *)
-  (*     else *)
-  (*       "fun" *)
-  | `Record fields ->
-      (try string_of_tuple fields
-       with Not_tuple ->
-         "(" ^ mapstrcat "," (fun (label, value) ->
-                                label ^ "=" ^ string_of_value value)
-           (List.sort (fun (l,_) (r, _) -> compare l r) fields) ^ ")")
-  | `Variant (label, `Record []) -> label
-  | `Variant (label, value) -> label ^ "(" ^ string_of_value value ^ ")"
-  | `List [] -> "[]"
-  | `List ((`XML _)::_ as elems) -> mapstrcat "" string_of_value elems
-  | `List (elems) -> "[" ^ String.concat ", " (List.map string_of_value elems) ^ "]"
-  | `Continuation cont -> "Continuation" ^ string_of_cont cont
-  | `Pid dist_pid -> "Pid " ^ (string_of_dist_pid dist_pid)
-  | `Socket (_, _) -> "<socket>"
-  | `SessionChannel c -> "Session channel " ^ (string_of_channel c)
-  | `SpawnLocation sl -> "Spawn location: " ^
-    (match sl with
-       | `ClientSpawnLoc cid -> "client " ^ (ClientID.to_string cid)
-       | `ServerSpawnLoc -> "server")
-  | (`AccessPointID _) as apid -> string_of_access_point apid
-and string_of_primitive : primitive_value -> string = function
-  | `Bool value -> string_of_bool value
-  | `Int value -> string_of_int value
-  | `Float value -> string_of_float' value
-  | `Char c -> "'"^ Char.escaped c ^"'"
-  | `XML x -> string_of_item x
-  | `Database (_, params) -> "(database " ^ params ^")"
-  | `Table (_, table_name, _, _) -> "(table " ^ table_name ^")"
-  | `String s -> "\"" ^ s ^ "\""
-
-and string_of_tuple (fields : (string * t) list) : string =
-    let fields = List.map (function
-                        | x, y when numberp x  -> (int_of_string x, y)
-                        | _ -> raise Not_tuple) fields in
-    let sorted = List.sort (fun (x,_) (y, _) -> compare x y) fields in
-    let numbers, values = List.split sorted in
-      if ordered_consecutive numbers && List.length numbers > 1 && List.hd numbers = 1 then
-        "(" ^ String.concat ", " (List.map string_of_value values) ^ ")"
-      else raise Not_tuple
-
-and numberp s = try ignore(int_of_string s); true with _ -> false
-
-and _string_of_environment : env -> string = fun _env -> "[ENVIRONMENT]"
-
-and string_of_cont : continuation -> string =
-  fun cont ->
-    let frame (_scope, var, _env, body) =
-      "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
-    in
-      "[" ^ mapstrcat ", " frame cont ^ "]"
-
-and string_of_dist_pid = function
-  | `ServerPid i -> "Server (" ^ (ProcessID.to_string i) ^ ")"
-  | `ClientPid (cid, i) ->
-      "Client num " ^ (ClientID.to_string cid) ^ ", process " ^ (ProcessID.to_string i)
-and string_of_channel (ep1, ep2) =
-  let ep1_str = ChannelID.to_string ep1 in
-  let ep2_str = ChannelID.to_string ep2 in
-  "Session channel. EP1: " ^ ep1_str ^ ", EP2: " ^ ep2_str
-
-and string_of_access_point = function
+let rec p_value (ppf : formatter) : t -> 'a = function
+  | `Bool true -> fprintf ppf "true"
+  | `Bool false -> fprintf ppf "false"
+  | `Int i -> fprintf ppf "%i" i
+  | `Float f -> fprintf ppf "%s" (string_of_float' f)
+  | `Char c -> fprintf ppf "'%c'" c
+  | `String s -> fprintf ppf "@{<string>\"%s\"@}" s
+  | `Record fields -> begin
+      try p_tuple ppf fields
+      with Not_tuple ->
+        fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields) end
+  | `List [] -> fprintf ppf "[]"
+  | `List ((`XML _)::_ as elems) ->
+     fprintf ppf "@[<hv>%a@]" (pp_print_list p_value) elems
+  | `List [v] -> fprintf ppf "[%a]" p_value v
+  | `List l -> fprintf ppf "[@[<hov 0>";
+               p_list_elements ppf l
+  | `ClientFunction n -> fprintf ppf "%s" n
+  | `PrimitiveFunction (name, _op) -> fprintf ppf "%s" name
+  | `Variant (label, `Record []) -> fprintf ppf "@{<constructor>%s@}" label
+  (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
+  | `Variant (label, (`Record _ as value)) -> fprintf ppf "@{<constructor>%s@}@[%a@]" label p_value value
+  | `Variant (label, value) -> fprintf ppf "@{<constructor>%s@}(@[%a)@]" label p_value value
+  | `FunctionPtr (x, fvs) -> if Settings.get_value Basicsettings.printing_functions then
+                               match fvs with
+                               | None -> fprintf ppf "%i" x (* ^ opt_app string_of_value "" fvs *)
+                               | Some t -> fprintf ppf "%i%a" x p_value t
+                             else
+                               fprintf ppf "fun"
+  | `Socket _ -> fprintf ppf "<socket>"
+  | `Table (_, name, _, _) -> fprintf ppf "(table %s)" name
+  | `Database (_, params) -> fprintf ppf "(database %s" params
+  | `SessionChannel (ep1, ep2) ->
+     fprintf ppf "Session channel. EP1: %s, EP2: %s"
+             (ChannelID.to_string ep1)
+             (ChannelID.to_string ep2)
+  | `SpawnLocation (`ClientSpawnLoc cid) ->
+     fprintf ppf "Spawn location: client %s" (ClientID.to_string cid)
+  | `SpawnLocation `ServerSpawnLoc ->
+     fprintf ppf "Spawn location: server"
+  | `XML xml -> p_xmlitem ~close_tags:false ppf xml
+  | `Continuation cont ->
+     let string_of_cont cont =
+       let frame (_scope, var, _env, body) =
+         "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
+       in
+       "[" ^ mapstrcat ", " frame cont ^ "]"
+     in fprintf ppf "Continuation%s" (string_of_cont cont)
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
-      "Client access point on client " ^ (ClientID.to_string cid) ^ ", " ^
-      "APID: " ^ (AccessPointID.to_string apid)
+     fprintf ppf "Client access point on client %s, APID: %s" (ClientID.to_string cid) (AccessPointID.to_string apid)
   | `AccessPointID (`ServerAccessPoint (apid)) ->
-      "Server access point " ^ (AccessPointID.to_string apid)
+     fprintf ppf "Server access point %s" (AccessPointID.to_string apid)
+  | `Pid (`ServerPid i) -> fprintf ppf "Pid Server (%s)" (ProcessID.to_string i)
+  | `Pid (`ClientPid (cid, i)) -> fprintf ppf "Pid Client num %s, process %s" (ClientID.to_string cid) (ProcessID.to_string i)
+and p_record_fields ppf = function
+  | [] -> fprintf ppf ""
+  | [(l, v)] -> fprintf ppf "@[@{<recordlabel>%a@} = %a@]"
+                        p_record_label l
+                        p_value v
+  | (l, v)::xs -> fprintf ppf "@{<recordlabel>%a@} = %a,@ "
+                          p_record_label l
+                          p_value v;
+                  p_record_fields ppf xs
+and p_record_label ppf = function
+  | s when StringSet.mem s keywords -> fprintf ppf "\"%s\"" s
+  (* TODO labels with spaces and other "weird" characters that would confuse the lexer. *)
+  | s -> fprintf ppf "%s" s
+and p_list_elements ppf = function
+  | [] -> assert false (* We only call this with lists of at least one element *)
+  | [v] -> fprintf ppf "%a]@]" p_value v
+  | v::vs -> fprintf ppf "%a,@ " p_value v;
+             p_list_elements ppf vs
+and p_tuple ppf (fields : (string * t) list) =
+  let fields = List.map (function
+                          | x, y when numberp x  -> (int_of_string x, y)
+                          | _ -> raise Not_tuple) fields in
+  let sorted = List.sort (fun (x,_) (y, _) -> compare x y) fields in
+  let numbers, values = List.split sorted in
+  if ordered_consecutive numbers && List.length numbers > 1 && List.hd numbers = 1 then
+    fprintf ppf "(@[<hv 0>%a@])" p_tuple_elements values
+  else raise Not_tuple
+and p_tuple_elements ppf = function
+  | [] -> assert false
+  | [v] -> fprintf ppf "%a" p_value v
+  | v::vs -> fprintf ppf "%a,@ " p_value v;
+             p_tuple_elements ppf vs
+(* Is this function needed? *)
+and p_xml ?(close_tags=false) ppf = fun (xml: xml) ->
+  pp_print_list (p_xmlitem ~close_tags:close_tags) ppf xml
+and p_xmlitem ?(close_tags=false) ppf: xmlitem -> unit = function
+  | Attr (k, v) -> let escape = Str.global_replace (Str.regexp "\"") "\\\"" in
+                   fprintf ppf "@{<xmlattr>%s@}=\"%s\"" k (escape v)
+  | Text s -> fprintf ppf "%s" (xml_escape s)
+  | Node (tag, children) ->
+     begin
+       match attrs children, nodes children with
+       | [], [] when not close_tags ->
+          fprintf ppf "<@{<xmltag>%s@}/>" tag
+       | attrs, [] when not close_tags ->
+          fprintf ppf "@[<hv 2><@{<xmltag>%s@}@ @[<hv>%a@]/>@]"
+                  tag
+                  (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
+       | [], nodes ->
+          fprintf ppf "@[<hv 4><@{<xmltag>%s@}>@,%a@;<0 -4></@{<xmltag>%s@}>@]"
+                  tag
+                  (p_xml ~close_tags:close_tags) nodes
+                  (* (pp_print_list (p_xml ~close_tags:close_tags)) nodes *)
+                  tag
+       | attrs, nodes ->
+          fprintf ppf "@[<hv 4><@{<xmltag>%s@}@;<1 -2>@[<hv>%a@]>@,%a@;<0 -4></@{<xmltag>%s@}>@]"
+                  tag
+                  (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
+                  (p_xml ~close_tags:close_tags) nodes
+                  (* (pp_print_list (p_xml ~close_tags:close_tags)) nodes *)
+                  tag
+     end
 
-(* let string_of_cont : continuation -> string = *)
-(*   fun cont -> Show.show show_compressed_continuation (compress_continuation cont) *)
+let string_of_pretty pretty_fun arg : string =
+  let b = Buffer.create 200 in
+  let f = Format.formatter_of_buffer b in
+  let (out_string, out_flush) = pp_get_formatter_output_functions f () in
+  (* Redefine the meaning of the pretty printing functions. The idea
+     is to ignore newlines introduced by pretty printing as well as
+     indentation. *)
+  let out_functions = {out_string = out_string;
+                       out_flush = out_flush;
+                       out_newline = ignore;
+                       out_spaces = function 0 -> () | _ -> out_string " " 0 1; } in
+  pp_set_formatter_out_functions f out_functions;
+  pretty_fun f arg;
+  pp_print_flush f ();
+  Buffer.contents b
+
+(** Get a string representation of a value
+
+    You might want to use `p_value` on a suitable output stream/formatter instead. *)
+let string_of_value: t -> string =
+  string_of_pretty p_value
+
+let string_of_xml ?(close_tags = false): xml -> string =
+  string_of_pretty (p_xml ~close_tags:close_tags)
+
+(* and string_of_dist_pid = function *)
+(*   | `ServerPid i -> "Server (" ^ (ProcessID.to_string i) ^ ")" *)
+(*   | `ClientPid (cid, i) -> *)
+(*       "Client num " ^ (ClientID.to_string cid) ^ ", process " ^ (ProcessID.to_string i) *)
+(* and string_of_channel (ep1, ep2) = *)
+(*   let ep1_str = ChannelID.to_string ep1 in *)
+(*   let ep2_str = ChannelID.to_string ep2 in *)
+(*   "Session channel. EP1: " ^ ep1_str ^ ", EP2: " ^ ep2_str *)
+
+(* and string_of_access_point = function *)
+(*   | `AccessPointID (`ClientAccessPoint (cid, apid)) -> *)
+(*       "Client access point on client " ^ (ClientID.to_string cid) ^ ", " ^ *)
+(*       "APID: " ^ (AccessPointID.to_string apid) *)
+(*   | `AccessPointID (`ServerAccessPoint (apid)) -> *)
+(*       "Server access point " ^ (AccessPointID.to_string apid) *)
 
 (** {1 Record manipulations} *)
 

@@ -162,13 +162,9 @@ val unbox_access_point : t -> access_point
 
 val intmap_of_record : t -> t Utility.intmap option
 
-val string_as_charlist : string -> t
-val charlist_as_string : t -> string
 val string_of_value : t -> string
 val string_of_xml : ?close_tags:bool -> xml -> string
-val string_of_primitive : primitive_value -> string
-val string_of_tuple : (string * t) list -> string
-val string_of_cont : continuation -> string
+val p_value: Format.formatter -> t -> unit
 
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string
