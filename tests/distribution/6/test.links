@@ -38,7 +38,7 @@ fun main() {
   var (ap : AP(S2)) = new();
   var _ = spawn { Server.main(ap) };
   addRoute("/", fun (_, _) { Client.main() });
-  serveWebsockets("/ws/");
+  serveWebsockets();
   servePages();
 }
 

@@ -10,7 +10,7 @@ module Client {
 fun main() {
   var ap = new();
   addRoute("/", fun (_, _) { Client.main(ap) } );
-  serveWebsockets("/ws/");
+  serveWebsockets();
   servePages()
 }
 
