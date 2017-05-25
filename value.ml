@@ -333,33 +333,117 @@ module Env = struct
       empty
 
   (** Compression **)
-  let compress env compress_t =
+  type 'cv compressed_t = (Ir.var * 'cv) list
+        deriving (Show, Eq, Typeable, Dump, Pickle)
+  let compress (compress_val : 'v -> 'cv) (env : 'v t)  : 'cv compressed_t =
     List.rev
     (fold
        (fun name (v, scope) compressed ->
           if scope = `Global then
             compressed
           else
-            (name, compress_t v)::compressed)
+            (name, compress_val v)::compressed)
        env
        [])
 
-  let uncompress globals env uncompress_t =
+  let uncompress (uncompress_val : 'v t -> 'cv -> 'v) globals (env : 'cv compressed_t) : 'v t =
     try
       List.fold_left
         (fun env (name, v) ->
-          bind name (uncompress_t globals v, Tables.find Tables.scopes name) env)
+          bind name (uncompress_val globals v, Tables.find Tables.scopes name) env)
         empty
         env
     with NotFound str -> failwith("In uncompress_env: " ^ str)
 end
 
-type frame = Ir.scope * Ir.var * env * Ir.computation
-and continuation = [
-  | `PureCont of frame list
-  | `GenCont of frame list list
-  ]
-and t = [
+module type FRAME = sig
+  type 'v t
+     deriving (Show)
+  val of_expr : 'v Env.t -> Ir.tail_computation -> 'v t
+  val make : Ir.scope -> Ir.var -> 'v Env.t -> Ir.computation -> 'v t
+end
+
+module Frame = struct
+  type 'v t = Ir.scope * Ir.var * 'v Env.t * Ir.computation
+     deriving (Show)
+
+  let make scope var env comp = (scope, var, env, comp)
+  let of_expr env tc =
+    make (`Local : Ir.scope) (Var.dummy_var : Ir.var) env (([], tc) : Ir.computation)
+
+  (** Compression **)
+  type 'cv compressed_t = Ir.var * 'cv Env.compressed_t
+     deriving (Show, Eq, Typeable, Dump, Pickle)
+  let compress (compress_val : 'v -> 'cv) (_, var, locals, _) : 'cv compressed_t =
+    (var, Env.compress compress_val locals)
+  let uncompress (uncompress_val : 'v Env.t -> 'cv -> 'v) globals (var, env) : 'v t =
+    let scope = Tables.find Tables.scopes var in
+    let body = Tables.find Tables.cont_defs var in
+    let env = Env.uncompress uncompress_val globals env in
+    let locals = Env.localise env var in
+    (scope, var, locals, body)
+end
+
+module type CONTINUATION = sig
+  type ('v, 'r) t
+     deriving (Show)
+
+  module Frame : FRAME
+
+  val empty : ('v, 'r) t
+  val (<>)  : ('v, 'r) t -> ('v, 'r) t -> ('v, 'r) t
+  val (&>)  : 'v Frame.t -> ('v, 'r) t -> ('v, 'r) t
+
+  val apply : eval:('v Env.t -> ('v, 'r) t -> Ir.computation -> 'r Lwt.t) ->
+              finish:('v Env.t -> 'v -> 'r Lwt.t) ->
+              env:'v Env.t ->
+              ('v, 'r) t ->
+              'v -> 'r Lwt.t
+
+  val to_string : ('v, 'r) t -> string
+end
+
+module type COMPRESSABLE_CONTINUATION = sig
+  include CONTINUATION
+
+
+  type 'cv compressed_t
+     deriving (Show, Eq, Typeable, Dump, Pickle)
+  val compress : compress_val:('v -> 'cv) -> ('v, 'r) t -> 'cv compressed_t
+  val uncompress : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_t -> ('v, 'r) t
+end
+
+module PureContinuation = struct
+  type ('v, 'r) t = ('v Frame.t) list
+      deriving (Show)
+
+  let empty = []
+  let (<>) k k' = k @ k'
+  let (&>) f k = f :: k
+
+  let apply ~eval ~finish ~env k v =
+    match k with
+    | [] -> finish env v
+    | (scope, var, locals, comp) :: cont ->
+       let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
+       eval env cont comp
+  let to_string = function
+    | _ -> failwith "Continuation.to_string not yet implemented."
+
+  (** Compression **)
+  type 'cv compressed_t = ('cv Frame.compressed_t) list
+        deriving (Show, Eq, Typeable, Dump, Pickle)
+  let compress ~compress_val cont =
+    List.map (Frame.compress compress_val) cont
+  let uncompress ~uncompress_val globals cont =
+    List.map (Frame.uncompress uncompress_val globals) cont
+
+  module Frame = Frame
+end
+
+module Continuation : COMPRESSABLE_CONTINUATION = PureContinuation
+
+type t = [
 | primitive_value
 | `List of t list
 | `Record of (string * t) list
@@ -374,61 +458,11 @@ and t = [
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
+and continuation = (t, (env * t)) Continuation.t
 and env = t Env.t
   deriving (Show)
 
 type delegated_chan = (chan * (t list))
-
-module type FRAME = sig
-  type t = frame
-  val of_expr : env -> Ir.tail_computation -> t
-  val make : Ir.scope -> Ir.var -> env -> Ir.computation -> t
-end
-
-module Frame = struct
-  type t = frame
-
-  let make scope var env comp = (scope, var, env, comp)
-  let of_expr env tc =
-    make (`Local : Ir.scope) (Var.dummy_var : Ir.var) (env : env) (([], tc) : Ir.computation)
-end
-
-module type CONTINUATION = sig
-  type t = continuation
-
-  module Frame : FRAME
-
-  val empty : t
-  val (<>)  : t -> t -> t
-  val (&>)  : Frame.t -> t -> t
-
-  val to_string : t -> string
-end
-
-module PureContinuation = struct
-  type t = continuation
-
-  module Frame = Frame
-
-  let empty = `PureCont []
-  let (<>) k k' =
-    match k, k' with
-    | `PureCont xs, `PureCont ys -> `PureCont (xs @ ys)
-    | _ -> assert false
-
-  let (&>) f = function
-    | `PureCont fs -> `PureCont (f :: fs)
-    | _ -> assert false
-
-  let to_string = function
-    | _ -> failwith "Continuation.to_string not yet implemented."
-end
-
-module Continuation = PureContinuation
-
-let map_pure_continuation f = function
-  | `PureCont fs  -> `PureCont (List.map f fs)
-  | `GenCont fss  -> `GenCont (List.map (fun fs -> List.map f fs) fss)
 
 (** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [
@@ -438,10 +472,7 @@ type compressed_primitive_value = [
 ]
   deriving (Show, Eq, Typeable, Pickle, Dump)
 
-type compressed_continuation = [
-  | `PureCont of (Ir.var * compressed_env) list
-  | `GenCont  of (Ir.var * compressed_env) list list
-  ]
+type compressed_continuation = compressed_t Continuation.compressed_t
 and compressed_t = [
 | compressed_primitive_value
 | `List of compressed_t list
@@ -451,7 +482,7 @@ and compressed_t = [
 | `PrimitiveFunction of string
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
-and compressed_env = (Ir.var * compressed_t) list
+and compressed_env = compressed_t Env.compressed_t
   deriving (Show, Eq, Typeable, Dump, Pickle)
 
 let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
@@ -461,20 +492,16 @@ let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
         `Table (db, table, keys, Types.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
 
-let rec compress_continuation (cont:continuation) : compressed_continuation =
-  let compress_frame (_scope, var, locals, _body) =
-    (var, compress_env locals)
-  in
-  map_pure_continuation compress_frame cont
-and compress_t (v : t) : compressed_t =
-  let cv = compress_t in
+let rec compress_continuation cont : compressed_continuation = Continuation.compress ~compress_val cont
+and compress_val (v : t) : compressed_t =
+  let cv = compress_val in
     match v with
       | #primitive_value as v -> compress_primitive_value v
       | `List vs -> `List (List.map cv vs)
       | `Record fields -> `Record(List.map(fun(name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
       | `FunctionPtr(x, fvs) ->
-        `FunctionPtr (x, opt_map compress_t fvs)
+        `FunctionPtr (x, opt_map cv fvs)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
@@ -483,7 +510,6 @@ and compress_t (v : t) : compressed_t =
       | `SessionChannel _ -> assert false (* mmmmm *)
       | `AccessPointID _ -> assert false (* mmmmm *)
       | `SpawnLocation _sl -> assert false (* wheeee! *)
-and compress_env env : compressed_env = Env.compress env compress_t
 
 (* let string_of_value : t -> string = *)
 (*   fun v -> Show.show show_compressed_t (compress_t v) *)
@@ -505,17 +531,10 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
           `Database database
 
 let rec uncompress_continuation globals cont
-    : continuation =
-  let uncompress_frame (var, env) =
-    let scope = Tables.find Tables.scopes var in
-    let body = Tables.find Tables.cont_defs var in
-    let env = uncompress_env globals env in
-    let locals = Env.localise env var in
-    (scope, var, locals, body)
-  in
-  map_pure_continuation uncompress_frame cont
-and uncompress_t globals (v : compressed_t) : t =
-  let uv = uncompress_t globals in
+        : continuation =
+  Continuation.uncompress ~uncompress_val globals cont
+and uncompress_val globals (v : compressed_t) : t =
+  let uv = uncompress_val globals in
     match v with
       | #compressed_primitive_value as v -> uncompress_primitive_value v
       | `List vs -> `List (List.map uv vs)
@@ -525,7 +544,6 @@ and uncompress_t globals (v : compressed_t) : t =
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
-and uncompress_env globals env : env = Env.uncompress globals env uncompress_t
 
 let string_as_charlist s : t =
   `List (List.rev (List.rev_map (fun x -> `Char x) (explode s)))
@@ -786,7 +804,7 @@ let marshal_value : t -> string =
   fun v ->
     let save = (value_serialiser ()).save in
     (* Debug.print ("marshalling: "^Show_t.show v); *)
-      base64encode (save (compress_t v))
+      base64encode (save (compress_val v))
 
 let unmarshal_continuation env : string -> continuation =
     let load = (continuation_serialiser ()).load in
@@ -798,7 +816,7 @@ let unmarshal_value env : string -> t =
     (* Debug.print ("unmarshalling string: " ^ s); *)
     let v = (load (base64decode s)) in
     (* Debug.print ("unmarshalling: " ^ Show_compressed_t.show v); *)
-      uncompress_t (Env.globals env) v
+      uncompress_val (Env.globals env) v
 
 (** Return the continuation frame that evaluates the given expression
     in the given environment. *)

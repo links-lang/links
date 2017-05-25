@@ -11,42 +11,22 @@ let find_fun = Tables.find Tables.fun_defs
 let dynamic_static_routes = Settings.add_bool ("dynamic_static_routes", false, `User)
 let allow_static_routes = ref true
 
-module type CONTINUATION = sig
-  include Value.CONTINUATION
-  type r
-  val apply : Value.env -> t -> Value.t -> r
-end
+(* module type EVALUATOR = functor (Webs : WEBSERVER) -> sig *)
+(*   type r = Proc.thread_result Lwt.t *)
 
-module type EVALUATOR = sig
-  type r = Proc.thread_result Lwt.t
+(*   val computation : Value.env -> Value.continuation -> Ir.computation -> r *)
+(*   val finish : Value.env -> Value.t -> r *)
+(*   val apply : Value.continuation -> Value.env -> Value.t * Value.t list -> r *)
+(*   val apply_cont : Value.continuation -> Value.env -> Value.t -> r *)
+(*   val run_program : Value.env -> Ir.program -> (Value.env * Value.t) *)
+(*   val run_defs : Value.env -> Ir.binding list -> Value.env *)
+(* end *)
 
-  val computation : Value.env -> Value.continuation -> Ir.computation -> r
-  val finish : Value.env -> Value.t -> r
-  val apply : Value.continuation -> Value.env -> Value.t * Value.t list -> r
-  val apply_cont : Value.continuation -> Value.env -> Value.t -> r
-  val run_program : Value.env -> Ir.program -> (Value.env * Value.t)
-  val run_defs : Value.env -> Ir.binding list -> Value.env
-end
-
-module Eval_PureContinuation = functor (Eval : EVALUATOR) -> struct
-  include Value.Continuation
-
-  type r = Eval.r
-
-  let apply env k v =
-    match k with
-    | `PureCont [] -> Eval.finish env v
-    | `PureCont ((scope, var, locals, comp) :: cont) ->
-       let env = Value.Env.bind var (v, scope) (Value.Env.shadow env ~by:locals) in
-       Eval.computation env (`PureCont cont) comp
-    | _ -> assert false
-end
-
-module Evaluator = functor (K : CONTINUATION with type r = Proc.thread_result Lwt.t)(Webs : WEBSERVER) ->
+module Eval = functor (Webs : WEBSERVER) ->
 struct
 
-  type r = Proc.thread_result Lwt.t
-  type k = Value.continuation
+  type continuation = Value.continuation
+  module K = Value.Continuation
 
   exception EvaluationError of string
   exception Wrong
@@ -96,7 +76,7 @@ struct
         Value.Env.find var env
       | Some v -> v
 
-   let serialize_call_to_client req_data ((continuation : K.t), name, args) =
+   let serialize_call_to_client req_data ((continuation : continuation), name, args) =
      let open Json in
      let client_id = RequestData.get_client_id req_data in
      let st = List.fold_left
@@ -218,14 +198,14 @@ struct
       (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
       (* end *)
     | `Coerce (v, _) -> value env v
-  and apply_access_point cont env : Value.spawn_location -> Proc.thread_result Lwt.t = function
+  and apply_access_point (cont : continuation) env : Value.spawn_location -> Proc.thread_result Lwt.t = function
       | `ClientSpawnLoc cid ->
           Session.new_client_access_point cid >>= fun apid ->
           apply_cont cont env (`AccessPointID (`ClientAccessPoint (cid, apid)))
       | `ServerSpawnLoc ->
           Session.new_server_access_point () >>= fun apid ->
           apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
-  and apply (cont : K.t) env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
+  and apply (cont : continuation) env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) = find_fun f in
@@ -478,11 +458,11 @@ struct
     | `Continuation _,       _  ->
         eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
-  and apply_cont cont env v =
+  and apply_cont (cont : continuation) env v =
     Proc.yield (fun () -> apply_cont' cont env v)
-  and apply_cont' cont env v : Proc.thread_result Lwt.t =
-    K.apply env cont v
-  and computation env cont (bindings, tailcomp) : Proc.thread_result Lwt.t =
+  and apply_cont' (cont : continuation) env v : Proc.thread_result Lwt.t =
+    K.apply ~eval:computation ~finish ~env cont v
+  and computation env (cont : continuation) (bindings, tailcomp) : Proc.thread_result Lwt.t =
     match bindings with
       | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
@@ -502,7 +482,7 @@ struct
           | `Alien _ ->
             computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
-  and tail_computation env (cont : K.t) : Ir.tail_computation -> Proc.thread_result Lwt.t = function
+  and tail_computation env (cont : continuation) : Ir.tail_computation -> Proc.thread_result Lwt.t = function
     (* | `Return (`ApplyPure _ as v) -> *)
     (*   let w = (value env v) in *)
     (*     Debug.print ("ApplyPure"); *)
@@ -533,7 +513,7 @@ struct
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
-  and special env (cont : K.t) : Ir.special -> Proc.thread_result Lwt.t = function
+  and special env (cont : continuation) : Ir.special -> Proc.thread_result Lwt.t = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Table (db, name, keys, (readtype, _, _)) ->
@@ -657,6 +637,7 @@ struct
               Session.block inp (Proc.get_current_pid ());
               Proc.block (fun () -> apply_cont K.(choice_frame &> cont) env (`Record []))
       end
+  and finish env v = Proc.finish (env, v)
     (*****************)
 
   let eval : Value.env -> program -> Proc.thread_result Lwt.t =
@@ -688,12 +669,12 @@ struct
   (** [apply_cont_toplevel cont env v] applies a continuation to a value
       and returns the result. Finishing the main thread normally comes
       here immediately. *)
-  let apply_cont_toplevel (cont : K.t) env v =
+  let apply_cont_toplevel (cont : continuation) env v =
     try snd (Proc.run (fun () -> apply_cont cont env v)) with
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
-  let apply_with_cont (cont : K.t) env (f, vs) =
+  let apply_with_cont (cont : continuation) env (f, vs) =
     try snd (Proc.run (fun () -> apply cont env (f, vs))) with
     |  NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                  " while interpreting.")
@@ -705,17 +686,4 @@ struct
     try snd (Proc.run (fun () -> eval env program)) with
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
-
-  let finish env v = Proc.finish (env, v)
-end
-
-module Eval = functor(Webs : WEBSERVER) -> struct
-
-  module rec DefaultEval : EVALUATOR = Evaluator(PureCont)(Webs)
-  and PureCont : CONTINUATION with type r = Proc.thread_result Lwt.t = Eval_PureContinuation(DefaultEval)
-
-  let apply = DefaultEval.apply
-  let apply_cont = DefaultEval.apply_cont
-  let run_program = DefaultEval.run_program
-  let run_defs = DefaultEval.run_defs
 end

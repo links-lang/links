@@ -108,6 +108,35 @@ end
 
 module Env : ENV
 
+(* Continuation *)
+module type FRAME = sig
+  type 'v t
+     deriving (Show)
+  val of_expr : 'v Env.t -> Ir.tail_computation -> 'v t
+  val make : Ir.scope -> Ir.var -> 'v Env.t -> Ir.computation -> 'v t
+end
+
+module type CONTINUATION = sig
+  type ('v, 'r) t
+     deriving (Show)
+
+  module Frame : FRAME
+
+  val empty : ('v, 'r) t
+  val (<>)  : ('v, 'r) t -> ('v, 'r) t -> ('v, 'r) t
+  val (&>)  : 'v Frame.t -> ('v, 'r) t -> ('v, 'r) t
+
+  val apply : eval:('v Env.t -> ('v, 'r) t -> Ir.computation -> 'r Lwt.t) ->
+              finish:('v Env.t -> 'v -> 'r Lwt.t) ->
+              env:'v Env.t ->
+              ('v, 'r) t ->
+              'v -> 'r Lwt.t
+
+  val to_string : ('v, 'r) t -> string
+end
+
+module Continuation : CONTINUATION
+
 type t = [
 | primitive_value
 | `List of t list
@@ -122,35 +151,10 @@ type t = [
 | `SessionChannel of chan
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
-  ]
-and frame = Ir.scope * Ir.var * env * Ir.computation
-and continuation = [
-  | `PureCont of frame list
-  | `GenCont of frame list list
-  ]
+]
+and continuation = (t, env * t) Continuation.t
 and env = t Env.t
     deriving (Show)
-
-(* Continuation *)
-module type FRAME = sig
-  type t = frame
-  val of_expr : env -> Ir.tail_computation -> t
-  val make : Ir.scope -> Ir.var -> env -> Ir.computation -> t
-end
-
-module type CONTINUATION = sig
-  type t = continuation
-
-  module Frame : FRAME
-
-  val empty : t
-  val (<>)  : t -> t -> t
-  val (&>)  : Frame.t -> t -> t
-
-  val to_string : t -> string
-end
-
-module Continuation : CONTINUATION
 
 type delegated_chan = (chan * (t list))
 
