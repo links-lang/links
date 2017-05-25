@@ -73,10 +73,20 @@ struct
   type routing_table = (string, providers) Trie.t
 
   let rt : routing_table ref = ref Trie.empty
+
   let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref =
     ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
+
+  (* Keeps track of whether websocket requests are allowed. *)
+  let accepting_websocket_requests = ref false
+  let is_accepting_websocket_requests () =
+    !accepting_websocket_requests
+  let set_accepting_websocket_requests v =
+    accepting_websocket_requests := v
+
+  let ws_url = Settings.get_value Basicsettings.websocket_url
 
   let set_prelude bs =
     prelude := bs
@@ -107,7 +117,7 @@ struct
           Debug.print ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
           Debug.print ("Decoded client ID: " ^ decoded_client_id);
-          Lwt.return (ClientID.of_string decoded_client_id)
+          ClientID.of_string decoded_client_id
       | None -> failwith "Client ID expected but not found."
 
 
@@ -132,7 +142,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt render_cont _conn req body =
+    let callback rt render_cont conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt_body.to_string body >>= fun body_string ->
@@ -158,6 +168,8 @@ struct
       (* Precondition: valenv has been initialised with the correct request data *)
       let run_page (valenv, v) () =
         let cid = RequestData.get_client_id (Value.request_data valenv) in
+        let ws_conn_url =
+          if !accepting_websocket_requests then Some (ws_url) else None in
         Eval.apply (render_cont ()) valenv
         (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)]) >>= fun (valenv, v) ->
           let page = Irtojs.generate_real_client_page
@@ -167,15 +179,19 @@ struct
                         * they should all end up in valenv... *)
                        (!prelude @ !globals)
                        (valenv, v)
+                       ws_conn_url
           in
         Lwt.return ("text/html", page) in
 
       let render_servercont_cont valenv v =
+        let ws_conn_url =
+          if !accepting_websocket_requests then Some (ws_url) else None in
         Irtojs.generate_real_client_page
           ~cgi_env:cgi_args
           (Lib.nenv, Lib.typing_env)
           (!prelude @ !globals)
-          (valenv, v) in
+          (valenv, v)
+          ws_conn_url in
 
       let serve_static base uri_path mime_types =
           let fname =
@@ -199,6 +215,8 @@ struct
           Debug.print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
           Server.respond_file ~headers ~fname () in
 
+      let is_websocket_request = is_prefix_of ws_url in
+
       let route rt =
         let rec up = function
           | [], _ -> Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
@@ -210,7 +228,7 @@ struct
           | ([], { as_page = Some (Right (valenv, v)); _ }) :: _, true
           | (_, { as_directory = Some (Right (valenv, v)); _ }) :: _, _ ->
              let (_, nenv, tyenv) = !env in
-             get_or_make_client_id cgi_args >>= fun (cid) ->
+             let cid = get_or_make_client_id cgi_args in
              let req_data = RequestData.new_request_data cgi_args cookies cid in
              let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
              Webif.do_request
@@ -235,6 +253,17 @@ struct
              end
           | s -> s in
         serve_static linkslib uri_path []
+      (* Handle websocket connections *)
+      else if (is_websocket_request path) then
+        let websocket_path = Settings.get_value Basicsettings.websocket_url in
+        let ws_url_length = String.length websocket_path in
+        (* TODO: Sanity checking of client ID here *)
+        let client_id = ClientID.of_string @@
+          String.sub path ws_url_length ((String.length path) - ws_url_length) in
+        Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
+          (ClientID.to_string client_id));
+        Cohttp_lwt_body.drain_body body >>= fun () ->
+        Proc.Websockets.accept client_id req (fst conn)
       else
         route rt in
 

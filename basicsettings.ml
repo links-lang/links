@@ -146,3 +146,6 @@ let links_file_paths = Settings.add_string("links_file_paths", "", `User)
 (* Pretty print values (outside web mode) *)
 let print_pretty = Settings.add_bool ("print_pretty", false, `User)
 let print_colors = Settings.add_bool ("print_colors", false, `User)
+
+(* Base URL for websocket connections *)
+let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)

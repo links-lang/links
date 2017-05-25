@@ -694,6 +694,18 @@ module EitherMonad = Deriving_monad.MonadPlusUtils(
       | m      -> m
   end)
 
+(* Extensions of queue module to handle queue -> list and list -> queue
+ * conversions *)
+module Queue = struct
+  include Queue
+  let to_list q =
+    List.rev @@ Queue.fold (fun acc x -> x :: acc) [] q
+
+  let of_list xs =
+    let q = Queue.create () in
+    List.iter (fun x -> Queue.add x q) xs;
+    q
+end
 
 module OptionUtils =
 struct

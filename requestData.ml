@@ -24,7 +24,7 @@ let new_request_data cgi_params cookies client_id = {
     http_response_headers = ref [];
     http_response_code = ref 200;
     client_id = ref client_id;
-  }
+}
 
 let get_cgi_parameters req_data = !(req_data.cgi_parameters)
 let set_cgi_parameters req_data x = req_data.cgi_parameters := x
