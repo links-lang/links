@@ -252,6 +252,108 @@ type access_point = [
 type chan = (channel_id * channel_id)
   deriving (Show)
 
+module type ENV =
+sig
+  type 'a t
+     deriving (Show)
+  val set_request_data : 'a t -> RequestData.request_data -> 'a t
+  val request_data : 'a t -> RequestData.request_data
+  val empty : 'a t
+  val bind  : Ir.var -> ('a * Ir.scope) -> 'a t -> 'a t
+  val find : Ir.var -> 'a t -> 'a
+  val mem : Ir.var -> 'a t -> bool
+  val lookup : Ir.var -> 'a t -> 'a option
+  val lookupS : Ir.var -> 'a t -> ('a * Ir.scope) option
+  val shadow : 'a t -> by:'a t -> 'a t
+  val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
+  val globals : 'a t -> 'a t
+  val request_data : 'a t -> RequestData.request_data
+  (* used only by json.ml, webif.ml ... *)
+  val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
+  val extend : 'a t -> ('a * Ir.scope) Utility.intmap -> 'a t
+  val localise : 'a t -> Ir.var -> 'a t
+end
+
+module Env = struct
+  type 'a t = {
+      all : ('a * Ir.scope) Utility.intmap;
+      globals : ('a * Ir.scope) Utility.intmap;
+      request_data : RequestData.request_data
+    }
+    deriving (Show)
+
+  let set_request_data env rd = { env with request_data = rd }
+  let request_data env = env.request_data
+  (** {1 Environment stuff} *)
+  (** {2 IntMap-based implementation with global memoization} *)
+
+  let empty = {
+      all = IntMap.empty;
+      globals = IntMap.empty;
+      request_data = RequestData.new_empty_request_data ()
+    }
+  let bind name (v,scope) env =
+    (* Maintains globals as submap of global bindings. *)
+    match scope with
+      `Local ->
+      { env with all = IntMap.add name (v,scope) env.all }
+    | `Global ->
+       { env with
+         all = IntMap.add name (v,scope) env.all;
+         globals = IntMap.add name (v,scope) env.globals;
+       }
+  let find name env = fst (IntMap.find name env.all)
+  let mem name env = IntMap.mem name env.all
+  let lookup name env = opt_map fst (IntMap.lookup name env.all)
+  let lookupS name env = IntMap.lookup name env.all
+  let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
+
+  let get_parameters env = env.all
+
+  let shadow env ~by:env_by =
+    (* Assumes that globals never change *)
+    let by_all = env_by.all in
+    IntMap.fold (fun name v env -> bind name v env) by_all env
+
+  let fold f env a = IntMap.fold f env.all a
+  let globals env = { env with all = env.globals }
+
+  let localise env var =
+    (* let module M = Deriving_Show.Show_option(Show_intset) in *)
+    (* Debug.print ("cont vars (" ^ string_of_int var ^ "): " ^ *)
+    (*              M.show (Tables.lookup Tables.cont_vars var)); *)
+    IntSet.fold
+      (fun name locals ->
+        match lookupS name env with
+        | None
+          | Some (_, `Global) -> locals
+        | Some (v, `Local) ->
+           bind name (v, `Local) locals)
+      (Tables.find Tables.cont_vars var)
+      empty
+
+  (** Compression **)
+  let compress env compress_t =
+    List.rev
+    (fold
+       (fun name (v, scope) compressed ->
+          if scope = `Global then
+            compressed
+          else
+            (name, compress_t v)::compressed)
+       env
+       [])
+
+  let uncompress globals env uncompress_t =
+    try
+      List.fold_left
+        (fun env (name, v) ->
+          bind name (uncompress_t globals v, Tables.find Tables.scopes name) env)
+        empty
+        env
+    with NotFound str -> failwith("In uncompress_env: " ^ str)
+end
+
 type frame = Ir.scope * Ir.var * env * Ir.computation
 and continuation = [
   | `PureCont of frame list
@@ -272,16 +374,10 @@ and t = [
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
-and env = {
-  all : (t * Ir.scope) Utility.intmap;
-  globals : (t * Ir.scope) Utility.intmap;
-  request_data : RequestData.request_data
-}
+and env = t Env.t
   deriving (Show)
 
 type delegated_chan = (chan * (t list))
-
-let set_request_data env rd = { env with request_data = rd }
 
 module type FRAME = sig
   type t = frame
@@ -334,42 +430,6 @@ let map_pure_continuation f = function
   | `PureCont fs  -> `PureCont (List.map f fs)
   | `GenCont fss  -> `GenCont (List.map (fun fs -> List.map f fs) fss)
 
-let request_data env = env.request_data
-
-(** {1 Environment stuff} *)
-(** {2 IntMap-based implementation with global memoization} *)
-
-let empty_env = {
-  all = IntMap.empty;
-  globals = IntMap.empty;
-  request_data = RequestData.new_empty_request_data ()
-}
-let bind name (v,scope) env =
-  (* Maintains globals as submap of global bindings. *)
-  match scope with
-    `Local ->
-      { env with all = IntMap.add name (v,scope) env.all }
-  | `Global ->
-      { env with
-          all = IntMap.add name (v,scope) env.all;
-          globals = IntMap.add name (v,scope) env.globals;
-      }
-let find name env = fst (IntMap.find name env.all)
-let mem name env = IntMap.mem name env.all
-let lookup name env = opt_map fst (IntMap.lookup name env.all)
-let lookupS name env = IntMap.lookup name env.all
-let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
-
-let get_parameters env = env.all
-
-let shadow env ~by:env_by =
-(* Assumes that globals never change *)
-  let by_all = env_by.all in
-  IntMap.fold (fun name v env -> bind name v env) by_all env
-
-let fold f env a = IntMap.fold f env.all a
-let globals env = { env with all = env.globals }
-
 (** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [
 | primitive_value_basis
@@ -401,21 +461,6 @@ let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
         `Table (db, table, keys, Types.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
 
-let localise env var =
-  (* let module M = Deriving_Show.Show_option(Show_intset) in *)
-  (* Debug.print ("cont vars (" ^ string_of_int var ^ "): " ^ *)
-  (*              M.show (Tables.lookup Tables.cont_vars var)); *)
-  IntSet.fold
-    (fun name locals ->
-       match lookupS name env with
-         | None
-         | Some (_, `Global) -> locals
-         | Some (v, `Local) ->
-             bind name (v, `Local) locals)
-    (Tables.find Tables.cont_vars var)
-    empty_env
-
-
 let rec compress_continuation (cont:continuation) : compressed_continuation =
   let compress_frame (_scope, var, locals, _body) =
     (var, compress_env locals)
@@ -438,16 +483,7 @@ and compress_t (v : t) : compressed_t =
       | `SessionChannel _ -> assert false (* mmmmm *)
       | `AccessPointID _ -> assert false (* mmmmm *)
       | `SpawnLocation _sl -> assert false (* wheeee! *)
-and compress_env env : compressed_env =
-  List.rev
-    (fold
-       (fun name (v, scope) compressed ->
-          if scope = `Global then
-            compressed
-          else
-            (name, compress_t v)::compressed)
-       env
-       [])
+and compress_env env : compressed_env = Env.compress env compress_t
 
 (* let string_of_value : t -> string = *)
 (*   fun v -> Show.show show_compressed_t (compress_t v) *)
@@ -474,7 +510,7 @@ let rec uncompress_continuation globals cont
     let scope = Tables.find Tables.scopes var in
     let body = Tables.find Tables.cont_defs var in
     let env = uncompress_env globals env in
-    let locals = localise env var in
+    let locals = Env.localise env var in
     (scope, var, locals, body)
   in
   map_pure_continuation uncompress_frame cont
@@ -489,14 +525,7 @@ and uncompress_t globals (v : compressed_t) : t =
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
-and uncompress_env globals env : env =
-  try
-  List.fold_left
-    (fun env (name, v) ->
-       bind name (uncompress_t globals v, Tables.find Tables.scopes name) env)
-    empty_env
-    env
-  with NotFound str -> failwith("In uncompress_env: " ^ str)
+and uncompress_env globals env : env = Env.uncompress globals env uncompress_t
 
 let string_as_charlist s : t =
   `List (List.rev (List.rev_map (fun x -> `Char x) (explode s)))
@@ -761,7 +790,7 @@ let marshal_value : t -> string =
 
 let unmarshal_continuation env : string -> continuation =
     let load = (continuation_serialiser ()).load in
-    base64decode ->- load ->- uncompress_continuation (globals env)
+    base64decode ->- load ->- uncompress_continuation (Env.globals env)
 
 let unmarshal_value env : string -> t =
   fun s ->
@@ -769,7 +798,7 @@ let unmarshal_value env : string -> t =
     (* Debug.print ("unmarshalling string: " ^ s); *)
     let v = (load (base64decode s)) in
     (* Debug.print ("unmarshalling: " ^ Show_compressed_t.show v); *)
-      uncompress_t (globals env) v
+      uncompress_t (Env.globals env) v
 
 (** Return the continuation frame that evaluates the given expression
     in the given environment. *)

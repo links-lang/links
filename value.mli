@@ -84,6 +84,30 @@ type access_point = [
 
 type chan = (channel_id * channel_id)
 
+module type ENV =
+sig
+  type 'a t
+     deriving (Show)
+  val set_request_data : 'a t -> RequestData.request_data -> 'a t
+  val request_data : 'a t -> RequestData.request_data
+  val empty : 'a t
+  val bind  : Ir.var -> ('a * Ir.scope) -> 'a t -> 'a t
+  val find : Ir.var -> 'a t -> 'a
+  val mem : Ir.var -> 'a t -> bool
+  val lookup : Ir.var -> 'a t -> 'a option
+  val lookupS : Ir.var -> 'a t -> ('a * Ir.scope) option
+  val shadow : 'a t -> by:'a t -> 'a t
+  val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
+  val globals : 'a t -> 'a t
+  val request_data : 'a t -> RequestData.request_data
+  (* used only by json.ml, webif.ml ... *)
+  val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
+  val extend : 'a t -> ('a * Ir.scope) Utility.intmap -> 'a t
+  val localise : 'a t -> Ir.var -> 'a t
+end
+
+module Env : ENV
+
 type t = [
 | primitive_value
 | `List of t list
@@ -104,7 +128,7 @@ and continuation = [
   | `PureCont of frame list
   | `GenCont of frame list list
   ]
-and env
+and env = t Env.t
     deriving (Show)
 
 (* Continuation *)
@@ -129,26 +153,6 @@ end
 module Continuation : CONTINUATION
 
 type delegated_chan = (chan * (t list))
-
-val set_request_data : env -> RequestData.request_data -> env
-
-val empty_env : env
-val bind  : Ir.var -> (t * Ir.scope) -> env -> env
-val find : Ir.var -> env -> t
-val mem : Ir.var -> env -> bool
-val lookup : Ir.var -> env -> t option
-val lookupS : Ir.var -> env -> (t * Ir.scope) option
-val shadow : env -> by:env -> env
-val fold : (Ir.var -> (t * Ir.scope) -> 'a -> 'a) -> env -> 'a -> 'a
-val globals : env -> env
-val request_data : env -> RequestData.request_data
-(* used only by json.ml, webif.ml ... *)
-val get_parameters : env -> (t*Ir.scope) Utility.intmap
-
-val extend : env -> (t*Ir.scope) Utility.intmap -> env
-
-
-val localise : env -> Ir.var -> env
 
 val project : string -> [> `Record of (string * 'b) list ] -> 'b
 val untuple : t -> t list

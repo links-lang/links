@@ -156,7 +156,7 @@ let rec directives
           (fun name var () ->
              if not (Lib.is_primitive name) then
                Printf.fprintf stderr " %-16s : %s\n"
-                 name (Value.string_of_value (Value.find var valenv)))
+                 name (Value.string_of_value (Value.Env.find var valenv)))
           nenv ();
         envs),
      "display the current value environment");
@@ -242,7 +242,7 @@ let interact envs =
                                 in the value environment *)
                              match Tables.lookup Tables.fun_defs var with
                              | None ->
-                               let v = Value.find var valenv in
+                               let v = Value.Env.find var valenv in
                                let t = Env.String.lookup tyenv'.Types.var_env name in
                                v, t
                              | Some (finfo, _, None, location) ->
@@ -362,7 +362,7 @@ let load_prelude () =
   (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
   BuildTables.bindings tenv Lib.primitive_vars globals;
 
-  let valenv = Eval.run_defs Value.empty_env globals in
+  let valenv = Eval.run_defs Value.Env.empty globals in
   let envs =
     (valenv,
      Env.String.extend Lib.nenv nenv,
@@ -386,7 +386,7 @@ let cache_load_prelude () =
   Loader.wpcache "prelude.closures" (fun () ->
     (* TODO: either scrap whole program caching or add closure
        conversion code here *)
-    let valenv = Eval.run_defs Value.empty_env globals in
+    let valenv = Eval.run_defs Value.Env.empty globals in
     let envs =
       (valenv,
        Env.String.extend Lib.nenv nenv,

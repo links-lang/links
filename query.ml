@@ -274,7 +274,7 @@ struct
 
   let env_of_value_env value_env = (value_env, Env.Int.empty)
   let (++) (venv, eenv) (venv', eenv') =
-    Value.shadow venv ~by:venv', Env.Int.extend eenv eenv'
+    Value.Env.shadow venv ~by:venv', Env.Int.extend eenv eenv'
 
   let lookup_fun (f, fvs) =
     match Tables.lookup Tables.fun_defs f with
@@ -296,8 +296,8 @@ struct
             | `Server | `Unknown ->
                 let env =
                   match z, fvs with
-                  | None, None       -> Value.empty_env
-                  | Some z, Some fvs -> Value.bind z (fvs, `Local) Value.empty_env
+                  | None, None       -> Value.Env.empty
+                  | Some z, Some fvs -> Value.Env.bind z (fvs, `Local) Value.Env.empty
                   | _, _ -> assert false in
                 `Closure ((xs, body), env_of_value_env env)
             | `Client ->
@@ -348,7 +348,7 @@ struct
     | Some v -> v
     | None ->
       begin
-        match Value.lookup var val_env, Env.Int.find exp_env var with
+        match Value.Env.lookup var val_env, Env.Int.find exp_env var with
         | None, Some v -> v
         | Some v, None -> expression_of_value v
         | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -493,7 +493,7 @@ struct
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.Show_binder.show (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
-      let env' = bind (Value.empty_env, Env.Int.empty) (z, value env v) in
+      let env' = bind (Value.Env.empty, Env.Int.empty) (z, value env v) in
       `Closure ((xs, body), env')
       (* (\* Debug.print("looking up query closure: "^string_of_int f); *\) *)
       (* begin *)

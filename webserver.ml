@@ -74,7 +74,7 @@ struct
 
   let rt : routing_table ref = ref Trie.empty
   let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref =
-    ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
+    ref (Value.Env.empty, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
 
@@ -157,7 +157,7 @@ struct
 
       (* Precondition: valenv has been initialised with the correct request data *)
       let run_page (valenv, v) () =
-        let cid = RequestData.get_client_id (Value.request_data valenv) in
+        let cid = RequestData.get_client_id (Value.Env.request_data valenv) in
         Eval.apply (render_cont ()) valenv
         (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)]) >>= fun (valenv, v) ->
           let page = Irtojs.generate_real_client_page
@@ -212,7 +212,7 @@ struct
              let (_, nenv, tyenv) = !env in
              get_or_make_client_id cgi_args >>= fun (cid) ->
              let req_data = RequestData.new_request_data cgi_args cookies cid in
-             let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
+             let req_env = Value.Env.set_request_data (Value.Env.shadow tl_valenv ~by:valenv) req_data in
              Webif.do_request
                (req_env, nenv, tyenv)
                cgi_args
@@ -248,7 +248,7 @@ struct
         Hashtbl.add Tables.scopes x `Global;
         Hashtbl.add Tables.cont_defs x ([], tail);
         Hashtbl.add Tables.cont_vars x IntSet.empty;
-        let frame = Value.Continuation.Frame.make `Global x Value.empty_env ([], tail) in
+        let frame = Value.Continuation.Frame.make `Global x Value.Env.empty ([], tail) in
         Value.Continuation.(frame &> empty)
       in
 
