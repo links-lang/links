@@ -406,10 +406,11 @@ module type CONTINUATION = sig
   module Handler : sig
     type t
 
-    val make_effect_handler : op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
-    val make_exception_handler : clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
+    val make_effect_handler : env:'v Env.t -> op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
+    val make_exception_handler : env:'v Env.t -> clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
   end
   val set_trap_point : handler:Handler.t -> 'v t -> 'v t
+  val invoke_trap : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> env:'v Env.t -> 'v t -> (Ir.name * 'v list) -> 'r
 end
 
 module type COMPRESSABLE_CONTINUATION = sig
@@ -451,12 +452,13 @@ module Pure_Continuation = struct
   module Handler = struct
     type t = unit
 
-    let make_effect_handler : op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
-      = fun ~op_clauses ~return_clause ~depth -> ignore(op_clauses); ignore(return_clause); ignore(depth); ()
-    let make_exception_handler : clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
-      = fun ~clauses ~finally -> ignore(clauses); ignore(finally); ()
+    let make_effect_handler : env:'v Env.t -> op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
+      = fun ~env ~op_clauses ~return_clause ~depth -> ignore(env); ignore(op_clauses); ignore(return_clause); ignore(depth); ()
+    let make_exception_handler : env:'v Env.t -> clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
+      = fun ~env ~clauses ~finally -> ignore(env); ignore(clauses); ignore(finally); ()
   end
   let set_trap_point ~handler k = ignore(handler); k
+  let invoke_trap ~eval ~env k op = failwith "Not yet implemented"
 end
 
 module Eff_Handler_Continuation = struct
@@ -483,13 +485,14 @@ module Eff_Handler_Continuation = struct
   module Handler = struct
     type t = unit
 
-    let make_effect_handler : op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
-      = fun ~op_clauses ~return_clause ~depth -> ignore(op_clauses); ignore(return_clause); ignore(depth); ()
-    let make_exception_handler : clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
-      = fun ~clauses ~finally -> ignore(clauses); ignore(finally); ()
+    let make_effect_handler : env:'v Env.t -> op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
+      = fun ~env ~op_clauses ~return_clause ~depth -> ignore(op_clauses); ignore(return_clause); ignore(depth); ()
+    let make_exception_handler : env:'v Env.t -> clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
+      = fun ~env ~clauses ~finally -> ignore(clauses); ignore(finally); ()
   end
 
   let set_trap_point ~handler _ = ignore(handler); ()
+  let invoke_trap ~eval ~env k op = failwith "Not yet implemented"
 end
 
 module Continuation
