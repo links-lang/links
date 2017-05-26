@@ -123,6 +123,7 @@ module type CONTINUATION = sig
   module Frame : FRAME
 
   val empty : 'v t
+  val toplevel : 'v t
   val (<>)  : 'v t -> 'v t -> 'v t
   val (&>)  : 'v Frame.t -> 'v t -> 'v t
 
@@ -136,6 +137,9 @@ module type CONTINUATION = sig
 
   module Handler : sig
     type t
+
+    val make_effect_handler : op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
+    val make_exception_handler : clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
   end
   val set_trap_point : handler:Handler.t -> 'v t -> 'v t
 end

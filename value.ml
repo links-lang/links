@@ -391,6 +391,7 @@ module type CONTINUATION = sig
   module Frame : FRAME
 
   val empty : 'v t
+  val toplevel : 'v t
   val (<>)  : 'v t -> 'v t -> 'v t
   val (&>)  : 'v Frame.t -> 'v t -> 'v t
 
@@ -404,6 +405,9 @@ module type CONTINUATION = sig
 
   module Handler : sig
     type t
+
+    val make_effect_handler : op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
+    val make_exception_handler : clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
   end
   val set_trap_point : handler:Handler.t -> 'v t -> 'v t
 end
@@ -411,18 +415,18 @@ end
 module type COMPRESSABLE_CONTINUATION = sig
   include CONTINUATION
 
-
   type 'cv compressed_t
      deriving (Show, Eq, Typeable, Dump, Pickle)
   val compress : compress_val:('v -> 'cv) -> 'v t -> 'cv compressed_t
   val uncompress : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_t -> 'v t
 end
 
-module PureContinuation = struct
+module Pure_Continuation = struct
   type 'v t = ('v Frame.t) list
       deriving (Show)
 
   let empty = []
+  let toplevel = empty
   let (<>) k k' = k @ k'
   let (&>) f k = f :: k
 
@@ -432,8 +436,7 @@ module PureContinuation = struct
     | (scope, var, locals, comp) :: cont ->
        let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
        eval env cont comp
-  let to_string = function
-    | _ -> failwith "Continuation.to_string not yet implemented."
+  let to_string _ = "pure_continuation"
 
   (** Compression **)
   type 'cv compressed_t = ('cv Frame.compressed_t) list
@@ -447,11 +450,53 @@ module PureContinuation = struct
 
   module Handler = struct
     type t = unit
+
+    let make_effect_handler : op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
+      = fun ~op_clauses ~return_clause ~depth -> ignore(op_clauses); ignore(return_clause); ignore(depth); ()
+    let make_exception_handler : clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
+      = fun ~clauses ~finally -> ignore(clauses); ignore(finally); ()
   end
   let set_trap_point ~handler k = ignore(handler); k
 end
 
-module Continuation : COMPRESSABLE_CONTINUATION = PureContinuation
+module Eff_Handler_Continuation = struct
+  type 'v t = unit
+       deriving (Show)
+
+  let empty = ()
+  let toplevel = empty
+  let (<>) _ _ = ()
+  let (&>) _ _ = ()
+
+  let apply : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> finish:('v Env.t -> 'v -> 'r)  -> env:('v Env.t) -> 'v t -> 'v -> 'r =
+    fun ~eval ~finish ~env k v -> ignore(eval); ignore(k); finish env v
+
+  let to_string _ = "generalised_continuation"
+
+  type 'cv compressed_t = unit
+        deriving (Show, Eq, Typeable, Dump, Pickle)
+  let compress ~compress_val _ = ignore(compress_val); ()
+  let uncompress ~uncompress_val _ _ = ignore(uncompress_val); ()
+
+  module Frame = Frame
+
+  module Handler = struct
+    type t = unit
+
+    let make_effect_handler : op_clauses:(Ir.binder * Ir.computation) Ir.name_map -> return_clause:(Ir.binder * Ir.computation) -> depth:[`Deep | `Shallow] -> t
+      = fun ~op_clauses ~return_clause ~depth -> ignore(op_clauses); ignore(return_clause); ignore(depth); ()
+    let make_exception_handler : clauses:(Ir.binder * Ir.computation) Ir.name_map -> finally:(Ir.binder * Ir.computation) -> t
+      = fun ~clauses ~finally -> ignore(clauses); ignore(finally); ()
+  end
+
+  let set_trap_point ~handler _ = ignore(handler); ()
+end
+
+module Continuation
+  = (val (if true then
+           (module Pure_Continuation : COMPRESSABLE_CONTINUATION)
+         else
+           (module Eff_Handler_Continuation : COMPRESSABLE_CONTINUATION)) : COMPRESSABLE_CONTINUATION)
 
 type t = [
 | primitive_value
