@@ -385,22 +385,27 @@ module Frame = struct
 end
 
 module type CONTINUATION = sig
-  type ('v, 'r) t
+  type 'v t
      deriving (Show)
 
   module Frame : FRAME
 
-  val empty : ('v, 'r) t
-  val (<>)  : ('v, 'r) t -> ('v, 'r) t -> ('v, 'r) t
-  val (&>)  : 'v Frame.t -> ('v, 'r) t -> ('v, 'r) t
+  val empty : 'v t
+  val (<>)  : 'v t -> 'v t -> 'v t
+  val (&>)  : 'v Frame.t -> 'v t -> 'v t
 
-  val apply : eval:('v Env.t -> ('v, 'r) t -> Ir.computation -> 'r Lwt.t) ->
-              finish:('v Env.t -> 'v -> 'r Lwt.t) ->
+  val apply : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) ->
+              finish:('v Env.t -> 'v -> 'r) ->
               env:'v Env.t ->
-              ('v, 'r) t ->
-              'v -> 'r Lwt.t
+              'v t ->
+              'v -> 'r
 
-  val to_string : ('v, 'r) t -> string
+  val to_string : 'v t -> string
+
+  module Handler : sig
+    type t
+  end
+  val set_trap_point : handler:Handler.t -> 'v t -> 'v t
 end
 
 module type COMPRESSABLE_CONTINUATION = sig
@@ -409,12 +414,12 @@ module type COMPRESSABLE_CONTINUATION = sig
 
   type 'cv compressed_t
      deriving (Show, Eq, Typeable, Dump, Pickle)
-  val compress : compress_val:('v -> 'cv) -> ('v, 'r) t -> 'cv compressed_t
-  val uncompress : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_t -> ('v, 'r) t
+  val compress : compress_val:('v -> 'cv) -> 'v t -> 'cv compressed_t
+  val uncompress : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_t -> 'v t
 end
 
 module PureContinuation = struct
-  type ('v, 'r) t = ('v Frame.t) list
+  type 'v t = ('v Frame.t) list
       deriving (Show)
 
   let empty = []
@@ -439,6 +444,11 @@ module PureContinuation = struct
     List.map (Frame.uncompress uncompress_val globals) cont
 
   module Frame = Frame
+
+  module Handler = struct
+    type t = unit
+  end
+  let set_trap_point ~handler k = ignore(handler); k
 end
 
 module Continuation : COMPRESSABLE_CONTINUATION = PureContinuation
@@ -458,7 +468,7 @@ type t = [
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
-and continuation = (t, (env * t)) Continuation.t
+and continuation = t Continuation.t
 and env = t Env.t
   deriving (Show)
 

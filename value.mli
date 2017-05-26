@@ -117,22 +117,27 @@ module type FRAME = sig
 end
 
 module type CONTINUATION = sig
-  type ('v, 'r) t
+  type 'v t
      deriving (Show)
 
   module Frame : FRAME
 
-  val empty : ('v, 'r) t
-  val (<>)  : ('v, 'r) t -> ('v, 'r) t -> ('v, 'r) t
-  val (&>)  : 'v Frame.t -> ('v, 'r) t -> ('v, 'r) t
+  val empty : 'v t
+  val (<>)  : 'v t -> 'v t -> 'v t
+  val (&>)  : 'v Frame.t -> 'v t -> 'v t
 
-  val apply : eval:('v Env.t -> ('v, 'r) t -> Ir.computation -> 'r Lwt.t) ->
-              finish:('v Env.t -> 'v -> 'r Lwt.t) ->
+  val apply : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) ->
+              finish:('v Env.t -> 'v -> 'r) ->
               env:'v Env.t ->
-              ('v, 'r) t ->
-              'v -> 'r Lwt.t
+              'v t ->
+              'v -> 'r
 
-  val to_string : ('v, 'r) t -> string
+  val to_string : 'v t -> string
+
+  module Handler : sig
+    type t
+  end
+  val set_trap_point : handler:Handler.t -> 'v t -> 'v t
 end
 
 module Continuation : CONTINUATION
@@ -152,7 +157,7 @@ type t = [
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
-and continuation = (t, env * t) Continuation.t
+and continuation = t Continuation.t
 and env = t Env.t
     deriving (Show)
 
