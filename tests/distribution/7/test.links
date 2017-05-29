@@ -1,0 +1,39 @@
+typename S1 = ?(Int).?(Int).?(Int).?(Int).End;
+typename S2 = !(S1).End;
+
+module Client {
+  # dummy
+  fun main() {
+    page <#></#>
+  }
+
+}
+
+module Server {
+
+  sig forked : (S2, S1) ~@ ()
+  linfun forked(carrier, recv_end) {
+    var _ = send(recv_end, carrier);
+    ()
+  }
+
+  linfun main(ap) {
+    var carrier = accept(ap);
+    var s_end = linFork(linfun(recv_end) { forked(carrier, recv_end) });
+    var s_end = send(1, s_end);
+    var s_end = send(2, s_end);
+    var s_end = send(3, s_end);
+    var _ = send(4, s_end);
+    ()
+  }
+}
+
+linfun main() {
+  var ap = new();
+  var _ = spawn { Server.main(ap) };
+  addRoute("/", fun (_, _) { Client.main() });
+  serveWebsockets();
+  servePages();
+}
+
+main()

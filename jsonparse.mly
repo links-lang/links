@@ -1,6 +1,7 @@
 %{
 open Utility
 open ProcessTypes
+open WebsocketMessages
 
 (* let unparse_label = function *)
 (*   | `Char c -> String.make 1 c *)
@@ -10,6 +11,70 @@ open ProcessTypes
 (* BUG: need to unescape strings
    (where they are escaped in json.ml)
 *)
+let websocket_req assoc_list =
+  (* Pervasives is opened in order to get "pipe" behaviour of |> *)
+  let open Pervasives in
+  let opcode = Value.unbox_string @@ List.assoc "opcode" assoc_list in
+  (* If we add more opcodes in, we might have to push these inwards *)
+  let get_field field = List.assoc field assoc_list in
+  let get_and_unbox_str = Value.unbox_string -<- get_field in
+
+  let parse_srv_ap_msg () =
+    let blocked_pid =
+          ProcessID.of_string (get_and_unbox_str "blockedClientPid") in
+    let server_apid =
+      AccessPointID.of_string (get_and_unbox_str "serverAPID") in
+    (blocked_pid, server_apid) in
+
+    match opcode with
+    | "CLIENT_TO_CLIENT" ->
+        let pid = ProcessID.of_string (get_and_unbox_str "destPid") in
+        let msg = get_field "msg" in
+        let client_id =
+          ClientID.of_string @@ get_and_unbox_str "destClientId" in
+        ClientToClient (client_id, pid, msg)
+    | "CLIENT_TO_SERVER" ->
+        let pid = ProcessID.of_string (get_and_unbox_str "destPid") in
+        let msg = (List.assoc "msg" assoc_list) in
+        ClientToServer (pid, msg)
+    | "SERVER_AP_REQUEST" ->
+        let (pid, apid) = parse_srv_ap_msg () in
+        APRequest (pid, apid)
+    | "SERVER_AP_ACCEPT" ->
+        let (pid, apid) = parse_srv_ap_msg () in
+        APAccept (pid, apid)
+    | "REMOTE_SESSION_SEND" ->
+        let parse_deleg_entry entry =
+          let chan =
+            List.assoc "chan" entry |> Value.unbox_channel in
+          let buf =
+            List.assoc "buffer" entry
+            |> Value.unbox_list
+            |> List.rev in (* Client representation of a buffer is reversed... *)
+          (chan, buf) in
+
+        let remote_ep =
+          List.assoc "remoteEP" assoc_list
+            |> Value.unbox_string
+            |> ChannelID.of_string in
+        let deleg_set =
+          List.assoc "delegatedSessions" assoc_list
+            |> Value.unbox_list
+            |> List.map (parse_deleg_entry -<- Value.unbox_record) in
+        let msg = List.assoc "msg" assoc_list in
+        ChanSend (remote_ep, deleg_set, msg)
+    | "LOST_MESSAGES" ->
+        let carrier_chan = get_and_unbox_str "epID" |> ChannelID.of_string in
+        let unboxed_msgs = get_field "msgs" |> Value.unbox_record in
+
+        let parse_lost_message_entry (chan_str, msgs) =
+          let chan_id = ChannelID.of_string chan_str in
+          let msgs = Value.unbox_list msgs |> List.rev in
+          (chan_id, msgs) in
+
+        let msg_table = List.map parse_lost_message_entry unboxed_msgs in
+        LostMessageResponse (carrier_chan, msg_table)
+    | _ -> failwith "Invalid opcode in websocket message"
 %}
 
 %token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
@@ -19,19 +84,25 @@ open ProcessTypes
 %token <float> FLOAT
 
 %start parse_json
+%start parse_websocket_request
 %type <Value.t> parse_json
+%type <WebsocketMessages.incoming_websocket_message> parse_websocket_request
 
 %%
 
 parse_json:
 | value { $1 }
 
+parse_websocket_request:
+| LBRACE members RBRACE { websocket_req $2 }
+
 object_:
 | LBRACE RBRACE         { `Record [] }
 | LBRACE members RBRACE { match $2 with
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
                             | ["_label", l; "_value", v]
-                            | ["_value", v; "_label", l] -> `Variant (Value.unbox_string l, v)
+                            | ["_value", v; "_label", l] ->
+                                Value.box_variant (Value.unbox_string l) v
                             | ["_clientAPID", apid_str; "_clientId", cid_str]
                             | ["_clientId", cid_str; "_clientAPID", apid_str] ->
                                 let apid = AccessPointID.of_string @@ Value.unbox_string apid_str in

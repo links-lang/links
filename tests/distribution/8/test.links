@@ -1,0 +1,19 @@
+typename S1 = ?Int.?Int.?Int.?Int.End;
+typename S2 = !S1.End;
+
+module Client {
+  # dummy
+  fun main(ap1, ap2) {
+    page <#></#>
+  }
+}
+
+fun main() {
+  var ap1 = new();
+  var ap2 = new();
+  addRoute("/", fun (_, _) { Client.main(ap1, ap2) } );
+  serveWebsockets();
+  servePages()
+}
+
+main()

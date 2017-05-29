@@ -1,0 +1,15 @@
+Key:
+
+1. Client requests from server AP, server accepts from AP, does some interactions
+2. Client accepts from server AP, server requests from AP, does some interactions
+3. Two clients connect via a server AP, do some interactions.
+4. Client-to-server delegation: no lost or orphan messages
+5. Client-to-server delegation: lost messages, no orphan messages
+6. Client-to-server delegation: lost and orphan messages
+7. Server-to-client delegation
+8. Client-to-client delegation: no lost or orphan messages
+9. Client-to-client delegation: lost messages, no orphan messages
+10. Client-to-client delegation: lost and orphan messages
+11. Client-to-client delegation: Delegation of carried channel
+12. Client-to-client delegation: Delegation of carrier channel
+13. Client-to-client delegation: Simultaneous delegation
