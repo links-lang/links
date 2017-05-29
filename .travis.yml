@@ -17,7 +17,8 @@ before_install:
   - opam upgrade -y
   - psql -c 'create database links;' -U postgres
 install:
-  - opam install -y --deps-only
+  - opam pin add links-dev . -n
+  - opam install -y --deps-only links-dev
 script:
   - make -j2 nc
   - make tests
