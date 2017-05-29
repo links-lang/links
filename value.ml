@@ -438,19 +438,34 @@ module Eff_Handler_Continuation = struct
         return_clause: Ir.binder * Ir.computation;
         depth: [`Deep | `Shallow];
       }
-     and 'v k = ('v handler * 'v Frame.t list) list
-     and 'v continuation =
+    and 'v k = ('v handler * 'v Frame.t list) list
+    and 'v continuation =
        | Continuation of 'v k
        | ShallowContinuation of 'v Frame.t list * 'v k
-         deriving (Show)
+       deriving (Show)
+
+    type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep | `Shallow]
+    and 'cv ck = ('cv compressed_handler * ('cv Frame.compressed_t list)) list
+    and 'cv compressed_continuation =
+      | CompressedContinuation of 'cv ck
+      | CompressedShallowContinuation of 'cv Frame.compressed_t list * 'cv ck
+      deriving (Show, Eq, Typeable, Dump, Pickle)
   end
   module Handler = struct
-    type 'v t = 'v K.handler
+    open K
+    type 'v t = 'v handler
        deriving (Show)
-    let make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
-      = fun ~env ~clauses ~depth ->
+    let make ~env ~clauses ~depth =
       let ((_,b,comp), op_clauses) = StringMap.pop "Return" clauses in
       { env; op_clauses; return_clause = (b,comp); depth }
+
+    let compress ~compress_val h =
+      (Env.compress compress_val h.env, h.depth)
+    let uncompress ~uncompress_val globals h =
+      { env = Env.uncompress uncompress_val globals (fst h);
+        op_clauses = StringMap.empty;
+        return_clause = (Var.fresh_binder_of_type `Not_typed, ([], `Special (`Wrong `Not_typed)));
+        depth = snd h; }
   end
 
   open K
@@ -472,18 +487,17 @@ module Eff_Handler_Continuation = struct
     | ShallowContinuation (f', (h, fs) :: rest) -> ShallowContinuation (f', (h, f :: fs) :: rest)
   let rec (<>) k k' =
     match k, k' with
-    | Continuation fss, Continuation fss' -> Continuation (fss @ fss')
-    | ShallowContinuation (fs, fss), ShallowContinuation (fs', fss') -> ShallowContinuation (fs @ fs', fss @ fss')
-    | ShallowContinuation (fs, fss'), k
-    | k, ShallowContinuation (fs, fss') -> (Continuation fss') <> (List.fold_left (fun k f -> f &> k) k fs)
+    | Continuation k, Continuation k' -> Continuation (k @ k')
+    | ShallowContinuation (fs, k), ShallowContinuation (fs', k') -> ShallowContinuation (fs @ fs', k @ k')
+    | ShallowContinuation (fs, k'), k
+    | k, ShallowContinuation (fs, k') -> (Continuation k') <> (List.fold_left (fun k f -> f &> k) k fs)
   let return ~eval k h v =
     let ((var,_), comp) = h.return_clause in
     eval (Env.bind var (v, `Local) h.env) k comp
 
-  let rec apply : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> finish:('v Env.t -> 'v -> 'r)  -> env:('v Env.t) -> 'v t -> 'v -> 'r =
-    fun ~eval ~finish ~env k v ->
+  let apply ~eval ~finish ~env k v =
     let k = match k with
-      | ShallowContinuation (f, fs) -> (id, f) :: fs
+      | ShallowContinuation (fs, k) -> (id, fs) :: k
       | Continuation k -> k
     in
     match k with
@@ -497,10 +511,20 @@ module Eff_Handler_Continuation = struct
 
   let to_string _ = "generalised_continuation"
 
-  type 'cv compressed_t = unit
+  type 'cv compressed_t = 'cv K.compressed_continuation
         deriving (Show, Eq, Typeable, Dump, Pickle)
-  let compress ~compress_val _ = failwith "Not yet implemented"
-  let uncompress ~uncompress_val _ _ = failwith "Not yet implemented"
+  let compress ~compress_val =
+    let compress_frame = Frame.compress compress_val in
+    let compress (h, fs) = (Handler.compress ~compress_val h, List.map compress_frame fs) in
+    function
+    | Continuation k -> CompressedContinuation (List.map compress k)
+    | ShallowContinuation (fs, k) -> CompressedShallowContinuation (List.map compress_frame fs, List.map compress k)
+  let uncompress ~uncompress_val globals =
+    let uncompress_frame = Frame.uncompress uncompress_val globals in
+    let uncompress (h, fs) = (Handler.uncompress uncompress_val globals h, List.map uncompress_frame fs) in
+    function
+    | CompressedContinuation k -> Continuation (List.map uncompress k)
+    | CompressedShallowContinuation (fs, k) -> ShallowContinuation (List.map uncompress_frame fs, List.map uncompress k)
 
   module Frame = Frame
 
