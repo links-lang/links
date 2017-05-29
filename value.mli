@@ -99,7 +99,6 @@ sig
   val shadow : 'a t -> by:'a t -> 'a t
   val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
   val globals : 'a t -> 'a t
-  val request_data : 'a t -> RequestData.request_data
   (* used only by json.ml, webif.ml ... *)
   val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
   val extend : 'a t -> ('a * Ir.scope) Utility.intmap -> 'a t
@@ -111,7 +110,7 @@ module Env : ENV
 (* Continuation *)
 module type FRAME = sig
   type 'v t
-     deriving (Show)
+
   val of_expr : 'v Env.t -> Ir.tail_computation -> 'v t
   val make : Ir.scope -> Ir.var -> 'v Env.t -> Ir.computation -> 'v t
 end

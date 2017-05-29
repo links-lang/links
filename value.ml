@@ -239,7 +239,6 @@ sig
   val shadow : 'a t -> by:'a t -> 'a t
   val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
   val globals : 'a t -> 'a t
-  val request_data : 'a t -> RequestData.request_data
   (* used only by json.ml, webif.ml ... *)
   val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
   val extend : 'a t -> ('a * Ir.scope) Utility.intmap -> 'a t
@@ -330,7 +329,7 @@ end
 
 module type FRAME = sig
   type 'v t
-     deriving (Show)
+
   val of_expr : 'v Env.t -> Ir.tail_computation -> 'v t
   val make : Ir.scope -> Ir.var -> 'v Env.t -> Ir.computation -> 'v t
 end
@@ -427,7 +426,7 @@ module Pure_Continuation = struct
       = fun ~env ~clauses ~depth -> ignore(env); ignore(clauses); ignore(depth); ()
   end
   let set_trap_point ~handler k = ignore(handler); k
-  let invoke_trap ~eval ~reify k op = failwith "Not yet implemented"
+  let invoke_trap ~eval ~reify k _ = ignore(reify); eval Env.empty k ([], `Special (`Wrong `Not_typed))
 end
 
 module Eff_Handler_Continuation = struct
@@ -521,7 +520,7 @@ module Eff_Handler_Continuation = struct
     | ShallowContinuation (fs, k) -> CompressedShallowContinuation (List.map compress_frame fs, List.map compress k)
   let uncompress ~uncompress_val globals =
     let uncompress_frame = Frame.uncompress uncompress_val globals in
-    let uncompress (h, fs) = (Handler.uncompress uncompress_val globals h, List.map uncompress_frame fs) in
+    let uncompress (h, fs) = (Handler.uncompress ~uncompress_val globals h, List.map uncompress_frame fs) in
     function
     | CompressedContinuation k -> Continuation (List.map uncompress k)
     | CompressedShallowContinuation (fs, k) -> ShallowContinuation (List.map uncompress_frame fs, List.map uncompress k)
@@ -600,7 +599,8 @@ and compressed_t = [
 | `FunctionPtr of (Ir.var * compressed_t option)
 | `PrimitiveFunction of string
 | `ClientFunction of string
-| `Continuation of compressed_continuation ]
+| `Continuation of compressed_continuation
+| `ReifiedContinuation of compressed_continuation ]
 and compressed_env = compressed_t Env.compressed_t
   deriving (Show, Eq, Typeable, Dump, Pickle)
 
@@ -624,6 +624,7 @@ and compress_val (v : t) : compressed_t =
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
+      | `ReifiedContinuation cont -> `ReifiedContinuation (compress_continuation cont)
       | `Pid _ -> assert false (* mmmmm *)
       | `Socket (_inc, _outc) -> assert false
       | `SessionChannel _ -> assert false (* mmmmm *)
@@ -659,6 +660,7 @@ and uncompress_val globals (v : compressed_t) : t =
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
+      | `ReifiedContinuation cont -> `ReifiedContinuation (uncompress_continuation globals cont)
 
 let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
