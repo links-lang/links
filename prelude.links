@@ -461,6 +461,26 @@ fun asList(t) server {
   for (x <-- t) [x]
 }
 
+# Create an arbitrary XML element
+# Inputs are not esacped. Sanitizing is the responsibility of the caller.
+#
+# @param {String} name Name of the element ([a-z]+)
+# @param {[(String, String)]} attributes List of attribute-value-pairs
+# @param {Xml} children Child XML nodes
+# @returns {Xml}
+sig makeXml : (String, [(String, String)], Xml) ~> Xml
+fun makeXml (name, attributes, children) {
+  var attributes = fold_left(fun (prev, curr) {
+    var (attr, value) = curr;
+    prev ^^ " " ^^ attr ^^ "=\"" ^^ value ^^ "\""
+  }, "", attributes);
+
+  var startTag = "<" ^^ name ^^ attributes ^^ ">";
+  var endTag = "</" ^^ name ^^ ">";
+
+  parseXml(startTag ^^ show(children) ^^ endTag)
+}
+
 #### FORMLETS ####
 ####   A library of functions supporting the 'formlet ... yields ...' syntax
 ####   TBD: move to a namespaced module
@@ -1221,3 +1241,15 @@ fun assertEq (actual, expected) server {
 #### APP SERVER ####
 sig addRoute : (String, (String, Location) ~> Page) ~> ()
 fun addRoute(path,f) { unsafeAddRoute(path, fun(p, loc){f(p, loc)}) }
+
+sig serveThis : (() ~> Page) ~> ()
+fun serveThis(p) {
+  addRoute("",fun (_,_) {p()});
+  servePages()
+}
+
+sig serveThese : ([(String,() ~> Page)]) ~> ()
+fun serveThese(routes) {
+  var _ = map(fun ((s,p)) {addRoute(s,fun (_,_) {p()})}, routes);
+  servePages()
+}

@@ -64,7 +64,7 @@ let jsonize_location : Ir.location -> string = function
 let rec jsonize_value : Value.t -> json_string =
   function
   | `PrimitiveFunction _
-  | `DeepContinuation _ | `ShallowContinuation _
+  | `ReifiedContinuation _
   | `Continuation _
   | `Socket _
       as r ->
@@ -232,7 +232,7 @@ let jsonize_value_with_state value state =
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
 
-let jsonize_call s cont (_ : Value.handlers) name args = (* FIXME: serialize handler [hs] *)
+let jsonize_call s cont name args =
   let vs = jsonize_values args in
   let v =
     "{\"__continuation\":\"" ^ (encode_continuation cont) ^"\"," ^

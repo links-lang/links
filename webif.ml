@@ -136,9 +136,9 @@ struct
                             (bs, body) =
     let xb, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
     let render_page = Env.String.lookup nenv "renderPage" in
-    let (tail : Ir.tail_computation) = `Apply (`Variable render_page, [`Variable x]) in
-    let (frame : Value.frame) = (`Global, x, Value.empty_env, ([], tail)) in
-    let (cont : Value.continuation) = [[frame]] in (* (Ir.scope * Ir.var * env * Ir.computation) *)
+    let tail = `Apply (`Variable render_page, [`Variable x]) in
+    let frame = Value.Continuation.Frame.make `Global x Value.Env.empty ([], tail) in
+    let cont = Value.Continuation.(frame &> empty) in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
   let resolve_json_state req_data v =
@@ -150,19 +150,20 @@ struct
     let json_state = ResolveJsonState.add_ap_information client_id json_state in
     ResolveJsonState.add_process_information client_id json_state
 
-  let perform_request valenv run render_cont req =
-    let req_data = Value.request_data valenv in
+  let perform_request valenv run render_cont render_servercont_cont req =
+    let req_data = Value.Env.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
     let client_id_str = ClientID.to_string client_id in
     match req with
       | ServerCont t ->
         Debug.print("Doing ServerCont for client ID " ^ client_id_str);
-        Eval.apply render_cont Value.toplevel_hs valenv (t, []) >>= fun (_, v) -> (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
-        Lwt.return ("text/html", Value.string_of_value v)
+        Eval.apply render_cont valenv (t, []) >>= fun (_, v) ->
+        let res = render_servercont_cont v in
+        Lwt.return ("text/html", res)
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
         Proc.resolve_external_processes arg;
-        Eval.apply_cont cont Value.toplevel_hs valenv arg >>= fun (_, result) -> (* FIXME: The handler stack shouldn't be the default [Value.toplevel_hs] *)
+        Eval.apply_cont cont valenv arg >>= fun (_, result) ->
         let json_state = resolve_json_state req_data result in
         let result_json = Json.jsonize_value_with_state result json_state in
         Lwt.return ("text/plain", Utility.base64encode result_json)
@@ -174,8 +175,8 @@ struct
         Proc.resolve_external_processes func;
         List.iter Proc.resolve_external_processes args;
         List.iter (Proc.resolve_external_processes -<- fst -<- snd)
-          (IntMap.bindings (Value.get_parameters env));
-        Eval.apply Value.toplevel_cont Value.toplevel_hs env (func, args) >>= fun (_, r) ->
+          (IntMap.bindings (Value.Env.get_parameters env));
+        Eval.apply Value.Continuation.toplevel env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining procs on server after remote call!";
@@ -217,11 +218,11 @@ struct
        let (_env, v) = Eval.run_program valenv program in
        Value.string_of_value v)
 
-  let do_request ((valenv, _, _) as env) cgi_args run render_cont response_printer =
+  let do_request ((valenv, _, _) as env) cgi_args run render_cont render_servercont_cont response_printer =
     let request = parse_request env cgi_args in
     let (>>=) f g = Lwt.bind f g in
     Lwt.catch
-      (fun () -> perform_request valenv run render_cont request )
+      (fun () -> perform_request valenv run render_cont render_servercont_cont request )
       (function
        | Aborted r -> Lwt.return r
        | Failure msg as e ->
@@ -237,11 +238,19 @@ struct
       response_printer
       cgi_args
       req_data =
-    let valenv' = Value.set_request_data valenv req_data in
+    let valenv' = Value.Env.set_request_data valenv req_data in
     let env = (valenv', env2, env3) in
+    let render_servercont_cont = (fun (v: Value.t) ->
+      Irtojs.generate_real_client_page
+           ~cgi_env:cgi_args
+           (Lib.nenv, Lib.typing_env)
+           (globals @ locals)
+           (valenv, v)) in
+
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
                                    render_cont
+                                   render_servercont_cont
                                    (fun headers body -> Lwt.return (response_printer headers body))
                                    )
 
@@ -334,7 +343,8 @@ struct
 
     Errors.display (lazy (serve_request_program
   			  (valenv, nenv, tyenv)
-  			  (globals, (locals, main), render_cont)
+  			  (globals, (locals, main),
+                           render_cont)
           (fun hdrs bdy -> Lib.print_http_response hdrs bdy req_data)
           cgi_args
           req_data

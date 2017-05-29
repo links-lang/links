@@ -31,36 +31,36 @@ fun main() {
   addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);
   addStaticRoute("/examplessrc/", "examples/", [("links", "text/plain")]);
 
-  addRoute("/examples/dictionary/dictSuggestUpdate.links", fun (_){DictSuggestUpdate.main()});
-  addRoute("/examples/draggable.links", fun (_) {Draggable.main()});
-  addRoute("/examples/progress.links", fun (_) {Progress.main()});
+  addRoute("/examples/dictionary/dictSuggestUpdate.links", fun (_, _){DictSuggestUpdate.main()});
+  addRoute("/examples/draggable.links", fun (_, _) {Draggable.main()});
+  addRoute("/examples/progress.links", fun (_, _) {Progress.main()});
 
-  addRoute("/examples/factorial.links", fun (_) {Factorial.main()});
-  addRoute("/examples/dictionary/dictSuggest.links", fun (_){DictSuggest.main()});
-  addRoute("/examples/dictionary/dictSuggestLite.links", fun (_){DictSuggestLite.main()});
-  addRoute("/examples/draggableDb.links", fun (_) {DraggableDb.main()});
+  addRoute("/examples/factorial.links", fun (_, _) {Factorial.main()});
+  addRoute("/examples/dictionary/dictSuggest.links", fun (_, _){DictSuggest.main()});
+  addRoute("/examples/dictionary/dictSuggestLite.links", fun (_, _){DictSuggestLite.main()});
+  addRoute("/examples/draggableDb.links", fun (_, _) {DraggableDb.main()});
 
-  addRoute("/examples/buttons.links", fun (_) {Buttons.main()});
-  addRoute("/examples/formsTest.links", fun (_) {FormsTest.main()});
+  addRoute("/examples/buttons.links", fun (_, _) {Buttons.main()});
+  addRoute("/examples/formsTest.links", fun (_, _) {FormsTest.main()});
 
-  addRoute("/examples/validate.links", fun (_) {Validate.main()});
+  addRoute("/examples/validate.links", fun (_, _) {Validate.main()});
 
-  addRoute("/examples/loginFlow.links", fun (_) {LoginFlow.main()});
-  addRoute("/examples/paginate.links", fun (_) {Paginate.main()});
-  addRoute("/examples/mandelbrot.links", fun (_) {Mandelbrot.main()});
-  addRoute("/examples/mandelcolor.links", fun (_) {Mandelcolor.main()});
-  addRoute("/examples/todo.links", fun (_) {Todo.main()});
-  addRoute("/examples/todoDb.links", fun (_) {TodoDb.showList()});
-  addRoute("/examples/crop.links", fun (_) {Crop.main()});
-  addRoute("/examples/wine.links", fun (_) {Wine.main()});
-  addRoute("/examples/filter.links", fun (_) {Filter.main()});
-  addRoute("/examples/citations.links", fun (_) {Citations.main()});
+  addRoute("/examples/loginFlow.links", fun (_, _) {LoginFlow.main()});
+  addRoute("/examples/paginate.links", fun (_, _) {Paginate.main()});
+  addRoute("/examples/mandelbrot.links", fun (_, _) {Mandelbrot.main()});
+  addRoute("/examples/mandelcolor.links", fun (_, _) {Mandelcolor.main()});
+  addRoute("/examples/todo.links", fun (_, _) {Todo.main()});
+  addRoute("/examples/todoDb.links", fun (_, _) {TodoDb.showList()});
+  addRoute("/examples/crop.links", fun (_, _) {Crop.main()});
+  addRoute("/examples/wine.links", fun (_, _) {Wine.main()});
+  addRoute("/examples/filter.links", fun (_, _) {Filter.main()});
+  addRoute("/examples/citations.links", fun (_, _) {Citations.main()});
 
   # games
-  addRoute("/examples/games/twentyfortyeight.links", fun (_) {Twentyfortyeight.main()});
-  addRoute("/examples/games/breakout.links", fun (_) {Breakout.main()});
-  addRoute("/examples/games/tetris.links", fun (_) {Tetris.main()});
-  addRoute("/examples/games/pacman.links", fun (_) {Pacman.main()});
+  addRoute("/examples/games/twentyfortyeight.links", fun (_, _) {Twentyfortyeight.main()});
+  addRoute("/examples/games/breakout.links", fun (_, _) {Breakout.main()});
+  addRoute("/examples/games/tetris.links", fun (_, _) {Tetris.main()});
+  addRoute("/examples/games/pacman.links", fun (_, _) {Pacman.main()});
 
   servePages()
 }

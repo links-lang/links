@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix
+PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix ANSITerminal
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
@@ -80,18 +80,18 @@ SOURCES = $(OPC)                                \
           tables.ml                             \
           closures.ml                           \
           parse.mli parse.ml                    \
-          sugarTraversals.mli  sugarTraversals.ml \
-	  moduleUtils.mli moduleUtils.ml       \
-          chaser.mli chaser.ml                 \
+          sugarTraversals.mli  sugarTraversals.ml       \
+	  moduleUtils.mli moduleUtils.ml \
+          resolvePositions.mli resolvePositions.ml       \
+	  chaser.mli chaser.ml \
 	  desugarModules.mli desugarModules.ml \
-          desugarDatatypes.mli desugarDatatypes.ml \
+          desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
 					requestData.mli requestData.ml        \
           value.mli value.ml                    \
           eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
-          resolvePositions.mli resolvePositions.ml       \
           refineBindings.mli refineBindings.ml           \
           desugarLAttributes.mli desugarLAttributes.ml   \
           transformSugar.mli transformSugar.ml           \

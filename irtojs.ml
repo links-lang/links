@@ -813,7 +813,7 @@ let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.bindi
       let (x, x_name) = name_binder b in
       (* Debug.print ("let_binding: " ^ x_name); *)
       let varenv = VEnv.bind varenv (x, x_name) in
-      let value = Value.find x valenv in
+      let value = Value.Env.find x valenv in
       let jsonized_val = Json.jsonize_value value in
       let state = ResolveJsonState.add_val_event_handlers value state in
       (state,
@@ -981,7 +981,7 @@ let resolve_toplevel_values : string list -> string =
 
 let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
   let open Json in
-  let req_data = Value.request_data valenv in
+  let req_data = Value.Env.request_data valenv in
   let client_id = RequestData.get_client_id req_data in
   let json_state = JsonState.empty client_id in
 

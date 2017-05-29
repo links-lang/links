@@ -10,7 +10,7 @@ let rec event_handlers_from_value : Value.t -> handler_id_set =
   function
   (* Can't-dos *)
   | `PrimitiveFunction _ | `Socket _
-  | `DeepContinuation _ | `ShallowContinuation _ | `Continuation _ as r ->
+  | `ReifiedContinuation _ | `Continuation _ as r ->
       failwith ("Can't create json state for " ^ Value.string_of_value r);
 
   (* Empties *)

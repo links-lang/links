@@ -9,7 +9,7 @@ type handler_spec   = handler_depth * [`Linear | `Unrestricted]
 and handler_depth   = [ `Deep | `Shallow ]
   deriving (Show)
 
-  
+
 type scope = Var.scope
   deriving (Show)
 (* term variables *)
@@ -96,7 +96,7 @@ and special =
   | `Handle of (value * clause name_map * handler_spec)
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
-and clause = [`Effect of binder | `Exception | `Regular] * binder * computation                        
+and clause = [`Effect of binder | `Exception | `Regular] * binder * computation
   deriving (Show)
 
 let binding_scope : binding -> scope =
