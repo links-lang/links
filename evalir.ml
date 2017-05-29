@@ -448,39 +448,6 @@ struct
        end
         (*****************)
     | `PrimitiveFunction (n,None), args ->
-  (*      apply_cont cont hs env (Lib.apply_pfun n args (Value.request_data env)) *)
-  (*   | `PrimitiveFunction (_, Some code), args -> *)
-  (*      apply_cont cont hs env (Lib.apply_pfun_by_code code args (Value.request_data env)) *)
-  (*   | `ClientFunction name, args -> *)
-  (*       let req_data = Value.request_data env in *)
-  (*       client_call req_data name cont hs args *)
-  (*   (\*| `Continuation c,      [p] -> apply_cont c env p *)
-  (*     | `Continuation _,       _  ->*\) *)
-  (*   | `ShallowContinuation (delim, cont', hs'), [p] -> *)
-  (*      let cont = Value.append_delim_cont delim cont in *)
-  (*      apply_cont (cont' @ cont) (hs' @ hs) env p *)
-  (*   | `DeepContinuation (cont', hs'), [p] -> *)
-  (*      apply_cont (cont' @ cont) (hs' @  hs) env p *)
-  (*   | `Continuation (cont, hs), [p] -> apply_cont cont hs env p *)
-  (*   | `Continuation _,       _    -> *)
-  (*      eval_error "Continuation applied to multiple (or zero) arguments" *)
-  (*   | (v,_)                      -> eval_error "Application of non-function: %s" (Value.string_of_value v) *)
-  (* and apply_cont cont hs env v = *)
-  (*   Proc.yield (fun () -> apply_cont' cont hs env v) *)
-  (* and apply_cont' cont hs env v : Proc.thread_result Lwt.t = *)
-  (*   match cont, hs with *)
-  (*   | [] :: conts, h :: hs -> *)
-  (*     invoke_return_clause conts hs env h v *)
-  (*   | [], [] -> *)
-  (*     Proc.finish (env, v) *)
-  (*   | [] :: conts, [] -> apply_cont conts hs env v *)
-  (*   | (frame :: delim) :: conts, _ -> *)
-  (*     let (scope, var, locals, comp) = frame in *)
-  (*     let env = Value.bind var (v, scope) (Value.shadow env ~by:locals) in *)
-  (*     let conts = delim :: conts in *)
-  (*     computation env conts hs comp *)
-  (*   | _   -> failwith ("evalir.ml: apply_cont: Edge case: Ooops, what happened?") *)
-  (* and computation env cont hs (bindings, tailcomp) : Proc.thread_result Lwt.t = *)
        apply_cont cont env (Lib.apply_pfun n args (Value.Env.request_data env))
     | `PrimitiveFunction (_, Some code), args ->
        apply_cont cont env (Lib.apply_pfun_by_code code args (Value.Env.request_data env))
@@ -489,7 +456,11 @@ struct
         client_call req_data name cont args
     | `Continuation c,      [p] -> apply_cont c env p
     | `Continuation _,       _  ->
-        eval_error "Continuation applied to multiple (or zero) arguments"
+       eval_error "Continuation applied to multiple (or zero) arguments"
+    | `ReifiedContinuation cont', [p] ->
+       apply_cont K.(cont' <> cont) env p
+    | `ReifiedContinuation _, _ ->
+       eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
   and apply_cont (cont : continuation) env v =
     Proc.yield (fun () -> apply_cont' cont env v)
@@ -646,9 +617,10 @@ struct
        let comp = value env v in
        apply cont env (comp, [])
     | `DoOperation (name, v, _) ->
+       let reify k = `ReifiedContinuation k in
        let eval = computation in
        let vs = List.map (value env) v in
-       K.invoke_trap ~eval ~env cont (name,vs)
+       K.invoke_trap ~eval ~reify cont (name, Value.box vs)
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
@@ -678,46 +650,6 @@ struct
                K.Frame.of_expr env (`Special (`Choice (v, cases)))
             in
             Session.block inp (Proc.get_current_pid ());
-  (*****************)
-  (* and handle _env cont hs (opname, vs) = (\* TODO: Is _env really supposed to be unused? *\) *)
-  (*   let depth = fst in     *)
-  (*   (\* handle operations, forwarding appropriately, where *)
-  (*       [cont'] and [hs'] are reversed stacks of *)
-  (*       delimited continuations and handlers *)
-  (*       used for restoring the stacks when [k] is invoked  *\) *)
-  (*   let rec handle' (cont', hs') = *)
-  (*     function *)
-  (*     | delim :: cont, (henv, h, spec) :: hs -> *)
-  (*        let cont' = delim :: cont' in *)
-  (*        let hs' = (henv, h, spec) :: hs' in *)
-  (*        begin *)
-  (*          match StringMap.lookup opname h with	     *)
-  (*          | Some (kb, (var, _), comp) -> *)
-  (*             let k = *)
-  (*               match depth spec with *)
-  (*               | `Deep -> *)
-  (*                  `DeepContinuation (List.rev cont', List.rev hs') *)
-  (*               | `Shallow -> *)
-  (*                  `ShallowContinuation (delim, List.rev (List.tl cont'), List.rev (List.tl hs')) *)
-  (*             in *)
-  (*             let henv = *)
-  (*               match kb with *)
-  (*               | `Effect kb -> Value.bind (Var.var_of_binder kb) (k, `Local) henv *)
-  (*               | _ -> henv *)
-  (*             in *)
-  (*             computation (Value.bind var (Value.box vs, `Local) henv) cont hs comp *)
-  (*          | None -> *)
-  (*             Debug.print ("Forwarding: " ^ opname); *)
-  (*             handle' (cont', hs') (cont, hs)               *)
-  (*        end *)
-  (*     | _, [] -> eval_error "Unhandled operation: %s" opname *)
-  (*     | _, _  -> assert false (\* Avoids a warning from being generated due to incomplete pattern matching *\) *)
-  (*   in *)
-  (*   handle' ([], []) (cont, hs) *)
-  (* and invoke_return_clause cont hs _env (henv, h, _) v = *)
-  (*   match StringMap.lookup "Return" h with *)
-  (*   | Some (_, (var, _), comp) -> computation (Value.bind var (v, `Local) henv) cont hs comp *)
-  (*   | None -> eval_error "Pattern matching failed on Return" *)
             Proc.block (fun () -> apply_cont K.(choice_frame &> cont) env (`Record []))
       end
   and finish env v = Proc.finish (env, v)

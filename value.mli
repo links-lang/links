@@ -136,12 +136,12 @@ module type CONTINUATION = sig
   val to_string : 'v t -> string
 
   module Handler : sig
-    type u
+    type 'v t
 
-    val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> u
+    val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
   end
-  val set_trap_point : handler:Handler.u -> 'v t -> 'v t
-  val invoke_trap : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> env:'v Env.t -> 'v t -> (Ir.name * 'v list) -> 'r
+  val set_trap_point : handler:'v Handler.t -> 'v t -> 'v t
+  val invoke_trap : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> reify:('v t -> 'v) -> 'v t -> (Ir.name * 'v) -> 'r
 end
 
 module Continuation : CONTINUATION
