@@ -431,10 +431,6 @@ perhaps_name:
 |                                                              { None }
 | cp_name                                                      { Some $1 }
 
-perhaps_exp:
-|                                                              { None }
-| exp                                                          { Some $1 }
-
 cp_expression:
 | LBRACE block_contents RBRACE                                 { `Unquote $2, pos () }
 | cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { `Grab ((fst3 $1, None), $3, $6), pos () }
