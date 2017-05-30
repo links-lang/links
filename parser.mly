@@ -177,7 +177,7 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER LINEARHANDLE LINEARHANDLER
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
-%token DOOP       
+%token DOOP
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -325,14 +325,14 @@ fun_declaration:
 								 `Handler (b, spec, hnlit, None), pos }
 
 typed_handler_binding:
-| handler_specialization optional_computation_parameter var handler_parameterization  { let binder = (fst $3, None, snd $3) in									       
+| handler_specialization optional_computation_parameter var handler_parameterization  { let binder = (fst $3, None, snd $3) in
 			   						     let hnlit  = ($2, fst $4, snd $4) in
  									     (binder, $1, hnlit, pos()) }
 
 optional_computation_parameter:
 | /* empty */                                                 { (`Any, pos()) }
 | LBRACKET pattern RBRACKET                                   { $2 }
-  
+
 perhaps_uinteger:
 | /* empty */                                                  { None }
 | UINTEGER                                                     { Some $1 }
@@ -471,9 +471,9 @@ primary_expression:
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
 | handler_specialization optional_computation_parameter handler_parameterization              {  let (body, args) = $3 in
-										      let hnlit = ($2, body, args) in						  
-											`HandlerLit ($1, hnlit), pos() } 
-    
+										      let hnlit = ($2, body, args) in
+											`HandlerLit ($1, hnlit), pos() }
+
 handler_specialization:
 | handler_depth                        { $1 }
 
@@ -485,9 +485,9 @@ handler_depth:
 | HANDLER                    { `Deep, `Unrestricted }
 | SHALLOWHANDLER             { `Shallow, `Unrestricted }
 
-handler_body:	  
+handler_body:
 | LBRACE cases RBRACE    	                               { $2 }
-  
+
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
 | CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2, None), pos() }
@@ -557,8 +557,8 @@ postfix_expression:
                                                                          (`Block $5, pos ()), None), pos () }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { `Query (Some ($3, $5), (`Block $7, pos ()), None), pos () }
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
-| postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }		     
-		     
+| postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
+
 
 arg_spec:
 | LPAREN RPAREN                                                { [] }
@@ -575,8 +575,8 @@ unary_expression:
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
 | DOOP CONSTRUCTOR arg_spec		                       { `DoOperation ($2, Some $3, None), pos() }
-| DOOP CONSTRUCTOR                                             { `DoOperation ($2, None, None), pos() }       
-	
+| DOOP CONSTRUCTOR                                             { `DoOperation ($2, None, None), pos() }
+
 
 infixr_9:
 | unary_expression                                             { $1 }
@@ -780,12 +780,12 @@ case_expression:
 
 handle_specialisation:
 | handle_depth                                                 { $1 }
-    
+
 handle_depth:
-| LINEARHANDLE                                                 { (`Deep, `Linear) }              
+| LINEARHANDLE                                                 { (`Deep, `Linear) }
 | HANDLE                                                       { (`Deep, `Unrestricted) }
 | SHALLOWHANDLE                                                { (`Shallow, `Unrestricted) }
-    
+
 iteration_expression:
 | case_expression                                              { $1 }
 | FOR LPAREN perhaps_generators RPAREN
