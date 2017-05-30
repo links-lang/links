@@ -696,6 +696,18 @@ module EitherMonad = Deriving_monad.MonadPlusUtils(
       | m      -> m
   end)
 
+(* Extensions of queue module to handle queue -> list and list -> queue
+ * conversions *)
+module Queue = struct
+  include Queue
+  let to_list q =
+    List.rev @@ Queue.fold (fun acc x -> x :: acc) [] q
+
+  let of_list xs =
+    let q = Queue.create () in
+    List.iter (fun x -> Queue.add x q) xs;
+    q
+end
 
 module OptionUtils =
 struct
@@ -830,7 +842,9 @@ let base64decode s =
     else
       raise e
 
-let base64encode = B64.encode
+let base64encode =
+  (* We may want to use B64.uri_safe_alphabet rather than the default alphabet *)
+  B64.encode ~alphabet:B64.default_alphabet ~pad:true
 
 let gensym_counter = ref 0
 

@@ -1,0 +1,30 @@
+typename Test = !(Int).!(Int).?(Int).End;
+
+module Client {
+  # dummy
+  fun main(_) {
+    page <#></#>
+  }
+}
+
+module Server {
+  sig main : (AP(Test)) ~> ()
+  fun main(ap) {
+    var c = request(ap);
+    var (x, c) = receive(c);
+    var (y, c) = receive(c);
+    var _ = send(x + y, c);
+    print(intToString(x + y));
+    sysexit(0)
+  }
+}
+
+fun main() {
+  var ap = new();
+  var _ = spawn { Server.main(ap) };
+  addRoute("/", fun (_, _) { Client.main(ap) } );
+  serveWebsockets();
+  servePages()
+}
+
+main()

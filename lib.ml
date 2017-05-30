@@ -313,7 +313,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "Send",
   (p2 (fun _pid _msg ->
          assert(false)), (* Now handled in evalir.ml *)
-   datatype "(Process ({hear:a|_}), a) ~> ()",
+   datatype "forall a::Type(Any, Any).(Process ({hear:a|_}), a) ~> ()",
    IMPURE);
 
   "self",
@@ -1580,7 +1580,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "serveWebsockets",
     (`PFun (fun _ -> assert false),
-    datatype "(String) ~> ()",
+    datatype "() ~> ()",
     IMPURE)
 ]
 

@@ -141,9 +141,14 @@ struct
     let cont = Value.Continuation.(frame &> empty) in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
+  let get_websocket_url () =
+    if Webs.is_accepting_websocket_requests () then
+      Some (Settings.get_value Basicsettings.websocket_url)
+      else None
+
   let resolve_json_state req_data v =
     let client_id = RequestData.get_client_id req_data in
-    let json_state = Json.JsonState.empty client_id in
+    let json_state = Json.JsonState.empty client_id (get_websocket_url ()) in
     (* Add event handlers *)
     let json_state = ResolveJsonState.add_val_event_handlers v json_state in
     (* Add AP and process information *)
@@ -178,9 +183,11 @@ struct
           (IntMap.bindings (Value.Env.get_parameters env));
         Eval.apply Value.Continuation.toplevel env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
+        (*
         if not(Proc.singlethreaded()) then
-          (prerr_endline "Remaining procs on server after remote call!";
+          (prerr_endline "Remaining  procs on server after remote call!";
            assert(false));
+           *)
         let json_state = resolve_json_state req_data r in
         Lwt.return
           ("text/plain",
@@ -202,6 +209,7 @@ struct
              (Lib.nenv, Lib.typing_env)
              (globals @ locals)
              (valenv, v)
+             (get_websocket_url ())
          end
        else
          let program = (globals @ locals, main) in
@@ -245,7 +253,8 @@ struct
            ~cgi_env:cgi_args
            (Lib.nenv, Lib.typing_env)
            (globals @ locals)
-           (valenv, v)) in
+           (valenv, v)
+           (get_websocket_url ())) in
 
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))

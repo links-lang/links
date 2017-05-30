@@ -190,6 +190,8 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
+val box_variant : string -> t -> t
+val unbox_variant : t -> (string * t)
 val box_pid : dist_pid -> t
 val unbox_pid : t -> dist_pid
 val box_socket : in_channel * out_channel -> t

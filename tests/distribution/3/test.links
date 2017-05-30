@@ -1,0 +1,17 @@
+typename Test = !(Int).!(Int).?(Int).End;
+
+module Client {
+  # dummy
+  fun main(_) {
+    page <#></#>
+  }
+}
+
+fun main() {
+  var ap = new();
+  addRoute("/", fun (_, _) { Client.main(ap) } );
+  serveWebsockets();
+  servePages()
+}
+
+main()

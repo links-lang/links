@@ -1,0 +1,40 @@
+typename S1 = ?(Int).?(Int).?(Int).!(Int).End;
+typename S2 = ?(S1).End;
+
+module Client {
+  fun main() {
+    page <#></#>
+  }
+}
+
+module Server {
+
+  fun main(ap) {
+    var carrier = accept(ap);
+    var (c, _) = receive(carrier);
+    debug("Received delegated channel");
+    var (x, c) = receive(c);
+    debug("Received " ^^ intToString(x));
+    var (y, c) = receive(c);
+    debug("Received " ^^ intToString(y));
+    var (z, c) = receive(c);
+    debug("Received " ^^ intToString(z));
+    var res = x + y + z;
+    var _ = send(res, c);
+    debug("Sent" ^^ intToString(res));
+    ()
+  }
+
+}
+
+fun main() {
+  # AP: S2
+  var (ap : AP(S2)) = new();
+  var _ = spawn { Server.main(ap) };
+  addRoute("/", fun (_, _) { Client.main() });
+  serveWebsockets();
+  servePages();
+}
+
+
+main()
