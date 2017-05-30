@@ -840,7 +840,9 @@ let base64decode s =
     else
       raise e
 
-let base64encode = B64.encode
+let base64encode =
+  (* We may want to use B64.uri_safe_alphabet rather than the default alphabet *)
+  B64.encode ~alphabet:B64.default_alphabet ~pad:true
 
 let gensym_counter = ref 0
 

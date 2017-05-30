@@ -435,7 +435,7 @@ struct
   let send_message wsocket str_msg =
     Lwt.wrap1 (wsocket.send_fn) @@ (
       Some (
-      Websocket_cohttp_lwt.Frame.of_bytes @@
+      Websocket_cohttp_lwt.Frame.of_bytes ?opcode:None ?extension:None ?final:None @@
       BytesLabels.of_string @@
       str_msg)
     )
