@@ -6,7 +6,7 @@ open Sugartypes
  [open] [shallow]handler(m) {
     case Op_i(p_i,k_i) -> ...
     case Return(x) -> ...
-  } 
+  }
   =>
   fun(m) {
     handle(m) {
@@ -31,16 +31,16 @@ let rec names : pattern -> string list
     | `Variable (name,_,_)        -> [name]
     | `Cons (pat,pat')            -> (names pat) @ (names pat')
     | `Tuple pats
-    | `List pats                  -> List.fold_left (fun ns pat -> (names pat) @ ns ) [] pats   
+    | `List pats                  -> List.fold_left (fun ns pat -> (names pat) @ ns ) [] pats
     | `Negative ns'               -> List.fold_left (fun ns n -> n :: ns) [] ns'
     | `As  ((name,_,_),pat)       -> [name] @ (names pat)
     | `HasType (pat,_)            -> names pat
     | _                           -> []
 
 (* This function resolves name conflicts in a given pattern p.
-   The conflict resolution is simple: 
+   The conflict resolution is simple:
    Given a set of conflicting names ns, then for every name n if (n \in p && n \in ns) then n gets rewritten as _.
- *)       
+ *)
 let resolve_name_conflicts : pattern -> stringset -> pattern
   = fun pat conflicts ->
     let rec hide_names : pattern -> pattern
@@ -66,7 +66,7 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
 	 end
 	   , pos)
     in hide_names pat
-    
+
 (* This function parameterises each clause computation, e.g.
  fun(m)(s) {
    handle(m) {
@@ -80,11 +80,11 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
      case Return(x) -> fun(s) { N }
    }
  }
- Furthermore, the function resolves name conflicts between clause-parameters 
+ Furthermore, the function resolves name conflicts between clause-parameters
  and the parameters of the introduced functions which encompass clause bodies. Currently,
  the clause-parameters shadow the introduced function parameters.
 *)
-let parameterize : (pattern * phrase) list -> pattern list list option -> (pattern * phrase) list 
+let parameterize : (pattern * phrase) list -> pattern list list option -> (pattern * phrase) list
   = fun cases params ->
   let wrap_fun params body =
     (`FunLit (None, `Unl, (params, body), `Unknown), dp)
@@ -102,7 +102,7 @@ let parameterize : (pattern * phrase) list -> pattern list list option -> (patte
        let params = List.map (List.map (fun p -> resolve_name_conflicts p name_conflicts)) params in
        (pat, wrap_fun params body)
      ) cases
-  
+
 
 (* This function assigns fresh names to `Any (_) *)
 let rec deanonymize : pattern -> pattern
@@ -123,7 +123,7 @@ let rec deanonymize : pattern -> pattern
       | `HasType (p,t)               -> `HasType (deanonymize p, t)
      end, pos)
 
-(* This function translates a pattern into a phrase. It assumes that the given pattern has been deanonymised. *)      
+(* This function translates a pattern into a phrase. It assumes that the given pattern has been deanonymised. *)
 let rec phrase_of_pattern : pattern -> phrase
   = fun (pat,pos) ->
     (begin
@@ -142,18 +142,18 @@ let rec phrase_of_pattern : pattern -> phrase
       | `HasType (p,t)               -> `TypeAnnotation (phrase_of_pattern p, t)
     end, pos)
 
-(* This function applies the list of parameters to the generated handle. *)      
+(* This function applies the list of parameters to the generated handle. *)
 let apply_params : phrase -> phrase list list -> phrase
   = fun h pss ->
-    List.fold_right (fun ps acc -> `FnAppl (acc, ps),dp ) (List.rev pss) h 
-           
+    List.fold_right (fun ps acc -> `FnAppl (acc, ps),dp ) (List.rev pss) h
+
 let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.funlit
   = fun (m, cases, params) desc ->
     let pos = snd m in
     let m    = deanonymize m in
     let comp = phrase_of_pattern m in
     let cases = parameterize cases params in
-    let handle : phrase = `Block ([], (`Handle (comp, cases, desc), pos)),pos in  
+    let handle : phrase = `Block ([], (`Handle (comp, cases, desc), pos)),pos in
     let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =
       match params with
@@ -163,19 +163,19 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.
 	 apply_params handle params
     in
     let fnparams : pattern list list = [[]] in
-    let fnparams = 
+    let fnparams =
       match params with
 	Some params -> params @ ([m] :: fnparams)
       | None -> [m] :: fnparams
     in
     let fnlit = (fnparams, body) in
     fnlit
-			     
+
 let desugar_handlers_early =
 object
   inherit SugarTraversals.map as super
   method! phrasenode = function
-    | `HandlerLit (spec, hnlit) ->      
+    | `HandlerLit (spec, hnlit) ->
        let handle = make_handle hnlit (spec,None) in
        let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, handle, `Unknown) in
        super#phrasenode funlit

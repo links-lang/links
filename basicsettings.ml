@@ -149,3 +149,8 @@ let print_colors = Settings.add_bool ("print_colors", false, `User)
 
 (* Base URL for websocket connections *)
 let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)
+
+(* Handlers stuff *)
+module Handlers = struct
+  let enabled = Settings.add_bool("enable_handlers", false, `System)
+end

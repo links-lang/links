@@ -208,7 +208,7 @@ and phrasenode = [
 | `Var              of name
 | `QualifiedVar     of name list
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
-| `HandlerLit       of handler_spec * handlerlit 
+| `HandlerLit       of handler_spec * handlerlit
 (* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
 | `Spawn            of spawn_kind * given_spawn_location * phrase * Types.row option
 | `Query            of (phrase * phrase) option * phrase * Types.datatype option

@@ -23,7 +23,7 @@ struct
     Debug.print (s ^ ": " ^ Sugartypes.Show_sentence.show sentence);
     sentence
 
-      
+
   (* (These functions correspond to 'first' in an arrow) *)
   let after_typing f (a, b, c) = (f a, b, c)
   let _after_alias_expansion f (a, b) = (f a, b)
@@ -42,7 +42,8 @@ struct
               "modules flag to true, or run with -m.")
       else program in
       let _program = CheckXmlQuasiquotes.checker#program program in
-      ( DesugarHandlers.desugar_handlers_early#program
+      ( CheckExperimental.check#program
+       ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
        ->- RefineBindings.refine_bindings#program
        ->- DesugarDatatypes.program tyenv.Types.tycon_env
@@ -64,7 +65,8 @@ struct
     fun tyenv pos_context sentence ->
       let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
       let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
-      ( DesugarHandlers.desugar_handlers_early#sentence
+      ( CheckExperimental.check#sentence
+       ->- DesugarHandlers.desugar_handlers_early#sentence
        ->- DesugarLAttributes.desugar_lattributes#sentence
        ->- RefineBindings.refine_bindings#sentence
        ->- DesugarDatatypes.sentence tyenv

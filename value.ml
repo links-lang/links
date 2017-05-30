@@ -555,7 +555,7 @@ module Eff_Handler_Continuation = struct
 end
 
 module Continuation
-  = (val (if false then
+  = (val (if not (Settings.get_value Basicsettings.Handlers.enabled) then
            (module Pure_Continuation : COMPRESSABLE_CONTINUATION)
          else
            (module Eff_Handler_Continuation : COMPRESSABLE_CONTINUATION)) : COMPRESSABLE_CONTINUATION)
