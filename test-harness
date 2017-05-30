@@ -65,7 +65,7 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
         popen_list = [links] + arg_array + [code]
         proc = Popen(popen_list, stdout=PIPE, stderr=PIPE, env=env)
     else:
-        proc = Popen([links, flags, code], stdout=PIPE, stderr=PIPE, env=env)
+        proc = Popen([links] +  flags.split(" ") + [code], stdout=PIPE, stderr=PIPE, env=env)
     passed = True
     errors = []
     for i in xrange(0, TIMEOUT*100):
