@@ -230,7 +230,7 @@ struct
     try getenv name
     with Not_found -> not_found "Sys.getenv" name
 
-  exception Unknown_environment_variable of string      
+  exception Unknown_environment_variable of string
   (* Windows shell identifier names: [][A-Za-z0-9#~.,$'()*+?@_`{} -]+
      Portable Unix shell identifier names: $[A-Za-z_][A-Za-z0-9_]*
   *)
@@ -245,7 +245,7 @@ struct
       (fun var -> String.sub var 1 (String.length var - 2))
     else
       (fun var -> String.sub var 1 (String.length var - 1))
-      
+
   (*  Expands any environmental variables in [string] *)
   let expand string =
     let getenv v =
@@ -254,7 +254,7 @@ struct
     let open Pervasives in
     Str.full_split shell_var_regexp string
     |> List.map (function | Str.Delim v -> getenv (normalize_env_var v) | Str.Text v -> v)
-    |> String.concat ""    
+    |> String.concat ""
 
 
 end

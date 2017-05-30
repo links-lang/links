@@ -58,7 +58,11 @@ let is_user = function
 let settings : ((universal SettingsMap.t) ref) = ref (SettingsMap.empty)
 
 (* parse and set *)
-let parse_and_set' : [`Any | `OnlyUser] -> (string * string) -> unit = fun kind (name, value) ->
+let parse_and_set' : [`Any | `OnlyUser] -> (string * string) -> bool -> unit = fun kind (name, value) quiet ->
+  let output_string msg =
+    if not quiet then
+      output_string stderr msg; flush stderr
+  in
   if SettingsMap.mem name (!settings) then
     let universal_setting = SettingsMap.find name (!settings) in
       match kind, is_user(universal_setting) with
@@ -71,14 +75,14 @@ let parse_and_set' : [`Any | `OnlyUser] -> (string * string) -> unit = fun kind 
 		      try
 		        set_value setting (parse_bool value)
 		      with (Invalid_argument _) ->
-		        output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
+		        output_string ("Setting '" ^ name ^ "' expects a boolean\n")
 	            end
 	        | `Int setting ->
 	            begin
 		      try
 		        set_value setting (int_of_string value)
 		      with Invalid_argument _ ->
-		        output_string stderr ("Setting '" ^ name ^ "' expects a boolean\n"); flush stderr
+		        output_string ("Setting '" ^ name ^ "' expects a boolean\n")
 	            end
 	        | `String setting ->
                    let expanded_value =
@@ -89,9 +93,9 @@ let parse_and_set' : [`Any | `OnlyUser] -> (string * string) -> unit = fun kind 
 	           set_value setting expanded_value
             end
         | _ ->
-	    output_string stderr ("Cannot change system setting '" ^ name ^ "'\n"); flush stderr;
+	    output_string ("Cannot change system setting '" ^ name ^ "'\n")
   else
-    output_string stderr ("Unknown setting: " ^ name ^ "\n"); flush stderr
+    output_string ("Unknown setting: " ^ name ^ "\n")
 
 let parse_and_set = parse_and_set' `Any     (* any setting can be set *)
 let parse_and_set_user = parse_and_set' `OnlyUser (* only allow user settings to be set *)
@@ -180,7 +184,7 @@ let from_argv : string array -> string list =
     process [] -<- Array.to_list
 
 
-let load_file filename =
+let load_file quiet filename =
   let file = open_in filename in
 
   let strip_comment s =
@@ -203,7 +207,7 @@ let load_file filename =
 	      let name = String.sub s 0 i in
 	      let value = String.sub s (i+1) ((String.length s) - (i+1))
 	      in
-		parse_and_set (name, value)
+		parse_and_set (name, value) quiet
 	    end
 	  else
 	    failwith ("Error in configuration file (line "^string_of_int n^"): '"^s^"'\n"^

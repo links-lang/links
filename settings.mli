@@ -18,13 +18,13 @@ val add_string : (string * string * mode) -> string setting
   parse_and_set(name, value)
     bind name to the parsed value
 *)
-val parse_and_set : string * string -> unit
+val parse_and_set : string * string -> bool -> unit
 
 (*
  parse_and_set_user(name, value)
    as parse_and_set(name, value), but only user settings can be set
 *)
-val parse_and_set_user : string * string -> unit
+val parse_and_set_user : string * string -> bool -> unit
 
 (* lookup a setting *)
 val lookup_bool : string -> bool setting
@@ -47,4 +47,4 @@ val print_settings : unit -> string list
 val from_argv : string array -> string list
 
 (* ... *)
-val load_file : string -> unit
+val load_file : bool -> string -> unit

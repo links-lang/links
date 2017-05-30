@@ -134,7 +134,7 @@ let rec directives
 
     "set",
     (ignore_envs
-       (function (name::value::_) -> Settings.parse_and_set_user (name, value)
+       (function (name::value::_) -> Settings.parse_and_set_user (name, value) false
           | _ -> prerr_endline "syntax : @set name value"),
      "change the value of a setting");
 
@@ -440,9 +440,10 @@ let set_web_mode() = (
 let print_keywords =
   Some (fun () -> List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0)
 
-let config_file   : string option ref = ref BS.config_file_path
+let config_file   : string option ref = EarlyOptions.config_file
 let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
+  EarlyOptions.options @
   [
     ('d',     "debug",               set Debug.debugging_enabled true, None);
     ('w',     "web_mode",            Some set_web_mode,                None);
@@ -451,7 +452,6 @@ let options : opt list =
     ('n',     "no-types",            set BS.printing_types false,      None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     ('m',     "modules",             set BS.modules true,              None);
-    (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "dump",                None,
      Some(fun filename -> Loader.print_cache filename;
             Settings.set_value BS.interacting false));
@@ -462,7 +462,6 @@ let options : opt list =
     (noshort, "print-keywords",      print_keywords,                   None);
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
-    (noshort, "enable-handlers",     set BS.Handlers.enabled true,     None);
     ]
 
 let file_list = ref []
@@ -539,7 +538,7 @@ let _ =
      (parse_cmdline options (fun i -> push_back i file_list)));
 
   (match !config_file with None -> ()
-     | Some file -> Settings.load_file file);
+     | Some file -> Settings.load_file false file);
 
   if Settings.get_value BS.cache_whole_program
   then whole_program_caching_main ()

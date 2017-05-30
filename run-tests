@@ -8,6 +8,7 @@
 
 DATABASE_TEST_DIR=tests/database   # Location of database tests
 SHREDDING_TEST_DIR=tests/shredding # Location of database tests
+HANDLERS_TEST_DIR=tests/handlers   # Location of handlers tests
 ret=0                              # Return code. If <> 0 then some tests failed
 STARTCOLOR="\e[31m"                # Control sequence to enable red text
 ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
@@ -16,6 +17,9 @@ ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
 if [[ "$1" != "db-only" ]]; then
     for i in tests/*.tests; do
         cmnd="./test-harness $i"
+        if [[ -f "$i.config" ]]; then
+            cmnd="$cmnd $i.config"
+        fi
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?

@@ -421,7 +421,7 @@ struct
       ([],[],[],[])
 
   let drop_nth xs n =
-    (take n xs) @ (drop (n+1) xs)      
+    (take n xs) @ (drop (n+1) xs)
 
   let rec filter_map pred f = function
     | [] -> []
