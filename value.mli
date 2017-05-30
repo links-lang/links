@@ -121,16 +121,18 @@ module type CONTINUATION = sig
 
   module Frame : FRAME
 
+  (* A continuation has a monoidal structure *)
   val empty : 'v t
+  val (<>)  : 'v t -> 'v t -> 'v t          (* continuation composition *)
+  val (&>)  : 'v Frame.t -> 'v t -> 'v t    (* continuation augmentation *)
   val toplevel : 'v t
-  val (<>)  : 'v t -> 'v t -> 'v t
-  val (&>)  : 'v Frame.t -> 'v t -> 'v t
 
-  val apply : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) ->
-              finish:('v Env.t -> 'v -> 'r) ->
-              env:'v Env.t ->
-              'v t ->
-              'v -> 'r
+  val apply : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> (* computation evaluator *)
+              finish:('v Env.t -> 'v -> 'r) ->                   (* when the continuation has been depleted *)
+              env:'v Env.t ->                                    (* the current environment *)
+              'v t ->                                            (* the continuation *)
+              'v ->                                              (* the argument *)
+              'r
 
   val to_string : 'v t -> string
 
@@ -139,8 +141,13 @@ module type CONTINUATION = sig
 
     val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
   end
-  val set_trap_point : handler:'v Handler.t -> 'v t -> 'v t
-  val invoke_trap : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> reify:('v t -> 'v) -> 'v t -> (Ir.name * 'v) -> 'r
+
+  val set_trap_point : handler:'v Handler.t -> 'v t -> 'v t (* installs a handler *)
+  val invoke_trap : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> (* computation evaluator *)
+                    reify:('v t -> 'v) ->                              (* continuation reification *)
+                    'v t ->                                            (* the continuation *)
+                    (Ir.name * 'v) ->                                  (* operation name and its argument *)
+                    'r
 end
 
 module Continuation : CONTINUATION
