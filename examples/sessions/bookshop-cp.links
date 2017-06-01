@@ -30,7 +30,6 @@ typename Son = [&|Choice:!Product.EndBang|&];
 #sig waitForClient : (Shop, [Product], String) ~> ()
 fun waitForClient(s, orderedProducts, removedProducts) client
 {
-
  <| offer s {
         case Add -> s(item).{waitForClient(s, item::orderedProducts, removedProducts)}
 
@@ -106,8 +105,7 @@ fun waitForSon(c) client
 
 # Sends a signal that it is time to choose a product.
 #sig getSonBook : (~Son) ~> (Product)
-fun getSonBook(s) client
-{
+fun getSonBook(s) {
         <| Choice s.s(choice).s().{choice} |>
 }
 
@@ -120,7 +118,8 @@ fun orderBooks(c) client
 
         <| Add c.c[Book("Alice in Wonderland")].
            Add c.c[Audio_Visual("Hitchhiker's Guide to the Galaxy")].{
-       var choice = <| nu s.({waitForSon(s)}|{getSonBook(s)}) |>;
+           var choice = <| nu s.({waitForSon(s)}|{getSonBook(s)}) |>;
+           debug("after choice");
 
        <| Add c.c[choice].
            Remove c.c[Audio_Visual("Hitchhiker's Guide to the Galaxy")].
@@ -131,31 +130,42 @@ fun orderBooks(c) client
 
 # Creates a new access point and binds the ends of the channel to appropriate functions.
 sig main : () ~> ()
-fun main() client
-{
+fun main() {
         var order = <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
 
         appendChildren(stringToXml(order!!0), getNodeById("items"));
         appendChildren(stringToXml(order!!1), getNodeById("removed"));
         appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
         appendChildren(stringToXml(order!!3), getNodeById("address"));
-
 }
 
-page
-        <html>
-        <head><title>From Academic Papers</title></head>
-        <body bgcolor="#E6E6FA">
-        <form l:onsubmit="{main()}">
-        <h3>Finished example from "Linear type theory for asynchronous session types":</h3>
-        <button type="submit">Start communication</button>
-        </form>
-        <p><b>Products ordered:</b></p>
-        <p id="items"></p>
-        <p><b>Products removed:</b></p>
-        <p id="removed"></p>
-        <p><b>Payment details:</b></p>
-        <p id="cardNo">Card number: </p>
-        <p id="address">Address: </p>
-        </body>
-        </html>
+
+fun mainPage(_,_) {
+  var pid = spawnClient { receive { case _ -> main() } };
+  fun trigger() { pid ! () }
+  page
+      <html>
+      <head><title>From Academic Papers</title></head>
+      <body bgcolor="#E6E6FA">
+      <form l:onsubmit="{trigger()}">
+      <h3>Finished example from "Linear type theory for asynchronous session types":</h3>
+      <button type="submit">Start communication</button>
+      </form>
+      <p><b>Products ordered:</b></p>
+      <p id="items"></p>
+      <p><b>Products removed:</b></p>
+      <p id="removed"></p>
+      <p><b>Payment details:</b></p>
+      <p id="cardNo">Card number: </p>
+      <p id="address">Address: </p>
+      </body>
+      </html>
+}
+
+
+fun setup() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+setup()

@@ -28,12 +28,11 @@ fun format(text) {
     {stringToXml(text)}</li>
 }
 
-sig draggableList : (String, [String]) ~> Xml
-fun draggableList(id, items)
+sig draggableList : (Location, String, [String]) ~> Xml
+fun draggableList(loc, id, items)
 {
-  var ap = new();
-
-  var manager = spawn {
+  var ap = newAP(loc);
+  var manager = spawnAt(loc, {
     fun wait(c) {
       var s = accept(ap);
       <|offer s {
@@ -62,7 +61,7 @@ fun draggableList(id, items)
     }
 
     wait(fork (fun (s) {waiting(id, s)}));
-  };
+  });
 
   fun mouseUp() {
     var c = request(ap);
@@ -91,15 +90,26 @@ fun draggableList(id, items)
   }</ul>
 }
 
-page
- <html>
- <body>
- <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
- {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
- <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
- {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
- <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
- {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
-                         "Sus scrofa cristatus","Sus scrofa taiwanus"])}
- </body>
- </html>
+
+fun mainPage(_, loc) {
+  page
+   <html>
+   <body>
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
+   {draggableList(loc, "bears",["Pooh", "Paddington", "Rupert", "Edward"])}
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
+   {draggableList(loc, "beers",["Budvar", "Delirium Tremens", "Deuchars"])}
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
+   {draggableList(loc, "boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
+                           "Sus scrofa cristatus","Sus scrofa taiwanus"])}
+   </body>
+   </html>
+}
+
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()
