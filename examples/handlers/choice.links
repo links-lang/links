@@ -22,7 +22,7 @@ fun positive(m) client {
 }
 
 fun allChoices(m)() client {
-  handle(m) {
+  handle(m()) {
     case Return(x) -> [x]
     case Choose(k) -> k(true) ++ k(false)
   }
