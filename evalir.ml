@@ -617,12 +617,11 @@ struct
     | `CallCC f ->
        apply cont env (value env f, [`Continuation cont])
     (* Handlers *)
-    | `Handle (v, clauses, spec) ->
+    | `Handle (comp, clauses, spec) ->
        let depth = fst spec in
        let handler = K.Handler.make ~env ~clauses ~depth in
        let cont = K.set_trap_point ~handler cont in
-       let comp = value env v in
-       apply cont env (comp, [])
+       computation env cont comp
     | `DoOperation (name, v, _) ->
        let reify k = `ReifiedContinuation k in
        let eval = computation in

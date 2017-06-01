@@ -457,7 +457,7 @@ class transform (env : Types.typing_environment) =
               (fun o (p, e) ->
                  let (o, p) = o#pattern p in
                  let (o, e, _) = o#phrase e in (o, (p, e)))
-              cases in	  
+              cases in
           let (o, t) = o#datatype t in
 	  let (o, effects) = o#row effects in
 	  let desc = SD.update_type_info (t, effects) desc in

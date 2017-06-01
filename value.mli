@@ -123,9 +123,9 @@ module type CONTINUATION = sig
 
   (* A continuation has a monoidal structure *)
   val empty : 'v t
+  val toplevel : 'v t
   val (<>)  : 'v t -> 'v t -> 'v t          (* continuation composition *)
   val (&>)  : 'v Frame.t -> 'v t -> 'v t    (* continuation augmentation *)
-  val toplevel : 'v t
 
   val apply : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> (* computation evaluator *)
               finish:('v Env.t -> 'v -> 'r) ->                   (* when the continuation has been depleted *)

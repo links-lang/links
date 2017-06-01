@@ -1,6 +1,6 @@
 fun intersperse(y, xs) {
    switch (xs) {
-     case []      -> []    
+     case []      -> []
      case [x]     -> [x]
      case x :: xs -> x :: y :: intersperse(y,xs)
    }
@@ -54,7 +54,7 @@ fun run() client {
 }
 
 # Page
-fun mainPage(_) {
+fun mainPage(_,_) {
   page
     <html>
       <body>

@@ -151,7 +151,7 @@ let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.
   = fun (m, cases, params) desc ->
     let pos = snd m in
     let m    = deanonymize m in
-    let comp = phrase_of_pattern m in
+    let comp = `FnAppl (phrase_of_pattern m, []), pos in
     let cases = parameterize cases params in
     let handle : phrase = `Block ([], (`Handle (comp, cases, desc), pos)),pos in
     let params = opt_map (List.map (List.map deanonymize)) params in

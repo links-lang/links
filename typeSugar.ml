@@ -2989,7 +2989,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       if has_wild then allow_wild row
 	       else row
            in
-           let m = tc m in (* Type-check the input computation m under current context *)
+           let m_context = { context with effect_row = Types.make_empty_open_row (`Unl, `Any) } in
+           let m = type_check m_context m in (* Type-check the input computation m under current context *)
+           let m_effects = `Record m_context.effect_row in
            let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
            let effects         = TypeUtils.extract_row pattern_type in
        (** TODO get effect context; don't assume m is a thunk **)
@@ -3000,9 +3002,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let fresh_row = Types.make_empty_open_row (`Unl, `Any) in
 	     Types.extend_row (fst3 effect_row) fresh_row <| allow_wild
            in
-           let thunk_type = Types.make_thunk_type input_effect_row ret in (* type: () {e}-> a *)
+           (*let thunk_type = Types.make_thunk_type input_effect_row ret in (* type: () {e}-> a *)*)
            let (_,_,p)  = SourceCode.resolve_pos pos in
-           let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, thunk_type)) in (* Unify m and and the constructed type. *)
+           let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, ret)) in (* Unify m and and the constructed type. *)
+           let () = unify ~handle:Gripers.handle_computation (no_pos (`Record input_effect_row), no_pos m_effects) in
 
        (** Next, construct the (output) effect row for the handler *)
            let output_effect_row =
@@ -3050,7 +3053,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 links> fun h2(m) { shallowhandle(m) { case Op(k) -> h1(fun() { k(2) }) case Return(x) -> x : Int } };
                 h2 = fun : (() {Op:Int|a}~> Int) {Op{_}|a}~> Int
             **)
-                let t      = TypeUtils.return_type (typ m) in
+                let t      = typ m in
 	        let (p,_)  = pos_and_typ m in
 	        List.fold_left
 	          (fun _ (k,ktail) ->

@@ -93,7 +93,7 @@ and special =
   | `CallCC of (value)
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (value * clause name_map * handler_spec)
+  | `Handle of (computation * clause name_map * handler_spec)
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
 and clause = [`Effect of binder | `Exception | `Regular] * binder * computation
@@ -474,10 +474,8 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
-	(* Input arguments: (value, (binder, computation)) 
-         * Boilerplate code: Basically, this turns out to be similar to how we handle Choice above. *)
-	| `Handle (v, bs, isclosed) ->
-	   let (v, _, o) = o#value v in
+	| `Handle (m, bs, descr) ->
+	   let (m, _, o) = o#computation m in
 	   let (bs, branch_types, o) =
 	     o#name_map
                (fun o (cc, b, c) ->
@@ -494,7 +492,7 @@ struct
 	       bs
 	   in
     	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-	   `Handle (v, bs, isclosed), t, o
+	   `Handle (m, bs, descr), t, o
 	| `DoOperation (name, vs, t) ->
 	   (* FIXME: the typing isn't right here for non-zero argument
 	   operations *)

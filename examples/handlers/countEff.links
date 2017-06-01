@@ -7,7 +7,7 @@ fun count() client {
 
 sig evalState : (Comp({Get:s,Put:(s) {}-> () |e}, a), s) {Get{_},Put{_} |e}~> a
 fun evalState(m,st0) {
-  (handle(m) {
+  (handle(m()) {
     case Return(x)      -> fun(_) { x }
     case Get(resume)    -> fun(st) { resume(st)(st) }
     case Put(st,resume) -> fun(_)  { resume(())(st) }
@@ -21,11 +21,11 @@ fun run(n) client {
 
 
 # Page
-fun mainPage(_) {
+fun mainPage(_,_) {
   page
     <html>
       <body>
-        <form l:onsubmit="{run(10^6)}">
+        <form l:onsubmit="{run(10^3)}">
           <input type="submit" value="Run" />
           <input type="text" id="result" readonly="readonly" value="" />
         </form>
