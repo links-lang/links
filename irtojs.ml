@@ -651,7 +651,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
       | `DoOperation (name, vs, _t) ->
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
-         in         
+         in
          bind_continuation kappa
            (fun kappa ->
              Bind ("hks", Call (Var "_lsTail", [kappa]),
@@ -662,7 +662,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                let env' = VEnv.bind env (name_binder binder) in
                snd (generate_computation env' body kappa)
          in
-         let m = gv m in
+         let m = Fn (["__kappa"], snd (generate_computation env  m (Var "__kappa"))) in
          let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
          let return =
            let (_, xb, body) = return_clause in
