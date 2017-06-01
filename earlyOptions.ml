@@ -12,8 +12,8 @@ let options : opt list =
   ]
 
 let _ =
-  (** This is somewhat hacky. There should be proper error handling
-  here. **)
+  (* This is somewhat hacky. There should be proper error handling
+  here. *)
   try
     parse_cmdline options (fun _ -> ());
     match !config_file with

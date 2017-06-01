@@ -165,7 +165,7 @@ let print_settings () =
 
 let from_argv : string array -> string list =
   let set name value =
-    parse_and_set_user (name, value)
+    parse_and_set_user (name, value) false
   and is_opt = start_of ~is:"--"
   and de_opt s = StringLabels.sub ~pos:2 ~len:(String.length s - 2) s in
   let rec process nonopts = function
