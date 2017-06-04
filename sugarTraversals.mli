@@ -51,7 +51,7 @@ class map :
     method location        : location -> location
     method iterpatt        : iterpatt -> iterpatt
     method funlit          : funlit -> funlit
-    method handlerlit      : handlerlit -> handlerlit					 
+    method handlerlit      : handlerlit -> handlerlit
     method fieldspec       : fieldspec -> fieldspec
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
@@ -65,8 +65,6 @@ class map :
     method binding         : binding -> binding
     method program         : program -> program
     method unknown         : 'a. 'a -> 'a
-    method handler_spec    : handler_spec -> handler_spec
-    method hdescriptor     : hdescriptor -> hdescriptor
   end
 
 (* Reduce a value.  See
@@ -122,7 +120,7 @@ class fold :
     method location        : location -> 'self
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
-    method handlerlit      : handlerlit -> 'self					 
+    method handlerlit      : handlerlit -> 'self
     (* method quantifier      : quantifier -> 'self *)
     method fieldspec       : fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
@@ -138,8 +136,6 @@ class fold :
     method binding         : binding -> 'self
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
-    method handler_spec    : handler_spec -> 'self
-    method hdescriptor     : hdescriptor -> 'self
   end
 
 
@@ -171,7 +167,7 @@ object ('self)
   method int             : int -> 'self * int
   method float           : float -> 'self * float
   method funlit          : funlit -> 'self * funlit
-  method handlerlit      : handlerlit -> 'self * handlerlit					       
+  method handlerlit      : handlerlit -> 'self * handlerlit
   method iterpatt        : iterpatt -> 'self * iterpatt
   method list            : 'a . ('self -> 'a -> 'self * 'a) -> 'a list -> 'self * 'a list
   method location        : location -> 'self * location
@@ -206,6 +202,4 @@ object ('self)
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
   method unary_op        : unary_op -> 'self * unary_op
   method unknown         : 'a . 'a -> 'self * 'a
-  method handler_spec    : handler_spec -> 'self * handler_spec
-  method hdescriptor     : hdescriptor -> 'self * hdescriptor
 end

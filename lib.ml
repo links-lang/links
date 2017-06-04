@@ -292,7 +292,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   "exit",
-  (`Continuation Value.Continuation.toplevel,
+  (`Continuation Value.Continuation.empty,
   (* Return type must be free so that it unifies with things that
      might be used alternatively. E.g.:
      if (test) exit(1) else 42 *)

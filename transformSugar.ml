@@ -239,12 +239,7 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
             (o, `FunLit (Some argss, lin, lam, location), t)
-	 (*| `HandlerLit (Some (effects, return_type, ht), spec, hnlit) ->*)
       | `HandlerLit _ -> assert false
-	 (*let () = print_endline ("TransformSugar: " ^ (Types.string_of_datatype ht)) in*)
-	 (*let (o, hnlit, ht) = o#handlerlit ht hnlit in
-	   let (o, effects) = o#row effects in
-           (o, `HandlerLit (Some (effects, return_type, ht), spec, hnlit), ht)*)
       | `Spawn (`Wait, loc, body, Some inner_effects) ->
           assert (loc = `NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
@@ -444,24 +439,28 @@ class transform (env : Types.typing_environment) =
       | `DoOperation (name, Some ps, Some t) ->
 	 let (o, ps, _) = list o (fun o -> o#phrase) ps in
 	 (o, `DoOperation (name, Some ps, Some t), TypeUtils.return_type t)
-      | `Handle (expr, cases, desc) ->
-         let module SD = HandlerUtils.SugarDescriptor in
-	 let (t, effects) =
-           match SD.type_info desc with
-           | Some v -> v
-           | None -> assert false
-         in
-          let (o, expr, _) = o#phrase expr in
-          let (o, cases) =
-            listu o
+      | `Handle { sh_expr; sh_clauses; sh_descr } ->
+         let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
+         let (o, expr, _) = o#phrase sh_expr in
+         let (o, cases) =
+           listu o
               (fun o (p, e) ->
-                 let (o, p) = o#pattern p in
-                 let (o, e, _) = o#phrase e in (o, (p, e)))
-              cases in
-          let (o, t) = o#datatype t in
-	  let (o, effects) = o#row effects in
-	  let desc = SD.update_type_info (t, effects) desc in
-            (o, `Handle (expr, cases, desc), t)
+                let (o, p) = o#pattern p in
+                let (o, e, _) = o#phrase e in (o, (p, e)))
+              sh_clauses
+         in
+         let (o, input_row) = o#row input_row in
+         let (o, input_t) = o#datatype input_t in
+         let (o, output_row) = o#row output_row in
+         let (o, output_t) = o#datatype output_t in
+	 let (o, raw_row) = o#row sh_descr.shd_raw_row in
+         let descr = {
+                       shd_depth = sh_descr.shd_depth;
+                       shd_types = (input_row, input_t, output_row, output_t);
+                       shd_raw_row = raw_row;
+                     }
+         in
+         (o, `Handle { sh_expr = expr; sh_clauses = cases; sh_descr = descr }, output_t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =

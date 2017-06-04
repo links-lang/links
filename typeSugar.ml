@@ -2969,7 +2969,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else
                 Gripers.upcast_subtype pos t2 t1
         | `Upcast _ -> assert false
-        | `Handle (m, cases, desc) ->
+        | `Handle { sh_expr = m; sh_clauses = cases; sh_descr = descr } ->
        (** allow_wild adds wild : () to the given effect row *)
            let allow_wild : Types.row -> Types.row
 	     = fun row ->
@@ -2994,7 +2994,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let m_effects = `Record m_context.effect_row in
            let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
            let effects         = TypeUtils.extract_row pattern_type in
-       (** TODO get effect context; don't assume m is a thunk **)
        (** First construct the effect row for the input computation m
            * It is important to construct the entire type for m before typing continuations,
            * as we need to know the return type of m to type continuations in shallow handlers *)
@@ -3028,7 +3027,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 		 (k, (kpat, tenv, TypeUtils.return_type t)) :: ks
 	       ) continuations []
 	     in
-	     match HandlerUtils.SugarDescriptor.depth desc with
+	     match descr.shd_depth with
 	     | `Deep -> (* Deep handlers: Make continuation codomains and body type agree *)
 	        let poly_presence_row = `Record (make_operations_presence_polymorphic output_effect_row) in
 	        List.fold_left
@@ -3062,8 +3061,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	          )
 	          () ks
            in
-           let desc = HandlerUtils.SugarDescriptor.update_type_info (body_type, effects) desc in
-           `Handle (erase m, erase_cases cases, desc), body_type, merge_usages [usages m; usages_cases cases]
+           let descr = { descr with
+                         shd_types = (input_effect_row, typ m, output_effect_row, body_type);
+                         shd_raw_row = effects; }
+           in
+           `Handle { sh_expr = erase m; sh_clauses = erase_cases cases; sh_descr = descr }, body_type, merge_usages [usages m; usages_cases cases]
         | `DoOperation (opname, args, _) ->
            (* Strategy:
               1. List.map tc args
@@ -3071,7 +3073,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               3. Construct effect row where the operation name gets bound to the previously constructed operation type
               4. Unify with current effect context
            *)
-           if String.compare opname HandlerUtils.return_case == 0 then
+           if String.compare opname "Return" = 0 then
 	     Gripers.die pos "The implicit effect Return is not invocable"
            else
 	     let (optype, return_type, args) =

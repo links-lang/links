@@ -657,12 +657,12 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
              Bind ("hks", Call (Var "_lsTail", [kappa]),
              Bind ("h", Call (Var "_lsHead", [Var "hks"]),
                 generate_op (Dict [("_label", strlit name); ("_value", box vs)]) (Var "h") kappa)))
-      | `Handle (m, clauses, _) ->
+      | `Handle { ih_thunk = m;  ih_clauses = clauses; _ } ->
          let gb env binder body kappa =
                let env' = VEnv.bind env (name_binder binder) in
                snd (generate_computation env' body kappa)
          in
-         let m = Fn (["__kappa"], snd (generate_computation env  m (Var "__kappa"))) in
+         let m = gv m in
          let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
          let return =
            let (_, xb, body) = return_clause in
@@ -673,7 +673,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
            let gc env (ct, xb, body) k h ks =
              let env', r_name =
                match ct with
-               | `Effect kb ->
+               | `Resumption kb ->
                   let kb' = name_binder kb in
                   VEnv.bind env kb', snd kb'
                | _ -> assert false
@@ -711,7 +711,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                                                                     [Var "_k_prime"; Var "ks"])])]))
                                          (Var "x"));
                                   Var "_hks_prime"])))))))
-           in           
+           in
            Fn (["_z"; "__kappa"],
                Bind ("_k", Call (Var "_lsHead", [Var "__kappa"]),
                Bind ("_hks", Call (Var "_lsTail", [Var "__kappa"]),

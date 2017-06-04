@@ -162,11 +162,9 @@ class map =
           let _xs = o#list (fun o -> o#name) _xs in `QualifiedVar _xs
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                            let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
-      | `HandlerLit (spec, hnlit) ->
-	 (*let types = o#option (fun o -> o#unknown) types in*)
-	 let spec = o#handler_spec spec in
+      | `HandlerLit hnlit ->
 	 let hnlit = o#handlerlit hnlit in
-	 `HandlerLit (spec, hnlit)
+	 `HandlerLit hnlit
       | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let _given_spawn_location = o#given_spawn_location _given_spawn_location in
           let _block_phr = o#phrase _block_phr in
@@ -256,18 +254,17 @@ class map =
 	 let t   = o#option (fun o -> o#unknown) t in
 	 `DoOperation (name, ps, t)
       (* The handle case is written by hand *)
-      | `Handle (m, cases, desc) ->
-          let m = o#phrase m in
+      | `Handle { sh_expr; sh_clauses; sh_descr } ->
+          let m = o#phrase sh_expr in
           let cases =
             o#list
               (fun o (lhs, rhs ) ->
                  let lhs = o#pattern lhs in
                  let rhs = o#phrase rhs in (lhs, rhs)
 	      )
-              cases
+              sh_clauses
 	  in
-	  let desc = o#hdescriptor desc in
-          `Handle (m, cases, desc)
+          `Handle { sh_expr = m; sh_clauses = cases; sh_descr }
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -462,7 +459,7 @@ class map =
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
 
     method handlerlit : handlerlit -> handlerlit =
-      fun (m, cases, params) ->
+      fun (depth, m, cases, params) ->
 	let m = o#pattern m in
 	let cases =
           o#list
@@ -472,19 +469,14 @@ class map =
 	    )
             cases
 	in
-(*	let params =
+        let params =
 	  o#option
 	    (fun o -> o#list
-	      (fun o -> o#pattern)
-	    ) params in*)
-            let params =
-	o#option
-	  (fun o -> o#list
-	    (fun o -> o#list
-	      (fun o -> o#pattern)
+	      (fun o -> o#list
+	        (fun o -> o#pattern)
 	    )
 	) params in
-	(m,cases,params)
+	(depth,m,cases,params)
 
     method fieldspec : fieldspec -> fieldspec =
       function
@@ -608,12 +600,11 @@ class map =
                  in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
           in `Funs _x
-      | `Handler (b, spec, hnlit, t) ->
+      | `Handler (b, hnlit, t) ->
 	 let b = o#binder b in
-	 let spec = o#handler_spec spec in
 	 let hnlit = o#handlerlit hnlit in
 	 let t     = o#option (fun o -> o#unknown) t in
-	 `Handler (b, spec, hnlit, t)
+	 `Handler (b, hnlit, t)
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
@@ -650,11 +641,6 @@ class map =
           (bindings, phrase)
 
     method unknown : 'a. 'a -> 'a = fun x -> x
-
-    method handler_spec : handler_spec -> handler_spec =
-      fun spec -> spec
-    method hdescriptor  : hdescriptor  -> hdescriptor =
-      fun desc -> desc
   end
 
 class fold =
@@ -797,9 +783,7 @@ class fold =
       | `QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
-      | `HandlerLit (spec, hnlit) ->
-	 (*let o = o#option (fun o -> o#unknown) types in*)
-	 let o = o#handler_spec spec in
+      | `HandlerLit hnlit ->
 	 let o = o#handlerlit hnlit in o
       | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let o = o#given_spawn_location _given_spawn_location in
@@ -875,17 +859,16 @@ class fold =
 	 let o = o#option (fun o -> o#unknown) t in
 	 let o = o#option (fun o -> o#list (fun o -> o#phrase)) ps in o
       (* The Handle case is written by hand *)
-      | `Handle (m, cases, desc) ->
-          let o = o#phrase m in
+      | `Handle { sh_expr; sh_clauses; _ } ->
+          let o = o#phrase sh_expr in
           let o =
             o#list
               (fun o (lhs, rhs) ->
                let o = o#pattern lhs in
 	       let o = o#phrase rhs in o
 	      )
-              cases
-	  in
-	  let o = o#hdescriptor desc in o
+              sh_clauses
+	  in o
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
@@ -1059,8 +1042,8 @@ class fold =
         let o = o#phrase _x_i1 in o
 
     method handlerlit : handlerlit -> 'self_type =
-      fun (m, cases, params) ->
-	let o = o#pattern m in	
+      fun (_, m, cases, params) ->
+	let o = o#pattern m in
 	let o =
           o#list
             (fun o (lhs, rhs) ->
@@ -1192,11 +1175,10 @@ class fold =
                  let o = o#position _x_i5 in o)
               _x
           in o
-      | `Handler (b, spec, hnlit, t) ->
+      | `Handler (b, hnlit, t) ->
 	 let o = o#binder b in
-	 let o = o#handler_spec spec in
 	 let o = o#handlerlit hnlit in
-	 let o = o#option (fun o -> o#unknown) t in o					 
+	 let o = o#option (fun o -> o#unknown) t in o
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
@@ -1232,12 +1214,6 @@ class fold =
 
 
     method unknown : 'a. 'a -> 'self_type = fun _ -> o
-
-    method handler_spec : handler_spec -> 'self_type =
-      fun _ -> o 
-	
-    method hdescriptor : hdescriptor -> 'self_type =
-      fun _ -> o
   end
 
 class virtual predicate =
@@ -1405,10 +1381,9 @@ class fold_map =
       | `FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
-      | `HandlerLit (spec, hnlit) ->	 
-	 let (o, spec) = o#handler_spec spec in
+      | `HandlerLit hnlit ->
 	 let (o, hnlit) = o#handlerlit hnlit in
-	 (o, `HandlerLit (spec, hnlit))
+	 (o, `HandlerLit hnlit)
       | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let (o, _given_spawn_location) = o#given_spawn_location _given_spawn_location in
           let (o, _block_phr) = o#phrase _block_phr in
@@ -1502,19 +1477,17 @@ class fold_map =
 	 let (o, t) = o#option (fun o -> o#unknown) t in
 	 let (o, ps) = o#option (fun o -> o#list (fun o -> o#phrase)) ps in
 	 (o, `DoOperation (name, ps, t))
-      (* Handle case is written by hand *)
-      | `Handle (m, cases, desc) ->
-          let (o, m) = o#phrase m in
+      | `Handle { sh_expr; sh_clauses; sh_descr } ->
+          let (o, m) = o#phrase sh_expr in
           let (o, cases) =
             o#list
               (fun o (lhs, rhs) ->
                  let (o, lhs) = o#pattern lhs in
                  let (o, rhs) = o#phrase rhs in (o, (lhs, rhs))
 	      )
-              cases
+              sh_clauses
 	  in
-	  let (o, desc) = o#hdescriptor desc in
-          (o, (`Handle (m, cases, desc)))
+          (o, (`Handle { sh_expr = m; sh_clauses = cases; sh_descr }))
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -1746,7 +1719,7 @@ class fold_map =
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
 
     method handlerlit : handlerlit -> ('self_type * handlerlit) =
-      fun (m, cases, params) ->
+      fun (depth, m, cases, params) ->
 	let (o, m) = o#pattern m in
 	let (o, cases) =
           o#list
@@ -1756,21 +1729,15 @@ class fold_map =
 	    )
             cases
 	in
-(*	let (o, params) =
+        let (o, params) =
 	  o#option
 	    (fun o -> o#list
-	      (fun o -> o#pattern)
-	) params in*)
-      let (o, params) =
-	o#option
-	  (fun o -> o#list
-	    (fun o -> o#list
-	      (fun o -> o#pattern)
+	      (fun o -> o#list
+	        (fun o -> o#pattern)
 	    )
 	) params in
-	(o, (m, cases, params))
+	(o, (depth, m, cases, params))
 
-					     
     method fieldspec : fieldspec -> ('self_type * fieldspec) =
       function
       | `Present _x -> let (o, _x) = o#datatype _x in (o, `Present _x)
@@ -1894,7 +1861,7 @@ class fold_map =
           let (o, _x_i2) = o#funlit _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))	       
+          in (o, (`Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
       | `Funs _x ->
           let (o, _x) =
             o#list
@@ -1907,12 +1874,11 @@ class fold_map =
                  in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
           in (o, (`Funs _x))
-      | `Handler (b, spec, hnlit, t) ->
+      | `Handler (b, hnlit, t) ->
 	 let (o, b) = o#binder b in
-	 let (o, spec) = o#handler_spec spec in
 	 let (o, hnlit) = o#handlerlit hnlit in
 	 let (o, t) = o#option (fun o -> o#unknown) t in
-	 (o, `Handler (b, spec, hnlit, t))
+	 (o, `Handler (b, hnlit, t))
       | `Foreign ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#name _x_i1 in
@@ -1951,11 +1917,4 @@ class fold_map =
         let (o, _x_i2) = o#position _x_i2 in (o, (_x, _x_i1, _x_i2))
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
-
-    method handler_spec : handler_spec -> ('self_type * handler_spec) =
-      fun spec ->
-	(o, spec)
-	  
-    method hdescriptor : hdescriptor -> ('self_type * hdescriptor) =
-      fun desc -> (o, desc)
   end

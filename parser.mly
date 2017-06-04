@@ -54,9 +54,9 @@ let annotate (signame, datatype) : _ -> binding =
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
           `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
-      | `Handler ((name,_,_) as m, spec, hnlit, dpos) ->
+      | `Handler ((name,_,_) as b, hnlit, dpos) ->
 	 let _ = checksig signame name in
-	 `Handler (m, spec, hnlit, Some datatype), dpos
+	 `Handler (b, hnlit, Some datatype), dpos
 
 let primary_kind_of_string pos =
   function
@@ -321,13 +321,13 @@ fun_declaration:
                                                                  in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 | signature typed_handler_binding                              { annotate $1 (`Handler $2) }
-| typed_handler_binding                                        { let (b, spec, hnlit, pos) = $1 in
-								 `Handler (b, spec, hnlit, None), pos }
+| typed_handler_binding                                        { let (b, hnlit, pos) = $1 in
+								 `Handler (b, hnlit, None), pos }
 
 typed_handler_binding:
-| handler_specialization optional_computation_parameter var handler_parameterization  { let binder = (fst $3, None, snd $3) in
-			   						     let hnlit  = ($2, fst $4, snd $4) in
- 									     (binder, $1, hnlit, pos()) }
+| handler_depth optional_computation_parameter var handler_parameterization { let binder = (fst $3, None, snd $3) in
+			   						      let hnlit  = ($1, $2, fst $4, snd $4) in
+ 									      (binder, hnlit, pos()) }
 
 optional_computation_parameter:
 | /* empty */                                                 { (`Any, pos()) }
@@ -470,20 +470,16 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
-| handler_specialization optional_computation_parameter handler_parameterization              {  let (body, args) = $3 in
-										      let hnlit = ($2, body, args) in
-											`HandlerLit ($1, hnlit), pos() }
-
-handler_specialization:
-| handler_depth                        { $1 }
-
+| handler_depth optional_computation_parameter handler_parameterization              {  let (body, args) = $3 in
+										      let hnlit = ($1, $2, body, args) in
+											`HandlerLit hnlit, pos() }
 handler_parameterization:
 | handler_body                         { ($1, None) }
 | arg_lists handler_body               { ($2, Some $1) }
 
 handler_depth:
-| HANDLER                    { `Deep, `Unrestricted }
-| SHALLOWHANDLER             { `Shallow, `Unrestricted }
+| HANDLER                    { `Deep }
+| SHALLOWHANDLER             { `Shallow }
 
 handler_body:
 | LBRACE cases RBRACE    	                               { $2 }
@@ -774,17 +770,12 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| handle_specialisation LPAREN exp RPAREN LBRACE cases RBRACE  {
-                                                                 let descriptor = ($1, None) in
-                                                                 `Handle ($3, $6, descriptor), pos() }
-
-handle_specialisation:
-| handle_depth                                                 { $1 }
+| handle_depth LPAREN exp RPAREN LBRACE cases RBRACE           { let hndlr = Sugartypes.make_untyped_handler $3 $6 $1 in
+                                                                 `Handle hndlr, pos() }
 
 handle_depth:
-| LINEARHANDLE                                                 { (`Deep, `Linear) }
-| HANDLE                                                       { (`Deep, `Unrestricted) }
-| SHALLOWHANDLE                                                { (`Shallow, `Unrestricted) }
+| HANDLE                                                       { `Deep }
+| SHALLOWHANDLE                                                { `Shallow }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -902,8 +893,8 @@ binding:
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
-| typed_handler_binding                                        { let (b, spec, hnlit, pos) = $1 in
-                                                                 `Handler (b, spec, hnlit, None), pos }
+| typed_handler_binding                                        { let (b, hnlit, pos) = $1 in
+                                                                 `Handler (b, hnlit, None), pos }
 | links_module                                                 { $1 }
 | links_open                                                   { $1 }
 

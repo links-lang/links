@@ -4,12 +4,6 @@
 
 open Utility
 
-(* Handlers *)
-type handler_spec   = handler_depth * [`Linear | `Unrestricted]
-and handler_depth   = [ `Deep | `Shallow ]
-  deriving (Show)
-
-
 type scope = Var.scope
   deriving (Show)
 (* term variables *)
@@ -93,10 +87,16 @@ and special =
   | `CallCC of (value)
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (computation * clause name_map * handler_spec)
+  | `Handle of handler
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
-and clause = [`Effect of binder | `Exception | `Regular] * binder * computation
+and clause = [`Resumption of binder | `Regular] * binder * computation
+and handler = {
+    ih_thunk: value;
+    ih_clauses: clause name_map;
+    ih_depth: handler_depth;
+}
+and handler_depth = [`Deep | `Shallow]
   deriving (Show)
 
 let binding_scope : binding -> scope =
@@ -474,25 +474,25 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
-	| `Handle (m, bs, descr) ->
-	   let (m, _, o) = o#computation m in
-	   let (bs, branch_types, o) =
+	| `Handle { ih_thunk; ih_clauses; ih_depth } ->
+	   let (ih_thunk, _, o) = o#value ih_thunk in
+	   let (ih_clauses, branch_types, o) =
 	     o#name_map
                (fun o (cc, b, c) ->
                  let (cc, o) =
                    match cc with
-                   | `Effect b ->
+                   | `Resumption b ->
                       let (b, o) = o#binder b in
-                      `Effect b, o
+                      `Resumption b, o
                    | _ -> (cc, o)
                  in
 		 let (b, o) = o#binder b in
 		 let (c, t, o) = o#computation c in
 		 (cc, b, c), t, o)
-	       bs
+	       ih_clauses
 	   in
     	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-	   `Handle (m, bs, descr), t, o
+	   `Handle { ih_thunk; ih_clauses; ih_depth }, t, o
 	| `DoOperation (name, vs, t) ->
 	   (* FIXME: the typing isn't right here for non-zero argument
 	   operations *)

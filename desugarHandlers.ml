@@ -147,13 +147,14 @@ let apply_params : phrase -> phrase list list -> phrase
   = fun h pss ->
     List.fold_right (fun ps acc -> `FnAppl (acc, ps),dp ) (List.rev pss) h
 
-let make_handle : Sugartypes.handlerlit -> Sugartypes.hdescriptor -> Sugartypes.funlit
-  = fun (m, cases, params) desc ->
+let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
+  = fun (depth, m, cases, params) ->
     let pos = snd m in
     let m    = deanonymize m in
     let comp = `FnAppl (phrase_of_pattern m, []), pos in
     let cases = parameterize cases params in
-    let handle : phrase = `Block ([], (`Handle (comp, cases, desc), pos)),pos in
+    let hndlr = Sugartypes.make_untyped_handler comp cases depth in
+    let handle : phrase = `Block ([], (`Handle hndlr, pos)),pos in
     let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =
       match params with
@@ -175,15 +176,26 @@ let desugar_handlers_early =
 object
   inherit SugarTraversals.map as super
   method! phrasenode = function
-    | `HandlerLit (spec, hnlit) ->
-       let handle = make_handle hnlit (spec,None) in
-       let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, handle, `Unknown) in
+    | `HandlerLit hnlit ->
+       let fnlit = funlit_of_handlerlit hnlit in
+       let funlit : Sugartypes.phrasenode = `FunLit (None, `Unl, fnlit, `Unknown) in
        super#phrasenode funlit
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | `Handler (binder, spec, hnlit, annotation) ->
-       let handle  = make_handle hnlit (spec,None) in
-       `Fun (binder, `Unl, ([], handle), `Unknown, annotation)
+    | `Handler (binder, hnlit, annotation) ->
+       let fnlit  = funlit_of_handlerlit hnlit in
+       `Fun (binder, `Unl, ([], fnlit), `Unknown, annotation)
     | b -> super#bindingnode b
 end
+
+let thunk_computation env =
+  object (o : 'self_type)
+    inherit (TransformSugar.transform env) as super
+    method! phrasenode = function
+      | `Handle ({ sh_expr = m; _ } as hndlr) ->
+         let (input_row, _, _, output_type) = hndlr.sh_descr.shd_types in
+         let thunk = `FunLit (Some [Types.unit_type, input_row], `Unl, ([[]], m), `Unknown), dp in
+         o, `Handle { hndlr with sh_expr = thunk }, output_type
+      | e -> super#phrasenode e
+  end

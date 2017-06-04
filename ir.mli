@@ -37,10 +37,6 @@ type constant = Constant.constant
 type location = Sugartypes.location
   deriving (Show)
 
-type handler_spec  = handler_depth * [`Linear | `Unrestricted]
-and handler_depth  = [ `Deep | `Shallow ]
-  deriving (Show)
-
 (* INVARIANT: all IR binders have unique names *)
 
 type value =
@@ -87,10 +83,16 @@ and special =
   | `CallCC of value
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
-  | `Handle of (computation * clause name_map * handler_spec)
+  | `Handle of handler
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
-and clause = [`Effect of binder | `Exception | `Regular] * binder * computation
+and clause = [`Resumption of binder | `Regular] * binder * computation
+and handler = {
+    ih_thunk: value;
+    ih_clauses: clause name_map;
+    ih_depth: handler_depth;
+}
+and handler_depth = [`Deep | `Shallow]
   deriving (Show)
 
 val binding_scope : binding -> scope

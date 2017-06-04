@@ -355,32 +355,59 @@ module Frame = struct
     (scope, var, locals, body)
 end
 
+module type CONTINUATION_EVALUATOR = sig
+  type v
+  type r
+  type 'v t
+  type 'v h
+
+  val apply : env:v Env.t ->            (* the current environment *)
+              v t ->                    (* the continuation *)
+              v ->                      (* the argument *)
+              r
+
+  val set_trap_point : handler:v h -> v t -> v t  (* installs a handler *)
+  val invoke_trap : v t ->                        (* the continuation *)
+                    (Ir.name * v) ->              (* operation name and its argument *)
+                    r
+
+  val toplevel : v t (* Toplevel continuation *)
+end
+
+module type EVAL = sig
+  type 'v t
+  type v
+  type r
+  val error : string -> 'a
+  val computation : v Env.t -> v t -> Ir.computation -> r
+  val finish : v Env.t -> v -> r
+  val reify : v t -> v
+  end
+
 module type CONTINUATION = sig
   type 'v t
      deriving (Show)
 
   module Frame : FRAME
+  module Handler : sig
+      type 'v t
 
+      val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
+  end
+
+  (* A continuation has a monoidal structure *)
   val empty : 'v t
-  val toplevel : 'v t
-  val (<>)  : 'v t -> 'v t -> 'v t
-  val (&>)  : 'v Frame.t -> 'v t -> 'v t
+  val (<>)  : 'v t -> 'v t -> 'v t          (* continuation composition *)
+  val (&>)  : 'v Frame.t -> 'v t -> 'v t    (* continuation augmentation *)
 
-  val apply : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) ->
-              finish:('v Env.t -> 'v -> 'r) ->
-              env:'v Env.t ->
-              'v t ->
-              'v -> 'r
+
+  module Evaluation :
+  functor(E : EVAL with type 'v t := 'v t) ->
+  sig
+    include CONTINUATION_EVALUATOR with type v = E.v and type r = E.r and type 'v t := 'v t and type 'v h := 'v Handler.t
+  end
 
   val to_string : 'v t -> string
-
-  module Handler : sig
-    type 'v t
-
-    val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
-  end
-  val set_trap_point : handler:'v Handler.t -> 'v t -> 'v t
-  val invoke_trap : eval:('v Env.t -> 'v t -> Ir.computation -> 'r) -> reify:('v t -> 'v) -> 'v t -> (Ir.name * 'v) -> 'r
 end
 
 module type COMPRESSABLE_CONTINUATION = sig
@@ -397,16 +424,9 @@ module Pure_Continuation = struct
       deriving (Show)
 
   let empty = []
-  let toplevel = empty
   let (<>) k k' = k @ k'
   let (&>) f k = f :: k
 
-  let apply ~eval ~finish ~env k v =
-    match k with
-    | [] -> finish env v
-    | (scope, var, locals, comp) :: cont ->
-       let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
-       eval env cont comp
   let to_string _ = "pure_continuation"
 
   (** Compression **)
@@ -420,13 +440,29 @@ module Pure_Continuation = struct
   module Frame = Frame
 
   module Handler = struct
-    type 'v t = unit
+      type 'v t = unit
 
-    let make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
-      = fun ~env ~clauses ~depth -> ignore(env); ignore(clauses); ignore(depth); ()
+      let make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
+        = fun ~env ~clauses ~depth -> ignore(env); ignore(clauses); ignore(depth); ()
   end
-  let set_trap_point ~handler k = ignore(handler); k
-  let invoke_trap ~eval ~reify k _ = ignore(reify); eval Env.empty k ([], `Special (`Wrong `Not_typed))
+
+  module Evaluation =
+    functor(E : EVAL with type 'v t := 'v t) ->
+  struct
+    type v = E.v
+    type r = E.r
+    let apply  ~env k v =
+    match k with
+    | [] -> E.finish env v
+    | (scope, var, locals, comp) :: cont ->
+       let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
+       E.computation env cont comp
+
+    let set_trap_point ~handler k = ignore(handler); k
+    let invoke_trap _ _ = E.error "no trap"
+
+    let toplevel = empty
+  end
 end
 
 module Eff_Handler_Continuation = struct
@@ -450,10 +486,34 @@ module Eff_Handler_Continuation = struct
       | CompressedShallowContinuation of 'cv Frame.compressed_t list * 'cv ck
       deriving (Show, Eq, Typeable, Dump, Pickle)
   end
+
+  open K
+  type 'v t = 'v continuation
+      deriving (Show)
+
+  let id =
+    let return_clause =
+      let (b,var) = Var.fresh_var (`Not_typed, "x", `Local) in
+      (b, ([], `Return (`Variable var)))
+    in
+    { env = Env.empty; op_clauses = StringMap.empty; return_clause; depth = `Deep }
+  let empty = Continuation [(id, [])]
+  let rec (&>) f = function
+    | Continuation [] -> f &> empty
+    | Continuation ((h, fs) :: rest) -> Continuation ((h, f :: fs) :: rest)
+    | ShallowContinuation (f', []) -> ShallowContinuation (f', [(id, [f])])
+    | ShallowContinuation (f', (h, fs) :: rest) -> ShallowContinuation (f', (h, f :: fs) :: rest)
+  let rec (<>) k k' =
+    match k, k' with
+    | Continuation k, Continuation k' -> Continuation (k @ k')
+    | ShallowContinuation (fs, k), ShallowContinuation (fs', k') -> ShallowContinuation (fs @ fs', k @ k')
+    | ShallowContinuation (fs, k'), k
+    | k, ShallowContinuation (fs, k') -> (Continuation k') <> (List.fold_left (fun k f -> f &> k) k fs)
+
   module Handler = struct
     open K
     type 'v t = 'v handler
-       deriving (Show)
+                   deriving (Show)
     let make ~env ~clauses ~depth =
       let ((_,b,comp), op_clauses) = StringMap.pop "Return" clauses in
       { env; op_clauses; return_clause = (b,comp); depth }
@@ -467,47 +527,58 @@ module Eff_Handler_Continuation = struct
         depth = snd h; }
   end
 
-  open K
-  type 'v t = 'v continuation
-      deriving (Show)
+  module Evaluation =
+    functor (E : EVAL with type 'v t := 'v t) ->
+    struct
+      type v = E.v
+      type r = E.r
 
-  let id =
-    let return_clause =
-      let (b,var) = Var.fresh_var (`Not_typed, "x", `Local) in
-      (b, ([], `Return (`Variable var)))
-    in
-    { env = Env.empty; op_clauses = StringMap.empty; return_clause; depth = `Deep }
-  let empty = Continuation [(id, [])]
-  let toplevel = empty
-  let rec (&>) f = function
-    | Continuation [] -> f &> toplevel
-    | Continuation ((h, fs) :: rest) -> Continuation ((h, f :: fs) :: rest)
-    | ShallowContinuation (f', []) -> ShallowContinuation (f', [(id, [f])])
-    | ShallowContinuation (f', (h, fs) :: rest) -> ShallowContinuation (f', (h, f :: fs) :: rest)
-  let rec (<>) k k' =
-    match k, k' with
-    | Continuation k, Continuation k' -> Continuation (k @ k')
-    | ShallowContinuation (fs, k), ShallowContinuation (fs', k') -> ShallowContinuation (fs @ fs', k @ k')
-    | ShallowContinuation (fs, k'), k
-    | k, ShallowContinuation (fs, k') -> (Continuation k') <> (List.fold_left (fun k f -> f &> k) k fs)
-  let return ~eval k h v =
-    let ((var,_), comp) = h.return_clause in
-    eval (Env.bind var (v, `Local) h.env) k comp
+    let return k h v =
+      let ((var,_), comp) = h.return_clause in
+      E.computation (Env.bind var (v, `Local) h.env) k comp
 
-  let apply ~eval ~finish ~env k v =
-    let k = match k with
-      | ShallowContinuation (fs, k) -> (id, fs) :: k
-      | Continuation k -> k
-    in
-    match k with
-    | [] -> finish env v
-    | (h,[]) :: k -> return ~eval (Continuation k) h v
-    | (h,f :: pk) :: k ->
-      let (scope, var, locals, comp) = f in
-      let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
-      let k = (h, pk) :: k in
-      eval env (Continuation k) comp
+    let apply ~env k v =
+      let k = match k with
+        | ShallowContinuation (fs, k) -> (id, fs) :: k
+        | Continuation k -> k
+      in
+      match k with
+      | [] -> E.finish env v
+      | (h,[]) :: k -> return (Continuation k) h v
+      | (h,f :: pk) :: k ->
+         let (scope, var, locals, comp) = f in
+         let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
+         let k = (h, pk) :: k in
+         E.computation env (Continuation k) comp
 
+    let toplevel = empty
+
+    let set_trap_point ~handler = function
+      | Continuation fs -> Continuation ((handler, []) :: fs)
+      | ShallowContinuation _ -> failwith "Not yet implemented"
+    let invoke_trap k (opname, arg) =
+      let rec handle k' = function
+        | (h, pk) :: k ->
+           begin match StringMap.lookup opname h.op_clauses with
+           | Some (kb, (var, _), comp) ->
+              let resume =
+                match h.depth with
+                | `Shallow -> ShallowContinuation (pk, List.rev k')
+                | `Deep -> Continuation ( List.rev ((h,pk) :: k') )
+              in
+              let env =
+                match kb with
+                | `Resumption rb -> Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
+                | _ -> h.env
+              in
+              E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp
+           | None -> handle ((h, pk) :: k') k
+           end
+        | [] -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname)
+      in match k with
+         | Continuation k -> handle [] k
+         | ShallowContinuation _ -> failwith "Not yet implemented"
+  end
   let to_string _ = "generalised_continuation"
 
   type 'cv compressed_t = 'cv K.compressed_continuation
@@ -526,32 +597,6 @@ module Eff_Handler_Continuation = struct
     | CompressedShallowContinuation (fs, k) -> ShallowContinuation (List.map uncompress_frame fs, List.map uncompress k)
 
   module Frame = Frame
-
-  let set_trap_point ~handler = function
-    | Continuation fs -> Continuation ((handler, []) :: fs)
-    | ShallowContinuation _ -> failwith "Not yet implemented"
-  let invoke_trap ~eval ~reify k (opname, arg) =
-    let rec handle k' = function
-      | (h, pk) :: k ->
-         begin match StringMap.lookup opname h.op_clauses with
-         | Some (kb, (var, _), comp) ->
-            let resume =
-              match h.depth with
-              | `Shallow -> ShallowContinuation (pk, List.rev k')
-              | `Deep -> Continuation ( List.rev ((h,pk) :: k') )
-            in
-            let env =
-              match kb with
-              | `Effect rb -> Env.bind (Var.var_of_binder rb) (reify resume, `Local) h.env
-              | _ -> h.env
-            in
-            eval (Env.bind var (arg, `Local) env) (Continuation k) comp
-         | None -> handle ((h, pk) :: k') k
-         end
-      | [] -> failwith ("no suitable handler for operation " ^ opname ^ " could be found.")
-    in match k with
-       | Continuation k -> handle [] k
-       | ShallowContinuation _ -> failwith "Not yet implemented"
 end
 
 module Continuation

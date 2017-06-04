@@ -57,7 +57,7 @@ let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
     make_lam rt lam
   in
     ((f, Some ft, fpos), lin, (tyvars, lam), location, t)
-      
+
 (*
   unwrap a curried function definition
   with a position attached
