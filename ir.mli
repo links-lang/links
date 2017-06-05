@@ -88,7 +88,7 @@ and special =
 and computation = binding list * tail_computation
 and clause = [`Resumption of binder | `Regular] * binder * computation
 and handler = {
-    ih_thunk: value;
+    ih_comp: computation;
     ih_clauses: clause name_map;
     ih_depth: handler_depth;
 }

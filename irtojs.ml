@@ -657,12 +657,11 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
              Bind ("hks", Call (Var "_lsTail", [kappa]),
              Bind ("h", Call (Var "_lsHead", [Var "hks"]),
                 generate_op (Dict [("_label", strlit name); ("_value", box vs)]) (Var "h") kappa)))
-      | `Handle { ih_thunk = m;  ih_clauses = clauses; _ } ->
+      | `Handle { Ir.ih_comp = m;  Ir.ih_clauses = clauses; _ } ->
          let gb env binder body kappa =
                let env' = VEnv.bind env (name_binder binder) in
                snd (generate_computation env' body kappa)
          in
-         let m = gv m in
          let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
          let return =
            let (_, xb, body) = return_clause in
@@ -721,7 +720,10 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
                            clauses (Var "_k") (Var "_h") (Var "_ks"),
                            Some ("_z", forward (Var "_z") (Var "_k") (Var "_h") (Var "_ks"))))))))
          in
-         Call (m, [Call (Var "_lsCons", [return; Call (Var "_lsCons", [operations; kappa])])])
+         let kappa' = (Call (Var "_lsCons", [return; Call (Var "_lsCons", [operations; kappa])])) in
+         bind_continuation kappa'
+         (fun kappa ->
+           snd (generate_computation env m kappa))
 
 and generate_op z h ks =
   apply_yielding (h, [z], ks)

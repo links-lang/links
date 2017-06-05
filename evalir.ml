@@ -13,36 +13,32 @@ let allow_static_routes = ref true
 
 module type EVALUATOR = sig
   type v = Value.t
-  type r = Proc.thread_result Lwt.t
+  type result = Proc.thread_result Lwt.t
 
   val reify : Value.continuation -> Value.t
   val error : string -> 'a
-  val computation : Value.env -> Value.continuation -> Ir.computation -> r
-  val finish : Value.env -> Value.t -> r
+  val computation : Value.env -> Value.continuation -> Ir.computation -> result
+  val finish : Value.env -> Value.t -> result
 
-  val apply : Value.continuation -> Value.env -> Value.t * Value.t list -> r
-  val apply_cont : Value.continuation -> Value.env -> Value.t -> r
+  val apply : Value.continuation -> Value.env -> Value.t * Value.t list -> result
+  val apply_cont : Value.continuation -> Value.env -> Value.t -> result
   val run_program : Value.env -> Ir.program -> (Value.env * Value.t)
   val run_defs : Value.env -> Ir.binding list -> Value.env
-  val toplevel_continuation : unit -> Value.continuation
 end
 
 module Evaluator = functor (ContEval : Value.CONTINUATION_EVALUATOR with type v = Value.t
-                                                                    and type r = Proc.thread_result Lwt.t
-                                                                    and type 'v t := 'v Value.Continuation.t
-                                                                    and type 'v h := 'v Value.Continuation.Handler.t)
+                                                                    and type result = Proc.thread_result Lwt.t
+                                                                    and type 'v t := 'v Value.Continuation.t)
                            (Webs : WEBSERVER) ->
 struct
   type v = Value.t
-  type r = Proc.thread_result Lwt.t
+  type result = Proc.thread_result Lwt.t
   type continuation = Value.continuation
 
   module K = struct
     include Value.Continuation
     module Eval = ContEval
   end
-
-  let toplevel_continuation () = K.Eval.toplevel
 
   exception EvaluationError of string
   exception Wrong
@@ -113,7 +109,7 @@ struct
      string ->
      Value.continuation ->
      Value.t list ->
-     Proc.thread_result Lwt.t =
+     result =
 
        fun req_data name cont args ->
          if not(Settings.get_value Basicsettings.web_mode) then
@@ -220,14 +216,14 @@ struct
       (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
       (* end *)
     | `Coerce (v, _) -> value env v
-  and apply_access_point (cont : continuation) env : Value.spawn_location -> Proc.thread_result Lwt.t = function
+  and apply_access_point (cont : continuation) env : Value.spawn_location -> result = function
       | `ClientSpawnLoc cid ->
           let apid = Session.new_client_access_point cid in
           apply_cont cont env (`AccessPointID (`ClientAccessPoint (cid, apid)))
       | `ServerSpawnLoc ->
           let apid = Session.new_server_access_point () in
           apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
-  and apply (cont : continuation) env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
+  and apply (cont : continuation) env : Value.t * Value.t list -> result =
     function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) = find_fun f in
@@ -489,9 +485,9 @@ struct
     | _                        -> eval_error "Application of non-function"
   and apply_cont (cont : continuation) env v =
     Proc.yield (fun () -> apply_cont' cont env v)
-  and apply_cont' (cont : continuation) env v : Proc.thread_result Lwt.t =
+  and apply_cont' (cont : continuation) env v : result =
     K.Eval.apply ~env cont v
-  and computation env (cont : continuation) (bindings, tailcomp) : Proc.thread_result Lwt.t =
+  and computation env (cont : continuation) (bindings, tailcomp) : result =
     match bindings with
       | [] -> tail_computation env cont tailcomp
       | b::bs -> match b with
@@ -511,7 +507,7 @@ struct
           | `Alien _ ->
             computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
-  and tail_computation env (cont : continuation) : Ir.tail_computation -> Proc.thread_result Lwt.t = function
+  and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     (* | `Return (`ApplyPure _ as v) -> *)
     (*   let w = (value env v) in *)
     (*     Debug.print ("ApplyPure"); *)
@@ -541,7 +537,7 @@ struct
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
-  and special env (cont : continuation) : Ir.special -> Proc.thread_result Lwt.t = function
+  and special env (cont : continuation) : Ir.special -> result = function
     | `Wrong _                    -> raise Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Table (db, name, keys, (readtype, _, _)) ->
@@ -635,14 +631,13 @@ struct
     | `CallCC f ->
        apply cont env (value env f, [`Continuation cont])
     (* Handlers *)
-    | `Handle { ih_thunk = m; ih_clauses = clauses; ih_depth = depth } ->
+    | `Handle { ih_comp = m; ih_clauses = clauses; ih_depth = depth } ->
        let handler = K.Handler.make ~env ~clauses ~depth in
-       let cont = K.Eval.set_trap_point ~handler cont in
-       let thunk = value env m in
-       apply cont env (thunk, [])
+       let cont = K.set_trap_point ~handler cont in
+       computation env cont m
     | `DoOperation (name, v, _) ->
        let vs = List.map (value env) v in
-       K.Eval.invoke_trap cont (name, Value.box vs)
+       K.Eval.trap cont (name, Value.box vs)
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
@@ -679,7 +674,7 @@ struct
     (*****************)
 
   let reify k = `ReifiedContinuation k
-  let eval : Value.env -> program -> Proc.thread_result Lwt.t =
+  let eval : Value.env -> program -> result =
     fun env -> computation env K.empty
 
   let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
@@ -728,6 +723,6 @@ end
 
 module Eval = functor (Webs : WEBSERVER) ->
 struct
-  module rec Eval : EVALUATOR with type r = Proc.thread_result Lwt.t = Evaluator(Value.Continuation.Evaluation(Eval))(Webs)
+  module rec Eval : EVALUATOR with type result = Proc.thread_result Lwt.t = Evaluator(Value.Continuation.Evaluation(Eval))(Webs)
   include Eval
 end

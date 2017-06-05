@@ -117,21 +117,18 @@ end
 
 module type CONTINUATION_EVALUATOR = sig
   type v
-  type r
+  type result
   type 'v t
-  type 'v h
 
   val apply : env:v Env.t ->            (* the current environment *)
               v t ->                    (* the continuation *)
               v ->                      (* the argument *)
-              r
+              result
 
-  val set_trap_point : handler:v h -> v t -> v t  (* installs a handler *)
-  val invoke_trap : v t ->                        (* the continuation *)
-                    (Ir.name * v) ->              (* operation name and its argument *)
-                    r
-
-  val toplevel : v t (* Toplevel continuation *)
+  (* trap invocation *)
+  val trap : v t ->                        (* the continuation *)
+             (Ir.name * v) ->              (* operation name and its argument *)
+             result
 end
 
 module type CONTINUATION = sig
@@ -149,19 +146,20 @@ module type CONTINUATION = sig
   val (<>)  : 'v t -> 'v t -> 'v t          (* continuation composition *)
   val (&>)  : 'v Frame.t -> 'v t -> 'v t    (* continuation augmentation *)
 
+  val set_trap_point : handler:'v Handler.t -> 'v t -> 'v t  (* installs a handler *)
 
   module Evaluation :
     functor(E :
               sig
                 type v
-                type r
+                type result
                 val error : string -> 'a
-                val computation : v Env.t -> v t -> Ir.computation -> r (* computation evaluator *)
-                val finish : v Env.t -> v -> r                          (* ends program evaluation *)
-                val reify : v t -> v                                    (* continuation reification *)
+                val computation : v Env.t -> v t -> Ir.computation -> result (* computation evaluator *)
+                val finish : v Env.t -> v -> result                          (* ends program evaluation *)
+                val reify : v t -> v                                         (* continuation reification *)
             end) ->
     sig
-      include CONTINUATION_EVALUATOR with type v = E.v and type r = E.r and type 'v t := 'v t and type 'v h := 'v Handler.t
+      include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
     end
 
   val to_string : 'v t -> string

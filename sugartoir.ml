@@ -131,7 +131,7 @@ sig
 
   val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 
-  val handle : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Sugartypes.handler_descriptor) -> tail_computation sem
+  val handle : env -> (tail_computation sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Sugartypes.handler_descriptor) -> tail_computation sem
 
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
@@ -622,16 +622,20 @@ struct
       List.map
         (fun (p, body) -> ([p], fun env -> reify (body env))) cases
     in
-    bind m
-      (fun v ->
-        M.bind
-          (comp_binding (Var.info_of_type (sem_type m), `Return v))
-          (fun var ->
-            let nenv, tenv, eff = env in
-            let tenv = TEnv.bind tenv (var, sem_type m) in
-            let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (var, cases, desc) in
-	    let (_,_,_,t) = desc.shd_types in
-            reflect (bs, (tc, t))))
+    let comp = reify m in
+    let (bs, tc) = CompilePatterns.compile_handle_cases env (cases, desc) comp in
+    let (_,_,_,t) = desc.Sugartypes.shd_types in
+    reflect (bs, (tc, t))
+    (* bind m *)
+    (*   (fun v -> *)
+    (*     M.bind *)
+    (*       (comp_binding (Var.info_of_type (sem_type m), `Return v)) *)
+    (*       (fun var -> *)
+    (*         let nenv, tenv, eff = env in *)
+    (*         let tenv = TEnv.bind tenv (var, sem_type m) in *)
+    (*         let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (var, cases, desc) in *)
+    (*         let (_,_,_,t) = desc.shd_types in *)
+    (*         reflect (bs, (tc, t)))) *)
 
   let switch env (v, cases, t) =
     let cases =
@@ -811,7 +815,7 @@ struct
 	     let vs = evs ps in
 	     I.do_operation (name, vs, t)
           | `DoOperation _ -> assert false (* Avoids a warning from being generated due to incomplete pattern matching *)
-          | `Handle { sh_expr; sh_clauses; sh_descr } ->
+          | `Handle { Sugartypes.sh_expr; Sugartypes.sh_clauses; Sugartypes.sh_descr } ->
               let cases =
                 List.map
                   (fun (p, body) ->
@@ -819,7 +823,7 @@ struct
                        (p, fun env -> eval (env ++ penv) body))
                   sh_clauses
               in
-              I.handle env (ev sh_expr, cases, sh_descr)
+              I.handle env (ec sh_expr, cases, sh_descr)
           | `Switch (e, cases, Some t) ->
               let cases =
                 List.map

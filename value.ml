@@ -357,30 +357,26 @@ end
 
 module type CONTINUATION_EVALUATOR = sig
   type v
-  type r
+  type result
   type 'v t
-  type 'v h
 
   val apply : env:v Env.t ->            (* the current environment *)
               v t ->                    (* the continuation *)
               v ->                      (* the argument *)
-              r
+              result
 
-  val set_trap_point : handler:v h -> v t -> v t  (* installs a handler *)
-  val invoke_trap : v t ->                        (* the continuation *)
-                    (Ir.name * v) ->              (* operation name and its argument *)
-                    r
-
-  val toplevel : v t (* Toplevel continuation *)
+  val trap : v t ->                        (* the continuation *)
+             (Ir.name * v) ->              (* operation name and its argument *)
+             result
 end
 
 module type EVAL = sig
   type 'v t
   type v
-  type r
+  type result
   val error : string -> 'a
-  val computation : v Env.t -> v t -> Ir.computation -> r
-  val finish : v Env.t -> v -> r
+  val computation : v Env.t -> v t -> Ir.computation -> result
+  val finish : v Env.t -> v -> result
   val reify : v t -> v
   end
 
@@ -400,11 +396,12 @@ module type CONTINUATION = sig
   val (<>)  : 'v t -> 'v t -> 'v t          (* continuation composition *)
   val (&>)  : 'v Frame.t -> 'v t -> 'v t    (* continuation augmentation *)
 
+  val set_trap_point : handler:'v Handler.t -> 'v t -> 'v t  (* installs a handler *)
 
   module Evaluation :
   functor(E : EVAL with type 'v t := 'v t) ->
   sig
-    include CONTINUATION_EVALUATOR with type v = E.v and type r = E.r and type 'v t := 'v t and type 'v h := 'v Handler.t
+    include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
   end
 
   val to_string : 'v t -> string
@@ -446,11 +443,13 @@ module Pure_Continuation = struct
         = fun ~env ~clauses ~depth -> ignore(env); ignore(clauses); ignore(depth); ()
   end
 
+  let set_trap_point ~handler k = ignore(handler); k
+
   module Evaluation =
     functor(E : EVAL with type 'v t := 'v t) ->
   struct
     type v = E.v
-    type r = E.r
+    type result = E.result
     let apply  ~env k v =
     match k with
     | [] -> E.finish env v
@@ -458,10 +457,7 @@ module Pure_Continuation = struct
        let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
        E.computation env cont comp
 
-    let set_trap_point ~handler k = ignore(handler); k
-    let invoke_trap _ _ = E.error "no trap"
-
-    let toplevel = empty
+    let trap _ _ = E.error "no trap"
   end
 end
 
@@ -527,11 +523,15 @@ module Eff_Handler_Continuation = struct
         depth = snd h; }
   end
 
+  let set_trap_point ~handler = function
+      | Continuation fs -> Continuation ((handler, []) :: fs)
+      | ShallowContinuation _ -> failwith "Not yet implemented"
+
   module Evaluation =
     functor (E : EVAL with type 'v t := 'v t) ->
     struct
       type v = E.v
-      type r = E.r
+      type result = E.result
 
     let return k h v =
       let ((var,_), comp) = h.return_clause in
@@ -551,12 +551,7 @@ module Eff_Handler_Continuation = struct
          let k = (h, pk) :: k in
          E.computation env (Continuation k) comp
 
-    let toplevel = empty
-
-    let set_trap_point ~handler = function
-      | Continuation fs -> Continuation ((handler, []) :: fs)
-      | ShallowContinuation _ -> failwith "Not yet implemented"
-    let invoke_trap k (opname, arg) =
+    let trap k (opname, arg) =
       let rec handle k' = function
         | (h, pk) :: k ->
            begin match StringMap.lookup opname h.op_clauses with

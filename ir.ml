@@ -92,7 +92,7 @@ and special =
 and computation = binding list * tail_computation
 and clause = [`Resumption of binder | `Regular] * binder * computation
 and handler = {
-    ih_thunk: value;
+    ih_comp: computation;
     ih_clauses: clause name_map;
     ih_depth: handler_depth;
 }
@@ -474,9 +474,9 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
-	| `Handle { ih_thunk; ih_clauses; ih_depth } ->
-	   let (ih_thunk, _, o) = o#value ih_thunk in
-	   let (ih_clauses, branch_types, o) =
+	| `Handle ({ ih_comp; ih_clauses; _ } as hndlr) ->
+	   let (comp, _, o) = o#computation ih_comp in
+	   let (clauses, branch_types, o) =
 	     o#name_map
                (fun o (cc, b, c) ->
                  let (cc, o) =
@@ -492,7 +492,7 @@ struct
 	       ih_clauses
 	   in
     	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-	   `Handle { ih_thunk; ih_clauses; ih_depth }, t, o
+	   `Handle { hndlr with ih_comp = comp; ih_clauses = clauses }, t, o
 	| `DoOperation (name, vs, t) ->
 	   (* FIXME: the typing isn't right here for non-zero argument
 	   operations *)

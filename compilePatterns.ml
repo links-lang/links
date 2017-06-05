@@ -864,8 +864,9 @@ let compile_cases
 
 (* Handler cases compilation *)
 let compile_handle_cases
-    : raw_env -> (Ir.var * raw_clause list * Sugartypes.handler_descriptor) -> Ir.computation =
-  fun (nenv, tenv, eff) (var, raw_clauses, desc) ->
+    : raw_env -> (raw_clause list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
+  fun (nenv, tenv, eff) (raw_clauses, desc) m ->
+  let open Sugartypes in
   let (_,_,_,output_type) = desc.shd_types in
   let effects = desc.shd_raw_row in
   let clauses = List.map reduce_clause raw_clauses in
@@ -920,7 +921,7 @@ let compile_handle_cases
              let (clause_class, comp) = fix_continuation_param opname comp in
              StringMap.add opname (clause_class,b,comp) clauses)
            clauses (StringMap.add "Return" (`Regular, fst return_clause, snd return_clause) StringMap.empty)
-       in ([], `Special (`Handle { ih_thunk = `Variable var; ih_clauses = clauses; ih_depth = desc.shd_depth }))
+       in ([], `Special (`Handle { ih_comp = m; ih_clauses = clauses; ih_depth = desc.shd_depth }))
     | _ -> assert false
     in
     (* END OF THE BIG HACK *)

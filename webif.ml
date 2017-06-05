@@ -181,7 +181,7 @@ struct
         List.iter Proc.resolve_external_processes args;
         List.iter (Proc.resolve_external_processes -<- fst -<- snd)
           (IntMap.bindings (Value.Env.get_parameters env));
-        Eval.apply (Eval.toplevel_continuation ()) env (func, args) >>= fun (_, r) ->
+        Eval.apply Value.Continuation.empty env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         (*
         if not(Proc.singlethreaded()) then
