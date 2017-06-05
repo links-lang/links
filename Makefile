@@ -108,7 +108,7 @@ SOURCES = $(OPC)                                \
 	  desugarHandlers.mli desugarHandlers.ml         \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
-          checkExperimental.ml \
+          experimentalExtensions.ml \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \

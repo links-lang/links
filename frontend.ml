@@ -42,7 +42,7 @@ struct
               "modules flag to true, or run with -m.")
       else program in
       let _program = CheckXmlQuasiquotes.checker#program program in
-      ( CheckExperimental.check#program
+      ( ExperimentalExtensions.check#program
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
        ->- RefineBindings.refine_bindings#program
@@ -66,7 +66,7 @@ struct
     fun tyenv pos_context sentence ->
       let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
       let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
-      ( CheckExperimental.check#sentence
+      ( ExperimentalExtensions.check#sentence
        ->- DesugarHandlers.desugar_handlers_early#sentence
        ->- DesugarLAttributes.desugar_lattributes#sentence
        ->- RefineBindings.refine_bindings#sentence
