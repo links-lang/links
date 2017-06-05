@@ -867,17 +867,19 @@ let compile_handle_cases
     : raw_env -> (raw_clause list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
   fun (nenv, tenv, eff) (raw_clauses, desc) m ->
   let open Sugartypes in
-  let (_,_,_,output_type) = desc.shd_types in
-  let effects = desc.shd_raw_row in
+  let (_,input_type,_,_) = desc.shd_types in
   let clauses = List.map reduce_clause raw_clauses in
+  let raw_row = desc.shd_raw_row in
   (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
-  (* Essentially, we use match_cases to generate appropriate code by temporarily changing the type of the computation m (var).
-     Afterwards we transform the `Case to a `Handle construct. *)
-  let dummy_var = Var.(make_local_info ->- fresh_binder ->- var_of_binder) (`Variant effects, "_m") in
+  (* Essentially, we use match_cases to generate appropriate code by
+     creating a dummy variable whose type is the raw input effect
+     signature cast as a variant.  Afterwards we transform the `Case
+     to a `Handle construct. *)
+  let dummy_var = Var.(make_local_info ->- fresh_binder ->- var_of_binder) (`Variant raw_row, "_m") in
   let (_,tc) =  (* The compiled cases *)
-    let tenv = TEnv.bind tenv (dummy_var, `Variant effects) in (* Override the type with a variant type s.t. match_cases is happy *)
+    let tenv = TEnv.bind tenv (dummy_var, `Variant raw_row) in (* Override the type with a variant type s.t. match_cases is happy *)
     let initial_env = (nenv, tenv, eff, PEnv.empty) in
-    let compiled_cases = match_cases [dummy_var] clauses (fun _ -> ([], `Special (`Wrong output_type))) initial_env in
+    let compiled_cases = match_cases [dummy_var] clauses (fun _ -> ([], `Special (`Wrong input_type))) initial_env in
     compiled_cases
   in
   (* Urgh *)
@@ -887,9 +889,9 @@ let compile_handle_cases
         | ([(_, pattern)], _) ->
            let (opname, arity) =
              match pattern with
-             | `Variant (name, `Any)        -> (name, 0)
-             | `Variant (name, `Record (r,_))   -> (name, StringMap.size r)
-             | `Variant (name, _)           -> (name, 1)
+             | `Variant (name, `Any)          -> (name, 0)
+             | `Variant (name, `Record (r,_)) -> (name, StringMap.size r)
+             | `Variant (name, _)             -> (name, 1)
              | _ -> assert false
            in
            (opname, arity) :: xs
@@ -928,75 +930,6 @@ let compile_handle_cases
     Debug.if_set (show_pattern_compilation)
                  (fun () -> "Compiled handler cases: "^(string_of_computation compiled_handle));
     compiled_handle
-
-(* let compile_handle_cases : raw_env -> (var * raw_clause list * Sugartypes.hdescriptor) -> Ir.computation = *)
-(*   fun (nenv, tenv, eff) (var, raw_clauses, desc) -> *)
-(*     let (output_type, effects) = *)
-(*       match snd desc with *)
-(*       | Some v -> v *)
-(*       | None -> assert false *)
-(*     in *)
-(*     let clauses = List.map reduce_clause raw_clauses in *)
-(*     (\* THE FOLLOWING IS ONE BIG HACK -- watch out! *\) *)
-(*     (\* Essentially, we use match_cases to generate appropriate code by temporarily changing the type of the computation m (var). *)
-(*      Afterwards we transform the `Case to a `Handle construct. *\) *)
-(*     let (_,tc) =  (\* The compiled cases *\) *)
-(*       let t' = TEnv.lookup tenv var in (\* Backup original type *\) *)
-(*       let tenv = TEnv.bind tenv (var, `Variant effects) in (\* Override the type with a variant type s.t. match_cases is happy *\) *)
-(*       let initial_env = (nenv, tenv, eff, PEnv.empty) in *)
-(*       let compiled_cases = match_cases [var] clauses (fun _ -> ([], `Special (`Wrong output_type))) initial_env in *)
-(*       ignore(TEnv.bind tenv (var, t')); (\* Restore original type (probably not necessary) *\) *)
-(*       compiled_cases *)
-(*     in *)
-(*     (\* Urgh *\) *)
-(*     let arities = *)
-(*       List.fold_left *)
-(*         (fun xs -> function *)
-(*         | ([(_, pattern)], _) -> *)
-(*            let (opname, arity) = *)
-(*              match pattern with *)
-(*              | `Variant (name, `Any)        -> (name, 0) *)
-(*              | `Variant (name, `Record (r,_))   -> (name, StringMap.size r) *)
-(*              | `Variant (name, _)           -> (name, 1) *)
-(*              | _ -> assert false *)
-(*            in *)
-(*            (opname, arity) :: xs *)
-(*         | _ -> assert false) *)
-(*         [] clauses *)
-(*     in *)
-(*     let fix_continuation_param opname (bs,tc) = *)
-(*       let arity = List.assoc opname arities in *)
-(*       let (cc,bs') = *)
-(*         if arity > 0 then *)
-(*           let kb = *)
-(*             match List.nth bs (arity-1) with *)
-(*             | `Let (kb, _) -> kb *)
-(*             | _ -> assert false *)
-(*           in *)
-(*           `Effect kb, ListUtils.drop_nth bs (arity-1) *)
-(*         else *)
-(*           `Regular, bs *)
-(*       in *)
-(*       (cc, (bs',tc)) *)
-(*     in *)
-(*     let compiled_handle = *)
-(*       let specialization = fst desc in *)
-(*         match tc with *)
-(* 	| `Case (_, clauses, _) -> *)
-(*             let (return_clause, clauses) = StringMap.pop "Return" clauses in *)
-(*             let clauses = *)
-(*               StringMap.fold *)
-(*                 (fun opname (b,comp) clauses -> *)
-(*                   let (clause_class, comp) = fix_continuation_param opname comp in *)
-(*                   StringMap.add opname (clause_class,b,comp) clauses) *)
-(*                 clauses (StringMap.add "Return" (`Regular, fst return_clause, snd return_clause) StringMap.empty) *)
-(*             in ([], `Special (`Handle (`Variable var, clauses, specialization))) *)
-(*         | _ -> assert false *)
-(*     in *)
-(*     (\* END OF THE BIG HACK *\) *)
-(*       Debug.if_set (show_pattern_compilation) *)
-(*         (fun () -> "Compiled handler cases: "^(string_of_computation compiled_handle)); *)
-(*       compiled_handle *)
 
 (* Session typing choice compilation *)
 let match_choices : var -> clause list -> bound_computation =
