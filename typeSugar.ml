@@ -3001,7 +3001,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let fresh_row = Types.make_empty_open_row (`Unl, `Any) in
 	     Types.extend_row (fst3 effect_row) fresh_row <| allow_wild
            in
-           (*let thunk_type = Types.make_thunk_type input_effect_row ret in (* type: () {e}-> a *)*)
            let (_,_,p)  = SourceCode.resolve_pos pos in
            let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, ret)) in (* Unify m and and the constructed type. *)
            let () = unify ~handle:Gripers.handle_computation (no_pos (`Record input_effect_row), no_pos m_effects) in
@@ -3056,8 +3055,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	        let (p,_)  = pos_and_typ m in
 	        List.fold_left
 	          (fun _ (k,ktail) ->
-		    unify ~handle:Gripers.continuation_codomains ((ppos_and_typ ktail), (p,t));
-		    unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
+                    unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k);
+		    unify ~handle:Gripers.continuation_codomains ((ppos_and_typ ktail), (p,t))
 	          )
 	          () ks
            in
@@ -3076,23 +3075,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            if String.compare opname "Return" = 0 then
 	     Gripers.die pos "The implicit effect Return is not invocable"
            else
-	     let (optype, return_type, args) =
+	     let (row, return_type, args) =
 	       match args with
-	         Some args ->
-	           let ps    = List.map tc args in
-	           let pts   = List.map typ ps in
-	           let inp_t = Types.make_tuple_type pts in
-	           let out_t = Types.fresh_type_variable (`Unl, `Any) in
-	           let ft    = Types.make_pure_function_type inp_t out_t in
-	           (ft, out_t, ps)
-	       | None -> let t = Types.fresh_type_variable (`Unl, `Any) in (t, t, [])
+               | [] ->
+                  let t = Types.fresh_type_variable (`Unl, `Any) in
+                  let effrow = Types.make_singleton_open_row (opname, `Present t) (`Unl, `Any) in
+                  (effrow, t, [])
+               | args ->
+	           let ps     = List.map tc args in
+	           let pts    = List.map typ ps in
+	           let inp_t  = Types.make_tuple_type pts in
+	           let out_t  = Types.fresh_type_variable (`Unl, `Any) in
+	           let optype = Types.make_pure_function_type inp_t out_t in
+                   let effrow = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
+	           (effrow, out_t, ps)
 	     in
-	     let effects = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
 	     let (_,_,p) = SourceCode.resolve_pos pos in
 	     let () = unify ~handle:Gripers.do_operation
-	       (no_pos (`Record context.effect_row), (p, `Record effects))
+	       (no_pos (`Record context.effect_row), (p, `Record row))
 	     in
-             (`DoOperation (opname, Some (List.map erase args), Some optype), return_type, StringMap.empty)
+             (`DoOperation (opname, List.map erase args, Some return_type), return_type, StringMap.empty)
         | `Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in

@@ -196,7 +196,6 @@ and regex = [
 and clause = pattern * phrase
 and funlit = pattern list list * phrase
 and handlerlit = [`Deep | `Shallow] * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
-(*and handler    = phrase  * clause list * hdescriptor (* computation, cases, descriptor *)*)
 and handler = {
     sh_expr: phrase;
     sh_clauses: clause list;
@@ -244,7 +243,7 @@ and phrasenode = [
 | `TypeAnnotation   of phrase * datatype'
 | `Upcast           of phrase * datatype' * datatype'
 | `ConstructorLit   of name * phrase option * Types.datatype option
-| `DoOperation      of name * phrase list option * Types.datatype option
+| `DoOperation      of name * phrase list * Types.datatype option
 | `Handle           of handler
 | `Switch           of phrase * (pattern * phrase) list * Types.datatype option
 | `Receive          of (pattern * phrase) list * Types.datatype option
@@ -289,9 +288,6 @@ and bindingnode = [
 | `Module  of name * binding list
 ]
 and binding = bindingnode * position
-(*and handler_spec    = handler_depth * [`Linear | `Unrestricted]
-and handler_depth   = [ `Deep | `Shallow ]
-and hdescriptor     = handler_spec * (Types.datatype * Types.row) option (* handler specialisation, optional (output type and input effects) *)*)
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
@@ -463,7 +459,7 @@ struct
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
-    | `DoOperation (_, ps, _) -> option_map (union_map phrase) ps
+    | `DoOperation (_, ps, _) -> union_map phrase ps
     | `QualifiedVar _ -> empty
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =

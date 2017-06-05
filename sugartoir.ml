@@ -809,12 +809,9 @@ struct
               cofv (I.inject (name, I.record ([], None), t))
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
-
-	  | `DoOperation (name, Some ps, Some t) ->
-	     (* FIXME: the type is only right here for 0-argument operations! *)
+	  | `DoOperation (name, ps, Some t) ->
 	     let vs = evs ps in
 	     I.do_operation (name, vs, t)
-          | `DoOperation _ -> assert false (* Avoids a warning from being generated due to incomplete pattern matching *)
           | `Handle { Sugartypes.sh_expr; Sugartypes.sh_clauses; Sugartypes.sh_descr } ->
               let cases =
                 List.map
@@ -946,6 +943,7 @@ struct
           | `Offer _
           | `QualifiedVar _
           | `HandlerLit _
+          | `DoOperation _
           | `CP _ ->
               Debug.print ("oops: " ^ Sugartypes.Show_phrasenode.show e);
               assert false

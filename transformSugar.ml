@@ -428,17 +428,9 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
           (o, `ConstructorLit (name, e, Some t), t)
-
-      (* NOTE: the reason we need the Some [] case for DoOperation is
-      that None gets turned into Some [] and transformSugar gets
-      called more than once. It isn't clear whether this is entirely
-      sensible. *)
-      | `DoOperation (name, Some [], Some t)
-      | `DoOperation (name, None, Some t) ->
-	 (o, `DoOperation (name, Some [], Some t), t)
-      | `DoOperation (name, Some ps, Some t) ->
+      | `DoOperation (name, ps, Some t) ->
 	 let (o, ps, _) = list o (fun o -> o#phrase) ps in
-	 (o, `DoOperation (name, Some ps, Some t), TypeUtils.return_type t)
+	 (o, `DoOperation (name, ps, Some t), t)
       | `Handle { sh_expr; sh_clauses; sh_descr } ->
          let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
          let (o, expr, _) = o#phrase sh_expr in

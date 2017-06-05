@@ -250,10 +250,9 @@ class map =
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
           in `ConstructorLit ((_x, _x_i1, _x_i2))
       | `DoOperation (name, ps, t) ->
-	 let ps  = o#option (fun o -> o#list (fun o -> o#phrase)) ps in
+	 let ps  = o#list (fun o -> o#phrase) ps in
 	 let t   = o#option (fun o -> o#unknown) t in
 	 `DoOperation (name, ps, t)
-      (* The handle case is written by hand *)
       | `Handle { sh_expr; sh_clauses; sh_descr } ->
           let m = o#phrase sh_expr in
           let cases =
@@ -857,8 +856,7 @@ class fold =
       | `DoOperation (name,ps,t) ->
          let o = o#name name in
 	 let o = o#option (fun o -> o#unknown) t in
-	 let o = o#option (fun o -> o#list (fun o -> o#phrase)) ps in o
-      (* The Handle case is written by hand *)
+	 let o = o#list (fun o -> o#phrase) ps in o
       | `Handle { sh_expr; sh_clauses; _ } ->
           let o = o#phrase sh_expr in
           let o =
@@ -1475,7 +1473,7 @@ class fold_map =
           in (o, (`ConstructorLit ((_x, _x_i1, _x_i2))))
       | `DoOperation (name, ps, t) ->
 	 let (o, t) = o#option (fun o -> o#unknown) t in
-	 let (o, ps) = o#option (fun o -> o#list (fun o -> o#phrase)) ps in
+	 let (o, ps) = o#list (fun o -> o#phrase) ps in
 	 (o, `DoOperation (name, ps, t))
       | `Handle { sh_expr; sh_clauses; sh_descr } ->
           let (o, m) = o#phrase sh_expr in

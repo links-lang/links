@@ -63,8 +63,8 @@ struct
 
   let interactive =
     fun tyenv pos_context sentence ->
-      let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
-      let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
+    let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
+    let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
       ( ExperimentalExtensions.check#sentence
        ->- DesugarHandlers.desugar_handlers_early#sentence
        ->- DesugarLAttributes.desugar_lattributes#sentence

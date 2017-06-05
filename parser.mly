@@ -570,8 +570,8 @@ unary_expression:
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
-| DOOP CONSTRUCTOR arg_spec		                       { `DoOperation ($2, Some $3, None), pos() }
-| DOOP CONSTRUCTOR                                             { `DoOperation ($2, None, None), pos() }
+| DOOP CONSTRUCTOR arg_spec		                       { `DoOperation ($2, $3, None), pos() }
+| DOOP CONSTRUCTOR                                             { `DoOperation ($2, [], None), pos() }
 
 
 infixr_9:
