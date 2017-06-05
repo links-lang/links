@@ -86,7 +86,7 @@ and special =
   | `Handle of handler
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
-and clause = [`Resumption of binder | `Regular] * binder * computation
+and clause = [`ResumptionBinder of binder | `NoResumption] * binder * computation
 and handler = {
     ih_comp: computation;
     ih_clauses: clause name_map;

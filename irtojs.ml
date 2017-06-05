@@ -672,7 +672,7 @@ and generate_special env : Ir.special -> code -> code = fun sp kappa ->
            let gc env (ct, xb, body) k h ks =
              let env', r_name =
                match ct with
-               | `Resumption kb ->
+               | `ResumptionBinder kb ->
                   let kb' = name_binder kb in
                   VEnv.bind env kb', snd kb'
                | _ -> assert false

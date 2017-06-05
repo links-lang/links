@@ -563,7 +563,7 @@ module Eff_Handler_Continuation = struct
               in
               let env =
                 match kb with
-                | `Resumption rb -> Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
+                | `ResumptionBinder rb -> Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
                 | _ -> h.env
               in
               E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp

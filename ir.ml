@@ -90,7 +90,7 @@ and special =
   | `Handle of handler
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
-and clause = [`Resumption of binder | `Regular] * binder * computation
+and clause = [`ResumptionBinder of binder | `NoResumption] * binder * computation
 and handler = {
     ih_comp: computation;
     ih_clauses: clause name_map;
@@ -481,9 +481,9 @@ struct
                (fun o (cc, b, c) ->
                  let (cc, o) =
                    match cc with
-                   | `Resumption b ->
+                   | `ResumptionBinder b ->
                       let (b, o) = o#binder b in
-                      `Resumption b, o
+                      `ResumptionBinder b, o
                    | _ -> (cc, o)
                  in
 		 let (b, o) = o#binder b in

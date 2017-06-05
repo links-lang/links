@@ -907,9 +907,9 @@ let compile_handle_cases
           | `Let (kb, _) -> kb
           | _ -> assert false
         in
-        `Resumption kb, ListUtils.drop_nth bs (arity-1)
+        `ResumptionBinder kb, ListUtils.drop_nth bs (arity-1)
       else
-        `Regular, bs
+        `NoResumption, bs
     in
     (cc, (bs',tc))
   in
@@ -922,7 +922,7 @@ let compile_handle_cases
            (fun opname (b,comp) clauses ->
              let (clause_class, comp) = fix_continuation_param opname comp in
              StringMap.add opname (clause_class,b,comp) clauses)
-           clauses (StringMap.add "Return" (`Regular, fst return_clause, snd return_clause) StringMap.empty)
+           clauses (StringMap.add "Return" (`NoResumption, fst return_clause, snd return_clause) StringMap.empty)
        in ([], `Special (`Handle { ih_comp = m; ih_clauses = clauses; ih_depth = desc.shd_depth }))
     | _ -> assert false
     in
