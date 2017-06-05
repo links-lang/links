@@ -64,7 +64,7 @@ depends: [
   "cgi"
   "base64"
   "cohttp"
-  "websocket"
+  "websocket" { <= "2.8" }
   "nocrypto"
 ]
 
