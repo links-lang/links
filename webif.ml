@@ -36,7 +36,7 @@ struct
       exists
         (function
            | `Fun (_, _, _, `Client)
-           | `Alien (_, "javascript") -> true
+           | `Alien (_, _, "javascript") -> true
            | `Rec defs ->
                exists
                  (fun (_, _, _, location) -> location = `Client)

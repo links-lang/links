@@ -710,8 +710,12 @@ and generate_binding env : Ir.binding -> (venv * (code -> code)) =
         let env' = List.fold_left VEnv.bind env fs in
           (env', fun code ->
              LetRec (List.map (generate_function env fs) defs, code))
-    | `Module _
-    | `Alien _ -> env, (fun code -> code)
+    | `Alien (bnd, raw_name, _lang) ->
+        let (f, _f_name) = name_binder bnd in
+        let env' = VEnv.bind env (f, raw_name) in
+        (* Add FFI binding, but we don't need to add any code as it's there already *)
+        (env', fun code -> code)
+    | `Module _ -> env, (fun code -> code)
 
 and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
   let (venv, code) = generate_computation env comp (Var "_start") in
@@ -744,9 +748,11 @@ let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.bindi
       let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
       let varenv = List.fold_left VEnv.bind varenv fs in
       (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
-    | `Module _
-    | `Alien _ -> state, varenv, None, (fun code -> code)
-
+    | `Alien (bnd, raw_name, _lang) ->
+        let (a, _a_name) = name_binder bnd in
+        let varenv = VEnv.bind varenv (a, raw_name) in
+        state, varenv, None, (fun code -> code)
+    | `Module _ -> state, varenv, None, (fun code -> code)
 let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code) =
   fun valenv state venv ->
     function
@@ -897,8 +903,6 @@ let resolve_toplevel_values : string list -> string =
     String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
 let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_conn_url external_files =
-  Printf.printf "I'm in gen real client page!\n";
-  List.iter (Printf.printf "External file: %s\n") external_files;
   let open Json in
   let req_data = Value.request_data valenv in
   let client_id = RequestData.get_client_id req_data in

@@ -71,7 +71,7 @@ and binding =
   [ `Let of binder * (tyvar list * tail_computation)
   | `Fun of fun_def
   | `Rec of fun_def list
-  | `Alien of binder * language
+  | `Alien of binder * name * language
   | `Module of (string * binding list option) ]
 and special =
   [ `Wrong of Types.datatype

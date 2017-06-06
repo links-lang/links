@@ -238,7 +238,7 @@ struct
     | `Let (x, body) -> `Let (binder x, body)
     | `Fun def -> `Fun (fun_def def)
     | `Rec defs -> `Rec (List.map fun_def defs)
-    | `Alien (x, language) -> `Alien (binder x, language)
+    | `Alien (x, n, language) -> `Alien (binder x, n, language)
     | `Module _ -> failwith "unimplemented"
   let bindings = List.map binding
   let computation (bs, tc) = (bindings bs, tc)

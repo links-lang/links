@@ -158,7 +158,7 @@ sig
     (var list -> tail_computation sem) ->
     tail_computation sem
 
-  val alien : var_info * language * (var -> tail_computation sem) -> tail_computation sem
+  val alien : var_info * name * language * (var -> tail_computation sem) -> tail_computation sem
 
   val select : name * value sem -> tail_computation sem
 
@@ -248,7 +248,7 @@ struct
        * location) list ->
       (Var.var list) M.sem
 
-    val alien_binding : var_info * language -> var M.sem
+    val alien_binding : var_info * name * language -> var M.sem
 
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
@@ -296,9 +296,9 @@ struct
                 defs))
           fs
 
-    let alien_binding (x_info, language) =
+    let alien_binding (x_info, raw_name, language) =
       let xb, x = Var.fresh_var x_info in
-        lift_binding (`Alien (xb, language)) x
+        lift_binding (`Alien (xb, raw_name, language)) x
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (`Variable x, t))
@@ -453,8 +453,8 @@ struct
 
   let wrong t = lift (`Special (`Wrong t), t)
 
-  let alien (x_info, language, rest) =
-    M.bind (alien_binding (x_info, language)) rest
+  let alien (x_info, raw_name, language, rest) =
+    M.bind (alien_binding (x_info, raw_name, language)) rest
 
   let select (l, e) =
     let t = TypeUtils.select_type l (sem_type e) in
@@ -970,8 +970,8 @@ struct
                         defs
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
-                | `Foreign ((x, Some xt, _), _raw_name, language, _file, _) ->
-                    I.alien ((xt, x, scope), language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
+                | `Foreign ((x, Some xt, _), raw_name, language, _file, _) ->
+                    I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | `Type _
                 | `Infix ->
                     (* Ignore type alias and infix declarations - they
@@ -1026,7 +1026,7 @@ struct
                           | `Local ->
                               partition (globals, b::locals, nenv) bs
                       end
-                | `Alien ((f, (_ft, f_name, `Global)), _) ->
+                | `Alien ((f, (_ft, f_name, `Global)), _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
                 | _ -> partition (globals, b::locals, nenv) bs
             end in
