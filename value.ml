@@ -464,7 +464,7 @@ end
 module Eff_Handler_Continuation = struct
   module K = struct
     type 'v handler =
-      | Identity_handler
+      | Identity
       | User_defined of 'v user_defined_handler
     and 'v user_defined_handler = {
         env: 'v Env.t;
@@ -474,7 +474,7 @@ module Eff_Handler_Continuation = struct
       }
     and 'v k = ('v handler * 'v Frame.t list) list
     and 'v continuation =
-      | Identity
+      | Empty
       | Continuation of 'v k
       | ShallowContinuation of 'v Frame.t list * 'v k
       deriving (Show)
@@ -482,6 +482,7 @@ module Eff_Handler_Continuation = struct
     type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep | `Shallow]
     and 'cv ck = ('cv compressed_handler * ('cv Frame.compressed_t list)) list
     and 'cv compressed_continuation =
+      | CompressedEmpty
       | CompressedContinuation of 'cv ck
       | CompressedShallowContinuation of 'cv Frame.compressed_t list * 'cv ck
       deriving (Show, Eq, Typeable, Dump, Pickle)
@@ -491,17 +492,19 @@ module Eff_Handler_Continuation = struct
   type 'v t = 'v continuation
       deriving (Show)
 
-  let empty = Identity
+  let empty = Empty
+
   let (&>) f = function
-    | Identity
-    | Continuation [] -> Continuation [(Identity_handler, [f])]
+    | Empty
+    | Continuation [] -> Continuation [(Identity, [f])]
     | Continuation ((h, fs) :: rest) -> Continuation ((h, f :: fs) :: rest)
-    | ShallowContinuation (f', []) -> ShallowContinuation (f', [(Identity_handler, [f])])
+    | ShallowContinuation (f', []) -> ShallowContinuation (f', [(Identity, [f])])
     | ShallowContinuation (f', (h, fs) :: rest) -> ShallowContinuation (f', (h, f :: fs) :: rest)
+
   let rec (<>) k k' =
     match k, k' with
-    | Identity, k
-    | k, Identity -> k
+    | Empty, k
+    | k, Empty -> k
     | Continuation k, Continuation k' -> Continuation (k @ k')
     | ShallowContinuation (fs, k), ShallowContinuation (fs', k') -> ShallowContinuation (fs @ fs', k @ k')
     | ShallowContinuation (fs, k'), k
@@ -510,7 +513,8 @@ module Eff_Handler_Continuation = struct
   module Handler = struct
     open K
     type 'v t = 'v handler
-                   deriving (Show)
+      deriving (Show)
+
     let make ~env ~clauses ~depth =
       let ((_,b,comp), op_clauses) = StringMap.pop "Return" clauses in
       User_defined { env; op_clauses; return_clause = (b,comp); depth }
@@ -518,6 +522,7 @@ module Eff_Handler_Continuation = struct
     let compress ~compress_val = function
       | User_defined h -> (Env.compress compress_val h.env, h.depth)
       | _ -> assert false
+
     let uncompress ~uncompress_val globals h =
       User_defined
         { env = Env.uncompress uncompress_val globals (fst h);
@@ -527,9 +532,9 @@ module Eff_Handler_Continuation = struct
   end
 
   let set_trap_point ~handler = function
-    | Identity -> Continuation [(handler,[])]
-    | Continuation fs -> Continuation ((handler, []) :: fs)
-    | ShallowContinuation _ -> failwith "Not yet implemented"
+    | Empty -> Continuation [(handler,[])]
+    | Continuation k -> Continuation ((handler, []) :: k)
+    | ShallowContinuation (pk,k) -> Continuation ((handler, pk) :: k)
 
   module Evaluation =
     functor (E : EVAL with type 'v t := 'v t) ->
@@ -543,16 +548,15 @@ module Eff_Handler_Continuation = struct
 
       let rec apply ~env k v =
         let k = match k with
-          | Identity -> []
-          | ShallowContinuation (fs, k) -> (Identity_handler, fs) :: k
+          | Empty -> []
+          | ShallowContinuation (fs, k) -> (Identity, fs) :: k
           | Continuation k -> k
         in
         match k with
         | [] -> E.finish env v
-      (*      | [(Identity_handler, [])] -> E.finish env v*)
-        | (Identity_handler,[]) :: k -> apply ~env (Continuation k) v
-        | (User_defined h,[]) :: k -> return (Continuation k) h v
-        | (h,f :: pk) :: k ->
+        | (Identity, []) :: k -> apply ~env (Continuation k) v
+        | (User_defined h, []) :: k -> return (Continuation k) h v
+        | (h, f :: pk) :: k ->
            let (scope, var, locals, comp) = f in
            let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
            let k = (h, pk) :: k in
@@ -563,14 +567,15 @@ module Eff_Handler_Continuation = struct
           | (User_defined h, pk) :: k ->
              begin match StringMap.lookup opname h.op_clauses with
              | Some (kb, (var, _), comp) ->
-                let resume =
-                  match h.depth with
-                  | `Shallow -> ShallowContinuation (pk, List.rev k')
-                  | `Deep -> Continuation ( List.rev ((User_defined h,pk) :: k') )
-                in
                 let env =
                   match kb with
-                  | `ResumptionBinder rb -> Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
+                  | `ResumptionBinder rb ->
+                     let resume =
+                       match h.depth with
+                       | `Shallow -> ShallowContinuation (pk, List.rev k')
+                       | `Deep -> Continuation ( List.rev ((User_defined h,pk) :: k') )
+                     in
+                     Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
                   | _ -> h.env
                 in
                 E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp
@@ -579,9 +584,9 @@ module Eff_Handler_Continuation = struct
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
           | [] -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname)
         in match k with
-        | Identity -> handle [] []
+        | Empty -> handle [] []
         | Continuation k -> handle [] k
-        | ShallowContinuation _ -> failwith "Not yet implemented"
+        | ShallowContinuation (pk,k) -> handle [(Identity, pk)] k
     end
   let to_string _ = "generalised_continuation"
 
@@ -591,18 +596,15 @@ module Eff_Handler_Continuation = struct
     let compress_frame = Frame.compress compress_val in
     let compress (h, fs) = (Handler.compress ~compress_val h, List.map compress_frame fs) in
     function
-    | Identity -> CompressedContinuation []
+    | Empty -> CompressedEmpty
     | Continuation k -> CompressedContinuation (List.map compress k)
     | ShallowContinuation (fs, k) -> CompressedShallowContinuation (List.map compress_frame fs, List.map compress k)
   let uncompress ~uncompress_val globals =
     let uncompress_frame = Frame.uncompress uncompress_val globals in
     let uncompress (h, fs) = (Handler.uncompress ~uncompress_val globals h, List.map uncompress_frame fs) in
     function
-    | CompressedContinuation k ->
-       let k = List.map uncompress k in
-       if List.length k = 0
-       then Identity
-       else Continuation k
+    | CompressedEmpty -> Empty
+    | CompressedContinuation k -> Continuation (List.map uncompress k)
     | CompressedShallowContinuation (fs, k) -> ShallowContinuation (List.map uncompress_frame fs, List.map uncompress k)
 
   module Frame = Frame
