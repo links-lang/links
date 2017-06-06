@@ -5,7 +5,7 @@ val webs_running : bool Settings.setting
 
 module type WEBSERVER =
 sig
-  val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> unit
+  val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> string list -> unit
   val set_prelude : Ir.binding list -> unit
   val add_route : bool -> string -> (string * (string * string) list, Value.env * Value.t) either -> unit
 

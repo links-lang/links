@@ -106,8 +106,11 @@ let format_exception_html = function
           "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>"
           pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
-  | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
-      (*raise exn (* use for backtraces *) *)
+  | exn -> (* "<h1>Links Error</h1>\n" ^ Printexc.to_string exn *)
+      Printexc.print_backtrace stderr;
+      output_string stderr (format_exception exn ^ "\n");
+      flush stderr;
+      raise exn (* use for backtraces *)
 
 let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
   try

@@ -90,10 +90,15 @@ struct
 
   let set_prelude bs =
     prelude := bs
-  let init some_env some_globals =
+
+  let external_files : (string list) ref = ref []
+
+  let init some_env some_globals some_external_files =
     env := some_env;
     globals := some_globals;
+    external_files := some_external_files;
     ()
+
 
   let add_route is_directory path thread_starter =
     rt := Trie.transform
@@ -180,6 +185,7 @@ struct
                        (!prelude @ !globals)
                        (valenv, v)
                        ws_conn_url
+                       !external_files
           in
         Lwt.return ("text/html", page) in
 
@@ -191,7 +197,8 @@ struct
           (Lib.nenv, Lib.typing_env)
           (!prelude @ !globals)
           (valenv, v)
-          ws_conn_url in
+          ws_conn_url
+          !external_files in
 
       let serve_static base uri_path mime_types =
           let fname =

@@ -763,7 +763,8 @@ let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.
 let script_tag body =
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
-let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") defs =
+let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
+  Printf.printf "external files in make_boiler_page: %s\n" (String.concat "," external_files);
   let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
   let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
     string_of_bool onoff ^ ";</script>"
@@ -771,6 +772,7 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="")
   let extLibs = ext_script_tag "regex.js"^"
   "            ^ext_script_tag "yahoo/yahoo.js"^"
   "            ^ext_script_tag "yahoo/event.js" in
+  let ffiLibs = String.concat "\n" (List.map ext_script_tag external_files) in
   let db_config_script =
     if Settings.get_value js_hide_database_info then
     script_tag("    function _getDatabaseConfig() {
@@ -789,6 +791,8 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="")
               "};\n  _makeCgiEnvironment();\n") in
     in_tag "html" (in_tag "head"
                      (  extLibs
+                      ^ "\n"
+                      ^ ffiLibs
                       ^ debug_flag (Settings.get_value Debug.debugging_enabled)
                       ^ ext_script_tag "jslib.js" ^ "\n"
                       ^ db_config_script
@@ -873,7 +877,7 @@ let initialise_envs (nenv, tyenv) =
   let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-let generate_program_page ?(cgi_env=[]) (nenv, tyenv) program  =
+let generate_program_page ?(cgi_env=[]) (nenv, tyenv) program external_files =
   let printed_code = Loader.wpcache "irtojs" (fun () ->
     let _, venv, _ = initialise_envs (nenv, tyenv) in
     let _, code = generate_program venv program in
@@ -883,6 +887,7 @@ let generate_program_page ?(cgi_env=[]) (nenv, tyenv) program  =
   (make_boiler_page
      ~cgi_env:cgi_env
      ~body:printed_code
+     ~external_files:external_files
 (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
      [])
 
@@ -891,7 +896,9 @@ let resolve_toplevel_values : string list -> string =
   fun names ->
     String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
-let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_conn_url =
+let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_conn_url external_files =
+  Printf.printf "I'm in gen real client page!\n";
+  List.iter (Printf.printf "External file: %s\n") external_files;
   let open Json in
   let req_data = Value.request_data valenv in
   let client_id = RequestData.get_client_id req_data in
@@ -929,4 +936,5 @@ let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_co
     ~head:(script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
       ^ Value.string_of_xml ~close_tags:true hs)
     ~onload:"_startRealPage()"
+    ~external_files:external_files
     []

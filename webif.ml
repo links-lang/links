@@ -195,7 +195,7 @@ struct
          Debug.print("Doing EvalMain");
          run ()
 
-  let run_main (valenv, _, _) (globals, (locals, main)) cgi_args () =
+  let run_main (valenv, _, _) (globals, (locals, main)) cgi_args (external_files : string list) () =
     ("text/html",
      if is_client_program (globals @ locals, main) then
        if Settings.get_value realpages then
@@ -209,6 +209,7 @@ struct
              (globals @ locals)
              (valenv, v)
              (get_websocket_url ())
+             external_files
          end
        else
          let program = (globals @ locals, main) in
@@ -217,7 +218,7 @@ struct
            lazy (Irtojs.generate_program_page
                    ~cgi_env:cgi_args
                    (Lib.nenv, Lib.typing_env)
-                   program) in
+                   program external_files) in
          measure_as res "irtojs"
      else
        let program = locals, main in
@@ -244,7 +245,8 @@ struct
       (globals, (locals, main), render_cont)
       response_printer
       cgi_args
-      req_data =
+      req_data
+      (external_files : string list) =
     let valenv' = Value.set_request_data valenv req_data in
     let env = (valenv', env2, env3) in
     let render_servercont_cont = (fun (v: Value.t) ->
@@ -253,10 +255,11 @@ struct
            (Lib.nenv, Lib.typing_env)
            (globals @ locals)
            (valenv, v)
-           (get_websocket_url ())) in
+           (get_websocket_url ())
+           external_files) in
 
     Proc.run (fun () -> do_request env cgi_args
-                                   (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
+                                   (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args external_files ()))
                                    render_cont
                                    render_servercont_cont
                                    (fun headers body -> Lwt.return (response_printer headers body))
@@ -267,7 +270,7 @@ struct
 
   let make_program (_, nenv, tyenv) prelude filename =
     (* Warning: cache call nested inside another cache call *)
-    let (nenv', tyenv'), (globals, (locals, main), t) =
+    let (nenv', tyenv'), (globals, (locals, main), t), external_files =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
     in
 
@@ -310,7 +313,7 @@ struct
     (* Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main)); *)
 
     BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
-    (render_cont, (nenv'', tyenv''), (globals, (locals, main)))
+    (render_cont, (nenv'', tyenv''), (globals, (locals, main)), external_files)
 
   (* Processes a CGI-based request *)
   let serve_request ((valenv, _, _) as envs) prelude filename : unit =
@@ -340,7 +343,7 @@ struct
       RequestData.new_request_data cgi_args cookies dummy_client_id in
 
     (* Compute cacheable stuff in one call *)
-    let (render_cont, (nenv,tyenv), (globals, (locals, main))) =
+    let (render_cont, (nenv,tyenv), (globals, (locals, main)), external_files) =
       Loader.wpcache "program" (fun () ->
         make_program envs prelude filename
      )
@@ -355,6 +358,7 @@ struct
           (fun hdrs bdy -> Lib.print_http_response hdrs bdy req_data)
           cgi_args
           req_data
+          external_files
       )
     )
 end
