@@ -23,8 +23,8 @@ object(_self)
     | `AlienModule (lang, lib, mod_name, decls) ->
         `Module (mod_name,
           (List.map (fun (b, dt) ->
-            let (_, _, pos) = b in
-            (`Foreign (b, lang, lib, dt), pos))) decls)
+            let (name, _, pos) = b in
+            (`Foreign (b, name, lang, lib, dt), pos))) decls)
     | x -> super#bindingnode x
 end
 

@@ -970,7 +970,7 @@ struct
                         defs
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
-                | `Foreign ((x, Some xt, _), language, _file, _) ->
+                | `Foreign ((x, Some xt, _), _raw_name, language, _file, _) ->
                     I.alien ((xt, x, scope), language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | `Type _
                 | `Infix ->

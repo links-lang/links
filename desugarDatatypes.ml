@@ -431,10 +431,10 @@ object (self)
                in (o, (bind, lin, (tyvars, fl), loc, dt, pos)))
             binds
         in o, `Funs binds
-    | `Foreign (bind, lang, file, dt) ->
+    | `Foreign (bind, raw_name, lang, file, dt) ->
         let _, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
-          self, `Foreign (bind, lang, file, dt')
+          self, `Foreign (bind, raw_name, lang, file, dt')
     | b -> super#bindingnode b
 
   method! sentence =

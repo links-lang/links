@@ -264,7 +264,7 @@ and bindingnode = [
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
-| `Foreign of binder * name * name * datatype' (* Binder, language, external file, type *)
+| `Foreign of binder * name * name * name * datatype' (* Binder, raw function name, language, external file, type *)
 | `QualifiedImport of name list
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
@@ -445,7 +445,7 @@ struct
             funs
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | `Foreign ((name, _, _), _, _, _) -> singleton name, empty
+    | `Foreign ((name, _, _), _, _, _, _) -> singleton name, empty
     | `QualifiedImport _
     | `Type _
     | `Infix -> empty, empty

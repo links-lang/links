@@ -288,7 +288,7 @@ declaration:
 
 nofun_declaration:
 | ALIEN VARIABLE STRING var COLON datatype SEMICOLON           { let (name, name_pos) = $4 in
-                                                                   `Foreign ((name, None, name_pos), $2, $3, datatype $6), pos() }
+                                                                   `Foreign ((name, None, name_pos), name, $2, $3, datatype $6), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (from_option default_fixity $2) (fst $3);
                                                                    (`Infix, pos()) }

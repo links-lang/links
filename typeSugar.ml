@@ -3026,8 +3026,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
           in
             `Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
 
-      | `Foreign ((name, _, pos), language, file, (_, Some datatype as dt)) ->
-          (`Foreign ((name, Some datatype, pos), language, file, dt),
+      | `Foreign ((name, _, pos), raw_name, language, file, (_, Some datatype as dt)) ->
+          (`Foreign ((name, Some datatype, pos), raw_name, language, file, dt),
            (bind_var empty_context (name, datatype)),
            StringMap.empty)
       | `Foreign _ -> assert false

@@ -679,9 +679,9 @@ class transform (env : Types.typing_environment) =
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
          (o, (`Funs defs))
-      | `Foreign (f, language, file, t) ->
+      | `Foreign (f, raw_name, language, file, t) ->
          let (o, f) = o#binder f in
-         (o, `Foreign (f, language, file, t))
+         (o, `Foreign (f, raw_name, language, file, t))
       | `Type (name, vars, (_, Some dt)) as e ->
          let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
          {< tycon_env=tycon_env >}, e
