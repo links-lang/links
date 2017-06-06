@@ -83,6 +83,7 @@ SOURCES = $(OPC)                                \
 					moduleUtils.mli moduleUtils.ml \
           resolvePositions.mli resolvePositions.ml       \
 					chaser.mli chaser.ml \
+					desugarAlienModules.mli desugarAlienModules.ml \
 					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \

@@ -31,7 +31,9 @@ struct
         if ModuleUtils.contains_modules program then
           if Settings.get_value Basicsettings.modules then
             let prog_with_deps = Chaser.add_dependencies program in
-            DesugarModules.desugarModules prog_with_deps
+            let prog_without_alien_modules =
+              DesugarAlienModules.transform_alien_modules prog_with_deps in
+            DesugarModules.desugarModules prog_without_alien_modules
           else
             failwith ("File contains modules, but modules not enabled. Please set " ^
               "modules flag to true, or run with -m.")

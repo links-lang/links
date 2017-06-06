@@ -300,9 +300,13 @@ nofun_declaration:
 | links_module                                                 { $1 }
 | links_open                                                   { $1 }
 
+alien_datatype:
+| var COLON datatype SEMICOLON                                 { let (name, name_pos) = $1 in
+                                                                 ((name, None, name_pos), datatype $3) }
+
 alien_datatypes:
-| datatype SEMICOLON                                           { [(datatype $1)] }
-| datatype SEMICOLON alien_datatypes                           { (datatype $1) :: $3 }
+| alien_datatype                                               { [$1] }
+| alien_datatype alien_datatypes                               { $1 :: $2 }
 
 alien_module_block:
 | LBRACE alien_datatypes RBRACE                                { $2 }

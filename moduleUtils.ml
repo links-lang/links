@@ -43,6 +43,7 @@ object
 
   method! bindingnode = function
     | `QualifiedImport _
+    | `AlienModule _
     | `Module _ -> {< has_no_modules = false >}
     | b -> super#bindingnode b
 

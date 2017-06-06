@@ -270,7 +270,7 @@ and bindingnode = [
 | `Infix
 | `Exp     of phrase
 | `Module  of name * binding list
-| `AlienModule of (name * name * name * datatype' list)
+| `AlienModule of (name * name * name * ((binder * datatype') list))
 ]
 and binding = bindingnode * position
 and directive = string * string list

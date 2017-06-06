@@ -137,6 +137,7 @@ let rec rename_binders_get_shadow_tbl module_table
       | `Type t -> (self, `Type t)
       | `Val v -> (self, `Val v)
       | `Exp b -> (self, `Exp b)
+      | `Foreign f -> (self, `Foreign f)
       | `QualifiedImport [] -> assert false
       | `QualifiedImport ((hd :: tl) as ns) ->
           (* Try to resolve head of PQN. This will either resolve to itself, or
@@ -331,5 +332,5 @@ let desugarModules prog =
   let module_map = create_module_info_map prog in
   let renamed_prog = rename module_map prog in
   let flattened_prog = flatten_prog renamed_prog in
-  (* printf "Flattened AST: %s\n" (Sugartypes.Show_program.show flattened_prog); *)
+  printf "Flattened AST: %s\n" (Sugartypes.Show_program.show flattened_prog);
   flattened_prog
