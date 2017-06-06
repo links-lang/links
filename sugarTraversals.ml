@@ -560,10 +560,12 @@ class map =
                  in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
           in `Funs _x
-      | `Foreign ((_x, _x_i1, _x_i2)) ->
+      | `Foreign ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
-          let _x_i2 = o#datatype' _x_i2 in `Foreign ((_x, _x_i1, _x_i2))
+          let _x_i2 = o#name _x_i2 in
+          let _x_i3 = o#datatype' _x_i3 in
+          `Foreign ((_x, _x_i1, _x_i2, _x_i3))
       | `QualifiedImport _xs ->
           let _xs = o#list (fun o -> o#name) _xs in
           `QualifiedImport _xs
@@ -583,6 +585,12 @@ class map =
           let n = o#name n in
           let bs = o#list (fun o -> o#binding) bs in
           `Module (n, bs)
+      | `AlienModule (lang, lib, mod_name, dts) ->
+          let lang = o#name lang in
+          let lib = o#name lib in
+          let mod_name = o#name mod_name in
+          let dts = o#list (fun o -> o#datatype') dts in
+          `AlienModule (lang, lib, mod_name, dts)
 
     method binding : binding -> binding =
       fun (_x, _x_i1) ->
@@ -1095,9 +1103,11 @@ class fold =
                  let o = o#position _x_i5 in o)
               _x
           in o
-      | `Foreign ((_x, _x_i1, _x_i2)) ->
+      | `Foreign ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#binder _x in
-          let o = o#name _x_i1 in let o = o#datatype' _x_i2 in o
+          let o = o#name _x_i1 in
+          let o = o#name _x_i2 in
+          let o = o#datatype' _x_i3 in o
       | `QualifiedImport _xs ->
           let o = o#list (fun o -> o#name) _xs in
           o
@@ -1116,6 +1126,12 @@ class fold =
       | `Module (n, bs) ->
           let o = o#name n in
           let o = o#list (fun o -> o#binding) bs in
+          o
+      | `AlienModule (lang, lib, mod_name, dts) ->
+          let o = o#name lang in
+          let o = o#name lib in
+          let o = o#name mod_name in
+          let o = o#list (fun o -> o#datatype') dts in
           o
 
     method binding : binding -> 'self_type =
@@ -1753,11 +1769,12 @@ class fold_map =
                  in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
           in (o, (`Funs _x))
-      | `Foreign ((_x, _x_i1, _x_i2)) ->
+      | `Foreign ((_x, _x_i1, _x_i2, _x_i3)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#name _x_i1 in
-          let (o, _x_i2) = o#datatype' _x_i2
-          in (o, (`Foreign ((_x, _x_i1, _x_i2))))
+          let (o, _x_i2) = o#name _x_i2 in
+          let (o, _x_i3) = o#datatype' _x_i3
+          in (o, (`Foreign ((_x, _x_i1, _x_i2, _x_i3))))
       | `QualifiedImport _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, `QualifiedImport _xs)
@@ -1778,6 +1795,12 @@ class fold_map =
           let (o, n) = o#string n in
           let (o, bs) = o#list (fun o -> o#binding) bs in
           (o, (`Module (n, bs)))
+      | `AlienModule (lang, lib, mod_name, dts) ->
+          let (o, lang) = o#name lang in
+          let (o, lib) = o#name lib in
+          let (o, mod_name) = o#name mod_name in
+          let (o, dts) = o#list (fun o -> o#datatype') dts in
+          (o, (`AlienModule (lang, lib, mod_name, dts)))
 
     method binding : binding -> ('self_type * binding) =
       fun (_x, _x_i1) ->

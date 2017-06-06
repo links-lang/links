@@ -970,14 +970,14 @@ struct
                         defs
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
-                | `Foreign ((x, Some xt, _), language, _) ->
+                | `Foreign ((x, Some xt, _), language, _file, _) ->
                     I.alien ((xt, x, scope), language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | `Type _
                 | `Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | `QualifiedImport _ | `Fun _ | `Foreign _ | `Module _-> assert false
+                | `QualifiedImport _ | `Fun _ | `Foreign _ | `AlienModule _ | `Module _ -> assert false
             end
 
   and evalv env e =

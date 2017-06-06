@@ -287,8 +287,8 @@ declaration:
 | nofun_declaration                                            { $1 }
 
 nofun_declaration:
-| ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
-                                                                   `Foreign ((name, None, name_pos), $2, datatype $5), pos() }
+| ALIEN VARIABLE STRING var COLON datatype SEMICOLON           { let (name, name_pos) = $4 in
+                                                                   `Foreign ((name, None, name_pos), $2, $3, datatype $6), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (from_option default_fixity $2) (fst $3);
                                                                    (`Infix, pos()) }
@@ -300,10 +300,21 @@ nofun_declaration:
 | links_module                                                 { $1 }
 | links_open                                                   { $1 }
 
+alien_datatypes:
+| datatype SEMICOLON                                           { [(datatype $1)] }
+| datatype SEMICOLON alien_datatypes                           { (datatype $1) :: $3 }
+
+alien_module_block:
+| LBRACE alien_datatypes RBRACE                                { $2 }
 
 links_module:
 | MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
                                                                  `Module (mod_name, $3), name_pos }
+| ALIEN var MODULE STRING module_name alien_module_block       { let (language, _) = $2 in
+                                                                 let library_name = $4 in
+                                                                 let (mod_name, name_pos) = $5 in
+                                                                 `AlienModule (language, library_name, mod_name, $6), name_pos }
+
 module_name:
 | CONSTRUCTOR                                                  { $1 , pos () }
 

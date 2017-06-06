@@ -264,12 +264,13 @@ and bindingnode = [
 | `Val     of tyvar list * pattern * phrase * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
-| `Foreign of binder * name * datatype'
+| `Foreign of binder * name * name * datatype' (* Binder, language, external file, type *)
 | `QualifiedImport of name list
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
 | `Module  of name * binding list
+| `AlienModule of (name * name * name * datatype' list)
 ]
 and binding = bindingnode * position
 and directive = string * string list
@@ -444,11 +445,12 @@ struct
             funs
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | `Foreign ((name, _, _), _, _) -> singleton name, empty
+    | `Foreign ((name, _, _), _, _, _) -> singleton name, empty
     | `QualifiedImport _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
+    | `AlienModule _
     | `Module _ -> failwith "Freevars for modules not implemented yet"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)

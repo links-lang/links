@@ -679,15 +679,16 @@ class transform (env : Types.typing_environment) =
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
          (o, (`Funs defs))
-      | `Foreign (f, language, t) ->
+      | `Foreign (f, language, file, t) ->
          let (o, f) = o#binder f in
-         (o, `Foreign (f, language, t))
+         (o, `Foreign (f, language, file, t))
       | `Type (name, vars, (_, Some dt)) as e ->
          let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
          {< tycon_env=tycon_env >}, e
       | `Type _ -> failwith "Unannotated type alias"
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
+      | `AlienModule _ -> assert false
       | `Module _ -> assert false
       | `QualifiedImport _ -> assert false
 
