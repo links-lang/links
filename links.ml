@@ -179,12 +179,19 @@ let rec directives
      "display the current type alias environment");
 
     "env",
-    ((fun ((valenv, nenv, _tyenv) as envs) _ ->
+    ((fun ((_valenv, nenv, tyenv) as envs) _ ->
         Env.String.fold
           (fun name var () ->
-             if not (Lib.is_primitive name) then
+            if not (Lib.is_primitive name) then
+              let ty = (Types.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
+                        -<- Env.String.lookup tyenv.Types.var_env) name in
+              let name =
+                if Settings.get_value Debug.debugging_enabled
+                then Printf.sprintf "%s(%d)" name var
+                else name
+              in
                Printf.fprintf stderr " %-16s : %s\n"
-                 name (Value.string_of_value (Value.Env.find var valenv)))
+                 name ty)
           nenv ();
         envs),
      "display the current value environment");

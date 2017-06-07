@@ -1244,7 +1244,7 @@ fun addRoute(path,f) { unsafeAddRoute(path, fun(p, loc){f(p, loc)}) }
 
 sig serveThis : (() ~> Page) ~> ()
 fun serveThis(p) {
-  addRoute("",fun (_,_) {p()});
+  addRoute("/",fun (_,_) {p()});
   servePages()
 }
 
