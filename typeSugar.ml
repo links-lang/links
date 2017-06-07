@@ -3003,7 +3003,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            let (_,_,p)  = SourceCode.resolve_pos pos in
            let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, ret)) in (* Unify m and and the constructed type. *)
-           let () = unify ~handle:Gripers.handle_computation (no_pos (`Record input_effect_row), no_pos m_effects) in
+           let () = unify ~handle:Gripers.handle_computation (no_pos (`Record input_effect_row), no_pos m_effects) in (* TODO: Fix this griper (Gripers.handled_effects or something) *)
 
        (** Next, construct the (output) effect row for the handler *)
            let output_effect_row =
