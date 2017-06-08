@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix websocket websocket.lwt websocket.cohttp ANSITerminal
+PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix websocket websocket.lwt websocket.cohttp ANSITerminal linenoise
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
@@ -53,7 +53,6 @@ OPC = unionfind.ml unionfind.mli \
 SOURCES = $(OPC)                                \
           multipart.ml                          \
           notfound.ml                           \
-					readline.ml readline.mli              \
           utility.ml                            \
 		  processTypes.mli processTypes.ml      \
           env.mli env.ml                        \

@@ -66,6 +66,7 @@ depends: [
   "cohttp"
   "websocket" { <= "2.8" }
   "nocrypto"
+  "linenoise"
 ]
 
 depopts: [
