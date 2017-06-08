@@ -53,6 +53,7 @@ OPC = unionfind.ml unionfind.mli \
 SOURCES = $(OPC)                                \
           multipart.ml                          \
           notfound.ml                           \
+					readline.ml readline.mli              \
           utility.ml                            \
 		  processTypes.mli processTypes.ml      \
           env.mli env.ml                        \

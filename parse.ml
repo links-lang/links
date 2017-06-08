@@ -81,6 +81,18 @@ let reader_of_string ?pp string =
         current_pos := !current_pos + nchars;
         nchars
 
+
+let reader_of_readline () =
+  let current_pos = ref 0
+  and buf = Buffer.create 30 in
+  let blah = Readline.readline in
+  Buffer.add_string buf blah in
+  fun dst_buf nchars ->
+    if nchars 
+
+
+
+
 let interactive : Sugartypes.sentence grammar = Parser.interactive
 let program : (Sugartypes.binding list * Sugartypes.phrase option) grammar = Parser.file
 let datatype : Sugartypes.datatype grammar = Parser.just_datatype
@@ -118,6 +130,22 @@ let parse_string ?(pp=default_preprocessor ()) ?in_context:context grammar strin
 let parse_channel ?interactive ?in_context:context grammar (channel, name) =
   let context = normalize_context context in
     read ?nlhook:interactive ~parse:grammar ~infun:(reader_of_channel channel) ~name:name ~context
+
+let parse_readline ps1 ?in_context:context grammar =
+  let context = normalize_context context in
+  read ?nlhook:my_nl_hook ~parse:grammar ~infun:reader_of_readline ~name:"<stdin>" ~context
+
+
+
+  let dot_prompt = String.make (String.length ps1 - 1) '.' ^ " " in
+  let is_more = ref false in
+  let rec interact lines =
+    let prompt = match lines with | [] -> ps1 | _ -> dot_prompt in
+    let line_opt = Readline.input_line ~prompt:prompt in
+    match line_opt with
+      | Some line ->
+          if not (!is_more) 
+      | None -> 
 
 let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
   match normalize_pp pp with
