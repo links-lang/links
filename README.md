@@ -1,7 +1,7 @@
 Links: Linking Theory to Practice for the Web
 ---------------------------------------------
 
-[![Build Status](https://travis-ci.org/links-lang/links.svg?branch=sessions)](https://travis-ci.org/links-lang/links)
+[![Build Status](https://travis-ci.org/links-lang/links.svg?branch=master)](https://travis-ci.org/links-lang/links)
 
 Links helps to build modern Ajax-style applications: those with
 significant client- and server-side components.
