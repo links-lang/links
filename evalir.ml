@@ -15,14 +15,14 @@ module type EVALUATOR = sig
   type v = Value.t
   type result = Proc.thread_result Lwt.t
 
-  val reify : Value.continuation -> Value.t
+  val reify : Value.continuation -> v
   val error : string -> 'a
   val computation : Value.env -> Value.continuation -> Ir.computation -> result
-  val finish : Value.env -> Value.t -> result
+  val finish : Value.env -> v -> result
 
-  val apply : Value.continuation -> Value.env -> Value.t * Value.t list -> result
-  val apply_cont : Value.continuation -> Value.env -> Value.t -> result
-  val run_program : Value.env -> Ir.program -> (Value.env * Value.t)
+  val apply : Value.continuation -> Value.env -> v * v list -> result
+  val apply_cont : Value.continuation -> Value.env -> v -> result
+  val run_program : Value.env -> Ir.program -> (Value.env * v)
   val run_defs : Value.env -> Ir.binding list -> Value.env
 end
 
@@ -43,11 +43,10 @@ struct
   exception EvaluationError of string
   exception Wrong
 
-  let eval_error fmt : 'r =
-    let error msg = raise (EvaluationError msg) in
-    Printf.kprintf error fmt
-
   let error msg : 'a = raise (EvaluationError msg)
+
+  let eval_error fmt : 'r =
+    Printf.kprintf error fmt
 
   let db_connect : Value.t -> Value.database * string = fun db ->
     let driver = Value.unbox_string (Value.project "driver" db)
@@ -721,8 +720,13 @@ struct
                                 " while interpreting.")
 end
 
-module Eval = functor (Webs : WEBSERVER) ->
+
+module type EVAL = functor (Webs : WEBSERVER) -> sig
+    include EVALUATOR
+end
+module Eval : EVAL = functor (Webs : WEBSERVER) ->
 struct
-  module rec Eval : EVALUATOR with type result = Proc.thread_result Lwt.t = Evaluator(Value.Continuation.Evaluation(Eval))(Webs)
+  module rec Eval : EVALUATOR
+    with type result = Proc.thread_result Lwt.t = Evaluator(Value.Continuation.Evaluation(Eval))(Webs)
   include Eval
 end
