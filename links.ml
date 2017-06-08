@@ -295,8 +295,6 @@ let interact envs =
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
-      (* print_string ps1; flush stdout; *)
-
       let _, nenv, tyenv = envs in
 
       let parse_and_desugar () =
