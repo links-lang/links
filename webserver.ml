@@ -239,7 +239,7 @@ struct
                (render_servercont_cont req_env)
                (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)
           | _ :: t, path_is_file -> up (t, path_is_file) in
-        up (Trie.longest_match (Str.split (Str.regexp "/") path) !rt, path.[String.length path - 1] <> '/') in
+        up (Trie.longest_match (Str.split (Str.regexp "/") path) !rt, String.length path == 1 ||path.[String.length path - 1] <> '/') in
 
       if is_prefix_of (Settings.get_value Basicsettings.Js.lib_url) path then
         let liburl_length = String.length (Settings.get_value Basicsettings.Js.lib_url) in
