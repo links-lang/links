@@ -1177,22 +1177,45 @@ fun lf(f) {
   }
 }
 
-### handler stuff
+### Handler stuff
 typename Comp(e::Row, a) = () ~e~> a;
-
 typename Zero = [||];
 
-# Handler composition operator
+# Composition operators
 # Data flows from right to left (or inside-out)
 #sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+infixr 9 -<-;
 op f -<- g {
   fun(x) { f(g(x)) }
 }
 
-# Plugs a computation into sequence of handlers
-#sig -< : ((a) -e-> b, a) -e-> b
-op f -< m {
+# Data flow from left to right (or outside-in)
+infixr 9 ->-;
+op f ->- g {
+  g -<- f
+}
+
+# Explicit application
+#sig @ : ((a) -e-> b, a) -e-> b
+infixr 1 @;
+op f @ m {
   f(m)
+}
+
+# Effect row generalisation
+sig gen0 : (Comp({ }, a)) -> Comp({ |%}, a)
+fun gen0(f) {
+  (f : (Comp({ |%}, a)) <- (Comp({ }, a)))
+}
+
+sig gen1 : ((a) {}~> b) -> ((a) { |%}~> b)
+fun gen1(f) {
+  (f : ((a) { |%}~> b) <- ((a) {}~> b))
+}
+
+sig gen2 : ((a,b) {}~> c) -> ((a,b) { |%}~> c)
+fun gen2(f) {
+  (f : ((a,b) { |%}~> c) <- ((a,b) {}~> c))
 }
 
 
