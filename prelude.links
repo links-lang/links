@@ -1209,3 +1209,32 @@ fun serveThese(routes) {
   var _ = map(fun ((s,p)) {addRoute(s,fun (_,_) {p()})}, routes);
   servePages()
 }
+
+
+### VDOM STUFF ###
+
+# Doc Type
+
+# typename VirtualHandler(a) = [| StringHandler: ((String) -> a) | Pines: a |];
+typename VirtualHandler(a) =
+  [| StringHandler: (String, (String) {}~> a) | UnitHandler: (String, () {}~> a) |];
+
+typename Doc(a) =
+  [| DocTextNode: (String)
+   | DocTagNode:
+      (tagName: String, attrs: [(String, String)], eventHandlers: [VirtualHandler(a)],
+       children: [Doc(a)])
+   |];
+
+fun textDoc(str) {
+  DocTextNode(str)
+}
+
+# sig tag : (String, [(String, String)], [VirtualHandler(a)], [Doc(a)]) -> Doc(a)
+fun tag(nameOfTag, attrsOfTag, handlers, childrenOfTag) {
+  DocTagNode((tagName=nameOfTag, attrs=attrsOfTag, eventHandlers=handlers, children=childrenOfTag))
+}
+
+fun attr(k, v) {
+  (k, v)
+}

@@ -98,9 +98,14 @@ let get_pattern_variables p = ((get_pat_vars ())#pattern p)#get_bindings
 let get_ffi_files_obj =
   object(self)
     inherit SugarTraversals.fold as super
-    val filenames = StringSet.empty
-    method add_external_file x = {< filenames = StringSet.add x filenames >}
-    method get_filenames = StringSet.elements filenames
+    val filenames = []
+    method add_external_file x =
+      if (List.mem x filenames) then
+        self
+      else
+        {< filenames = x :: filenames >}
+
+    method get_filenames = filenames
 
     method! bindingnode = function
       | `Foreign (_, _, _, filename, _) -> self#add_external_file filename

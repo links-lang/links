@@ -1,0 +1,112 @@
+### TO GO IN PRELUDE ###
+
+# Will need to go in every file at the moment.
+# Will need to fix the chaser so that it doesn't error out, and
+# then we can move this to prelude.
+
+# Needed to ensure that virtual-dom is open
+alien javascript module "virtual-dom.js" VirtualDOM {
+  dummy : ();
+}
+
+# Loads the "vdom.js" file, exposes runDom and updateDom.
+alien javascript module "vdom.js" VDom {
+  runDom : forall a . (String, Doc(a), Process({hear:a, wild})) ~%e~> ();
+  updateDom : forall a . (Doc(a)) ~%e~> ();
+}
+
+
+# Main event loop
+fun evtLoop(updt, render, model) {
+  receive {
+    case msg ->
+      var newModel = updt(msg, model);
+      VDom.updateDom(render(newModel));
+      evtLoop(updt, render, newModel)
+  }
+}
+
+# User-facing function
+fun runVDom(placeholder, view, updt, model) {
+  var evtHandler = spawnClient {
+    evtLoop(updt, view, model)
+  };
+  var _ = spawnClient { VDom.runDom(placeholder, view(model), evtHandler) };
+  evtHandler
+}
+
+############
+#sig strToTag : forall a . (String) -> Doc(a)
+fun strToTag(str) {
+  tag("li", [], [], [textDoc(str)])
+}
+
+#sig li_list : forall a. ([String]) -> [Doc(a)]
+fun li_list(items) {
+  map(strToTag, items)
+}
+
+fun remove(item, items) {
+  switch (items) {
+     case []    -> []
+     case x::xs -> if (item == x) xs
+                   else x::remove(item, xs)
+  }
+}
+typename Model = (items: [String]);
+typename Msg = [| AddTodo | RemTodo |];
+
+sig updt : (Msg, Model) ~%e~> Model
+fun updt(msg, model) {
+  var input_dom = getNodeById("inputBox");
+  var item_text = domGetPropertyFromRef(input_dom, "value");
+  switch(msg) {
+    case AddTodo ->
+      (model with items = (item_text::model.items))
+    case RemTodo ->
+      (model with items = remove(item_text,model.items))
+  }
+}
+
+
+fun onClick(f) {
+  UnitHandler("onclick", f)
+}
+
+fun addTodoHandler() {
+  onClick(fun () { AddTodo })
+}
+
+fun remTodoHandler() {
+  onClick(fun () { RemTodo })
+}
+
+
+
+sig view : (Model) ~%e~> Doc(Msg)
+fun view(model) {
+  tag("div", [ attr("id", "virtualised-dom")], [], [
+    tag("button", [], [addTodoHandler()], [textDoc("Add")]),
+    tag("button", [], [remTodoHandler()], [textDoc("Remove")]),
+    tag("ul", [], [], li_list(model.items))
+  ])
+}
+
+fun mainPage(_, _) {
+  var initialModel = (items=["Eat"]);
+  var evtHandler = runVDom("placeholder", view, updt, initialModel);
+  page
+  <html>
+    <body>
+      <input type="text" placeholder="Enter item" id="inputBox" />
+      <div id="placeholder"></div>
+    </body>
+  </html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()
