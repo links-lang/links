@@ -770,7 +770,6 @@ let script_tag body =
   "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
 let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
-  Printf.printf "external files in make_boiler_page: %s\n" (String.concat "," external_files);
   let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
   let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
     string_of_bool onoff ^ ";</script>"
@@ -798,9 +797,9 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="")
     in_tag "html" (in_tag "head"
                      (  extLibs
                       ^ "\n"
-                      ^ ffiLibs
                       ^ debug_flag (Settings.get_value Debug.debugging_enabled)
                       ^ ext_script_tag "jslib.js" ^ "\n"
+                      ^ ffiLibs ^ "\n"
                       ^ db_config_script
                       ^ env
                       ^ head
