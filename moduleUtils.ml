@@ -105,7 +105,7 @@ let get_ffi_files_obj =
       else
         {< filenames = x :: filenames >}
 
-    method get_filenames = filenames
+    method get_filenames = List.rev filenames
 
     method! bindingnode = function
       | `Foreign (_, _, _, filename, _) -> self#add_external_file filename

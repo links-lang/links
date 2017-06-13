@@ -777,7 +777,7 @@ let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="")
   let extLibs = ext_script_tag "regex.js"^"
   "            ^ext_script_tag "yahoo/yahoo.js"^"
   "            ^ext_script_tag "yahoo/event.js" in
-  let ffiLibs = String.concat "\n" (List.map ext_script_tag (List.rev external_files)) in
+  let ffiLibs = String.concat "\n" (List.map ext_script_tag external_files) in
   let db_config_script =
     if Settings.get_value js_hide_database_info then
     script_tag("    function _getDatabaseConfig() {
