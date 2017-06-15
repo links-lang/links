@@ -95,3 +95,39 @@ stdout : foo<a/><b>bar</b>fubar : Xml
 Labelization bug
 (escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
 stdout : @.* : \[XmlItem\]
+
+XML Construction
+makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>)
+stdout : <foo id="bar" class="baz"><div/></foo> : XmlItem
+
+XML-Variant-Conversion
+variantToXml(xmlToVariant(<div class="i-am-a-div"><ul><li/><li></li><li>A</li></ul></div>))
+stdout : <div class="i-am-a-div"><ul><li/><li/><li>A</li></ul></div> : Xml
+
+Appending a children (single)
+appendChild(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><div/><span/></foo> : XmlItem
+
+Appending a children (multiple)
+appendChild(makeXml("foo", [ ], <div/>), <#><div><span>Foo</span></div><span/></#>)
+stdout : <foo><div/><div><span>Foo</span></div><span/></foo> : XmlItem
+
+Prepending a children (single)
+prependChild(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><span/><div/></foo> : XmlItem
+
+Prepending a children (multiple)
+prependChild(makeXml("foo", [ ], <div/>), <#><div><span>Foo</span></div><span/></#>)
+stdout : <foo><div><span>Foo</span></div><span/><div/></foo> : XmlItem
+
+Replace children
+replaceChildren(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><span/></foo> : XmlItem
+
+Settring new Attributes
+setAttribute(makeXml("foo", [ ], <#/>), "bar", "baz")
+stdout : <foo bar="baz"/> : XmlItem
+
+Setting existing Attributes
+setAttribute(makeXml("foo", [ ("bar", "baz") ], <#/>), "bar", "oof")
+stdout : <foo bar="oof"/> : XmlItem

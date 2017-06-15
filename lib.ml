@@ -680,8 +680,26 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                            | (`XML x) -> Value.value_of_xmlitem x
                                            | _ -> failwith "non-XML passed to xmlToVariant") xs)
                     | _ -> failwith "non-XML passed to xmlToVariant")),
-   datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) |] ]",
+  datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) |] ]",
+  IMPURE);
+
+  "xmlItemToVariant",
+  (`Server (p1 (fun v ->
+      match v with
+        | (`XML x) -> Value.value_of_xmlitem x
+        | _ -> failwith "non-XML passed to xmlItemToVariant")),
+    datatype "(XmlItem) ~> mu n. [|Text:String | Attr:(String, String) | Node:(String, [ n ]) |]",
+    IMPURE);
+
+  "variantToXml",
+  (`Server (p1 (fun v -> `List (List.map (fun i -> `XML (i)) (Value.xml_of_variants v)))),
+   datatype "(mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) |] ]) ~> Xml",
    IMPURE);
+
+  "variantToXmlItem",
+  (`Server (p1 (fun v -> `XML (Value.xmlitem_of_variant v))),
+    datatype "(mu n. [| Text: String | Attr: (String, String) | Node: (String, [ n ]) |]) ~> XmlItem",
+    IMPURE);
 
   "getTagName",
   (p1 (fun v ->

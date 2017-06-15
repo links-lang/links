@@ -764,3 +764,16 @@ and value_of_xmlitem =
     | Text s -> `Variant ("Text", box_string s)
     | Attr (name, value) -> `Variant ("Attr", `Record [("1", box_string name); ("2", box_string value)])
     | Node (name, children) -> `Variant ("Node", `Record [("1", box_string name); ("2", value_of_xml children)])
+
+let rec xml_of_variants vs = match vs with
+  | (`List variant_items) -> List.map xmlitem_of_variant variant_items
+  | _ -> failwith "Cannot construct xml from variants"
+and xmlitem_of_variant =
+  function
+    | `Variant ("Text", boxed_string) ->
+        Text (unbox_string(boxed_string))
+    | `Variant ("Attr", `Record([ ("1", boxed_name); ("2", boxed_value) ])) ->
+        Attr(unbox_string(boxed_name), unbox_string(boxed_value))
+    |`Variant ("Node", `Record([ ("1", boxed_name); ("2", variant_children) ])) ->
+        Node(unbox_string(boxed_name), xml_of_variants variant_children)
+    | _ -> failwith "Cannot construct xml from variant"
