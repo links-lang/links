@@ -608,7 +608,14 @@ and unbox_int  : t -> int    = function
   | _other -> failwith("Type error unboxing int")
 and box_float f = `Float f
 and unbox_float : t -> float = function
-  | `Float f -> f | _ -> failwith "Type error unboxing float"
+  | `Float f -> f
+  (* This case happens due to the fact that JS serialises "1.0" as "1".
+   * Therefore, JSONParse will deserialise something that has Float type
+   * and box it as an integer. The alternative would be to box all floats
+   * on the client, but this is easier and more performant (if a little hacky)
+   *)
+  | `Int i -> float_of_int i
+  | _ -> failwith "Type error unboxing float"
 and box_char c = `Char c
 and unbox_char :  t -> char = function
   | `Char f -> f | _ -> failwith "Type error unboxing char"
