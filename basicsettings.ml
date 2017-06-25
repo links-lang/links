@@ -149,3 +149,14 @@ let print_colors = Settings.add_bool ("print_colors", false, `User)
 
 (* Base URL for websocket connections *)
 let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)
+
+(* Path for readline history file *)
+let readline_history_setting = Settings.add_string("readline_history_path", "", `User)
+
+let readline_history_path () =
+  let settings_path = Settings.get_value readline_history_setting in
+  if settings_path = "" then
+    Filename.concat (Unix.getenv "HOME") ".links_history"
+  else
+    settings_path
+

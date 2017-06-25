@@ -82,9 +82,10 @@ let reader_of_string ?pp string =
         nchars
 
 let reader_of_readline ps1 =
-  let current_pos = ref 0
-  and buf = Buffer.create 30
-  and dots = String.make (String.length ps1 - 1) '.' ^ " " in
+  let current_pos = ref 0 in
+  let buf = Buffer.create 30 in
+  let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+  let history_path = Basicsettings.readline_history_path () in
 
   (* Gets an input from the command line, with a newline at the end, *)
   let get_input prompt =
@@ -92,6 +93,7 @@ let reader_of_readline ps1 =
       | None -> ""
       | Some inp ->
           ignore (LNoise.history_add inp);
+          ignore (LNoise.history_save ~filename:history_path);
           inp ^ "\n" in
 
   let initial_string = get_input ps1 in

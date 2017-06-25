@@ -237,6 +237,8 @@ let execute_directive (name, args) (valenv, nenv, typingenv) =
 (** Interactive loop *)
 let interact envs =
   (* Ensure we retain history *)
+  let history_path = Basicsettings.readline_history_path () in
+  ignore (LNoise.history_load ~filename:history_path);
   ignore (LNoise.history_set ~max_length:100);
   let rec interact envs =
     let evaluate_replitem parse envs =
