@@ -30,7 +30,6 @@ let try_parse_file filename =
     else [] in
 
   let poss_dirs =
-    printf "poss_stdlib_dir: %s\n" (if List.length poss_stdlib_dir > 0 then List.hd poss_stdlib_dir else "");
     let path_setting = Settings.get_value Basicsettings.links_file_paths in
     let split_dirs = Str.split (Str.regexp path_sep) path_setting in
     "" :: "." :: poss_stdlib_dir @ (List.map (check_n_chop) split_dirs) in
