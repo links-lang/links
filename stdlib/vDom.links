@@ -1,0 +1,58 @@
+### VDOM STUFF ###
+
+# Doc Type
+
+# typename VirtualHandler(a) = [| StringHandler: ((String) -> a) | Pines: a |];
+typename VirtualHandler(a) =
+  [| StringHandler: (String, (String) {}~> a) | UnitHandler: (String, () {}~> a) |];
+
+typename Doc(a) =
+  [| DocTextNode: (String)
+   | DocTagNode:
+      (tagName: String, attrs: [(String, String)], eventHandlers: [VirtualHandler(a)],
+       children: [Doc(a)])
+   |];
+
+fun textDoc(str) {
+  DocTextNode(str)
+}
+
+# sig tag : (String, [(String, String)], [VirtualHandler(a)], [Doc(a)]) -> Doc(a)
+fun tag(nameOfTag, attrsOfTag, handlers, childrenOfTag) {
+  DocTagNode((tagName=nameOfTag, attrs=attrsOfTag, eventHandlers=handlers, children=childrenOfTag))
+}
+
+fun attr(k, v) {
+  (k, v)
+}
+
+# Needed to ensure that virtual-dom is open
+alien javascript module "virtual-dom.js" VirtualDOM {
+  dummy : ();
+}
+
+# Loads the "vdom.js" file, exposes runDom and updateDom.
+alien javascript module "vdom.js" VDom {
+  runDom : forall a . (String, Doc(a), Process({hear:a, wild})) ~%e~> ();
+  updateDom : forall a . (Doc(a)) ~%e~> ();
+}
+
+
+# Main event loop
+fun evtLoop(updt, render, model) {
+  receive {
+    case msg ->
+      var newModel = updt(msg, model);
+      VDom.updateDom(render(newModel));
+      evtLoop(updt, render, newModel)
+  }
+}
+
+# User-facing function
+fun runVDom(placeholder, view, updt, model) {
+  var evtHandler = spawnClient {
+    evtLoop(updt, view, model)
+  };
+  var _ = spawnClient { VDom.runDom(placeholder, view(model), evtHandler) };
+  evtHandler
+}

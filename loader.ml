@@ -44,15 +44,14 @@ let read_file_source (nenv, tyenv) (filename:string) =
   let sugar, pos_context =
     ModuleUtils.try_parse_file filename in
   (* printf "AST: \n %s \n" (Sugartypes.Show_program.show sugar); *)
-  let ext_files = ModuleUtils.get_ffi_files sugar in
-  let program, t, tenv = Frontend.Pipeline.program tyenv pos_context sugar in
+  let ((program, t, tenv), ffi_files) = Frontend.Pipeline.program tyenv pos_context sugar in
   let globals, main, nenv =
     Sugartoir.desugar_program
       (nenv,
        Var.varify_env (nenv, tyenv.Types.var_env),
        tyenv.Types.effect_row) program
   in
-  (nenv, tenv), (globals, main, t), ext_files
+  (nenv, tenv), (globals, main, t), ffi_files
 
 let cachefile_path_tag filename tag =
   let suffix = if tag = "" then ".cache" else "."^tag^".cache" in

@@ -1,41 +1,4 @@
-### TO GO IN PRELUDE ###
-
-# Will need to go in every file at the moment.
-# Will need to fix the chaser so that it doesn't error out, and
-# then we can move this to prelude.
-
-# Needed to ensure that virtual-dom is open
-alien javascript module "virtual-dom.js" VirtualDOM {
-  dummy : ();
-}
-
-# Loads the "vdom.js" file, exposes runDom and updateDom.
-alien javascript module "vdom.js" VDom {
-  runDom : forall a . (String, Doc(a), Process({hear:a, wild})) ~%e~> ();
-  updateDom : forall a . (Doc(a)) ~%e~> ();
-}
-
-
-# Main event loop
-fun evtLoop(updt, render, model) {
-  receive {
-    case msg ->
-      var newModel = updt(msg, model);
-      VDom.updateDom(render(newModel));
-      evtLoop(updt, render, newModel)
-  }
-}
-
-# User-facing function
-fun runVDom(placeholder, view, updt, model) {
-  var evtHandler = spawnClient {
-    evtLoop(updt, view, model)
-  };
-  var _ = spawnClient { VDom.runDom(placeholder, view(model), evtHandler) };
-  evtHandler
-}
-
-############
+open VDom
 #sig strToTag : forall a . (String) -> Doc(a)
 fun strToTag(str) {
   tag("li", [], [], [textDoc(str)])

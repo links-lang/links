@@ -363,7 +363,7 @@ let run_file prelude envs filename =
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s =
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value BS.pp) Parse.program s in
-    let program, t, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+    let (program, t, _), _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
