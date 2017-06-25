@@ -24,36 +24,32 @@ let concurrent_server = Settings.add_bool ("concurrent_server", true, `System)
 (** Set this to [true] to print types when printing results. *)
 let printing_types = Settings.add_bool ("printing_types", true, `User)
 
-(* Looks for a given file, either in the current directory or in the Links opam path *)
-let locate_file filename =
-  (* If LINKS_LIB is not defined then we search in current directory *)
-  let executable_dir = Filename.dirname Sys.executable_name in
-  if Sys.file_exists (Filename.concat executable_dir filename) then
-    executable_dir
-  else
-    try
-      (* If all else failed we search for OPAM installation of Links and
-         use a prelude that it provides *)
-      let opam_links_lib =
-        input_line (Unix.open_process_in "opam config var links:lib 2>/dev/null") in
-      if Sys.file_exists (Filename.concat opam_links_lib filename) then
-        opam_links_lib
-      else
-        (* But if no OPAM installation exists we fall back to current
-           directory so that user gets a reasonable error message *)
-        executable_dir
-    with End_of_file ->
-      (* User probably does not have OPAM, so fall back to current directory *)
-      executable_dir
-
 (** Name of the file containing the prelude code. *)
 let prelude_file =
-  let prelude_dir =
-    match Utility.getenv "LINKS_LIB" with
+  let prelude_dir = match Utility.getenv "LINKS_LIB" with
     (* If user defined LINKS_LIB then it takes the highest priority *)
     | Some path -> path
-    | None -> locate_file "prelude.links" in
-  Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
+    | None ->
+        (* If LINKS_LIB is not defined then we search in current directory *)
+        let executable_dir = Filename.dirname Sys.executable_name in
+        if Sys.file_exists (Filename.concat executable_dir "prelude.links") then
+          executable_dir
+        else
+          try
+            (* If all else failed we search for OPAM installation of Links and
+               use a prelude that it provides *)
+            let opam_links_lib =
+              input_line (Unix.open_process_in "opam config var links:lib 2>/dev/null") in
+            if Sys.file_exists (Filename.concat opam_links_lib "prelude.links") then
+              opam_links_lib
+            else
+              (* But if no OPAM installation exists we fall back to current
+                 directory so that user gets a reasonable error message *)
+              executable_dir
+          with End_of_file ->
+            (* User probably does not have OPAM, so fall back to current directory *)
+            executable_dir
+  in Settings.add_string ("prelude", Filename.concat prelude_dir "prelude.links", `System)
 
 (** Path to config file *)
 let config_file_path = match Utility.getenv "LINKS_CONFIG" with
@@ -153,10 +149,3 @@ let print_colors = Settings.add_bool ("print_colors", false, `User)
 
 (* Base URL for websocket connections *)
 let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)
-
-(* Should we use the extra standard library definitions? *)
-let use_stdlib = Settings.add_bool ("use_stdlib", true, `User)
-
-(* Standard library path *)
-let stdlib_path = Settings.add_string ("stdlib_path", "", `User)
-
