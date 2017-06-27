@@ -488,7 +488,7 @@ fun main() {
             var downloadNode = getNodeById("download");
             var imageName = "links-tetris-" ^^ intToString(clientTime()) ^^ ".png";
             var _ = domSetAttributeFromRef(downloadNode, "download", imageName);
-            replaceChildren(stringToXml("Download the snapshot as " ^^ imageName), downloadNode);
+            domReplaceChildren(stringToXml("Download the snapshot as " ^^ imageName), downloadNode);
             jsSaveCanvas(getNodeById(mainCanvas), downloadNode, "image/png")
         }
         else ();

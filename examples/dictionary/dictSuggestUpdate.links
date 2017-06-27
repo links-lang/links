@@ -31,7 +31,7 @@ fun completions(s) server {
 }
 
 fun suggest(s) client {
-  replaceChildren(format(completions(s)), getNodeById("suggestions"))
+  domReplaceChildren(format(completions(s)), getNodeById("suggestions"))
 }
 
 fun editDef(def) client {
@@ -60,7 +60,7 @@ fun editDef(def) client {
 }
 
 fun redraw(xml, defId) {
-  replaceChildren(xml, getNodeById("def:" ^^ defId))
+  domReplaceChildren(xml, getNodeById("def:" ^^ defId))
 }
 
 fun formatDef(def) {
@@ -102,7 +102,7 @@ fun main() {
         case Suggest(s) -> suggest(s); receiver(s)
         case NewDef(def) ->
           newDef(def);
-          replaceChildren(addForm(self()), getNodeById("add"));
+          domReplaceChildren(addForm(self()), getNodeById("add"));
           if (s <> "") suggest(s) else (); receiver(s)
       }
     }

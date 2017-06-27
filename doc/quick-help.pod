@@ -1593,7 +1593,7 @@ C<parentRef>.
 Removes C<node> from its current position, leaving it with no
 parent. This makes it an orphan.
 
-=item C<replaceChildren(xml, node)>
+=item C<domReplaceChildren(xml, node)>
 
 Replaces the children of C<node> with xml.
 

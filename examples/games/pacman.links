@@ -826,7 +826,7 @@ fun main() {
                 var downloadNode = getNodeById("download");
                 var imageName = gameName ^^ "-" ^^ intToString(clientTime()) ^^ ".png";
                 var _ = domSetAttributeFromRef(downloadNode, "download", imageName);
-                replaceChildren(
+                domReplaceChildren(
                     <#>
                         {stringToXml("Click to download the snapshot as")}
                         <br />

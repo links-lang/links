@@ -50,7 +50,7 @@ page
   <body>
   <h3>Cool Integer Calculator</h3> 
 
-   <form l:onsubmit="{replaceChildren(stringToXml(intToString(main(op1, op2, operation))), getNodeById("result"))}">
+   <form l:onsubmit="{domReplaceChildren(stringToXml(intToString(main(op1, op2, operation))), getNodeById("result"))}">
     <input type="text" size="5" l:name="op1"/>
     <select l:name="operation">
  	<option value="add">+</option>
