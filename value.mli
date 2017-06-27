@@ -46,6 +46,8 @@ val reconstruct_db_string : string * string -> string
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
+               | NsAttr of (string * string * string)
+               | NsNode of (string * string * xml)
 and xml = xmlitem list
   deriving (Show)
 
@@ -247,5 +249,8 @@ val unmarshal_value : env -> string -> t
 val get_contained_channels : t -> chan list
 
 val value_of_xmlitem : xmlitem -> t
+val value_of_xml : xml -> t
+val xml_of_variants : t -> xml
+val xmlitem_of_variant : t -> xmlitem
 
 val split_html : xml -> xml * xml

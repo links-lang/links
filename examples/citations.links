@@ -31,11 +31,11 @@ fun header(title) {
 sig suggest : (String, String) ~> ()
 fun suggest(authorPrefix, paperPrefix) client {
   var (authorList, paperList) = completions(authorPrefix, paperPrefix);
-  replaceChildren(
+  domReplaceChildren(
     authorList,
     getNodeById(authorId)
   );
-  replaceChildren(
+  domReplaceChildren(
     paperList,
     getNodeById(paperId)
   )

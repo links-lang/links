@@ -43,7 +43,7 @@ module Components {
     fun changeTopic(topic) {
       var topicNode = getNodeById("topic");
       var to_add = <#><p><span class="lead"><b>Topic: </b>{stringToXml(topic)}</span></p></#>;
-      replaceChildren(to_add, topicNode)
+      domReplaceChildren(to_add, topicNode)
     }
 
     fun removeUser(nick) {
@@ -124,7 +124,7 @@ module Components {
     var incomingHandler = spawnClient { incomingMsgLoop(incomingMsgChan) };
 
     # Finally, remove the name request box, put the chatbox in, and we can get going
-    replaceChildren(chatBox(outgoingHandler), getNodeById("main"))
+    domReplaceChildren(chatBox(outgoingHandler), getNodeById("main"))
   }
 
 
@@ -141,12 +141,12 @@ module Components {
         displayChatBox(topic, nicks, incomingMsgChan, s)
     }
 
-    var handler = spawnClient { receive { case _ -> handleSubmitName() } };
+    var hndlr = spawnClient { receive { case _ -> handleSubmitName() } };
 
     <#>
       <div id="nameBox">
         <p>Nickname:</p>
-        <form l:onsubmit="{handler ! ()}">
+        <form l:onsubmit="{hndlr ! ()}">
           <input id="name_box" type="text"></input>
         </form>
       </div>
