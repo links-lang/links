@@ -297,10 +297,24 @@ let interact envs =
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
+      let use_linenoise = Settings.get_value Basicsettings.native_readline in
+      begin
+        if not use_linenoise then
+          (print_string ps1; flush stdout)
+        else ()
+      end;
       let _, nenv, tyenv = envs in
 
       let parse_and_desugar () =
-        let sugar, pos_context = Parse.parse_readline ps1 Parse.interactive in
+        let sugar, pos_context =
+          if use_linenoise then
+            Parse.parse_readline ps1 Parse.interactive
+          else
+            let make_dotter ps1 =
+              let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+              fun _ -> print_string dots; flush stdout in
+            Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive (stdin, "<stdin>")
+          in
         let sentence, t, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
           (* FIXME: What's going on here? Why is this not part of
              Frontend.Pipeline.interactive?*)

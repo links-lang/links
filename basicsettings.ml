@@ -160,3 +160,4 @@ let readline_history_path () =
   else
     settings_path
 
+let native_readline = Settings.add_bool("native_readline", true, `User)
