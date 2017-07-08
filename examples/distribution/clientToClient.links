@@ -61,7 +61,7 @@ fun mainPage(regPid) {
 
 fun main() {
   var registryPid = spawn { clientRegProcess([]) };
-  addRoute("/x", fun (_, _) { mainPage(registryPid) });
+  addRoute("/x", fun(_) { mainPage(registryPid) });
   serveWebsockets();
   servePages()
 }

@@ -140,7 +140,7 @@ fun main() {
 }
 
 
-fun mainPage(_,_) {
+fun mainPage(_) {
   var pid = spawnClient { receive { case _ -> main() } };
   fun trigger() { pid ! () }
   page
