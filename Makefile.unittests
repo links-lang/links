@@ -1,12 +1,11 @@
 -include ./Makefile.config
 
-LINKSBASEMAKEFILE = ./MakefileLinksBase
+LINKSBASEMAKEFILE = ./Makefile.shared
 include $(LINKSBASEMAKEFILE)
 
 SOURCES :=	$(SOURCES)			\
 				unitTestsJson.ml	\
 				unitTests.ml 		\
-			
 
 PACKS :=	$(PACKS) oUnit
 

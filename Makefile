@@ -1,6 +1,6 @@
 -include ./Makefile.config
 
-LINKSBASEMAKEFILE = ./MakefileLinksBase
+LINKSBASEMAKEFILE = ./Makefile.shared
 include $(LINKSBASEMAKEFILE)
 
 SOURCES :=	$(SOURCES)		\
@@ -28,6 +28,9 @@ quick-help:
 docs-clean:
 	cd doc && make clean
 
+unit-tests-clean:
+	$(MAKE) -f Makefile.unittests clean
+
 prelude.links.cache: prelude.links links
 	@echo "Pre-compiling prelude..."
 	@./links -e 'print("Prelude compiled OK.")'
@@ -39,7 +42,7 @@ byte-code: cache-clean
 
 native-code: cache-clean
 
-clean :: docs-clean cache-clean
+clean :: docs-clean cache-clean unit-tests-clean
 
 .PHONY: install
 install: nc
@@ -60,3 +63,8 @@ uninstall:
 	rm -f $(LINKS_BIN)/links
 	@echo "Removing $(LINKS_LIB)/prelude.links"
 	rm -f $(LINKS_LIB)/prelude.links
+
+.PHONY: unit-tests
+unit-tests:
+	-$(MAKE) -f Makefile.unittests
+
