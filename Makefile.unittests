@@ -9,10 +9,10 @@ SOURCES :=	$(SOURCES)			\
 				unitTests.ml 		\
 
 # because we update packs we need to ensure REAL_OCAMLFIND is undefined
-undefine REAL_OCAMLFIND
+undefine	REAL_OCAMLFIND
 PACKS :=	$(PACKS) oUnit
 
-RESULT  = linksTests
+RESULT = linksTests
 
 include $(OCAMLMAKEFILE)
 
