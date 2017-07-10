@@ -19,6 +19,7 @@ before_install:
 install:
   - opam pin add links-dev . -n -y
   - opam install -y --deps-only links-dev
+  - opam install -y ounit
   - opam pin remove links-dev -y
 script:
   - make -j2 nc
