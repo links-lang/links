@@ -149,6 +149,8 @@ val box_unit : unit -> t
 val unbox_unit : t -> unit
 val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
+val box_variant : string -> t -> t
+val unbox_variant : t -> (string * t)
 val box_pid : dist_pid -> t
 val unbox_pid : t -> dist_pid
 val box_socket : in_channel * out_channel -> t
@@ -162,13 +164,9 @@ val unbox_access_point : t -> access_point
 
 val intmap_of_record : t -> t Utility.intmap option
 
-val string_as_charlist : string -> t
-val charlist_as_string : t -> string
 val string_of_value : t -> string
 val string_of_xml : ?close_tags:bool -> xml -> string
-val string_of_primitive : primitive_value -> string
-val string_of_tuple : (string * t) list -> string
-val string_of_cont : continuation -> string
+val p_value: Format.formatter -> t -> unit
 
 val marshal_value : t -> string
 val marshal_continuation : continuation -> string

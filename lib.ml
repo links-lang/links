@@ -311,7 +311,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "Send",
   (p2 (fun _pid _msg ->
          assert(false)), (* Now handled in evalir.ml *)
-   datatype "(Process ({hear:a|_}), a) ~> ()",
+   datatype "forall a::Type(Any, Any).(Process ({hear:a|_}), a) ~> ()",
    IMPURE);
 
   "self",
@@ -377,11 +377,16 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "spawnWait",
-  (`Client,
+  (`PFun (fun _ -> assert false),
    datatype "(() ~> a) ~> a",
    IMPURE);
 
-  (* If we add more effects then spawn and spawnWait shouldn't
+  "spawnWait'",
+  (`PFun (fun _ -> assert false),
+   datatype "() ~> a",
+   IMPURE);
+
+   (* If we add more effects then spawn and spawnWait shouldn't
      necessarily mask them, so we might want to change their types to
      something like this:
 
@@ -1573,7 +1578,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "serveWebsockets",
     (`PFun (fun _ -> assert false),
-    datatype "(String) ~> ()",
+    datatype "() ~> ()",
     IMPURE)
 ]
 
@@ -1640,7 +1645,9 @@ let is_primitive_var var =
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
 
-let typing_env = {Types.var_env = type_env; tycon_env = alias_env; Types.effect_row = Types.make_empty_open_row (`Any, `Any)}
+let typing_env = {Types.var_env = type_env;
+                  tycon_env = alias_env;
+                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 

@@ -9,6 +9,54 @@ let jslibdir : string Settings.setting = Settings.add_string("jslibdir", "", `Us
 let host_name = Settings.add_string ("host", "0.0.0.0", `User)
 let port = Settings.add_int ("port", 8080, `User)
 
+
+module Trie =
+struct
+  type ('a, 'b) t =
+    | Trie of 'b option * ('a * ('a, 'b) t) list
+
+  let empty : ('a, 'b) t = Trie (None, [])
+
+  let rec transform : 'a list -> ('b -> 'b) -> 'b -> ('a, 'b) t -> ('a, 'b) t =
+    fun key xf b trie ->
+    let rec down key (Trie (here, children)) =
+      match key, here with
+      | [], None -> Trie (Some b, children)
+      | [], Some b' -> Trie (Some (xf b'), children)
+      | hk :: tk, _ ->
+         let rec right = function
+           | [] -> [hk, transform tk xf b empty]
+           | ((hc, child) :: tc) ->
+              if hk = hc then
+                (hc, down tk child) :: tc
+              else
+                (hc, child) :: right tc in
+         Trie (here, right children) in
+    down key trie
+
+  (* This has ended up being remarkably specialized *)
+  let rec longest_match : 'a list -> ('a, 'b) t -> ('a list * 'b) list =
+    fun key (Trie (here, children)) ->
+    match key, here with
+    | [], None -> []
+    | [], Some v -> [key, v]
+    | hk :: tk, _ ->
+       let rec right = function
+         | [] -> begin
+             match here with
+             | None -> []
+             | Some v -> [key, v]
+           end
+         | ((hc, child) :: tc) ->
+            if hk = hc then
+              match here with
+              | None -> longest_match tk child
+              | Some v -> longest_match tk child @ [key, v]
+            else
+              right tc in
+       right children
+end
+
 module rec Webserver : WEBSERVER =
 struct
 
@@ -20,14 +68,25 @@ struct
   type static_resource = path * mime_type list
   type request_handler_fn = Value.env * Value.t
 
-  (* Is directory handler * path * handler information *)
-  type routing_table = (bool * string * (static_resource, request_handler_fn) either) list
+  type provider = (static_resource, request_handler_fn) either option
+  type providers = { as_directory: provider; as_page: provider }  (* Really, at least one should be Some *)
+  type routing_table = (string, providers) Trie.t
 
-  let rt : routing_table ref = ref []
+  let rt : routing_table ref = ref Trie.empty
+
   let env : (Value.env * Ir.var Env.String.t * Types.typing_environment) ref =
     ref (Value.empty_env, Env.String.empty, Types.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
+
+  (* Keeps track of whether websocket requests are allowed. *)
+  let accepting_websocket_requests = ref false
+  let is_accepting_websocket_requests () =
+    !accepting_websocket_requests
+  let set_accepting_websocket_requests v =
+    accepting_websocket_requests := v
+
+  let ws_url = Settings.get_value Basicsettings.websocket_url
 
   let set_prelude bs =
     prelude := bs
@@ -37,7 +96,17 @@ struct
     ()
 
   let add_route is_directory path thread_starter =
-    rt := (is_directory, path, thread_starter) :: !rt
+    rt := Trie.transform
+            (Str.split (Str.regexp "/") path)
+            (fun p -> if is_directory then
+                        {p with as_directory = Some thread_starter}
+                      else
+                        {p with as_page = Some thread_starter})
+            (if is_directory then
+               { as_directory = Some thread_starter; as_page = None }
+             else
+               { as_directory = None; as_page = Some thread_starter })
+            !rt
 
   let extract_client_id cgi_args =
     Utility.lookup "__client_id" cgi_args
@@ -48,7 +117,7 @@ struct
           Debug.print ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
           Debug.print ("Decoded client ID: " ^ decoded_client_id);
-          Lwt.return (ClientID.of_string decoded_client_id)
+          ClientID.of_string decoded_client_id
       | None -> failwith "Client ID expected but not found."
 
 
@@ -73,7 +142,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt render_cont _conn req body =
+    let callback rt render_cont conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt_body.to_string body >>= fun body_string ->
@@ -97,8 +166,10 @@ struct
       let path = Uri.path (Request.uri req) in
 
       (* Precondition: valenv has been initialised with the correct request data *)
-      let run_page (_dir, _s, (valenv, v)) () =
+      let run_page (valenv, v) () =
         let cid = RequestData.get_client_id (Value.request_data valenv) in
+        let ws_conn_url =
+          if !accepting_websocket_requests then Some (ws_url) else None in
         Eval.apply (render_cont ()) valenv
         (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)]) >>= fun (valenv, v) ->
           let page = Irtojs.generate_real_client_page
@@ -108,8 +179,19 @@ struct
                         * they should all end up in valenv... *)
                        (!prelude @ !globals)
                        (valenv, v)
+                       ws_conn_url
           in
         Lwt.return ("text/html", page) in
+
+      let render_servercont_cont valenv v =
+        let ws_conn_url =
+          if !accepting_websocket_requests then Some (ws_url) else None in
+        Irtojs.generate_real_client_page
+          ~cgi_env:cgi_args
+          (Lib.nenv, Lib.typing_env)
+          (!prelude @ !globals)
+          (valenv, v)
+          ws_conn_url in
 
       let serve_static base uri_path mime_types =
           let fname =
@@ -133,29 +215,31 @@ struct
           Debug.print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
           Server.respond_file ~headers ~fname () in
 
-      let rec route = function
-        | [] ->
-           Debug.print "No cases matched!\n";
-           Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
-        | ((_, s, Left (file_path, mime_types)) :: _rest) when is_prefix_of s path ->
-           Debug.print (Printf.sprintf "Matched static case %s\n" s);
-           let uri_path = String.sub path (String.length s) (String.length path - String.length s) in
-           serve_static file_path uri_path mime_types
-        | ((dir, s, Right (valenv, v)) :: _rest) when (dir && is_prefix_of s path) || (s = path) ->
-           Debug.print (Printf.sprintf "Matched case %s\n" s);
-           let (_, nenv, tyenv) = !env in
-           get_or_make_client_id cgi_args >>= fun (cid) ->
-           let req_data = RequestData.new_request_data cgi_args cookies cid in
-           let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
-           Webif.do_request
-             (req_env, nenv, tyenv)
-             cgi_args
-             (run_page (dir, s, (req_env, v)))
-             (render_cont ())
-             (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)
-        | ((_, s, _) :: rest) ->
-           Debug.print (Printf.sprintf "Skipping case for %s\n" s);
-           route rest in
+      let is_websocket_request = is_prefix_of ws_url in
+
+      let route rt =
+        let rec up = function
+          | [], _ -> Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
+          | ([] as remaining, { as_page = Some (Left (file_path, mime_types)); _ }) :: _, true
+          | (remaining, { as_directory = Some (Left (file_path, mime_types)); _ }) :: _, true ->
+             serve_static file_path (String.concat "/" remaining) mime_types
+          | (remaining, { as_directory = Some (Left (file_path, mime_types)); _ }) :: _, false ->
+             serve_static file_path (String.concat "/" remaining / "index.html") mime_types
+          | ([], { as_page = Some (Right (valenv, v)); _ }) :: _, true
+          | (_, { as_directory = Some (Right (valenv, v)); _ }) :: _, _ ->
+             let (_, nenv, tyenv) = !env in
+             let cid = get_or_make_client_id cgi_args in
+             let req_data = RequestData.new_request_data cgi_args cookies cid in
+             let req_env = Value.set_request_data (Value.shadow tl_valenv ~by:valenv) req_data in
+             Webif.do_request
+               (req_env, nenv, tyenv)
+               cgi_args
+               (run_page (req_env, v))
+               (render_cont ())
+               (render_servercont_cont req_env)
+               (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)
+          | _ :: t, path_is_file -> up (t, path_is_file) in
+        up (Trie.longest_match (Str.split (Str.regexp "/") path) !rt, String.length path == 1 ||path.[String.length path - 1] <> '/') in
 
       if is_prefix_of (Settings.get_value Basicsettings.Js.lib_url) path then
         let liburl_length = String.length (Settings.get_value Basicsettings.Js.lib_url) in
@@ -169,6 +253,17 @@ struct
              end
           | s -> s in
         serve_static linkslib uri_path []
+      (* Handle websocket connections *)
+      else if (is_websocket_request path) then
+        let websocket_path = Settings.get_value Basicsettings.websocket_url in
+        let ws_url_length = String.length websocket_path in
+        (* TODO: Sanity checking of client ID here *)
+        let client_id = ClientID.of_string @@
+          String.sub path ws_url_length ((String.length path) - ws_url_length) in
+        Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
+          (ClientID.to_string client_id));
+        Cohttp_lwt_body.drain_body body >>= fun () ->
+        Proc.Websockets.accept client_id req (fst conn)
       else
         route rt in
 
@@ -194,5 +289,5 @@ struct
       (fun exn -> Debug.print ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
     Settings.set_value Basicsettings.web_mode true;
     Settings.set_value webs_running true;
-    start_server (Settings.get_value host_name) (Settings.get_value port) !rt
+    start_server (Settings.get_value host_name) (Settings.get_value port) rt
 end

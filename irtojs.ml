@@ -891,11 +891,11 @@ let resolve_toplevel_values : string list -> string =
   fun names ->
     String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
-let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) =
+let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_conn_url =
   let open Json in
   let req_data = Value.request_data valenv in
   let client_id = RequestData.get_client_id req_data in
-  let json_state = JsonState.empty client_id in
+  let json_state = JsonState.empty client_id ws_conn_url in
 
   (* Add the event handlers for the final value to be sent *)
   let json_state = ResolveJsonState.add_val_event_handlers v json_state in

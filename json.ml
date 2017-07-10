@@ -7,6 +7,7 @@ let show_json = Settings.add_bool("show_json", false, `User)
 
 (* Type synonyms *)
 type handler_id = int
+type websocket_url = string
 
 (* Types *)
 type json_string = string
@@ -61,7 +62,7 @@ let jsonize_location : Ir.location -> string = function
   | `Native  -> "native"
   | `Unknown -> "unknown"
 
-let rec jsonize_value : Value.t -> json_string =
+let rec jsonize_value' : Value.t -> json_string =
   function
   | `PrimitiveFunction _
   | `Continuation _
@@ -75,14 +76,14 @@ let rec jsonize_value : Value.t -> json_string =
       match fvs with
       | None     -> ""
       | Some fvs ->
-        let s = jsonize_value fvs in
+        let s = jsonize_value' fvs in
         ", \"environment\":" ^ s in
     "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
     " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}"
   | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) ->
-    let s = jsonize_value value in
+    let s = jsonize_value' value in
     "{\"_label\":\"" ^ label ^ "\",\"_value\":" ^ s ^ "}"
   | `Record fields ->
     let ls, vs = List.split fields in
@@ -143,7 +144,7 @@ and jsonize_values : Value.t list -> string list  =
     let ss =
       List.fold_left
         (fun ss v ->
-           let s = jsonize_value v in
+           let s = jsonize_value' v in
            s::ss) [] vs in
     List.rev ss
 
@@ -155,8 +156,8 @@ let value_with_state v s =
 let show_processes procs =
   (* Show the JSON for a prcess, including the PID, process to be run, and mailbox *)
   let show_process (pid, (proc, msgs)) =
-    let ps = jsonize_value proc in
-    let ms = jsonize_value (`List msgs) in
+    let ps = jsonize_value' proc in
+    let ms = jsonize_value' (`List msgs) in
     "{\"pid\":" ^ (ProcessID.to_json pid) ^ "," ^
     " \"process\":" ^ ps ^ "," ^
     " \"messages\":" ^ ms ^ "}" in
@@ -166,7 +167,7 @@ let show_processes procs =
 let show_handlers evt_handlers =
   (* Show the JSON for an event handler: the evt handler key, and the associated process *)
   let show_evt_handler (key, proc) =
-    let h_proc_json = jsonize_value proc in
+    let h_proc_json = jsonize_value' proc in
     "{\"key\": " ^ string_of_int key ^ "," ^
     " \"eventHandlers\":" ^ h_proc_json ^ "}" in
   let bnds = IntMap.bindings evt_handlers in
@@ -176,8 +177,13 @@ let show_aps aps =
   let ap_list = AccessPointIDSet.elements aps in
   String.concat "," (List.map (AccessPointID.to_json) ap_list)
 
-let print_json_state client_id procs handlers aps =
-   "{\"client_id\":" ^ (ClientID.to_json client_id) ^ "," ^
+let print_json_state client_id conn_url procs handlers aps =
+    let ws_url_data =
+    (match conn_url with
+       | Some ws_conn_url -> "\"ws_conn_url\":\"" ^ ws_conn_url ^ "\","
+       | None -> "") in
+  "{\"client_id\":" ^ (ClientID.to_json client_id) ^ "," ^
+   ws_url_data ^
    "\"access_points\":" ^ "[" ^ (show_aps aps) ^ "]" ^ "," ^
    "\"processes\":" ^ "[" ^ (show_processes procs) ^ "]" ^ "," ^
    "\"handlers\":" ^ "[" ^ (show_handlers handlers) ^ "]}"
@@ -187,14 +193,16 @@ let print_json_state client_id procs handlers aps =
 module JsonState = struct
   type t = {
     client_id : client_id;
+    ws_conn_url : websocket_url option;
     processes: (Value.t * Value.t list) pid_map;
     handlers: Value.t intmap;
     aps: apid_set
   }
 
   (** Creates an empty JSON state *)
-  let empty cid = {
+  let empty cid url = {
     client_id = cid;
+    ws_conn_url = url;
     processes = PidMap.empty;
     handlers = IntMap.empty;
     aps = AccessPointIDSet.empty
@@ -213,8 +221,7 @@ module JsonState = struct
     { state with aps = AccessPointIDSet.add apid state.aps }
 
   (** Serialises the state as a JSON string *)
-  let to_string s =
-    print_json_state s.client_id s.processes s.handlers s.aps
+  let to_string s = print_json_state s.client_id s.ws_conn_url s.processes s.handlers s.aps
 end
 
 type json_state = JsonState.t
@@ -223,10 +230,18 @@ type json_state = JsonState.t
 let jsonize_value_with_state value state =
   Debug.if_set show_json
       (fun () -> "jsonize_value_with_state => " ^ Value.string_of_value value);
-  let jv = jsonize_value value in
+  let jv = jsonize_value' value in
   let jv_s = value_with_state jv (JsonState.to_string state) in
   Debug.if_set show_json (fun () -> "jsonize_value_with_state <= " ^ jv_s);
   jv_s
+
+let jsonize_value v =
+  Debug.if_set show_json
+      (fun () -> "jsonize_value => " ^ Value.string_of_value v);
+  let jv = jsonize_value' v in
+  Debug.if_set show_json (fun () -> "jsonize_value <= " ^ jv);
+  jv
+
 
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont

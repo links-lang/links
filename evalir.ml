@@ -3,6 +3,7 @@ open Ir
 open Lwt
 open Utility
 open Proc
+open Pervasives
 
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
@@ -64,9 +65,13 @@ struct
    let serialize_call_to_client req_data (continuation, name, args) =
      let open Json in
      let client_id = RequestData.get_client_id req_data in
+     let conn_url =
+       if (Webs.is_accepting_websocket_requests ()) then
+         Some (Settings.get_value Basicsettings.websocket_url) else
+         None in
      let st = List.fold_left
        (fun st_acc arg -> ResolveJsonState.add_val_event_handlers arg st_acc)
-       (JsonState.empty client_id) args in
+       (JsonState.empty client_id conn_url) args in
      let st = ResolveJsonState.add_ap_information client_id st in
      let st = ResolveJsonState.add_process_information client_id st in
      Json.jsonize_call st continuation name args
@@ -81,8 +86,8 @@ struct
        fun req_data name cont args ->
          if not(Settings.get_value Basicsettings.web_mode) then
            failwith "Can't make client call outside web mode.";
-         if not(Proc.singlethreaded()) then
-           failwith "Remaining procs on server at client call!";
+         (*if not(Proc.singlethreaded()) then
+           failwith "Remaining procs on server at client call!"; *)
          Debug.print("Making client call to " ^ name);
   (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
          let call_package =
@@ -185,10 +190,10 @@ struct
     | `Coerce (v, _) -> value env v
   and apply_access_point cont env : Value.spawn_location -> Proc.thread_result Lwt.t = function
       | `ClientSpawnLoc cid ->
-          Session.new_client_access_point cid >>= fun apid ->
+          let apid = Session.new_client_access_point cid in
           apply_cont cont env (`AccessPointID (`ClientAccessPoint (cid, apid)))
       | `ServerSpawnLoc ->
-          Session.new_server_access_point () >>= fun apid ->
+          let apid = Session.new_server_access_point () in
           apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
   and apply cont env : Value.t * Value.t list -> Proc.thread_result Lwt.t =
     function
@@ -220,7 +225,7 @@ struct
                   Lwt.return @@ Mailbox.send_server_message msg serv_pid
               (* Send a message to a process which lives on another client *)
               | `ClientPid (client_id, process_id) ->
-                  Lwt.return @@ Mailbox.send_client_message msg client_id process_id
+                  Mailbox.send_client_message msg client_id process_id
            with
                  UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)
@@ -266,6 +271,41 @@ struct
                   apply_cont cont env (`Pid (`ServerPid new_pid))
               | _ -> assert false
           end
+    | `PrimitiveFunction ("spawnWait", _), [func] ->
+        let our_pid = Proc.get_current_pid () in
+        (* Create the new process *)
+        let var = Var.dummy_var in
+        let cont' = (`Local, var, Value.empty_env,
+                     ([], `Apply (`Variable var, []))) in
+        Proc.create_spawnwait_process our_pid
+          (fun () -> apply_cont (cont'::Value.toplevel_cont) env func) >>= fun child_pid ->
+        (* Now, we need to block this process until the spawned process has evaluated to a value.
+         * The idea here is that we have a second function, spawnWait', which grabs the result
+         * from proc.ml. *)
+        let fresh_var = Var.fresh_raw_var () in
+        let extended_env =
+          Value.bind fresh_var (Value.box_pid (`ServerPid child_pid), `Local) env in
+        let grab_frame =
+          Value.expr_to_contframe extended_env
+            (Lib.prim_appln "spawnWait'" [`Variable fresh_var]) in
+
+        (* Now, check to see whether we already have the result; if so, we can
+         * grab and continue. Otherwise, we need to block. *)
+        begin
+          match Proc.get_spawnwait_result child_pid with
+            | Some v -> apply_cont cont env v
+            | None ->
+                Proc.block (fun () -> apply_cont (grab_frame::cont) env (`Record []))
+        end
+    | `PrimitiveFunction ("spawnWait'", _), [child_pid] ->
+        let unboxed_pid = Value.unbox_pid child_pid in
+        begin
+        match unboxed_pid with
+          | `ServerPid server_pid ->
+              let v = OptionUtils.val_of @@ Proc.get_spawnwait_result server_pid in
+              apply_cont cont env v
+          | _ -> assert false
+        end
     | `PrimitiveFunction ("recv",_), [] ->
         (* If there are any messages, take the first one and apply the
            continuation to it.  Otherwise, block the process (put its
@@ -285,7 +325,8 @@ struct
               let recv_frame = Value.expr_to_contframe
                 env (Lib.prim_appln "recv" [])
               in
-              Proc.block (fun () -> apply_cont (recv_frame::cont) env (`Record []))
+              Proc.block (fun () ->
+                apply_cont (recv_frame::cont) env (`Record []))
         end
     (* end of mailbox stuff *)
     (* start of session stuff *)
@@ -308,7 +349,7 @@ struct
               (* TODO: Work out the semantics of this *)
               failwith "Cannot *yet* accept on a client AP on the server"
           | `ServerAccessPoint apid ->
-              Session.accept apid >>= fun ((c, _) as ch, blocked) ->
+              Session.accept apid >>= fun ((_, c) as ch, blocked) ->
               let boxed_channel = Value.box_channel ch in
               Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
               if blocked then
@@ -327,7 +368,7 @@ struct
               (* TODO: Work out the semantics of this *)
               failwith "Cannot *yet* request from a client-spawned AP on the server"
           | `ServerAccessPoint apid ->
-              Session.request apid >>= fun ((c, _) as ch, blocked) ->
+              Session.request apid >>= fun ((_, c) as ch, blocked) ->
               let boxed_channel = Value.box_channel ch in
               if blocked then
                 (* block my end of the channel *)
@@ -341,7 +382,7 @@ struct
     | `PrimitiveFunction ("send", _), [v; chan] ->
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let (outp, _) = Value.unbox_channel chan in
-      Session.send v outp;
+      Session.send_from_local v outp >>= fun _ ->
       apply_cont cont env chan
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
@@ -404,7 +445,10 @@ struct
          Webs.start env >>= fun () ->
          apply_cont cont env (`Record [])
        end
-        (*****************)
+    | `PrimitiveFunction ("serveWebsockets", _), [] ->
+        Webs.set_accepting_websocket_requests true;
+        apply_cont cont env (`Record [])
+    (*****************)
     | `PrimitiveFunction (n,None), args ->
        apply_cont cont env (Lib.apply_pfun n args (Value.request_data env))
     | `PrimitiveFunction (_, Some code), args ->
@@ -571,7 +615,7 @@ struct
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
       let ch = Value.unbox_channel chan in
       let (outp, _inp) = ch in
-      Session.send (Value.box_string name) outp;
+      Session.send_from_local (Value.box_variant name (Value.box_unit ())) outp >>= fun _ ->
       OptionUtils.opt_iter Proc.awaken (Session.unblock outp);
       apply_cont cont env chan
     | `Choice (v, cases) ->
@@ -581,8 +625,9 @@ struct
         let (_, inp) = Value.unbox_channel chan in
         match Session.receive inp with
           | Some v ->
-            Debug.print ("chose: " ^ Value.string_of_value v);
-            let label = Value.unbox_string v in
+            let label = fst @@ Value.unbox_variant v in
+            Debug.print ("chose label: " ^ label);
+
               begin
                 match StringMap.lookup label cases with
                 | Some ((var,_), body) ->

@@ -140,16 +140,21 @@ struct
     let cont = [(`Global, x, Value.empty_env, ([], tail))] in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
+  let get_websocket_url () =
+    if Webs.is_accepting_websocket_requests () then
+      Some (Settings.get_value Basicsettings.websocket_url)
+      else None
+
   let resolve_json_state req_data v =
     let client_id = RequestData.get_client_id req_data in
-    let json_state = Json.JsonState.empty client_id in
+    let json_state = Json.JsonState.empty client_id (get_websocket_url ()) in
     (* Add event handlers *)
     let json_state = ResolveJsonState.add_val_event_handlers v json_state in
     (* Add AP and process information *)
     let json_state = ResolveJsonState.add_ap_information client_id json_state in
     ResolveJsonState.add_process_information client_id json_state
 
-  let perform_request valenv run render_cont req =
+  let perform_request valenv run render_cont render_servercont_cont req =
     let req_data = Value.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
     let client_id_str = ClientID.to_string client_id in
@@ -157,7 +162,8 @@ struct
       | ServerCont t ->
         Debug.print("Doing ServerCont for client ID " ^ client_id_str);
         Eval.apply render_cont valenv (t, []) >>= fun (_, v) ->
-        Lwt.return ("text/html", Value.string_of_value v)
+        let res = render_servercont_cont v in
+        Lwt.return ("text/html", res)
       | ClientReturn(cont, arg) ->
         Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
         Proc.resolve_external_processes arg;
@@ -176,9 +182,11 @@ struct
           (IntMap.bindings (Value.get_parameters env));
         Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
+        (*
         if not(Proc.singlethreaded()) then
-          (prerr_endline "Remaining procs on server after remote call!";
+          (prerr_endline "Remaining  procs on server after remote call!";
            assert(false));
+           *)
         let json_state = resolve_json_state req_data r in
         Lwt.return
           ("text/plain",
@@ -200,6 +208,7 @@ struct
              (Lib.nenv, Lib.typing_env)
              (globals @ locals)
              (valenv, v)
+             (get_websocket_url ())
          end
        else
          let program = (globals @ locals, main) in
@@ -216,11 +225,11 @@ struct
        let (_env, v) = Eval.run_program valenv program in
        Value.string_of_value v)
 
-  let do_request ((valenv, _, _) as env) cgi_args run render_cont response_printer =
+  let do_request ((valenv, _, _) as env) cgi_args run render_cont render_servercont_cont response_printer =
     let request = parse_request env cgi_args in
     let (>>=) f g = Lwt.bind f g in
     Lwt.catch
-      (fun () -> perform_request valenv run render_cont request )
+      (fun () -> perform_request valenv run render_cont render_servercont_cont request )
       (function
        | Aborted r -> Lwt.return r
        | Failure msg as e ->
@@ -238,9 +247,18 @@ struct
       req_data =
     let valenv' = Value.set_request_data valenv req_data in
     let env = (valenv', env2, env3) in
+    let render_servercont_cont = (fun (v: Value.t) ->
+      Irtojs.generate_real_client_page
+           ~cgi_env:cgi_args
+           (Lib.nenv, Lib.typing_env)
+           (globals @ locals)
+           (valenv, v)
+           (get_websocket_url ())) in
+
     Proc.run (fun () -> do_request env cgi_args
                                    (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args ()))
                                    render_cont
+                                   render_servercont_cont
                                    (fun headers body -> Lwt.return (response_printer headers body))
                                    )
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-make -f MakefileLinksTests -j2 nc
+make unit-tests
 
 if [ $? -eq 0 ]; then
 	clear

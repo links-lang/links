@@ -2,8 +2,7 @@
 
 module type NAME = sig
   type t
-  val create : unit -> t Lwt.t
-  val create_unsafe : unit -> t
+  val create : unit -> t
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val to_string : t -> string

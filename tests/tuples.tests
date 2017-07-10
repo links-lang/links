@@ -41,8 +41,9 @@ stdout : true : Bool
 
 1-tuples
 (1="one")
-stdout : (1="one") : (1:String)
+stdout : (1 = "one") : (1:String)
 
 Quasituples
 (1="foo", 3="bar")
-stdout : @.*3=
+stdout : (1 = "foo", 3 = "bar") : (1:String, 3:String)
+ignore : The type is currently printed as (String, String). Is this really what we want?

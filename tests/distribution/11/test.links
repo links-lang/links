@@ -1,0 +1,21 @@
+typename S = !SDoublePrime.End;
+typename SPrime = !S.End;
+typename SDoublePrime = !Int.!Int.!Int.End;
+
+module Client {
+  # dummy
+  fun main(ap1, ap2, ap3) {
+    page <#></#>
+  }
+}
+
+fun main() {
+  var ap1 = new();
+  var ap2 = new();
+  var ap3 = new();
+  addRoute("/", fun (_, _) { Client.main(ap1, ap2, ap3) } );
+  serveWebsockets();
+  servePages()
+}
+
+main()

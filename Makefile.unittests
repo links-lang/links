@@ -1,5 +1,6 @@
 -include ./Makefile.config
 
+
 LINKSBASEMAKEFILE = ./Makefile.shared
 include $(LINKSBASEMAKEFILE)
 
@@ -7,6 +8,8 @@ SOURCES :=	$(SOURCES)			\
 				unitTestsJson.ml	\
 				unitTests.ml 		\
 
+# because we update packs we need to ensure REAL_OCAMLFIND is undefined
+undefine REAL_OCAMLFIND
 PACKS :=	$(PACKS) oUnit
 
 RESULT  = linksTests

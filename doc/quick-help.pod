@@ -1670,6 +1670,10 @@ call returns a reference to the next sibling.
 Returns a list of references to the child nodes of the node ref. NOT
 YET IMPLEMENTED
 
+=item getInputValue(id)
+
+Gets the current value of an input element with identity C<id>.
+
 =back
 
 =head2 XML operations
@@ -1875,9 +1879,9 @@ even : (Int) -> Bool
 Returns C<true> if the argument is, respectively, odd or even.
 
 =item *
-select : ([a], Int) ~> a
+selectElem : ([a], Int) ~> a
 
-C<select(list, i)> returns the C<i>th element of the list, the first
+C<selectElem(list, i)> returns the C<i>th element of the list, the first
 element being 0 (and throws an error if the list has fewer than C<i>+1
 elements).
 
@@ -2221,6 +2225,12 @@ C<true> if the checkbox is checked at submit time, and C<false> if
 not.
 
 =item *
+checkboxDefault : (Bool) ~> Formlet (Bool)
+
+Similar to C<checkbox>, but allows setting the initial value (checked 
+or unchecked).
+
+=item *
 inputRadiogroup : ([a], a, ([(Xml, a)]) {}~> Xml) -> Formlet (a)
 
 Constructs a formlet composed of a set of radio buttons, only one of
@@ -2268,7 +2278,9 @@ the options listed in the argument, as per C<choice> above.
 =head1 Running links
 
 Links can be run either as a CGI script through a web server such as
-Apache, or from the command line.
+Apache, as a stand-alone Web application server, or from the command line.
+
+[TODO: Document AppServer usage]
 
 When run as a CGI script Links must be passed a filename as an
 argument:

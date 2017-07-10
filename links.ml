@@ -16,10 +16,38 @@ type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  print_string (Value.string_of_value value);
-  print_endline (if Settings.get_value(BS.printing_types) then
-		   " : "^ Types.string_of_datatype rtype
-                 else "")
+  if Settings.get_value Basicsettings.web_mode || not (Settings.get_value Basicsettings.print_pretty || Settings.get_value Basicsettings.interacting)
+  then begin
+      print_string (Value.string_of_value value);
+      print_endline (if Settings.get_value(BS.printing_types) then
+		       " : "^ Types.string_of_datatype rtype
+                     else "")
+    end
+  else
+    let (width, _height) = try ANSITerminal.size () with _ -> (80, 24) in
+    let open Format in
+    pp_set_margin std_formatter width;
+    pp_set_tags std_formatter (Settings.get_value Basicsettings.print_colors);
+    pp_set_mark_tags std_formatter (Settings.get_value Basicsettings.print_colors);
+    pp_set_formatter_tag_functions
+      std_formatter
+      {mark_open_tag = (function
+                        | "xmltag" -> "\x1b[32m"
+                        | "constructor" -> "\x1b[32m"
+                        | "xmlattr" -> "\x1b[35m"
+                        | "recordlabel" -> "\x1b[35m"
+                        (* | "string" -> "\x1b[36m" *)
+                        | _ -> "");
+       mark_close_tag  = (fun _ -> "\x1b[39m");
+       print_open_tag  = ignore;
+       print_close_tag = ignore;
+      };
+    fprintf std_formatter "@[%a@;<1 4>: %s@]"
+            Value.p_value value
+            (if Settings.get_value(BS.printing_types) then
+	       Types.string_of_datatype rtype
+             else "");
+    pp_print_newline std_formatter ()
 
 (** optimise and evaluate a program *)
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
@@ -77,7 +105,7 @@ let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs
      Env.String.extend nenv nenv',
      Types.extend_typing_environment tyenv tyenv'), v
   in
-  let evaluate_inner x =   lazy (evaluate_inner x) <|measure_as|> "evaluate" in
+  let evaluate_inner x = lazy (evaluate_inner x) <|measure_as|> "evaluate" in
   handle_errors evaluate_inner
 
 
@@ -151,12 +179,19 @@ let rec directives
      "display the current type alias environment");
 
     "env",
-    ((fun ((valenv, nenv, _tyenv) as envs) _ ->
+    ((fun ((_valenv, nenv, tyenv) as envs) _ ->
         Env.String.fold
           (fun name var () ->
-             if not (Lib.is_primitive name) then
+            if not (Lib.is_primitive name) then
+              let ty = (Types.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
+                        -<- Env.String.lookup tyenv.Types.var_env) name in
+              let name =
+                if Settings.get_value Debug.debugging_enabled
+                then Printf.sprintf "%s(%d)" name var
+                else name
+              in
                Printf.fprintf stderr " %-16s : %s\n"
-                 name (Value.string_of_value (Value.find var valenv)))
+                 name ty)
           nenv ();
         envs),
      "display the current value environment");
@@ -167,7 +202,7 @@ let rec directives
           | [filename] ->
               let parse_and_desugar (nenv, tyenv) filename =
                 let (nenv, tyenv), (globals, (locals, main), t) =
-                  Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
+                  Loader.load_file (nenv, tyenv) filename
                 in
                   ((globals @ locals, main), t), (nenv, tyenv) in
               let envs, _ = evaluate parse_and_desugar envs filename in
@@ -268,7 +303,7 @@ let interact envs =
                 | `Expression (e, t), _ ->
                     let valenv, _ = process_program envs (e, t) in
                       valenv, nenv, tyenv
-                | `Directive directive, _ -> execute_directive directive envs))
+                | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
       print_string ps1; flush stdout;
 

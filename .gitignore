@@ -10,6 +10,7 @@
 *.cmx
 *.annot
 *.output
+.*.sw*
 links
 jsonlex.ml
 jsonparse.ml

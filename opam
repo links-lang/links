@@ -29,6 +29,7 @@ install: [
   [ "cp" "INSTALL" "%{links:doc}%/README"                             ]
 # Copy examples
   [ "mkdir" "-p" "%{links:share}%/examples"                           ]
+  [ "sh" "-c" "cp -r examples/dbsetup %{links:share}%/examples/dbsetup/" ]
   [ "sh" "-c" "cp examples/*.links %{links:share}%/examples"          ]
   [ "sh" "-c" "cp examples/*.jpg %{links:share}%/examples"            ]
   [ "sh" "-c" "cp examples/*.sql %{links:share}%/examples"            ]
@@ -64,6 +65,8 @@ depends: [
   "cgi"
   "base64"
   "cohttp"
+  "websocket" { <= "2.8" }
+  "ANSITerminal"
 ]
 
 depopts: [
