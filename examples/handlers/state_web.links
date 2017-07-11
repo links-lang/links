@@ -45,12 +45,12 @@ fun toggleButton() client {
 }
 
 # Page
-fun mainPage(_) {
+fun mainPage(_,_) {
   page
     <html>
       <body>
         <form l:onsubmit="{toggleButton()}">
-          <input type="submit" id="on" value="Click me!" />          
+          <input type="submit" id="on" value="Click me!" />
         </form>
       </body>
     </html>

@@ -62,7 +62,7 @@ let jsonize_location : Ir.location -> string = function
   | `Native  -> "native"
   | `Unknown -> "unknown"
 
-let rec jsonize_value : Value.t -> json_string =
+let rec jsonize_value' : Value.t -> json_string =
   function
   | `PrimitiveFunction _
   | `ReifiedContinuation _
@@ -77,14 +77,14 @@ let rec jsonize_value : Value.t -> json_string =
       match fvs with
       | None     -> ""
       | Some fvs ->
-        let s = jsonize_value fvs in
+        let s = jsonize_value' fvs in
         ", \"environment\":" ^ s in
     "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
     " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}"
   | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) ->
-    let s = jsonize_value value in
+    let s = jsonize_value' value in
     "{\"_label\":\"" ^ label ^ "\",\"_value\":" ^ s ^ "}"
   | `Record fields ->
     let ls, vs = List.split fields in
@@ -145,7 +145,7 @@ and jsonize_values : Value.t list -> string list  =
     let ss =
       List.fold_left
         (fun ss v ->
-           let s = jsonize_value v in
+           let s = jsonize_value' v in
            s::ss) [] vs in
     List.rev ss
 
@@ -157,8 +157,8 @@ let value_with_state v s =
 let show_processes procs =
   (* Show the JSON for a prcess, including the PID, process to be run, and mailbox *)
   let show_process (pid, (proc, msgs)) =
-    let ps = jsonize_value proc in
-    let ms = jsonize_value (`List msgs) in
+    let ps = jsonize_value' proc in
+    let ms = jsonize_value' (`List msgs) in
     "{\"pid\":" ^ (ProcessID.to_json pid) ^ "," ^
     " \"process\":" ^ ps ^ "," ^
     " \"messages\":" ^ ms ^ "}" in
@@ -168,7 +168,7 @@ let show_processes procs =
 let show_handlers evt_handlers =
   (* Show the JSON for an event handler: the evt handler key, and the associated process *)
   let show_evt_handler (key, proc) =
-    let h_proc_json = jsonize_value proc in
+    let h_proc_json = jsonize_value' proc in
     "{\"key\": " ^ string_of_int key ^ "," ^
     " \"eventHandlers\":" ^ h_proc_json ^ "}" in
   let bnds = IntMap.bindings evt_handlers in
@@ -231,10 +231,18 @@ type json_state = JsonState.t
 let jsonize_value_with_state value state =
   Debug.if_set show_json
       (fun () -> "jsonize_value_with_state => " ^ Value.string_of_value value);
-  let jv = jsonize_value value in
+  let jv = jsonize_value' value in
   let jv_s = value_with_state jv (JsonState.to_string state) in
   Debug.if_set show_json (fun () -> "jsonize_value_with_state <= " ^ jv_s);
   jv_s
+
+let jsonize_value v =
+  Debug.if_set show_json
+      (fun () -> "jsonize_value => " ^ Value.string_of_value v);
+  let jv = jsonize_value' v in
+  Debug.if_set show_json (fun () -> "jsonize_value <= " ^ jv);
+  jv
+
 
 let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
