@@ -361,6 +361,7 @@ module type CONTINUATION = sig
      as an abstract list. *)
   type t
 
+  val toplevel : t
   (* A continuation is a monoid. *)
   val identity : t
   val (<>) : t -> t -> t
@@ -390,6 +391,7 @@ module type CONTINUATION = sig
   val primitive_bindings : string
 end
 
+(* The standard Links continuation (no extensions) *)
 module DefaultContinuation : CONTINUATION = struct
   (* We can think of this particular continuation structure as
      singleton list. *)
@@ -402,6 +404,7 @@ module DefaultContinuation : CONTINUATION = struct
   let pop k = k, Identity
 
   let identity = Identity
+  let toplevel = Code (Fn (["x"], Nothing))
   (* This continuation is a degenerate monoid. The multiplicative
      operator is "forgetful" in the sense that it ignores its second
      argument b whenever a != Identity. Meaning that a <> b == a when
@@ -451,6 +454,89 @@ module DefaultContinuation : CONTINUATION = struct
     | _ -> failwith "error: kify: none function argument."
 end
 
+(* The higher-order continuation structure for effect handlers
+   support *)
+module Higher_Order_Continuation : CONTINUATION = struct
+  (* We can think of this particular continuation structure as a
+     nonempty stack with an even number of elements. *)
+  type t = Cons of code * t
+         | Reflect of code
+         | Identity
+
+  (* Auxiliary functions for growing the continuation stack *)
+  let nil = Var "lsNil"
+  let cons x xs = Call (Var "_lsCons", [x; xs])
+  let head xs = Call (Var "_lsHead", [xs])
+  let tail xs = Call (Var "_lsTail", [xs])
+  let toplevel = Reflect (Var "_idy")
+
+  let reflect x = Reflect x
+  let rec reify = function
+  | Cons (v, vs) ->
+    cons v (reify vs)
+  | Reflect v -> v
+  | Identity -> nil
+
+  let pop = function
+    | Cons (hd, tl) -> (reflect hd), tl
+    | Reflect ks -> reflect (head ks), reflect (tail ks)
+    | Identity -> reflect nil, reflect nil
+
+  let identity = Identity
+  let (<>) a b =
+    match a,b with
+    | Identity, b -> b
+    | a, Identity -> a
+    | Reflect ks, b -> Cons (ks, b)
+    | Cons _ as a,b ->
+       let rec append xs ys =
+         match xs with
+         | Cons (x, xs) -> Cons (x, append xs ys)
+         | Reflect ks   -> Cons (ks, ys)
+         | Identity     -> ys
+       in
+       append a b
+
+  let bind kappas body =
+    let rec bind bs ks =
+      fun kappas ->
+        match kappas with
+        | Identity ->
+           let k = gensym ~prefix:"_kappa" () in
+           (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k
+        | Reflect ((Var _) as v) ->
+           bs, ks, v
+        | Reflect v ->
+           let k = gensym ~prefix:"_kappa" () in
+           (fun code -> bs (Bind (k, v, code))), ks, Var k
+        | Cons ((Var _) as v, kappas) ->
+           bind bs (fun kappas -> Cons (v, kappas)) kappas
+        | Cons (v, kappas) ->
+           let k = gensym ~prefix:"_kappa" () in
+           bind
+             (fun code -> bs (Bind (k, v, code)))
+             (fun kappas -> Cons (Var k, kappas)) kappas
+  in
+  let bs, ks, seed = bind (fun code -> code) (fun kappas -> kappas) kappas in
+  bs (body (ks (reflect seed)))
+
+  let apply ?(strategy=`Yield) k arg =
+    match strategy with
+    | `Direct -> Call (Var "_applyCont", [reify k; arg])
+    | _       -> Call (Var "_yieldCont", [reify k; arg])
+
+  let primitive_bindings =
+    "function _makeCont(k) {\n" ^
+      "  return _lsCons(k, _lsSingleton(_efferr));\n" ^
+      "}\n" ^
+      "var _idy = _makeCont(function(x, ks) { return; });\n" ^
+      "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;"
+
+  let kify fn =
+    match fn (reflect (Var "__ks")) with
+    | env, Fn (args, body) -> env, reflect (Fn (args @ ["__ks"], body))
+    | _ -> failwith "error: kify: none function argument."
+end
 
 (** Compiler interface *)
 module type WEB_COMPILER = sig
@@ -998,27 +1084,27 @@ end = functor (K : CONTINUATION) -> struct
     let client_id = RequestData.get_client_id req_data in
     let json_state = JsonState.empty client_id ws_conn_url in
 
-  (* Add the event handlers for the final value to be sent *)
+    (* Add the event handlers for the final value to be sent *)
     let json_state = ResolveJsonState.add_val_event_handlers v json_state in
-  (* Json.jsonize_state req_data v in *)
+    (* Json.jsonize_state req_data v in *)
 
-  (* divide HTML into head and body secitions (as we need to augment the head) *)
+    (* divide HTML into head and body secitions (as we need to augment the head) *)
     let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
     let _nenv, venv, _tenv = initialise_envs (nenv, tyenv) in
 
     let json_state, venv, let_names, f = generate_toplevel_bindings valenv json_state venv defs in
     let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
 
-  (* Add AP information; mark APs as delivered *)
+    (* Add AP information; mark APs as delivered *)
     let json_state = ResolveJsonState.add_ap_information client_id json_state in
 
-  (* Add process information to the JSON state; mark all processes as active *)
+    (* Add process information to the JSON state; mark all processes as active *)
     let json_state = ResolveJsonState.add_process_information client_id json_state in
 
     let state_string = JsonState.to_string json_state in
 
     let printed_code =
-      let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (K.reflect (Fn ([], Nothing))) in
+      let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (K.toplevel) in
       let code = f code in
       let code =
         let open Pervasives in
@@ -1035,7 +1121,7 @@ end = functor (K : CONTINUATION) -> struct
       []
 end
 
-module Compiler = CPS_Compiler(DefaultContinuation)
+module Compiler = CPS_Compiler(Higher_Order_Continuation) (*CPS_Compiler(DefaultContinuation)*)
 
 let generate_program_page = Compiler.generate_program_page
 let generate_real_client_page = Compiler.generate_real_client_page
