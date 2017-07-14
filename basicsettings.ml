@@ -95,6 +95,7 @@ struct
   let pp = Settings.add_bool("js_pretty_print", true, `User)
 
   let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
+  let backend = Settings.add_string("js_backend", "cps", `System)
 end
 
 module Shredding = struct

@@ -359,7 +359,7 @@ module type CONTINUATION = sig
   (* Invariant: the continuation structure is algebraic. For
      programming purposes it is instructive to think of a continuation
      as an abstract list. *)
-  type t (*= Cons of code * t | Reflect of code*)
+  type t
 
   val toplevel : t
   (* A continuation is a monoid. *)
@@ -394,7 +394,7 @@ module type CONTINUATION = sig
 end
 
 (* (\* The standard Links continuation (no extensions) *\) *)
-module DefaultContinuation : CONTINUATION = struct
+module Default_Continuation : CONTINUATION = struct
   (* We can think of this particular continuation structure as
      singleton list. *)
   type t = Identity
@@ -444,7 +444,7 @@ module DefaultContinuation : CONTINUATION = struct
     "function _makeCont(k) { return k; }\n" ^
       "var _idy = _makeCont(function(x,ks) { return; });\n" ^
       "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
-      "var _cont_kind = \"DefaultContinuation\";"
+      "var _cont_kind = \"Default_Continuation\";"
 
   let contify_with_env fn =
     match fn Identity with
@@ -467,39 +467,34 @@ module Higher_Order_Continuation : CONTINUATION = struct
      nonempty stack with an even number of elements. *)
   type t = Cons of code * t
          | Reflect of code
-  (*| Identity*)
+         | Identity
 
   (* Auxiliary functions for growing the continuation stack *)
   let nil = Var "lsNil"
   let cons x xs = Call (Var "_lsCons", [x; xs])
   let head xs = Call (Var "_lsHead", [xs])
   let tail xs = Call (Var "_lsTail", [xs])
-  let toplevel = Cons (Var "_idk", Cons (Var "_efferr", Reflect (Var "lsNil")))
+  let toplevel = Cons (Var "_idk", Cons (Var "_efferr", Reflect nil))
 
   let reflect x = Reflect x
   let rec reify = function
   | Cons (v, vs) ->
     cons v (reify vs)
   | Reflect v -> v
-  (*  | Identity -> reify toplevel*)
+  | Identity -> reify toplevel
 
-  let rec pop = function
-    | Cons (hd, tl) -> (reflect hd), tl
-    | Reflect ks -> reflect (head ks), reflect (tail ks)
-(*    | Identity -> pop toplevel*)
-
-  let identity = Reflect nil (*Identity*)
+  let identity = Identity
   let (<>) a b =
     match a,b with
-(*    | Identity, b -> b
-      | a, Identity -> a*)
+    | Identity, b -> b
+    | a, Identity -> a
     | Reflect ks, b -> Cons (ks, b)
     | Cons _ as a,b ->
        let rec append xs ys =
          match xs with
          | Cons (x, xs) -> Cons (x, append xs ys)
          | Reflect ks   -> Cons (ks, ys)
-       (*         | Identity     -> ys*)
+         | Identity     -> ys
        in
        append a b
 
@@ -507,9 +502,9 @@ module Higher_Order_Continuation : CONTINUATION = struct
     let rec bind bs ks =
       fun kappas ->
         match kappas with
-(*        | Identity ->
+        | Identity ->
            let k = gensym ~prefix:"_kappa" () in
-          (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k*)
+          (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k
         | Reflect ((Var _) as v) ->
            bs, ks, v
         | Reflect v ->
@@ -548,16 +543,17 @@ module Higher_Order_Continuation : CONTINUATION = struct
   let contify fn =
     snd @@ contify_with_env (fun k -> VEnv.empty, fn k)
 
-  let pop = function
+  let rec pop = function
     | Cons (kappa, kappas) ->
        (fun code -> code), (reflect kappa), kappas
     | Reflect ks ->
        let __k = gensym ~prefix:"__k" () in
        let __ks = gensym ~prefix:"__ks" () in
        (fun code ->
-         Bind (__k, Call (Var "_lsHead", [ks]),
-               Bind (__ks, Call (Var "_lsTail", [ks]), code))),
-      (Reflect (Var __k)), Reflect (Var __ks)
+         Bind (__k, head ks,
+               Bind (__ks, tail ks, code))),
+       (reflect (Var __k)), reflect (Var __ks)
+    | Identity -> pop toplevel
 end
 
 (** Compiler interface *)
@@ -1228,7 +1224,17 @@ end = functor (K : CONTINUATION) -> struct
       []
 end
 
-module Compiler = CPS_Compiler(Higher_Order_Continuation)
+module Continuation =
+  (val
+      (match Settings.get_value Basicsettings.Js.backend with
+      | "cps" when Settings.get_value Basicsettings.Handlers.enabled ->
+         (module Higher_Order_Continuation : CONTINUATION)
+      | "cps" ->
+         (module Default_Continuation : CONTINUATION)
+      (** TODO: better error handling *)
+      | _ -> failwith "Unrecognised JS backend.") : CONTINUATION)
+
+module Compiler = CPS_Compiler(Continuation)
 
 let generate_program_page = Compiler.generate_program_page
 let generate_real_client_page = Compiler.generate_real_client_page
