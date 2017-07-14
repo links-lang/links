@@ -387,7 +387,6 @@ module type CONTINUATION = sig
      reflects the result as a continuation. The continuation parameter
      in the callback provides access to the current continuation. *)
   val contify_with_env : (t -> venv * code) -> venv * t
-  val contify : (t -> code) -> t
 
   (* Generates appropriate bindings for primitives *)
   val primitive_bindings : string
@@ -451,9 +450,6 @@ module Default_Continuation : CONTINUATION = struct
     | env, (Fn _ as k) -> env, reflect k
     | _ -> failwith "error: contify: none function argument."
 
-  let contify fn =
-    snd @@ contify_with_env (fun k -> VEnv.empty, fn k)
-
   (* Pop returns the code in "the singleton list" as the second
      component, and returns a fresh singleton list containing the
      identity element in the third component. *)
@@ -469,7 +465,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
          | Reflect of code
          | Identity
 
-  (* Auxiliary functions for growing the continuation stack *)
+  (* Auxiliary functions for manipulating the continuation stack *)
   let nil = Var "lsNil"
   let cons x xs = Call (Var "_lsCons", [x; xs])
   let head xs = Call (Var "_lsHead", [xs])
@@ -540,9 +536,6 @@ module Higher_Order_Continuation : CONTINUATION = struct
     | env, Fn (args, body) -> env, reflect (Fn (args @ [name], body))
     | _ -> failwith "error: contify: none function argument."
 
-  let contify fn =
-    snd @@ contify_with_env (fun k -> VEnv.empty, fn k)
-
   let rec pop = function
     | Cons (kappa, kappas) ->
        (fun code -> code), (reflect kappa), kappas
@@ -588,6 +581,9 @@ end = functor (K : CONTINUATION) -> struct
 
   let apply_yielding f args k =
     Call (Var "_yield", f :: (args @ [K.reify k]))
+
+  let contify fn =
+    snd @@ K.contify_with_env (fun k -> VEnv.empty, fn k)
 
   let rec generate_value env : Ir.value -> code =
     let gv v = generate_value env v in
@@ -924,7 +920,7 @@ end = functor (K : CONTINUATION) -> struct
          let return =
            let (_, xb, body) = return_clause in
            let x_name = snd @@ name_binder xb in
-           K.contify (fun kappa ->
+           contify (fun kappa ->
              Fn ([x_name;],
                  let bind, _, kappa = K.pop kappa in
                  bind @@ gb env xb body kappa))
@@ -972,7 +968,7 @@ end = functor (K : CONTINUATION) -> struct
                  let vmap = Call (Var "_vmapOp", [resumption; Var z_name]) in
                  bind1 (bind2 (apply_yielding (K.reify h') [vmap] ks')))
            in
-           K.contify
+           contify
              (fun ks ->
                Fn (["_z"],
                    Case ("_z",
@@ -1213,12 +1209,16 @@ end = functor (K : CONTINUATION) -> struct
         let open Pervasives in
         code |> (GenStubs.bindings defs) |> GenStubs.wrap_with_server_lib_stubs
       in
-      show code in
+      show code
+    in
+    let welcome_msg =
+      "_debug(\"Links version " ^ Basicsettings.version ^ "\");"
+    in
     make_boiler_page
       ~cgi_env:cgi_env
       ~body:printed_code
       ~html:(Value.string_of_xml ~close_tags:true bs)
-      ~head:(script_tag (K.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
+      ~head:(script_tag welcome_msg ^ "\n" ^ script_tag (K.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
              ^ Value.string_of_xml ~close_tags:true hs)
       ~onload:"_startRealPage()"
       []

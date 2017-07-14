@@ -74,13 +74,14 @@ let config_file_path = match Utility.getenv "LINKS_CONFIG" with
             None
 
 (** The banner *)
+let version = "0.6.1 (Gorgie)"
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
  | |   | | , \\| |   /  \\  \\\n\
  | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
  |_____|_|_| \\__|_| \\_|____/\n\
-Welcome to Links version 0.6.1 (Gorgie)", `System)
+Welcome to Links version " ^ version, `System)
 
 (** Allow impure top-level definitions *)
 let allow_impure_defs = Settings.add_bool("allow_impure_defs", false, `User)
