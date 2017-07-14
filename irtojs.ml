@@ -359,15 +359,16 @@ module type CONTINUATION = sig
   (* Invariant: the continuation structure is algebraic. For
      programming purposes it is instructive to think of a continuation
      as an abstract list. *)
-  type t
+  type t (*= Cons of code * t | Reflect of code*)
 
   val toplevel : t
   (* A continuation is a monoid. *)
   val identity : t
   val (<>) : t -> t -> t
 
-  (* Returns the head and tail of the continuation. *)
-  val pop : t -> t * t
+  (* Returns a scope in which the head and tail of the continuation
+     are accessible. *)
+  val pop : t -> (code -> code) * t * t
 
   (* Turns code into a continuation. *)
   val reflect : code -> t
@@ -387,21 +388,16 @@ module type CONTINUATION = sig
      in the callback provides access to the current continuation. *)
   val kify : (t -> venv * code) -> venv * t
 
-  (* Generates appropriate primitive bindings *)
+  (* Generates appropriate bindings for primitives *)
   val primitive_bindings : string
 end
 
-(* The standard Links continuation (no extensions) *)
+(* (\* The standard Links continuation (no extensions) *\) *)
 module DefaultContinuation : CONTINUATION = struct
   (* We can think of this particular continuation structure as
      singleton list. *)
   type t = Identity
          | Code of code
-
-  (* Pop returns the code in "the singleton list" as the first
-     component, and returns a fresh singleton list containing the
-     identity element in the second component. *)
-  let pop k = k, Identity
 
   let identity = Identity
   let toplevel = Code (Fn (["x"], Nothing))
@@ -445,13 +441,19 @@ module DefaultContinuation : CONTINUATION = struct
 
   let primitive_bindings =
     "function _makeCont(k) { return k; }\n" ^
-      "var _idy = _makeCont(function(x) { return; });\n" ^
-      "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;"
+      "var _idy = _makeCont(function(x,ks) { return; });\n" ^
+      "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
+      "var _cont_kind = \"DefaultContinuation\";"
 
   let kify fn =
     match fn Identity with
     | env, (Fn _ as k) -> env, reflect k
     | _ -> failwith "error: kify: none function argument."
+
+  (* Pop returns the code in "the singleton list" as the second
+     component, and returns a fresh singleton list containing the
+     identity element in the third component. *)
+  let pop k = (fun code -> code), k, Identity
 end
 
 (* The higher-order continuation structure for effect handlers
@@ -461,39 +463,39 @@ module Higher_Order_Continuation : CONTINUATION = struct
      nonempty stack with an even number of elements. *)
   type t = Cons of code * t
          | Reflect of code
-         | Identity
+  (*| Identity*)
 
   (* Auxiliary functions for growing the continuation stack *)
   let nil = Var "lsNil"
   let cons x xs = Call (Var "_lsCons", [x; xs])
   let head xs = Call (Var "_lsHead", [xs])
   let tail xs = Call (Var "_lsTail", [xs])
-  let toplevel = Reflect (Var "_idy")
+  let toplevel = Cons (Var "_idk", Cons (Var "_efferr", Reflect (Var "lsNil")))
 
   let reflect x = Reflect x
   let rec reify = function
   | Cons (v, vs) ->
     cons v (reify vs)
   | Reflect v -> v
-  | Identity -> nil
+  (*  | Identity -> reify toplevel*)
 
-  let pop = function
+  let rec pop = function
     | Cons (hd, tl) -> (reflect hd), tl
     | Reflect ks -> reflect (head ks), reflect (tail ks)
-    | Identity -> reflect nil, reflect nil
+(*    | Identity -> pop toplevel*)
 
-  let identity = Identity
+  let identity = Reflect nil (*Identity*)
   let (<>) a b =
     match a,b with
-    | Identity, b -> b
-    | a, Identity -> a
+(*    | Identity, b -> b
+      | a, Identity -> a*)
     | Reflect ks, b -> Cons (ks, b)
     | Cons _ as a,b ->
        let rec append xs ys =
          match xs with
          | Cons (x, xs) -> Cons (x, append xs ys)
          | Reflect ks   -> Cons (ks, ys)
-         | Identity     -> ys
+       (*         | Identity     -> ys*)
        in
        append a b
 
@@ -501,9 +503,9 @@ module Higher_Order_Continuation : CONTINUATION = struct
     let rec bind bs ks =
       fun kappas ->
         match kappas with
-        | Identity ->
+(*        | Identity ->
            let k = gensym ~prefix:"_kappa" () in
-           (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k
+          (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k*)
         | Reflect ((Var _) as v) ->
            bs, ks, v
         | Reflect v ->
@@ -529,13 +531,24 @@ module Higher_Order_Continuation : CONTINUATION = struct
     "function _makeCont(k) {\n" ^
       "  return _lsCons(k, _lsSingleton(_efferr));\n" ^
       "}\n" ^
-      "var _idy = _makeCont(function(x, ks) { return; });\n" ^
-      "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;"
+      "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
+      "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
+      "var _cont_kind = \"Higher_Order_Continuation\";"
 
   let kify fn =
-    match fn (reflect (Var "__ks")) with
-    | env, Fn (args, body) -> env, reflect (Fn (args @ ["__ks"], body))
+    let name = "__kappa" in
+    match fn (reflect (Var name)) with
+    | env, Fn (args, body) -> env, reflect (Fn (args @ [name], body))
     | _ -> failwith "error: kify: none function argument."
+
+  let pop = function
+    | Cons (kappa, kappas) ->
+       (fun code -> code), (reflect kappa), kappas
+    | Reflect ks ->
+       (fun code ->
+         Bind ("__k", Call (Var "_lsHead", [ks]),
+               Bind ("__ks", Call (Var "_lsTail", [ks]), code))),
+      (Reflect (Var "__k")), Reflect (Var "__ks")
 end
 
 (** Compiler interface *)
@@ -892,14 +905,28 @@ end = functor (K : CONTINUATION) -> struct
              (env', Bind (x_name, generate_value env v, rest))
           | `Let (b, (_, tc)) :: bs ->
              let (x, x_name) = name_binder b in
-             let k, ks = K.pop kappa in
-             let env',k' =
+             let scope, skappa, skappas = K.pop kappa in
+             let env',skappa' =
                K.kify
-                 (fun ks ->
-                   let env', body = gbs (VEnv.bind env (x, x_name)) K.(k <> ks) bs in
+                 (fun kappas ->
+                   let env', body = gbs (VEnv.bind env (x, x_name)) K.(skappa <> kappas) bs in
                    env', Fn ([x_name], body))
              in
-             env', generate_tail_computation env tc K.(k' <> ks)
+             env', scope (generate_tail_computation env tc K.(skappa' <> skappas))
+          (* | (`Let (b, (_, tc)) :: bs) -> *)
+          (*    let kbs, kappa, kappas' = *)
+          (*      match kappa with *)
+          (*      | K.Cons (kappa, kappas) -> *)
+          (*         (fun code -> code), kappa, kappas *)
+          (*      | K.Reflect ks -> *)
+          (*         (fun code -> *)
+          (*           Bind ("__k", Call (Var "_lsHead", [ks]), *)
+          (*                 Bind ("__ks", Call (Var "_lsTail", [ks]), code))), *)
+          (*        Var "__k", K.Reflect (Var "__ks") in *)
+          (*    let (x, x_name) = name_binder b in *)
+          (*    let env', body = gbs (VEnv.bind env (x, x_name)) (K.Cons (kappa, K.Reflect (Var "__ks"))) bs in *)
+          (*    let kappa' = Fn ([x_name; "__ks"], body) in *)
+          (*    env', kbs (generate_tail_computation env tc (K.Cons (kappa', kappas'))) *)
           | `Fun ((fb, _, _zs, _location) as def) :: bs ->
              let (f, f_name) = name_binder fb in
              let def_header = generate_function env [] def in
@@ -921,8 +948,8 @@ end = functor (K : CONTINUATION) -> struct
     fun (fb, (_, xsb, body), zb, location) ->
       let (f, f_name) = name_binder fb in
       assert (f_name <> "");
-    (* prerr_endline ("f_name: "^f_name); *)
-    (* optionally add an additional closure environment argument *)
+      (* prerr_endline ("f_name: "^f_name); *)
+      (* optionally add an additional closure environment argument *)
       let xsb =
         match zb with
         | None -> xsb
@@ -1027,6 +1054,7 @@ end = functor (K : CONTINUATION) -> struct
                      )
                    ^ "<body onload=\'" ^ onload ^ "\'>
   <script type='text/javascript'>
+  _debug(\"Continuation: \" + _cont_kind);
   _startTimer();" ^ body ^ ";
   </script>" ^ html ^ "</body>")
 
@@ -1121,7 +1149,7 @@ end = functor (K : CONTINUATION) -> struct
       []
 end
 
-module Compiler = CPS_Compiler(Higher_Order_Continuation) (*CPS_Compiler(DefaultContinuation)*)
+module Compiler = CPS_Compiler(DefaultContinuation) (* CPS_Compiler(Higher_Order_Continuation) *)
 
 let generate_program_page = Compiler.generate_program_page
 let generate_real_client_page = Compiler.generate_real_client_page
