@@ -15,7 +15,7 @@ fun showList(showX)(xs) {
 }
 
 fun positive(m) client {
-  handle(m) {
+  handle(m()) {
     case Return(x) -> x
     case Choose(k) -> k(true)
   }
@@ -29,7 +29,7 @@ fun allChoices(m)() client {
 }
 
 fun failure(m)() client {
-  handle(m) {
+  handle(m()) {
     case Return(x) -> [x]
     case Fail(k) -> []
   }
@@ -48,7 +48,7 @@ fun drunkToss() client {
 # }
 
 fun run() client {
-  var xs = allChoices(toss)();
+  var xs = positive(toss) :: allChoices(toss)();
   var i = length(xs);
   print(intToString(i))
 }
