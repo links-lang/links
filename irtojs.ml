@@ -386,7 +386,8 @@ module type CONTINUATION = sig
   (* Augments a function [Fn] with a continuation parameter and
      reflects the result as a continuation. The continuation parameter
      in the callback provides access to the current continuation. *)
-  val kify : (t -> venv * code) -> venv * t
+  val contify_with_env : (t -> venv * code) -> venv * t
+  val contify : (t -> code) -> t
 
   (* Generates appropriate bindings for primitives *)
   val primitive_bindings : string
@@ -445,10 +446,13 @@ module DefaultContinuation : CONTINUATION = struct
       "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
       "var _cont_kind = \"DefaultContinuation\";"
 
-  let kify fn =
+  let contify_with_env fn =
     match fn Identity with
     | env, (Fn _ as k) -> env, reflect k
-    | _ -> failwith "error: kify: none function argument."
+    | _ -> failwith "error: contify: none function argument."
+
+  let contify fn =
+    snd @@ contify_with_env (fun k -> VEnv.empty, fn k)
 
   (* Pop returns the code in "the singleton list" as the second
      component, and returns a fresh singleton list containing the
@@ -535,11 +539,14 @@ module Higher_Order_Continuation : CONTINUATION = struct
       "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
       "var _cont_kind = \"Higher_Order_Continuation\";"
 
-  let kify fn =
+  let contify_with_env fn =
     let name = "__kappa" in
     match fn (reflect (Var name)) with
     | env, Fn (args, body) -> env, reflect (Fn (args @ [name], body))
-    | _ -> failwith "error: kify: none function argument."
+    | _ -> failwith "error: contify: none function argument."
+
+  let contify fn =
+    snd @@ contify_with_env (fun k -> VEnv.empty, fn k)
 
   let pop = function
     | Cons (kappa, kappas) ->
@@ -911,7 +918,74 @@ end = functor (K : CONTINUATION) -> struct
                     ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
              in
              bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
-      | `Handle _ -> failwith "Not yet implemented"
+      | `Handle { Ir.ih_comp = comp; Ir.ih_clauses = clauses; _ } ->
+         (** Generate body *)
+         let gb env binder body kappas =
+           let env' = VEnv.bind env (name_binder binder) in
+           snd (generate_computation env' body kappas)
+         in
+         let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
+         let return =
+           let (_, xb, body) = return_clause in
+           let x_name = snd @@ name_binder xb in
+           K.contify (fun kappa ->
+             Fn ([x_name;],
+                 let bind, _, kappa = K.pop kappa in
+                 bind @@ gb env xb body kappa))
+         in
+         let operations =
+           (** Generate clause *)
+           let gc env (ct, xb, body) kappas =
+             let x_name = snd @@ name_binder xb in
+             let env', r_name =
+               match ct with
+               | `ResumptionBinder rb ->
+                  let rb' = name_binder rb in
+                  VEnv.bind env rb', snd rb'
+               | _ ->
+                  let dummy_binder = Var.fresh_binder (Var.make_local_info (`Not_typed, "_dummy_resume")) in
+                  let dummy = name_binder dummy_binder in
+                  VEnv.bind env dummy, snd dummy
+             in
+             let p = Call (Var "LINKS.project", [Var x_name; strlit "p"]) in
+             let s = Call (Var "LINKS.project", [Var x_name; strlit "s"]) in
+             let r = Call (Var "_makeFun", [s]) in
+             let clause_body =
+               Bind (r_name, r,
+                     Bind (x_name, p, gb env' xb body kappas))
+             in
+             x_name, clause_body
+           in
+           let clauses kappas =
+             StringMap.map
+               (fun clause ->
+                 gc env clause kappas)
+               operation_clauses
+           in
+           let forward ks =
+             let z_name = "_z" in
+             K.bind ks
+               (fun ks ->
+                 let bind1, k', ks' = K.pop ks in
+                 let bind2, h', ks' = K.pop ks' in
+                 let resumption =
+                   Fn (["s"], Call (Var "_lsCons",
+                                    [K.reify h';
+                                     Call (Var "_lsCons", [K.reify k'; Var "s"])]))
+                 in
+                 let vmap = Call (Var "_vmapOp", [resumption; Var z_name]) in
+                 bind1 (bind2 (apply_yielding (K.reify h') [vmap] ks')))
+           in
+           K.contify
+             (fun ks ->
+               Fn (["_z"],
+                   Case ("_z",
+                         clauses ks,
+                         Some ("_z", forward ks))))
+         in
+         let kappa = K.(return <> operations <> kappa) in
+         let _, comp = generate_computation env comp kappa in
+         comp
 
   and generate_computation env : Ir.computation -> continuation -> (venv * code) =
     fun (bs, tc) kappa ->
@@ -926,26 +1000,12 @@ end = functor (K : CONTINUATION) -> struct
              let (x, x_name) = name_binder b in
              let scope, skappa, skappas = K.pop kappa in
              let env',skappa' =
-               K.kify
+               K.contify_with_env
                  (fun kappas ->
                    let env', body = gbs (VEnv.bind env (x, x_name)) K.(skappa <> kappas) bs in
                    env', Fn ([x_name], body))
              in
              env', scope (generate_tail_computation env tc K.(skappa' <> skappas))
-          (* | (`Let (b, (_, tc)) :: bs) -> *)
-          (*    let kbs, kappa, kappas' = *)
-          (*      match kappa with *)
-          (*      | K.Cons (kappa, kappas) -> *)
-          (*         (fun code -> code), kappa, kappas *)
-          (*      | K.Reflect ks -> *)
-          (*         (fun code -> *)
-          (*           Bind ("__k", Call (Var "_lsHead", [ks]), *)
-          (*                 Bind ("__ks", Call (Var "_lsTail", [ks]), code))), *)
-          (*        Var "__k", K.Reflect (Var "__ks") in *)
-          (*    let (x, x_name) = name_binder b in *)
-          (*    let env', body = gbs (VEnv.bind env (x, x_name)) (K.Cons (kappa, K.Reflect (Var "__ks"))) bs in *)
-          (*    let kappa' = Fn ([x_name; "__ks"], body) in *)
-          (*    env', kbs (generate_tail_computation env tc (K.Cons (kappa', kappas'))) *)
           | `Fun ((fb, _, _zs, _location) as def) :: bs ->
              let (f, f_name) = name_binder fb in
              let def_header = generate_function env [] def in
