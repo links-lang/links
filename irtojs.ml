@@ -545,10 +545,12 @@ module Higher_Order_Continuation : CONTINUATION = struct
     | Cons (kappa, kappas) ->
        (fun code -> code), (reflect kappa), kappas
     | Reflect ks ->
+       let __k = gensym ~prefix:"__k" () in
+       let __ks = gensym ~prefix:"__ks" () in
        (fun code ->
-         Bind ("__k", Call (Var "_lsHead", [ks]),
-               Bind ("__ks", Call (Var "_lsTail", [ks]), code))),
-      (Reflect (Var "__k")), Reflect (Var "__ks")
+         Bind (__k, Call (Var "_lsHead", [ks]),
+               Bind (__ks, Call (Var "_lsTail", [ks]), code))),
+      (Reflect (Var __k)), Reflect (Var __ks)
 end
 
 (** Compiler interface *)
@@ -891,7 +893,24 @@ end = functor (K : CONTINUATION) -> struct
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
              let branches = StringMap.map generate_branch bs in
              Call (Var "receive", [gv c; Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]))
-      | `DoOperation _ -> failwith "Not yet implemented"
+      | `DoOperation (name, args, _) ->
+         let box vs =
+           Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
+         in
+         let cons k ks =
+           Call (Var "_lsCons", [k;ks])
+         in
+         let nil = Var "lsNil" in
+         K.bind kappa
+           (fun kappas ->
+             let bind_skappa, skappa, kappas = K.pop kappas in
+             let bind_seta, seta, kappas   = K.pop kappas in
+             let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
+             let op    =
+               Dict [ ("_label", strlit name)
+                    ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
+             in
+             bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
       | `Handle _ -> failwith "Not yet implemented"
 
   and generate_computation env : Ir.computation -> continuation -> (venv * code) =
@@ -1149,7 +1168,7 @@ end = functor (K : CONTINUATION) -> struct
       []
 end
 
-module Compiler = CPS_Compiler(DefaultContinuation) (* CPS_Compiler(Higher_Order_Continuation) *)
+module Compiler = CPS_Compiler(Higher_Order_Continuation)
 
 let generate_program_page = Compiler.generate_program_page
 let generate_real_client_page = Compiler.generate_real_client_page
