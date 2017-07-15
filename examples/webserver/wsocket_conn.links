@@ -4,7 +4,7 @@ fun mainPage() {
 }
 
 fun main() {
-  addRoute("/", fun (_, _) { mainPage() });
+  addRoute("/", fun(_) { mainPage() });
   serveWebsockets();
   servePages();
 }
