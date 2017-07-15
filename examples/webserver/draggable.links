@@ -65,7 +65,7 @@ fun mainPage(pg, loc) {
 }
 
 fun main() {
-  addRoute("/", mainPage);
+  addLocatedRouteHandler("/", mainPage);
   servePages()
 }
 
