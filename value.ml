@@ -521,7 +521,7 @@ module Eff_Handler_Continuation = struct
 
     let compress ~compress_val = function
       | User_defined h -> (Env.compress compress_val h.env, h.depth)
-      | _ -> assert false
+      | Identity -> (Env.compress compress_val Env.empty, `Deep)
 
     let uncompress ~uncompress_val globals h =
       User_defined
