@@ -440,9 +440,10 @@ module Default_Continuation : CONTINUATION = struct
 
   let primitive_bindings =
     "function _makeCont(k) { return k; }\n" ^
-      "var _idy = _makeCont(function(x,ks) { return; });\n" ^
+      "var _idy = function(x) { return; };\n" ^
       "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
-      "var _cont_kind = \"Default_Continuation\";"
+        "var _cont_kind = \"Default_Continuation\";\n" ^
+          "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }"
 
   let contify_with_env fn =
     match fn Identity with
@@ -527,7 +528,10 @@ module Higher_Order_Continuation : CONTINUATION = struct
       "}\n" ^
       "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
       "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
-      "var _cont_kind = \"Higher_Order_Continuation\";"
+        "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
+          "function is_continuation(kappa) {\n" ^
+            "return kappa !== null && typeof kappa === 'object' && _lsHead(kappa) !== undefined && _lsTail(kappa) !== undefined;\n" ^
+              "}"
 
   let contify_with_env fn =
     let name = "__kappa" in
