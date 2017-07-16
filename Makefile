@@ -58,7 +58,7 @@ SOURCES = $(OPC)                                \
           env.mli env.ml                        \
           settings.mli settings.ml              \
           basicsettings.ml                      \
-	  earlyOptions.ml \
+	  parseSettings.ml \
           debug.mli debug.ml                    \
           performance.mli performance.ml        \
           graph.ml                              \

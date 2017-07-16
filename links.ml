@@ -1,7 +1,6 @@
 open Webserver
 
 open Performance
-open Getopt
 open Utility
 open List
 
@@ -430,48 +429,9 @@ let cache_load_prelude () =
     globals, envs)
 
 
-let to_evaluate : string list ref = ref []
-let to_precompile : string list ref = ref []
-
-let set_web_mode() = (
-    (* When forcing web mode using the command-line argument, default
-     the CGI environment variables to a GET request with no params--
-     i.e. start running with the main expression. *)
-  if not(is_some(getenv "REQUEST_METHOD")) then
-    Unix.putenv "REQUEST_METHOD" "GET";
-  if not(is_some(getenv "QUERY_STRING")) then
-    Unix.putenv "QUERY_STRING" "";
-  Settings.set_value BS.web_mode true
-  )
-
-let print_keywords =
-  Some (fun () -> List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0)
-
-let config_file   : string option ref = EarlyOptions.config_file
-let options : opt list =
-  let set setting value = Some (fun () -> Settings.set_value setting value) in
-  EarlyOptions.options @
-  [
-    ('d',     "debug",               set Debug.debugging_enabled true, None);
-    ('w',     "web_mode",            Some set_web_mode,                None);
-    (noshort, "optimise",            set BS.optimise true,             None);
-    (noshort, "measure-performance", set measuring true,               None);
-    ('n',     "no-types",            set BS.printing_types false,      None);
-    ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
-    ('m',     "modules",             set BS.modules true,              None);
-    (noshort, "dump",                None,
-     Some(fun filename -> Loader.print_cache filename;
-            Settings.set_value BS.interacting false));
-    (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
-(*     (noshort, "working-tests",       Some (run_tests Tests.working_tests),                  None); *)
-(*     (noshort, "broken-tests",        Some (run_tests Tests.broken_tests),                   None); *)
-(*     (noshort, "failing-tests",       Some (run_tests Tests.known_failures),                 None); *)
-    (noshort, "print-keywords",      print_keywords,                   None);
-    (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
-    (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
-    ]
-
-let file_list = ref []
+let to_evaluate : string list ref = ParseSettings.to_evaluate
+let to_precompile : string list ref = ParseSettings.to_precompile
+let file_list : string list ref = ParseSettings.file_list
 
 let main () =
   let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
@@ -508,6 +468,7 @@ let main () =
  *)
 
 let whole_program_caching_main () =
+  let open Getopt in
   Debug.print ("Whole program caching mode activated.");
 
   if Settings.get_value BS.interacting
@@ -522,7 +483,7 @@ let whole_program_caching_main () =
   (* caching_main assumes exactly one source file *)
   let file_list = ref [] in
   Errors.display_fatal_l (lazy
-			    (parse_cmdline options
+			    (parse_cmdline ParseSettings.options
 			       (fun i -> push_back i file_list)));
   if(length (!file_list) <> 1)
   then failwith "Whole program caching mode expects exactly one source file";
@@ -535,17 +496,18 @@ let whole_program_caching_main () =
    Webif.serve_request envs prelude filename
 
 let _ =
+  (match !ParseSettings.print_cache with
+   | (true, Some filename) -> Loader.print_cache filename;
+                              Settings.set_value BS.interacting false
+   | _                     -> ());
+  if !ParseSettings.print_keywords
+  then (List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0);
+
 (* parse common cmdline arguments and settings *)
   begin match Utility.getenv "REQUEST_METHOD" with
     | Some _ -> Settings.set_value BS.web_mode true
     | None -> ()
   end;
-
-  Errors.display_fatal_l (lazy
-     (parse_cmdline options (fun i -> push_back i file_list)));
-
-  (match !config_file with None -> ()
-     | Some file -> Settings.load_file false file);
 
   if Settings.get_value BS.cache_whole_program
   then whole_program_caching_main ()

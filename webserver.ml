@@ -5,9 +5,9 @@ open ProcessTypes
 open Utility
 open Webserver_types
 
-let jslibdir : string Settings.setting = Settings.add_string("jslibdir", "", `User)
-let host_name = Settings.add_string ("host", "0.0.0.0", `User)
-let port = Settings.add_int ("port", 8080, `User)
+let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
+let host_name = Basicsettings.Appserver.hostname
+let port = Basicsettings.Appserver.port
 
 
 module Trie =

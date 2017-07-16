@@ -1,7 +1,6 @@
 (*pp deriving *)
 
 (** JavaScript generation *)
-
 open Utility
 
 let js_lib_url = Basicsettings.Js.lib_url

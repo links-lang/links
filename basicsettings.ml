@@ -1,3 +1,6 @@
+(** Whether to turn on debug printing *)
+let debugging_enabled = Settings.add_bool ("debug", false, `User)
+
 (**
  Whether to run the interactive loop
  (default is true)
@@ -93,10 +96,11 @@ struct
   let optimise = Settings.add_bool("optimise_javascript", true, `User)
   let elim_dead_defs = Settings.add_bool("elim_dead_defs", false, `User)
   let lib_url = Settings.add_string("jsliburl", "lib/", `User)
+  let lib_dir = Settings.add_string("jslibdir", "", `User)
   let pp = Settings.add_bool("js_pretty_print", true, `User)
 
   let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
-  let backend = Settings.add_string("js_backend", "cps", `System)
+  let backend = Settings.add_string("js_compiler", "cps", `System)
 end
 
 module Shredding = struct
@@ -104,6 +108,12 @@ module Shredding = struct
   let shredding = Settings.add_bool("shredding", false, `User)
 end
 
+
+(** App server stuff *)
+module Appserver = struct
+  let hostname = Settings.add_string ("host", "0.0.0.0", `User)
+  let port = Settings.add_int ("port", 8080, `User)
+end
 
 (** Caveat: don't [Open basicsettings] because the above module
    conflicts with the Js module from js.ml*)
@@ -155,4 +165,10 @@ let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)
 (* Handlers stuff *)
 module Handlers = struct
   let enabled = Settings.add_bool("enable_handlers", false, `System)
+end
+
+(* Performance settings *)
+module Performance = struct
+  let measuring = Settings.add_bool("measure_performance", false, `User)
+  let noisy_gc = Settings.add_bool("noisy_garbage_collection", false, `User)
 end
