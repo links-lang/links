@@ -39,7 +39,7 @@ module Server {
 fun main() {
   var ap = new();
   var _ = spawn { Server.go(ap) };
-  addRoute("/", fun(_, _) { Client.mainPage(ap) });
+  addRoute("/", fun(_) { Client.mainPage(ap) });
   serveWebsockets();
   servePages();
 }

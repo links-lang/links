@@ -108,7 +108,7 @@ fun mainPage(_, loc) {
 
 
 fun main() {
-  addRoute("/", mainPage);
+  addLocatedRouteHandler("/", mainPage);
   servePages()
 }
 
