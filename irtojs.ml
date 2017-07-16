@@ -33,6 +33,7 @@ type code = | Var    of string
             | Arr    of (code list)
 
             | Bind   of (string * code * code)
+            | Return of code
 
             | Die    of (string)
             | Nothing
@@ -45,6 +46,9 @@ module VEnv = Env.Int
 (** Type of environments mapping IR variables to source variables *)
 type venv = string VEnv.t
 
+
+(** Continuation parameter name (convention) *)
+let __kappa = "__kappa"
 (**
   Required runtime support (documenting any JavaScript functions used):
 
@@ -128,6 +132,7 @@ struct
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
         | Arr elems -> "[" ^ arglist elems ^ "]"
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
+        | Return expr -> "return " ^ (show expr) ^ ";"
         | Nothing -> ""
         | Die msg -> "error('" ^ msg ^ "', __kappa)"
 end
@@ -170,6 +175,7 @@ struct
       | Arr _
       | Bind _
       | Die _
+      | Return _
       | Nothing as c -> show c
       | c -> parens (show c)
     in
@@ -217,6 +223,8 @@ struct
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
               break ^^ show body
+        | Return expr ->
+           PP.text "return " ^^ (show expr) ^^ PP.text ";"
 
   let show = show ->- PP.pretty 144
 end
@@ -534,7 +542,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
               "}"
 
   let contify_with_env fn =
-    let name = "__kappa" in
+    let name = __kappa in
     match fn (reflect (Var name)) with
     | env, Fn (args, body) -> env, reflect (Fn (args @ [name], body))
     | _ -> failwith "error: contify: none function argument."
@@ -611,12 +619,12 @@ end = functor (K : CONTINUATION) -> struct
           (* HACK *)
        let name = VEnv.lookup env var in
        if Arithmetic.is name then
-         Fn (["x"; "y"; "__kappa"],
-             K.apply (K.reflect (Var "__kappa"))
+         Fn (["x"; "y"; __kappa],
+             K.apply (K.reflect (Var __kappa))
                (Arithmetic.gen (Var "x", name, Var "y")))
        else if StringOp.is name then
-         Fn (["x"; "y"; "__kappa"],
-             K.apply (K.reflect (Var "__kappa"))
+         Fn (["x"; "y"; __kappa],
+             K.apply (K.reflect (Var __kappa))
                (StringOp.gen (Var "x", name, Var "y")))
        else if Comparison.is name then
          Var (Comparison.js_name name)
@@ -693,7 +701,7 @@ end = functor (K : CONTINUATION) -> struct
           Arr (List.map (generate_value env) children)])
 
   let generate_remote_call f_var xs_names env =
-    Call(Call (Var "LINKS.remoteCall", [Var "__kappa"]),
+    Call(Call (Var "LINKS.remoteCall", [Var __kappa]),
          [intlit f_var;
           env;
           Dict (
@@ -723,7 +731,7 @@ end = functor (K : CONTINUATION) -> struct
 
         match location with
         | `Client | `Native | `Unknown ->
-           let xs_names'' = xs_names'@["__kappa"] in
+           let xs_names'' = xs_names'@[__kappa] in
            LetFun ((Js.var_name_binder fb,
                     xs_names'',
                     Call (Var (snd (name_binder fb)),
@@ -732,7 +740,7 @@ end = functor (K : CONTINUATION) -> struct
                    code)
         | `Server ->
            LetFun ((Js.var_name_binder fb,
-                    xs_names'@["__kappa"],
+                    xs_names'@[__kappa],
                     generate_remote_call f_var xs_names env,
                     location),
                    code)
@@ -788,7 +796,7 @@ end = functor (K : CONTINUATION) -> struct
         (fun (name, args, body) code ->
           LetFun
             ((name,
-              args @ ["__kappa"],
+              args @ [__kappa],
               body,
               `Server),
              code))
@@ -963,13 +971,14 @@ end = functor (K : CONTINUATION) -> struct
                (fun ks ->
                  let bind1, k', ks' = K.pop ks in
                  let bind2, h', ks' = K.pop ks' in
+                 let bind code = bind1 (bind2 code) in
                  let resumption =
-                   Fn (["s"], Call (Var "_lsCons",
-                                    [K.reify h';
-                                     Call (Var "_lsCons", [K.reify k'; Var "s"])]))
+                   Fn (["s"], Return (Call (Var "_lsCons",
+                                            [K.reify h';
+                                             Call (Var "_lsCons", [K.reify k'; Var "s"])])))
                  in
                  let vmap = Call (Var "_vmapOp", [resumption; Var z_name]) in
-                 bind1 (bind2 (apply_yielding (K.reify h') [vmap] ks')))
+                 bind (apply_yielding (K.reify h') [vmap] ks'))
            in
            contify
              (fun ks ->
@@ -993,14 +1002,14 @@ end = functor (K : CONTINUATION) -> struct
              (env', Bind (x_name, generate_value env v, rest))
           | `Let (b, (_, tc)) :: bs ->
              let (x, x_name) = name_binder b in
-             let scope, skappa, skappas = K.pop kappa in
+             let bind, skappa, skappas = K.pop kappa in
              let env',skappa' =
                K.contify_with_env
                  (fun kappas ->
                    let env', body = gbs (VEnv.bind env (x, x_name)) K.(skappa <> kappas) bs in
                    env', Fn ([x_name], body))
              in
-             env', scope (generate_tail_computation env tc K.(skappa' <> skappas))
+             env', bind (generate_tail_computation env tc K.(skappa' <> skappas))
           | `Fun ((fb, _, _zs, _location) as def) :: bs ->
              let (f, f_name) = name_binder fb in
              let def_header = generate_function env [] def in
@@ -1035,12 +1044,12 @@ end = functor (K : CONTINUATION) -> struct
       let body =
         match location with
         | `Client | `Unknown ->
-           snd (generate_computation body_env body (K.reflect (Var "__kappa")))
+           snd (generate_computation body_env body (K.reflect (Var __kappa)))
         | `Server -> generate_remote_call f xs_names (Dict [])
         | `Native -> failwith ("Not implemented native calls yet")
       in
       (f_name,
-       xs_names @ ["__kappa"],
+       xs_names @ [__kappa],
        body,
        location)
 
