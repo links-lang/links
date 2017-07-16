@@ -524,10 +524,13 @@ module Eff_Handler_Continuation = struct
       | Identity -> (Env.compress compress_val Env.empty, `Deep)
 
     let uncompress ~uncompress_val globals h =
+      let xb = Var.fresh_binder_of_type `Not_typed in
+      let x  = Var.var_of_binder xb in
       User_defined
         { env = Env.uncompress uncompress_val globals (fst h);
         op_clauses = StringMap.empty;
-        return_clause = (Var.fresh_binder_of_type `Not_typed, ([], `Special (`Wrong `Not_typed)));
+        return_clause =
+          (xb, ([], `Return (`Variable x)));
         depth = snd h; }
   end
 
