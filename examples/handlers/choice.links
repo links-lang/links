@@ -48,13 +48,13 @@ fun drunkToss() client {
 # }
 
 fun run() client {
-  var xs = positive(toss) :: allChoices(toss)();
+  var xs = allChoices(failure(toss))();
   var i = length(xs);
   print(intToString(i))
 }
 
 # Page
-fun mainPage(_,_) {
+fun mainPage(_) {
   page
     <html>
       <body>

@@ -1,6 +1,6 @@
 fun foo() client {do Foo("Bar")}
 
-fun mainPage(_,_) {
+fun mainPage(_) {
   page
    <html>
     <body>
