@@ -3,7 +3,7 @@ open Utility
 open Notfound
 open ProcessTypes
 
-let serialiser = Settings.add_string ("serialiser", "Dump", `User)
+let serialiser = Basicsettings.Serialisation.serialiser
 
 class type otherfield =
 object

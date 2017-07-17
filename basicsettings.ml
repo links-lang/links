@@ -172,3 +172,8 @@ module Performance = struct
   let measuring = Settings.add_bool("measure_performance", false, `User)
   let noisy_gc = Settings.add_bool("noisy_garbage_collection", false, `User)
 end
+
+(* Serialisation stuff *)
+module Serialisation = struct
+  let serialiser = Settings.add_string ("serialiser", "Dump", `User)
+end
