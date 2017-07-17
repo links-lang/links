@@ -177,3 +177,77 @@ end
 module Serialisation = struct
   let serialiser = Settings.add_string ("serialiser", "Dump", `User)
 end
+
+(* Typing stuff *)
+module TypeSugar = struct
+  let endbang_antiquotes = Settings.add_bool ("endbang_antiquotes", false, `User)
+(*  let constrain_absence_types = Settings.add_bool ("constrain_absence_types", false, `User)*)
+  let check_top_level_purity = Settings.add_bool ("check_top_level_purity", false, `User)
+  let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
+end
+
+(* Types stuff *)
+module Types = struct
+  let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, `User)
+  let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
+  module Print = struct
+    let show_quantifiers     = Settings.add_bool   ("show_quantifiers"    , false    , `User)
+    let show_flavours        = Settings.add_bool   ("show_flavours"       , false    , `User)
+    let show_kinds           = Settings.add_string ("show_kinds"          , "default", `User)
+    let hide_fresh_type_vars = Settings.add_bool   ("hide_fresh_type_vars", true     , `User)
+  end
+end
+
+(* Compile patterns stuff *)
+module CompilePatterns = struct
+  let show_pattern_compilation = Settings.add_bool("show_pattern_compilation2", false, `User)
+end
+
+(* Ir stuff *)
+module Ir = struct
+  let show_rec_uses = Settings.add_bool("show_rec_uses", false, `User)
+end
+
+(* Generalise stuff *)
+module Generalise = struct
+  let show_generalisation = Settings.add_bool("show_generalisation", false, `User)
+end
+
+(* Webif stuff *)
+module Webif = struct
+  let realpages = Settings.add_bool ("realpages", false, `System)
+end
+
+(* Json stuff *)
+module Json = struct
+  let show_json = Settings.add_bool("show_json", false, `User)
+end
+
+(* Webserver types stuff *)
+module Webserver_types = struct
+  let webs_running = Settings.add_bool ("webs_running", false, `System)
+end
+
+(* Polymorphic types instantiation stuff *)
+module Instantiate = struct
+  let show_recursion = Settings.add_bool("show_recursion", false, `User)
+  let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
+  let quantified_instantiation = Settings.add_bool("quantified_instantiation", true, `User)
+end
+
+(* Evaluation stuff *)
+module Evalir = struct
+  let dynamic_static_routes = Settings.add_bool ("dynamic_static_routes", false, `User)
+end
+
+(* Sugar to ir stuff *)
+module Sugartoir = struct
+  let show_compiled_ir = Settings.add_bool ("show_compiled_ir", false, `User)
+end
+
+(* Unification stuff *)
+module Unify = struct
+  let show_unification = Settings.add_bool("show_unification", false, `User)
+  let show_row_unification = Settings.add_bool("show_row_unification", false, `User)
+  let infer_recursive_types = Settings.add_string("infer_recursive_types", "guarded", `User)
+end

@@ -9,7 +9,7 @@ open Webserver_types
 open Performance
 open Utility
 
-let realpages = Settings.add_bool ("realpages", false, `System)
+let realpages = Basicsettings.Webif.realpages
 let ( >>= ) = Lwt.bind
 
 module WebIf = functor (Webs : WEBSERVER) ->

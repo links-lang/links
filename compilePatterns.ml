@@ -203,7 +203,7 @@ end
 open CompileEq
 
 
-let show_pattern_compilation = Settings.add_bool("show_pattern_compilation2", false, `User)
+let show_pattern_compilation = Basicsettings.CompilePatterns.show_pattern_compilation
 
 type annotation = [`Binder of binder | `Type of Types.datatype] list
 type annotated_pattern = annotation * pattern

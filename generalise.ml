@@ -2,7 +2,7 @@ open Utility
 open Types
 
 (* debug flags *)
-let show_generalisation = Settings.add_bool("show_generalisation", false, `User)
+let show_generalisation = Basicsettings.Generalise.show_generalisation
 let show_recursion = Instantiate.show_recursion
 
 type gen_kind = [`Rigid|`All]

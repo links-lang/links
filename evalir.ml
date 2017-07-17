@@ -8,7 +8,7 @@ open Pervasives
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
-let dynamic_static_routes = Settings.add_bool ("dynamic_static_routes", false, `User)
+let dynamic_static_routes = Basicsettings.Evalir.dynamic_static_routes
 let allow_static_routes = ref true
 
 module type EVALUATOR = sig

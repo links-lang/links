@@ -691,7 +691,7 @@ end
 *)
 module ElimDeadDefs =
 struct
-  let show_rec_uses = Settings.add_bool("show_rec_uses", false, `User)
+  let show_rec_uses = Basicsettings.Ir.show_rec_uses
 
   let counter tyenv =
   object (o : 'self_type)

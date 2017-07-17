@@ -3,8 +3,8 @@ open Types
 open Typevarcheck
 
 (* debug flags *)
-let show_unification = Settings.add_bool("show_unification", false, `User)
-let show_row_unification = Settings.add_bool("show_row_unification", false, `User)
+let show_unification = Basicsettings.Unify.show_unification
+let show_row_unification = Basicsettings.Unify.show_row_unification
 let show_recursion = Instantiate.show_recursion
 
 (*
@@ -13,7 +13,7 @@ let show_recursion = Instantiate.show_recursion
   "guarded"  - only allow guarded recursive types
   "positive" - only allow positive recursive types
  *)
-let infer_recursive_types = Settings.add_string("infer_recursive_types", "guarded", `User)
+let infer_recursive_types = Basicsettings.Unify.infer_recursive_types
 
 type error = [
   `Msg of string

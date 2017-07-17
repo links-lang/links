@@ -54,7 +54,7 @@ SOURCES = $(OPC)                                \
           multipart.ml                          \
           notfound.ml                           \
           utility.ml                            \
-		  processTypes.mli processTypes.ml      \
+	  processTypes.mli processTypes.ml      \
           env.mli env.ml                        \
           settings.mli settings.ml              \
           basicsettings.ml                      \
@@ -87,7 +87,7 @@ SOURCES = $(OPC)                                \
 	  desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
-					requestData.mli requestData.ml        \
+          requestData.mli requestData.ml        \
           value.mli value.ml                    \
           eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \

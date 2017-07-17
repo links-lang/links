@@ -44,7 +44,7 @@ open Ir
    frontend and call/cc in the IR) is silly.
 *)
 
-let show_compiled_ir = Settings.add_bool ("show_compiled_ir", false, `User)
+let show_compiled_ir = Basicsettings.Sugartoir.show_compiled_ir
 
 let dp = Sugartypes.dummy_position
 

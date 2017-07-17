@@ -2,13 +2,11 @@
 open Utility
 open Sugartypes
 
-(* let constrain_absence_types = Settings.add_bool ("constrain_absence_types", *)
-(*                                                  false, `User) *)
+(* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 
-let endbang_antiquotes = Settings.add_bool ("endbang_antiquotes", false, `User)
+let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
-let check_top_level_purity =
-  Settings.add_bool ("check_top_level_purity", false, `User)
+let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
 
 type var_env =
     Types.meta_type_var StringMap.t *
@@ -3592,8 +3590,7 @@ and type_cp (context : context) = fun (p, pos) ->
        `Comp ((c, Some s, binder_pos), left, right), t', merge_usages [u; u'] in
   (p, pos), t, u
 
-let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing",
-                                              false, `User)
+let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
 
 let binding_purity_check bindings =
   List.iter (fun ((_, pos) as b) ->

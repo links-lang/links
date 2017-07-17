@@ -1331,10 +1331,10 @@ let extract_tuple (field_env, _, _) =
    [NOTE]
       unused mailbox parameters are never shown
  *)
-let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, `User)
+let show_mailbox_annotations = Basicsettings.Types.show_mailbox_annotations
 
 (* pretty-print type vars as raw numbers rather than letters *)
-let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
+let show_raw_type_vars = Basicsettings.Types.show_raw_type_vars
 
 
 module Vars =
@@ -1526,10 +1526,11 @@ end
 
 module Print =
 struct
-  let show_quantifiers     = Settings.add_bool   ("show_quantifiers"    , false    , `User)
-  let show_flavours        = Settings.add_bool   ("show_flavours"       , false    , `User)
-  let show_kinds           = Settings.add_string ("show_kinds"          , "default", `User)
-  let hide_fresh_type_vars = Settings.add_bool   ("hide_fresh_type_vars", true     , `User)
+  module BS = Basicsettings
+  let show_quantifiers     = BS.Types.Print.show_quantifiers
+  let show_flavours        = BS.Types.Print.show_flavours
+  let show_kinds           = BS.Types.Print.show_kinds
+  let hide_fresh_type_vars = BS.Types.Print.hide_fresh_type_vars
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
