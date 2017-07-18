@@ -111,7 +111,7 @@ fun main() {
   var (clientAP:AP(ChatServer)) = new();
   var loopPid = spawn { serverLoop(Topic("Hello, ABCD!"), [], []) };
   var _ = spawn { acceptor(clientAP, loopPid) };
-  addRoute("/", fun (_, _) { ChatClient.mainPage(clientAP) } );
+  addRoute("/", fun(_) { ChatClient.mainPage(clientAP) } );
   addStaticRoute("/css", "css", [("css", "text/css")]);
   serveWebsockets();
   servePages()

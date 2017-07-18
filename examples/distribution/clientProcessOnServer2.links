@@ -26,7 +26,7 @@ fun mainPage(loc) {
 }
 
 fun main() {
-  addRoute("/", fun (_, loc) { mainPage(loc) } );
+  addLocatedRouteHandler("/", fun (_, loc) { mainPage(loc) } );
   serveWebsockets();
   servePages()
 }

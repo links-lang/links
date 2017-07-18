@@ -370,6 +370,7 @@ end
        code ppr_t
 
     let but2things (lthing, (lexpr, lt)) (rthing, (rexpr, rt)) =
+      build_tyvar_names [lt;rt];
       let ppr_lt = show_type lt in
       let ppr_rt = show_type rt in
       ", but the " ^ lthing ^ nli () ^

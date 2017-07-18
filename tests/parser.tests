@@ -1,0 +1,4 @@
+Test that DOS newlines are handled
+./tests/dos-newlines.links
+filemode : true
+stdout : 43 : Int
