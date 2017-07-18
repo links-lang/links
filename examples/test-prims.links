@@ -182,9 +182,9 @@ replaceNode(<li id="item">Replacement item</li>, getNodeById("item"));
 
 # domAppendChildRef(_,_);
 
-# replaceChildren  : (Xml, DomNode) -> ()
+# domReplaceChildren  : (Xml, DomNode) -> ()
 
-replaceChildren(<#><li id="item:1">Foo</li>
+domReplaceChildren(<#><li id="item:1">Foo</li>
                    <li id="item:2">Bar</li>
                    <li id="item:3">Baz</li></#>,
                 getNodeById("list"));

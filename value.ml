@@ -142,12 +142,16 @@ let _ = register_driver ("null", fun args -> new null_database, reconstruct_db_s
 type xmlitem =   Text of string
                | Attr of (string * string)
                | Node of (string * xml)
+               | NsAttr of (string * string * string)
+               | NsNode of (string * string * xml)
 and xml = xmlitem list
     deriving (Typeable, Show, Eq, Pickle, Dump)
 
+
 let is_attr = function
-  | Attr _ -> true
-  | _      -> false
+  | Attr _   -> true
+  | NsAttr _ -> true
+  | _        -> false
 
 let attrs = List.filter is_attr
 and nodes = List.filter (not -<- is_attr)
@@ -534,7 +538,9 @@ and p_xmlitem ?(close_tags=false) ppf: xmlitem -> unit = function
                   (p_xml ~close_tags:close_tags) nodes
                   (* (pp_print_list (p_xml ~close_tags:close_tags)) nodes *)
                   tag
-     end
+      end
+  | NsAttr (ns, k, v) -> p_xmlitem ppf (Attr (ns ^ ":" ^ k, v))
+  | NsNode (ns, tag, children) -> p_xmlitem ppf (Node (ns ^ ":" ^ tag, children))
 
 let string_of_pretty pretty_fun arg : string =
   let b = Buffer.create 200 in
@@ -771,3 +777,37 @@ and value_of_xmlitem =
     | Text s -> `Variant ("Text", box_string s)
     | Attr (name, value) -> `Variant ("Attr", `Record [("1", box_string name); ("2", box_string value)])
     | Node (name, children) -> `Variant ("Node", `Record [("1", box_string name); ("2", value_of_xml children)])
+    | NsAttr (ns, name, value) -> `Variant ("NsAttr", `Record [("1", box_string ns); ("2", box_string name); ("3", box_string value)])
+    | NsNode (ns, name, children) -> `Variant ("NsNode", `Record [("1", box_string ns); ("2", box_string name); ("3", value_of_xml children)])
+
+let rec xml_of_variants vs = match vs with
+  | (`List variant_items) -> List.map xmlitem_of_variant variant_items
+  | _ -> failwith "Cannot construct xml from variants"
+and xmlitem_of_variant =
+  function
+    | `Variant ("Text", boxed_string) ->
+        Text (unbox_string(boxed_string))
+    | `Variant ("Attr", `Record([ ("1", boxed_name); ("2", boxed_value) ])) ->
+        Attr(unbox_string(boxed_name), unbox_string(boxed_value))
+    | `Variant ("Node", `Record([ ("1", boxed_name); ("2", variant_children) ])) ->
+        let name = unbox_string(boxed_name) in
+        if (String.contains name ':')
+        then failwith "Illegal character in tagname"
+        else Node(unbox_string(boxed_name), xml_of_variants variant_children)
+    | `Variant ("NsAttr", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", boxed_value) ])) ->
+        let ns = unbox_string(boxed_ns) in
+        let name = unbox_string(boxed_name) in
+        if (String.contains ns ':') 
+        then failwith "Illegal character in namespace"
+        else if (String.contains name ':') 
+        then failwith "Illegal character in attrname"
+        else NsAttr(ns, name, unbox_string(boxed_value))
+    | `Variant ("NsNode", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", variant_children) ])) ->
+        let ns = unbox_string(boxed_ns) in
+        let name = unbox_string(boxed_name) in
+        if (String.contains ns ':') 
+        then failwith "Illegal character in namespace"
+        else if (String.contains name ':') 
+        then failwith "Illegal character in tagname"
+        else NsNode(ns, name, xml_of_variants variant_children)
+    | _ -> failwith "Cannot construct xml from variant"

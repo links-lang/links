@@ -211,7 +211,7 @@ fun showResults(wines) client {
         ${floatToXml(w.price)}
         <br/>
       </#>;
-  replaceChildren(xml, r)
+  domReplaceChildren(xml, r)
 }
 
 fun manager(atoms, atomss) client {
@@ -228,7 +228,7 @@ fun manager(atoms, atomss) client {
         case Nothing -> manager(atoms, atomss)
         case Just(a) ->
           switch ((atoms, connective)) {
-            case ([], _)  -> replaceChildren(<#/>, getNodeById("filter"));
+            case ([], _)  -> domReplaceChildren(<#/>, getNodeById("filter"));
                              renderAtom(<#/>, a); manager([a], atomss)
             case (_, And) -> renderAtom(<#> and </#>, a); manager(a::atoms, atomss)
             case (_, Or)  -> renderAtom(<#> or<br/></#>, a); manager([a], atoms::atomss)
@@ -237,10 +237,10 @@ fun manager(atoms, atomss) client {
     case Query ->
       showResults(makeQuery(atoms::atomss)); manager(atoms, atomss)
     case Reset ->
-      replaceChildren(<#>true</#>, getNodeById("filter"));
-      replaceChildren(<#/>, getNodeById("results"));
-      replaceChildren(<#/>, getNodeById("price-error"));
-      replaceChildren(<#/>, getNodeById("year-error"));
+      domReplaceChildren(<#>true</#>, getNodeById("filter"));
+      domReplaceChildren(<#/>, getNodeById("results"));
+      domReplaceChildren(<#/>, getNodeById("price-error"));
+      domReplaceChildren(<#/>, getNodeById("year-error"));
       manager([], [])
   }
 }
@@ -268,10 +268,10 @@ fun lookupPrice() client {
   if (isPrice(s)) {
     var v = stringToFloat(s);
     var comparison = stringToComparison(domValue("price-comp"));
-    replaceChildren(<#/>, e);
+    domReplaceChildren(<#/>, e);
     Just(Price(comparison, v))
   } else {
-    replaceChildren(<#>Price must be a number greater than or equal to 0</#>, e);
+    domReplaceChildren(<#>Price must be a number greater than or equal to 0</#>, e);
     Nothing
   }
 }
@@ -283,10 +283,10 @@ fun lookupYear() client {
   if (isYear(s)) {
     var v = stringToInt(s);
     var comparison = stringToComparison(domValue("year-comp"));
-    replaceChildren(<#/>, e);
+    domReplaceChildren(<#/>, e);
     Just(Year(comparison, v))
   } else {
-    replaceChildren(<#>Year must be a year in the range 1970-2000</#>, e);
+    domReplaceChildren(<#>Year must be a year in the range 1970-2000</#>, e);
     Nothing
   }
 }
