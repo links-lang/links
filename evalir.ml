@@ -423,11 +423,11 @@ struct
       unblock out2;
       apply_cont cont env (`Record [])
     (* end of session stuff *)
-    | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler] ->
+    | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler; error_handler] ->
        let path = Value.unbox_string pathv in
        let is_dir_handler = String.length path > 0 && path.[String.length path - 1] = '/' in
        let path = if String.length path == 0 || path.[0] <> '/' then "/" ^ path else path in
-       Webs.add_route is_dir_handler path (Right (env, handler));
+       Webs.add_route is_dir_handler path (Right {Webs.request_handler = (env, handler); Webs.error_handler = (env, error_handler)});
        apply_cont cont env (`Record [])
     | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv; mime_typesv] ->
        if not (!allow_static_routes) then
