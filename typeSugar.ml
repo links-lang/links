@@ -199,6 +199,8 @@ sig
   val type_continuation : griper
   val type_continuation_with_annotation : griper
   val should_not_go_wrong : griper
+  val handle_return : griper
+  val handle_comp_effects : griper
 
   val do_operation : griper
 
@@ -367,7 +369,7 @@ end
        See Notes [Variable names in error messages] and [Refreshing type variable names] *)
     let show_type   = Types.string_of_datatype ~policy:error_policy ~refresh_tyvar_names:false
     let show_row    = Types.string_of_row      ~policy:error_policy ~refresh_tyvar_names:false
-    let show_effectrow row = "{ " ^ (Types.string_of_row ~policy:error_policy ~refresh_tyvar_names:false row) ^ " }"
+    let show_effectrow row = "{" ^ (Types.string_of_row ~policy:error_policy ~refresh_tyvar_names:false row) ^ "}"
 
     (* Wrappers for generating type variable names *)
     let build_tyvar_names =
@@ -483,7 +485,29 @@ end
 		  tab() ^ code (show_type rt) ^ nl() ^
 		  "but it is annotated with type" ^ nl() ^
 		  tab() ^ code (show_type lt)
-      )
+              )
+
+    let handle_return ~pos ~t1:(hexpr, lt) ~t2:(ret, rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("The inferred type of the handled expression " ^ nl () ^
+                 tab() ^ code hexpr ^ nl() ^
+                   "is " ^ nl() ^
+                     tab() ^ code (show_type lt) ^ nl () ^
+                       "but the return clause " ^ nl() ^
+                         tab() ^ code ret ^ nl() ^
+                           "expects a computation whose return type is " ^ nl() ^
+                             tab() ^ code (show_type rt))
+
+    let handle_comp_effects ~pos ~t1:(hexpr, lt) ~t2:(handle, rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("The inferred effect signature for the handled expression " ^ nl() ^
+                 tab() ^ code hexpr ^ nl() ^
+                   "is " ^ nl() ^
+                     tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
+                       "but the handler " ^ nl() ^
+                         tab() ^ code handle ^ nl() ^
+                           "expects an expression whose signature is compatible with " ^ nl() ^
+                             tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
     let input_output_effect_rows ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -1935,9 +1959,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     let type_handler_cases binders =
       let pt = Types.fresh_type_variable (`Unl, `Any) in
       let bt = Types.fresh_type_variable (`Unl, `Any) in
+      let ret_pos = ref SourceCode.dummy_pos in (* Slight hack to retrieve the position of the return case (used for more informative error messages) *)
       let binders, pats, kenv =
         List.fold_right
           (fun (pat, body) (binders, pats, kenv) ->
+            let () =
+              match fst pat with
+              | `Variant ("Return",_) -> ret_pos := snd body
+              | _ -> ()
+            in
           (*	   let (pat,k) = type_operation_case pat in*)
             let (pat, kenv) = type_operation_pattern pat kenv in
             let () =
@@ -1990,7 +2020,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
           binders []
       in
       let ks = StringMap.to_list (fun _ (k,_) -> k) kenv in
-      binders, pt, bt, ks, (effect_row,ret)
+      binders, pt, bt, ks, (effect_row,ret,!ret_pos)
     in
     let type_cases binders =
       let pt = Types.fresh_type_variable (`Any, `Any) in
@@ -2977,32 +3007,40 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
        (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
-	     = fun (signatures,row_var,dual) ->
-	       let has_wild = StringMap.exists (fun name _ -> String.compare name "wild" = 0) signatures in
-	       let signatures =
-                 Pervasives.(
-                   StringMap.filter (fun name _ -> String.compare name "wild" <> 0) signatures (* filter out wild *)
-                |> StringMap.map (fun _ -> Types.fresh_presence_variable (`Unl, `Any)))        (* make every operation polymorphic in its presence *)
+	     = fun (operations,row_var,dual) ->
+	       let has_wild = StringMap.exists (fun name _ -> String.compare name "wild" = 0) operations in
+	       let operations' =
+                 (*StringMap.filter (fun name _ -> String.compare name "wild" <> 0) signatures (* filter out wild *)*)
+                 let (_,operations'') =
+                   if has_wild
+                   then StringMap.pop "wild" operations
+                   else (`Absent, operations)
+                 in
+                 StringMap.map (fun _ -> Types.fresh_presence_variable (`Unl, `Any)) operations'' (* make every operation polymorphic in its presence *)
                in
-	       let row = (signatures, row_var, dual) in
-	       if has_wild then allow_wild row
+	       let row = (operations', row_var, dual) in
+	       if has_wild
+               then allow_wild row
 	       else row
            in
            let m_context = { context with effect_row = Types.make_empty_open_row (`Unl, `Any) } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = `Record m_context.effect_row in
-           let cases, pattern_type, body_type, continuations, (effect_row, ret) = type_handler_cases cases in  (* Type check cases. *)
+           let cases, pattern_type, body_type, continuations, (effect_row, ret,ret_pos) = type_handler_cases cases in  (* Type check cases. *)
            let effects         = TypeUtils.extract_row pattern_type in
        (** First construct the effect row for the input computation m
            * It is important to construct the entire type for m before typing continuations,
            * as we need to know the return type of m to type continuations in shallow handlers *)
            let input_effect_row =
              let fresh_row = Types.make_empty_open_row (`Unl, `Any) in
-	     Types.extend_row (fst3 effect_row) fresh_row <| allow_wild
+	     let row = Types.extend_row (fst3 effect_row) fresh_row in
+             allow_wild row
            in
            let (_,_,p)  = SourceCode.resolve_pos pos in
-           let () = unify ~handle:Gripers.handle_computation (pos_and_typ m, (p, ret)) in (* Unify m and and the constructed type. *)
-           let () = unify ~handle:Gripers.handle_computation (no_pos (`Record input_effect_row), no_pos m_effects) in (* TODO: Fix this griper (Gripers.handled_effects or something) *)
+           let (_,_,ret_pos) = SourceCode.resolve_pos ret_pos in
+           let m_pos    = fst @@ pos_and_typ m in
+           let () = unify ~handle:Gripers.handle_return (pos_and_typ m, (ret_pos, ret)) in (* Unify m and and the constructed type. *)
+           let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), (p, `Record input_effect_row)) in
 
        (** Next, construct the (output) effect row for the handler *)
            let output_effect_row =
