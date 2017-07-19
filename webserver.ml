@@ -66,7 +66,7 @@ struct
   type path = string
   type mime_type = (string * string)
   type static_resource = path * mime_type list
-  type request_handler_fn = Value.env * Value.t
+  type request_handler_fn = { request_handler: Value.env * Value.t; error_handler: Value.env * Value.t }
 
   type provider = (static_resource, request_handler_fn) either option
   type providers = { as_directory: provider; as_page: provider }  (* Really, at least one should be Some *)
@@ -166,12 +166,12 @@ struct
       let path = Uri.path (Request.uri req) in
 
       (* Precondition: valenv has been initialised with the correct request data *)
-      let run_page (valenv, v) () =
+      let run_page (valenv, v) (error_valenv, error_v) () =
         let cid = RequestData.get_client_id (Value.Env.request_data valenv) in
         let ws_conn_url =
           if !accepting_websocket_requests then Some (ws_url) else None in
-        Eval.apply (render_cont ()) valenv
-        (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)]) >>= fun (valenv, v) ->
+        let applier env vp =
+          Eval.apply (render_cont ()) env vp >>= fun (valenv, v) ->
           let page = Irtojs.generate_real_client_page
                        ~cgi_env:cgi_args
                        (Lib.nenv, Lib.typing_env)
@@ -179,9 +179,15 @@ struct
                         * they should all end up in valenv... *)
                        (!prelude @ !globals)
                        (valenv, v)
-                       ws_conn_url
-          in
+                       ws_conn_url in
           Lwt.return ("text/html", page) in
+        try
+          applier valenv (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)])
+        with
+        | Evalir.Exceptions.Wrong ->
+           applier error_valenv (error_v, [`String path; `String "Error in string matching (perhaps you have an over-specific route function)."; `SpawnLocation (`ClientSpawnLoc cid)])
+        | Evalir.Exceptions.EvaluationError s ->
+           applier error_valenv (error_v, [`String path; `String s; `SpawnLocation (`ClientSpawnLoc cid)]) in
 
       let render_servercont_cont valenv v =
         let ws_conn_url =
@@ -225,16 +231,17 @@ struct
              serve_static file_path (String.concat "/" remaining) mime_types
           | (remaining, { as_directory = Some (Left (file_path, mime_types)); _ }) :: _, false ->
              serve_static file_path (String.concat "/" remaining / "index.html") mime_types
-          | ([], { as_page = Some (Right (valenv, v)); _ }) :: _, true
-          | (_, { as_directory = Some (Right (valenv, v)); _ }) :: _, _ ->
+          | ([], { as_page = Some (Right { request_handler = (valenv, v); error_handler = (error_valenv, error_v) }); _}) :: _, true
+          | (_, { as_directory = Some (Right { request_handler = (valenv, v); error_handler = (error_valenv, error_v) }); _}) :: _, _ ->
              let (_, nenv, tyenv) = !env in
              let cid = get_or_make_client_id cgi_args in
              let req_data = RequestData.new_request_data cgi_args cookies cid in
              let req_env = Value.Env.set_request_data (Value.Env.shadow tl_valenv ~by:valenv) req_data in
+             let req_error_env = Value.Env.set_request_data (Value.Env.shadow tl_valenv ~by:error_valenv) req_data in
              Webif.do_request
                (req_env, nenv, tyenv)
                cgi_args
-               (run_page (req_env, v))
+               (run_page (req_env, v) (req_error_env, error_v))
                (render_cont ())
                (render_servercont_cont req_env)
                (fun hdrs bdy -> Lib.cohttp_server_response hdrs bdy req_data)

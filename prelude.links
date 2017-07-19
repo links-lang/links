@@ -1264,13 +1264,26 @@ fun assertEq (actual, expected) server {
 #### APP SERVER ####
 
 sig addSimpleRouteHandler : (String, (String) ~> Page) ~> ()
-fun addSimpleRouteHandler(path,f) { unsafeAddRoute(path, fun(p, _){f(p)}) }
+fun addSimpleRouteHandler(path,f) { addRoute(path,f) }
 
 sig addRoute : (String, (String) ~> Page) ~> ()
-fun addRoute(path, f) { unsafeAddRoute(path, fun(p, _){f(p)}) }
+fun addRoute(path, f) { addLocatedRouteHandler(path, fun(p, _){f(p)}) }
+
+sig defaultErrorPage : (String, String, Location) ~> Page
+fun defaultErrorPage(_, error_string, _) {
+  bodyP(<html>
+        <body>
+        <h1>Wrong</h1>
+        <p>Links has encountered an internal error; the error message is <em>{stringToXml(error_string)}</em></p>
+        </body>
+        </html>)
+}
 
 sig addLocatedRouteHandler : (String, (String, Location) ~> Page) ~> ()
-fun addLocatedRouteHandler(path,f) { unsafeAddRoute(path, fun(p, l){f(p, l)}) }
+fun addLocatedRouteHandler(path,f) { addLocatedRouteWithErrors(path, fun(p, l){f(p, l)}, defaultErrorPage) }
+
+sig addLocatedRouteWithErrors : (String, (String, Location) ~> Page, (String, String, Location) ~> Page) ~> ()
+fun addLocatedRouteWithErrors(path, f, error_handler) { unsafeAddRoute(path, f, error_handler) }
 
 sig serveThis : (() ~> Page) ~> ()
 fun serveThis(p) {

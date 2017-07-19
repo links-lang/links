@@ -26,6 +26,11 @@ module type EVALUATOR = sig
   val run_defs : Value.env -> Ir.binding list -> Value.env
 end
 
+module Exceptions = struct
+  exception EvaluationError of string
+  exception Wrong
+end
+
 module Evaluator = functor (ContEval : Value.CONTINUATION_EVALUATOR with type v = Value.t
                                                                     and type result = Proc.thread_result Lwt.t
                                                                     and type 'v t := 'v Value.Continuation.t)
@@ -40,10 +45,10 @@ struct
     module Eval = ContEval
   end
 
-  exception EvaluationError of string
-  exception Wrong
+(*  exception EvaluationError of string
+    exception Wrong*)
 
-  let error msg : 'a = raise (EvaluationError msg)
+  let error msg : 'a = raise (Exceptions.EvaluationError msg)
 
   let eval_error fmt : 'r =
     Printf.kprintf error fmt
@@ -441,11 +446,11 @@ struct
       unblock out2;
       apply_cont cont env (`Record [])
     (* end of session stuff *)
-    | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler] ->
+    | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler; error_handler] ->
        let path = Value.unbox_string pathv in
        let is_dir_handler = String.length path > 0 && path.[String.length path - 1] = '/' in
        let path = if String.length path == 0 || path.[0] <> '/' then "/" ^ path else path in
-       Webs.add_route is_dir_handler path (Right (env, handler));
+       Webs.add_route is_dir_handler path (Right {Webs.request_handler = (env, handler); Webs.error_handler = (env, error_handler)});
        apply_cont cont env (`Record [])
     | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv; mime_typesv] ->
        if not (!allow_static_routes) then
@@ -537,7 +542,7 @@ struct
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
   and special env (cont : continuation) : Ir.special -> result = function
-    | `Wrong _                    -> raise Wrong
+    | `Wrong _                    -> raise Exceptions.Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Table (db, name, keys, (readtype, _, _)) ->
       begin
@@ -720,12 +725,12 @@ struct
                                 " while interpreting.")
 end
 
-
 module type EVAL = functor (Webs : WEBSERVER) -> sig
     include EVALUATOR
 end
 module Eval : EVAL = functor (Webs : WEBSERVER) ->
 struct
+
   module rec Eval : EVALUATOR
     with type result = Proc.thread_result Lwt.t = Evaluator(Value.Continuation.Evaluation(Eval))(Webs)
   include Eval

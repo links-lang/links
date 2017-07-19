@@ -1572,7 +1572,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),
-     datatype "(String, (String, Location) ~> a) ~> ()",
+     datatype "(String, (String, Location) ~> a, (String, String, Location) ~> a) ~> ()",
      IMPURE);
     "servePages",
     (`PFun (fun _ -> assert false),
