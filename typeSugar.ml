@@ -495,7 +495,7 @@ end
                      tab() ^ code (show_type lt) ^ nl () ^
                        "but the return clause " ^ nl() ^
                          tab() ^ code ret ^ nl() ^
-                           "expects a computation whose return type is " ^ nl() ^
+                           "expects an expression that produces a value of type " ^ nl() ^
                              tab() ^ code (show_type rt))
 
     let handle_comp_effects ~pos ~t1:(hexpr, lt) ~t2:(handle, rt) ~error:_ =
