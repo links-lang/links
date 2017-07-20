@@ -191,16 +191,15 @@ sig
 
   val handle_patterns : griper
   val handle_branches : griper
-  val handle_computation : griper
-  val continuation_codomains : griper
-  val input_output_effect_rows : griper
-  val output_effect_row : griper
+  val handle_continuation_codomains : griper
   val continuation_effect_rows : griper
   val type_continuation : griper
   val type_continuation_with_annotation : griper
   val should_not_go_wrong : griper
   val handle_return : griper
   val handle_comp_effects : griper
+  val handle_unify_effect_rows : griper
+  val handle_intro_effects : griper
 
   val do_operation : griper
 
@@ -477,16 +476,6 @@ end
 		  "while the subsequent clauses have type" ^ nl() ^
 		  tab() ^ code (show_type rt))
 
-    let handle_computation ~pos ~t1:(_, lt) ~t2:(rexpr, rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("The inferred input type of the handler " ^ nl () ^
-		  tab() ^ code rexpr ^ nl() ^
-  		  "is " ^ nl() ^
-		  tab() ^ code (show_type rt) ^ nl() ^
-		  "but it is annotated with type" ^ nl() ^
-		  tab() ^ code (show_type lt)
-              )
-
     let handle_return ~pos ~t1:(hexpr, lt) ~t2:(ret, rt) ~error:_ =
       build_tyvar_names [lt;rt];
       die pos ("The inferred type of the handled expression " ^ nl () ^
@@ -506,26 +495,28 @@ end
                      tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
                        "but the handler " ^ nl() ^
                          tab() ^ code handle ^ nl() ^
-                           "expects an expression whose signature is compatible with " ^ nl() ^
+                           "expects an expression whose effect signature is compatible with " ^ nl() ^
                              tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
-    let input_output_effect_rows ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+    let handle_intro_effects ~pos ~t1:(_ctx, lt) ~t2:(_wild_ctx, rt) ~error:_ =
       build_tyvar_names [lt;rt];
-      die pos ("The input effect row " ^ nl() ^
-		  tab() ^ code (show_row (TypeUtils.extract_row lt)) ^ nl() ^
-		  "is not unifiable with output effect row" ^ nl() ^
-		  tab() ^ code (show_row (TypeUtils.extract_row rt))
-      )
+      die pos ("The handler introduces the following effects " ^ nl() ^
+                  tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
+                  "but this effect row cannot be unified with " ^ nl() ^
+                  tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
-    let output_effect_row ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+    let handle_unify_effect_rows ~pos ~t1:(inp, lt) ~t2:(out, rt) ~error:_ =
       build_tyvar_names [lt;rt];
-      die pos ("The current effect context " ^ nl() ^
-		  tab() ^ code (show_row (TypeUtils.extract_row lt)) ^ nl() ^
-		  "is not unifiable with" ^ nl() ^
-		  tab() ^ code (show_row (TypeUtils.extract_row rt))
-      )
+      die pos ("The inferred effect signature for the handled expression " ^ nl() ^
+                 tab() ^ code inp ^ nl() ^
+                   "is " ^ nl() ^
+                     tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
+                       "but it is incompatible with the handler " ^ nl() ^
+                         tab() ^ code out ^ nl() ^
+                           "whose inferred effect signature is " ^ nl() ^
+                             tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
-    let continuation_codomains ~pos ~t1:(kexpr,kt) ~t2:(_,body_type) ~error:_ =
+    let handle_continuation_codomains ~pos ~t1:(kexpr,kt) ~t2:(_,body_type) ~error:_ =
       build_tyvar_names [kt;body_type];
       die pos ("The codomain of continuation " ^ code kexpr ^ " has type" ^ nl() ^
 		  tab() ^ code (show_type kt) ^ nl() ^
@@ -3045,14 +3036,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
        (** Next, construct the (output) effect row for the handler *)
            let output_effect_row =
 	     let wild_effect_row = allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
-	     let _ = unify ~handle:Gripers.output_effect_row (no_pos (`Record context.effect_row), no_pos (`Record wild_effect_row)) in
+	     let _ = unify ~handle:Gripers.handle_intro_effects ((p, `Record context.effect_row), no_pos (`Record wild_effect_row)) in
 	     context.effect_row
            in
 
        (** Unify the input and output effect rows  *)
            let _ =
 	     let input_effect_row = make_operations_presence_polymorphic input_effect_row in
-	     unify ~handle:Gripers.input_output_effect_rows (no_pos (`Record input_effect_row), no_pos (`Record output_effect_row))
+	     unify ~handle:Gripers.handle_unify_effect_rows ((m_pos, `Record input_effect_row), (p, `Record output_effect_row))
            in
 
        (** Next, type continuation effect rows *)
@@ -3068,7 +3059,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	        let poly_presence_row = `Record (make_operations_presence_polymorphic output_effect_row) in
 	        List.fold_left
 	          (fun _ (k, ktail) ->
-	            unify ~handle:Gripers.continuation_codomains ((ppos_and_typ ktail), no_pos body_type);
+	            unify ~handle:Gripers.handle_continuation_codomains ((ppos_and_typ ktail), (p,body_type));
 	            unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
 	          )
 	          () ks
@@ -3093,7 +3084,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	        List.fold_left
 	          (fun _ (k,ktail) ->
                     unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k);
-		    unify ~handle:Gripers.continuation_codomains ((ppos_and_typ ktail), (p,t))
+		    unify ~handle:Gripers.handle_continuation_codomains ((ppos_and_typ ktail), (p,t))
 	          )
 	          () ks
            in
