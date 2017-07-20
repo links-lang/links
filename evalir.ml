@@ -45,9 +45,6 @@ struct
     module Eval = ContEval
   end
 
-(*  exception EvaluationError of string
-    exception Wrong*)
-
   let error msg : 'a = raise (Exceptions.EvaluationError msg)
 
   let eval_error fmt : 'r =
