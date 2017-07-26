@@ -213,6 +213,7 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
 %token TYPE ROW PRESENCE
+%token TRY OTHERWISE
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -748,6 +749,7 @@ page_placement:
 
 session_expression:
 | db_expression                                                { $1 }
+| TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8), pos () }
 | SELECT field_label exp                                       { `Select ($2, $3) , pos() }
 | OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { `Offer ($3, $6, None) , pos() }
 

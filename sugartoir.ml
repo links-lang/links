@@ -944,6 +944,7 @@ struct
           | `QualifiedVar _
           | `HandlerLit _
           | `DoOperation _
+          | `TryInOtherwise _ (* temp... *)
           | `CP _ ->
               Debug.print ("oops: " ^ Sugartypes.Show_phrasenode.show e);
               assert false
