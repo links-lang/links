@@ -664,7 +664,7 @@ struct
 
     let comp_in = reify c_in in
     let comp_otherwise = reify c_otherwise in
-    lift (`Special (`TryAsInOtherwise (comp_try, (bnd, comp_in), comp_otherwise)))
+    lift (`Special (`TryInOtherwise (comp_try, (bnd, comp_in), comp_otherwise)))
 
   let switch env (v, cases, t) =
     let cases =
@@ -975,7 +975,6 @@ struct
           | `QualifiedVar _
           | `HandlerLit _
           | `DoOperation _
-          | `TryInOtherwise _
           | `CP _ ->
               Debug.print ("oops: " ^ Sugartypes.Show_phrasenode.show e);
               assert false
