@@ -117,7 +117,7 @@ class pg_database host port dbname user password = object(self)
           failwith("PostgreSQL returned error: " ^Postgresql.string_of_error msg)
 	    )
   method escape_string s =
-    connection#escape_string s
+    connection#escape_string (String.escaped s)
   method quote_field f =
     "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" f ^ "\""
 
