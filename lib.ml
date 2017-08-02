@@ -1214,6 +1214,16 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype ("(String) ~> Int "),
     PURE));
 
+  ("strescape",
+   (p1 (function | `String s -> `String (String.escaped s) | _ -> failwith "Internal error: strescape got wrong arguments"),
+   datatype ("(String) ~> String "),
+   IMPURE));
+
+  ("strunescape",
+   (p1 (function | `String s -> `String (Scanf.unescaped s) | _ -> failwith "Internal error: strunescape got wrong arguments"),
+   datatype ("(String) ~> String "),
+   IMPURE));
+
   ("implode",
    (p1 (fun l ->
 		   let chars = List.map unbox_char (unbox_list l) in
