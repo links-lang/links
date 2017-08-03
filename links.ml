@@ -16,7 +16,7 @@ type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  if not (Settings.get_value Basicsettings.print_pretty) (* Settings.get_value Basicsettings.web_mode || not (Settings.get_value Basicsettings.print_pretty || Settings.get_value Basicsettings.interacting) *)
+  if Settings.get_value Basicsettings.web_mode || not (Settings.get_value Basicsettings.print_pretty || Settings.get_value Basicsettings.interacting)
   then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get_value(BS.printing_types) then
@@ -32,9 +32,7 @@ let print_value rtype value =
     pp_set_formatter_tag_functions
       std_formatter
       {mark_open_tag = (function
-                        | "xmltag" -> "\x1b[32m"
                         | "constructor" -> "\x1b[32m"
-                        | "xmlattr" -> "\x1b[35m"
                         | "recordlabel" -> "\x1b[35m"
                         (* | "string" -> "\x1b[36m" *)
                         | _ -> "");

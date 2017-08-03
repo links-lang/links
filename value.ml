@@ -510,29 +510,27 @@ and p_xml ?(close_tags=false) ppf = fun (xml: xml) ->
   pp_print_list (p_xmlitem ~close_tags:close_tags) ppf xml
 and p_xmlitem ?(close_tags=false) ppf: xmlitem -> unit = function
   | Attr (k, v) -> let escape = Str.global_replace (Str.regexp "\"") "\\\"" in
-                   fprintf ppf "@{<xmlattr>%s@}=\"%s\"" k (escape v)
+                   fprintf ppf "%s=\"%s\"" k (escape v)
   | Text s -> fprintf ppf "%s" (xml_escape s)
   | Node (tag, children) ->
      begin
        match attrs children, nodes children with
        | [], [] when not close_tags ->
-          fprintf ppf "<@{<xmltag>%s@}/>" tag
+          fprintf ppf "<%s/>" tag
        | attrs, [] when not close_tags ->
-          fprintf ppf "@[<hv 2><@{<xmltag>%s@}@ @[<hv>%a@]/>@]"
+          fprintf ppf "<%s %a/>"
                   tag
                   (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
        | [], nodes ->
-          fprintf ppf "@[<hv 2><@{<xmltag>%s@}>%a@;<0 -2></@{<xmltag>%s@}>@]"
+          fprintf ppf "<%s>%a</%s>"
                   tag
                   (p_xml ~close_tags:close_tags) nodes
-                  (* (pp_print_list (p_xml ~close_tags:close_tags)) nodes *)
                   tag
        | attrs, nodes ->
-          fprintf ppf "@[<hv 4><@{<xmltag>%s@}@;<1 -2>@[<hv>%a@]>%a@;<0 -4></@{<xmltag>%s@}>@]"
+          fprintf ppf "<%s %a>%a</%s>"
                   tag
                   (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
                   (p_xml ~close_tags:close_tags) nodes
-                  (* (pp_print_list (p_xml ~close_tags:close_tags)) nodes *)
                   tag
      end
 
