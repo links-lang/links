@@ -522,13 +522,13 @@ and p_xmlitem ?(close_tags=false) ppf: xmlitem -> unit = function
                   tag
                   (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
        | [], nodes ->
-          fprintf ppf "@[<hv 4><@{<xmltag>%s@}>@,%a@;<0 -4></@{<xmltag>%s@}>@]"
+          fprintf ppf "@[<hv 2><@{<xmltag>%s@}>%a@;<0 -2></@{<xmltag>%s@}>@]"
                   tag
                   (p_xml ~close_tags:close_tags) nodes
                   (* (pp_print_list (p_xml ~close_tags:close_tags)) nodes *)
                   tag
        | attrs, nodes ->
-          fprintf ppf "@[<hv 4><@{<xmltag>%s@}@;<1 -2>@[<hv>%a@]>@,%a@;<0 -4></@{<xmltag>%s@}>@]"
+          fprintf ppf "@[<hv 4><@{<xmltag>%s@}@;<1 -2>@[<hv>%a@]>%a@;<0 -4></@{<xmltag>%s@}>@]"
                   tag
                   (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
                   (p_xml ~close_tags:close_tags) nodes

@@ -16,7 +16,7 @@ type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  if Settings.get_value Basicsettings.web_mode || not (Settings.get_value Basicsettings.print_pretty || Settings.get_value Basicsettings.interacting)
+  if not (Settings.get_value Basicsettings.print_pretty) (* Settings.get_value Basicsettings.web_mode || not (Settings.get_value Basicsettings.print_pretty || Settings.get_value Basicsettings.interacting) *)
   then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get_value(BS.printing_types) then
