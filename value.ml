@@ -232,6 +232,7 @@ and t = [
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
+| `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of continuation
 | `Pid of dist_pid
@@ -304,6 +305,7 @@ and compressed_t = [
 | `Variant of string * compressed_t
 | `FunctionPtr of (Ir.var * compressed_t option)
 | `PrimitiveFunction of string
+| `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of compressed_continuation ]
 and compressed_env = (Ir.var * compressed_t) list
@@ -345,6 +347,7 @@ and compress_t (v : t) : compressed_t =
       | `FunctionPtr(x, fvs) ->
         `FunctionPtr (x, opt_map compress_t fvs)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
+      | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
       | `Pid _ -> assert false (* mmmmm *)
@@ -398,6 +401,7 @@ and uncompress_t globals (v : compressed_t) : t =
       | `Variant (name, v) -> `Variant (name, uv v)
       | `FunctionPtr (x, fvs) -> `FunctionPtr (x, opt_map uv fvs)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
+      | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
 and uncompress_env globals env : env =
@@ -436,6 +440,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
                p_list_elements ppf l
+  | `ClientDomRef i -> fprintf ppf "%i" i
   | `ClientFunction n -> fprintf ppf "%s" n
   | `PrimitiveFunction (name, _op) -> fprintf ppf "%s" name
   | `Variant (label, `Record []) -> fprintf ppf "@{<constructor>%s@}" label
