@@ -81,6 +81,7 @@ let rec jsonize_value' : Value.t -> json_string =
         ", \"environment\":" ^ s in
     "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
     " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}"
+  | `ClientDomRef i -> "{\"_domRefKey\":" ^ (string_of_int i) ^ "}"
   | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) ->

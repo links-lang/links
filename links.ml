@@ -31,9 +31,7 @@ let print_value rtype value =
     pp_set_formatter_tag_functions
       std_formatter
       {mark_open_tag = (function
-                        | "xmltag" -> "\x1b[32m"
                         | "constructor" -> "\x1b[32m"
-                        | "xmlattr" -> "\x1b[35m"
                         | "recordlabel" -> "\x1b[35m"
                         (* | "string" -> "\x1b[36m" *)
                         | _ -> "");

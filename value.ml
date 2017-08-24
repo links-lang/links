@@ -626,6 +626,7 @@ type t = [
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
+| `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of continuation
 | `ReifiedContinuation of continuation
@@ -657,6 +658,7 @@ and compressed_t = [
 | `Variant of string * compressed_t
 | `FunctionPtr of (Ir.var * compressed_t option)
 | `PrimitiveFunction of string
+| `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of compressed_continuation
 | `ReifiedContinuation of compressed_continuation ]
@@ -681,6 +683,7 @@ and compress_val (v : t) : compressed_t =
       | `FunctionPtr(x, fvs) ->
         `FunctionPtr (x, opt_map cv fvs)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
+      | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
       | `ReifiedContinuation cont -> `ReifiedContinuation (compress_continuation cont)
@@ -717,6 +720,7 @@ and uncompress_val globals (v : compressed_t) : t =
       | `Variant (name, v) -> `Variant (name, uv v)
       | `FunctionPtr (x, fvs) -> `FunctionPtr (x, opt_map uv fvs)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
+      | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
       | `ReifiedContinuation cont -> `ReifiedContinuation (uncompress_continuation globals cont)
@@ -748,6 +752,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
                p_list_elements ppf l
+  | `ClientDomRef i -> fprintf ppf "%i" i
   | `ClientFunction n -> fprintf ppf "%s" n
   | `PrimitiveFunction (name, _op) -> fprintf ppf "%s" name
   | `Variant (label, `Record []) -> fprintf ppf "@{<constructor>%s@}" label
@@ -817,29 +822,27 @@ and p_xml ?(close_tags=false) ppf = fun (xml: xml) ->
   pp_print_list (p_xmlitem ~close_tags:close_tags) ppf xml
 and p_xmlitem ?(close_tags=false) ppf: xmlitem -> unit = function
   | Attr (k, v) -> let escape = Str.global_replace (Str.regexp "\"") "\\\"" in
-                   fprintf ppf "@{<xmlattr>%s@}=\"%s\"" k (escape v)
+                   fprintf ppf "%s=\"%s\"" k (escape v)
   | Text s -> fprintf ppf "%s" (xml_escape s)
   | Node (tag, children) ->
      begin
        match attrs children, nodes children with
        | [], [] when not close_tags ->
-          fprintf ppf "<@{<xmltag>%s@}/>" tag
+          fprintf ppf "<%s/>" tag
        | attrs, [] when not close_tags ->
-          fprintf ppf "@[<hv 2><@{<xmltag>%s@}@ @[<hv>%a@]/>@]"
+          fprintf ppf "<%s %a/>"
                   tag
                   (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
        | [], nodes ->
-          fprintf ppf "@[<hv 4><@{<xmltag>%s@}>@,%a@;<0 -4></@{<xmltag>%s@}>@]"
+          fprintf ppf "<%s>%a</%s>"
                   tag
                   (p_xml ~close_tags:close_tags) nodes
-                  (* (pp_print_list (p_xml ~close_tags:close_tags)) nodes *)
                   tag
        | attrs, nodes ->
-          fprintf ppf "@[<hv 4><@{<xmltag>%s@}@;<1 -2>@[<hv>%a@]>@,%a@;<0 -4></@{<xmltag>%s@}>@]"
+          fprintf ppf "<%s %a>%a</%s>"
                   tag
                   (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
                   (p_xml ~close_tags:close_tags) nodes
-                  (* (pp_print_list (p_xml ~close_tags:close_tags)) nodes *)
                   tag
      end
 
