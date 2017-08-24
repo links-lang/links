@@ -3,9 +3,6 @@ dist: trusty
 language: c
 services:
   - postgresql
-cache:
-  directories:
-  - $HOME/.opam
 before_install:
   - sudo add-apt-repository -y ppa:avsm/ppa
   - sudo apt-get -qq update
@@ -13,8 +10,6 @@ before_install:
   - opam init -a
   - opam switch 4.04.0
   - eval `opam config env`
-  - opam update
-  - opam upgrade -y
   - psql -c 'create database links;' -U postgres
 install:
   - opam pin add links-dev . -n -y
