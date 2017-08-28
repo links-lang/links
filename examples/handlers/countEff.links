@@ -21,7 +21,7 @@ fun run(n) client {
 
 
 # Page
-fun mainPage(_,_) {
+fun mainPage(_) {
   page
     <html>
       <body>
