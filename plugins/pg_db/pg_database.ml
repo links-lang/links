@@ -159,7 +159,7 @@ class pg_database host port dbname user password = object(self)
                               vss) ^ " returning " ^ self#quote_field returning]
 end
 
-let driver_name = "postgresql" 
+let driver_name = "postgresql"
 
 let get_pg_database_by_string args =
   match Utility.split_string args ':' with

@@ -11,28 +11,15 @@ type shadow_table = string list stringmap
 
 let try_parse_file filename =
   (* First, get the list of directories, with trailing slashes stripped *)
-  let check_n_chop path =
-    let dir_sep = Filename.dir_sep in
-    if Filename.check_suffix path dir_sep then
-      Filename.chop_suffix path dir_sep else path in
-
-  let poss_stdlib_dir =
-    let stdlib_path = Settings.get_value Basicsettings.stdlib_path in
-    if Settings.get_value Basicsettings.use_stdlib then
-      if stdlib_path <> "" then
-        [check_n_chop stdlib_path]
-      else
-        (* Otherwise, follow the same logic as for the prelude.
-         * Firstly, check the current directory.
-         * Secondly, check OPAM *)
-        let chopped_path = check_n_chop @@ Basicsettings.locate_file "stdlib" in
-        [Filename.concat chopped_path "stdlib"]
-    else [] in
-
   let poss_dirs =
     let path_setting = Settings.get_value Basicsettings.links_file_paths in
     let split_dirs = Str.split (Str.regexp path_sep) path_setting in
-    "" :: "." :: poss_stdlib_dir @ (List.map (check_n_chop) split_dirs) in
+    "" :: "." :: (List.map (fun path ->
+      let dir_sep = Filename.dir_sep in
+      if Filename.check_suffix path dir_sep then
+        Filename.chop_suffix path dir_sep
+      else
+        path) split_dirs) in
 
   (* Loop through, trying to open the module with each path *)
   let rec loop = (function
@@ -45,6 +32,7 @@ let try_parse_file filename =
         else
           loop xs) in
   loop poss_dirs
+
 
 let has_no_modules =
 object

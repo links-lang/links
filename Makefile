@@ -2,36 +2,16 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix websocket websocket.lwt websocket.cohttp ANSITerminal
+PACKS=str deriving.syntax deriving.syntax.classes 	\
+	deriving.runtime lwt lwt.syntax lwt.unix cgi 	\
+	base64 cohttp cohttp.lwt unix websocket 		\
+	websocket.lwt websocket.cohttp ANSITerminal		\
+	dynlink
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
 
-POSTGRESQL_LIBDIR=$(shell ocamlfind query postgresql)
-SQLITE3_LIBDIR=$(shell ocamlfind query sqlite3)
-MYSQL_LIBDIR=$(shell ocamlfind query mysql)
-
-ifneq ($(SQLITE3_LIBDIR),)
-   DB_CODE    += lite3_database.ml
-   DB_AUXLIBS += $(SQLITE3_LIBDIR)
-   DB_CLIBS   += sqlite3
-   DB_LIBS    += sqlite3
-endif
-
-ifneq ($(MYSQL_LIBDIR),)
-   DB_CODE    += mysql_database.ml
-   DB_AUXLIBS += $(MYSQL_LIBDIR)
-   DB_LIBS    += mysql
-endif
-
-ifneq ($(POSTGRESQL_LIBDIR),)
-   DB_CODE    += pg_database.ml
-   DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
-   DB_LIBS    += postgresql
-   THREADS = yes
-endif
-
-AUXLIB_DIRS = $(DB_AUXLIBS)
+THREADS = yes
 
 ifdef PROF
 OCAMLOPT := ocamlopt -p -inline 0
@@ -121,7 +101,6 @@ SOURCES = $(OPC)                                \
 	  lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
-          $(DB_CODE)                            \
           irtojs.mli irtojs.ml                  \
           query.mli query.ml                              \
           queryshredding.ml                     \
@@ -131,6 +110,7 @@ SOURCES = $(OPC)                                \
           buildTables.ml                        \
           webif.mli webif.ml                    \
 	  webserver.ml                          \
+	  	  dynload.ml 						\
           links.ml                              \
 
 # TODO: get these working again
@@ -138,14 +118,10 @@ SOURCES = $(OPC)                                \
 #          test.ml                               \
 #          tests.ml                              \
 
-
-LIBS    = $(DB_LIBS)
-
 RESULT  = links
-CLIBS 	= $(DB_CLIBS)
 
-INCDIRS = $(AUXLIB_DIRS) $(EXTRA_INCDIRS)
-LIBDIRS = $(AUXLIB_DIRS) $(EXTRA_LIBDIRS)
+INCDIRS = $(EXTRA_INCDIRS)
+LIBDIRS = $(EXTRA_LIBDIRS)
 
 include $(OCAMLMAKEFILE)
 

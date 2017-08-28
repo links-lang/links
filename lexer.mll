@@ -1,32 +1,23 @@
 (*
   We can't tokenize Links using an FSM because of the following
   combination of properties:
-
   1. XML literals must be tokenized differently from regular code.
      For example, most operator characters in Links have no special
      meaning when they occur in an XML literal.
-
   2. An XML literal can contain nested Links expressions (using the
      "unquote" characters '{' and '}').
-
   3. Links code can contain nested XML literals.
-
   4. XML literal elements can contain other XML literal elements.
-
   5. Braces can be arbitrarily nested within Links code.
-
   We therefore need the power of a PDA.  This is achieved by
   maintaining a stack of lexers, which is manipulated by the semantic
   actions.  The particularly notable manipulations are:
-
   1. On encountering '{' we push an expression lexer onto the stack.
      On encountering '}' we pop the lexer, and carry on lexing in
      the "mode" we were in before.
-
   2. On encountering the start of an XML literal we push an xml lexer.
      On encountering an XML closing tag we pop the lexer and carry on
      lexing in the "mode" we were in before.
-
   There are some other details (involving start tags and attributes)
   that are handled similarly to the above.
 *)
@@ -244,7 +235,6 @@ let opchar = [ '.' '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' ]
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack
    will be called next;  when each action starts it's the current lexer.
-
    Each rule takes two arguments: the currently operative precedence
    table and the stack.
 *)
@@ -366,9 +356,9 @@ and regex' ctxt nl = parse
   | eof                                 { END }
   | '/'                                 { ctxt#push_lexer (regex ctxt nl); SLASH }
   | "s/"                                { ctxt#push_lexer (regexrepl ctxt nl); (* push twice is intentional *)
-					  ctxt#push_lexer (regexrepl ctxt nl);
-					  ctxt#push_lexer (regex ctxt nl);
-					  SSLASH }
+            ctxt#push_lexer (regexrepl ctxt nl);
+            ctxt#push_lexer (regex ctxt nl);
+            SSLASH }
   | '#' ([^ '\n'] *)                    { regex' ctxt nl lexbuf }
   | '\n'                                { nl (); bump_lines lexbuf 1; regex' ctxt nl lexbuf }
   | def_blank                           { regex' ctxt nl lexbuf }

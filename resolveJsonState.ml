@@ -14,8 +14,7 @@ let rec event_handlers_from_value : Value.t -> handler_id_set =
 
   (* Empties *)
   | `List [] | `SpawnLocation _ | `Pid _
-  | `AccessPointID _ | `ClientDomRef _
-  | `ClientFunction _ | `SessionChannel _ -> empty_state
+  | `AccessPointID _ | `ClientFunction _ | `SessionChannel _ -> empty_state
 
   (* Homomorphisms *)
   | `FunctionPtr (_f, fvs) ->
