@@ -48,7 +48,7 @@ and row_values db = function
 (*   | r -> failwith ("Internal error: forming query from non-row: "^string_of_value r)  *)
 
 type primitive =
-[ Value.t
+[ t
 | `PFun of RequestData.request_data -> Value.t list -> Value.t ]
 
 type pure = PURE | IMPURE
@@ -208,7 +208,7 @@ let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
 let prelude_tyenv = ref None (* :-( *)
 let prelude_nenv = ref None (* :-( *)
 
-let env : (string * (located_primitive * Types.datatype * pure)) list = [
+let env : (string * (located_primitive * Types.datatype * pure)) list ref = ref [
   "+", int_op (+) PURE;
   "-", int_op (-) PURE;
   "*", int_op ( * ) PURE;
@@ -1214,16 +1214,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype ("(String) ~> Int "),
     PURE));
 
-  ("strescape",
-   (p1 (function | `String s -> `String (String.escaped s) | _ -> failwith "Internal error: strescape got wrong arguments"),
-   datatype ("(String) ~> String "),
-   IMPURE));
-
-  ("strunescape",
-   (p1 (function | `String s -> `String (Scanf.unescaped s) | _ -> failwith "Internal error: strunescape got wrong arguments"),
-   datatype ("(String) ~> String "),
-   IMPURE));
-
   ("implode",
    (p1 (fun l ->
 		   let chars = List.map unbox_char (unbox_list l) in
@@ -1580,7 +1570,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),
-     datatype "(String, (String, Location) ~> a, (String, String, Location) ~> a) ~> ()",
+     datatype "(String, (String, Location) ~> a) ~> ()",
      IMPURE);
     "servePages",
     (`PFun (fun _ -> assert false),
@@ -1613,60 +1603,113 @@ let impl : located_primitive -> primitive option = function
   | `Server p
   | (#primitive as p) -> Some p
 
-let nenv =
+let nenv = ref (
   List.fold_left
     (fun nenv (n, _) -> Env.String.bind nenv (n, Var.fresh_raw_var ()))
     Env.String.empty
-    env
+    !env )
 
-let venv =
+let venv = ref (
   Env.String.fold
     (fun name var venv ->
        Env.Int.bind venv (var, name))
-    nenv
-    Env.Int.empty
+    !nenv
+    Env.Int.empty )
 
-let value_env : primitive option Env.Int.t =
+let value_env : primitive option Env.Int.t ref = ref (
   List.fold_right
     (fun (name, (p, _, _)) env ->
-       Env.Int.bind env (Env.String.lookup nenv name, impl p))
-    env
-    Env.Int.empty
+       Env.Int.bind env (Env.String.lookup !nenv name, impl p))
+    !env
+    Env.Int.empty )
 
-let maxvar =
+let maxvar = ref (
   Env.String.fold
     (fun _name var x -> max var x)
-    nenv 0
+    !nenv 0 )
 
-let minvar =
+let minvar = ref (
   Env.String.fold
     (fun _name var x -> min var x)
-    nenv maxvar
+    !nenv !maxvar )
 
-let value_array : primitive option array =
-  let array = Array.make (maxvar+1) None in
+let value_array : primitive option array ref = ref (
+  let array = Array.make (!maxvar+1) None in
   List.iter (fun (name, (p, _, _)) ->
-    Array.set array (Env.String.lookup nenv name) (impl p)) env;
-  array
+    Array.set array (Env.String.lookup !nenv name) (impl p)) !env;
+  array )
 
 let is_primitive_var var =
-  minvar <= var && var <= maxvar
+  !minvar <= var && var <= !maxvar
 
-let type_env : Types.environment =
-  List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
+let type_env : Types.environment ref = ref (
+  List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) !env Env.String.empty )
 
-let typing_env = {Types.var_env = type_env;
+let typing_env = ref ( {Types.var_env = !type_env;
                   tycon_env = alias_env;
-                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}
+                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)} )
 
-let primitive_names = StringSet.elements (Env.String.domain type_env)
+let primitive_names = ref ( StringSet.elements (Env.String.domain !type_env) )
 
-let primitive_vars = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty
+let primitive_vars = ref ( Env.String.fold (fun _name var vars -> IntSet.add var vars) !nenv IntSet.empty )
 
-let primitive_name = Env.Int.lookup venv
+let primitive_name = ref ( Env.Int.lookup !venv )
+
+(* re-calculate env-related variables -- Yuren *)
+let re_cal_env () = 
+  nenv := (
+  List.fold_left
+    (fun nenv (n, _) -> Env.String.bind nenv (n, Var.fresh_raw_var ()))
+    Env.String.empty
+    !env );
+
+  venv := (
+  Env.String.fold
+    (fun name var venv ->
+       Env.Int.bind venv (var, name))
+    !nenv
+    Env.Int.empty );
+
+  value_env := (
+  List.fold_right
+    (fun (name, (p, _, _)) env ->
+       Env.Int.bind env (Env.String.lookup !nenv name, impl p))
+    !env
+    Env.Int.empty );
+
+  maxvar := (
+  Env.String.fold
+    (fun _name var x -> max var x)
+    !nenv 0 );
+
+  minvar := (
+  Env.String.fold
+    (fun _name var x -> min var x)
+    !nenv !maxvar );
+
+  value_array := (
+  let array = Array.make (!maxvar+1) None in
+  List.iter (fun (name, (p, _, _)) ->
+    Array.set array (Env.String.lookup !nenv name) (impl p)) !env;
+  array );
+
+  type_env := (
+  List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) !env Env.String.empty );
+
+  typing_env := ( {Types.var_env = !type_env;
+                  tycon_env = alias_env;
+                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)} );
+
+  primitive_names := ( StringSet.elements (Env.String.domain !type_env) );
+
+  primitive_vars := ( Env.String.fold (fun _name var vars -> IntSet.add var vars) !nenv IntSet.empty );
+
+  primitive_name := ( Env.Int.lookup !venv );
+
+  ()
 
 let primitive_location (name:string) =
-  match fst3 (List.assoc name env) with
+  match fst3 (List.assoc name !env) with
     | `Client ->  `Client
     | `Server _ -> `Server
     | #primitive -> `Unknown
@@ -1679,17 +1722,17 @@ let rec function_arity =
     | _ -> None
 
 let primitive_arity (name : string) =
-  let _, t, _ = assoc name env in
+  let _, t, _ = assoc name !env in
     function_arity t
 
 (*let primitive_by_code var = Env.Int.lookup value_env var*)
 (* use array instead? seems faster for primop-intensive code *)
-let primitive_by_code var = Array.get value_array var
+let primitive_by_code var = Array.get !value_array var
 
 
 
 let primitive_stub (name : string) : Value.t =
-  match Env.String.find nenv name with
+  match Env.String.find !nenv name with
     | Some var ->
         begin
           match primitive_by_code var with
@@ -1701,7 +1744,7 @@ let primitive_stub (name : string) : Value.t =
 
 (* jcheney: added to avoid Env.String.lookup *)
 let primitive_stub_by_code (var : Var.var) : Value.t =
-  let name = Env.Int.lookup venv var in
+  let name = Env.Int.lookup !venv var in
   match primitive_by_code var with
   | Some (#Value.t as r) -> r
   | Some _ -> `PrimitiveFunction (name,Some var)
@@ -1719,15 +1762,15 @@ let apply_pfun_by_code var args req_data =
 
 
 let apply_pfun name args req_data =
-  match Env.String.find nenv name with
+  match Env.String.find !nenv name with
     | Some var -> apply_pfun_by_code var args req_data
     | None -> assert false
 
-let is_primitive name = List.mem_assoc name env
+let is_primitive name = List.mem_assoc name !env
 
 let is_pure_primitive name =
-  if List.mem_assoc name env then
-    match List.assoc name env with
+  if List.mem_assoc name !env then
+    match List.assoc name !env with
       | (_, _, PURE) -> true
       | _ -> false
   else
@@ -1735,7 +1778,7 @@ let is_pure_primitive name =
 
 (** Construct IR for application of the primitive [name] to the
     arguments [args]. *)
-let prim_appln name args = `Apply(`Variable(Env.String.lookup nenv name),
+let prim_appln name args = `Apply(`Variable(Env.String.lookup !nenv name),
                                   args)
 
 let cohttp_server_response headers body req_data =
