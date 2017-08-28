@@ -539,7 +539,7 @@ let whole_program_caching_main () =
    Webif.serve_request envs prelude filename
 
 let construct_plugin_name x = 
-  "/home/harvey/dynlinx/ocamllib/ocaml_" ^ x ^ ".cmxs"
+  "/home/harvey/links/plugins/ocamllib/ocaml_" ^ x ^ ".cmxs"
 
 let rec load_builtin_function lst = 
   match lst with

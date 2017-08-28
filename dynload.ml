@@ -6,7 +6,9 @@ module StrS = Set.Make(String)
 module StrMM = MoreLabels.Map.Make(String)
 module StrMS  = MoreLabels.Set.Make(String)
 
-
+(* reference all Ocaml standard libraries, otherwise Dynlink.loadfile may encounter errors.
+   -linkall fails because some modules(not in standard libraries) define same names.
+   Better update this part if Ocaml standard libraries are modified. *)
 let _ = 
 	let _ = Arg.parse in
 	let _ = Array.get in
