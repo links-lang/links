@@ -213,8 +213,6 @@ object_:
                             | ["_serverFunc", id; "_env", fvs]
                             | ["_env", fvs; "_serverFunc", id] ->
                               `FunctionPtr(Value.unbox_int id, Some fvs)
-                            | ["_domRefKey", id] ->
-                              `ClientDomRef(Value.unbox_int id)
                             | _ -> `Record (List.rev $2)
                         }
 

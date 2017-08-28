@@ -61,7 +61,7 @@ struct
   end
 
   let primitives scopes =
-    IntSet.iter (fun x -> Hashtbl.add scopes x `Global) Lib.primitive_vars
+    IntSet.iter (fun x -> Hashtbl.add scopes x `Global) !Lib.primitive_vars
 
   let bindings tyenv scopes cont_defs bs =
     let _ = (new visitor tyenv scopes cont_defs)#bindings bs in ()

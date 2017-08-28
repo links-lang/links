@@ -374,7 +374,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Constant (`String _) -> Types.string_type
       | `Project (`Var (_, field_types), name) -> StringMap.find name field_types
       | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
-      | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
+      | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup !Lib.type_env f)
       | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
 
 let default_of_base_type = Query.default_of_base_type
@@ -520,7 +520,7 @@ struct
         | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
         | None, None ->
           begin
-            try expression_of_value (Lib.primitive_stub (Lib.primitive_name var)) with
+            try expression_of_value (Lib.primitive_stub (!Lib.primitive_name var)) with
             | NotFound _ -> failwith ("Variable " ^ string_of_int var ^ " not found");
           end
       end
@@ -529,7 +529,7 @@ struct
   let lookup_lib_fun (val_env, _exp_env) var =
     match Value.lookup var val_env with
       | Some v -> expression_of_value v
-      | None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
+      | None -> expression_of_value (Lib.primitive_stub (!Lib.primitive_name var))
 
   let eta_expand_var (x, field_types) =
     `Record

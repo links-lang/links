@@ -32,7 +32,9 @@ let print_value rtype value =
     pp_set_formatter_tag_functions
       std_formatter
       {mark_open_tag = (function
+                        | "xmltag" -> "\x1b[32m"
                         | "constructor" -> "\x1b[32m"
+                        | "xmlattr" -> "\x1b[35m"
                         | "recordlabel" -> "\x1b[35m"
                         (* | "string" -> "\x1b[36m" *)
                         | _ -> "");
@@ -81,8 +83,8 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
     else program
   in
 
-  let program = Closures.program tenv Lib.primitive_vars program in
-  BuildTables.program tenv Lib.primitive_vars program;
+  let program = Closures.program tenv !Lib.primitive_vars program in
+  BuildTables.program tenv !Lib.primitive_vars program;
   let (globals, _) = program in
   Webserver.init (valenv, nenv, tyenv) globals;
 
@@ -143,12 +145,12 @@ let rec directives
             (fun k s () ->
                Printf.fprintf stderr "typename %s = %s\n" k
                  (Types.string_of_tycon_spec s))
-            (Lib.typing_env.Types.tycon_env) ();
+            (!Lib.typing_env.Types.tycon_env) ();
           StringSet.iter (fun n ->
-                            let t = Env.String.lookup Lib.type_env n in
+                            let t = Env.String.lookup !Lib.type_env n in
                               Printf.fprintf stderr " %-16s : %s\n"
                                 n (Types.string_of_datatype t))
-            (Env.String.domain Lib.type_env)),
+            (Env.String.domain !Lib.type_env)),
      "list builtin functions and values");
 
     "quit",
@@ -162,7 +164,7 @@ let rec directives
                Printf.fprintf stderr " %-16s : %s\n" k
                  (Types.string_of_datatype t))
           (StringSet.diff (Env.String.domain typeenv)
-             (Env.String.domain Lib.type_env));
+             (Env.String.domain !Lib.type_env));
         envs),
      "display the current type environment");
 
@@ -172,7 +174,7 @@ let rec directives
                           let s = Env.String.lookup tycon_env k in
                             Printf.fprintf stderr " %s = %s\n" k
                               (Types.string_of_tycon_spec s))
-          (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
+          (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain !Lib.typing_env.Types.tycon_env));
         envs),
      "display the current type alias environment");
 
@@ -381,7 +383,7 @@ let evaluate_string_in envs v =
 let load_prelude () =
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
-       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
+       (Loader.load_file (!Lib.nenv, !Lib.typing_env)) (Settings.get_value BS.prelude_file))
   in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
@@ -389,17 +391,17 @@ let load_prelude () =
   Lib.prelude_tyenv := Some tyenv;
   Lib.prelude_nenv := Some nenv;
 
-  let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
+  let tenv = (Var.varify_env (!Lib.nenv, !Lib.typing_env.Types.var_env)) in
 
-  let globals = Closures.bindings tenv Lib.primitive_vars globals in
+  let globals = Closures.bindings tenv !Lib.primitive_vars globals in
   (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
-  BuildTables.bindings tenv Lib.primitive_vars globals;
+  BuildTables.bindings tenv !Lib.primitive_vars globals;
 
   let valenv = Eval.run_defs Value.empty_env globals in
   let envs =
     (valenv,
-     Env.String.extend Lib.nenv nenv,
-     Types.extend_typing_environment Lib.typing_env tyenv)
+     Env.String.extend !Lib.nenv nenv,
+     Types.extend_typing_environment !Lib.typing_env tyenv)
   in
     globals, envs
 
@@ -408,7 +410,7 @@ let cache_load_prelude () =
   let (nenv, tyenv), (globals, _, _) =
     (Errors.display_fatal
        (Loader.wpcache "prelude.ir")
-	  (fun () -> Loader.read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value BS.prelude_file)))
+	  (fun () -> Loader.read_file_source (!Lib.nenv, !Lib.typing_env) (Settings.get_value BS.prelude_file)))
   in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
@@ -422,8 +424,8 @@ let cache_load_prelude () =
     let valenv = Eval.run_defs Value.empty_env globals in
     let envs =
       (valenv,
-       Env.String.extend Lib.nenv nenv,
-       Types.extend_typing_environment Lib.typing_env tyenv)
+       Env.String.extend !Lib.nenv nenv,
+       Types.extend_typing_environment !Lib.typing_env tyenv)
     in
     globals, envs)
 
@@ -446,6 +448,8 @@ let print_keywords =
   Some (fun () -> List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0)
 
 let config_file   : string option ref = ref BS.config_file_path
+let database_file : string ref = ref ""
+let function_file : string list ref = ref []
 let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
@@ -467,6 +471,8 @@ let options : opt list =
     (noshort, "print-keywords",      print_keywords,                   None);
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
+    (noshort, "database",            None,                             Some (fun name -> database_file := name));
+    (noshort, "builtin_func",        None,                             Some (fun name -> function_file := List.append (!function_file) (String.split_on_char ',' name)));
     ]
 
 let file_list = ref []
@@ -532,6 +538,14 @@ let whole_program_caching_main () =
   in
    Webif.serve_request envs prelude filename
 
+let construct_plugin_name x = 
+  "/home/harvey/dynlinx/ocamllib/ocaml_" ^ x ^ ".cmxs"
+
+let rec load_builtin_function lst = 
+  match lst with
+  | [] -> ()
+  | x :: xs -> (Dynload.load (construct_plugin_name x); load_builtin_function xs)
+
 let _ =
 (* parse common cmdline arguments and settings *)
   begin match Utility.getenv "REQUEST_METHOD" with
@@ -544,6 +558,14 @@ let _ =
 
   (match !config_file with None -> ()
      | Some file -> Settings.load_file file);
+
+  (match !database_file with "" -> ()
+      | name -> Dynload.load name);
+
+  (match !function_file with [] -> ()
+      | name_lst -> (
+        load_builtin_function name_lst;
+        Lib.re_cal_env () ));
 
   if Settings.get_value BS.cache_whole_program
   then whole_program_caching_main ()
