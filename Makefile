@@ -1,151 +1,12 @@
 -include ./Makefile.config
 
-OCAMLMAKEFILE = ./OCamlMakefile
+LINKSBASEMAKEFILE = ./Makefile.shared
+include $(LINKSBASEMAKEFILE)
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix websocket websocket.lwt websocket.cohttp ANSITerminal
-export OCAMLFLAGS=-syntax camlp4o
-
-PATH := $(PATH):deriving
-
-POSTGRESQL_LIBDIR=$(shell ocamlfind query postgresql)
-SQLITE3_LIBDIR=$(shell ocamlfind query sqlite3)
-MYSQL_LIBDIR=$(shell ocamlfind query mysql)
-
-ifneq ($(SQLITE3_LIBDIR),)
-   DB_CODE    += lite3_database.ml
-   DB_AUXLIBS += $(SQLITE3_LIBDIR)
-   DB_CLIBS   += sqlite3
-   DB_LIBS    += sqlite3
-endif
-
-ifneq ($(MYSQL_LIBDIR),)
-   DB_CODE    += mysql_database.ml
-   DB_AUXLIBS += $(MYSQL_LIBDIR)
-   DB_LIBS    += mysql
-endif
-
-ifneq ($(POSTGRESQL_LIBDIR),)
-   DB_CODE    += pg_database.ml
-   DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
-   DB_LIBS    += postgresql
-   THREADS = yes
-endif
-
-AUXLIB_DIRS = $(DB_AUXLIBS)
-
-ifdef PROF
-OCAMLOPT := ocamlopt -p -inline 0
-endif
-
-#OCAMLYACC := menhir --infer --comment --explain --dump --log-grammar 1 --log-code 1 --log-automaton 2 --graph
-OCAMLYACC := ocamlyacc -v
-
-OCAMLFLAGS=-dtypes -w Ae-44-45-60 -g -cclib -lunix
-#OCAMLDOCFLAGS=-pp deriving
-
-# additional files to clean
-TRASH=*.tmp *.output *.cache
-
-# Other people's code.
-OPC = unionfind.ml unionfind.mli \
-      getopt.ml getopt.mli PP.ml
-
-SOURCES = $(OPC)                                \
-          multipart.ml                          \
-          notfound.ml                           \
-          utility.ml                            \
-		  processTypes.mli processTypes.ml      \
-          env.mli env.ml                        \
-          settings.mli settings.ml              \
-          basicsettings.ml                      \
-          debug.mli debug.ml                    \
-          performance.mli performance.ml        \
-          graph.ml                              \
-          types.mli types.ml                    \
-          constant.ml                           \
-          sourceCode.ml                         \
-          regex.ml                              \
-          sugartypes.ml                         \
-          parser.mly                            \
-          lexer.mli lexer.mll                   \
-          typeUtils.mli typeUtils.ml            \
-          errors.mli errors.ml                  \
-          instantiate.mli instantiate.ml        \
-          generalise.mli generalise.ml          \
-          typevarcheck.mli typevarcheck.ml      \
-          unify.mli unify.ml                    \
-          var.ml                                \
-          ir.mli ir.ml                          \
-          tables.ml                             \
-          closures.ml                           \
-          parse.mli parse.ml                    \
-          sugarTraversals.mli  sugarTraversals.ml       \
-					moduleUtils.mli moduleUtils.ml \
-          resolvePositions.mli resolvePositions.ml       \
-					chaser.mli chaser.ml \
-					desugarModules.mli desugarModules.ml \
-          desugarDatatypes.mli desugarDatatypes.ml      \
-          defaultAliases.ml                     \
-					requestData.mli requestData.ml        \
-          value.mli value.ml                    \
-          eventHandlers.mli eventHandlers.ml    \
-          xmlParser.mly xmlLexer.mll            \
-          parseXml.mli parseXml.ml              \
-          refineBindings.mli refineBindings.ml           \
-          desugarLAttributes.mli desugarLAttributes.ml   \
-          transformSugar.mli transformSugar.ml           \
-          fixTypeAbstractions.mli fixTypeAbstractions.ml \
-          desugarPages.mli desugarPages.ml               \
-          desugarFormlets.mli desugarFormlets.ml         \
-          desugarRegexes.mli desugarRegexes.ml           \
-          desugarFors.mli desugarFors.ml                 \
-          desugarDbs.mli desugarDbs.ml                   \
-          desugarFuns.mli desugarFuns.ml                 \
-          desugarProcesses.mli desugarProcesses.ml       \
-          desugarInners.mli desugarInners.ml             \
-					desugarCP.mli desugarCP.ml                     \
-          typeSugar.mli typeSugar.ml                     \
-          checkXmlQuasiquotes.ml                \
-          frontend.ml                           \
-          dumpTypes.ml                          \
-          compilePatterns.ml                    \
-					websocketMessages.ml \
-          jsonparse.mly                         \
-          jsonlex.mll                           \
-          js.ml                                 \
-          json.mli json.ml                      \
-          proc.mli proc.ml                      \
-					resolveJsonState.mli resolveJsonState.ml \
-          database.mli database.ml              \
-          linksregex.ml                         \
-	  lib.mli lib.ml                        \
-          sugartoir.mli sugartoir.ml            \
-          loader.mli loader.ml                  \
-          $(DB_CODE)                            \
-          irtojs.mli irtojs.ml                  \
-          query.mli query.ml                              \
-          queryshredding.ml                     \
-          webserver_types.mli webserver_types.ml \
-          webserver.mli                         \
-	  evalir.ml                             \
-          buildTables.ml                        \
-          webif.mli webif.ml                    \
-	  webserver.ml                          \
-          links.ml                              \
-
-# TODO: get these working again
-#
-#          test.ml                               \
-#          tests.ml                              \
-
-
-LIBS    = $(DB_LIBS)
+SOURCES :=	$(SOURCES)		\
+		   	links.ml		\
 
 RESULT  = links
-CLIBS 	= $(DB_CLIBS)
-
-INCDIRS = $(AUXLIB_DIRS) $(EXTRA_INCDIRS)
-LIBDIRS = $(AUXLIB_DIRS) $(EXTRA_LIBDIRS)
 
 include $(OCAMLMAKEFILE)
 
@@ -167,6 +28,9 @@ quick-help:
 docs-clean:
 	cd doc && make clean
 
+unit-tests-clean:
+	$(MAKE) -f Makefile.unittests clean
+
 prelude.links.cache: prelude.links links
 	@echo "Pre-compiling prelude..."
 	@./links -e 'print("Prelude compiled OK.")'
@@ -178,7 +42,7 @@ byte-code: cache-clean
 
 native-code: cache-clean
 
-clean :: docs-clean cache-clean
+clean :: docs-clean cache-clean unit-tests-clean
 
 .PHONY: install
 install: nc
@@ -199,3 +63,8 @@ uninstall:
 	rm -f $(LINKS_BIN)/links
 	@echo "Removing $(LINKS_LIB)/prelude.links"
 	rm -f $(LINKS_LIB)/prelude.links
+
+.PHONY: unit-tests
+unit-tests:
+	-$(MAKE) -f Makefile.unittests 
+

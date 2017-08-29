@@ -15,8 +15,10 @@ install:
   - opam install -y postgresql
   - opam pin add links-dev . -n -y
   - opam install -y --deps-only links-dev
+  - opam install -y ounit
   - opam pin remove links-dev -y
 script:
   - make -j2 nc
   - make tests
   - ./run-tests db-only shredding
+  - ./run-unit-tests
