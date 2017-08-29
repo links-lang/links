@@ -75,3 +75,7 @@ depopts: [
   "postgresql" { <= "4.0.1" }
   "sqlite3"
 ]
+
+conflicts: [
+  "postgresql" { >= "4.1" }
+]
