@@ -205,7 +205,7 @@ struct
            (* Debug.print ("valenv" ^ Value.Show_env.show valenv); *)
            Irtojs.generate_real_client_page
              ~cgi_env:cgi_args
-             (Lib.nenv, Lib.typing_env)
+             (!Lib.nenv, !Lib.typing_env)
              (globals @ locals)
              (valenv, v)
              (get_websocket_url ())
@@ -216,7 +216,7 @@ struct
          let res =
            lazy (Irtojs.generate_program_page
                    ~cgi_env:cgi_args
-                   (Lib.nenv, Lib.typing_env)
+                   (!Lib.nenv, !Lib.typing_env)
                    program) in
          measure_as res "irtojs"
      else
@@ -250,7 +250,7 @@ struct
     let render_servercont_cont = (fun (v: Value.t) ->
       Irtojs.generate_real_client_page
            ~cgi_env:cgi_args
-           (Lib.nenv, Lib.typing_env)
+           (!Lib.nenv, !Lib.typing_env)
            (globals @ locals)
            (valenv, v)
            (get_websocket_url ())) in
@@ -309,7 +309,7 @@ struct
     let globals = prelude@globals in
     (* Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main)); *)
 
-    BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
+    BuildTables.program tenv0 !Lib.primitive_vars ((globals @ locals), main);
     (render_cont, (nenv'', tyenv''), (globals, (locals, main)))
 
   (* Processes a CGI-based request *)

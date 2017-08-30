@@ -812,12 +812,12 @@ let wrap_with_server_lib_stubs : code -> code = fun code ->
     List.rev
       (Env.Int.fold
          (fun var _v funcs ->
-            let name = Lib.primitive_name var in
+            let name = !Lib.primitive_name var in
               if Lib.primitive_location name = `Server then
                 (name, var)::funcs
               else
                 funcs)
-         (Lib.value_env) []) in
+         (!Lib.value_env) []) in
 
   let rec some_vars = function
       0 -> []
