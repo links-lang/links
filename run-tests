@@ -74,7 +74,7 @@ run_database_testsuite () {
           t=${line[1]}
           expect_broken=1
         fi
-        cmnd="./links --config=$1/config --database=/plugins/pg_db/pg_database.cmxs $1/$t.links"
+        cmnd="./links --config=$1/config --database=plugins/pg_db/pg_database.cmxs $1/$t.links"
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?
