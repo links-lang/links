@@ -82,8 +82,17 @@ and special =
   | `Delete of (binder * value) * computation option
   | `CallCC of value
   | `Select of (name * value)
-  | `Choice of (value * (binder * computation) name_map) ]
+  | `Choice of (value * (binder * computation) name_map)
+  | `Handle of handler
+  | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
+and clause = [`ResumptionBinder of binder | `NoResumption] * binder * computation
+and handler = {
+    ih_comp: computation;
+    ih_clauses: clause name_map;
+    ih_depth: handler_depth;
+}
+and handler_depth = [`Deep | `Shallow]
   deriving (Show)
 
 val binding_scope : binding -> scope

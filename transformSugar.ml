@@ -239,6 +239,7 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
             (o, `FunLit (Some argss, lin, lam, location), t)
+      | `HandlerLit _ -> assert false
       | `Spawn (`Wait, loc, body, Some inner_effects) ->
           assert (loc = `NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
@@ -340,8 +341,8 @@ class transform (env : Types.typing_environment) =
                  let (o, e, _) = o#phrase e in
                    (o, `UnaryAppl ((tyargs, op), e), t))
       | `FnAppl (f, args) ->
-          let (o, f, ft) = o#phrase f in
-          let (o, args, _) = list o (fun o -> o#phrase) args in
+         let (o, f, ft) = o#phrase f in
+         let (o, args, _) = list o (fun o -> o#phrase) args in
             (o, `FnAppl (f, args), TypeUtils.return_type ft)
       | `TAbstr (tyvars, e) ->
           let outer_tyvars = o#backup_quantifiers in
@@ -426,7 +427,32 @@ class transform (env : Types.typing_environment) =
       | `ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
-            (o, `ConstructorLit (name, e, Some t), t)
+          (o, `ConstructorLit (name, e, Some t), t)
+      | `DoOperation (name, ps, Some t) ->
+	 let (o, ps, _) = list o (fun o -> o#phrase) ps in
+	 (o, `DoOperation (name, ps, Some t), t)
+      | `Handle { sh_expr; sh_clauses; sh_descr } ->
+         let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
+         let (o, expr, _) = o#phrase sh_expr in
+         let (o, cases) =
+           listu o
+              (fun o (p, e) ->
+                let (o, p) = o#pattern p in
+                let (o, e, _) = o#phrase e in (o, (p, e)))
+              sh_clauses
+         in
+         let (o, input_row) = o#row input_row in
+         let (o, input_t) = o#datatype input_t in
+         let (o, output_row) = o#row output_row in
+         let (o, output_t) = o#datatype output_t in
+	 let (o, raw_row) = o#row sh_descr.shd_raw_row in
+         let descr = {
+                       shd_depth = sh_descr.shd_depth;
+                       shd_types = (input_row, input_t, output_row, output_t);
+                       shd_raw_row = raw_row;
+                     }
+         in
+         (o, `Handle { sh_expr = expr; sh_clauses = cases; sh_descr = descr }, output_t)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
@@ -585,7 +611,25 @@ class transform (env : Types.typing_environment) =
         let o = o#with_effects inner_eff in
         let (o, e, t) = o#phrase e in
         let o = o#restore_envs envs in
-          (o, (pss, e), t)
+        (o, (pss, e), t)
+
+    method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
+      fun _ _ -> failwith "transformSugar.ml: method handlerlit not yet implemented!" (*
+      let envs = o#backup_envs in
+      let (o, m) =
+	match m with
+	  `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
+	| `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
+      in
+      let (o, cases) =
+        listu o
+	      (fun o (p, e) ->
+               let (o, p) = o#pattern p in
+               let (o, e, _) = o#phrase e in (o, (p, e)))
+	      cases
+      in
+      let o = o#restore_envs envs in
+													 (o, (m, cases, params), t)*)
 
     method constant : constant -> ('self_type * constant * Types.datatype) =
       function
@@ -679,6 +723,7 @@ class transform (env : Types.typing_environment) =
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
          (o, (`Funs defs))
+      | `Handler _ -> assert false
       | `Foreign (f, language, t) ->
          let (o, f) = o#binder f in
          (o, `Foreign (f, language, t))

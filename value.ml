@@ -3,7 +3,7 @@ open Utility
 open Notfound
 open ProcessTypes
 
-let serialiser = Settings.add_string ("serialiser", "Dump", `User)
+let serialiser = Basicsettings.Serialisation.serialiser
 
 class type otherfield =
 object
@@ -224,8 +224,402 @@ type access_point = [
 type chan = (channel_id * channel_id)
   deriving (Show)
 
-type continuation = (Ir.scope * Ir.var * env * Ir.computation) list
-and t = [
+module type ENV =
+sig
+  type 'a t
+     deriving (Show)
+  val set_request_data : 'a t -> RequestData.request_data -> 'a t
+  val request_data : 'a t -> RequestData.request_data
+  val empty : 'a t
+  val bind  : Ir.var -> ('a * Ir.scope) -> 'a t -> 'a t
+  val find : Ir.var -> 'a t -> 'a
+  val mem : Ir.var -> 'a t -> bool
+  val lookup : Ir.var -> 'a t -> 'a option
+  val lookupS : Ir.var -> 'a t -> ('a * Ir.scope) option
+  val shadow : 'a t -> by:'a t -> 'a t
+  val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
+  val globals : 'a t -> 'a t
+  (* used only by json.ml, webif.ml ... *)
+  val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
+  val extend : 'a t -> ('a * Ir.scope) Utility.intmap -> 'a t
+  val localise : 'a t -> Ir.var -> 'a t
+end
+
+module Env = struct
+  type 'a t = {
+      all : ('a * Ir.scope) Utility.intmap;
+      globals : ('a * Ir.scope) Utility.intmap;
+      request_data : RequestData.request_data
+    }
+    deriving (Show)
+
+  let set_request_data env rd = { env with request_data = rd }
+  let request_data env = env.request_data
+  (** {1 Environment stuff} *)
+  (** {2 IntMap-based implementation with global memoization} *)
+
+  let empty = {
+      all = IntMap.empty;
+      globals = IntMap.empty;
+      request_data = RequestData.new_empty_request_data ()
+    }
+  let bind name (v,scope) env =
+    (* Maintains globals as submap of global bindings. *)
+    match scope with
+      `Local ->
+      { env with all = IntMap.add name (v,scope) env.all }
+    | `Global ->
+       { env with
+         all = IntMap.add name (v,scope) env.all;
+         globals = IntMap.add name (v,scope) env.globals;
+       }
+  let find name env = fst (IntMap.find name env.all)
+  let mem name env = IntMap.mem name env.all
+  let lookup name env = opt_map fst (IntMap.lookup name env.all)
+  let lookupS name env = IntMap.lookup name env.all
+  let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
+
+  let get_parameters env = env.all
+
+  let shadow env ~by:env_by =
+    (* Assumes that globals never change *)
+    let by_all = env_by.all in
+    IntMap.fold (fun name v env -> bind name v env) by_all env
+
+  let fold f env a = IntMap.fold f env.all a
+  let globals env = { env with all = env.globals }
+
+  let localise env var =
+    (* let module M = Deriving_Show.Show_option(Show_intset) in *)
+    (* Debug.print ("cont vars (" ^ string_of_int var ^ "): " ^ *)
+    (*              M.show (Tables.lookup Tables.cont_vars var)); *)
+    IntSet.fold
+      (fun name locals ->
+        match lookupS name env with
+        | None
+          | Some (_, `Global) -> locals
+        | Some (v, `Local) ->
+           bind name (v, `Local) locals)
+      (Tables.find Tables.cont_vars var)
+      empty
+
+  (** Compression **)
+  type 'cv compressed_t = (Ir.var * 'cv) list
+        deriving (Show, Eq, Typeable, Dump, Pickle)
+  let compress (compress_val : 'v -> 'cv) (env : 'v t)  : 'cv compressed_t =
+    List.rev
+    (fold
+       (fun name (v, scope) compressed ->
+          if scope = `Global then
+            compressed
+          else
+            (name, compress_val v)::compressed)
+       env
+       [])
+
+  let uncompress (uncompress_val : 'v t -> 'cv -> 'v) globals (env : 'cv compressed_t) : 'v t =
+    try
+      List.fold_left
+        (fun env (name, v) ->
+          bind name (uncompress_val globals v, Tables.find Tables.scopes name) env)
+        empty
+        env
+    with NotFound str -> failwith("In uncompress_env: " ^ str)
+end
+
+module type FRAME = sig
+  type 'v t
+
+  val of_expr : 'v Env.t -> Ir.tail_computation -> 'v t
+  val make : Ir.scope -> Ir.var -> 'v Env.t -> Ir.computation -> 'v t
+end
+
+module Frame = struct
+  type 'v t = Ir.scope * Ir.var * 'v Env.t * Ir.computation
+     deriving (Show)
+
+  let make scope var env comp = (scope, var, env, comp)
+  let of_expr env tc =
+    make (`Local : Ir.scope) (Var.dummy_var : Ir.var) env (([], tc) : Ir.computation)
+
+  (** Compression **)
+  type 'cv compressed_t = Ir.var * 'cv Env.compressed_t
+     deriving (Show, Eq, Typeable, Dump, Pickle)
+  let compress (compress_val : 'v -> 'cv) (_, var, locals, _) : 'cv compressed_t =
+    (var, Env.compress compress_val locals)
+  let uncompress (uncompress_val : 'v Env.t -> 'cv -> 'v) globals (var, env) : 'v t =
+    let scope = Tables.find Tables.scopes var in
+    let body = Tables.find Tables.cont_defs var in
+    let env = Env.uncompress uncompress_val globals env in
+    let locals = Env.localise env var in
+    (scope, var, locals, body)
+end
+
+module type CONTINUATION_EVALUATOR = sig
+  type v
+  type result
+  type 'v t
+
+  val apply : env:v Env.t ->            (* the current environment *)
+              v t ->                    (* the continuation *)
+              v ->                      (* the argument *)
+              result
+
+  val trap : v t ->                        (* the continuation *)
+             (Ir.name * v) ->              (* operation name and its argument *)
+             result
+end
+
+module type EVAL = sig
+  type 'v t
+  type v
+  type result
+  val error : string -> 'a
+  val computation : v Env.t -> v t -> Ir.computation -> result
+  val finish : v Env.t -> v -> result
+  val reify : v t -> v
+  end
+
+module type CONTINUATION = sig
+  type 'v t
+     deriving (Show)
+
+  module Frame : FRAME
+  module Handler : sig
+      type 'v t
+
+      val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
+  end
+
+  (* A continuation has a monoidal structure *)
+  val empty : 'v t
+  val (<>)  : 'v t -> 'v t -> 'v t          (* continuation composition *)
+  val (&>)  : 'v Frame.t -> 'v t -> 'v t    (* continuation augmentation *)
+
+  val set_trap_point : handler:'v Handler.t -> 'v t -> 'v t  (* installs a handler *)
+
+  module Evaluation :
+  functor(E : EVAL with type 'v t := 'v t) ->
+  sig
+    include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
+  end
+
+  val to_string : 'v t -> string
+end
+
+module type COMPRESSABLE_CONTINUATION = sig
+  include CONTINUATION
+
+  type 'cv compressed_t
+     deriving (Show, Eq, Typeable, Dump, Pickle)
+  val compress : compress_val:('v -> 'cv) -> 'v t -> 'cv compressed_t
+  val uncompress : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_t -> 'v t
+end
+
+module Pure_Continuation = struct
+  type 'v t = ('v Frame.t) list
+      deriving (Show)
+
+  let empty = []
+  let (<>) k k' = k @ k'
+  let (&>) f k = f :: k
+
+  let to_string _ = "pure_continuation"
+
+  (** Compression **)
+  type 'cv compressed_t = ('cv Frame.compressed_t) list
+        deriving (Show, Eq, Typeable, Dump, Pickle)
+  let compress ~compress_val cont =
+    List.map (Frame.compress compress_val) cont
+  let uncompress ~uncompress_val globals cont =
+    List.map (Frame.uncompress uncompress_val globals) cont
+
+  module Frame = Frame
+
+  module Handler = struct
+      type 'v t = unit
+
+      let make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
+        = fun ~env ~clauses ~depth -> ignore(env); ignore(clauses); ignore(depth); ()
+  end
+
+  let set_trap_point ~handler k = ignore(handler); k
+
+  module Evaluation =
+    functor(E : EVAL with type 'v t := 'v t) ->
+  struct
+    type v = E.v
+    type result = E.result
+    let apply  ~env k v =
+    match k with
+    | [] -> E.finish env v
+    | (scope, var, locals, comp) :: cont ->
+       let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
+       E.computation env cont comp
+
+    let trap _ _ = E.error "no trap"
+  end
+end
+
+module Eff_Handler_Continuation = struct
+  module K = struct
+    type 'v handler =
+      | Identity
+      | User_defined of 'v user_defined_handler
+    and 'v user_defined_handler = {
+        env: 'v Env.t;
+        op_clauses: Ir.clause Ir.name_map;
+        return_clause: Ir.binder * Ir.computation;
+        depth: [`Deep | `Shallow];
+      }
+    and 'v k = ('v handler * 'v Frame.t list) list
+    and 'v continuation =
+      | Empty
+      | Continuation of 'v k
+      | ShallowContinuation of 'v Frame.t list * 'v k
+      deriving (Show)
+
+    type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep | `Shallow]
+    and 'cv ck = ('cv compressed_handler * ('cv Frame.compressed_t list)) list
+    and 'cv compressed_continuation =
+      | CompressedEmpty
+      | CompressedContinuation of 'cv ck
+      | CompressedShallowContinuation of 'cv Frame.compressed_t list * 'cv ck
+      deriving (Show, Eq, Typeable, Dump, Pickle)
+  end
+
+  open K
+  type 'v t = 'v continuation
+      deriving (Show)
+
+  let empty = Empty
+
+  let (&>) f = function
+    | Empty
+    | Continuation [] -> Continuation [(Identity, [f])]
+    | Continuation ((h, fs) :: rest) -> Continuation ((h, f :: fs) :: rest)
+    | ShallowContinuation (f', []) -> ShallowContinuation (f', [(Identity, [f])])
+    | ShallowContinuation (f', (h, fs) :: rest) -> ShallowContinuation (f', (h, f :: fs) :: rest)
+
+  let rec (<>) k k' =
+    match k, k' with
+    | Empty, k
+    | k, Empty -> k
+    | Continuation k, Continuation k' -> Continuation (k @ k')
+    | ShallowContinuation (fs, k), ShallowContinuation (fs', k') -> ShallowContinuation (fs @ fs', k @ k')
+    | ShallowContinuation (fs, k'), k
+    | k, ShallowContinuation (fs, k') -> (Continuation k') <> (List.fold_left (fun k f -> f &> k) k fs)
+
+  module Handler = struct
+    open K
+    type 'v t = 'v handler
+      deriving (Show)
+
+    let make ~env ~clauses ~depth =
+      let ((_,b,comp), op_clauses) = StringMap.pop "Return" clauses in
+      User_defined { env; op_clauses; return_clause = (b,comp); depth }
+
+    let compress ~compress_val = function
+      | User_defined h -> (Env.compress compress_val h.env, h.depth)
+      | Identity -> (Env.compress compress_val Env.empty, `Deep)
+
+    let uncompress ~uncompress_val globals h =
+      let xb = Var.fresh_binder_of_type `Not_typed in
+      let x  = Var.var_of_binder xb in
+      User_defined
+        { env = Env.uncompress uncompress_val globals (fst h);
+        op_clauses = StringMap.empty;
+        return_clause =
+          (xb, ([], `Return (`Variable x)));
+        depth = snd h; }
+  end
+
+  let set_trap_point ~handler = function
+    | Empty -> Continuation [(handler,[])]
+    | Continuation k -> Continuation ((handler, []) :: k)
+    | ShallowContinuation (pk,k) -> Continuation ((handler, pk) :: k)
+
+  module Evaluation =
+    functor (E : EVAL with type 'v t := 'v t) ->
+    struct
+      type v = E.v
+      type result = E.result
+
+      let return k h v =
+        let ((var,_), comp) = h.return_clause in
+        E.computation (Env.bind var (v, `Local) h.env) k comp
+
+      let rec apply ~env k v =
+        let k = match k with
+          | Empty -> []
+          | ShallowContinuation (fs, k) -> (Identity, fs) :: k
+          | Continuation k -> k
+        in
+        match k with
+        | [] -> E.finish env v
+        | (Identity, []) :: k -> apply ~env (Continuation k) v
+        | (User_defined h, []) :: k -> return (Continuation k) h v
+        | (h, f :: pk) :: k ->
+           let (scope, var, locals, comp) = f in
+           let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
+           let k = (h, pk) :: k in
+           E.computation env (Continuation k) comp
+
+      let trap k (opname, arg) =
+        let rec handle k' = function
+          | (User_defined h, pk) :: k ->
+             begin match StringMap.lookup opname h.op_clauses with
+             | Some (kb, (var, _), comp) ->
+                let env =
+                  match kb with
+                  | `ResumptionBinder rb ->
+                     let resume =
+                       match h.depth with
+                       | `Shallow -> ShallowContinuation (pk, List.rev k')
+                       | `Deep -> Continuation ( List.rev ((User_defined h,pk) :: k') )
+                     in
+                     Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
+                  | _ -> h.env
+                in
+                E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp
+             | None -> handle ((User_defined h, pk) :: k') k
+             end
+          | (identity, pk) :: k -> handle ((identity, pk) :: k') k
+          | [] -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname)
+        in match k with
+        | Empty -> handle [] []
+        | Continuation k -> handle [] k
+        | ShallowContinuation (pk,k) -> handle [(Identity, pk)] k
+    end
+  let to_string _ = "generalised_continuation"
+
+  type 'cv compressed_t = 'cv K.compressed_continuation
+        deriving (Show, Eq, Typeable, Dump, Pickle)
+  let compress ~compress_val =
+    let compress_frame = Frame.compress compress_val in
+    let compress (h, fs) = (Handler.compress ~compress_val h, List.map compress_frame fs) in
+    function
+    | Empty -> CompressedEmpty
+    | Continuation k -> CompressedContinuation (List.map compress k)
+    | ShallowContinuation (fs, k) -> CompressedShallowContinuation (List.map compress_frame fs, List.map compress k)
+  let uncompress ~uncompress_val globals =
+    let uncompress_frame = Frame.uncompress uncompress_val globals in
+    let uncompress (h, fs) = (Handler.uncompress ~uncompress_val globals h, List.map uncompress_frame fs) in
+    function
+    | CompressedEmpty -> Empty
+    | CompressedContinuation k -> Continuation (List.map uncompress k)
+    | CompressedShallowContinuation (fs, k) -> ShallowContinuation (List.map uncompress_frame fs, List.map uncompress k)
+
+  module Frame = Frame
+end
+
+module Continuation
+  = (val (if not (Settings.get_value Basicsettings.Handlers.enabled) then
+           (module Pure_Continuation : COMPRESSABLE_CONTINUATION)
+         else
+           (module Eff_Handler_Continuation : COMPRESSABLE_CONTINUATION)) : COMPRESSABLE_CONTINUATION)
+
+type t = [
 | primitive_value
 | `List of t list
 | `Record of (string * t) list
@@ -235,59 +629,18 @@ and t = [
 | `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of continuation
+| `ReifiedContinuation of continuation
 | `Pid of dist_pid
 | `AccessPointID of access_point
 | `SessionChannel of chan
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
-and env = {
-  all : (t * Ir.scope) Utility.intmap;
-  globals : (t * Ir.scope) Utility.intmap;
-  request_data : RequestData.request_data
-}
+and continuation = t Continuation.t
+and env = t Env.t
   deriving (Show)
 
 type delegated_chan = (chan * (t list))
-
-let set_request_data env rd = { env with request_data = rd }
-
-let toplevel_cont : continuation = []
-let request_data env = env.request_data
-
-(** {1 Environment stuff} *)
-(** {2 IntMap-based implementation with global memoization} *)
-
-let empty_env = {
-  all = IntMap.empty;
-  globals = IntMap.empty;
-  request_data = RequestData.new_empty_request_data ()
-}
-let bind name (v,scope) env =
-  (* Maintains globals as submap of global bindings. *)
-  match scope with
-    `Local ->
-      { env with all = IntMap.add name (v,scope) env.all }
-  | `Global ->
-      { env with
-          all = IntMap.add name (v,scope) env.all;
-          globals = IntMap.add name (v,scope) env.globals;
-      }
-let find name env = fst (IntMap.find name env.all)
-let mem name env = IntMap.mem name env.all
-let lookup name env = opt_map fst (IntMap.lookup name env.all)
-let lookupS name env = IntMap.lookup name env.all
-let extend env bs = IntMap.fold (fun k v r -> bind k v r) bs env
-
-let get_parameters env = env.all
-
-let shadow env ~by:env_by =
-(* Assumes that globals never change *)
-  let by_all = env_by.all in
-  IntMap.fold (fun name v env -> bind name v env) by_all env
-
-let fold f env a = IntMap.fold f env.all a
-let globals env = { env with all = env.globals }
 
 (** {1 Compressed values for more efficient pickling} *)
 type compressed_primitive_value = [
@@ -297,7 +650,7 @@ type compressed_primitive_value = [
 ]
   deriving (Show, Eq, Typeable, Pickle, Dump)
 
-type compressed_continuation = (Ir.var * compressed_env) list
+type compressed_continuation = compressed_t Continuation.compressed_t
 and compressed_t = [
 | compressed_primitive_value
 | `List of compressed_t list
@@ -307,8 +660,9 @@ and compressed_t = [
 | `PrimitiveFunction of string
 | `ClientDomRef of int
 | `ClientFunction of string
-| `Continuation of compressed_continuation ]
-and compressed_env = (Ir.var * compressed_t) list
+| `Continuation of compressed_continuation
+| `ReifiedContinuation of compressed_continuation ]
+and compressed_env = compressed_t Env.compressed_t
   deriving (Show, Eq, Typeable, Dump, Pickle)
 
 let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
@@ -318,53 +672,26 @@ let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
         `Table (db, table, keys, Types.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
 
-let localise env var =
-  (* let module M = Deriving_Show.Show_option(Show_intset) in *)
-  (* Debug.print ("cont vars (" ^ string_of_int var ^ "): " ^ *)
-  (*              M.show (Tables.lookup Tables.cont_vars var)); *)
-  IntSet.fold
-    (fun name locals ->
-       match lookupS name env with
-         | None
-         | Some (_, `Global) -> locals
-         | Some (v, `Local) ->
-             bind name (v, `Local) locals)
-    (Tables.find Tables.cont_vars var)
-    empty_env
-
-
-let rec compress_continuation (cont:continuation) : compressed_continuation =
-  List.map
-    (fun (_scope, var, locals, _body) ->
-       (var, compress_env locals)) cont
-and compress_t (v : t) : compressed_t =
-  let cv = compress_t in
+let rec compress_continuation cont : compressed_continuation = Continuation.compress ~compress_val cont
+and compress_val (v : t) : compressed_t =
+  let cv = compress_val in
     match v with
       | #primitive_value as v -> compress_primitive_value v
       | `List vs -> `List (List.map cv vs)
       | `Record fields -> `Record(List.map(fun(name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
       | `FunctionPtr(x, fvs) ->
-        `FunctionPtr (x, opt_map compress_t fvs)
+        `FunctionPtr (x, opt_map cv fvs)
       | `PrimitiveFunction (f,_op) -> `PrimitiveFunction f
       | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
+      | `ReifiedContinuation cont -> `ReifiedContinuation (compress_continuation cont)
       | `Pid _ -> assert false (* mmmmm *)
       | `Socket (_inc, _outc) -> assert false
       | `SessionChannel _ -> assert false (* mmmmm *)
       | `AccessPointID _ -> assert false (* mmmmm *)
       | `SpawnLocation _sl -> assert false (* wheeee! *)
-and compress_env env : compressed_env =
-  List.rev
-    (fold
-       (fun name (v, scope) compressed ->
-          if scope = `Global then
-            compressed
-          else
-            (name, compress_t v)::compressed)
-       env
-       [])
 
 let uncompress_primitive_value : compressed_primitive_value -> [> primitive_value] =
   function
@@ -381,19 +708,11 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
         let driver, params = parse_db_string s in
         let database = db_connect driver params in
           `Database database
-
 let rec uncompress_continuation globals cont
-    : continuation =
-  List.map
-    (fun (var, env) ->
-       let scope = Tables.find Tables.scopes var in
-       let body = Tables.find Tables.cont_defs var in
-       let env = uncompress_env globals env in
-       let locals = localise env var in
-         (scope, var, locals, body))
-    cont
-and uncompress_t globals (v : compressed_t) : t =
-  let uv = uncompress_t globals in
+        : continuation =
+  Continuation.uncompress ~uncompress_val globals cont
+and uncompress_val globals (v : compressed_t) : t =
+  let uv = uncompress_val globals in
     match v with
       | #compressed_primitive_value as v -> uncompress_primitive_value v
       | `List vs -> `List (List.map uv vs)
@@ -404,14 +723,7 @@ and uncompress_t globals (v : compressed_t) : t =
       | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
-and uncompress_env globals env : env =
-  try
-  List.fold_left
-    (fun env (name, v) ->
-       bind name (uncompress_t globals v, Tables.find Tables.scopes name) env)
-    empty_env
-    env
-  with NotFound str -> failwith("In uncompress_env: " ^ str)
+      | `ReifiedContinuation cont -> `ReifiedContinuation (uncompress_continuation globals cont)
 
 let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
@@ -465,13 +777,8 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `SpawnLocation `ServerSpawnLoc ->
      fprintf ppf "Spawn location: server"
   | `XML xml -> p_xmlitem ~close_tags:false ppf xml
-  | `Continuation cont ->
-     let string_of_cont cont =
-       let frame (_scope, var, _env, body) =
-         "(" ^ string_of_int var ^ ", " ^ Ir.Show_computation.show body ^ ")"
-       in
-       "[" ^ mapstrcat ", " frame cont ^ "]"
-     in fprintf ppf "Continuation%s" (string_of_cont cont)
+  | `Continuation cont -> fprintf ppf "Continuation%s" (Continuation.to_string cont)
+  | `ReifiedContinuation cont -> fprintf ppf "ReifiedContinuation %s" (Continuation.to_string cont)
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
      fprintf ppf "Client access point on client %s, APID: %s" (ClientID.to_string cid) (AccessPointID.to_string apid)
   | `AccessPointID (`ServerAccessPoint (apid)) ->
@@ -640,6 +947,17 @@ and box_unit : unit -> t
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
   | `Record [] -> () | _ -> failwith "Type error unboxing unit"
+
+let box_op : t list -> t -> t =
+  fun ps k -> let box = List.fold_left
+			  (fun (i, box) p -> let i = i + 1 in (i, ((string_of_int i, p) :: box)))
+			  (0, []) ps
+	      in
+	      let box = (string_of_int ((fst box) + 1), k) :: (snd box) in
+	      `Record (List.rev box)
+
+let box : t list -> t = fun ps -> `Record (List.mapi (fun i p -> (string_of_int (i+1), p)) ps)
+
 let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
@@ -689,13 +1007,26 @@ let continuation_serialisers : (string * compressed_continuation serialiser) lis
   { save = marshal_save ; load = marshal_load };
 
   "Pickle",
+  { save = Pickle.to_string<compressed_continuation> ;
+    load = Pickle.from_string<compressed_continuation> };
+
+  "Dump",
+  { save = Dump.to_string<compressed_continuation> ;
+    load = Dump.from_string<compressed_continuation> }
+]
+
+(*let continuation_serialisers : (string * compressed_continuation serialiser) list = [
+  "Marshal",
+  { save = marshal_save ; load = marshal_load };
+
+  "Pickle",
   { save = Pickle_compressed_continuation.to_string ;
     load = Pickle_compressed_continuation.from_string };
 
   "Dump",
   { save = Dump_compressed_continuation.to_string ;
     load = Dump_compressed_continuation.from_string }
-]
+]*)
 
 let value_serialisers : (string * compressed_t serialiser) list = [
   "Marshal",
@@ -734,11 +1065,11 @@ let marshal_value : t -> string =
   fun v ->
     let save = (value_serialiser ()).save in
     (* Debug.print ("marshalling: "^Show_t.show v); *)
-      base64encode (save (compress_t v))
+      base64encode (save (compress_val v))
 
 let unmarshal_continuation env : string -> continuation =
     let load = (continuation_serialiser ()).load in
-    base64decode ->- load ->- uncompress_continuation (globals env)
+    base64decode ->- load ->- uncompress_continuation (Env.globals env)
 
 let unmarshal_value env : string -> t =
   fun s ->
@@ -746,15 +1077,15 @@ let unmarshal_value env : string -> t =
     (* Debug.print ("unmarshalling string: " ^ s); *)
     let v = (load (base64decode s)) in
     (* Debug.print ("unmarshalling: " ^ Show_compressed_t.show v); *)
-      uncompress_t (globals env) v
+      uncompress_val (Env.globals env) v
 
 (** Return the continuation frame that evaluates the given expression
     in the given environment. *)
-let expr_to_contframe env expr =
-  ((`Local        : Ir.scope),
-   (Var.dummy_var : Ir.var),
-   (env           : env),
-   (([], expr)    : Ir.computation))
+(* let expr_to_contframe env expr = *)
+(*   ((`Local        : Ir.scope), *)
+(*    (Var.dummy_var : Ir.var), *)
+(*    (env           : env), *)
+(*    (([], expr)    : Ir.computation)) *)
 
 let rec get_contained_channels v =
   let get_list_contained_channels xs =

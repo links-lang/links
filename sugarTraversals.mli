@@ -51,6 +51,7 @@ class map :
     method location        : location -> location
     method iterpatt        : iterpatt -> iterpatt
     method funlit          : funlit -> funlit
+    method handlerlit      : handlerlit -> handlerlit
     method fieldspec       : fieldspec -> fieldspec
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
@@ -119,6 +120,7 @@ class fold :
     method location        : location -> 'self
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
+    method handlerlit      : handlerlit -> 'self
     (* method quantifier      : quantifier -> 'self *)
     method fieldspec       : fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
@@ -165,6 +167,7 @@ object ('self)
   method int             : int -> 'self * int
   method float           : float -> 'self * float
   method funlit          : funlit -> 'self * funlit
+  method handlerlit      : handlerlit -> 'self * handlerlit
   method iterpatt        : iterpatt -> 'self * iterpatt
   method list            : 'a . ('self -> 'a -> 'self * 'a) -> 'a list -> 'self * 'a list
   method location        : location -> 'self * location

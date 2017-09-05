@@ -9,7 +9,7 @@ open Webserver_types
 open Performance
 open Utility
 
-let realpages = Settings.add_bool ("realpages", false, `System)
+let realpages = Basicsettings.Webif.realpages
 let ( >>= ) = Lwt.bind
 
 module WebIf = functor (Webs : WEBSERVER) ->
@@ -137,7 +137,8 @@ struct
     let xb, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
     let render_page = Env.String.lookup nenv "renderPage" in
     let tail = `Apply (`Variable render_page, [`Variable x]) in
-    let cont = [(`Global, x, Value.empty_env, ([], tail))] in
+    let frame = Value.Continuation.Frame.make `Global x Value.Env.empty ([], tail) in
+    let cont = Value.Continuation.(frame &> empty) in
       (bs @ [`Let (xb, ([], body))], tail), cont
 
   let get_websocket_url () =
@@ -155,7 +156,7 @@ struct
     ResolveJsonState.add_process_information client_id json_state
 
   let perform_request valenv run render_cont render_servercont_cont req =
-    let req_data = Value.request_data valenv in
+    let req_data = Value.Env.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
     let client_id_str = ClientID.to_string client_id in
     match req with
@@ -179,8 +180,8 @@ struct
         Proc.resolve_external_processes func;
         List.iter Proc.resolve_external_processes args;
         List.iter (Proc.resolve_external_processes -<- fst -<- snd)
-          (IntMap.bindings (Value.get_parameters env));
-        Eval.apply Value.toplevel_cont env (func, args) >>= fun (_, r) ->
+          (IntMap.bindings (Value.Env.get_parameters env));
+        Eval.apply Value.Continuation.empty env (func, args) >>= fun (_, r) ->
         (* Debug.print ("result: "^Value.Show_t.show result); *)
         (*
         if not(Proc.singlethreaded()) then
@@ -245,7 +246,7 @@ struct
       response_printer
       cgi_args
       req_data =
-    let valenv' = Value.set_request_data valenv req_data in
+    let valenv' = Value.Env.set_request_data valenv req_data in
     let env = (valenv', env2, env3) in
     let render_servercont_cont = (fun (v: Value.t) ->
       Irtojs.generate_real_client_page
@@ -340,7 +341,7 @@ struct
       RequestData.new_request_data cgi_args cookies dummy_client_id in
 
     (* Compute cacheable stuff in one call *)
-    let (render_cont, (nenv,tyenv), (globals, (locals, main))) =
+    let (render_cont, (nenv,tyenv), ((globals : Ir.binding list), ((locals : Ir.binding list), main))) =
       Loader.wpcache "program" (fun () ->
         make_program envs prelude filename
      )
@@ -351,7 +352,8 @@ struct
 
     Errors.display (lazy (serve_request_program
   			  (valenv, nenv, tyenv)
-  			  (globals, (locals, main), render_cont)
+  			  (globals, (locals, main),
+                           render_cont)
           (fun hdrs bdy -> Lib.print_http_response hdrs bdy req_data)
           cgi_args
           req_data

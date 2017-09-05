@@ -56,7 +56,7 @@ sig
   (** construct a map from an association list *)
 
   val to_list : (key -> 'a -> 'b) -> 'a t -> 'b list
-  (** contruct a list from a map *)
+  (** construct a list from a map *)
 
   val megamap : (key * 'a -> key * 'b) -> 'a t -> 'b t
 
@@ -420,6 +420,9 @@ struct
       wxyzs
       ([],[],[],[])
 
+  let drop_nth xs n =
+    (take n xs) @ (drop (n+1) xs)
+
   let rec filter_map pred f = function
     | [] -> []
     | x::xs ->
@@ -432,7 +435,6 @@ struct
         | e::[] -> e
         | e::xs -> e ^ ", " ^ (print_list_inner xs) in
     "[" ^ print_list_inner xs ^ "]"
-
 end
 include ListUtils
 

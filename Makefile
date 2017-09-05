@@ -54,10 +54,11 @@ SOURCES = $(OPC)                                \
           multipart.ml                          \
           notfound.ml                           \
           utility.ml                            \
-		  processTypes.mli processTypes.ml      \
+	  processTypes.mli processTypes.ml      \
           env.mli env.ml                        \
           settings.mli settings.ml              \
           basicsettings.ml                      \
+	  parseSettings.ml \
           debug.mli debug.ml                    \
           performance.mli performance.ml        \
           graph.ml                              \
@@ -80,13 +81,13 @@ SOURCES = $(OPC)                                \
           closures.ml                           \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
-					moduleUtils.mli moduleUtils.ml \
+	  moduleUtils.mli moduleUtils.ml \
           resolvePositions.mli resolvePositions.ml       \
-					chaser.mli chaser.ml \
-					desugarModules.mli desugarModules.ml \
+	  chaser.mli chaser.ml \
+	  desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
-					requestData.mli requestData.ml        \
+          requestData.mli requestData.ml        \
           value.mli value.ml                    \
           eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \
@@ -103,9 +104,11 @@ SOURCES = $(OPC)                                \
           desugarFuns.mli desugarFuns.ml                 \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
-					desugarCP.mli desugarCP.ml                     \
+	  desugarCP.mli desugarCP.ml                     \
+	  desugarHandlers.mli desugarHandlers.ml         \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
+          experimentalExtensions.ml \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \
@@ -137,7 +140,6 @@ SOURCES = $(OPC)                                \
 #
 #          test.ml                               \
 #          tests.ml                              \
-
 
 LIBS    = $(DB_LIBS)
 

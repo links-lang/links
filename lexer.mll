@@ -166,6 +166,7 @@ let keywords = [
  "database" , DATABASE;
  "default"  , DEFAULT;
  "delete"   , DELETE;
+ "do"       , DOOP;
  "else"     , ELSE;
  "escape"   , ESCAPE;
  "false"    , FALSE;
@@ -174,6 +175,8 @@ let keywords = [
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;
+ "handle"   , HANDLE; "linearhandle", LINEARHANDLE;
+ "handler"  , HANDLER; "linearhandler", LINEARHANDLER;
  "if"       , IF;
  "in"       , IN;
  "open"     , OPEN;
@@ -187,6 +190,7 @@ let keywords = [
  "offer"    , OFFER;
  "orderby"  , ORDERBY;
  "op"       , OP;
+ "open"     , OPEN;
  "page"     , PAGE;
  "query"    , QUERY;
  "readonly" , READONLY;
@@ -196,6 +200,8 @@ let keywords = [
  "select"   , SELECT;
  "server"   , SERVER;
  "set"      , SET;
+ "shallowhandle", SHALLOWHANDLE;
+ "shallowhandler"  , SHALLOWHANDLER;
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnClient" , SPAWNCLIENT;
@@ -238,8 +244,8 @@ let directive_prefix = ['' '@' '$']
 let xml_opening = ('<' def_id)
 let xml_closing_tag = ('<' '/' def_id '>')
 
-let initopchar = [ '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' ]
-let opchar = [ '.' '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' ]
+let initopchar = [ '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' '|' ]
+let opchar = [ '.' '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' '|' ]
 
 (* Each lexer when called must return exactly one token and possibly
    modify the stack of remaining lexers.  The lexer on top of the stack

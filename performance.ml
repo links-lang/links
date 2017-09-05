@@ -1,6 +1,6 @@
 (* Measure performance *)
-let measuring = Settings.add_bool("measure_performance", false, `User)
-let noisy = Settings.add_bool("noisy_garbage_collection", false, `User)
+let measuring = Basicsettings.Performance.measuring
+let noisy = Basicsettings.Performance.noisy_gc
 
 let notify_gc () =
   Debug.if_set noisy (fun _ -> "Completing GC cycle")

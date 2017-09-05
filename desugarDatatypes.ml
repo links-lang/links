@@ -434,7 +434,7 @@ object (self)
     | `Foreign (bind, lang, dt) ->
         let _, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
-          self, `Foreign (bind, lang, dt')
+        self, `Foreign (bind, lang, dt')
     | b -> super#bindingnode b
 
   method! sentence =

@@ -54,7 +54,7 @@ let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
                    ((`Var g), dp)), dp))
         | _, _ -> assert false
     in
-      make_lam rt lam
+    make_lam rt lam
   in
     ((f, Some ft, fpos), lin, (tyvars, lam), location, t)
 

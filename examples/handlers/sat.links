@@ -1,0 +1,253 @@
+# Satisfiability testing
+
+typename Expr = [|Var:String
+                 |And:(Expr,Expr)
+                 |Or:(Expr,Expr)
+                 |Not:Expr
+                 |Const:Bool|];
+
+# Converts an expression into a string
+sig exprToString : (Expr) ~> String
+fun exprToString(expr) {
+   fun parens(s) { "(" ^^ s ^^ ")" }
+   switch (expr : Expr) {
+     case Var(name)    -> name
+     case And(e1,e2)   ->
+       switch((e1,e2)) {
+         case (Or(_,_),Or(_,_)) -> parens(exprToString(e1)) ^^ " && " ^^ parens(exprToString(e2))
+         case (Or(_,_),_)       -> parens(exprToString(e1)) ^^ " && " ^^ exprToString(e2)
+         case (_,Or(_,_))       -> exprToString(e1) ^^ " && " ^^ parens(exprToString(e2))
+         case otherwise         -> exprToString(e1) ^^ " && " ^^ exprToString(e2)
+       }
+     case Or(e1,And(_,_) as e2) -> exprToString(e1) ^^ " || " ^^ parens(exprToString(e2))
+     case Or(e1,e2)    ->
+       switch ((e1,e2)) {
+         case (And(_,_),And(_,_)) -> parens(exprToString(e1)) ^^ " || " ^^ parens(exprToString(e2))
+         case (And(_,_),_)       -> parens(exprToString(e1)) ^^ " || " ^^ exprToString(e2)
+         case (_,And(_,_))       -> exprToString(e1) ^^ " || " ^^ parens(exprToString(e2))
+         case otherwise         -> exprToString(e1) ^^ " || " ^^ exprToString(e2)
+       }
+     case Not(Var(_) as e) -> "!" ^^ exprToString(e)
+     case Not(Const(_) as e) -> "!" ^^ exprToString(e)
+     case Not(Not(_) as e) -> "!" ^^ exprToString(e)
+     case Not(e)       -> "!" ^^ parens(exprToString(e))
+     case Const(true)  -> "tt"
+     case Const(false) -> "ff"
+  }
+}
+
+# run
+sig run : (Comp({ |e}, a)) ~e~> a
+fun run(m) {m()}
+
+# failure
+sig fail : forall a . () {Fail:Zero|_}-> a
+fun fail() {switch(do Fail) { }}
+
+sig maybe : (Comp({Fail:Zero|e}, a)) -> Comp({ Fail{_} |e}, Maybe(a))
+fun maybe(m)() {
+  handle(m()) {
+    case Return(x) -> Just(x)
+    case Fail(_)   -> Nothing
+  }
+}
+
+# left biased choice
+fun leftBiased(m)() {
+  handle(m()) {
+    case Return(x) -> x
+    case Choose(k) ->
+      fun its(c)() {k(c)}
+      switch (run @ maybe(its(true))) {
+        case Just(x) -> x
+        case Nothing ->
+          switch (run @ maybe(its(false))) {
+            case Just(x) -> x
+            case Nothing -> fail()
+          }
+      }
+   }
+}
+
+# choice combinator
+sig <|> : (Comp({ Choose:Bool |e}, a), Comp({ Choose:Bool |e}, a)) {Choose:Bool|e}~> a
+op lhs <|> rhs {
+  if (do Choose) lhs()
+  else rhs()
+}
+
+# Returns a free variable, if any, in a given expression
+sig freeVariable : (Expr) -> Comp({Choose:Bool |_}, Maybe(String))
+fun freeVariable(expr)() {
+  switch (expr : Expr) {
+     case Const(_)   -> Nothing
+     case Var(name)  -> Just(name)
+     case Not(e)     -> freeVariable(e)()
+     case And(e1,e2) -> freeVariable(e1) <|> freeVariable(e2)
+     case Or(e1,e2)  -> freeVariable(e1) <|> freeVariable(e2)
+  }
+}
+
+# Guess valuation
+sig guessVariable : (String, Bool, Expr) ~> Expr
+fun guessVariable(x,val,expr) {
+    fun guess(expr) { guessVariable(x,val,expr) }
+
+    switch (expr : Expr) {
+      case Var(name)  ->
+        if (name == x) Const(val)
+        else Var(name)
+      case Not(e)     -> Not(guess(e))
+      case Or(e1,e2)  -> Or(guess(e1),guess(e2))
+      case And(e1,e2) -> And(guess(e1),guess(e2))
+      case otherwise  -> otherwise
+    }
+}
+
+sig isConstFalse : (Expr) -> Bool
+fun isConstFalse(expr) {
+  switch (expr) {
+    case Const(b) -> not(b)
+    case _        -> false
+  }
+}
+
+sig isConstTrue : (Expr) -> Bool
+fun isConstTrue(expr) {
+  switch (expr) {
+    case Const(b) -> b
+    case _        -> false
+  }
+}
+
+# Simplify expressions
+sig simplify : (Expr) ~> Expr
+fun simplify(expr) {
+    switch (expr : Expr) {
+      case Var(name) -> Var(name)
+      case Const(b)  -> Const(b)
+      case Not(e) ->
+         switch (simplify(e)) {
+           case Const(b) -> Const(not(b))
+           case e        -> Not(e)
+         }
+      case Or(e1,e2) ->
+        var exprs = filter(not -<- isConstFalse, [simplify(e1),simplify(e2)]);
+        if (any(isConstTrue, exprs)) { Const(true) }
+        else {
+          switch (exprs) {
+            case [] -> Const(false)
+            case [e] -> e
+            case [e1,e2] -> Or(e1,e2)
+          }
+        }
+      case And(e1,e2) ->
+        var exprs = filter(not -<- isConstTrue, [simplify(e1),simplify(e2)]);
+        if (any(isConstFalse, exprs)) { Const(false) }
+        else {
+          switch (exprs) {
+            case [] -> Const(true)
+            case [e] -> e
+            case [e1,e2] -> And(e1,e2)
+          }
+        }
+    }
+}
+
+# Extract the value from the Const constructor
+sig unConst : (Expr) ~> Bool
+fun unConst(expr) {
+  switch (expr) {
+    case Const(b) -> b
+    case _        -> error("Not Const")
+  }
+}
+
+# Simple satisfiability checker
+sig satisfiable : (Expr) -> Comp({Choose:Bool |e}, Bool)
+fun satisfiable(expr)() {
+   switch (freeVariable(expr)()) {
+      case Nothing -> unConst(expr)
+      case Just(name) ->
+        var trueGuess  = simplify(guessVariable(name, true, expr));
+        var falseGuess = simplify(guessVariable(name, false, expr));
+        satisfiable(trueGuess)() || satisfiable(falseGuess)()
+   }
+}
+
+##
+
+# Apply De Morgan's Laws to get rid of negations
+sig fixNegations : (Expr) ~> Expr
+fun fixNegations(expr) {
+  var f = fixNegations;
+  switch (expr : Expr) {
+    # Eliminate double negations
+    case Not(Not(e)) -> f(e)
+    # De Morgan's Laws
+    case Not(And(e1,e2)) -> Or(f(Not(e1)),f(Not(e2)))
+    case Not(Or(e1,e2))  -> And(f(Not(e1)),f(Not(e2)))
+    # Simplify constants
+    case Not(Const(b)) -> Const(not(b))
+    # Recurse
+    case Not(e)     -> Not(f(e))
+    case And(e1,e2) -> And(f(e1),f(e2))
+    case Or(e1,e2)  -> Or(f(e1),f(e2))
+    case e          -> e
+  }
+}
+
+# Distribute OR over AND
+sig distribute : (Expr) ~> Expr
+fun distribute(expr) {
+  var d = distribute;
+  switch (expr : Expr) {
+    # Distribute OR
+    case Or(e1,And(e2,e3)) ->
+       And(Or(d(e1),d(e2)),
+           Or(d(e1),d(e3)))
+    case Or(And(e1,e2),e3) ->
+       And(Or(d(e3),d(e1)),
+           Or(d(e3),d(e2)))
+    # Recurse
+    case Or(e1,e2)  -> Or(d(e1),d(e2))
+    case And(e1,e2) -> And(d(e1),d(e2))
+    case Not(e)     -> Not(d(e))
+    case e          -> e
+  }
+}
+
+# Convert an expression into CNF
+sig cnf : (Expr) ~> Expr
+fun cnf(expr) {
+  var e = distribute(fixNegations(expr));
+  if (e == expr) expr
+  else cnf(e)
+}
+
+sig ex1 : Expr
+var ex1 = Or(Var("a"),Not(And(Var("b"),Or(Var("a"),Var("c")))));
+
+fun check(e) {
+ var res = run -<- maybe -<- leftBiased @ satisfiable(cnf(e));
+ switch (res) {
+   case Just(r) -> r
+   case Nothing -> error("Unhandled error.")
+ }
+}
+
+# Optimisations
+typename Polarity = [|Positive
+                     |Negative
+                     |Mixed|];
+
+sig literalPolarity : (Expr, String) -> Maybe(Polarity)
+fun literalPolarity(e,x) {
+  switch (e : Expr) {
+    case Var(y) -> if (x == y) Just(Positive)
+                    else Nothing
+    case Not(Var(y)) -> if (x == y) Just(Negative)
+                          else Nothing
+    case otherwise -> Nothing
+  }
+}

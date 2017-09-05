@@ -1,0 +1,30 @@
+fun fooHandler(m) client {
+  handle(m) {
+    case Return(x) -> x
+    case Foo(n,k)    -> k("Hello " ^^ n)
+  }
+}
+
+fun foo(n)() client {
+  print(do Foo(n))
+}
+
+fun mainPage(_) {
+  page
+   <html>
+    <body>
+    <h1>Hello World!</h1>
+     <form l:onsubmit="{fooHandler(foo(name))}">
+      Name: <input type="text" l:name="name"/>
+      <input type="submit"/>
+     </form>
+    </body>
+   </html>
+}
+
+fun main() server {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

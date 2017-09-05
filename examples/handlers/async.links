@@ -1,0 +1,185 @@
+# Asynchronous computations
+#
+
+#
+# Concurrency interface
+#
+typename F(a) = [|Future:Int|];
+
+sig fork : (a) {Fork:(a) {}-> b|_}~> b
+fun fork(t) {do Fork(t)}
+
+sig yield : Comp({Yield:()|_}, ())
+fun yield() {do Yield}
+
+#
+# Bug in Links pattern-matcher:
+# switch (do Get) { ... } results in
+# "*** Error: TypeUtils.TypeDestructionError("Attempt to deconstruct non-variant type (F (a)) {}-> Maybe (a)")" that means the typechecker returns the wrong type for the operation.
+#
+
+sig get : (F(a)) {Yield:(),Get:(F(a)) {}-> Maybe(a)|_}~> a
+fun get(f) {
+    var x = do Get(f);
+    switch(x){
+       case Nothing -> yield(); get(f)
+       case Just(x) -> x
+    }
+}
+
+sig put : (F(a), a) {Put:(F(a),a) {}-> ()|_}~> ()
+fun put(f,r) {do Put(f,r)}
+
+sig new : Comp({New:F(a)|_}, F(a))
+fun new() {do New}
+
+#
+# Bad error message when the input and output effect signature annotations do not have the same
+# effects.
+#
+# Typing bug / error message in parameterised handlers:
+# case Op(i,k) ->
+# switch(lookup(i, s)) {
+#      case Just(x) -> k(Nothing)(s)
+#      case Nothing -> error("No future with ID " ^^ intToString(i)) <-- results in "The codomain of `k' has type ... but a type compatible with ... was expected" error message
+#    }
+#
+
+fun stringOfMaybe(m) {
+  switch(m) {
+    case Just(x) -> "Just(" ^^ intToString(x) ^^ ")"
+    case Nothing -> "Nothing"
+  }
+}
+
+fun stringOfFuture(f) {
+    switch(f) {
+      case Future(i) -> "F#" ^^ intToString(i)
+    }
+}
+
+sig future : (Comp({Get:(F(a)) {}-> Maybe(a),New:(F(a)),Put:(F(a),a) {}-> ()|e}, b)) -> ([(Int,Maybe(a))]) ->
+              Comp({Get{_},New{_},Put{_}                      |e}, b)
+open handler future(m)(s) {
+  case Get(Future(i),k) -> {
+    switch(lookup(i, s)) {
+      case Just(x) -> k(x)(s)
+      case Nothing -> error("No future with ID " ^^ intToString(i))(s)
+    }
+  }
+  case New(k)           -> {
+    var i = length(s);
+    #print("Allocating future with ID: " ^^ intToString(i+1));   
+    k(Future(i+1))((i+1,Nothing) :: s)
+  }
+  case Put(Future(i),r,k) -> {
+    #print("Putting " ^^ stringOfFuture(Future(i)) ^^ " = " ^^ intToString(r));
+    var s = filter(fun(x) { first(x) <> i }, s);
+    k(())((i,Just(r)) :: s)
+  }
+  case Return(x)        -> x
+}
+
+open handler stack(m)(s) {
+  case Get(Future(_),k) -> {
+    switch(s) {
+      case r :: s -> k(r)(s)
+      case other  -> k(Nothing)(s)
+    }
+  }
+  case New(k)           -> {
+    var i = length(s);
+    k(Future(i+1))(s)
+  }
+  case Put(f,r,k) -> {
+    k(())(Just(r) :: s)
+  }
+  case Return(x)        -> x
+}
+
+#
+# Queue interface
+#
+typename Queue(a::Type) = [a];
+
+sig enqueue : (a) {Enqueue:(a) {}-> ()|_}~> ()
+fun enqueue(e) {do Enqueue(e)}
+
+sig dequeue : Comp({Dequeue:a|_}, a)
+fun dequeue() {do Dequeue}
+
+sig is_empty : Comp({IsEmpty:Bool|_}, Bool)
+fun is_empty() {do IsEmpty}
+
+sig size : Comp({Size:Int|_},Int)
+fun size() {do Size}
+
+# Fair queue implementation
+sig fair_queuer : (Comp({Dequeue:a ,Enqueue:(a) {}-> (),IsEmpty:Bool,Size:Int|e}, b)) -> (Queue(a)) ->
+                   Comp({Dequeue{_},Enqueue{_}         ,IsEmpty{_},Size{_}  |e}, b)
+open handler fair_queuer(m)(q) {
+  case Enqueue(e,k) -> k(())(q ++ [e])
+  case Dequeue(k)   -> { var e = hd(q); k(e)(tl(q)) }
+  case IsEmpty(k)   -> switch (q) {
+                         case []    -> k(true)(q)
+			 case other -> k(false)(q)
+                       }
+  case Size(k)      -> k(length(q))(q)		       
+  case Return(x)    -> x
+}
+
+# Overload of put operation
+sig fput : (Maybe(F(a)), a) {Put:(F(a),a) {}-> ()|_}~> ()
+fun fput(f,v) {
+  switch (f) {
+       case Nothing -> ()
+       case Just(f) -> put(f,v)
+  }
+}
+
+# Cooperative routines scheduler
+# Depth first scheduling: Eagerly execute the forked computation.
+open handler dfscheduler(m)(f) {
+  case Fork(t,k) -> {
+     var new_f = new();
+     enqueue(fun(_) { k(new_f)(f) });
+     scheduler(t)(Just(new_f))()
+  }
+  case Yield(k)  -> { enqueue(fun(_) { k(())(f) }); var t = dequeue(); t(()) }
+  case Return(x) -> {
+     fput(f,x);
+     if (is_empty()) { x }
+     else { var t = dequeue(); t(()) }
+   }
+}
+
+# Breadth first: Delay execution of the forked computation
+open handler bfscheduler(m)(f) {
+  case Fork(t,k) -> {
+     var new_f = new();
+     enqueue(fun(_) { scheduler(t)(Just(new_f))() });
+     k(new_f)(f)
+  }
+  case Yield(k)  -> { enqueue(fun(_) { k(())(f) }); var t = dequeue(); t(()) }
+  case Return(x) -> {
+     fput(f,x);
+     if (is_empty()) { x }
+     else { var t = dequeue(); t(()) }
+   } 
+}
+
+#
+# Fibonacci
+#
+fun fib(n) {
+  if (n <= 1) {n}
+  else {
+    var f1 = fork(fun() { fib(n-1) });
+    var f2 = fork(fun() { fib(n-2) });
+    #print(intToString(n) ^^ " => " ^^ stringOfFuture(f1) ^^ " & " ^^ stringOfFuture(f2));
+    var i = get(f1);
+    var j = get(f2);
+    #print("RESULT: fib(" ^^ intToString(n) ^^ ") = " ^^ intToString(i) ^^ " + " ^^ intToString(j));
+    i + j
+  }
+}

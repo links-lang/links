@@ -449,7 +449,7 @@ struct
 
   let env_of_value_env value_env = (value_env, Env.Int.empty)
   let (++) (venv, eenv) (venv', eenv') =
-    Value.shadow venv ~by:venv', Env.Int.extend eenv eenv'
+    Value.Env.shadow venv ~by:venv', Env.Int.extend eenv eenv'
 
   let rec expression_of_value : Value.t -> t =
     function
@@ -475,8 +475,8 @@ struct
         let (_finfo, (xs, body), z, _location) = Tables.find Tables.fun_defs f in
         let env =
           match z, fvs with
-          | None, None       -> Value.empty_env
-          | Some z, Some fvs -> Value.bind z (fvs, `Local) Value.empty_env
+          | None, None       -> Value.Env.empty
+          | Some z, Some fvs -> Value.Env.bind z (fvs, `Local) Value.Env.empty
           | _, _             -> assert false in
         `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
@@ -505,7 +505,7 @@ struct
             match location with
             | `Server | `Unknown ->
               (* Debug.print ("looked up function: "^Var.Show_binder.show (var, finfo)); *)
-              `Closure ((xs, body), env_of_value_env Value.empty_env)
+              `Closure ((xs, body), env_of_value_env Value.Env.empty)
             | `Client ->
               failwith ("Attempt to use client function: " ^ Js.var_name_binder (var, finfo) ^ " in query")
             | `Native ->
@@ -514,7 +514,7 @@ struct
       end
     | None ->
       begin
-        match Value.lookup var val_env, Env.Int.find exp_env var with
+        match Value.Env.lookup var val_env, Env.Int.find exp_env var with
         | None, Some v -> v
         | Some v, None -> expression_of_value v
         | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -527,7 +527,7 @@ struct
     | _ -> assert false
 
   let lookup_lib_fun (val_env, _exp_env) var =
-    match Value.lookup var val_env with
+    match Value.Env.lookup var val_env with
       | Some v -> expression_of_value v
       | None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
 
@@ -665,7 +665,7 @@ struct
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.Show_binder.show (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
-      let env' = bind (Value.empty_env, Env.Int.empty) (z, value env v) in
+      let env' = bind (Value.Env.empty, Env.Int.empty) (z, value env v) in
       `Closure ((xs, body), env')
       (* (\* Debug.print("looking up query closure: "^string_of_int f); *\) *)
       (* begin *)

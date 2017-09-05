@@ -1,0 +1,37 @@
+# "Knock, knock" using algebraic effects
+# Simple example demonstrating how open handler composition works.
+# links> run();
+
+# Three handlers
+
+# First handler handles the knock effect.
+open handler knock(m) {
+  case Knock(p,k) -> p ^^ k(" Who's there?")
+  case Return(x)  -> x
+}
+
+# Second handler handles the "it is" effect
+open handler who(m) {
+  case Its(p,k)  -> k(p ^^ ". " ^^ p ^^ ", who?")
+  case Return(x) -> x
+}
+
+# Third handler handles the "me" effect.
+open handler me(m) {
+  case Me(p,k)   -> k(p ^^ ".")
+  case Return(x) -> x
+}
+
+# The force handler
+handler force(m) {
+  case Return(x) -> x
+}
+
+# The abstract computation
+fun knockknock() {
+    do Knock("Knock! Knock!") ^^ "\n " ^^ do Its("Eff") ^^ "\n " ^^ do Me("Effect")
+}
+
+fun run() {
+    force(knock(who(me(knockknock))))
+}

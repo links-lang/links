@@ -157,6 +157,7 @@ fun replicate(n, item) {
   else item :: replicate(n-1, item)
 }
 
+
 fun flip(f) {
   fun(x,y) { f(y,x) }
 }
@@ -168,6 +169,10 @@ fun curry(f) {
 fun uncurry(f) {
   fun (x, y) { f(x)(y) }
 }
+
+# Curried flip
+sig cflip : ((a::Any) -e-> (b::Any) -e-> c::Any) -> (b::Any) -> (a::Any) -e-> c::Any
+fun cflip(h) { curry(flip(uncurry(h))) }
 
 fun compose(f, g) {
   fun (x) { f(g(x)) }
@@ -1170,6 +1175,68 @@ fun lf(f) {
   linfun (x) {
     f(x)
   }
+}
+
+### Handler stuff
+typename Comp(e::Row, a) = () ~e~> a;
+typename Zero = [||];
+
+# Composition operators
+# Data flows from right to left (or inside-out)
+#sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+infixr 9 -<-;
+op f -<- g {
+  fun(x) { f(g(x)) }
+}
+
+# Data flow from left to right (or outside-in)
+infixr 9 ->-;
+op f ->- g {
+  g -<- f
+}
+
+# Explicit application
+#sig @ : ((a) -e-> b, a) -e-> b
+infixr 1 @;
+op f @ m {
+  f(m)
+}
+
+# Effect row generalisation
+sig gen0 : (Comp({ }, a)) -> Comp({ |%}, a)
+fun gen0(f) {
+  (f : (Comp({ |%}, a)) <- (Comp({ }, a)))
+}
+
+sig gen1 : ((a) {}~> b) -> ((a) { |%}~> b)
+fun gen1(f) {
+  (f : ((a) { |%}~> b) <- ((a) {}~> b))
+}
+
+sig gen2 : ((a,b) {}~> c) -> ((a,b) { |%}~> c)
+fun gen2(f) {
+  (f : ((a,b) { |%}~> c) <- ((a,b) {}~> c))
+}
+
+
+## Utility functions
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+sig elemIndex : (a, [a]) ~> Maybe(Int)
+fun elemIndex(x, xs) {
+  var n = fold_left(fun(acc, y) {
+    switch (acc) {
+       case (n,Just(i)) -> (n,Just(i))
+       case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+    }
+  }, (0,Nothing), xs);
+
+  second(n)
+}
+
+# Returns the maximum of a and b.
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
 }
 
 ####

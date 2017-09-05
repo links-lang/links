@@ -203,7 +203,7 @@ end
 open CompileEq
 
 
-let show_pattern_compilation = Settings.add_bool("show_pattern_compilation2", false, `User)
+let show_pattern_compilation = Basicsettings.CompilePatterns.show_pattern_compilation
 
 type annotation = [`Binder of binder | `Type of Types.datatype] list
 type annotated_pattern = annotation * pattern
@@ -862,6 +862,74 @@ let compile_cases
         (fun () -> "Compiled pattern: "^(string_of_computation result));
       result
 
+(* Handler cases compilation *)
+let compile_handle_cases
+    : raw_env -> (raw_clause list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
+  fun (nenv, tenv, eff) (raw_clauses, desc) m ->
+  let open Sugartypes in
+  let (_,input_type,_,_) = desc.shd_types in
+  let clauses = List.map reduce_clause raw_clauses in
+  let raw_row = desc.shd_raw_row in
+  (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
+  (* Essentially, we use match_cases to generate appropriate code by
+     creating a dummy variable whose type is the raw input effect
+     signature cast as a variant.  Afterwards we transform the `Case
+     to a `Handle construct. *)
+  let dummy_var = Var.(make_local_info ->- fresh_binder ->- var_of_binder) (`Variant raw_row, "_m") in
+  let (_,tc) =  (* The compiled cases *)
+    let tenv = TEnv.bind tenv (dummy_var, `Variant raw_row) in (* Override the type with a variant type s.t. match_cases is happy *)
+    let initial_env = (nenv, tenv, eff, PEnv.empty) in
+    let compiled_cases = match_cases [dummy_var] clauses (fun _ -> ([], `Special (`Wrong input_type))) initial_env in
+    compiled_cases
+  in
+  (* Urgh *)
+  let arities =
+    List.fold_left
+      (fun xs -> function
+        | ([(_, pattern)], _) ->
+           let (opname, arity) =
+             match pattern with
+             | `Variant (name, `Any)          -> (name, 0)
+             | `Variant (name, `Record (r,_)) -> (name, StringMap.size r)
+             | `Variant (name, _)             -> (name, 1)
+             | _ -> assert false
+           in
+           (opname, arity) :: xs
+        | _ -> assert false)
+      [] clauses
+  in
+  let fix_continuation_param opname (bs,tc) =
+    let arity = List.assoc opname arities in
+    let (cc,bs') =
+      if arity > 0 then
+        let kb =
+          match List.nth bs (arity-1) with
+          | `Let (kb, _) -> kb
+          | _ -> assert false
+        in
+        `ResumptionBinder kb, ListUtils.drop_nth bs (arity-1)
+      else
+        `NoResumption, bs
+    in
+    (cc, (bs',tc))
+  in
+  let compiled_handle =
+    match tc with
+    | `Case (_, clauses, _) ->
+       let (return_clause, clauses) = StringMap.pop "Return" clauses in
+       let clauses =
+         StringMap.fold
+           (fun opname (b,comp) clauses ->
+             let (clause_class, comp) = fix_continuation_param opname comp in
+             StringMap.add opname (clause_class,b,comp) clauses)
+           clauses (StringMap.add "Return" (`NoResumption, fst return_clause, snd return_clause) StringMap.empty)
+       in ([], `Special (`Handle { ih_comp = m; ih_clauses = clauses; ih_depth = desc.shd_depth }))
+    | _ -> assert false
+    in
+    (* END OF THE BIG HACK *)
+    Debug.if_set (show_pattern_compilation)
+                 (fun () -> "Compiled handler cases: "^(string_of_computation compiled_handle));
+    compiled_handle
 
 (* Session typing choice compilation *)
 let match_choices : var -> clause list -> bound_computation =

@@ -1,0 +1,109 @@
+# Stateful parser
+# links> parse(p, "abba");
+
+# A type alias for the parser state
+typename PState = ([Char],[Char]);
+
+# The force handler
+handler force(m) {
+	case Return(x) -> x
+}
+
+# The open state handler
+open handler state(m) {
+	case Get(_,k)  -> fun(s) { k(s)(s)  }
+	case Put(p,k)  -> fun(s) { k(())(p) }
+	case Return(x) -> fun(s) { x }
+}
+
+# State runner
+fun runState(s0, m) {
+    force(state(m))(s0)
+}
+
+# The parser interpreter.
+#sig parser : (() ~> ()) -> Maybe(String)
+open handler parserh(m) {
+	case Token(_,k) -> {
+	     var s = (do Get()) : PState;
+	     var stream = second(s);
+	     switch (stream) {
+	        case (x :: xs) -> { do Put((x :: first(s), xs)); k(x) }
+	        case [] -> Nothing : Maybe([Char])
+	     }
+	}
+	case Choose(_,k) -> {
+	     var s = (do Get()) : PState;
+	     switch (k(true)) {
+	        case Nothing -> { do Put(s); k(false) }
+	        case Just(x) -> Just(x) : Maybe([Char])
+	     }
+	}
+	case Fail(_,_)  -> Nothing
+	case Return(x)  -> {
+	     var s = (do Get()) : PState;
+	     var stream = second(s);
+	     switch(stream) {
+	        case []    -> Just(reverse(first(s))) : Maybe([Char])
+		case other -> Nothing : Maybe([Char])
+	     }
+	}
+}
+
+# Convenient function for running a parser.
+#sig parse : (String) ~> Maybe(String)
+fun parse(p, source) {
+    var inp = explode(source);
+    var s = ([], inp);
+     switch (runState(s, parserh(p))) {
+        case Just(r) -> Just(implode(r)) : Maybe(String)
+        case Nothing -> Nothing : Maybe(String)
+     }
+}
+
+#
+# Parser combinators
+#
+
+# The empty string parser
+fun empty() {
+    ()
+}
+
+# A single character parser generator
+fun char(t) {
+    fun() {
+        var c = do Token();
+	    if (t == c) {
+	      empty()
+	    } else {
+	      do Fail()
+	    }
+    }
+}
+
+# Choice parser generator
+op p <|> q {
+    fun() {
+    	   if (do Choose()) {
+	     p()
+	   } else {
+	     q()
+	   }
+    }
+}
+
+# Sequence parser generator
+op p <*> q {
+    fun() { p(); q() }
+}
+
+# A compound parser for the language Palindromes.
+fun p() {
+   var a   = char('a');
+   var b   = char('b');
+   var apa = a <*> p <*> a;
+   var bpb = b <*> p <*> b;
+   var p   = apa <|> bpb <|> a <|> b <|> empty;                   
+   p()	      
+}

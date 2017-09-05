@@ -1,7 +1,7 @@
 open Utility
 
 type websocket_url = string
-let webs_running = Settings.add_bool ("webs_running", false, `System)
+let webs_running = Basicsettings.Webserver_types.webs_running
 
 module type WEBSERVER =
 sig

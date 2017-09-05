@@ -1,5 +1,5 @@
 (*** Debugging ***)
-let debugging_enabled = Settings.add_bool ("debug", false, `User)
+let debugging_enabled = Basicsettings.debugging_enabled
 
 (** print a debug message if debugging is enabled *)
 let print message =

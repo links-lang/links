@@ -3,7 +3,7 @@ open ProcessTypes
 open Utility
 
 (* Setting *)
-let show_json = Settings.add_bool("show_json", false, `User)
+let show_json = Basicsettings.Json.show_json
 
 (* Type synonyms *)
 type handler_id = int
@@ -65,6 +65,7 @@ let jsonize_location : Ir.location -> string = function
 let rec jsonize_value' : Value.t -> json_string =
   function
   | `PrimitiveFunction _
+  | `ReifiedContinuation _
   | `Continuation _
   | `Socket _
       as r ->

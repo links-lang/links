@@ -1,0 +1,7 @@
+# Continuation parameter annotation
+
+sig h1 : (Comp({Op:Int},Int)) {}~> Int
+handler h1(m) {
+	case Op(k : ((Int) {Op{_}|_}-> Int)) -> k(1) + 1
+	case Return(x) -> x
+}

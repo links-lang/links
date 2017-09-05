@@ -86,8 +86,17 @@ and special =
   | `Delete of (binder * value) * computation option
   | `CallCC of (value)
   | `Select of (name * value)
-  | `Choice of (value * (binder * computation) name_map) ]
+  | `Choice of (value * (binder * computation) name_map)
+  | `Handle of handler
+  | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
+and clause = [`ResumptionBinder of binder | `NoResumption] * binder * computation
+and handler = {
+    ih_comp: computation;
+    ih_clauses: clause name_map;
+    ih_depth: handler_depth;
+}
+and handler_depth = [`Deep | `Shallow]
   deriving (Show)
 
 let binding_scope : binding -> scope =
@@ -120,7 +129,7 @@ let rec is_atom =
 (*
   This can only be an atom if
   Erase is just an upcast, and our language
-  is properly parameteric.
+  is properly parametric.
 *)
 (*    | `Erase (_, v) *)
     | `Coerce (v, _) -> is_atom v
@@ -465,6 +474,30 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
+	| `Handle ({ ih_comp; ih_clauses; _ } as hndlr) ->
+	   let (comp, _, o) = o#computation ih_comp in
+	   let (clauses, branch_types, o) =
+	     o#name_map
+               (fun o (cc, b, c) ->
+                 let (cc, o) =
+                   match cc with
+                   | `ResumptionBinder b ->
+                      let (b, o) = o#binder b in
+                      `ResumptionBinder b, o
+                   | _ -> (cc, o)
+                 in
+		 let (b, o) = o#binder b in
+		 let (c, t, o) = o#computation c in
+		 (cc, b, c), t, o)
+	       ih_clauses
+	   in
+    	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
+	   `Handle { hndlr with ih_comp = comp; ih_clauses = clauses }, t, o
+	| `DoOperation (name, vs, t) ->
+	   (* FIXME: the typing isn't right here for non-zero argument
+	   operations *)
+	   let (vs, _, o) = o#list (fun o -> o#value) vs in
+	   (`DoOperation (name, vs, t), t, o)
 
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
@@ -658,7 +691,7 @@ end
 *)
 module ElimDeadDefs =
 struct
-  let show_rec_uses = Settings.add_bool("show_rec_uses", false, `User)
+  let show_rec_uses = Basicsettings.Ir.show_rec_uses
 
   let counter tyenv =
   object (o : 'self_type)

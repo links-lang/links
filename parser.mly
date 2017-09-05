@@ -53,7 +53,10 @@ let annotate (signame, datatype) : _ -> binding =
             `Fun ((name, None, bpos), lin, ([], phrase), location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
-            `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+          `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+      | `Handler ((name,_,_) as b, hnlit, dpos) ->
+	 let _ = checksig signame name in
+	 `Handler (b, hnlit, Some datatype), dpos
 
 let primary_kind_of_string pos =
   function
@@ -171,8 +174,10 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE
+%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER LINEARHANDLE LINEARHANDLER
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
+%token DOOP
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -315,6 +320,18 @@ fun_declaration:
 | tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
                                                                  in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
+| signature typed_handler_binding                              { annotate $1 (`Handler $2) }
+| typed_handler_binding                                        { let (b, hnlit, pos) = $1 in
+								 `Handler (b, hnlit, None), pos }
+
+typed_handler_binding:
+| handler_depth optional_computation_parameter var handler_parameterization { let binder = (fst $3, None, snd $3) in
+			   						      let hnlit  = ($1, $2, fst $4, snd $4) in
+ 									      (binder, hnlit, pos()) }
+
+optional_computation_parameter:
+| /* empty */                                                 { (`Any, pos()) }
+| LBRACKET pattern RBRACKET                                   { $2 }
 
 perhaps_uinteger:
 | /* empty */                                                  { None }
@@ -453,6 +470,19 @@ primary_expression:
 | FUN arg_lists block                                          { `FunLit (None, `Unl, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LINFUN arg_lists block                                       { `FunLit (None, `Lin, ($2, (`Block $3, pos ())), `Unknown), pos() }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { `CP $2, pos () }
+| handler_depth optional_computation_parameter handler_parameterization              {  let (body, args) = $3 in
+										      let hnlit = ($1, $2, body, args) in
+											`HandlerLit hnlit, pos() }
+handler_parameterization:
+| handler_body                         { ($1, None) }
+| arg_lists handler_body               { ($2, Some $1) }
+
+handler_depth:
+| HANDLER                    { `Deep }
+| SHALLOWHANDLER             { `Shallow }
+
+handler_body:
+| LBRACE cases RBRACE    	                               { $2 }
 
 constructor_expression:
 | CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
@@ -525,6 +555,7 @@ postfix_expression:
 | postfix_expression arg_spec                                  { `FnAppl ($1, $2), pos() }
 | postfix_expression DOT record_label                          { `Projection ($1, $3), pos() }
 
+
 arg_spec:
 | LPAREN RPAREN                                                { [] }
 | LPAREN exps RPAREN                                           { $2 }
@@ -539,6 +570,9 @@ unary_expression:
 | PREFIXOP unary_expression                                    { `UnaryAppl (([], `Name $1), $2), pos() }
 | postfix_expression                                           { $1 }
 | constructor_expression                                       { $1 }
+| DOOP CONSTRUCTOR arg_spec		                       { `DoOperation ($2, $3, None), pos() }
+| DOOP CONSTRUCTOR                                             { `DoOperation ($2, [], None), pos() }
+
 
 infixr_9:
 | unary_expression                                             { $1 }
@@ -736,6 +770,12 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
+| handle_depth LPAREN exp RPAREN LBRACE cases RBRACE           { let hndlr = Sugartypes.make_untyped_handler $3 $6 $1 in
+                                                                 `Handle hndlr, pos() }
+
+handle_depth:
+| HANDLE                                                       { `Deep }
+| SHALLOWHANDLE                                                { `Shallow }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -853,6 +893,8 @@ binding:
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
+| typed_handler_binding                                        { let (b, hnlit, pos) = $1 in
+                                                                 `Handler (b, hnlit, None), pos }
 | links_module                                                 { $1 }
 | links_open                                                   { $1 }
 

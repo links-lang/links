@@ -1,0 +1,20 @@
+fun foo() client {do Foo("Bar")}
+
+fun mainPage(_) {
+  page
+   <html>
+    <body>
+    <h1>Hello World!</h1>
+     <form l:onsubmit="{foo()}">
+      <input type="submit"/>
+     </form>
+    </body>
+   </html>
+}
+
+fun main() server {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

@@ -1,3 +1,6 @@
+(** Whether to turn on debug printing *)
+let debugging_enabled = Settings.add_bool ("debug", false, `User)
+
 (**
  Whether to run the interactive loop
  (default is true)
@@ -78,13 +81,14 @@ let config_file_path = match Utility.getenv "LINKS_CONFIG" with
             None
 
 (** The banner *)
+let version = "0.6.1 (Gorgie)"
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
  | |   | | , \\| |   /  \\  \\\n\
  | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
  |_____|_|_| \\__|_| \\_|____/\n\
-Welcome to Links version 0.6.1 (Gorgie)", `System)
+Welcome to Links version " ^ version, `System)
 
 (** Allow impure top-level definitions *)
 let allow_impure_defs = Settings.add_bool("allow_impure_defs", false, `User)
@@ -96,9 +100,11 @@ struct
   let optimise = Settings.add_bool("optimise_javascript", true, `User)
   let elim_dead_defs = Settings.add_bool("elim_dead_defs", false, `User)
   let lib_url = Settings.add_string("jsliburl", "lib/", `User)
+  let lib_dir = Settings.add_string("jslibdir", "", `User)
   let pp = Settings.add_bool("js_pretty_print", true, `User)
 
   let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
+  let backend = Settings.add_string("js_compiler", "cps", `System)
 end
 
 module Shredding = struct
@@ -106,6 +112,12 @@ module Shredding = struct
   let shredding = Settings.add_bool("shredding", false, `User)
 end
 
+
+(** App server stuff *)
+module Appserver = struct
+  let hostname = Settings.add_string ("host", "0.0.0.0", `User)
+  let port = Settings.add_int ("port", 8080, `User)
+end
 
 (** Caveat: don't [Open basicsettings] because the above module
    conflicts with the Js module from js.ml*)
@@ -154,9 +166,98 @@ let print_colors = Settings.add_bool ("print_colors", false, `User)
 (* Base URL for websocket connections *)
 let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)
 
+(* Handlers stuff *)
+module Handlers = struct
+  let enabled = Settings.add_bool("enable_handlers", false, `System)
+end
+
+(* Performance settings *)
+module Performance = struct
+  let measuring = Settings.add_bool("measure_performance", false, `User)
+  let noisy_gc = Settings.add_bool("noisy_garbage_collection", false, `User)
+end
+
+(* Serialisation stuff *)
+module Serialisation = struct
+  let serialiser = Settings.add_string ("serialiser", "Dump", `User)
+end
+
+(* Typing stuff *)
+module TypeSugar = struct
+  let endbang_antiquotes = Settings.add_bool ("endbang_antiquotes", false, `User)
+(*  let constrain_absence_types = Settings.add_bool ("constrain_absence_types", false, `User)*)
+  let check_top_level_purity = Settings.add_bool ("check_top_level_purity", false, `User)
+  let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
+end
+
+(* Types stuff *)
+module Types = struct
+  let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, `User)
+  let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
+  module Print = struct
+    let show_quantifiers     = Settings.add_bool   ("show_quantifiers"    , false    , `User)
+    let show_flavours        = Settings.add_bool   ("show_flavours"       , false    , `User)
+    let show_kinds           = Settings.add_string ("show_kinds"          , "default", `User)
+    let hide_fresh_type_vars = Settings.add_bool   ("hide_fresh_type_vars", true     , `User)
+  end
+end
+
+(* Compile patterns stuff *)
+module CompilePatterns = struct
+  let show_pattern_compilation = Settings.add_bool("show_pattern_compilation2", false, `User)
+end
+
+(* Ir stuff *)
+module Ir = struct
+  let show_rec_uses = Settings.add_bool("show_rec_uses", false, `User)
+end
+
+(* Generalise stuff *)
+module Generalise = struct
+  let show_generalisation = Settings.add_bool("show_generalisation", false, `User)
+end
+
+(* Webif stuff *)
+module Webif = struct
+  let realpages = Settings.add_bool ("realpages", false, `System)
+end
+
+(* Json stuff *)
+module Json = struct
+  let show_json = Settings.add_bool("show_json", false, `User)
+end
+
+(* Webserver types stuff *)
+module Webserver_types = struct
+  let webs_running = Settings.add_bool ("webs_running", false, `System)
+end
+
+(* Polymorphic types instantiation stuff *)
+module Instantiate = struct
+  let show_recursion = Settings.add_bool("show_recursion", false, `User)
+  let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
+  let quantified_instantiation = Settings.add_bool("quantified_instantiation", true, `User)
+end
+
+(* Evaluation stuff *)
+module Evalir = struct
+  let dynamic_static_routes = Settings.add_bool ("dynamic_static_routes", false, `User)
+end
+
+(* Sugar to ir stuff *)
+module Sugartoir = struct
+  let show_compiled_ir = Settings.add_bool ("show_compiled_ir", false, `User)
+end
+
+(* Unification stuff *)
+module Unify = struct
+  let show_unification = Settings.add_bool("show_unification", false, `User)
+  let show_row_unification = Settings.add_bool("show_row_unification", false, `User)
+  let infer_recursive_types = Settings.add_string("infer_recursive_types", "guarded", `User)
+end
+
 (* Should we use the extra standard library definitions? *)
 let use_stdlib = Settings.add_bool ("use_stdlib", true, `User)
 
 (* Standard library path *)
 let stdlib_path = Settings.add_string ("stdlib_path", "", `User)
-
