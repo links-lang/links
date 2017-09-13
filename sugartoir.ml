@@ -131,7 +131,8 @@ sig
 
   val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 
-  val try_as_in_otherwise : env -> (tail_computation sem * (CompilePatterns.pattern * tail_computation sem) * tail_computation sem) -> tail_computation sem
+  val try_as_in_otherwise : env -> datatype ->
+    (tail_computation sem * (CompilePatterns.pattern * (env -> tail_computation sem)) * tail_computation sem) -> tail_computation sem
 
   val handle : env -> (tail_computation sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Sugartypes.handler_descriptor) -> tail_computation sem
 
@@ -648,23 +649,25 @@ struct
                       I.comp env (p, s, ss)
 *)
 
-  let try_as_in_otherwise env (c_try, (bnd, c_in), c_otherwise) = failwith "not yet"
+  let try_as_in_otherwise env ty (c_try, as_clause, c_otherwise) =
     (* I.try_as_in_otherwise (ev p_try, (p, (eval (env ++ penv) p_in)), ev p_otherwise)
   val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
+*)
 
-    let (p, penv) = (CompilePatterns.desugar_pattern `Local pat) in
-
+    let (p, body) = as_clause in
     (* Try is a straightforward reify *)
     let comp_try = reify c_try in
 
-    (* Need to bind result in "as" *)
-    (* "as" computation: takes environment, evaluates body *)
-    let comp_as = (p, fun env -> eval (env ++ penv) body) in
+    let reified_as_clause = ([p], fun env -> reify (body env)) in
 
     (* "otherwise" is again straightforward reification *)
     let comp_otherwise = reify c_otherwise in
-    lift (`Special (`TryInOtherwise (comp_try, (bnd, comp_in), comp_otherwise)))
-*)
+    let (bs, tc) =
+      CompilePatterns.compile_session_exception_handler
+        env ty comp_try reified_as_clause comp_otherwise in
+
+    reflect (bs, (tc, ty))
+    (* lift (`Special (`TryInOtherwise (comp_try, (bnd, comp_in), comp_otherwise))) *)
 (*
 | `Switch (e, cases, Some t) ->
               let cases =
@@ -871,8 +874,13 @@ struct
                   cases
               in
                 I.switch env (ev e, cases, t)
-          | `TryInOtherwise (p_try, pat, p_in, p_otherwise, _ty) ->
-              failwith "not yet"
+          | `TryInOtherwise (p_try, pat, p_in, p_otherwise, (Some ty)) ->
+              (* Need to bind result in "as" *)
+              (* "as" computation: takes environment, evaluates body *)
+              let (p, penv) = (CompilePatterns.desugar_pattern `Local pat) in
+              let as_clause = (p, fun env -> eval (env ++ penv) p_in) in
+              I.try_as_in_otherwise env ty (ec p_try, as_clause, ec p_otherwise)
+          | `TryInOtherwise _ -> assert false
           | `DatabaseLit (name, (None, _)) ->
               I.database (ev (`RecordLit ([("name", name)],
                                           Some (`FnAppl ((`Var "getDatabaseConfig", pos), []), pos)), pos))
