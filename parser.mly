@@ -749,7 +749,7 @@ page_placement:
 
 session_expression:
 | db_expression                                                { $1 }
-| TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8), pos () }
+| TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
 | SELECT field_label exp                                       { `Select ($2, $3) , pos() }
 | OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { `Offer ($3, $6, None) , pos() }
 

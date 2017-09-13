@@ -266,7 +266,7 @@ and phrasenode = [
 | `Offer            of phrase * (pattern * phrase) list * Types.datatype option
 (* | `Fork             of binder * phrase *)
 | `CP               of cp_phrase
-| `TryInOtherwise   of (phrase * pattern * phrase * phrase)
+| `TryInOtherwise   of (phrase * pattern * phrase * phrase * Types.datatype option)
 ]
 and phrase = phrasenode * position
 and bindingnode = [
@@ -462,7 +462,7 @@ struct
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | `DoOperation (_, ps, _) -> union_map phrase ps
     | `QualifiedVar _ -> empty
-    | `TryInOtherwise (p1, pat, p2, p3) -> union (union_map phrase [p1; p2; p3]) (pattern pat)
+    | `TryInOtherwise (p1, pat, p2, p3, _ty) -> union (union_map phrase [p1; p2; p3]) (pattern pat)
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
                                     * StringSet.t (* free vars in the rhs *) =
     match binding with

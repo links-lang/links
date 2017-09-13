@@ -649,19 +649,33 @@ struct
 *)
 
   let try_as_in_otherwise env (c_try, (bnd, c_in), c_otherwise) = failwith "not yet"
-    (*
-              I.try_as_in_otherwise (ev p_try, (p, (eval (env ++ penv) p_in)), ev p_otherwise)
+    (* I.try_as_in_otherwise (ev p_try, (p, (eval (env ++ penv) p_in)), ev p_otherwise)
   val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
 
     let (p, penv) = (CompilePatterns.desugar_pattern `Local pat) in
-    let env' = env ++ penv in
 
+    (* Try is a straightforward reify *)
     let comp_try = reify c_try in
-    comp 
 
-    let comp_in = reify c_in in
+    (* Need to bind result in "as" *)
+    (* "as" computation: takes environment, evaluates body *)
+    let comp_as = (p, fun env -> eval (env ++ penv) body) in
+
+    (* "otherwise" is again straightforward reification *)
     let comp_otherwise = reify c_otherwise in
     lift (`Special (`TryInOtherwise (comp_try, (bnd, comp_in), comp_otherwise)))
+*)
+(*
+| `Switch (e, cases, Some t) ->
+              let cases =
+                List.map
+                  (fun (p, body) ->
+                     let p, penv = CompilePatterns.desugar_pattern `Local p in
+                       (p, fun env ->  eval (env ++ penv) body))
+                  cases
+              in
+                I.switch env (ev e, cases, t)
+
 *)
 
   let switch env (v, cases, t) =
@@ -836,9 +850,9 @@ struct
               cofv (I.inject (name, I.record ([], None), t))
           | `ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
-	  | `DoOperation (name, ps, Some t) ->
-	     let vs = evs ps in
-	     I.do_operation (name, vs, t)
+          | `DoOperation (name, ps, Some t) ->
+             let vs = evs ps in
+             I.do_operation (name, vs, t)
           | `Handle { Sugartypes.sh_expr; Sugartypes.sh_clauses; Sugartypes.sh_descr } ->
               let cases =
                 List.map
@@ -857,7 +871,7 @@ struct
                   cases
               in
                 I.switch env (ev e, cases, t)
-          | `TryInOtherwise (p_try, pat, p_in, p_otherwise) ->
+          | `TryInOtherwise (p_try, pat, p_in, p_otherwise, _ty) ->
               failwith "not yet"
           | `DatabaseLit (name, (None, _)) ->
               I.database (ev (`RecordLit ([("name", name)],
