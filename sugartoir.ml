@@ -640,46 +640,17 @@ struct
     (*         let (_,_,_,t) = desc.shd_types in *)
     (*         reflect (bs, (tc, t)))) *)
 
-(*
-                | `Val (_, p, body, _, _) ->
-                    let p, penv = CompilePatterns.desugar_pattern scope p in
-                    let env' = env ++ penv in
-                    let s = ev body in
-                    let ss = eval_bindings scope env' bs e in
-                      I.comp env (p, s, ss)
-*)
-
   let try_as_in_otherwise env ty (c_try, as_clause, c_otherwise) =
-    (* I.try_as_in_otherwise (ev p_try, (p, (eval (env ++ penv) p_in)), ev p_otherwise)
-  val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
-*)
-
     let (p, body) = as_clause in
     (* Try is a straightforward reify *)
     let comp_try = reify c_try in
-
     let reified_as_clause = ([p], fun env -> reify (body env)) in
-
     (* "otherwise" is again straightforward reification *)
     let comp_otherwise = reify c_otherwise in
     let (bs, tc) =
       CompilePatterns.compile_session_exception_handler
         env ty comp_try reified_as_clause comp_otherwise in
-
     reflect (bs, (tc, ty))
-    (* lift (`Special (`TryInOtherwise (comp_try, (bnd, comp_in), comp_otherwise))) *)
-(*
-| `Switch (e, cases, Some t) ->
-              let cases =
-                List.map
-                  (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern `Local p in
-                       (p, fun env ->  eval (env ++ penv) body))
-                  cases
-              in
-                I.switch env (ev e, cases, t)
-
-*)
 
   let switch env (v, cases, t) =
     let cases =
