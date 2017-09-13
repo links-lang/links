@@ -191,6 +191,7 @@ let keywords = [
  "orderby"  , ORDERBY;
  "op"       , OP;
  "open"     , OPEN;
+ "otherwise", OTHERWISE;
  "page"     , PAGE;
  "query"    , QUERY;
  "readonly" , READONLY;
@@ -213,6 +214,7 @@ let keywords = [
  "table"    , TABLE;
  "TableHandle", TABLEHANDLE;
  "true"     , TRUE;
+ "try"     , TRY;
  "typename" , TYPENAME;
  "update"   , UPDATE;
  "values"   , VALUES;

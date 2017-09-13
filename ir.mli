@@ -84,7 +84,9 @@ and special =
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
   | `Handle of handler
-  | `DoOperation of (name * value list * Types.datatype) ]
+  | `DoOperation of (name * value list * Types.datatype)
+  | `TryInOtherwise of (computation * (binder * computation) * computation)
+  ]
 and computation = binding list * tail_computation
 and clause = [`ResumptionBinder of binder | `NoResumption] * binder * computation
 and handler = {

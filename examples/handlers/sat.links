@@ -36,48 +36,24 @@ fun exprToString(expr) {
   }
 }
 
-# run
-sig run : (Comp({ |e}, a)) ~e~> a
-fun run(m) {m()}
-
-# failure
-sig fail : forall a . () {Fail:Zero|_}-> a
-fun fail() {switch(do Fail) { }}
-
-sig maybe : (Comp({Fail:Zero|e}, a)) -> Comp({ Fail{_} |e}, Maybe(a))
-fun maybe(m)() {
-  handle(m()) {
-    case Return(x) -> Just(x)
-    case Fail(_)   -> Nothing
+# Left-biased choice combinator
+sig <|> : (Comp({ Choose:Bool |e}, Maybe(a)), Comp({ Choose:Bool |e}, Maybe(a))) { Choose{_} |e}~> Maybe(a)
+op lhs <|> rhs {
+  handle({
+    if (do Choose) lhs()
+    else rhs()
+  }) {
+    case Choose(k) ->
+      switch(k(true)) {
+        case Nothing   -> k(false)
+        case otherwise -> otherwise
+     }
+    case Return(x) -> x
   }
 }
 
-# left biased choice
-fun leftBiased(m)() {
-  handle(m()) {
-    case Return(x) -> x
-    case Choose(k) ->
-      fun its(c)() {k(c)}
-      switch (run @ maybe(its(true))) {
-        case Just(x) -> x
-        case Nothing ->
-          switch (run @ maybe(its(false))) {
-            case Just(x) -> x
-            case Nothing -> fail()
-          }
-      }
-   }
-}
-
-# choice combinator
-sig <|> : (Comp({ Choose:Bool |e}, a), Comp({ Choose:Bool |e}, a)) {Choose:Bool|e}~> a
-op lhs <|> rhs {
-  if (do Choose) lhs()
-  else rhs()
-}
-
 # Returns a free variable, if any, in a given expression
-sig freeVariable : (Expr) -> Comp({Choose:Bool |_}, Maybe(String))
+sig freeVariable : (Expr) -> () {Choose{_} |_}~> Maybe(String)
 fun freeVariable(expr)() {
   switch (expr : Expr) {
      case Const(_)   -> Nothing
@@ -164,14 +140,14 @@ fun unConst(expr) {
 }
 
 # Simple satisfiability checker
-sig satisfiable : (Expr) -> Comp({Choose:Bool |e}, Bool)
-fun satisfiable(expr)() {
+sig satisfiable : (Expr) {Choose{_} |e}~> Bool
+fun satisfiable(expr) {
    switch (freeVariable(expr)()) {
       case Nothing -> unConst(expr)
       case Just(name) ->
         var trueGuess  = simplify(guessVariable(name, true, expr));
         var falseGuess = simplify(guessVariable(name, false, expr));
-        satisfiable(trueGuess)() || satisfiable(falseGuess)()
+        satisfiable(trueGuess) || satisfiable(falseGuess)
    }
 }
 
@@ -227,27 +203,3 @@ fun cnf(expr) {
 
 sig ex1 : Expr
 var ex1 = Or(Var("a"),Not(And(Var("b"),Or(Var("a"),Var("c")))));
-
-fun check(e) {
- var res = run -<- maybe -<- leftBiased @ satisfiable(cnf(e));
- switch (res) {
-   case Just(r) -> r
-   case Nothing -> error("Unhandled error.")
- }
-}
-
-# Optimisations
-typename Polarity = [|Positive
-                     |Negative
-                     |Mixed|];
-
-sig literalPolarity : (Expr, String) -> Maybe(Polarity)
-fun literalPolarity(e,x) {
-  switch (e : Expr) {
-    case Var(y) -> if (x == y) Just(Positive)
-                    else Nothing
-    case Not(Var(y)) -> if (x == y) Just(Negative)
-                          else Nothing
-    case otherwise -> Nothing
-  }
-}
