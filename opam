@@ -72,10 +72,6 @@ depends: [
 
 depopts: [
   "mysql"
-  "postgresql" { <= "4.0.1" }
+  "postgresql"
   "sqlite3"
-]
-
-conflicts: [
-  "postgresql" { >= "4.1" }
 ]
