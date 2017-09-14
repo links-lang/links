@@ -480,6 +480,7 @@ let options : opt list =
     (noshort, "print-keywords",      print_keywords,                   None);
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
+    ('rl',    "rlwrap",              set BS.native_readline false,     None);
     ]
 
 let file_list = ref []
