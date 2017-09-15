@@ -137,6 +137,14 @@ let rec rename_binders_get_shadow_tbl module_table
       | `Type t -> (self, `Type t)
       | `Val v -> (self, `Val v)
       | `Exp b -> (self, `Exp b)
+      | `Foreign (bnd, raw_name, lang, ext_file, dt) ->
+          let (o, bnd') = self#binder bnd in
+          (o, `Foreign (bnd', raw_name, lang, ext_file, dt))
+      | `AlienBlock (lang, lib, decls) ->
+          let (o, decls') = self#list (fun o (bnd, dt) ->
+            let (o, bnd') = o#binder bnd in
+            (o, (bnd', dt))) decls in
+          (o, `AlienBlock (lang, lib, decls'))
       | `QualifiedImport [] -> assert false
       | `QualifiedImport ((hd :: tl) as ns) ->
           (* Try to resolve head of PQN. This will either resolve to itself, or
@@ -197,8 +205,19 @@ and perform_renaming module_table path term_ht type_ht =
           let (_, rv') = o#row_var rv in
           (self, (xs', rv'))
 
+          (*
+    method! binding = function
+      | (`AlienBlock (n1, n2, decls), pos) -> (self, (`AlienBlock (n1, n2, decls), pos))
+      | b -> super#binding b
+      *)
+
+
     method! bindingnode = function
-      | `Module (n, bs) -> (self, `Module (n, bs))
+      | `Module (n, bs) ->
+          (self, `Module (n, bs))
+      | `AlienBlock ab ->
+          (self, `AlienBlock ab)
+      | `Foreign f -> (self, `Foreign f)
       | `Type (n, tvs, dt) ->
           (* Add type binding *)
           let fqn = make_path_string path n in
@@ -331,5 +350,5 @@ let desugarModules prog =
   let module_map = create_module_info_map prog in
   let renamed_prog = rename module_map prog in
   let flattened_prog = flatten_prog renamed_prog in
-  (* printf "Flattened AST: %s\n" (Sugartypes.Show_program.show flattened_prog); *)
+  (* printf "Flattened AST: %s\n%!" (Sugartypes.Show_program.show flattened_prog); *)
   flattened_prog

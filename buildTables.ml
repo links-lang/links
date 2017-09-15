@@ -227,7 +227,7 @@ struct
                 defs in
 
             o#close_cont (IntSet.union fvs fvs') bs
-        | `Alien (f, _language)::bs ->
+        | `Alien (f, _, _language)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
               o#close_cont fvs bs
         | `Module _::_ ->
