@@ -91,7 +91,7 @@ struct
       | Lit _
       | Call _
       | Dict _
-      | Arr _     
+      | Arr _
       | Bind _
       | Die _
       | Nothing as c -> show c
@@ -771,13 +771,14 @@ let script_tag body =
 
 let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
   let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
+  let custom_ext_script_tag str = "<script type='text/javascript' src='" ^ str ^ "'></script>" in
   let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
     string_of_bool onoff ^ ";</script>"
   in
   let extLibs = ext_script_tag "regex.js"^"
   "            ^ext_script_tag "yahoo/yahoo.js"^"
   "            ^ext_script_tag "yahoo/event.js" in
-  let ffiLibs = String.concat "\n" (List.map ext_script_tag external_files) in
+  let ffiLibs = String.concat "\n" (List.map custom_ext_script_tag external_files) in
   let db_config_script =
     if Settings.get_value js_hide_database_info then
     script_tag("    function _getDatabaseConfig() {
