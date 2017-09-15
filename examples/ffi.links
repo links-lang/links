@@ -1,6 +1,8 @@
-alien javascript module "test.js" Test {
-  setTitle : (String) ~%~> ();
-  alertBox : (String) ~%~> ();
+module Test {
+  alien javascript "test.js" {
+    setTitle : (String) ~%~> ();
+    alertBox : (String) ~%~> ();
+  }
 }
 
 fun mainPage(_, _) {
