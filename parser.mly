@@ -292,8 +292,9 @@ declaration:
 | nofun_declaration                                            { $1 }
 
 nofun_declaration:
-| ALIEN VARIABLE var COLON datatype SEMICOLON                  { let (name, name_pos) = $3 in
-                                                                   `Foreign ((name, None, name_pos), $2, datatype $5), pos() }
+| alien_block                                                  { $1 }
+| ALIEN VARIABLE STRING var COLON datatype SEMICOLON           { let (name, name_pos) = $4 in
+                                                                   `Foreign ((name, None, name_pos), name, $2, $3, datatype $6), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (from_option default_fixity $2) (fst $3);
                                                                    (`Infix, pos()) }
@@ -305,10 +306,23 @@ nofun_declaration:
 | links_module                                                 { $1 }
 | links_open                                                   { $1 }
 
+alien_datatype:
+| var COLON datatype SEMICOLON                                 { let (name, name_pos) = $1 in
+                                                                 ((name, None, name_pos), datatype $3) }
+
+alien_datatypes:
+| alien_datatype                                               { [$1] }
+| alien_datatype alien_datatypes                               { $1 :: $2 }
 
 links_module:
 | MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
                                                                  `Module (mod_name, $3), name_pos }
+
+alien_block:
+| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let language = $2 in
+                                                                 let library_name = $3 in
+                                                                 `AlienBlock (language, library_name, $5), pos () }
+
 module_name:
 | CONSTRUCTOR                                                  { $1 , pos () }
 
@@ -896,6 +910,7 @@ binding:
 | typed_handler_binding                                        { let (b, hnlit, pos) = $1 in
                                                                  `Handler (b, hnlit, None), pos }
 | links_module                                                 { $1 }
+| alien_block                                                  { $1 }
 | links_open                                                   { $1 }
 
 bindings:

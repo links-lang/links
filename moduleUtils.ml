@@ -105,6 +105,26 @@ let get_pat_vars () =
 
 let get_pattern_variables p = ((get_pat_vars ())#pattern p)#get_bindings
 
+(* Gets the list of external FFI files to include *)
+let get_ffi_files_obj =
+  object(self)
+    inherit SugarTraversals.fold as super
+    val filenames = []
+    method add_external_file x =
+      if (List.mem x filenames) then
+        self
+      else
+        {< filenames = x :: filenames >}
+
+    method get_filenames = List.rev filenames
+
+    method! bindingnode = function
+      | `Foreign (_, _, _, filename, _) -> self#add_external_file filename
+      | x -> super#bindingnode x
+  end
+
+let get_ffi_files prog = (get_ffi_files_obj#program prog)#get_filenames
+
 let make_path_string xs name =
   if name = "" then "" else
     let xs1 = xs @ [name] in

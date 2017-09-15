@@ -6,7 +6,7 @@ sig
     Types.typing_environment ->
     SourceCode.source_code ->
     Sugartypes.program ->
-    (Sugartypes.program * Types.datatype * Types.typing_environment)
+    ((Sugartypes.program * Types.datatype * Types.typing_environment) * string list)
   val interactive :
     Types.typing_environment ->
     SourceCode.source_code ->
@@ -31,18 +31,21 @@ struct
   let program =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
+      let program = DesugarAlienBlocks.transform_alien_blocks program in
+
       (* Module-y things *)
-      let program =
+      let (program, ffi_files) =
         if ModuleUtils.contains_modules program then
           if Settings.get_value Basicsettings.modules then
             let prog_with_deps = Chaser.add_dependencies program in
-            DesugarModules.desugarModules prog_with_deps
+            let ffi_files = ModuleUtils.get_ffi_files prog_with_deps in
+            (DesugarModules.desugarModules prog_with_deps, ffi_files)
           else
             failwith ("File contains modules, but modules not enabled. Please set " ^
               "modules flag to true, or run with -m.")
-      else program in
+      else (program, ModuleUtils.get_ffi_files program) in
       let _program = CheckXmlQuasiquotes.checker#program program in
-      ( ExperimentalExtensions.check#program
+      ((( ExperimentalExtensions.check#program
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
        ->- RefineBindings.refine_bindings#program
@@ -58,7 +61,7 @@ struct
        ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
        ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
-        program
+        program), ffi_files)
 
 
   let interactive =

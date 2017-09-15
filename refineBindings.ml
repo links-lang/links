@@ -29,8 +29,9 @@ let refine_bindings : binding list -> binding list =
               (* Modules & qualified imports will have been eliminated by now. Funs
                * aren't introduced yet. *)
               | `Handler _
-              | `Module _ 
+              | `Module _
               | `QualifiedImport _
+              | `AlienBlock _
               | `Funs _ -> assert false
               | `Exp _
               | `Foreign _
@@ -257,9 +258,10 @@ module RefineTypeBindings = struct
       let group, groups =
         List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
 	  match binding with
-    	    `Handler _  (* Desugared at this point *)
-          | `Module _ 
-          | `QualifiedImport _ 
+          | `Handler _  (* Desugared at this point *)
+          | `Module _
+          | `QualifiedImport _
+          | `AlienBlock _
           | `Funs _ -> assert false
           | `Fun _
           | `Foreign _
