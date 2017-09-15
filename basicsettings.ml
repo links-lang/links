@@ -136,8 +136,8 @@ let printing_functions = Settings.add_bool ("printing_functions", false, `User)
 (** Caching *)
 let cache_directory =
   Settings.add_string ("cache_directory", "", `User)
-let use_cache = Settings.add_bool("use_cache", true, `System)
-let make_cache = Settings.add_bool("make_cache", true, `System)
+let use_cache = Settings.add_bool("use_cache", false, `System)
+let make_cache = Settings.add_bool("make_cache", false, `System)
 
 (* if set to true, then Links will not check that the
    cache is newer than the Links binary
