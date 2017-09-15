@@ -100,6 +100,7 @@ struct
   and is_pure_binding (bind, _ : binding) = match bind with
       (* need to check that pattern matching cannot fail *)
     | `QualifiedImport _
+    | `AlienBlock _
     | `Module _
     | `Fun _
     | `Funs _
@@ -3421,8 +3422,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
           in
             `Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
 
-      | `Foreign ((name, _, pos), language, (_, Some datatype as dt)) ->
-          (`Foreign ((name, Some datatype, pos), language, dt),
+      | `Foreign ((name, _, pos), raw_name, language, file, (_, Some datatype as dt)) ->
+          (`Foreign ((name, Some datatype, pos), raw_name, language, file, dt),
            (bind_var empty_context (name, datatype)),
            StringMap.empty)
       | `Foreign _ -> assert false
@@ -3437,6 +3438,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
           `Exp (erase e), empty_context, usages e
       | `Handler _
       | `QualifiedImport _
+      | `AlienBlock _
       | `Module _ -> assert false
     in
       (typed, pos), ctxt, usage

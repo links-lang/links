@@ -1,0 +1,21 @@
+alien javascript module "test.js" Test {
+  setTitle : (String) ~%~> ();
+  alertBox : (String) ~%~> ();
+}
+
+fun mainPage(_, _) {
+  var _ = spawnClient {
+    Test.setTitle("Hello!");
+    Test.alertBox("Hola!")
+  };
+
+  page
+    <html><body><h1>Hi!</h1></body></html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()
