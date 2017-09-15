@@ -26,15 +26,15 @@ struct
   let program =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
+      let program = DesugarAlienBlocks.transform_alien_blocks program in
+
       (* Module-y things *)
       let (program, ffi_files) =
         if ModuleUtils.contains_modules program then
           if Settings.get_value Basicsettings.modules then
             let prog_with_deps = Chaser.add_dependencies program in
             let ffi_files = ModuleUtils.get_ffi_files prog_with_deps in
-            let prog_without_alien_modules =
-              DesugarAlienModules.transform_alien_modules prog_with_deps in
-            (DesugarModules.desugarModules prog_without_alien_modules, ffi_files)
+            (DesugarModules.desugarModules prog_with_deps, ffi_files)
           else
             failwith ("File contains modules, but modules not enabled. Please set " ^
               "modules flag to true, or run with -m.")

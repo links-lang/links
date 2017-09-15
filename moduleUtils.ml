@@ -43,7 +43,6 @@ object
 
   method! bindingnode = function
     | `QualifiedImport _
-    | `AlienModule _
     | `Module _ -> {< has_no_modules = false >}
     | b -> super#bindingnode b
 
@@ -109,7 +108,6 @@ let get_ffi_files_obj =
 
     method! bindingnode = function
       | `Foreign (_, _, _, filename, _) -> self#add_external_file filename
-      | `AlienModule (_, filename, _, _) -> self#add_external_file filename
       | x -> super#bindingnode x
   end
 

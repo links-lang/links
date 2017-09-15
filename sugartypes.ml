@@ -270,7 +270,7 @@ and bindingnode = [
 | `Infix
 | `Exp     of phrase
 | `Module  of name * binding list
-| `AlienModule of (name * name * name * ((binder * datatype') list))
+| `AlienBlock of (name * name * ((binder * datatype') list))
 ]
 and binding = bindingnode * position
 and directive = string * string list
@@ -450,7 +450,7 @@ struct
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
-    | `AlienModule _
+    | `AlienBlock _ (* TODO: this needs to be implemented *)
     | `Module _ -> failwith "Freevars for modules not implemented yet"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)

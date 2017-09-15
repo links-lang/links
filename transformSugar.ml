@@ -688,7 +688,7 @@ class transform (env : Types.typing_environment) =
       | `Type _ -> failwith "Unannotated type alias"
       | `Infix -> (o, `Infix)
       | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
-      | `AlienModule _ -> assert false
+      | `AlienBlock _ -> assert false
       | `Module _ -> assert false
       | `QualifiedImport _ -> assert false
 

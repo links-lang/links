@@ -586,15 +586,14 @@ class map =
           let n = o#name n in
           let bs = o#list (fun o -> o#binding) bs in
           `Module (n, bs)
-      | `AlienModule (lang, lib, mod_name, dts) ->
+      | `AlienBlock (lang, lib, dts) ->
           let lang = o#name lang in
           let lib = o#name lib in
-          let mod_name = o#name mod_name in
           let dts = o#list (fun o (b, dt) ->
             let b = o#binder b in
             let dt = o#datatype' dt in
             (b, dt)) dts in
-          `AlienModule (lang, lib, mod_name, dts)
+          `AlienBlock (lang, lib, dts)
 
     method binding : binding -> binding =
       fun (_x, _x_i1) ->
@@ -1132,10 +1131,9 @@ class fold =
           let o = o#name n in
           let o = o#list (fun o -> o#binding) bs in
           o
-      | `AlienModule (lang, lib, mod_name, dts) ->
+      | `AlienBlock (lang, lib, dts) ->
           let o = o#name lang in
           let o = o#name lib in
-          let o = o#name mod_name in
           let o = o#list (fun o (b, dt)->
             let o = o#binder b in
             o#datatype' dt) dts in
@@ -1803,16 +1801,15 @@ class fold_map =
           let (o, n) = o#string n in
           let (o, bs) = o#list (fun o -> o#binding) bs in
           (o, (`Module (n, bs)))
-      | `AlienModule (lang, lib, mod_name, dts) ->
+      | `AlienBlock (lang, lib, dts) ->
           let (o, lang) = o#name lang in
           let (o, lib) = o#name lib in
-          let (o, mod_name) = o#name mod_name in
           let (o, dts) = o#list (fun o (b, dt) ->
             let (o, b) = o#binder b in
             let (o, dt) = o#datatype' dt in
             (o, (b, dt))
           ) dts in
-          (o, (`AlienModule (lang, lib, mod_name, dts)))
+          (o, (`AlienBlock (lang, lib, dts)))
 
     method binding : binding -> ('self_type * binding) =
       fun (_x, _x_i1) ->

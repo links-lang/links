@@ -287,6 +287,7 @@ declaration:
 | nofun_declaration                                            { $1 }
 
 nofun_declaration:
+| alien_block                                                  { $1 }
 | ALIEN VARIABLE STRING var COLON datatype SEMICOLON           { let (name, name_pos) = $4 in
                                                                    `Foreign ((name, None, name_pos), name, $2, $3, datatype $6), pos() }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
@@ -308,16 +309,14 @@ alien_datatypes:
 | alien_datatype                                               { [$1] }
 | alien_datatype alien_datatypes                               { $1 :: $2 }
 
-alien_module_block:
-| LBRACE alien_datatypes RBRACE                                { $2 }
-
 links_module:
 | MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
                                                                  `Module (mod_name, $3), name_pos }
-| ALIEN var MODULE STRING module_name alien_module_block       { let (language, _) = $2 in
-                                                                 let library_name = $4 in
-                                                                 let (mod_name, name_pos) = $5 in
-                                                                 `AlienModule (language, library_name, mod_name, $6), name_pos }
+
+alien_block:
+| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let language = $2 in
+                                                                 let library_name = $3 in
+                                                                 `AlienBlock (language, library_name, $5), pos () }
 
 module_name:
 | CONSTRUCTOR                                                  { $1 , pos () }
@@ -869,6 +868,7 @@ binding:
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
 | links_module                                                 { $1 }
+| alien_block                                                  { $1 }
 | links_open                                                   { $1 }
 
 bindings:
