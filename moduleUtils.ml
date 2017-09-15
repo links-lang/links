@@ -17,8 +17,8 @@ let try_parse_file filename =
       Filename.chop_suffix path dir_sep else path in
 
   let poss_stdlib_dir =
-    let stdlib_path = Settings.get_value Basicsettings.stdlib_path in
-    if Settings.get_value Basicsettings.use_stdlib then
+    let stdlib_path = Settings.get_value Basicsettings.StdLib.stdlib_path in
+    if Settings.get_value Basicsettings.StdLib.use_stdlib then
       if stdlib_path <> "" then
         [check_n_chop stdlib_path]
       else

@@ -85,7 +85,7 @@ let reader_of_readline ps1 =
   let current_pos = ref 0 in
   let buf = Buffer.create 30 in
   let dots = String.make (String.length ps1 - 1) '.' ^ " " in
-  let history_path = Basicsettings.readline_history_path () in
+  let history_path = Basicsettings.Readline.readline_history_path () in
 
   (* Gets an input from the command line, with a newline at the end, *)
   let get_input prompt =

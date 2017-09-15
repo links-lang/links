@@ -241,7 +241,7 @@ let execute_directive (name, args) (valenv, nenv, typingenv) =
 (** Interactive loop *)
 let interact envs =
   (* Ensure we retain history *)
-  let history_path = Basicsettings.readline_history_path () in
+  let history_path = Basicsettings.Readline.readline_history_path () in
   ignore (LNoise.history_load ~filename:history_path);
   ignore (LNoise.history_set ~max_length:100);
   let rec interact envs =
@@ -301,7 +301,7 @@ let interact envs =
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
-      let use_linenoise = Settings.get_value Basicsettings.native_readline in
+      let use_linenoise = Settings.get_value Basicsettings.Readline.native_readline in
       begin
         if not use_linenoise then
           (print_string ps1; flush stdout)
