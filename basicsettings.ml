@@ -256,8 +256,26 @@ module Unify = struct
   let infer_recursive_types = Settings.add_string("infer_recursive_types", "guarded", `User)
 end
 
-(* Should we use the extra standard library definitions? *)
-let use_stdlib = Settings.add_bool ("use_stdlib", true, `User)
+(* Standard Library stuff *)
+module StdLib = struct
+  (* Should we use the extra standard library definitions? *)
+  let use_stdlib = Settings.add_bool ("use_stdlib", true, `User)
 
-(* Standard library path *)
-let stdlib_path = Settings.add_string ("stdlib_path", "", `User)
+  (* Standard library path *)
+  let stdlib_path = Settings.add_string ("stdlib_path", "", `User)
+end
+
+module Readline = struct
+  (* Path for readline history file *)
+  let readline_history_setting = Settings.add_string("readline_history_path", "", `User)
+
+  let readline_history_path () =
+    let settings_path = Settings.get_value readline_history_setting in
+    if settings_path = "" then
+      Filename.concat (Unix.getenv "HOME") ".links_history"
+    else
+      settings_path
+
+  (* Enable native readline? *)
+  let native_readline = Settings.add_bool("native_readline", true, `User)
+end

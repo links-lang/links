@@ -67,6 +67,7 @@ depends: [
   "base64"
   "cohttp"
   "websocket" { <= "2.8" }
+  "linenoise"
   "ANSITerminal"
 ]
 
