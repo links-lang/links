@@ -1,0 +1,10 @@
+(jbuild_version 1)
+
+(ocamlyacc (parser jsonparse xmlParser))
+(ocamllex (jsonlex lexer xmlLexer))
+
+(executable
+  ((name links)
+   (libraries (str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix websocket websocket.lwt websocket.cohttp ANSITerminal linenoise))
+   (preprocess (action (run deriving/deriving ${<})))
+))

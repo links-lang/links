@@ -33,8 +33,8 @@ end
 
 module Evaluator = functor (ContEval : Value.CONTINUATION_EVALUATOR with type v = Value.t
                                                                     and type result = Proc.thread_result Lwt.t
-                                                                    and type 'v t := 'v Value.Continuation.t)
-                           (Webs : WEBSERVER) ->
+                                                                    and type 'v t := 'v Value.Continuation.t) ->
+                   functor (Webs : WEBSERVER) ->
 struct
   type v = Value.t
   type result = Proc.thread_result Lwt.t
