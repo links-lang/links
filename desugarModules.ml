@@ -205,13 +205,6 @@ and perform_renaming module_table path term_ht type_ht =
           let (_, rv') = o#row_var rv in
           (self, (xs', rv'))
 
-          (*
-    method! binding = function
-      | (`AlienBlock (n1, n2, decls), pos) -> (self, (`AlienBlock (n1, n2, decls), pos))
-      | b -> super#binding b
-      *)
-
-
     method! bindingnode = function
       | `Module (n, bs) ->
           (self, `Module (n, bs))
