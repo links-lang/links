@@ -57,6 +57,7 @@ struct
        ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
        ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
        ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
+       ->- after_typing ((DesugarSessionExceptions.desugar_session_exceptions tyenv)#program ->- snd3)
        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
         program
 

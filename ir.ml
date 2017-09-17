@@ -88,8 +88,7 @@ and special =
   | `Select of (name * value)
   | `Choice of (value * (binder * computation) name_map)
   | `Handle of handler
-  | `DoOperation of (name * value list * Types.datatype)
-  | `TryInOtherwise of (computation * (binder * computation) * computation)]
+  | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
 and clause = [`ResumptionBinder of binder | `NoResumption] * binder * computation
 and handler = {
@@ -499,12 +498,6 @@ struct
 	   operations *)
 	   let (vs, _, o) = o#list (fun o -> o#value) vs in
 	   (`DoOperation (name, vs, t), t, o)
-  | `TryInOtherwise (c_try, (bnd, c_in), c_otherwise) ->
-      let (c_try, _, o) = o#computation c_try in
-      let (bnd, o) = o#binder bnd in
-      let (c_in, ty, o) = o#computation c_in in
-      let (c_otherwise, _, o) = o#computation c_otherwise in
-      `TryInOtherwise (c_try, (bnd, c_in), c_otherwise), ty, o
 
     method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
