@@ -198,9 +198,13 @@ let rec directives
         match args with
           | [filename] ->
               let parse_and_desugar (nenv, tyenv) filename =
-                let (nenv, tyenv), (globals, (locals, main), t), external_files =
+                let source =
                   Loader.load_file (nenv, tyenv) filename
                 in
+                  let open Loader in
+                  let (nenv, tyenv) = source.envs in
+                  let (globals, (locals, main), t) = source.program in
+                  let external_files = source.external_dependencies in
                   ((globals @ locals, main), t), (nenv, tyenv), external_files in
               let envs, _ = evaluate parse_and_desugar envs filename in
                 envs
@@ -350,9 +354,13 @@ let run_file prelude envs filename =
   Settings.set_value BS.interacting false;
   Webserver.set_prelude prelude;
   let parse_and_desugar (nenv, tyenv) filename =
-    let (nenv, tyenv), (globals, (locals, main), t), external_files =
+    let source =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
     in
+      let open Loader in
+      let (nenv, tyenv) = source.envs in
+      let (globals, (locals, main), t) = source.program in
+      let external_files = source.external_dependencies in
       ((globals @ locals, main), t), (nenv, tyenv), external_files
   in
     if Settings.get_value BS.web_mode then
@@ -378,10 +386,13 @@ let evaluate_string_in envs v =
      ignore (evaluate parse_and_desugar envs v))
 
 let load_prelude () =
-  let (nenv, tyenv), (globals, _, _), _ =
+  let open Loader in
+  let source =
     (Errors.display_fatal
        (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
   in
+  let (nenv, tyenv) = source.envs in
+  let (globals, _, _) = source.program in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
 
@@ -404,14 +415,15 @@ let load_prelude () =
 
 (*Impure so caching is painful *)
 let cache_load_prelude () =
-  let (nenv, tyenv), (globals, _, _), _ =
+  let open Loader in
+  let source =
     (Errors.display_fatal
        (Loader.wpcache "prelude.ir")
-	  (fun () -> Loader.read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value BS.prelude_file)))
-  in
+	  (fun () -> read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value BS.prelude_file))) in
+  let (nenv, tyenv) = source.envs in
+  let (globals, _, _) = source.program in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
-
   Lib.prelude_tyenv := Some tyenv;
   Lib.prelude_nenv := Some nenv;
 

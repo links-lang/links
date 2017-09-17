@@ -271,10 +271,13 @@ struct
 
   let make_program (_, nenv, tyenv) prelude filename =
     (* Warning: cache call nested inside another cache call *)
-    let (nenv', tyenv'), (globals, (locals, main), t), external_files =
+    let source =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
     in
-
+    let open Loader in
+    let (nenv', tyenv') = source.envs in
+    let (globals, (locals, main), t) = source.program in
+    let external_files = source.external_dependencies in
     begin
       try
         Unify.datatypes (t, Instantiate.alias "Page" [] tyenv.Types.tycon_env)

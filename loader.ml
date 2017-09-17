@@ -4,6 +4,16 @@ open Performance
 type envs = Var.var Env.String.t * Types.typing_environment
 type program = Ir.binding list * Ir.computation * Types.datatype
 
+(* Filename of an external dependency *)
+type ext_dep = string
+
+(* Result of loading a file *)
+type source = {
+  envs: envs;
+  program: program;
+  external_dependencies: ext_dep list
+}
+
 (** Marshal an IR program to a file along with naming and typing
     environments and the fresh variable counters.
 *)
@@ -51,7 +61,11 @@ let read_file_source (nenv, tyenv) (filename:string) =
        Var.varify_env (nenv, tyenv.Types.var_env),
        tyenv.Types.effect_row) program
   in
-  (nenv, tenv), (globals, main, t), ffi_files
+  {
+    envs = (nenv, tenv);
+    program = (globals, main, t);
+    external_dependencies = ffi_files
+  }
 
 let cachefile_path_tag filename tag =
   let suffix = if tag = "" then ".cache" else "."^tag^".cache" in
@@ -145,8 +159,8 @@ let print_cache filename =
 (** precompile a cache file *)
 let precompile_cache envs infile : unit =
   let outfile = infile ^ ".cache" in
-  let envs, program, _ = read_file_source envs infile in
-    write_program outfile envs program
+  let source = read_file_source envs infile in
+    write_program outfile source.envs source.program
 
 
 let wpcachefilename = ref ""
