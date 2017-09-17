@@ -931,6 +931,23 @@ let compile_handle_cases
                  (fun () -> "Compiled handler cases: "^(string_of_computation compiled_handle));
     compiled_handle
 
+let compile_session_exception_handler :
+  raw_env -> Types.datatype -> Ir.computation -> raw_clause -> Ir.computation -> Ir.computation =
+    fun env ty try_comp raw_as_clause otherwise_comp ->
+      let (nenv, tenv, eff) = env in
+      let as_clause = reduce_clause raw_as_clause in
+      let binder = Var.(make_local_info ->- fresh_binder) (ty, "_exn") in
+      let var = Var.var_of_binder binder in
+      let compiled_as_clause =
+        let tenv = TEnv.bind tenv (var, ty) in
+        let initial_env = (nenv, tenv, eff, PEnv.empty) in
+        let compiled_cases =
+          match_cases [var] [as_clause] (fun _ -> ([], `Special (`Wrong ty))) initial_env in
+        compiled_cases in
+      Debug.if_set (show_pattern_compilation)
+                   (fun () -> "Compiled handler cases: " ^ (string_of_computation compiled_as_clause));
+      ([], `Special (`TryInOtherwise (try_comp, (binder, compiled_as_clause), otherwise_comp)))
+
 (* Session typing choice compilation *)
 let match_choices : var -> clause list -> bound_computation =
   fun var clauses env ->
