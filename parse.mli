@@ -29,3 +29,8 @@ val parse_channel : ?interactive:(unit -> unit)
                   -> 'a grammar
                   -> (in_channel * string)
                   -> 'a * position_context
+
+val parse_readline : string
+                   -> ?in_context:context
+                   -> 'a grammar
+                   -> ('a * position_context)

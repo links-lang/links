@@ -240,17 +240,16 @@ let execute_directive (name, args) (valenv, nenv, typingenv) =
 
 (** Interactive loop *)
 let interact envs =
-  let make_dotter ps1 =
-    let dots = String.make (String.length ps1 - 1) '.' ^ " " in
-      fun _ ->
-        print_string dots;
-        flush stdout in
+  (* Ensure we retain history *)
+  let history_path = Basicsettings.Readline.readline_history_path () in
+  ignore (LNoise.history_load ~filename:history_path);
+  ignore (LNoise.history_set ~max_length:100);
   let rec interact envs =
-    let evaluate_replitem parse envs input =
+    let evaluate_replitem parse envs =
       let _, nenv, tyenv = envs in
         Errors.display ~default:(fun _ -> envs)
           (lazy
-             (match parse input with
+             (match parse () with
                 | `Definitions (defs, nenv'), tyenv' ->
                     let valenv, _ =
                       process_program
@@ -302,12 +301,24 @@ let interact envs =
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
-      print_string ps1; flush stdout;
-
+      let use_linenoise = Settings.get_value Basicsettings.Readline.native_readline in
+      begin
+        if not use_linenoise then
+          (print_string ps1; flush stdout)
+        else ()
+      end;
       let _, nenv, tyenv = envs in
 
-      let parse_and_desugar input =
-        let sugar, pos_context = Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive input in
+      let parse_and_desugar () =
+        let sugar, pos_context =
+          if use_linenoise then
+            Parse.parse_readline ps1 Parse.interactive
+          else
+            let make_dotter ps1 =
+              let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+              fun _ -> print_string dots; flush stdout in
+            Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive (stdin, "<stdin>")
+          in
         let sentence, t, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
           (* FIXME: What's going on here? Why is this not part of
              Frontend.Pipeline.interactive?*)
@@ -324,7 +335,7 @@ let interact envs =
         in
           sentence', tyenv'
       in
-        interact (evaluate_replitem parse_and_desugar envs (stdin, "<stdin>"))
+        interact (evaluate_replitem parse_and_desugar envs)
   in
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs
