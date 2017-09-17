@@ -3145,7 +3145,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify ~handle:Gripers.switch_pattern (pos_and_typ e, no_pos pattern_type) in
               `Switch (erase e, erase_cases binders, Some body_type), body_type, merge_usages [usages e; usages_cases binders]
-              (*
         | `TryInOtherwise (try_phrase, pat, in_phrase, unless_phrase, _) ->
             let try_phrase = tc try_phrase in
 
@@ -3191,8 +3190,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             `TryInOtherwise
               (erase try_phrase, erase_pat pat, erase in_phrase,
                 erase unless_phrase, Some return_type), return_type, usages_res
-                *)
-        | `TryInOtherwise _ -> assert false
         | `QualifiedVar _ -> assert false
     in (e, pos), t, usages
 

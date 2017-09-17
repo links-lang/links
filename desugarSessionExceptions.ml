@@ -31,28 +31,32 @@ and handler_descriptor = {
 *)
 
 
+module TyEnv = Env.String
+
 let dp = Sugartypes.dummy_position
 
-let desugar_session_exceptions =
-object (self)
-  inherit SugarTraversals.map as super
+class desugar_session_exceptions env =
+object (o : 'self_type)
+  inherit (TransformSugar.transform env) as super
 
 
   method! phrasenode = function
-    | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, _dt_opt) ->
-        let o = self in
-        let try_phr = o#phrase try_phr in
-        let (_, pos) = try_phr in
-        let try_phr = (`DoOperation ("Return", [try_phr], None), pos) in
-        let pat = o#pattern pat in
-        let as_phr = o#phrase as_phr in
-        let otherwise_phr = o#phrase otherwise_phr in
+    | `TryInOtherwise (_, _, _, _, None) -> assert false
+    | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
+        (* TODO: Typing is not worked out yet. Types are probably garbage. *)
+        let (o, try_phr, _try_dt) = o#phrase try_phr in
+        let envs = o#backup_envs in
+        let (o, pat) = o#pattern pat in
+        let (o, as_phr, _as_dt) = o#phrase as_phr in
+        let o = o#restore_envs envs in
+        let (o, otherwise_phr, otherwise_dt) = o#phrase otherwise_phr in
         (* Now, to create a handler... *)
+        (* Again, this is probably junk... *)
         let types =
           (Types.make_empty_closed_row (), `Not_typed,
-          Types.make_empty_closed_row (), `Not_typed) in
+          Types.make_empty_closed_row (), otherwise_dt) in
 
-        let mk_var_pat name : pattern = (`Variable (name, None, dp), dp) in
+        let mk_var_pat name : pattern = (`Variable (name, Some `Not_typed, dp), dp) in
 
         let return_pat = (`Variant ("Return", Some (pat)), dp) in
         let return_clause = (return_pat, as_phr) in
@@ -70,7 +74,7 @@ object (self)
         let clauses = [return_clause ; otherwise_clause] in
 
         let hndl_desc = {
-          shd_depth = `Shallow; (* I think? *)
+          shd_depth = `Deep; (* I think? *)
           shd_types = types;
           shd_raw_row = Types.make_empty_closed_row ()
         } in
@@ -79,14 +83,10 @@ object (self)
           sh_expr = try_phr;
           sh_clauses = clauses;
           sh_descr = hndl_desc
-        } in `Handle hndlr
+        } in (o, `Handle hndlr, dt)
     | e -> super#phrasenode e
 end
 
-(*
 let desugar_session_exceptions env =
   ((new desugar_session_exceptions env) :
     desugar_session_exceptions :> TransformSugar.transform)
-*)
-
-let desugar_session_exceptions = desugar_session_exceptions
