@@ -43,20 +43,17 @@ object (o : 'self_type)
   method! phrasenode = function
     | `TryInOtherwise (_, _, _, _, None) -> assert false
     | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
+        let open Pervasives in (* Let me have those sweet, sweet pipes *)
         (* TODO: Typing is not worked out yet. Types are probably garbage. *)
-        let (o, try_phr, _try_dt) = o#phrase try_phr in
+        let (o, try_phr, try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
-        let (o, as_phr, _as_dt) = o#phrase as_phr in
+        let (o, as_phr, as_dt) = o#phrase as_phr in
         let o = o#restore_envs envs in
         let (o, otherwise_phr, otherwise_dt) = o#phrase otherwise_phr in
         (* Now, to create a handler... *)
-        (* Again, this is probably junk... *)
-        let types =
-          (Types.make_empty_closed_row (), `Not_typed,
-          Types.make_empty_closed_row (), otherwise_dt) in
 
-        let mk_var_pat name : pattern = (`Variable (name, Some `Not_typed, dp), dp) in
+                let mk_var_pat name : pattern = (`Variable (name, Some `Not_typed, dp), dp) in
 
         let return_pat = (`Variant ("Return", Some (pat)), dp) in
         let return_clause = (return_pat, as_phr) in
@@ -73,11 +70,24 @@ object (o : 'self_type)
 
         let clauses = [return_clause ; otherwise_clause] in
 
+        (* Manually construct a row with the two hardwired handler cases. *)
+        let raw_row =
+          Types.make_empty_closed_row ()
+            |> Types.row_with ("Return", (`Present as_dt))
+            |> Types.row_with ("_SessionFail", (`Present otherwise_dt)) in
+
+        (* Dummy types *)
+        let types =
+          (Types.make_empty_closed_row (), try_dt,
+          Types.make_empty_closed_row (), otherwise_dt) in
+
         let hndl_desc = {
-          shd_depth = `Deep; (* I think? *)
+          shd_depth = `Shallow; (* I think? *)
           shd_types = types;
-          shd_raw_row = Types.make_empty_closed_row ()
+          shd_raw_row = raw_row
         } in
+
+        (* let try_operation = (`DoOperation ("_SessionFail", [], Some try_dt), snd try_phr) in *)
 
         let hndlr = {
           sh_expr = try_phr;
