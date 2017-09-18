@@ -377,6 +377,8 @@ class map =
           let _p2 = o#phrase _p2 in
           let _p3 = o#phrase _p3 in
           `TryInOtherwise (_p1, _pat, _p2, _p3, _ty)
+      | `Raise -> `Raise
+
 
     method phrase : phrase -> phrase =
       fun (_x, _x_i1) ->
@@ -976,6 +978,7 @@ class fold =
           let o = o#phrase _p2 in
           let o = o#phrase _p3 in
           o
+      | `Raise -> o
 
     method phrase : phrase -> 'self_type =
       fun (_x, _x_i1) ->
@@ -1624,6 +1627,7 @@ class fold_map =
           let (o, _p2) = o#phrase _p2 in
           let (o, _p3) = o#phrase _p3 in
           (o, (`TryInOtherwise (_p1, _pat, _p2, _p3, _ty)))
+      | `Raise -> (o, `Raise)
 
     method phrase : phrase -> ('self_type * phrase) =
       fun (_x, _x_i1) ->

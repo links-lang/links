@@ -41,6 +41,7 @@ object (o : 'self_type)
 
 
   method! phrasenode = function
+    | `Raise -> (o, `DoOperation ("_SessionFail", [], Some `Not_typed), `Not_typed)
     | `TryInOtherwise (_, _, _, _, None) -> assert false
     | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
         let open Pervasives in (* Let me have those sweet, sweet pipes *)
@@ -53,8 +54,7 @@ object (o : 'self_type)
         let (o, otherwise_phr, otherwise_dt) = o#phrase otherwise_phr in
         (* Now, to create a handler... *)
 
-                let mk_var_pat name : pattern = (`Variable (name, Some `Not_typed, dp), dp) in
-
+        let mk_var_pat name : pattern = (`Variable (name, Some `Not_typed, dp), dp) in
         let return_pat = (`Variant ("Return", Some (pat)), dp) in
         let return_clause = (return_pat, as_phr) in
         (* Otherwise clause: Distinguished 'session failure' name. Since

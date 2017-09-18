@@ -97,6 +97,7 @@ struct
     | `DBDelete _
     | `DBInsert _
     | `TryInOtherwise _
+    | `Raise
     | `DBUpdate _ -> false
   and is_pure_binding (bind, _ : binding) = match bind with
       (* need to check that pattern matching cannot fail *)
@@ -3191,6 +3192,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               (erase try_phrase, erase_pat pat, erase in_phrase,
                 erase unless_phrase, Some return_type), return_type, usages_res
         | `QualifiedVar _ -> assert false
+        | `Raise -> (`Raise, Types.fresh_type_variable (`Any, `Any), StringMap.empty)
     in (e, pos), t, usages
 
 (** [type_binding] takes XXX YYY (FIXME)

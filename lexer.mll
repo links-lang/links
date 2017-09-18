@@ -194,8 +194,8 @@ let keywords = [
  "otherwise", OTHERWISE;
  "page"     , PAGE;
  "query"    , QUERY;
+ "raise"    , RAISE;
  "readonly" , READONLY;
-
  "receive"  , RECEIVE;
  "returning", RETURNING;
  "select"   , SELECT;
