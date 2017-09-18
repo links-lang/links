@@ -62,13 +62,13 @@ remove: [
 depends: [
   "ocamlfind" {build}
   "deriving" {build}
-  "lwt"
   "cgi"
   "base64"
-  "cohttp"
-  "websocket" { <= "2.8" }
   "linenoise"
   "ANSITerminal"
+  "lwt"
+  "cohttp"
+  "websocket-lwt"
 ]
 
 depopts: [

@@ -2,7 +2,7 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix websocket websocket.lwt websocket.cohttp ANSITerminal linenoise
+PACKS=str deriving unix cgi base64 ANSITerminal linenoise cohttp lwt websocket websocket-lwt.cohttp
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
