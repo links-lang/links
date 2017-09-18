@@ -564,12 +564,12 @@ end
 module type WEB_COMPILER = sig
   val generate_program_page : ?cgi_env:(string * string) list ->
     (Var.var Env.String.t * Types.typing_environment) ->
-    Ir.program ->  string
+    Ir.program -> Loader.ext_dep list -> string
 
   val generate_real_client_page : ?cgi_env:(string * string) list ->
     (Var.var Env.String.t * Types.typing_environment) ->
     Ir.binding list -> (Value.env * Value.t) ->
-    Webserver_types.websocket_url option -> string
+    Webserver_types.websocket_url option -> Loader.ext_dep list -> string
 
   val make_boiler_page :
     ?cgi_env:(string * string) list ->
@@ -577,7 +577,7 @@ module type WEB_COMPILER = sig
     ?body:string ->
     ?html:string ->
     ?head:string ->
-    string list -> string
+    ?external_files:string list -> string list -> string
 end
 
 (** [generate]
@@ -1083,8 +1083,11 @@ end = functor (K : CONTINUATION) -> struct
          let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
          let varenv = List.fold_left VEnv.bind varenv fs in
          (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
-      | `Module _
-      | `Alien _ -> state, varenv, None, (fun code -> code)
+      | `Alien (bnd, raw_name, _lang) ->
+        let (a, _a_name) = name_binder bnd in
+        let varenv = VEnv.bind varenv (a, raw_name) in
+        state, varenv, None, (fun code -> code)
+      | `Module _ -> state, varenv, None, (fun code -> code)
 
   let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code) =
     fun valenv state venv ->
@@ -1102,8 +1105,10 @@ end = functor (K : CONTINUATION) -> struct
   let script_tag body =
     "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
 
-  let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") defs =
+  let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
     let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
+    let custom_ext_script_tag str = "<script type='text/javascript' src='" ^ str ^ "'></script>" in
+    let ffiLibs = String.concat "\n" (List.map custom_ext_script_tag external_files) in
     let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
       string_of_bool onoff ^ ";</script>"
     in
@@ -1130,6 +1135,7 @@ end = functor (K : CONTINUATION) -> struct
                      (  extLibs
                         ^ debug_flag (Settings.get_value Debug.debugging_enabled)
                         ^ ext_script_tag "jslib.js" ^ "\n"
+                        ^ ffiLibs ^ "\n"
                         ^ db_config_script
                         ^ env
                         ^ head
@@ -1171,7 +1177,7 @@ end = functor (K : CONTINUATION) -> struct
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-  let generate_program_page ?(cgi_env=[]) (nenv, tyenv) program  =
+  let generate_program_page ?(cgi_env=[]) (nenv, tyenv) program external_files =
     let printed_code = Loader.wpcache "irtojs" (fun () ->
       let _, venv, _ = initialise_envs (nenv, tyenv) in
       let _, code = generate_program venv program in
@@ -1181,6 +1187,7 @@ end = functor (K : CONTINUATION) -> struct
     (make_boiler_page
        ~cgi_env:cgi_env
        ~body:printed_code
+       ~external_files:external_files
      (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
        [])
 
@@ -1189,7 +1196,7 @@ end = functor (K : CONTINUATION) -> struct
     fun names ->
       String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
-  let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_conn_url =
+  let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_conn_url external_files =
     let open Json in
     let req_data = Value.Env.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
@@ -1233,6 +1240,7 @@ end = functor (K : CONTINUATION) -> struct
       ~head:(script_tag welcome_msg ^ "\n" ^ script_tag (K.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
              ^ Value.string_of_xml ~close_tags:true hs)
       ~onload:"_startRealPage()"
+      ~external_files:external_files
       []
 end
 
