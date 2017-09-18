@@ -131,9 +131,6 @@ sig
 
   val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 
-  val try_as_in_otherwise : env -> datatype ->
-    (tail_computation sem * (CompilePatterns.pattern * (env -> tail_computation sem)) * tail_computation sem) -> tail_computation sem
-
   val handle : env -> (tail_computation sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Sugartypes.handler_descriptor) -> tail_computation sem
 
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
@@ -640,18 +637,6 @@ struct
     (*         let (_,_,_,t) = desc.shd_types in *)
     (*         reflect (bs, (tc, t)))) *)
 
-  let try_as_in_otherwise env ty (c_try, as_clause, c_otherwise) =
-    let (p, body) = as_clause in
-    (* Try is a straightforward reify *)
-    let comp_try = reify c_try in
-    let reified_as_clause = ([p], fun env -> reify (body env)) in
-    (* "otherwise" is again straightforward reification *)
-    let comp_otherwise = reify c_otherwise in
-    let (bs, tc) =
-      CompilePatterns.compile_session_exception_handler
-        env ty comp_try reified_as_clause comp_otherwise in
-    reflect (bs, (tc, ty))
-
   let switch env (v, cases, t) =
     let cases =
       List.map
@@ -845,13 +830,6 @@ struct
                   cases
               in
                 I.switch env (ev e, cases, t)
-          | `TryInOtherwise (p_try, pat, p_in, p_otherwise, (Some ty)) ->
-              (* Need to bind result in "as" *)
-              (* "as" computation: takes environment, evaluates body *)
-              let (p, penv) = (CompilePatterns.desugar_pattern `Local pat) in
-              let as_clause = (p, fun env -> eval (env ++ penv) p_in) in
-              I.try_as_in_otherwise env ty (ec p_try, as_clause, ec p_otherwise)
-          | `TryInOtherwise _ -> assert false
           | `DatabaseLit (name, (None, _)) ->
               I.database (ev (`RecordLit ([("name", name)],
                                           Some (`FnAppl ((`Var "getDatabaseConfig", pos), []), pos)), pos))
@@ -966,6 +944,7 @@ struct
           | `QualifiedVar _
           | `HandlerLit _
           | `DoOperation _
+          | `TryInOtherwise _
           | `CP _ ->
               Debug.print ("oops: " ^ Sugartypes.Show_phrasenode.show e);
               assert false
