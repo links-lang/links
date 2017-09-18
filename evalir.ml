@@ -268,16 +268,14 @@ struct
           begin
             match loc with
               | `SpawnLocation (`ClientSpawnLoc client_id) ->
-                  Proc.create_client_process client_id func >>= fun new_pid ->
-                  apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
+                Proc.create_client_process client_id func >>= fun new_pid ->
+                apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
               | `SpawnLocation (`ServerSpawnLoc) ->
-                  begin
-                    let var = Var.dummy_var in
-                    let frame = K.Frame.make `Local var Value.Env.empty ([], `Apply (`Variable var, [])) in
-                    Proc.create_process false
-                      (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
-                    apply_cont cont env (`Pid (`ServerPid new_pid))
-                  end
+                let var = Var.dummy_var in
+                let frame = K.Frame.make `Local var Value.Env.empty ([], `Apply (`Variable var, [])) in
+                Proc.create_process false
+                  (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
+                apply_cont cont env (`Pid (`ServerPid new_pid))
               | _ -> assert false
           end
     | `PrimitiveFunction ("spawnAngelAt",_), [func; loc] ->
@@ -288,14 +286,14 @@ struct
           begin
             match loc with
               | `SpawnLocation (`ClientSpawnLoc client_id) ->
-                  Proc.create_client_process client_id func >>= fun new_pid ->
-                  apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
+                Proc.create_client_process client_id func >>= fun new_pid ->
+                apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
               | `SpawnLocation (`ServerSpawnLoc) ->
-                  let var = Var.dummy_var in
-                  let frame = K.Frame.make `Local var Value.Env.empty ([], `Apply (`Variable var, [])) in
-                  Proc.create_process true
-                    (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
-                  apply_cont cont env (`Pid (`ServerPid new_pid))
+                let var = Var.dummy_var in
+                let frame = K.Frame.make `Local var Value.Env.empty ([], `Apply (`Variable var, [])) in
+                Proc.create_process true
+                  (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
+                apply_cont cont env (`Pid (`ServerPid new_pid))
               | _ -> assert false
           end
     | `PrimitiveFunction ("spawnWait", _), [func] ->
