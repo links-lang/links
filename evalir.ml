@@ -236,7 +236,7 @@ struct
 
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.Env.bind x (p, `Local)) xs ps env in
-      computation env cont body
+      computation_yielding env cont body
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
       let key = EventHandlers.register hs in
       apply_cont cont env (`String (string_of_int key))
@@ -486,6 +486,8 @@ struct
     Proc.yield (fun () -> apply_cont' cont env v)
   and apply_cont' (cont : continuation) env v : result =
     K.Eval.apply ~env cont v
+  and computation_yielding env cont body : result =
+    Proc.yield (fun () -> computation env cont body)
   and computation env (cont : continuation) (bindings, tailcomp) : result =
     match bindings with
       | [] -> tail_computation env cont tailcomp
