@@ -41,3 +41,4 @@ FEATURES
  * Polymorphic records and variants
  * An effect system for supporting abstraction over database queries
 whilst guaranteeing that they can be efficiently compiled to SQL
+ * Handlers for algebraic effects on the server-side and the client-side

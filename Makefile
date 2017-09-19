@@ -2,36 +2,26 @@
 
 OCAMLMAKEFILE = ./OCamlMakefile
 
-PACKS=str deriving.syntax deriving.syntax.classes deriving.runtime lwt lwt.syntax lwt.unix cgi base64 cohttp cohttp.lwt unix websocket websocket.lwt websocket.cohttp ANSITerminal
+PACKS=str deriving unix cgi base64 ANSITerminal linenoise cohttp lwt websocket websocket-lwt.cohttp
 export OCAMLFLAGS=-syntax camlp4o
 
 PATH := $(PATH):deriving
 
-POSTGRESQL_LIBDIR=$(shell ocamlfind query postgresql)
-SQLITE3_LIBDIR=$(shell ocamlfind query sqlite3)
-MYSQL_LIBDIR=$(shell ocamlfind query mysql)
-
-ifneq ($(SQLITE3_LIBDIR),)
-   DB_CODE    += lite3_database.ml
-   DB_AUXLIBS += $(SQLITE3_LIBDIR)
-   DB_CLIBS   += sqlite3
-   DB_LIBS    += sqlite3
+ifneq ($(shell ocamlfind query sqlite3),)
+   DB_CODE += lite3_database.ml
+   PACKS   += sqlite3
 endif
 
-ifneq ($(MYSQL_LIBDIR),)
-   DB_CODE    += mysql_database.ml
-   DB_AUXLIBS += $(MYSQL_LIBDIR)
-   DB_LIBS    += mysql
+ifneq ($(shell ocamlfind query mysql),)
+   DB_CODE += mysql_database.ml
+   PACKS   += mysql
 endif
 
-ifneq ($(POSTGRESQL_LIBDIR),)
-   DB_CODE    += pg_database.ml
-   DB_AUXLIBS += $(POSTGRESQL_LIBDIR)
-   DB_LIBS    += postgresql
+ifneq ($(shell ocamlfind query postgresql),)
+   DB_CODE += pg_database.ml
+   PACKS   += postgresql
    THREADS = yes
 endif
-
-AUXLIB_DIRS = $(DB_AUXLIBS)
 
 ifdef PROF
 OCAMLOPT := ocamlopt -p -inline 0
@@ -83,8 +73,9 @@ SOURCES = $(OPC)                                \
           sugarTraversals.mli  sugarTraversals.ml       \
 	  moduleUtils.mli moduleUtils.ml \
           resolvePositions.mli resolvePositions.ml       \
-	  chaser.mli chaser.ml \
-	  desugarModules.mli desugarModules.ml \
+					chaser.mli chaser.ml \
+					desugarAlienBlocks.mli desugarAlienBlocks.ml \
+					desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
           requestData.mli requestData.ml        \
@@ -142,13 +133,7 @@ SOURCES = $(OPC)                                \
 #          test.ml                               \
 #          tests.ml                              \
 
-LIBS    = $(DB_LIBS)
-
 RESULT  = links
-CLIBS 	= $(DB_CLIBS)
-
-INCDIRS = $(AUXLIB_DIRS) $(EXTRA_INCDIRS)
-LIBDIRS = $(AUXLIB_DIRS) $(EXTRA_LIBDIRS)
 
 include $(OCAMLMAKEFILE)
 

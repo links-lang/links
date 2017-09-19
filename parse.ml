@@ -81,6 +81,38 @@ let reader_of_string ?pp string =
         current_pos := !current_pos + nchars;
         nchars
 
+let reader_of_readline ps1 =
+  let current_pos = ref 0 in
+  let buf = Buffer.create 30 in
+  let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+  let history_path = Basicsettings.Readline.readline_history_path () in
+
+  (* Gets an input from the command line, with a newline at the end, *)
+  let get_input prompt =
+    match LNoise.linenoise prompt with
+      | None -> ""
+      | Some inp ->
+          ignore (LNoise.history_add inp);
+          ignore (LNoise.history_save ~filename:history_path);
+          inp ^ "\n" in
+
+  let initial_string = get_input ps1 in
+  Buffer.add_string buf initial_string;
+  (* Function to access the buffer (passed to Lexing.from_function) *)
+  let accessor_fun =
+    fun dst_buf nchars ->
+      let nchars = min nchars (Buffer.length buf - !current_pos) in
+      Buffer.blit buf !current_pos dst_buf 0 nchars;
+      current_pos := !current_pos + nchars;
+      nchars in
+  (* Function to populate the buffer (passed as newline callback) *)
+  let populate_fun =
+    fun _ ->
+      let input_str = get_input dots in
+      Buffer.add_string buf input_str in
+  (accessor_fun, populate_fun)
+
+
 let interactive : Sugartypes.sentence grammar = Parser.interactive
 let program : (Sugartypes.binding list * Sugartypes.phrase option) grammar = Parser.file
 let datatype : Sugartypes.datatype grammar = Parser.just_datatype
@@ -118,6 +150,12 @@ let parse_string ?(pp=default_preprocessor ()) ?in_context:context grammar strin
 let parse_channel ?interactive ?in_context:context grammar (channel, name) =
   let context = normalize_context context in
     read ?nlhook:interactive ~parse:grammar ~infun:(reader_of_channel channel) ~name:name ~context
+
+(* Reads lines in and parses them, given an initial prompt *)
+let parse_readline ps1 ?in_context:context grammar =
+  let context = normalize_context context in
+  let (accessor_fun, populate_fun) = reader_of_readline ps1 in
+  read ?nlhook:(Some populate_fun) ~parse:grammar ~infun:accessor_fun ~name:"<stdin>" ~context
 
 let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
   match normalize_pp pp with

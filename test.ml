@@ -28,7 +28,7 @@ let checkTypes = attempt (Inference.type_program Library.typing_env ->- snd)
 
 let parse_thingy s =
   let sugar, pos_context = (Parse.parse_string Parse.program) s in
-  let program, _, _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
+  let (program, _, _), _ = Frontend.Pipeline.program Library.typing_env pos_context sugar in
     Sugar.desugar_program program
 
 let parse = attempt parse_thingy

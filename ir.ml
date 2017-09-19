@@ -75,7 +75,7 @@ and binding =
   [ `Let of binder * (tyvar list * tail_computation)
   | `Fun of fun_def
   | `Rec of fun_def list
-  | `Alien of (binder * language)
+  | `Alien of (binder * name * language)
   | `Module of (string * binding list option) ]
 and special =
   [ `Wrong of Types.datatype
@@ -104,7 +104,7 @@ let binding_scope : binding -> scope =
   | `Let (b, _)
   | `Fun (b, _, _, _)
   | `Rec ((b, _, _, _)::_)
-  | `Alien (b, _) -> Var.scope_of_binder b
+  | `Alien (b, _, _) -> Var.scope_of_binder b
   | `Rec []
   | `Module _ -> assert false
 
@@ -567,9 +567,9 @@ struct
                 defs in
             let defs = List.rev defs in
               `Rec defs, o
-        | `Alien (x, language) ->
+        | `Alien (x, name, language) ->
             let x, o = o#binder x in
-              `Alien (x, language), o
+              `Alien (x, name, language), o
         | `Module (name, defs) ->
             let defs, o =
               match defs with

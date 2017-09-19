@@ -47,7 +47,7 @@ let print_value rtype value =
     pp_print_newline std_formatter ()
 
 (** optimise and evaluate a program *)
-let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
+let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) external_files =
   let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
 
   (* TODO: optimisation *)
@@ -83,21 +83,21 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
   let program = Closures.program tenv Lib.primitive_vars program in
   BuildTables.program tenv Lib.primitive_vars program;
   let (globals, _) = program in
-  Webserver.init (valenv, nenv, tyenv) globals;
+  Webserver.init (valenv, nenv, tyenv) globals external_files;
 
   let valenv, v = lazy (Eval.run_program valenv program) <|measure_as|> "run_program" in
   lazy (printer t v) <|measure_as|> "print";
   valenv, v
 
-let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) =
-  lazy (process_program ~printer (valenv, nenv, tyenv) (program, t)) <|measure_as|> "process_program"
+let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) external_files =
+  lazy (process_program ~printer (valenv, nenv, tyenv) (program, t) external_files) <|measure_as|> "process_program"
 
 (** Read Links source code, then optimise and run it. *)
 let evaluate ?(handle_errors=Errors.display_fatal) parse (_, nenv, tyenv as envs) =
   let evaluate_inner x =
-    let (program, t), (nenv', tyenv') = parse (nenv, tyenv) x in
+    let (program, t), (nenv', tyenv'), external_files = parse (nenv, tyenv) x in
 
-    let valenv, v = process_program envs (program, t) in
+    let valenv, v = process_program envs (program, t) external_files in
     (valenv,
      Env.String.extend nenv nenv',
      Types.extend_typing_environment tyenv tyenv'), v
@@ -198,10 +198,14 @@ let rec directives
         match args with
           | [filename] ->
               let parse_and_desugar (nenv, tyenv) filename =
-                let (nenv, tyenv), (globals, (locals, main), t) =
+                let source =
                   Loader.load_file (nenv, tyenv) filename
                 in
-                  ((globals @ locals, main), t), (nenv, tyenv) in
+                  let open Loader in
+                  let (nenv, tyenv) = source.envs in
+                  let (globals, (locals, main), t) = source.program in
+                  let external_files = source.external_dependencies in
+                  ((globals @ locals, main), t), (nenv, tyenv), external_files in
               let envs, _ = evaluate parse_and_desugar envs filename in
                 envs
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
@@ -240,24 +244,23 @@ let execute_directive (name, args) (valenv, nenv, typingenv) =
 
 (** Interactive loop *)
 let interact envs =
-  let make_dotter ps1 =
-    let dots = String.make (String.length ps1 - 1) '.' ^ " " in
-      fun _ ->
-        print_string dots;
-        flush stdout in
+  (* Ensure we retain history *)
+  let history_path = Basicsettings.Readline.readline_history_path () in
+  ignore (LNoise.history_load ~filename:history_path);
+  ignore (LNoise.history_set ~max_length:100);
   let rec interact envs =
-    let evaluate_replitem parse envs input =
+    let evaluate_replitem parse envs =
       let _, nenv, tyenv = envs in
         Errors.display ~default:(fun _ -> envs)
           (lazy
-             (match parse input with
+             (match parse () with
                 | `Definitions (defs, nenv'), tyenv' ->
                     let valenv, _ =
                       process_program
                         ~printer:(fun _ _ -> ())
                         envs
                         ((defs, `Return (`Extend (StringMap.empty, None))),
-                         Types.unit_type) in
+                         Types.unit_type) [] in
 
                       Env.String.fold (* TBD: Make Env.String.foreach. *)
                         (fun name spec () ->
@@ -298,16 +301,28 @@ let interact envs =
                        Env.String.extend nenv nenv',
                        Types.extend_typing_environment tyenv tyenv')
                 | `Expression (e, t), _ ->
-                    let valenv, _ = process_program envs (e, t) in
+                    let valenv, _ = process_program envs (e, t) [] in
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
-      print_string ps1; flush stdout;
-
+      let use_linenoise = Settings.get_value Basicsettings.Readline.native_readline in
+      begin
+        if not use_linenoise then
+          (print_string ps1; flush stdout)
+        else ()
+      end;
       let _, nenv, tyenv = envs in
 
-      let parse_and_desugar input =
-        let sugar, pos_context = Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive input in
+      let parse_and_desugar () =
+        let sugar, pos_context =
+          if use_linenoise then
+            Parse.parse_readline ps1 Parse.interactive
+          else
+            let make_dotter ps1 =
+              let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+              fun _ -> print_string dots; flush stdout in
+            Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive (stdin, "<stdin>")
+          in
         let sentence, t, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
           (* FIXME: What's going on here? Why is this not part of
              Frontend.Pipeline.interactive?*)
@@ -324,7 +339,7 @@ let interact envs =
         in
           sentence', tyenv'
       in
-        interact (evaluate_replitem parse_and_desugar envs (stdin, "<stdin>"))
+        interact (evaluate_replitem parse_and_desugar envs)
   in
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs
@@ -350,10 +365,14 @@ let run_file prelude envs filename =
   Settings.set_value BS.interacting false;
   Webserver.set_prelude prelude;
   let parse_and_desugar (nenv, tyenv) filename =
-    let (nenv, tyenv), (globals, (locals, main), t) =
+    let source =
       Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
     in
-      ((globals @ locals, main), t), (nenv, tyenv)
+      let open Loader in
+      let (nenv, tyenv) = source.envs in
+      let (globals, (locals, main), t) = source.program in
+      let external_files = source.external_dependencies in
+      ((globals @ locals, main), t), (nenv, tyenv), external_files
   in
     if Settings.get_value BS.web_mode then
        Webif.serve_request envs prelude filename
@@ -367,21 +386,24 @@ let run_file prelude envs filename =
 let evaluate_string_in envs v =
   let parse_and_desugar (nenv, tyenv) s =
     let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value BS.pp) Parse.program s in
-    let program, t, _ = Frontend.Pipeline.program tyenv pos_context sugar in
+    let (program, t, _), _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
     let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
-    ((globals @ locals, main), t), (nenv, tyenv)
+    ((globals @ locals, main), t), (nenv, tyenv), []
   in
     (Settings.set_value BS.interacting false;
      ignore (evaluate parse_and_desugar envs v))
 
 let load_prelude () =
-  let (nenv, tyenv), (globals, _, _) =
+  let open Loader in
+  let source =
     (Errors.display_fatal
        (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
   in
+  let (nenv, tyenv) = source.envs in
+  let (globals, _, _) = source.program in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
 
@@ -404,14 +426,15 @@ let load_prelude () =
 
 (*Impure so caching is painful *)
 let cache_load_prelude () =
-  let (nenv, tyenv), (globals, _, _) =
+  let open Loader in
+  let source =
     (Errors.display_fatal
        (Loader.wpcache "prelude.ir")
-	  (fun () -> Loader.read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value BS.prelude_file)))
-  in
+	  (fun () -> read_file_source (Lib.nenv, Lib.typing_env) (Settings.get_value BS.prelude_file))) in
+  let (nenv, tyenv) = source.envs in
+  let (globals, _, _) = source.program in
 
   let tyenv = Lib.patch_prelude_funs tyenv in
-
   Lib.prelude_tyenv := Some tyenv;
   Lib.prelude_nenv := Some nenv;
 

@@ -107,7 +107,7 @@ let format_exception_html = function
           pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
   | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
-      (*raise exn (* use for backtraces *) *)
+      (* raise exn  (* use for backtraces *) *)
 
 let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
   try
