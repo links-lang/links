@@ -24,6 +24,11 @@ module type EVALUATOR = sig
   val apply_cont : Value.continuation -> Value.env -> v -> result
   val run_program : Value.env -> Ir.program -> (Value.env * v)
   val run_defs : Value.env -> Ir.binding list -> Value.env
+
+  (* LET'S SEE HOW THIS GOES *)
+  (* Environment at point of exception, environment when handler was installed *)
+  val handle_session_exception : Value.env -> Value.env ->
+    (Ir.scope * Ir.var * Value.env * Ir.computation) list -> unit
 end
 
 module Exceptions = struct
@@ -636,7 +641,7 @@ struct
        computation env cont m
     | `DoOperation (name, v, _) ->
        let vs = List.map (value env) v in
-       K.Eval.trap cont (name, Value.box vs)
+       K.Eval.trap env cont (name, Value.box vs)
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
@@ -718,6 +723,9 @@ struct
     try snd (Proc.run (fun () -> eval env program)) with
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
+
+  let handle_session_exception _raise_env _install_env _frames =
+    Printf.printf "in handle session exception\n"
 end
 
 module type EVAL = functor (Webs : WEBSERVER) -> sig

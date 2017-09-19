@@ -4,6 +4,7 @@ open Notfound
 open ProcessTypes
 
 let serialiser = Basicsettings.Serialisation.serialiser
+let session_exception_operation = "_SessionFail"
 
 class type otherfield =
 object
@@ -237,7 +238,7 @@ sig
   val lookup : Ir.var -> 'a t -> 'a option
   val lookupS : Ir.var -> 'a t -> ('a * Ir.scope) option
   val shadow : 'a t -> by:'a t -> 'a t
-  val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
+  val fold : (Ir.var -> ('a * Ir.scope) -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val globals : 'a t -> 'a t
   (* used only by json.ml, webif.ml ... *)
   val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
@@ -365,7 +366,8 @@ module type CONTINUATION_EVALUATOR = sig
               v ->                      (* the argument *)
               result
 
-  val trap : v t ->                        (* the continuation *)
+  val trap : v Env.t ->                    (* Current environment *)
+             v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
              result
 end
@@ -378,6 +380,7 @@ module type EVAL = sig
   val computation : v Env.t -> v t -> Ir.computation -> result
   val finish : v Env.t -> v -> result
   val reify : v t -> v
+  val handle_session_exception : v Env.t -> v Env.t -> (Ir.scope * Ir.var * v Env.t * Ir.computation ) list -> unit
   end
 
 module type CONTINUATION = sig
@@ -457,7 +460,7 @@ module Pure_Continuation = struct
        let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
        E.computation env cont comp
 
-    let trap _ _ = E.error "no trap"
+    let trap _env _ _ = E.error "no trap"
   end
 end
 
@@ -565,11 +568,16 @@ module Eff_Handler_Continuation = struct
            let k = (h, pk) :: k in
            E.computation env (Continuation k) comp
 
-      let trap k (opname, arg) =
+      let handle_session_exception = E.handle_session_exception
+
+      let trap env k (opname, arg) =
         let rec handle k' = function
-          | (User_defined h, pk) :: k ->
+          | ((User_defined h, pk) :: k) ->
              begin match StringMap.lookup opname h.op_clauses with
              | Some (kb, (var, _), comp) ->
+                (* TODO: Session exception handling logic goes here *)
+                (if opname = session_exception_operation then
+                  handle_session_exception env h.env pk else ());
                 let env =
                   match kb with
                   | `ResumptionBinder rb ->
@@ -585,11 +593,16 @@ module Eff_Handler_Continuation = struct
              | None -> handle ((User_defined h, pk) :: k') k
              end
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
-          | [] -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname)
+          | [] ->
+              (* TODO: Process termination logic goes here  *)
+              (if opname = session_exception_operation then
+                E.error "unhandled session fail\n" else ());
+              E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname)
         in match k with
         | Empty -> handle [] []
         | Continuation k -> handle [] k
         | ShallowContinuation (pk,k) -> handle [(Identity, pk)] k
+
     end
   let to_string _ = "generalised_continuation"
 
@@ -1105,3 +1118,4 @@ and value_of_xmlitem =
     | Text s -> `Variant ("Text", box_string s)
     | Attr (name, value) -> `Variant ("Attr", `Record [("1", box_string name); ("2", box_string value)])
     | Node (name, children) -> `Variant ("Node", `Record [("1", box_string name); ("2", value_of_xml children)])
+

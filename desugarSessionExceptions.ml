@@ -33,6 +33,8 @@ and handler_descriptor = {
 
 module TyEnv = Env.String
 
+let failure_op_name = Value.session_exception_operation
+
 let dp = Sugartypes.dummy_position
 
 class desugar_session_exceptions env =
@@ -41,7 +43,7 @@ object (o : 'self_type)
 
 
   method! phrasenode = function
-    | `Raise -> (o, `DoOperation ("_SessionFail", [], Some `Not_typed), `Not_typed)
+    | `Raise -> (o, `DoOperation (failure_op_name, [], Some `Not_typed), `Not_typed)
     | `TryInOtherwise (_, _, _, _, None) -> assert false
     | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
         let open Pervasives in (* Let me have those sweet, sweet pipes *)
@@ -65,7 +67,7 @@ object (o : 'self_type)
 
 
         let otherwise_pat =
-          (`Variant ("_SessionFail", Some (mk_var_pat dummy_name)), dp) in
+          (`Variant (failure_op_name, Some (mk_var_pat dummy_name)), dp) in
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 
         let clauses = [return_clause ; otherwise_clause] in
@@ -74,7 +76,7 @@ object (o : 'self_type)
         let raw_row =
           Types.make_empty_closed_row ()
             |> Types.row_with ("Return", (`Present as_dt))
-            |> Types.row_with ("_SessionFail", (`Present otherwise_dt)) in
+            |> Types.row_with (failure_op_name, (`Present otherwise_dt)) in
 
         (* Dummy types *)
         let types =

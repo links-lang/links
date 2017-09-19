@@ -97,7 +97,7 @@ sig
   val lookup : Ir.var -> 'a t -> 'a option
   val lookupS : Ir.var -> 'a t -> ('a * Ir.scope) option
   val shadow : 'a t -> by:'a t -> 'a t
-  val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
+  val fold : (Ir.var -> ('a * Ir.scope) -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val globals : 'a t -> 'a t
   (* used only by json.ml, webif.ml ... *)
   val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
@@ -126,7 +126,8 @@ module type CONTINUATION_EVALUATOR = sig
               result
 
   (* trap invocation *)
-  val trap : v t ->                        (* the continuation *)
+  val trap : v Env.t ->                    (* the current environment *)
+             v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
              result
 end
@@ -157,6 +158,8 @@ module type CONTINUATION = sig
                 val computation : v Env.t -> v t -> Ir.computation -> result (* computation evaluator *)
                 val finish : v Env.t -> v -> result                          (* ends program evaluation *)
                 val reify : v t -> v                                         (* continuation reification *)
+                val handle_session_exception : v Env.t -> v Env.t ->
+                  (Ir.scope * Ir.var * v Env.t * Ir.computation) list -> unit  (* session exception handling *)
             end) ->
     sig
       include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
@@ -249,3 +252,5 @@ val get_contained_channels : t -> chan list
 val value_of_xmlitem : xmlitem -> t
 
 val split_html : xml -> xml * xml
+
+val session_exception_operation : string

@@ -80,6 +80,7 @@ SOURCES = $(OPC)                                \
           defaultAliases.ml                     \
           requestData.mli requestData.ml        \
           value.mli value.ml                    \
+					channelVarUtils.mli channelVarUtils.ml \
           eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
