@@ -483,15 +483,11 @@ struct
        eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
   and apply_cont (cont : continuation) env v =
-<<<<<<< HEAD
     Proc.yield (fun () -> K.Eval.apply ~env cont v)
-=======
-    Proc.yield (fun () -> apply_cont' cont env v)
   and apply_cont' (cont : continuation) env v : result =
     K.Eval.apply ~env cont v
   and computation_yielding env cont body : result =
     Proc.yield (fun () -> computation env cont body)
->>>>>>> Fix #253
   and computation env (cont : continuation) (bindings, tailcomp) : result =
     match bindings with
       | [] -> tail_computation env cont tailcomp
