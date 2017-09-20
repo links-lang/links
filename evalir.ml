@@ -724,8 +724,11 @@ struct
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
 
-  let handle_session_exception _raise_env _install_env _frames =
-    Printf.printf "in handle session exception\n"
+  let handle_session_exception raise_env install_env frames =
+    Printf.printf "in handle session exception. Affected channels:\n";
+    let affected_channels =
+      ChannelVarUtils.affected_channels raise_env install_env frames in
+    List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels
 end
 
 module type EVAL = functor (Webs : WEBSERVER) -> sig
