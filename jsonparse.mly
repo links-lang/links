@@ -174,36 +174,42 @@ object_:
                                     | _ -> failwith ("jsonparse: table value must be a record")
                                 end
                             | ["_xml", t] ->
-                                  begin
-                                    match t with
-                                      | `List [node_type; s] when (Value.unbox_string node_type = "TEXT") ->
-                                          `XML (Value.Text (Value.unbox_string s))
-                                      | `List [node_type; tag; attrs; body]
-                                          when (Value.unbox_string node_type = "ELEMENT") ->
-                                          let tag = Value.unbox_string tag in
-                                          let attrs =
-                                            match attrs with
-                                              | `Record attrs -> attrs
-                                              | _ -> failwith ("jsonparse: xml attributes should be an attribute record") in
-                                            let attrs =
-                                              List.fold_left
-                                                (fun attrs (label, value) ->
-                                                   Value.Attr (label, Value.unbox_string value) :: attrs)
-                                                [] attrs in
-                                              let body =
-                                                match body with
-                                                  | `List body -> List.map
-                                                      (function
-                                                         | `XML body -> body
-                                                         | _ -> failwith ("jsonparse: xml body should be a list of xmlitems"))
-                                                        body
-                                                  | _ -> failwith ("jsonparse: xml body should be a list of xmlitems")
-                                              in
-                                                `XML (Value.Node (tag, attrs @ body))
-                                      | _ ->
-                                          failwith ("jsonparse: xml should be either a text node or an element node. Got: "
-                                                    ^ Value.string_of_value t)
-                                  end
+                              begin
+                                match t with
+                                  | `Record kvps ->
+                                    let get_assoc = (fun key -> match (List.find (function
+                                      | (k, _) when (k = key) -> true
+                                      | _ -> false
+                                    ) kvps) with
+                                      | (_, value) -> value) in
+                                    let elemType = Value.unbox_string (get_assoc "type") in
+                                    (
+                                      match elemType with
+                                        | "TEXT" -> `XML (Value.Text (Value.unbox_string (get_assoc "text")))
+                                        | "ELEMENT" ->
+                                          let tag = Value.unbox_string (get_assoc "tagname") in
+                                          let attrs = get_assoc "attributes" in
+                                          let attrs = match attrs with
+                                            | `Record attrs -> attrs
+                                            | _ -> failwith ("jsonparse: xml attributes should be an attribute record") in
+                                          let attrs = List.fold_left (fun attrs (label, value) ->
+                                            Value.Attr (label, Value.unbox_string value) :: attrs
+                                          ) [] attrs in
+                                          let body = get_assoc "body" in
+                                          let body = match body with
+                                            | `List body -> List.map (function
+                                                | `XML body -> body
+                                                | _ -> failwith ("jsonparse: xml body should be a list of xmlitems")
+                                              ) body
+                                            | _ -> failwith ("jsonparse: xml body should be a list of xmlitems")
+                                          in `XML (Value.Node (tag, attrs @ body))
+                                        | _ -> failwith ("Jsonparse: xml of unknown type in jsonparse. Got type: " ^ elemType)
+                                      )
+                                  | _ ->  failwith (
+                                      "jsonparse: xml should be either a text node or an element node. Got: " ^
+                                      Value.string_of_value t
+                                    )
+                                end
                             | ["_closureTable", id] ->
                               `ClientFunction("_closureTable["^Value.string_of_value id^"]")
                             | ["_serverFunc", id]

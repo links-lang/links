@@ -190,18 +190,22 @@ and less_lists = function
 let less_or_equal l r = less l r || equal l r
 
 let add_attribute : Value.t * Value.t -> Value.t -> Value.t =
+  let rec filter = fun name -> function
+    | [] -> []
+    | Value.Attr (s, _) :: nodes when s = name -> filter name nodes
+    | Value.NsAttr (ns, s, _) :: nodes when ns ^ ":" ^ s = name -> filter name nodes
+    | node :: nodes -> node :: filter name nodes
+  in
   fun (name,value) ->
-  let open Value in
-  function
-    | `XML (Node (tag, children)) ->
-        let name = Value.unbox_string name
-        and value = Value.unbox_string value in
-        let rec filter = function
-          | [] -> []
-          | Attr (s, _) :: nodes when s=name -> filter nodes
-          | node :: nodes -> node :: filter nodes
-        in
-          `XML (Node (tag, Attr (name, value) :: filter children))
+    let name = Value.unbox_string name
+    and value = Value.unbox_string value
+    in let new_attr = match String.split_on_char ':' name with
+          | [ n ] -> Value.Attr(n, value)
+          | [ ns; n ] -> Value.NsAttr(ns, n, value)
+          | _ -> failwith ("Attribute-name con only contain one colon for namespacing. Multiple found: " ^ name)
+    in function
+    | `XML (Value.Node (tag, children))       -> `XML (Value.Node (tag, new_attr :: filter name children))
+    | `XML (Value.NsNode (ns, tag, children)) -> `XML (Value.NsNode (ns, tag, new_attr :: filter name children))
     | r -> failwith ("cannot add attribute to " ^ Value.string_of_value r)
 
 let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
@@ -524,8 +528,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "childNodes",
   (p1 (function
          | `List [`XML (Value.Node (_, children))] ->
-             let children = filter (function (Value.Node _) -> true | _ -> false) children in
-               `List (map (fun x -> `XML x) children)
+           let children = List.filter (function 
+             | (Value.Node _) -> true 
+             | (Value.NsNode _) -> true 
+             | _ -> false) children in
+           `List (map (fun x -> `XML x) children)
+         | `List [ `XML (Value.NsNode (_, _, children)) ] ->
+           let children = List.filter (function 
+             | (Value.Node _) -> true 
+             | (Value.NsNode _) -> true 
+             | _ -> false) children in
+           `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
    datatype "(Xml) -> Xml",
   IMPURE);
@@ -535,25 +548,23 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "attribute",
-  (p2 (let none = `Variant ("None", `Record []) in
-         fun elem attr ->
-             match elem with
-               | `List ((`XML (Value.Node (_, children)))::_) ->
-                   let attr = Value.unbox_string attr in
-                   let attr_match = (function
-                                       | Value.Attr (k, _) when k = attr -> true
-                                       | _ -> false) in
-                     (try match List.find attr_match children with
-                        | Value.Attr (_, v) -> `Variant ("Some", Value.box_string v)
-                        | _ -> failwith "Internal error in `attribute'"
-                      with NotFound _ -> none)
-               | _ -> none),
-   datatype "(Xml,String) -> [|Some:String | None:()|]",
+  (p2 (fun elem attr ->
+    let attr = Value.unbox_string attr
+    in let find_attr = fun cs -> (try match List.find (function
+      | Value.Attr (k, _) when k = attr -> true
+      | Value.NsAttr (ns, k, _) when ns ^ ":" ^ k = attr -> true
+      | _ -> false
+    ) cs with
+      | Value.Attr (_, v) -> `Variant ("Just", Value.box_string v)
+      | Value.NsAttr (_, _, v) -> `Variant ("Just", Value.box_string v)
+      | _ -> failwith "Internal error in `attribute'"
+    with NotFound _ -> `Variant ("Nothing", `Record []))
+    in match elem with
+      | `List [ `XML (Value.Node (_, children)) ] -> find_attr children
+      | `List [ `XML (Value.NsNode (_, _, children)) ] -> find_attr children
+      | _ -> failwith "Non-element node given to attribute"),
+  datatype "(Xml, String) -> [| Just: String | Nothing |]",
   PURE);
-
-  "alertDialog",
-  (`Client, datatype "(String) ~> ()",
-   IMPURE);
 
   "debug",
   (p1 (fun message -> Debug.print (Value.unbox_string message);
@@ -649,7 +660,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(DomNode, Bool) ~> (DomNode)",
   IMPURE);
 
-  "replaceChildren",
+  "domReplaceChildren",
   (`Client, datatype "(Xml, DomNode) ~> ()",
   IMPURE);
 
@@ -673,26 +684,71 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(DomNode) ~> Bool",
   PURE);
 
-  (* Section: Accessors for XML *)
+  (* Create XML element from string, attributes and children *)
+  "makeXml",
+  (p3 (fun name attrList children -> match (attrList, children) with
+    | (`List attrs, `List cs) -> `XML (Value.Node (Value.unbox_string(name), List.map (function
+        | (`XML x) -> x
+        | _ -> failwith "non-XML in makeXml"
+      ) cs @ (List.map (function
+          | `Record [ ("1", key); ("2", value) ] -> Value.Attr (Value.unbox_string(key), Value.unbox_string(value))
+        | _ -> failwith "non-attr in makeXml"
+      ) attrs))
+    )
+    | _ -> failwith "non-XML in makeXml"),
+  datatype "(String, [(String, String)], Xml) -> XmlItem",
+  IMPURE);
+
+  (* XML <-> variant conversion *)
+
   "xmlToVariant",
-  (`Server (p1 (fun v ->
+  (p1 (fun v ->
                   match v with
                     | `List xs ->
                         `List (List.map (function
                                            | (`XML x) -> Value.value_of_xmlitem x
                                            | _ -> failwith "non-XML passed to xmlToVariant") xs)
-                    | _ -> failwith "non-XML passed to xmlToVariant")),
-   datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) |] ]",
+                    | _ -> failwith "non-XML passed to xmlToVariant"),
+  datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |] ]",
+  IMPURE);
+
+  "xmlItemToVariant",
+  (p1 (fun v ->
+      match v with
+        | (`XML x) -> Value.value_of_xmlitem x
+        | _ -> failwith "non-XML passed to xmlItemToVariant"),
+    datatype "(XmlItem) ~> mu n. [|Text:String | Attr:(String, String) | Node:(String, [ n ]) | NsAttr: (String, String, String) | NsNode: (String, String, [ n ]) |]",
+    IMPURE);
+
+  "variantToXml",
+  (p1 (fun v -> `List (List.map (fun i -> `XML (i)) (Value.xml_of_variants v))),
+   datatype "(mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |] ]) ~> Xml",
    IMPURE);
+
+  "variantToXmlItem",
+  (p1 (fun v -> `XML (Value.xmlitem_of_variant v)),
+    datatype "(mu n. [| Text: String | Attr: (String, String) | Node: (String, [ n ]) | NsAttr: (String, String, String) | NsNode: (String, String, [ n ]) |]) ~> XmlItem",
+    IMPURE);
+
+  (* Section: Accessors for XML *)
 
   "getTagName",
   (p1 (fun v ->
          match v with
-           | `List [`XML(Value.Node(name, _))] ->
-               Value.box_string name
+           | `List [ `XML (Value.Node (name, _)) ]      -> Value.box_string name
+           | `List [ `XML (Value.NsNode (_, name, _)) ] -> Value.box_string name
            | _ -> failwith "non-element passed to getTagName"),
   datatype "(Xml) ~> String",
   IMPURE);
+
+  "getNamespace",
+  (p1 (fun v -> match v with
+    | `List [ `XML (Value.NsNode (ns, _, _)) ] -> Value.box_string ns
+    | `List [ `XML (Value.Node (_, _)) ]       -> Value.box_string ""
+    | _ -> failwith "non-element passed to getNamespace"),
+  datatype "(Xml) ~> String",
+  IMPURE);
+
 
   "getTextContent",
   (`Client, datatype "(Xml) ~> String",
@@ -700,17 +756,20 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "getAttributes",
   (p1 (fun v ->
-         match v with
-           | `List [`XML(Value.Node(_, children))] ->
-               `List (map
-                        (function
-                           | (Value.Attr (name, value)) ->
-                               `Record [("1", Value.box_string name); ("2", Value.box_string value)]
-                           | _ -> assert false)
-                        (filter (function (Value.Attr _) -> true | _ -> false) children))
-           | _ -> failwith "non-element given to getAttributes"),
-   datatype "(Xml) ~> [(String,String)]",
-   IMPURE);
+    let attr_to_record = function
+      | (Value.Attr (name, value)) -> `Record [("1", Value.box_string name); ("2", Value.box_string value)]
+      | (Value.NsAttr (ns, name, value)) -> `Record [ ("1", Value.box_string (ns ^ ":" ^ name)); ("2", Value.box_string value) ]
+      | _ -> assert false
+    and is_attr = function
+      | Value.Attr _ -> true
+      | Value.NsAttr _ -> true
+      | _ -> false
+    in match v with
+      | `List [ `XML (Value.Node (_, children)) ]      -> `List (map attr_to_record (filter is_attr children))
+      | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (map attr_to_record (filter is_attr children))
+      | _ -> failwith "non-element given to getAttributes"),
+  datatype "(Xml) ~> [(String,String)]",
+  IMPURE);
 
   "hasAttribute",
   (`Client, datatype "(Xml, String) ~> Bool",
@@ -725,7 +784,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun v ->
          match v with
            | `List [`XML(Value.Node(_, children))] ->
-               `List (map (fun x -> `XML(x)) (filter (function (Value.Attr _) -> false | _ -> true) children))
+               `List (map (fun x -> `XML(x)) (filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
+           | `List [`XML(Value.NsNode(_, _, children))] ->
+               `List (map (fun x -> `XML(x)) (filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
            | _ -> failwith "non-element given to getChildNodes"),
    datatype "(Xml) ~> Xml",
   IMPURE);
@@ -772,6 +833,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "domGetStyleAttrFromRef",
   (`Client, datatype "(DomNode, String) ~> String",
+  IMPURE);
+
+  "domGetChildrenFromRef",
+  (`Client, datatype "(DomNode) ~> [ DomNode ]",
   IMPURE);
 
   "domSetStyleAttrFromRef",
@@ -855,12 +920,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(String) ~> ()",
   IMPURE);
 
-  (* Yahoo UI library functions we don't implement: *)
-  (* # stopEvent : ??? *)
-  (* # stopPropagation : ??? *)
-  (* # preventDefault : ??? *)
-
-  (* Cookies *)
+ (* Cookies *)
   "setCookie",
   (p2D (fun cookieName cookieVal req_data ->
          let cookieName = Value.unbox_string cookieName in
@@ -1225,6 +1285,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (p1 (function | `String s -> `String (Scanf.unescaped s) | _ -> failwith "Internal error: strunescape got wrong arguments"),
    datatype ("(String) ~> String "),
    IMPURE));
+
+   ("strContains",
+    (p2 (fun s c -> Value.box_bool (String.contains (Value.unbox_string s) (Value.unbox_char c))),
+    datatype ("(String, Char) ~> Bool"),
+    PURE)
+  );
 
   ("implode",
    (p1 (fun l ->

@@ -1103,7 +1103,7 @@ end = functor (K : CONTINUATION) -> struct
          state, venv, xs, f -<- g
 
   let script_tag body =
-    "<script type='text/javascript'><!--\n" ^ body ^ "\n--> </script>\n"
+    "<script type='text/javascript'><!--\n'use strict';\n" ^ body ^ "\n--> </script>\n"
 
   let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
     let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
@@ -1112,13 +1112,11 @@ end = functor (K : CONTINUATION) -> struct
     let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
       string_of_bool onoff ^ ";</script>"
     in
-    let extLibs = ext_script_tag "regex.js"^"
-  "            ^ext_script_tag "yahoo/yahoo.js"^"
-  "            ^ext_script_tag "yahoo/event.js" in
+    let extLibs = ext_script_tag "regex.js" in
     let db_config_script =
       if Settings.get_value js_hide_database_info then
         script_tag("    function _getDatabaseConfig() {
-      return {}
+     return {}
     }
     var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n")
       else
@@ -1143,6 +1141,7 @@ end = functor (K : CONTINUATION) -> struct
                      )
                    ^ "<body onload=\'" ^ onload ^ "\'>
   <script type='text/javascript'>
+  'use strict';
   _debug(\"Continuation: \" + _cont_kind);
   _startTimer();" ^ body ^ ";
   </script>" ^ html ^ "</body>")

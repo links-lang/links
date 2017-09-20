@@ -461,25 +461,106 @@ fun asList(t) server {
   for (x <-- t) [x]
 }
 
-# Create an arbitrary XML element
-# Inputs are not esacped. Sanitizing is the responsibility of the caller.
-#
-# @param {String} name Name of the element ([a-z]+)
-# @param {[(String, String)]} attributes List of attribute-value-pairs
-# @param {Xml} children Child XML nodes
-# @returns {Xml}
-sig makeXml : (String, [(String, String)], Xml) ~> Xml
-fun makeXml (name, attributes, children) {
-  var attributes = fold_left(fun (prev, curr) {
-    var (attr, value) = curr;
-    prev ^^ " " ^^ attr ^^ "=\"" ^^ value ^^ "\""
-  }, "", attributes);
-
-  var startTag = "<" ^^ name ^^ attributes ^^ ">";
-  var endTag = "</" ^^ name ^^ ">";
-
-  parseXml(startTag ^^ show(children) ^^ endTag)
+# Appends a XML forest to an XmlItems children
+# @param {XmlItem} item
+# @param {Xml} child
+# @returns {XmlItem}
+sig appendChild : (XmlItem, Xml) ~> XmlItem
+fun appendChild(item, child) {
+  switch (xmlItemToVariant(item)) {
+    case Node(n, c) -> variantToXmlItem(Node(n, c ++ xmlToVariant(child)))
+    case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, c ++ xmlToVariant(child)))
+    case _ -> error("Cannot append to " ^^ show(item))
+  }
 }
+
+# Sets or overrides an attribute of a XmlItem
+# @param {XmlItem} item
+# @param {String} name Name of the attribute
+# @param {String} value Value the attribute is set to
+# @returns {XmlItem} Updated item
+sig setAttribute : (XmlItem, String, String) ~> XmlItem
+fun setAttribute (item, name, value) {
+  fun helper (i, o) {
+    switch (i) {
+      case [ ] -> reverse(Attr(name, value) :: o)
+      case Attr(n, v)::t -> if (n == name) {
+        reverse(Attr(n, value) :: o)
+      } else {
+        helper(t, Attr(n, v) :: o)
+      }
+      case other::t -> helper(t, other :: o)
+    }
+  }
+  if (strContains(name, ':')) {
+    error("Attribute names cannot contain colons. Use setAttributeNS instead.")
+  } else {
+    switch (xmlItemToVariant(item)) {
+      case Node(n, c) -> variantToXmlItem(Node(n, helper(c, [ ])))
+      case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, helper(c, [ ])))
+      case _ -> error("Cannot set attribute of " ^^ show(item))
+    }
+  }
+}
+
+# Sets or overrides a namespaced attribute of a XmlItem
+# @param {XmlItem} item
+# @param {String} namespace
+# @param {String} name Name of the attribute
+# @param {String} value Value the attribute is set to
+# @returns {XmlItem} Updated item
+sig setAttributeNS : (XmlItem, String, String, String) ~> XmlItem
+fun setAttributeNS (item, namespace, name, value) {
+  fun helper (i, o) {
+    switch (i) {
+      case [ ] -> reverse(NsAttr(namespace, name, value) :: o)
+      case NsAttr(ns, n, v)::t -> if (ns == namespace && n == name) {
+        reverse(NsAttr(ns, n, value) :: o)
+      } else {
+        helper(t, NsAttr(ns, n, v) :: o)
+      }
+      case other::t -> helper(t, other :: o)
+    }
+  }
+
+  if (strContains(name, ':')) {
+    error("Attribute names cannot contain colons.")
+  } else {
+    switch (xmlItemToVariant(item)) {
+      case Node(n, c) -> variantToXmlItem(Node(n, helper(c, [ ])))
+      case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, helper(c, [ ])))
+      case _ -> error("Cannot set attribute of " ^^ show(item))
+    }
+  }
+}
+
+# Adds child to the front of an XmlItems children
+# Note: It is possible to add multiple children by passing an XML forest
+# @param {XmlItem} item
+# @param {Xml} child or children
+# @returns {XmlItem}
+sig prependChild : (XmlItem, Xml) ~> XmlItem
+fun prependChild (item, child) {
+  switch (xmlItemToVariant(item)) {
+    case Node(n, c) -> variantToXmlItem(Node(n, xmlToVariant(child) ++ c ))
+    case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, xmlToVariant(child) ++ c ))
+    case _ -> error("Cannot prepend child in " ^^ show(item))
+  }
+}
+
+# Replaces all children of an XmlItem
+# @param {XmlItem} item
+# @param {Xml} newChildren
+# @returns {XmlItem} item with new children
+sig replaceChildren : (XmlItem, Xml) ~> XmlItem
+fun replaceChildren (item, newChildren) {
+  switch (xmlItemToVariant(item)) {
+    case Node(n, c) -> variantToXmlItem(Node(n, xmlToVariant(newChildren)))
+    case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, xmlToVariant(newChildren)))
+    case _ -> error("Cannot replace children of " ^^ show(item))
+  }
+}
+
 
 #### FORMLETS ####
 ####   A library of functions supporting the 'formlet ... yields ...' syntax

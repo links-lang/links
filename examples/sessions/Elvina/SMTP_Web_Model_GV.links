@@ -94,7 +94,7 @@ page
 	<head><title>SMTP Client</title></head>
 	<body bgcolor="#e3e2dd">
 	
-	<form l:onsubmit="{replaceChildren(stringToXml(startCommunication(sender, recipient, message)), getNodeById("result"))}">
+	<form l:onsubmit="{domReplaceChildren(stringToXml(startCommunication(sender, recipient, message)), getNodeById("result"))}">
 	From:<br />
 	<input type="text" size="30" value="someone@staffmail.inf.ed.ac.uk" l:name="sender" /><br />
 	To:<br />

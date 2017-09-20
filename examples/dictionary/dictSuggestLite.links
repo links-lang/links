@@ -3,7 +3,7 @@ fun lowercase(s) {
 }
 
 fun suggest(pre) client {
- replaceChildren(
+ domReplaceChildren(
   format(completions(lowercase(pre))),
   getNodeById("suggestions")
  )
