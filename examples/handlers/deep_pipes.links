@@ -8,7 +8,7 @@ typename Consumer(e::Row, a) = (a)  ~e~> (Producer(e, a)) ~e~> ();
 
 typename Pump(e::Row,o)     = Comp({Yield:(o) {}-> () |e}, ());
 typename Sink(e::Row,i)     = Comp({Await:i           |e}, ());
-typename Pipe(e::Row,i,o)   = Comp({ |e}, ()); 
+typename Pipe(e::Row,i,o)   = Comp({ |e}, ());
 
 # Yield an element
 sig yield : (a) {Yield:(a) {}-> ()|_}-> ()
@@ -23,7 +23,7 @@ sig up : (Comp( {Yield:(s) {}-> () |e}, ()))
                 {Yield{yp}         |e}~>
 	  Comp( {Yield{yp}         |e}, (Consumer({Yield{yp} |e}, s)) {Yield{yp} |e}~> ())
 fun up(m)() {
-  handle(m) {
+  handle(m()) {
     case Return(x)   -> fun(_) { x }
     case Yield(s, k) ->
       fun(cons : Consumer({Yield{yp} |e}, s)) {
@@ -42,7 +42,7 @@ sig down : ( Comp( {Await:s |e}, ()) )
                    {Await{ap} |e}~>
              Comp( {Await{ap} |e}, (Producer({Await{ap} |e}, s)) {Await{ap} |e}~> ())
 fun down(m)() {
-  handle(m) {
+  handle(m()) {
     case Return(x) -> fun(_) { x }
     case Await(k)  ->
      fun(prod : Producer({Await{ap} |e}, s)) {
