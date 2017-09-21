@@ -1,0 +1,50 @@
+# Monadic reflection (state)
+
+typename Unit = [|Unit|];
+
+# State monad
+typename State (e::Row,a,s) = (s) { |e}~> (s,a);
+
+sig return : (a) -e-> State({ |e}, a, s)
+fun return(v)(st) {(st, v)}
+
+sig bind : (State({ |e}, a, s), (a) ~e~> State({ |e}, b, s)) -> State({ |e}, b, s)
+fun bind(m,k)(st) {
+  var (st1, x) = run(m, st);
+  k(x)(st1)
+}
+
+infixl 1 >>=;
+op m >>= k {bind(m,k)}
+
+sig get : State({ |e}, s, s)
+fun get(s) {(s,s)}
+
+sig put : (s) -> State({ |e}, Unit, s)
+fun put(s)(_) {(s, Unit)}
+
+sig run : (State({ |e}, a, s), s) ~e~> (s, a)
+fun run(m,st) {m(st)}
+
+# Reify reflect
+sig reify : (Comp({ Reflect:(State({ Reflect{p} |e}, a, s)) {}-> a |e}, b)) { Reflect{p} |e}~> State({ Reflect{p} |e}, b, s)
+fun reify(m) {
+  handle(m()) {
+    case Return(x)     -> return(x)
+    case Reflect(m, k) -> m >>= k
+  }
+}
+
+sig reflect : (State({ |e}, a, s)) {Reflect:(State({ |e}, a, s)) {}-> a |_}-> a
+fun reflect(m) {do Reflect(m)}
+
+# Example
+fun getR() {reflect(get)}
+fun putR(v) {reflect(put(v))}
+
+# Operation polymorphism is necessary for this example to type check.
+# fun example() {
+#   var st = getR();
+#   print("The initial state is " ^^ intToString(st));
+#   putR(100)
+# }
