@@ -902,7 +902,10 @@ end = functor (K : CONTINUATION) -> struct
                let (c, cname) = name_binder cb in
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
              let branches = StringMap.map generate_branch bs in
-             Call (Var "receive", [gv c; Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]))
+             let recv_cont_name = "__recv_cont" in
+             Bind (recv_cont_name,
+              Call (Var "_makeCont", [Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]),
+              Call (Var "receive", [gv c; Var recv_cont_name])))
       | `DoOperation (name, args, _) ->
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
