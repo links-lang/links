@@ -379,6 +379,9 @@ sig
   val receive_port : chan -> channel_id
   val send_port : chan -> channel_id
 
+  val cancel : chan -> unit Lwt.t
+  val is_endpoint_cancelled : channel_id -> bool
+
   val new_server_access_point : unit -> apid
   val new_client_access_point : client_id -> apid
 
@@ -781,6 +784,8 @@ and Session : SESSION = struct
   let chans_can_be_delegated chans =
     not @@ List.exists (is_delegation_carrier) chans
 
+  let lookup_endpoint = Hashtbl.find endpoint_states
+
   (* Queue of channel IDs where there are pending send actions *)
   let blocked_outgoing_channels = ref []
 
@@ -798,6 +803,24 @@ and Session : SESSION = struct
 
   let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
   let forward_tbl = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
+
+  let rec cancel chan =
+    let send_ep = send_port chan in
+    let local_ep = receive_port chan in
+    (* Cancelling a channel twice is a no-op *)
+    if is_endpoint_cancelled local_ep then Lwt.return () else
+    begin
+      cancel_endpoint local_ep;
+      match lookup_endpoint local_ep with
+        | Local ->
+            let buf = Hashtbl.find buffers local_ep |> Queue.to_list |> List.filter (Value.is_channel) in
+            List.fold_left (fun acc carried_chan ->
+              acc >>= fun _ -> cancel (Value.unbox_channel carried_chan))
+              ((OptionUtils.opt_iter (Proc.awaken) (Session.unblock send_ep));
+                Lwt.return ())
+              buf
+        | Remote _client_id -> failwith "TODO: send remote cancellation notification"
+    end
 
   (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)
   let fresh_chan () =
@@ -1087,7 +1110,7 @@ and Session : SESSION = struct
   (* Send which originated on the server *)
   let send_from_local_internal msg send_port =
     if is_endpoint_cancelled send_port then Lwt.return SendPartnerCancelled else
-    match Hashtbl.find endpoint_states send_port with
+    match lookup_endpoint send_port with
       | Local ->
           (* If we're doing a local -> local, we don't need to do anything special. *)
           do_local_send true msg send_port;
@@ -1102,7 +1125,7 @@ and Session : SESSION = struct
   (* Send which originated on a client *)
   let send_from_remote_internal owner_cid deleg_chans msg send_port =
     if is_endpoint_cancelled send_port then Lwt.return SendPartnerCancelled else
-    match Hashtbl.find endpoint_states send_port with
+    match lookup_endpoint send_port with
       | Local ->
           (* Client -> Server delegation *)
           (* If we're not delegating anything, then we can just do a
@@ -1243,7 +1266,7 @@ and Session : SESSION = struct
     Websockets.deliver_lost_messages cid carrier_channel lost_message_table
 
   let handle_lost_message_response carrier_channel lost_message_table =
-    match Hashtbl.find endpoint_states carrier_channel with
+    match lookup_endpoint carrier_channel with
       | Local ->
           handle_local_lost_messages carrier_channel lost_message_table
       | Remote cid ->
@@ -1257,7 +1280,7 @@ and Session : SESSION = struct
   let receive chan =
       let recv_port = receive_port chan in
       let partner_ep = send_port chan in
-      match Hashtbl.find endpoint_states recv_port with
+      match lookup_endpoint recv_port with
         | Local ->
           (* Debug.print ("Receiving on: " ^ string_of_int p); *)
           let p = find_active recv_port in

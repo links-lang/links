@@ -28,7 +28,7 @@ module type EVALUATOR = sig
   (* LET'S SEE HOW THIS GOES *)
   (* Environment at point of exception, environment when handler was installed *)
   val handle_session_exception : Value.env -> Value.env ->
-    (Ir.scope * Ir.var * Value.env * Ir.computation) list -> unit
+    (Ir.scope * Ir.var * Value.env * Ir.computation) list -> unit Lwt.t
 end
 
 module Exceptions = struct
@@ -230,6 +230,8 @@ struct
           let apid = Session.new_server_access_point () in
           apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
   and apply (cont : continuation) env : Value.t * Value.t list -> result =
+    let invoke_session_exception () =
+      special env cont (`DoOperation (Value.session_exception_operation, [], `Not_typed)) in
     function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) = find_fun f in
@@ -420,26 +422,32 @@ struct
         let open Session in
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
         let unboxed_chan = Value.unbox_channel chan in
-        match Session.receive unboxed_chan with
-          | ReceiveOK v ->
-            Debug.print ("grabbed: " ^ Value.string_of_value v);
-            apply_cont cont env (Value.box_pair v chan)
-          | ReceiveBlocked ->
-            (* Here, we have to extend the environment with a fresh variable
-             * representing the channel, since we can't create an IR application
-             * involving a Value.t (only an Ir.value).
-             * This *should* be safe, but still feels a bit unsatisfactory.
-             * It would be nice to refine this further. *)
-            let fresh_var = Var.fresh_raw_var () in
-            let extended_env = Value.Env.bind fresh_var (chan, `Local) env in
-            let grab_frame = K.Frame.of_expr extended_env (Lib.prim_appln "receive" [`Variable fresh_var]) in
-              let inp = (snd unboxed_chan) in
-              Session.block inp (Proc.get_current_pid ());
-              Proc.block (fun () -> apply_cont K.(grab_frame &> cont) env (`Record []))
-          | ReceivePartnerCancelled ->
-              (* TODO: implement cancellation logic here *)
-              failwith "receive partner cancelled -- must implement cancellation / exception logic here!"
-      end
+        (* If we've already been cancelled (as a result of us being blocked, and
+         * the opposite endpoint being cancelled), trigger an exception *)
+        let recv_ep = Session.receive_port unboxed_chan in
+        if Session.is_endpoint_cancelled recv_ep then
+          invoke_session_exception ()
+        else
+          match Session.receive unboxed_chan with
+            | ReceiveOK v ->
+              Debug.print ("grabbed: " ^ Value.string_of_value v);
+              apply_cont cont env (Value.box_pair v chan)
+            | ReceiveBlocked ->
+              (* Here, we have to extend the environment with a fresh variable
+               * representing the channel, since we can't create an IR application
+               * involving a Value.t (only an Ir.value).
+               * This *should* be safe, but still feels a bit unsatisfactory.
+               * It would be nice to refine this further. *)
+              let fresh_var = Var.fresh_raw_var () in
+              let extended_env = Value.Env.bind fresh_var (chan, `Local) env in
+              let grab_frame = K.Frame.of_expr extended_env (Lib.prim_appln "receive" [`Variable fresh_var]) in
+                let inp = (snd unboxed_chan) in
+                Session.block inp (Proc.get_current_pid ());
+                Proc.block (fun () -> apply_cont K.(grab_frame &> cont) env (`Record []))
+            | ReceivePartnerCancelled ->
+                Session.cancel unboxed_chan >>= fun _ ->
+                invoke_session_exception ()
+        end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
       let unblock p =
         match Session.unblock p with
@@ -549,7 +557,10 @@ struct
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
-  and special env (cont : continuation) : Ir.special -> result = function
+  and special env (cont : continuation) : Ir.special -> result =
+    let invoke_session_exception () =
+      special env cont (`DoOperation (Value.session_exception_operation, [], `Not_typed)) in
+    function
     | `Wrong _                    -> raise Exceptions.Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Table (db, name, keys, (readtype, _, _)) ->
@@ -684,7 +695,9 @@ struct
                Session.block inp (Proc.get_current_pid ());
                Proc.block (fun () -> apply_cont K.(choice_frame &> cont) env (`Record []))
           | ReceivePartnerCancelled ->
-              failwith "oops, should implement receive cancellation in choice!"
+              (* Cancel this endpoint, then invoke the session exception. *)
+              Session.cancel unboxed_chan >>= fun _ ->
+              invoke_session_exception ()
       end
   and finish env v = Proc.finish (env, v)
     (*****************)
@@ -740,7 +753,10 @@ struct
     Printf.printf "in handle session exception. Affected channels:\n";
     let affected_channels =
       ChannelVarUtils.affected_channels raise_env install_env frames in
-    List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels
+    (* List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels *)
+    List.fold_left (fun acc v -> acc >>= (fun _ -> Value.unbox_channel v |> Session.cancel))
+      (Lwt.return ())
+      affected_channels
 end
 
 module type EVAL = functor (Webs : WEBSERVER) -> sig

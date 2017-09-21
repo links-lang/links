@@ -380,7 +380,7 @@ module type EVAL = sig
   val computation : v Env.t -> v t -> Ir.computation -> result
   val finish : v Env.t -> v -> result
   val reify : v t -> v
-  val handle_session_exception : v Env.t -> v Env.t -> (Ir.scope * Ir.var * v Env.t * Ir.computation ) list -> unit
+  val handle_session_exception : v Env.t -> v Env.t -> (Ir.scope * Ir.var * v Env.t * Ir.computation ) list -> unit Lwt.t
   end
 
 module type CONTINUATION = sig
@@ -575,9 +575,8 @@ module Eff_Handler_Continuation = struct
           | ((User_defined h, pk) :: k) ->
              begin match StringMap.lookup opname h.op_clauses with
              | Some (kb, (var, _), comp) ->
-                (* TODO: Session exception handling logic goes here *)
                 (if opname = session_exception_operation then
-                  handle_session_exception env h.env pk else ());
+                  handle_session_exception env h.env pk else Lwt.return ()) >>= fun _ ->
                 let env =
                   match kb with
                   | `ResumptionBinder rb ->
@@ -1009,6 +1008,10 @@ type 'a serialiser = {
   save : 'a -> string;
   load : string -> 'a;
 }
+
+let is_channel = function
+  | `SessionChannel _ -> true
+  | _ -> false
 
 (** {1 Serialization of values. } *)
 

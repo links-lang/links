@@ -159,7 +159,7 @@ module type CONTINUATION = sig
                 val finish : v Env.t -> v -> result                          (* ends program evaluation *)
                 val reify : v t -> v                                         (* continuation reification *)
                 val handle_session_exception : v Env.t -> v Env.t ->
-                  (Ir.scope * Ir.var * v Env.t * Ir.computation) list -> unit  (* session exception handling *)
+                  (Ir.scope * Ir.var * v Env.t * Ir.computation) list -> unit Lwt.t (* session exception handling *)
             end) ->
     sig
       include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
@@ -252,5 +252,7 @@ val get_contained_channels : t -> chan list
 val value_of_xmlitem : xmlitem -> t
 
 val split_html : xml -> xml * xml
+
+val is_channel : t -> bool
 
 val session_exception_operation : string

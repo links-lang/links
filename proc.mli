@@ -117,6 +117,9 @@ sig
   val receive_port : chan -> channel_id
   val send_port : chan -> channel_id
 
+  val cancel : chan -> unit Lwt.t
+  val is_endpoint_cancelled : channel_id -> bool
+
   type send_result = SendOK | SendPartnerCancelled
   type receive_result = ReceiveOK of Value.t | ReceiveBlocked | ReceivePartnerCancelled
 
