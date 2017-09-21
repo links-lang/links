@@ -28,34 +28,34 @@ fun walkTree(tree)() {
 }
 
 # Convenient type synonyms
-typename Continuation(a,e::Row,b) = (a) { |e}~> b;
-typename Status(e::Row, a) = mu b . [|Done:Unit
-                                     |Yielded:(a, Continuation(Unit, { |e}, b))|];
-
-# Pauses evaluation of a computation whenever Yield occurs
-sig step : (Comp({ Yield:(a) {}-> Unit |e}, Unit)) {Yield{p} |e}~> Status({ Yield{p} |e}, a)
-fun step(f) {
-  handle (f()) {
-    case Return(x)  -> Done(x)
-    case Yield(v,k) -> Yielded(v,k)
-  }
-}
+typename Continuation(a, e::Row, r) = (a) { |e}~> r;
+typename Status(e::Row, a) = mu r . [|Done:Unit
+                                     |Yielded:(a, Continuation(Unit, { |e}, r))|];
 
 # Facilitates communication between two cooperative tree traversals
 sig sameFringe : (Tree(a), Tree(a)) ~> Bool
 fun sameFringe(x, y) {
   fun sameFringe_aux(f, g) {
-    switch ((f(), g())) {
+    switch ((f(()), g(()))) {
       case (Done(_),Done(_)) -> true
       case (Yielded(v1,k1),Yielded(v2,k2)) ->
         if (v1 <> v2) false
-        else sameFringe_aux(fun() {k1(())}, fun() {k2(())})
+        else sameFringe_aux(k1, k2)
       case (Done(_),_) -> false
       case (_,Done(_)) -> false
     }
   }
   var sameFringe_aux = gen2(sameFringe_aux);
-  sameFringe_aux(fun() {step(walkTree(x))}, fun() {step(walkTree(y))})
+  sameFringe_aux(step(walkTree(x)), step(walkTree(y)))
+}
+
+# Pauses evaluation of a computation whenever Yield occurs
+sig step : (Comp({ Yield:(a) {}-> Unit |e}, Unit)) -> (Unit) {Yield{p} |e}~> Status({ Yield{p} |e}, a)
+fun step(f)(()) {
+  handle (f()) {
+    case Return(()) -> Done(())
+    case Yield(v,k) -> Yielded(v,k)
+  }
 }
 
 # Examples
