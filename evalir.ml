@@ -406,20 +406,25 @@ struct
                 apply_cont cont env boxed_channel
       end
     | `PrimitiveFunction ("send", _), [v; chan] ->
+      let open Session in
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let (outp, _) = Value.unbox_channel chan in
-      Session.send_from_local v outp >>= fun _ ->
-      apply_cont cont env chan
+      Session.send_from_local v outp >>= fun res ->
+        begin
+          match res with
+            | SendOK -> apply_cont cont env chan
+            | SendPartnerCancelled -> failwith "oops, need to implement send cancellation logic here"
+        end
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
+        let open Session in
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
         let unboxed_chan = Value.unbox_channel chan in
-        let (_outp, inp) = unboxed_chan in
-        match Session.receive inp with
-          | Some v ->
+        match Session.receive unboxed_chan with
+          | ReceiveOK v ->
             Debug.print ("grabbed: " ^ Value.string_of_value v);
             apply_cont cont env (Value.box_pair v chan)
-          | None ->
+          | ReceiveBlocked ->
             (* Here, we have to extend the environment with a fresh variable
              * representing the channel, since we can't create an IR application
              * involving a Value.t (only an Ir.value).
@@ -431,6 +436,9 @@ struct
               let inp = (snd unboxed_chan) in
               Session.block inp (Proc.get_current_pid ());
               Proc.block (fun () -> apply_cont K.(grab_frame &> cont) env (`Record []))
+          | ReceivePartnerCancelled ->
+              (* TODO: implement cancellation logic here *)
+              failwith "receive partner cancelled -- must implement cancellation / exception logic here!"
       end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
       let unblock p =
@@ -653,11 +661,13 @@ struct
       apply_cont cont env chan
     | `Choice (v, cases) ->
       begin
+        let open Session in
         let chan = value env v in
         Debug.print("choosing from: " ^ Value.string_of_value chan);
-        let (_, inp) = Value.unbox_channel chan in
-        match Session.receive inp with
-          | Some v ->
+        let unboxed_chan = Value.unbox_channel chan in
+        let inp = receive_port unboxed_chan in
+        match Session.receive unboxed_chan with
+          | ReceiveOK v ->
             let label = fst @@ Value.unbox_variant v in
             Debug.print ("chose label: " ^ label);
 
@@ -667,12 +677,14 @@ struct
                   computation (Value.Env.bind var (chan, `Local) env) cont body
                 | None -> eval_error "Choice pattern matching failed"
               end
-          | None ->
+          | ReceiveBlocked ->
              let choice_frame =
                K.Frame.of_expr env (`Special (`Choice (v, cases)))
-            in
-            Session.block inp (Proc.get_current_pid ());
-            Proc.block (fun () -> apply_cont K.(choice_frame &> cont) env (`Record []))
+             in
+               Session.block inp (Proc.get_current_pid ());
+               Proc.block (fun () -> apply_cont K.(choice_frame &> cont) env (`Record []))
+          | ReceivePartnerCancelled ->
+              failwith "oops, should implement receive cancellation in choice!"
       end
   and finish env v = Proc.finish (env, v)
     (*****************)

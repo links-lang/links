@@ -370,6 +370,14 @@ end
 module type SESSION =
 sig
   type chan = Value.chan
+  type send_result = SendOK | SendPartnerCancelled
+  type receive_result =
+    | ReceiveOK of Value.t
+    | ReceiveBlocked
+    | ReceivePartnerCancelled
+
+  val receive_port : chan -> channel_id
+  val send_port : chan -> channel_id
 
   val new_server_access_point : unit -> apid
   val new_client_access_point : client_id -> apid
@@ -384,10 +392,11 @@ sig
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
 
-  val send_from_local : Value.t -> channel_id -> unit Lwt.t
+  val send_from_local : Value.t -> channel_id -> send_result Lwt.t
   val send_from_remote :
-    client_id -> Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
-  val receive : channel_id -> Value.t option
+    client_id -> Value.delegated_chan list -> Value.t -> channel_id -> send_result Lwt.t
+
+  val receive : chan -> receive_result
 
   val handle_lost_message_response :
     channel_id -> ((channel_id * (Value.t list)) list) -> unit Lwt.t
@@ -469,7 +478,8 @@ struct
       | ChanSend (chan_id, deleg_chans, v) ->
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Proc.resolve_external_processes v;
-          Session.send_from_remote client_id deleg_chans v chan_id
+          (* TODO: Have to send a cancellation notification if the send doesn't succeed *)
+          Session.send_from_remote client_id deleg_chans v chan_id >>= fun _ -> Lwt.return ()
       | LostMessageResponse (carrier_chan_id, lost_message_table) ->
           Session.handle_lost_message_response carrier_chan_id lost_message_table
 
@@ -713,6 +723,12 @@ and Session : SESSION = struct
   (* Invariant: receive endpoint must reside on the same VM. *)
   type chan = Value.chan
 
+  type send_result = SendOK | SendPartnerCancelled
+  type receive_result = ReceiveOK of Value.t | ReceiveBlocked | ReceivePartnerCancelled
+
+  let send_port = fst
+  let receive_port = snd
+
   (* ap_req represents requests to an access point.
    * A chan will be constructed on the first request to the AP (either request or accept)
    * and the flipped version will be given to the first matching partner.
@@ -745,6 +761,12 @@ and Session : SESSION = struct
 
   (* Orphan messages: messages which have arrived for a channel before lost messages *)
   let orphans = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
+
+  (* Endpoint Cancellation *)
+  let cancelled_endpoints = ref ChannelIDSet.empty
+  let cancel_endpoint c =
+    cancelled_endpoints := ChannelIDSet.add c (!cancelled_endpoints)
+  let is_endpoint_cancelled c = ChannelIDSet.mem c (!cancelled_endpoints)
 
   (* Delegating channels: channels being used as a carrier for delegation. Any channel in this
    * set should *not* be delegated *)
@@ -1064,36 +1086,52 @@ and Session : SESSION = struct
 
   (* Send which originated on the server *)
   let send_from_local_internal msg send_port =
+    if is_endpoint_cancelled send_port then Lwt.return SendPartnerCancelled else
     match Hashtbl.find endpoint_states send_port with
       | Local ->
           (* If we're doing a local -> local, we don't need to do anything special. *)
-          Lwt.return @@ do_local_send true msg send_port
+          do_local_send true msg send_port;
+          Lwt.return SendOK
       | Remote client_id ->
           (* If we're doing a local -> remote, we grab the buffer but don't need
            * to do anything special with lost messages. *)
           let deleg_chans = get_local_delegated_buffers msg in
-          delegate_to_client None deleg_chans client_id msg send_port
+          delegate_to_client None deleg_chans client_id msg send_port >>= fun _ ->
+          Lwt.return SendOK
 
-  (* Send whch originated on a client *)
+  (* Send which originated on a client *)
   let send_from_remote_internal owner_cid deleg_chans msg send_port =
+    if is_endpoint_cancelled send_port then Lwt.return SendPartnerCancelled else
     match Hashtbl.find endpoint_states send_port with
       | Local ->
           (* Client -> Server delegation *)
           (* If we're not delegating anything, then we can just do a
            * straightforward local send *)
           if (List.length deleg_chans) = 0 then
-            Lwt.return @@ do_local_send true msg send_port
+            begin
+              do_local_send true msg send_port;
+              Lwt.return SendOK
+            end
           else
-            (record_chan_locations owner_cid deleg_chans;
-            delegate_to_server owner_cid deleg_chans msg send_port)
+            begin
+              record_chan_locations owner_cid deleg_chans;
+              delegate_to_server owner_cid deleg_chans msg send_port >>= fun _ ->
+              Lwt.return SendOK
+            end
       | Remote cid ->
           if (List.length deleg_chans) = 0 then
-            Websockets.deliver_session_message cid send_port
-              deleg_chans false msg
+            begin
+              Websockets.deliver_session_message cid send_port
+                deleg_chans false msg >>= fun _ ->
+              Lwt.return SendOK
+            end
           else
-            (* Client -> Client Delegation *)
-            (add_delegation_carrier send_port;
-            delegate_to_client (Some owner_cid) deleg_chans cid msg send_port)
+            begin
+              (* Client -> Client Delegation *)
+              add_delegation_carrier send_port;
+              delegate_to_client (Some owner_cid) deleg_chans cid msg send_port >>= fun _ ->
+              Lwt.return SendOK
+            end
 
   let can_send chans send_port =
     (not @@ Hashtbl.mem outgoing_buffers send_port) &&
@@ -1118,11 +1156,19 @@ and Session : SESSION = struct
           let chan_ids = List.map (snd -<- fst) bufs in
           if can_send chan_ids send_port then
             send_from_local_internal msg send_port
-          else Lwt.return @@ queue_outgoing None bufs msg send_port
+          else
+            begin
+              queue_outgoing None bufs msg send_port;
+              Lwt.return SendOK
+            end
       | FromRemote (cid, chans) ->
           if can_send (List.map (snd -<- fst) chans) send_port then
             send_from_remote_internal cid chans msg send_port
-          else Lwt.return @@ queue_outgoing (Some cid) chans msg send_port
+          else
+            begin
+              queue_outgoing (Some cid) chans msg send_port;
+              Lwt.return SendOK
+            end
 
   let send_from_local msg port = send FromLocal msg port
   let send_from_remote cid chans msg port =
@@ -1208,15 +1254,21 @@ and Session : SESSION = struct
     let is_chan_ready (_, recv_ep) = Hashtbl.mem buffers recv_ep in
     List.for_all (is_chan_ready) contained_channels
 
-  let receive recv_port =
+  let receive chan =
+      let recv_port = receive_port chan in
+      let partner_ep = send_port chan in
       match Hashtbl.find endpoint_states recv_port with
         | Local ->
           (* Debug.print ("Receiving on: " ^ string_of_int p); *)
           let p = find_active recv_port in
           let buf = Hashtbl.find buffers p in
           if (not (Queue.is_empty buf)) && (can_receive_message @@ Queue.peek buf) then
-              Some (Queue.pop buf)
-          else None
+              ReceiveOK (Queue.pop buf)
+          else
+            if is_endpoint_cancelled partner_ep then
+              ReceivePartnerCancelled
+            else
+              ReceiveBlocked
         | Remote _ ->
             (* If this happens, something has gone *seriously* wrong
              * internally. *)

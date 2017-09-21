@@ -114,6 +114,11 @@ exception UnknownClientID of client_id
 module type SESSION =
 sig
   type chan = Value.chan
+  val receive_port : chan -> channel_id
+  val send_port : chan -> channel_id
+
+  type send_result = SendOK | SendPartnerCancelled
+  type receive_result = ReceiveOK of Value.t | ReceiveBlocked | ReceivePartnerCancelled
 
   val new_server_access_point : unit -> apid
   val new_client_access_point : client_id -> apid
@@ -128,11 +133,11 @@ sig
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
 
-  val send_from_local : Value.t -> channel_id -> unit Lwt.t
+  val send_from_local : Value.t -> channel_id -> send_result Lwt.t
   val send_from_remote :
-    client_id -> Value.delegated_chan list -> Value.t -> channel_id -> unit Lwt.t
+    client_id -> Value.delegated_chan list -> Value.t -> channel_id -> send_result Lwt.t
 
-  val receive : channel_id -> Value.t option
+  val receive : chan -> receive_result
 
   val handle_lost_message_response :
     channel_id -> ((channel_id * (Value.t list)) list) -> unit Lwt.t
