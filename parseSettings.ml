@@ -20,7 +20,7 @@ let set_web_mode() = (
 let print_keywords = ref false
 let print_cache : (bool * string option) ref = ref (false, None)
 
-let config_file   : string option ref = ref None
+let config_file   : string option ref = ref BS.config_file_path
 let options : opt list =
   let set setting value = Some (fun () -> Settings.set_value setting value) in
   [
