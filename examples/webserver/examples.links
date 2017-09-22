@@ -61,6 +61,7 @@ fun main() {
   addRoute("/examples/games/breakout.links", fun(_) {Breakout.main()});
   addRoute("/examples/games/tetris.links", fun(_) {Tetris.main()});
   addRoute("/examples/games/pacman.links", fun(_) {Pacman.main()});
+  addStaticRoute("/", "examples/", [("links", "text/plain")]);
 
   servePages()
 }

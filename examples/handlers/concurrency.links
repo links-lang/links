@@ -1,192 +1,132 @@
 #
-# Auxiliary functions
+# Cooperative concurrency
 #
-sig splitAt : (Int, [a]) ~> ([a], [a])
-fun splitAt(i, xs) {
-    (take(i,xs), drop(i,xs))
-}
 
-sig removeAt : (Int, [a]) ~> (a, [a])
-fun removeAt(i, xs) {
-  if (length(xs) >= i) {
-    if (i == 0) {
-       (hd(xs), tl(xs))
-    } else {
-       var (xs, ys) = splitAt(i, xs);
-       (hd(reverse(xs)), reverse(tl(reverse(xs))) ++ ys)
-    }
-  } else { error("Index out of bounds!") }
-}
+# type of a concurrent computation
+typename Co(e::Row) = Comp ({Fork : (Co({ |e})) {}-> (),
+                             Yield : () | e},
+                            ());
 
-#
-# Randomness
-#
-sig rand : Comp({Rand:a|_},a)
-fun rand() {do Rand}
-
-# Returns a random integer from [min; max]
-sig randomInteger : (Int, Int) -> (Comp({Rand:Int|e},a)) -> Comp({Rand{_}|e}, a)
-fun randomInteger(min, max) {
-    open handler(m) {
-      case Rand(k)   -> { var r = floatToInt(random() *. intToFloat((max - min) + 1)); k(r) }
-      case Return(x) -> x
-    }
-}
-
-# Returns an integer from [min; max]
-sig randIn : (Int, Int) {Rand:a|_}~> Int
-fun randIn(a,b) { randomInteger(a, b)(fun() { rand() })() }
-
-#
-# Queue interface
-#
-typename Queue(a::Type) = [a];
-
-sig enqueue : (a) {Enqueue:(a) {}-> ()|_}~> ()
-fun enqueue(e) {do Enqueue(e)}
-
-sig dequeue : Comp({Dequeue:a|_}, a)
-fun dequeue() {do Dequeue}
-
-sig is_empty : Comp({IsEmpty:Bool|_}, Bool)
-fun is_empty() {do IsEmpty}
-
-# Fair queue implementation
-sig fair_queuer : (Comp({Dequeue:a ,Enqueue:(a) {}-> (),IsEmpty:Bool|e}, b)) -> (Queue(a)) ->
-                   Comp({Dequeue{_},Enqueue{_}         ,IsEmpty{_}  |e}, b)
-open handler fair_queuer(m)(q) {
-  case Enqueue(e,k) -> k(())(q ++ [e])
-  case Dequeue(k)   -> { var e = hd(q); k(e)(tl(q)) }
-  case IsEmpty(k)   -> switch (q) {
-                         case []    -> k(true)(q)
-			 case other -> k(false)(q)
-                       }
-  case Return(x)    -> x
-}
-
-# Random dequeuer: Dequeues a random element
-sig random_dequeuer : (Comp({Dequeue:a ,Enqueue:(a) {}-> (),IsEmpty:Bool,Rand:b|e}, b)) -> (Queue(a)) ->
-                       Comp({Dequeue{_},Enqueue{_}         ,IsEmpty{_}  ,Rand:b|e}, b)
-open handler random_dequeuer(m)(q) {
-  case Enqueue(e,k) -> k(())(e :: q)
-  case Dequeue(k)   -> { var i = randIn(0,length(q)-1);
-                         var (t, ts) = removeAt(i, q);
-			 k(t)(ts)
-                       }
-  case IsEmpty(k)   -> switch (q) {
-                         case []    -> k(true)(q)
-			 case other -> k(false)(q)
-                       }
-  case Return(x)    -> x		       
-}
-
-#
-# Concurrency interface
-#
-sig fork : (a) {Fork:(a) {}-> b|_}~> b
-fun fork(t) {do Fork(t)}
+## cooperative concurrency interface
+sig fork : (Co({ |e})) {Fork:(Co({ |e})) {}-> ()|_}~> ()
+fun fork(p) {do Fork(p)}
 
 sig yield : Comp({Yield:()|_}, ())
 fun yield() {do Yield}
 
-# Cooperative routines scheduler
-open handler scheduler(m) {
-  case Fork(t,k) -> { enqueue(k); scheduler(t)() }
-  case Yield(k)  -> { var t = dequeue(); enqueue(k); t(()) }
-  case Return(x) -> { if (is_empty()) { x }
-                      else { var t = dequeue(); t(()) }
-		    }
+# example abstract concurrent computation
+sig test : Co({ |e})
+fun test() {
+  print("M1 ");
+  fork(fun () {print("A1 "); yield(); print ("A2 ")});
+  print("M2 ");
+  yield();
+  fork(fun () {print("B1 "); yield(); print ("B2 ")});
+  yield();
+  print("M3 ");
+  yield();
+  print("\n");
 }
 
-# The below is for testing purposes
-open handler sched(m) {
-  case Fork(t, k) -> { enqueue(k); sched(t)() }
-  case Yield(k)   -> { var t = dequeue(); t(()) }
-  case Return(x)  -> x
-}
+## queue interface
+sig enqueue : (a) {Enqueue:(a) {}-> b|e}-> b
+fun enqueue(x) {do Enqueue(x)}
 
-# Runs the coroutines scheduler on comp
-fun runScheduler(policy)(comp) {
-    policy(scheduler(comp))([])()
-}
+sig dequeue : () {Dequeue:a|e}-> a
+fun dequeue() {do Dequeue}
 
-# Spawning a thread from within another
-fun nested_forking() {
-    var _ = fork(fun() {
-		   print("Thread 1: Hello from thread 1!");
-		   yield();
-		   var _ = fork(fun() {
-		       	          print("Thread 1.1: Spawned from within Thread 1!");
-				  yield();
-				  print("Thread 1.1: Finished!");
-			        });
-	           print("Thread 1: Finished!");
-		   
- 	         });
-    
-    var _ = fork(fun() {
-    	           print("Thread 2: Hello from thread 2!");
-	  	   yield();
-		   print("Thread 2: Finished!");		   
-		 });
-		 ()
-}
+## process queues
 
-# Use list comprehension to print "Hello!" n times
-fun helloNtimes(n) {
-    var _ = fork(fun() {
-    	  var _ = for (_ <- [1..n]) {
-	      	   print("Hello!");
-		   []
-	  	 };
-          ()
-    });
-    ()
-}
+# process queue computations
+typename Proc(e::Row) =
+  Comp ({Enqueue:(Proc({ |e})) {}-> (),
+         Dequeue:Maybe(Proc({ |e}))
+        |e}, ());
 
-# Dynamic nested thread forking
-fun fib(n) {
-  print("fib(" ^^ intToString(n) ^^ ")");
-  if (n <= 1) { () }
-  else {       
-       var f1 = fork(fun() { fib(n-1) });
-       var f2 = fork(fun() { fib(n-2) });
-       ()
+# return true if the process queue is empty
+sig dequeueAndRun : Comp ({Enqueue:(Proc({ |e})) {}-> (),
+                           Dequeue:Maybe(Proc({ |e}))
+                      |e}, Bool)
+fun dequeueAndRun() {
+  switch (dequeue()) {
+    case (Just(p)) -> p(); false
+    case Nothing   ->      true
   }
 }
 
-# Concurrency handler using Links' built-in primitives
-open handler spawner(m) {
-  case Fork(t,k) -> { var pid = spawn { t() }; k(pid) }
-  case Return(x) -> x
+sig runNext : Proc({ |e})
+fun runNext() {
+  ignore(dequeueAndRun())
 }
 
-# Alternative fibonacci
-fun fib2(n) {
-    if (n <= 1) { n }
-    else {
-      var master = self();
-      var _ = fork(fun() {
-                  spawner(fun() {master ! fib2(n-1)})()
-              });
-      var _ = fork(fun() {
-                  spawner(fun() {master ! fib2(n-2)})()
-              });
-      recv() + recv()
-    }
+sig runAll : Proc({ |e})
+fun runAll() {
+  if (dequeueAndRun()) {()} else {runAll()}
 }
 
-# Fork/join concurrency
-open handler scheduler2(m) {
-  case Fork(t,k) -> { var x = scheduler2(t)(); k(x) }
-  case Return(x) -> x
+## implementations of cooperative concurrency
+
+# defer forked processes
+sig scheduleBreadthFirst :
+  (Co({Enqueue:(Proc({Fork{p}, Yield{q} | e})) {}-> (),
+       Dequeue:Maybe(Proc({Fork{p}, Yield{q} |e}))
+      |e})) ->
+   Proc ({Fork{p}, Yield{q} | e})
+handler scheduleBreadthFirst {
+  case Yield(k)   -> enqueue(fun() {k (())}); runNext()
+  case Fork(p, k) -> enqueue(scheduleBreadthFirst(p)); k(())
+  case Return(()) -> runAll()
 }
 
-fun fib3(n) {
-    if (n <= 1) { n }
-    else {
-      var f1 = fork(fun() { fib3(n-1) });
-      var f2 = fork(fun() { fib3(n-2) });
-      f1 + f2
-    }
+# eagerly run forked processes
+sig scheduleDepthFirst :
+  (Co({Enqueue:(Proc({Fork{p}, Yield{q} | e})) {}-> (),
+       Dequeue:Maybe(Proc({Fork{p}, Yield{q} |e}))
+      |e})) ->
+   Proc ({Fork{p}, Yield{q} | e})
+handler scheduleDepthFirst {
+  case Yield(k)   -> enqueue(fun() {k (())});
+                     runNext();
+  case Fork(p, k) -> enqueue(fun() {k (())});
+                     scheduleDepthFirst(p)()
+  case Return(()) -> runAll()
 }
+
+# randomly choose when to run forked processes
+sig scheduleRandom :
+  (Co({Enqueue:(Proc({Fork{p}, Yield{q} | e})) {}-> (),
+       Dequeue:Maybe(Proc({Fork{p}, Yield{q} |e}))
+      |e})) ->
+   Proc ({Fork{p}, Yield{q} | e})
+handler scheduleRandom {
+  case Yield(k)   -> enqueue(fun() {k (())}); runNext();
+  case Fork(p, k) -> if (random() < 0.5) {
+                       enqueue(scheduleRandom(p)); k(())
+                     } else {
+                       enqueue(fun() {k (())});
+                       scheduleRandom(p)()
+                     }
+  case Return(()) -> runAll()
+}
+
+
+## queue implementation using a zipper
+sig zipQueue :
+  (Comp ({Enqueue:(s) {}-> (), Dequeue:Maybe(s)|e}, a)) ->
+   Comp ({Enqueue{_},          Dequeue{_}      |e}, a)
+fun zipQueue(m) {
+  (handler (front, back) {
+     case Enqueue(x, k) -> k(())(front, x :: back)
+     case Dequeue(k)    ->
+       switch ((front, back)) {
+         case ([], [])   -> k(Nothing)([], [])
+         case ([], back) -> var (x::front) = reverse(back);
+                            k(Just(x))(front, [])
+         case (x::front, back) -> k(Just(x))(front, back)
+       }
+     case Return(x) -> x
+   })([], [])(m)
+}
+
+
+# zipQueue(scheduleRandom(test))()
