@@ -107,6 +107,17 @@ end
 
 module Env : ENV
 
+module Trap : sig
+  type ('v, 'r) result =
+    | Trap of (unit -> 'r)
+    | SessionTrap of ('v, 'r) session_result
+    | UnhandledSessionException of (Ir.computation list)
+  and ('v, 'r) session_result = {
+    handle_env: 'v Env.t;
+    frames: Ir.computation list;
+    continuation_thunk: (unit -> 'r)
+  }
+end
 (* Continuation *)
 module type FRAME = sig
   type 'v t
@@ -119,6 +130,7 @@ module type CONTINUATION_EVALUATOR = sig
   type v
   type result
   type 'v t
+  type trap_result = (v, result) Trap.result
 
   val apply : env:v Env.t ->            (* the current environment *)
               v t ->                    (* the continuation *)
@@ -126,10 +138,9 @@ module type CONTINUATION_EVALUATOR = sig
               result
 
   (* trap invocation *)
-  val trap : v Env.t ->                    (* the current environment *)
-             v t ->                        (* the continuation *)
+  val trap : v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
-             result
+             trap_result
 end
 
 module type CONTINUATION = sig
@@ -158,11 +169,12 @@ module type CONTINUATION = sig
                 val computation : v Env.t -> v t -> Ir.computation -> result (* computation evaluator *)
                 val finish : v Env.t -> v -> result                          (* ends program evaluation *)
                 val reify : v t -> v                                         (* continuation reification *)
-                val handle_session_exception : v Env.t -> v Env.t ->
-                  (Ir.scope * Ir.var * v Env.t * Ir.computation) list -> unit Lwt.t (* session exception handling *)
             end) ->
     sig
-      include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
+      include CONTINUATION_EVALUATOR with
+        type v = E.v
+        and type result = E.result
+        and type 'v t := 'v t
     end
 
   val to_string : 'v t -> string

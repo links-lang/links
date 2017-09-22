@@ -328,6 +328,18 @@ module Env = struct
     with NotFound str -> failwith("In uncompress_env: " ^ str)
 end
 
+module Trap = struct
+  type ('v, 'r) result =
+    | Trap of (unit -> 'r)
+    | SessionTrap of ('v, 'r) session_result
+    | UnhandledSessionException of (Ir.computation list)
+  and ('v, 'r) session_result = {
+    handle_env: 'v Env.t;
+    frames: Ir.computation list;
+    continuation_thunk: (unit -> 'r)
+  }
+end
+
 module type FRAME = sig
   type 'v t
 
@@ -360,16 +372,16 @@ module type CONTINUATION_EVALUATOR = sig
   type v
   type result
   type 'v t
+  type trap_result = (v, result) Trap.result
 
   val apply : env:v Env.t ->            (* the current environment *)
               v t ->                    (* the continuation *)
               v ->                      (* the argument *)
               result
 
-  val trap : v Env.t ->                    (* Current environment *)
-             v t ->                        (* the continuation *)
+  val trap : v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
-             result
+             trap_result
 end
 
 module type EVAL = sig
@@ -380,8 +392,7 @@ module type EVAL = sig
   val computation : v Env.t -> v t -> Ir.computation -> result
   val finish : v Env.t -> v -> result
   val reify : v t -> v
-  val handle_session_exception : v Env.t -> v Env.t -> (Ir.scope * Ir.var * v Env.t * Ir.computation ) list -> unit Lwt.t
-  end
+end
 
 module type CONTINUATION = sig
   type 'v t
@@ -404,7 +415,10 @@ module type CONTINUATION = sig
   module Evaluation :
   functor(E : EVAL with type 'v t := 'v t) ->
   sig
-    include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
+    include CONTINUATION_EVALUATOR with
+      type v = E.v
+      and type result = E.result
+      and type 'v t := 'v t
   end
 
   val to_string : 'v t -> string
@@ -453,6 +467,8 @@ module Pure_Continuation = struct
   struct
     type v = E.v
     type result = E.result
+    type trap_result = (v, result) Trap.result
+
     let apply  ~env k v =
     match k with
     | [] -> E.finish env v
@@ -460,7 +476,7 @@ module Pure_Continuation = struct
        let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
        E.computation env cont comp
 
-    let trap _env _ _ = E.error "no trap"
+    let trap _ _ = E.error "no trap"
   end
 end
 
@@ -547,6 +563,7 @@ module Eff_Handler_Continuation = struct
     struct
       type v = E.v
       type result = E.result
+      type trap_result = (v, result) Trap.result
 
       let return k h v =
         let ((var,_), comp) = h.return_clause in
@@ -568,15 +585,12 @@ module Eff_Handler_Continuation = struct
            let k = (h, pk) :: k in
            E.computation env (Continuation k) comp
 
-      let handle_session_exception = E.handle_session_exception
-
-      let trap env k (opname, arg) =
+      let trap k (opname, arg) =
+        let open Trap in
         let rec handle k' = function
           | ((User_defined h, pk) :: k) ->
              begin match StringMap.lookup opname h.op_clauses with
              | Some (kb, (var, _), comp) ->
-                (if opname = session_exception_operation then
-                  handle_session_exception env h.env pk else Lwt.return ()) >>= fun _ ->
                 let env =
                   match kb with
                   | `ResumptionBinder rb ->
@@ -588,15 +602,34 @@ module Eff_Handler_Continuation = struct
                      Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
                   | _ -> h.env
                 in
-                E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp
+                let continuation_thunk =
+                  fun () -> E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp in
+
+                if (opname = session_exception_operation) then
+                 let comps = List.map (fun (_, _, _, c) -> c) pk in
+                 SessionTrap ({
+                   handle_env = env;
+                   frames = comps;
+                   continuation_thunk = continuation_thunk
+                 }) else (Trap continuation_thunk)
              | None -> handle ((User_defined h, pk) :: k') k
              end
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
           | [] ->
-              (* TODO: Process termination logic goes here  *)
-              (if opname = session_exception_operation then
-                E.error "unhandled session fail\n" else ());
-              E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname)
+              begin
+              if opname = session_exception_operation then
+                (* TODO: Is this correct??? *)
+                let comps =
+                  begin
+                  match (List.rev k') with
+                    | [] -> []
+                    | (User_defined _, pk) :: _
+                    | (_, pk) :: _ -> List.map (fun (_, _, _, comp) -> comp) pk
+                  end in
+                UnhandledSessionException comps
+              else
+                Trap (fun () -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname))
+              end
         in match k with
         | Empty -> handle [] []
         | Continuation k -> handle [] k

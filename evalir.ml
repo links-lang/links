@@ -24,11 +24,6 @@ module type EVALUATOR = sig
   val apply_cont : Value.continuation -> Value.env -> v -> result
   val run_program : Value.env -> Ir.program -> (Value.env * v)
   val run_defs : Value.env -> Ir.binding list -> Value.env
-
-  (* LET'S SEE HOW THIS GOES *)
-  (* Environment at point of exception, environment when handler was installed *)
-  val handle_session_exception : Value.env -> Value.env ->
-    (Ir.scope * Ir.var * Value.env * Ir.computation) list -> unit Lwt.t
 end
 
 module Exceptions = struct
@@ -128,6 +123,15 @@ struct
            Utility.base64encode @@
              serialize_call_to_client req_data (cont, name, args) in
          Proc.abort ("text/plain", call_package)
+
+    let handle_session_exception raise_env install_env frames =
+      Printf.printf "in handle session exception. Affected channels:\n";
+      let affected_channels =
+        ChannelVarUtils.affected_channels raise_env install_env frames in
+      (* List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels *)
+      List.fold_left (fun acc v -> acc >>= (fun _ -> Value.unbox_channel v |> Session.cancel))
+        (Lwt.return ())
+        affected_channels
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
@@ -659,8 +663,17 @@ struct
        let cont = K.set_trap_point ~handler cont in
        computation env cont m
     | `DoOperation (name, v, _) ->
+  (* let handle_session_exception raise_env install_env frames = *)
+       let open Value.Trap in
        let vs = List.map (value env) v in
-       K.Eval.trap env cont (name, Value.box vs)
+       begin
+       match K.Eval.trap cont (name, Value.box vs) with
+         | Trap cont_thunk -> cont_thunk ()
+         | SessionTrap st_res ->
+             handle_session_exception env st_res.handle_env st_res.frames >>= fun _ ->
+             st_res.continuation_thunk ()
+         | UnhandledSessionException _frames -> failwith "soon"
+       end
     (* Session stuff *)
     | `Select (name, v) ->
       let chan = value env v in
@@ -731,6 +744,7 @@ struct
   (** [apply_cont_toplevel cont env v] applies a continuation to a value
       and returns the result. Finishing the main thread normally comes
       here immediately. *)
+
   let apply_cont_toplevel (cont : continuation) env v =
     try snd (Proc.run (fun () -> apply_cont cont env v)) with
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
@@ -748,15 +762,6 @@ struct
     try snd (Proc.run (fun () -> eval env program)) with
     | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
                                 " while interpreting.")
-
-  let handle_session_exception raise_env install_env frames =
-    Printf.printf "in handle session exception. Affected channels:\n";
-    let affected_channels =
-      ChannelVarUtils.affected_channels raise_env install_env frames in
-    (* List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels *)
-    List.fold_left (fun acc v -> acc >>= (fun _ -> Value.unbox_channel v |> Session.cancel))
-      (Lwt.return ())
-      affected_channels
 end
 
 module type EVAL = functor (Webs : WEBSERVER) -> sig

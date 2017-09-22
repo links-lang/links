@@ -130,7 +130,7 @@ let affected_channels raise_env install_env frames =
   (* show_frames frames; *)
   let affected_context_chans =
     List.fold_left (
-      fun acc (_, _, _, c) ->
+      fun acc c ->
         (affected_in_context raise_env c) @ acc) [] frames in
   unduplicate (fun v1 v2 -> v1 = v2) (added_before_raise @ affected_context_chans)
 
