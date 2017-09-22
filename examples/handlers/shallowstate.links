@@ -1,35 +1,82 @@
 # Shallow state handlers
 
+# Standard types
+typename Comp(e::Row, a) = () ~e~> a;
+typename Unit = [|Unit|];
+
+# Convenient auxiliary function: turns a shallow continuation into a
+# computation.
+sig compify : ((a) ~e~> b) -> ((a) -> Comp({ |e}, b))
+fun compify(k)(x) {
+  fun() {k(x)}
+}
+
+# The run handler forces evaluation of a computation
+fun run(m) {
+  handle(m()) {
+    case Return(x) -> x
+  }
+}
+
+# Get and put operations
 sig get : Comp({Get:a |_}, a)
 fun get() {do Get}
 
 sig put : (a) {Put:(a) {}-> ()|_}~> ()
-fun put(x) {do Put(x) }
+fun put(p) {do Put(p)}
 
-sig printLine : (String) {PrintLine:(String) {}-> ()|_}~> ()
-fun printLine(str) {do PrintLine(str)}
+# Print line operation
+sig log : (a) {Log:(a) {}-> ()|_}~> ()
+fun log(p) {do Log(p)}
 
-shallowhandler simpleState(m) {
-  case Get(k)    -> fun(s) { simpleState(fun() { k(s)  })(s) }
-  case Put(p,k)  -> fun(s) { simpleState(fun() { k(()) })(p) }
-  case Return(x) -> fun(s) { x }
+# Stateful computation evaluator
+sig evalState : (s) ->
+                (Comp({Get:s,Put:(s) {}-> () |e}, a)) ->
+                 Comp({Get{_},Put{_}         |e}, a)
+fun evalState(st)(m)() {
+  (shallowhandle(m()) {
+    case Return(x) -> fun(_)  { x }
+    case Get(k)    -> fun(st) { var k = compify(k); run -<- evalState(st) @ k(st) }
+    case Put(p,k)  -> fun(_)  { var k = compify(k); run -<- evalState(p)  @ k(()) }
+  })(st)
 }
 
-open shallowhandler forwardState(m)(s) {
-  case Get(k)    -> forwardState(fun() { k(s)  })(s)()
-  case Put(p,k)  -> forwardState(fun() { k(()) })(p)()
-  case Return(x) -> x
+fun logState(m)() {
+  shallowhandle(m()) {
+    case Get(k)    -> var k = compify(k);
+                      logState(k(get()))()
+    case Put(p,k)  -> var k = compify(k);
+                      log(p);
+                      logState(k(put(p)))()
+    case Return(x) -> x
+  }
 }
 
-open shallowhandler printHandler(m) {
-  case PrintLine(s, k) -> { print(s);
-                            printHandler(fun() { k(()) })()
-			  }
-  case Return(x)       -> x
+# Prints integers to stdout
+sig logPrinter : (Comp({Log:(Int) {}-> () |e}, a)) ->
+                  Comp({Log{_}            |e}, a)
+fun logPrinter(m)() {
+  shallowhandle(m()) {
+    case Return(x) -> x
+    case Log(p,k)  -> var k = compify(k);
+                      print(intToString(p));
+                      logPrinter(k(()))()
+  }
 }
 
+# Stateful computation which counts down to zero
 fun count() {
     var i = get();
     if (i <= 0) {i}
     else {put(i-1); count()}
+}
+
+# Example 1
+fun example1() {
+  run -<- evalState(5) @ count
+}
+
+# Example 2
+fun example2() {
+  (run -<- logPrinter -<- evalState(5) -<- logState) @ count
 }
