@@ -10,7 +10,7 @@
   (libraries (findlib.dynload threads dynlink links-core))))
 
 (install
- ((section bin)
+ ((section lib)
   (files (prelude.links))
   (package links)))
 
