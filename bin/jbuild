@@ -1,0 +1,10 @@
+(jbuild_version 1)
+
+(executable
+ ((name links)
+  (public_name links)
+  (package links)
+  (modes (native))
+  (flags (:standard -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
+  (link_flags -linkall)
+  (libraries (links.lib links.postgres))))
