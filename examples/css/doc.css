@@ -173,7 +173,7 @@ main {
   }
 }
 
-iframe {
+iframe, object {
   width: calc(100% + 2rem);
   margin: 0 -1rem;
   height: calc(100vh - 3rem);
