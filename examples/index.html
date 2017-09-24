@@ -7,6 +7,7 @@
     <link rel="stylesheet" type="text/css" href="/examples/css/doc.css" />
     <script>
       window.addEventListener('load', function () {
+        const examples = 'examples/';
         const frame = document.getElementById('exampleFrame');
         const nav = document.querySelector('nav');
 
@@ -15,23 +16,24 @@
         }
 
         function replaceExample (url) {
+          const exampleUrl = '/' + examples + url;
           if (isMobile()) {
-            location = url;
+            location = exampleUrl;
           } else {
-            frame.data = url;
+            frame.data = exampleUrl;
           }
         }
 
         // Set initial example
         if (location.hash) {
-          replaceExample('/' + location.hash.slice(1));
+          replaceExample(location.hash.slice(1));
         }
 
         // Intercept navigation
         window.addEventListener('hashchange', (e) => {
           e.preventDefault();
           if (location.hash) {
-            replaceExample('/' + location.hash.slice(1));
+            replaceExample(location.hash.slice(1));
           }
           history.replaceState({ }, '', location.hash);
         });
@@ -44,7 +46,7 @@
             a.addEventListener('click', function (e) {
               if (!isMobile()) {
                 e.preventDefault();
-                location.hash = a.getAttribute('href').slice(1);
+                location.hash = a.getAttribute('href').slice(1).replace(examples, "");
               }
             });
           }
