@@ -45,15 +45,21 @@ fun deep_state() {
 
 # fun deep_pipes() {
 #   open Deep_pipes
-#   assert(stringEq, "199.00", Deep_pipes.unitTest(0), id, "Deep_pipes")
+#   assert((==), "199.00", Deep_pipes.unitTest(0), id, "Deep_pipes")
 # }
 
+# Exceptions tests
+fun exceptions() {
+  open Exceptions
+  assert((==), 60, Exceptions.unitTest(), intToString, "Exceptions")
+}
 
 # Test runner
 fun runTests() {
    var tests = [ shallow_state
                , deep_state
 #               , deep_pipes
+               , exceptions
                ];
    ignore(map(fun(t) { t() }, tests))
 }
