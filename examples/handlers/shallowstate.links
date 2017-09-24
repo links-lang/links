@@ -26,8 +26,8 @@ sig put : (a) {Put:(a) {}-> ()|_}~> ()
 fun put(p) {do Put(p)}
 
 # Print line operation
-sig log : (a) {Log:(a) {}-> ()|_}~> ()
-fun log(p) {do Log(p)}
+sig logVal : (a) {Log:(a) {}-> ()|_}~> ()
+fun logVal(p) {do Log(p)}
 
 # Stateful computation evaluator
 sig evalState : (s) ->
@@ -44,10 +44,12 @@ fun evalState(st)(m)() {
 fun logState(m)() {
   shallowhandle(m()) {
     case Get(k)    -> var k = compify(k);
-                      logState(k(get()))()
+                      var v = get();
+                      logState(k(v))()
     case Put(p,k)  -> var k = compify(k);
-                      log(p);
-                      logState(k(put(p)))()
+                      logVal(p);
+                      var v = put(p);
+                      logState(k(v))()
     case Return(x) -> x
   }
 }
@@ -73,7 +75,7 @@ fun count() {
 
 # Example 1
 fun example1() {
-  run -<- evalState(5) @ count
+  run -<- evalState(1) @ count
 }
 
 # Example 2
