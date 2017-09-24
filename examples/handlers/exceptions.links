@@ -73,3 +73,17 @@ fun catchResume(m)() {
 fun example2() {
   printResult -<- catchResume -<- prompt @ sumUp
 }
+
+# Unit test
+sig sumUpSilently : Comp({Input:(String) {}-> Int |_}, Int)
+fun sumUpSilently() {
+  fun input(s) {do Input(s)}
+  sum([input("10"), input("20"), input("MMXVII"), input("30")])
+}
+
+fun unitTest() {
+  handle(prompt(sumUpSilently)()) {
+    case Fail(_,k) -> k(0)
+    case Return(x : Int) -> x
+  }
+}
