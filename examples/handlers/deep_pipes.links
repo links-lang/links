@@ -153,3 +153,25 @@ fun example2() {
     printer(id)               # sink
  ) ()
 }
+
+# End
+#sig end : Sink({Await:a |e}, a)
+fun end() {await()}
+
+fun unitTest(n) {
+  handle(
+   ( produceFrom(n)           # yields INT
+ >+>
+    skip(99)                  # yields INT
+ >+>
+    sumTo(100)                # yields INT
+ >+>
+    converter(intToFloat)     # yields FLOAT
+ >+>
+    converter(floatToString)  # yields STRING
+  ) ()) {
+    case Return(_)  -> error("Unexpected return.")
+    case Await(_,_) -> error("Unexpected await.")
+    case Yield(x,_) -> x
+  }
+}
