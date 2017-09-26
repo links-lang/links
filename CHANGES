@@ -1,4 +1,44 @@
 # Changes
+## Version 0.7.1
+
+Fixes some issues with configuration files, and allows better navigation on the examples pages.
+
+## Version 0.7 (Dalry)
+
+Version 0.7 of Links brings many new features (some of which have been in the works for over two years!)
+
+### Handlers for Algebraic Effects
+Algebraic effects abstractly specify operations, which are given meaning by
+handlers. These provide a powerful mechanism for designing effectful code.
+
+Read more in Hillerström & Lindley's
+[Liberating Effects with Rows and Handlers](http://homepages.inf.ed.ac.uk/slindley/papers/links-effect.pdf) and in
+`examples/handlers`.
+
+### Distributed Concurrency
+Whereas before, communication using session types and actor-style processes was
+limited to processes on the same concurrency runtime, Dalry provides the
+infrastructure to use these concurrency primitives across concurrency runtimes.
+See more in `examples/distribution`.
+
+### Javascript FFI
+Dalry brings support for natively calling JavaScript functions from Links client
+code. You can read more on the [wiki page](https://github.com/links-lang/links/wiki/JavaScript-FFI).
+
+### Standard Library
+Links now has support for a standard library. We are hoping to gradually move
+things out of the more monolithic prelude, and support more data structures and
+algorithms out of the box. For now, we have included a minimal node-indexed
+binary tree library, which you can load with `open BinaryTree`.
+
+### Support for Programmatic XML Construction
+Links now supports the ability to create XML from variants, and variants from XML.
+These are implemented in the `xmlToVariant` and `variantToXml` functions.
+
+### Minor Changes
+
+  * Links now has native readline functionality by default. To turn this off, run with the `-r` flag.
+  * Many bugfixes.
 
 ## Version 0.6.1 (Gorgie update release)
 

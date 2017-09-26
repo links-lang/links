@@ -496,23 +496,86 @@ module Eff_Handler_Continuation = struct
   type 'v t = 'v continuation
       deriving (Show)
 
+  module Debug = struct
+    type debug_handler = {
+        _op_names: string list;
+        _depth:[`Deep | `Shallow];
+        _kind:[`Identity | `User_defined];
+    }
+    and debug_handler_stack = {
+         _handlers: debug_handler list;
+    }
+
+    let _debug_handler : 'v handler -> debug_handler =
+      let operation_names : 'v K.handler -> string list = function
+        | Identity -> []
+        | User_defined h ->
+           StringMap.fold (fun name _ names -> name :: names) h.op_clauses []
+      in
+      function
+      | Identity -> { _op_names = operation_names Identity; _depth = `Deep; _kind = `Identity; }
+      | User_defined h ->
+         { _op_names = operation_names (User_defined h); _depth = h.depth; _kind = `User_defined }
+
+    let _debug_handler_stack : 'v continuation -> debug_handler_stack =
+      fun k ->
+      let rec debug_stack = function
+        | Empty
+        | Continuation [] -> []
+        | Continuation ((h, _) :: rest) ->
+           let h' = _debug_handler h in
+           h' :: (debug_stack (Continuation rest))
+        | ShallowContinuation (_,k) -> debug_stack (Continuation k)
+      in
+      { _handlers = debug_stack k }
+
+    let _string_of_debug_handler : debug_handler -> string
+      = fun { _op_names; _depth; _kind; } ->
+      let string_of_kind = function
+        | `Identity -> "Identity" | `User_defined -> "User defined"
+      in
+      let string_of_depth = function `Deep -> "Deep" | `Shallow -> "Shallow" in
+      let rec string_of_op_names = function
+        | [] -> ""
+        | [name] -> name
+        | name :: names -> Printf.sprintf "%s, %s" name (string_of_op_names names)
+      in
+      Printf.sprintf "Handler:\n  Kind: %s\n  Depth: %s\n  Operations: %s\n%!" (string_of_kind _kind) (string_of_depth _depth) (string_of_op_names _op_names)
+
+    let _string_of_debug_handler_stack : debug_handler_stack -> string
+      = fun { _handlers } ->
+      let rec string_of = function
+        | [] -> ""
+        | [h] -> Printf.sprintf "+%s" (_string_of_debug_handler h)
+        | h :: rest -> Printf.sprintf "+%s\n%s" (_string_of_debug_handler h) (string_of rest)
+      in
+      string_of _handlers
+  end
+
   let empty = Empty
 
+  (* TODO: decide semantics for shallow cases *)
   let (&>) f = function
     | Empty
     | Continuation [] -> Continuation [(Identity, [f])]
     | Continuation ((h, fs) :: rest) -> Continuation ((h, f :: fs) :: rest)
-    | ShallowContinuation (f', []) -> ShallowContinuation (f', [(Identity, [f])])
-    | ShallowContinuation (f', (h, fs) :: rest) -> ShallowContinuation (f', (h, f :: fs) :: rest)
+    | ShallowContinuation (_f', []) -> assert false (*ShallowContinuation (f', [(Identity, [f])])*)
+    | ShallowContinuation (_f', (_h, _fs) :: _rest) -> assert false (*ShallowContinuation (f', (h, f :: fs) :: rest)*)
 
   let rec (<>) k k' =
+    let prepend_frames fs = function
+      | Empty | Continuation [] | ShallowContinuation _ -> assert false
+      | Continuation ((h, fs') :: rest) -> Continuation ((h, fs @ fs') :: rest)
+    in
     match k, k' with
     | Empty, k
     | k, Empty -> k
     | Continuation k, Continuation k' -> Continuation (k @ k')
-    | ShallowContinuation (fs, k), ShallowContinuation (fs', k') -> ShallowContinuation (fs @ fs', k @ k')
-    | ShallowContinuation (fs, k'), k
-    | k, ShallowContinuation (fs, k') -> (Continuation k') <> (List.fold_left (fun k f -> f &> k) k fs)
+    | ShallowContinuation (_fs, _k), ShallowContinuation (_fs', _k') -> assert false (*ShallowContinuation (fs @ fs', k @ k')*)
+    | ShallowContinuation (fs, k'), k ->
+       let k'' = prepend_frames fs k in
+       (Continuation k') <> k''
+    | _k, ShallowContinuation (_fs, _k') -> assert false (*(Continuation k') <> (List.fold_left (fun k f -> f &> k) k fs)*)
 
   module Handler = struct
     open K
@@ -538,10 +601,11 @@ module Eff_Handler_Continuation = struct
         depth = snd h; }
   end
 
+  (* TODO: decide semantics for shallow case *)
   let set_trap_point ~handler = function
     | Empty -> Continuation [(handler,[])]
     | Continuation k -> Continuation ((handler, []) :: k)
-    | ShallowContinuation (pk,k) -> Continuation ((handler, pk) :: k)
+    | ShallowContinuation (_pk,_k) -> assert false (*Continuation ((handler, pk) :: k)*)
 
   module Evaluation =
     functor (E : EVAL with type 'v t := 'v t) ->

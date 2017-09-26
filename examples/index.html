@@ -2,24 +2,61 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <meta name=viewport content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Links examples</title>
     <link rel="stylesheet" type="text/css" href="/examples/css/doc.css" />
     <script>
       window.addEventListener('load', function () {
-        const iframe = document.getElementById('exampleFrame');
+        const examples = 'examples/';
+        const frame = document.getElementById('exampleFrame');
         const nav = document.querySelector('nav');
-        document.querySelectorAll('nav a.frame-link').forEach(function (a) {
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        function isMobile () {
+          return !(nav.getBoundingClientRect().width < document.body.getBoundingClientRect().width / 2);
+        }
+
+        function replaceExample (url) {
+          loadingOverlay.style.display = 'flex';
+          const exampleUrl = '/' + examples + url;
+          if (isMobile()) {
+            location = exampleUrl;
+          } else {
+            frame.data = exampleUrl;
+          }
+        }
+
+        // Set initial example
+        if (location.hash) {
+          replaceExample(location.hash.slice(1));
+        }
+
+        // Intercept navigation
+        window.addEventListener('hashchange', function (e) {
+          e.preventDefault();
+          if (location.hash) {
+            replaceExample(location.hash.slice(1));
+          }
+          history.replaceState({ }, '', location.hash);
+        });
+
+        frame.addEventListener('load', function () {
+          loadingOverlay.style.display = 'none';
+        });
+
+        const frameLinks = document.querySelectorAll('nav a.frame-link');
+
+        for (let i = 0; i < frameLinks.length; i++) {
+          const a = frameLinks[i];
           if (a.getAttribute('href')) {
             a.addEventListener('click', function (e) {
-              if (nav.getBoundingClientRect().width < document.body.getBoundingClientRect().width / 2) {
-                iframe.setAttribute('src', '');
+              if (!isMobile()) {
                 e.preventDefault();
-                iframe.setAttribute('src', a.getAttribute('href'));
+                location.hash = a.getAttribute('href').slice(1).replace(examples, "");
               }
             });
           }
-        });
+        }
       });
     </script>
   </head>
@@ -151,7 +188,22 @@
       </section>
     </nav>
     <main>
-      <iframe id="exampleFrame" src=""></iframe>
+      <div class="loading-overlay" id="loadingOverlay">
+        <div>
+          <div class="sk-folding-cube sk-blue">
+            <div class="sk-cube1 sk-cube"></div>
+            <div class="sk-cube2 sk-cube"></div>
+            <div class="sk-cube3 sk-cube"></div>
+          </div>
+          <div class="sk-folding-cube sk-red">
+            <div class="sk-cube1 sk-cube"></div>
+            <div class="sk-cube2 sk-cube"></div>
+            <div class="sk-cube3 sk-cube"></div>
+          </div>
+        </div>
+        <span>Loading example</span>
+      </div>
+      <object type="text/html" id="exampleFrame"></object>
     </main>
   </body>
 </html>

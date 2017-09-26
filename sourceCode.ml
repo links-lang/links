@@ -57,7 +57,7 @@ object (self)
   (* Retrieve the last line of source code read. *)
   method find_line (pos : Lexing.position) : (string * int) =
     (self#extract_line pos.Lexing.pos_lnum,
-     pos.Lexing.pos_cnum - Hashtbl.find lines (pos.Lexing.pos_lnum -1) - 1)
+     abs @@ pos.Lexing.pos_cnum - Hashtbl.find lines (pos.Lexing.pos_lnum -1) - 1)
 
   (* Create a `lookup function' that given start and finish positions
      returns a resolved position
