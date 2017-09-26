@@ -674,7 +674,11 @@ struct
          | SessionTrap st_res ->
              handle_session_exception env st_res.handle_env st_res.frames >>= fun _ ->
              st_res.continuation_thunk ()
-         | UnhandledSessionException _frames -> failwith "unhandled session exception -- need to implement"
+         | UnhandledSessionException frames ->
+             Debug.print ("unhandled session exception");
+             handle_session_exception env env frames >>= fun _ ->
+             (* TODO: How to do this properly? *)
+             Proc.finish (env, Value.box_unit())
        end
     (* Session stuff *)
     | `Select (name, v) ->
