@@ -807,6 +807,18 @@ and Session : SESSION = struct
   let rec cancel chan =
     let send_ep = send_port chan in
     let local_ep = receive_port chan in
+
+    (* foldM_ *)
+    let sequence act =
+      List.fold_left (fun acc c -> acc >>= fun _ -> (act c)) (Lwt.return ()) in
+
+    let notify_peer =
+      match lookup_endpoint send_ep with
+        | Local ->
+            OptionUtils.opt_iter (Proc.awaken) (Session.unblock send_ep);
+            Lwt.return ()
+        | Remote _ -> failwith "remote cancellation notifications not yet implemented" in
+
     (* Cancelling a channel twice is a no-op *)
     if is_endpoint_cancelled local_ep then Lwt.return () else
     begin
@@ -814,12 +826,11 @@ and Session : SESSION = struct
       match lookup_endpoint local_ep with
         | Local ->
             let buf = Hashtbl.find buffers local_ep |> Queue.to_list |> List.filter (Value.is_channel) in
-            List.fold_left (fun acc carried_chan ->
-              acc >>= fun _ -> cancel (Value.unbox_channel carried_chan))
-              ((OptionUtils.opt_iter (Proc.awaken) (Session.unblock send_ep));
-                Lwt.return ())
-              buf
-        | Remote _client_id -> failwith "TODO: send remote cancellation notification"
+            sequence (fun c -> cancel (Value.unbox_channel c)) buf >>= fun _ ->
+            notify_peer
+        | Remote _client_id ->
+            Debug.print "Trying to cancel remote buffer. This probably shouldn't happen. Maybe due to delegation?";
+            Lwt.return ()
     end
 
   (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)

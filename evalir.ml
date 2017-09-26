@@ -426,10 +426,8 @@ struct
         let open Session in
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
         let unboxed_chan = Value.unbox_channel chan in
-        (* If we've already been cancelled (as a result of us being blocked, and
-         * the opposite endpoint being cancelled), trigger an exception *)
-        let recv_ep = Session.receive_port unboxed_chan in
-        if Session.is_endpoint_cancelled recv_ep then
+        let peer_ep = Session.send_port unboxed_chan in
+        if Session.is_endpoint_cancelled peer_ep then
           invoke_session_exception ()
         else
           match Session.receive unboxed_chan with
@@ -663,7 +661,6 @@ struct
        let cont = K.set_trap_point ~handler cont in
        computation env cont m
     | `DoOperation (name, v, _) ->
-  (* let handle_session_exception raise_env install_env frames = *)
        let open Value.Trap in
        let vs = List.map (value env) v in
        begin
