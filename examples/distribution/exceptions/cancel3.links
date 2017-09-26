@@ -1,0 +1,20 @@
+fun go() {
+  var ap = new();
+  try {
+    var t = fork(fun(t) {
+      var carried = request(ap);
+      var _ = send(carried, t);
+      ()
+      });
+    var carried = accept(ap);
+    cancel(t);
+    var (res, _) = receive(carried);
+    res
+  } as (x) in {
+    print("received from carried: " ^^ intToString(x))
+  } otherwise {
+    print("receive from carried channel failed")
+  }
+}
+
+go()

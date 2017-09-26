@@ -1,29 +1,32 @@
 # Failure of sending
-# (slightly dependent on scheduling at the moment...)
 
 fun goAlright() {
+  var ap = new(); # Yay synchronisation!
   try {
     var s = fork (fun (s) {
-      var t = fork(fun (t) { var _ = receive(t); () });
-      ignore(send(t, s))
+  #    cancel(s);
+      ignore(request(ap));
+      ignore(receive(s));
     });
-    var (t, _) = receive(s);
-    ignore(send(5, t))
+    ignore(accept(ap));
+    ignore(send(5, s))
   } as (_) in {
     print("send successful")
   } otherwise {
     print("an exception occurred!")
   }
 }
+
 
 fun goBadly() {
+  var ap = new(); # Yay synchronisation!
   try {
     var s = fork (fun (s) {
-      var t = fork(fun (t) { cancel(t) });
-      ignore(send(t, s))
+      ignore(request(ap));
+      cancel(s);
     });
-    var (t, _) = receive(s);
-    ignore(send(5, t))
+    ignore(accept(ap));
+    ignore(send(5, s))
   } as (_) in {
     print("send successful")
   } otherwise {
@@ -32,5 +35,5 @@ fun goBadly() {
 }
 
 
-#goBadly()
-goAlright()
+goBadly()
+#goAlright()
