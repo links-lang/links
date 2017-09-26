@@ -81,7 +81,7 @@ let config_file_path = match Utility.getenv "LINKS_CONFIG" with
             None
 
 (** The banner *)
-let version = "0.7 (Dalry)"
+let version = "0.7.2 (Dalry)"
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\

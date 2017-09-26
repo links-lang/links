@@ -95,3 +95,106 @@ stdout : foo<a/><b>bar</b>fubar : Xml
 Labelization bug
 (escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
 stdout : @.* : \[XmlItem\]
+
+XML Construction
+<#>{[makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>)]}</#>
+stdout : <foo id="bar" class="baz"><div/></foo> : Xml
+
+XML Construction 2
+[ makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>) ]: Xml
+stdout : <foo id="bar" class="baz"><div/></foo> : Xml
+
+XML Construction 3
+makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>)
+stdout : <foo id="bar" class="baz"><div/></foo> : XmlItem
+ignore : Xml/XmlItem pretty-print bug
+
+XML-Variant-Conversion
+variantToXml(xmlToVariant(<div class="i-am-a-div"><ul><li/><li></li><li>A</li></ul></div>))
+stdout : <div class="i-am-a-div"><ul><li/><li/><li>A</li></ul></div> : Xml
+
+XML-Variant-Conversion (namespaced)
+variantToXmlItem(NsNode("myns", "mytag", [ Attr("x", "y"), NsAttr("a", "b", "c"), Node("div", [ ]), NsNode("foo", "bar", [ ]) ]))
+stdout : <myns:mytag x="y" a:b="c"><div/><foo:bar/></myns:mytag> : XmlItem
+
+Ill-formed namespace
+variantToXmlItem(NsNode("ill:formed", "div", [ ]))
+stderr : @..*
+exit : 1
+
+Ill-formed tag-name [1]
+variantToXmlItem(Node("tag:name", [ ]))
+stderr : @..*
+exit : 1
+
+Ill-formed tag-name [2]
+variantToXmlItem(NsNode("ns", "tag:name", [ ]))
+stderr : @..*
+exit : 1
+
+Appending a children (single)
+appendChild(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><div/><span/></foo> : XmlItem
+
+Appending a children (multiple)
+appendChild(makeXml("foo", [ ], <div/>), <#><div><span>Foo</span></div><span/></#>)
+stdout : <foo><div/><div><span>Foo</span></div><span/></foo> : XmlItem
+
+Prepending a children (single)
+prependChild(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><span/><div/></foo> : XmlItem
+
+Prepending a children (multiple)
+prependChild(makeXml("foo", [ ], <div/>), <#><div><span>Foo</span></div><span/></#>)
+stdout : <foo><div><span>Foo</span></div><span/><div/></foo> : XmlItem
+
+Replace children
+replaceChildren(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><span/></foo> : XmlItem
+
+Setting new Attributes
+setAttribute(makeXml("foo", [ ], <#/>), "bar", "baz")
+stdout : <foo bar="baz"/> : XmlItem
+
+Setting new Attributes NS
+setAttributeNS(makeXml("foo", [ ], <#/>), "attr", "bar", "baz")
+stdout : <foo attr:bar="baz"/> : XmlItem
+
+Setting illformed Attributes [1]
+setAttributeNS(makeXml("foo", [ ], <#/>), "attr", "ill:formed", "baz")
+stderr : @..*
+exit : 1
+
+Setting illformed Attributes [2]
+setAttribute(makeXml("foo", [ ], <#/>), "ill:formed", "baz")
+stderr : @..*
+exit : 1
+
+Setting existing Attributes
+setAttribute(makeXml("foo", [ ("bar", "baz") ], <#/>), "bar", "oof")
+stdout : <foo bar="oof"/> : XmlItem
+
+Getting namespace [1]
+getNamespace([ variantToXmlItem(NsNode("ns", "tagname", [ ])) ])
+stdout : "ns" : String
+
+Getting namespace [2]
+getNamespace([ variantToXmlItem(Node("tagname", [ ])) ])
+stdout : "" : String
+
+Get tag name [1]
+getTagName(<div />)
+stdout : "div" : String
+
+Get tag name [2]
+getTagName([ variantToXmlItem(NsNode("ns", "tagname", [ ])) ])
+stdout : "tagname" : String
+
+Get single attribute [1]
+attribute(<div id="myid" />, "id")
+stdout : Just("myid") : [|Just:String|Nothing|]
+
+Get attributes
+getAttributes(<div id="myid" ns:foo="bar" />)
+stdout : [("ns:foo", "bar"), ("id", "myid")] : [(String, String)]
+

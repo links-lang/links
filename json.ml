@@ -125,22 +125,30 @@ and jsonize_primitive : Value.primitive_value -> string  = function
   | `String s -> "\"" ^ js_dq_escape_string s ^ "\""
 and json_of_xmlitem = function
   | Value.Text s ->
-      "[\"TEXT\",\"" ^ js_dq_escape_string (s) ^ "\"]"
+      "{ \"type\": \"TEXT\", \"text\": \"" ^ js_dq_escape_string (s) ^ "\"}"
   (* TODO: check that we don't run into problems when HTML containing
      an event handler is copied *)
-  | Value.Node (tag, xml) ->
+  | Value.NsNode (ns, tag, xml) ->
       let attrs, body =
         List.fold_right (fun xmlitem (attrs, body) ->
             match xmlitem with
             | Value.Attr (label, value) ->
                 ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
+            | Value.NsAttr (ns, label, value) ->
+                ("\"" ^ ns ^ ":" ^ label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
             | _ ->
               let s = json_of_xmlitem xmlitem in
               attrs, s :: body) xml ([], [])
       in
-        "[\"ELEMENT\",\"" ^ tag ^
-            "\",{" ^ String.concat "," attrs ^"},[" ^ String.concat "," body ^ "]]"
-  | Value.Attr _ -> assert false
+        "{ \"type\": \"ELEMENT\"," ^
+          "\"tagName\": \"" ^ tag ^ "\"," ^
+          (if (String.length(ns) > 0) then "\"namespace\": \"" ^ ns ^ "\"," else "") ^
+          "\"attrs\": {" ^ String.concat "," attrs ^ "}," ^
+          "\"children\": [" ^ String.concat "," body ^ "]" ^
+        "}"
+  | Value.Node (name, children) -> json_of_xmlitem (Value.NsNode ("", name, children))
+  | _ -> failwith "Cannot jsonize a detached attribute."
+
 and jsonize_values : Value.t list -> string list  =
   fun vs ->
     let ss =

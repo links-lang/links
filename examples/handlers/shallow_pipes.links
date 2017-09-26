@@ -8,7 +8,7 @@ typename Cons(e::Row,i,a) = (i)  {Await:i           |e}~> a;
 
 typename Pump(e::Row,o,a)     = Comp({Yield:(o) {}-> () |e}, a);
 typename Sink(e::Row,i,a)     = Comp({Await:i           |e}, a);
-typename Pipe(e::Row,i,o,a)   = Comp({                  |e}, a); 
+typename Pipe(e::Row,i,o,a)   = Comp({                  |e}, a);
 
 #
 # Operations
@@ -20,14 +20,14 @@ sig yield : (s) {Yield:(s) {}-> () |_}~> ()
 fun yield(s) { do Yield(s) }
 
 #
-# 
+#
 #
 
 sig up : (Comp({Await{ap},Yield:(o) {}-> () |e},    a)) ->
          (Cons({Yield{yp}                   |e}, o, a)) ->
           Comp({Await{ap},Yield{yp}         |e},    a)
 fun up(m)(cons)() {
-  shallowhandle(m) {
+  shallowhandle(m()) {
     case Return(x)  -> x
     case Yield(s,k) -> down(fun() { cons(s) })(k)()
   }
@@ -37,7 +37,7 @@ sig down : (Comp({Await:i  ,Yield{yp} |e},    a)) ->
            (Prod({Await{ap}           |e}, i, a)) ->
             Comp({Await{ap},Yield{yp} |e},    a)
 fun down(m)(prod)() {
-  shallowhandle(m) {
+  shallowhandle(m()) {
     case Return(x) -> x
     case Await(k)  -> up(fun() { prod(()) })(k)()
   }

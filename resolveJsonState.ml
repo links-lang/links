@@ -50,6 +50,10 @@ and event_handlers_from_xml = function
             let state' = event_handlers_from_xml xmlitem in
             IntSet.union state state') xml empty_state
   | Value.Attr _ -> assert false
+  | Value.NsAttr _ -> assert false
+  (* Namespace of a tag is not relevant for event handlers, so we can just drop that here *)
+  | Value.NsNode (_, name, children) -> event_handlers_from_xml (Value.Node (name, children))
+
 and event_handlers_from_values (vs : Value.t list) : handler_id_set =
     List.fold_left
         (fun set_acc v ->

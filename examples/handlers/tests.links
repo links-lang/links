@@ -1,0 +1,67 @@
+# Utility functions
+fun intersperse(y, xs) {
+   switch (xs) {
+     case []      -> []
+     case [x]     -> [x]
+     case x :: xs -> x :: y :: intersperse(y,xs)
+   }
+}
+
+fun pairToString(fstToString, sndToString)(pair) {
+  "(" ^^ fstToString(pair.1) ^^ ", " ^^ sndToString(pair.2) ^^ ")"
+}
+
+fun listToString(elemToString)(xs) {
+  var xs = fold_left(fun (acc, x) { acc ^^ x }
+                    , ""
+                    , intersperse(",", map(elemToString, xs)));
+  "[" ^^ xs ^^ "]"
+}
+
+fun assert(equals, expected, actual, toString, testName) {
+  if (equals(expected,actual)) ()
+  else error("Test failure (" ^^ testName ^^ ") expected `" ^^ toString(expected) ^^ "`; got `" ^^ toString(actual) ^^ "`")
+}
+
+
+# State tests
+fun stateExamplesEquals((x,xs),(y,ys)) {
+  x == y && xs == ys
+}
+
+var stateExamplesToString = pairToString(intToString, listToString(intToString));
+
+fun shallow_state() {
+  open Shallow_state
+  assert(stateExamplesEquals, (0, [0,1,2,3,4]), Shallow_state.unitTest(5), stateExamplesToString, "Shallow_state")
+}
+
+fun deep_state() {
+  open Deep_state
+  assert(stateExamplesEquals, (0, [0,1,2,3,4]), Deep_state.unitTest(5), stateExamplesToString, "Deep_state")
+}
+
+# Pipes tests
+
+# fun deep_pipes() {
+#   open Deep_pipes
+#   assert((==), "199.00", Deep_pipes.unitTest(0), id, "Deep_pipes")
+# }
+
+# Exceptions tests
+fun exceptions() {
+  open Exceptions
+  assert((==), 60, Exceptions.unitTest(), intToString, "Exceptions")
+}
+
+# Test runner
+fun runTests() {
+   var tests = [ shallow_state
+               , deep_state
+#               , deep_pipes
+               , exceptions
+               ];
+   ignore(map(fun(t) { t() }, tests))
+}
+
+runTests()

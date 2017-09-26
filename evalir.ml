@@ -246,7 +246,7 @@ struct
 
       (* extend env with arguments *)
       let env = List.fold_right2 (fun x p -> Value.Env.bind x (p, `Local)) xs ps env in
-      computation env cont body
+      computation_yielding env cont body
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
       let key = EventHandlers.register hs in
       apply_cont cont env (`String (string_of_int key))
@@ -511,9 +511,9 @@ struct
        eval_error "Continuation applied to multiple (or zero) arguments"
     | _                        -> eval_error "Application of non-function"
   and apply_cont (cont : continuation) env v =
-    Proc.yield (fun () -> apply_cont' cont env v)
-  and apply_cont' (cont : continuation) env v : result =
-    K.Eval.apply ~env cont v
+    Proc.yield (fun () -> K.Eval.apply ~env cont v)
+  and computation_yielding env cont body =
+    Proc.yield (fun () -> computation env cont body)
   and computation env (cont : continuation) (bindings, tailcomp) : result =
     match bindings with
       | [] -> tail_computation env cont tailcomp
@@ -521,9 +521,8 @@ struct
         | `Let ((var, _) as b, (_, tc)) ->
            let locals = Value.Env.localise env var in
            let cont' =
-             K.(
-               let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
-               frame &> cont)
+             K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
+                frame &> cont)
            in
            tail_computation env cont' tc
           (* function definitions are stored in the global fun map *)
@@ -535,13 +534,6 @@ struct
             computation env cont (bs, tailcomp)
           | `Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
-    (* | `Return (`ApplyPure _ as v) -> *)
-    (*   let w = (value env v) in *)
-    (*     Debug.print ("ApplyPure"); *)
-    (*     Debug.print ("  value term: " ^ Show.show Ir.show_value v); *)
-    (*     Debug.print ("  cont: " ^ Value.string_of_cont cont); *)
-    (*     Debug.print ("  value: " ^ Value.string_of_value w); *)
-    (*     apply_cont cont env w *)
     | `Return v      -> apply_cont cont env (value env v)
     | `Apply (f, ps) -> apply cont env (value env f, List.map (value env) ps)
     | `Special s     -> special env cont s
@@ -775,7 +767,6 @@ module type EVAL = functor (Webs : WEBSERVER) -> sig
 end
 module Eval : EVAL = functor (Webs : WEBSERVER) ->
 struct
-
   module rec Eval : EVALUATOR
     with type result = Proc.thread_result Lwt.t = Evaluator(Value.Continuation.Evaluation(Eval))(Webs)
   include Eval
