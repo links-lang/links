@@ -1,0 +1,36 @@
+# Failure of sending
+# (slightly dependent on scheduling at the moment...)
+
+fun goAlright() {
+  try {
+    var s = fork (fun (s) {
+      var t = fork(fun (t) { var _ = receive(t); () });
+      ignore(send(t, s))
+    });
+    var (t, _) = receive(s);
+    ignore(send(5, t))
+  } as (_) in {
+    print("send successful")
+  } otherwise {
+    print("an exception occurred!")
+  }
+}
+
+fun goBadly() {
+  try {
+    var s = fork (fun (s) {
+      var t = fork(fun (t) { cancel(t) });
+      ignore(send(t, s))
+    });
+    var (t, _) = receive(s);
+    ignore(send(5, t))
+  } as (_) in {
+    print("send successful")
+  } otherwise {
+    print("an exception occurred!")
+  }
+}
+
+
+#goBadly()
+goAlright()

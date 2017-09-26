@@ -125,7 +125,6 @@ struct
          Proc.abort ("text/plain", call_package)
 
     let handle_session_exception raise_env install_env frames =
-      Printf.printf "in handle session exception. Affected channels:\n";
       let affected_channels =
         ChannelVarUtils.affected_channels raise_env install_env frames in
       (* List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels *)
@@ -454,18 +453,21 @@ struct
                 invoke_session_exception ()
         end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
-      let unblock p =
-        match Session.unblock p with
-        | Some pid -> (*Debug.print("unblocked: "^string_of_int p); *)
-                      Proc.awaken pid
-        | None     -> () in
-      Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
-      let (out1, in1) = Value.unbox_channel chanl in
-      let (out2, in2) = Value.unbox_channel chanr in
-      Session.link (out1, in1) (out2, in2);
-      unblock out1;
-      unblock out2;
-      apply_cont cont env (`Record [])
+        let unblock p =
+          match Session.unblock p with
+          | Some pid -> (*Debug.print("unblocked: "^string_of_int p); *)
+                        Proc.awaken pid
+          | None     -> () in
+        Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
+        let (out1, in1) = Value.unbox_channel chanl in
+        let (out2, in2) = Value.unbox_channel chanr in
+        Session.link (out1, in1) (out2, in2);
+        unblock out1;
+        unblock out2;
+        apply_cont cont env (`Record [])
+    | `PrimitiveFunction ("cancel", _), [chan] ->
+        Session.cancel (Value.unbox_channel chan) >>= fun _ ->
+        apply_cont cont env (`Record [])
     (* end of session stuff *)
     | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler; error_handler] ->
        let path = Value.unbox_string pathv in
@@ -672,7 +674,7 @@ struct
          | SessionTrap st_res ->
              handle_session_exception env st_res.handle_env st_res.frames >>= fun _ ->
              st_res.continuation_thunk ()
-         | UnhandledSessionException _frames -> failwith "soon"
+         | UnhandledSessionException _frames -> failwith "unhandled session exception -- need to implement"
        end
     (* Session stuff *)
     | `Select (name, v) ->

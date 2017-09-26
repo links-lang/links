@@ -1,0 +1,27 @@
+fun goAlright() {
+  try {
+    var s = fork (fun (s) { ignore(send(5, s)) });
+    var (res, _) = receive(s);
+    res
+  } as (x) in {
+    print("result: " ^^ intToString(x))
+  } otherwise {
+    print("an exception occurred!")
+  }
+}
+
+fun goBadly() {
+  try {
+    var s = fork (fun (s) { cancel(s) });
+    var (res, _) = receive(s);
+    res
+  } as (x) in {
+    print("result: " ^^ intToString(x))
+  } otherwise {
+    print("an exception occurred!")
+  }
+}
+
+
+goBadly()
+#goAlright()
