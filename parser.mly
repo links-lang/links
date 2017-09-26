@@ -763,8 +763,6 @@ page_placement:
 
 session_expression:
 | db_expression                                                { $1 }
-| RAISE                                                        { `Raise, pos () }
-| TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
 | SELECT field_label exp                                       { `Select ($2, $3) , pos() }
 | OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { `Offer ($3, $6, None) , pos() }
 
@@ -789,6 +787,8 @@ case_expression:
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
 | handle_depth LPAREN exp RPAREN LBRACE cases RBRACE           { let hndlr = Sugartypes.make_untyped_handler $3 $6 $1 in
                                                                  `Handle hndlr, pos() }
+| RAISE                                                        { `Raise, pos () }
+| TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
 
 handle_depth:
 | HANDLE                                                       { `Deep }
