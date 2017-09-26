@@ -414,12 +414,15 @@ struct
     | `PrimitiveFunction ("send", _), [v; chan] ->
       let open Session in
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
-      let (outp, _) = Value.unbox_channel chan in
+      let unboxed_chan = Value.unbox_channel chan in
+      let outp = Session.send_port unboxed_chan in
       Session.send_from_local v outp >>= fun res ->
         begin
           match res with
             | SendOK -> apply_cont cont env chan
-            | SendPartnerCancelled -> failwith "oops, need to implement send cancellation logic here"
+            | SendPartnerCancelled ->
+                Session.cancel unboxed_chan >>= fun _ ->
+                invoke_session_exception ()
         end
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
