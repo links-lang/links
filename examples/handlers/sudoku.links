@@ -17,7 +17,7 @@ fun emptySudoku() {
 sig intersperse : (a, [a]) ~> [a]
 fun intersperse(y, xs) {
    switch (xs) {
-     case []      -> []    
+     case []      -> []
      case [x]     -> [x]
      case x :: xs -> x :: y :: intersperse(y,xs)
    }
@@ -244,7 +244,7 @@ fun mainPage(_) {
             {layoutSudoku(testSudoku)}
           </div>
           <button l:onclick="{renderSudoku(validateSudoku(readSudoku("b")))}">Validate</button>
-          <button l:onclick="{()}">Has solution</button>
+          <button l:onclick="{()}" disabled="disabled">Has solution</button>
           <button l:onclick="{renderSudoku(resetSudoku(readSudoku("b")))}">Reset</button>
         </div>
       </body>
