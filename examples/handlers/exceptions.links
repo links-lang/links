@@ -19,8 +19,8 @@ fun sumUp() {
 }
 
 # Fail operation to signal conversion failure
-sig fail : (a) {Fail:(a) {}-> b |_}-> b
-fun fail(s) {do Fail(s)}
+sig fail : (exn) {Fail:(exn) {}-> b |_}-> b
+fun fail(e) {do Fail(e)}
 
 # String to integer conversion
 sig parseInt : (String) {Fail:(String) {}-> Int|_}-> Int
