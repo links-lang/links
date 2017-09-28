@@ -39,6 +39,48 @@ type code = | Var    of string
             | Nothing
   deriving (Show)
 
+let inspect_ir_variables code =
+  let open Pervasives in
+  let vars = ref (StringSet.empty) in
+  let add_var s = vars := (StringSet.add s (!vars)) in
+  let get_vars () =
+    let res = StringSet.elements (!vars) in
+    Debug.print "affected client vars: \n";
+    List.iter (Debug.print) res;
+    List.map (fun x -> Var(x)) res in
+
+  (*
+  let get_vars () =
+    StringSet.elements (!vars)
+      |> List.map (fun x -> Var(x)) in
+*)
+
+
+  let rec go cmd = 
+    match cmd with
+      | Var s -> add_var s
+      | Fn (_, cmd) -> go cmd
+      | LetFun ((_, _, cmd1, _), cmd2) -> go cmd1; go cmd2
+      | LetRec (xs, cmd) ->
+          List.iter (fun (_, _, cmd, _) -> go cmd) xs;
+          go cmd
+      | Call (c, cs) -> go c; List.iter (go) cs
+      | Unop (_, c) -> go c
+      | Binop (c1, _, c2) -> go c1; go c2
+      | If (i, t, e) -> List.iter (go) [i;t;e]
+      | Dict xs -> List.iter (go -<- snd) xs
+      | Arr xs -> List.iter (go) xs
+      | Bind (_, c1, c2) -> go c1; go c2
+      | Return c -> go c
+      | Case (_, sm, sc_opt) ->
+          StringMap.iter (fun _ (_, code) -> go code) sm;
+          OptionUtils.opt_iter (go -<- snd) sc_opt
+      | Lit _ | Die _ | Nothing -> () in
+  go code;
+  get_vars ()
+
+
+
 
 (** IR variable environment *)
 module VEnv = Env.Int
@@ -907,6 +949,27 @@ end = functor (K : CONTINUATION) -> struct
               Call (Var "_makeCont", [Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]),
               Call (Var "receive", [gv c; Var recv_cont_name])))
       | `DoOperation (name, args, _) ->
+          let open Pervasives in (* christ this is such BS *)
+              (* Essentially, we have:
+                  * - Environment
+                  * - Operation details
+                  * - Continuation kappa
+               *)
+              (* What we want to do:
+                  * - Hook in if op is __SessionFail
+                  * - (tricky part #1) do a diff on the venv from handler
+                  *   installation to this part to get channels created or rebound
+                  *   as a result of operations
+                  * - (tricky part #2) inspect the continuation to find channels that
+                  *   are affected. 
+                  *
+                  *   We can get the list of *variables* that are affected statically.
+                  *   This is fine, in the IR, statically determinable.
+                  *   But the *inspection* needs to be done at runtime (I think, anyway.
+                  *   We might have type information I suppose?) *)
+  (* val bind : t -> (t -> code) -> code *)
+  (* val pop : t -> (code -> code) * t * t *)
+
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
@@ -916,14 +979,30 @@ end = functor (K : CONTINUATION) -> struct
          let nil = Var "lsNil" in
          K.bind kappa
            (fun kappas ->
+             (* kappa -- pure continuation *)
              let bind_skappa, skappa, kappas = K.pop kappas in
+             (* eta -- effect continuation *)
              let bind_seta, seta, kappas   = K.pop kappas in
              let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
              let op    =
                Dict [ ("_label", strlit name)
                     ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
              in
-             bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
+             (* If this is a session fail operation, hook to invoke the 
+              * session failure logic before invoking the "otherwise" block *)
+             let reified_seta =
+               if (name = Value.session_exception_operation) then
+                 (* skappa is the pure continuation *)
+                 let affected_variables =
+                   inspect_ir_variables (K.reify skappa) in
+                 (* TODO: Is there a better way of sequencing a side-effecting op here? *)
+                 let dummy_var_name = gensym () in
+                   Bind (dummy_var_name,
+                    Call (Var "_handleSessionException", [Arr affected_variables]),
+                    K.reify seta)
+               else K.reify seta in
+
+             bind_skappa (bind_seta (apply_yielding (reified_seta) [op] kappas)))
       | `Handle { Ir.ih_comp = comp; Ir.ih_clauses = clauses; _ } ->
          (** Generate body *)
          let gb env binder body kappas =

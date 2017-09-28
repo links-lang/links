@@ -10,7 +10,7 @@ fun goAlright() {
   }
 }
 
-fun goBadly() {
+fun go() {
   try {
     var s = fork (fun (s) { cancel(s) });
     var (res, _) = receive(s);
@@ -23,5 +23,5 @@ fun goBadly() {
 }
 
 
-goBadly()
+#goBadly()
 #goAlright()

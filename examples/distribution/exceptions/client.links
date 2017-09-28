@@ -1,0 +1,30 @@
+#open Cancel2
+
+fun makePage() {
+    #var _ = spawnClient { Cancel2.go() };
+    fun foo() {
+      var t = fork(fun(t) { ignore(send(10, t)) });
+      try {
+        var s = fork(fun(s) { ignore(send(5, s)) });
+        raise;
+        var (x, s) = receive(s);
+        var (y, t) = receive(t);
+        x + y
+      } as (x) in {
+        print(intToString(x))
+      } otherwise {
+        print("error!")
+      }
+    }
+    var _ = spawnClient { foo() };
+
+    page
+        <#><h1>Yup</h1></#>
+}
+
+fun main() {
+    addRoute("/", fun (_) { makePage() });
+    servePages()
+}
+
+main()
