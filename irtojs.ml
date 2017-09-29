@@ -439,6 +439,9 @@ module type CONTINUATION = sig
 
   (* Generates appropriate bindings for primitives *)
   val primitive_bindings : string
+
+  (* Generates a string dump of the continuation, for debugging purposes. *)
+  val to_string : t -> string
 end
 
 (* (\* The standard Links continuation (no extensions) *\) *)
@@ -504,6 +507,10 @@ module Default_Continuation : CONTINUATION = struct
      component, and returns a fresh singleton list containing the
      identity element in the third component. *)
   let pop k = (fun code -> code), k, Identity
+
+  let to_string = function
+    | Identity -> "IDENTITY"
+    | Code code -> "CODE: " ^ (Show_code.show code)
 end
 
 (* The higher-order continuation structure for effect handlers
@@ -600,6 +607,11 @@ module Higher_Order_Continuation : CONTINUATION = struct
                Bind (__ks, tail ks, code))),
        (reflect (Var __k)), reflect (Var __ks)
     | Identity -> pop toplevel
+
+  let to_string = function
+    | Identity -> "IDENTITY"
+    | Reflect code -> "REFLECT: " ^ (Show_code.show code)
+    | 
 end
 
 (** Compiler interface *)
