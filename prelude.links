@@ -1264,8 +1264,8 @@ typename Zero = [||];
 
 # Composition operators
 # Data flows from right to left (or inside-out)
-#sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
 infixr 9 -<-;
+sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
 op f -<- g {
   fun(x) { f(g(x)) }
 }
@@ -1277,8 +1277,8 @@ op f ->- g {
 }
 
 # Explicit application
-#sig @ : ((a) -e-> b, a) -e-> b
 infixr 1 @;
+sig @ : ((a) -e-> b, a) -e-> b
 op f @ m {
   f(m)
 }
