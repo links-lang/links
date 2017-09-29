@@ -934,3 +934,17 @@ let string_of_float' : float -> string =
 
 let time_seconds() = int_of_float (Unix.time())
 let time_milliseconds() = int_of_float (Unix.gettimeofday() *. 1000.0)
+
+let strip_leading_slash s =
+  if s = "" then s else
+  if s = "/" then "" else
+  if s.[0] = '/' then String.sub s 1 ((String.length s) - 1) else s
+
+let strip_trailing_slash s =
+  if s = "" then s else
+  if s = "/" then "" else
+  if s.[(String.length s) - 1] = '/' then
+    String.sub s 0 ((String.length s) - 1) else
+    s
+
+let strip_slashes = (strip_leading_slash -<- strip_trailing_slash)
