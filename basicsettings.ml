@@ -117,7 +117,8 @@ end
 module Appserver = struct
   let hostname = Settings.add_string ("host", "0.0.0.0", `User)
   let port = Settings.add_int ("port", 8080, `User)
-  let base_url = Settings.add_string("base_url", "", `User)
+  let js_base_url = Settings.add_string("js_base_url", "", `User)
+  let route_base_url = Settings.add_string("route_base_url", "", `User)
 end
 
 (** Caveat: don't [Open basicsettings] because the above module

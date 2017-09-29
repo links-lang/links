@@ -445,7 +445,7 @@ struct
        let path = Value.unbox_string pathv in
        let is_dir_handler = String.length path > 0 && path.[String.length path - 1] = '/' in
        let path = if String.length path == 0 || path.[0] <> '/' then "/" ^ path else path in
-       let base_url = Settings.get_value (Basicsettings.Appserver.base_url) in
+       let base_url = Settings.get_value (Basicsettings.Appserver.route_base_url) in
        let path =
          if base_url = "" then path
          else
@@ -458,7 +458,7 @@ struct
          eval_error "Attempt to add a static route after they have been disabled";
        let uri = Value.unbox_string uriv in
        let uri = if String.length uri == 0 || uri.[0] <> '/' then "/" ^ uri else uri in
-       let base_uri = Settings.get_value (Basicsettings.Appserver.base_url) in
+       let base_uri = Settings.get_value (Basicsettings.Appserver.route_base_url) in
        let uri =
          if base_uri = "" then uri
          else
