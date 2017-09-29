@@ -257,7 +257,7 @@ struct
         up (Trie.longest_match (Str.split (Str.regexp "/") path) !rt, String.length path == 1 ||path.[String.length path - 1] <> '/') in
 
         let prefixed_lib_url =
-          let base_url = Settings.get_value Basicsettings.Appserver.external_base_url in
+          let base_url = Settings.get_value Basicsettings.Appserver.internal_base_url in
           let js_url = Settings.get_value Basicsettings.Js.lib_url in
           if base_url = "" then js_url else
           "/" ^
