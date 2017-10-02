@@ -608,10 +608,12 @@ module Higher_Order_Continuation : CONTINUATION = struct
        (reflect (Var __k)), reflect (Var __ks)
     | Identity -> pop toplevel
 
-  let to_string = function
+  let rec to_string = function
     | Identity -> "IDENTITY"
     | Reflect code -> "REFLECT: " ^ (Show_code.show code)
-    | 
+    | Cons (code, k) ->
+        "CONS: " ^ (Show_code.show code) ^ ", \n" ^ (to_string k)
+
 end
 
 (** Compiler interface *)
@@ -1005,13 +1007,18 @@ end = functor (K : CONTINUATION) -> struct
              let reified_seta =
                if (name = Value.session_exception_operation) then
                  (* skappa is the pure continuation *)
+                 (
+                 Debug.print ("skappa: " ^ (K.to_string skappa) ^ "\n");
+                 Debug.print ("kappas: " ^ (K.to_string kappas) ^ "\n");
+                 Debug.print ("seta: " ^ (K.to_string seta) ^ "\n");
+                 (* Debug.print ("setas: " ^ (String.concat "," (List.map (K.to_string) setas) ^ "\n"); *)
                  let affected_variables =
                    inspect_ir_variables (K.reify skappa) in
                  (* TODO: Is there a better way of sequencing a side-effecting op here? *)
                  let dummy_var_name = gensym () in
                    Bind (dummy_var_name,
                     Call (Var "_handleSessionException", [Arr affected_variables]),
-                    K.reify seta)
+                    K.reify seta))
                else K.reify seta in
 
              bind_skappa (bind_seta (apply_yielding (reified_seta) [op] kappas)))
