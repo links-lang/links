@@ -267,6 +267,14 @@ fun rec_env ->
       let t1 = ignore_empty_quantifiers t1 in
       let t2 = ignore_empty_quantifiers t2 in
 
+      let mono_of_type =
+        function
+        | `ForAll (qs, t) when List.for_all (fun q -> not (is_rigid_quantifier q)) (unbox_quantifiers qs) ->
+           (* WARNING: side-effect! *)
+           qs := [];
+           Some t
+        | _ -> None in
+
       let ut = unify' rec_env in
       let ur = unify_rows' rec_env in
       counter := !counter+1;
@@ -373,22 +381,28 @@ fun rec_env ->
                            raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
                                                    " with the non-session type "^ string_of_datatype t1)));
                        Unionfind.union rpoint lpoint
-                   | `Var (l, _, `Rigid), _ ->
+                   | `Var (l, _, `Rigid), `Body (`ForAll _ as t2) ->
                        begin
-                         match Types.flexible_of_type t2 with
+                         match mono_of_type t2 with
                            | Some t2 -> unify' rec_env (t1, t2)
                            | None ->
                                raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
                                                        string_of_int l ^" with the type "^ string_of_datatype (`MetaTypeVar rpoint))))
                        end
-                   | _, `Var (r, _, `Rigid) ->
+                   | `Body (`ForAll _ as t1), `Var (r, _, `Rigid) ->
                        begin
-                         match Types.flexible_of_type t1 with
+                         match mono_of_type t1 with
                            | Some t1 -> unify' rec_env (t1, t2)
                            | None ->
                                raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
                                                        string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint))))
                        end
+                   | `Var (l, _, `Rigid), _ ->
+                      raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
+                                              string_of_int l ^" with the type "^ string_of_datatype (`MetaTypeVar rpoint))))
+                   | _, `Var (r, _, `Rigid) ->
+                      raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
+                                              string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint))))
                    | `Recursive (lvar, t), `Recursive (rvar, t') ->
                        assert (lvar <> rvar);
                        Debug.if_set (show_recursion)
@@ -449,13 +463,15 @@ fun rec_env ->
               begin
                 match Unionfind.find point with
                  | `Var (l, _, `Rigid) ->
-                     begin
-                       match Types.flexible_of_type t with
-                         | Some t -> unify' rec_env (t, `MetaTypeVar point)
-                         | None ->
-                             raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
-                                                     " with the type "^ string_of_datatype t)))
-                     end
+                    begin
+                      (* if t is polymorphic then we might make
+                      progress by stripping the flexible quantifiers *)
+                      match mono_of_type t with
+                      | Some t -> unify' rec_env (t, `MetaTypeVar point)
+                      | None ->
+                         raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
+                                                 " with the type "^ string_of_datatype t)))
+                    end
                  | `Var (var, (lin, rest), `Flexible) ->
                      if var_is_free_in_type var t then
                        begin

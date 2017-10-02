@@ -183,7 +183,7 @@ val is_rigid_quantifier : quantifier -> bool
 val box_quantifiers : quantifier list -> quantifier list ref
 val unbox_quantifiers : quantifier list ref -> quantifier list
 
-val flexible_of_type : datatype -> datatype option
+(* val flexible_of_type : datatype -> datatype option *)
 
 val normalise_quantifier : quantifier -> quantifier
 val for_all : quantifier list * datatype -> datatype
