@@ -495,13 +495,13 @@ module Default_Continuation : CONTINUATION = struct
     "function _makeCont(k) { return k; }\n" ^
       "var _idy = function(x) { return; };\n" ^
       "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
-        "var _cont_kind = \"Default_Continuation\";\n" ^
-          "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }"
+      "var _cont_kind = \"Default_Continuation\";\n" ^
+        "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }"
 
   let contify_with_env fn =
     match fn Identity with
     | env, (Fn _ as k) -> env, reflect k
-    | _ -> failwith "error: contify: none function argument."
+    | _ -> failwith "error: contify: non-function argument."
 
   (* Pop returns the code in "the singleton list" as the second
      component, and returns a fresh singleton list containing the
@@ -552,23 +552,48 @@ module Higher_Order_Continuation : CONTINUATION = struct
        append a b
 
   let bind kappas body =
+    (* SJF: Nonsense notes to help me understand WTF is going on.
+     * These should definitely be removed before we merge this... *)
+
+    (* Inner bind takes:
+      * bs: (code -> 'a)
+      * ks: (continuation -> continuation)
+      * and returns a triple of (code -> 'a), a (continuation -> continuation) function, and some code *)
     let rec bind bs ks =
       fun kappas ->
         match kappas with
         | Identity ->
+           (* Generate a new continuation name *)
            let k = gensym ~prefix:"_kappa" () in
+           (* Return:
+             *   Binding function applies "bs" to some code
+             *   which binds the continuation name to the reified toplevel continuation, in "code".
+             *   ks is returned unchanged, and the resulting code is the freshly-created continuation name.
+             *   I guess the idea is that we allow access to the newly-created continuation. *)
           (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k
         | Reflect ((Var _) as v) ->
+           (* We already have a var. Don't need to bind anything else. Return the var. *)
            bs, ks, v
         | Reflect v ->
+           (* Similar to Identity -- create a fresh continuation name, bind it using binding function.
+            * ks is unchanced. Return name of freshly-created continuation. *)
            let k = gensym ~prefix:"_kappa" () in
            (fun code -> bs (Bind (k, v, code))), ks, Var k
         | Cons ((Var _) as v, kappas) ->
+           (* Ah, now this is where the ks function is used. If we've already got
+            * a continuation stack, then we create a function which creates a cons continuation,
+            * and then recursively bind the remainder of the stack. *)
            bind bs (fun kappas -> Cons (v, kappas)) kappas
         | Cons (v, kappas) ->
+           (* Consing something that *isn't* a value. *)
+           (* Create our fresh continuation variable. *)
            let k = gensym ~prefix:"_kappa" () in
+           (* Recursively call... *)
            bind
+             (* Create a binding function which uses the existing binding function
+              * to bind the code to the continuation name. *)
              (fun code -> bs (Bind (k, v, code)))
+             (* Create a continuation binding function which conses the variable to the continuation. *)
              (fun kappas -> Cons (Var k, kappas)) kappas
   in
   let bs, ks, seed = bind (fun code -> code) (fun kappas -> kappas) kappas in
