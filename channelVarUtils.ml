@@ -23,16 +23,10 @@ let channels_in_env e =
       | (`SessionChannel _c) as c -> c :: acc
       | _ -> acc) e []
 
-(* Key point: IR variables are unique (HURRAH!) -- so no need to
- * worry about shadowing. All we need to do is:
-   * 1) traverse each frame's computation to gather the referenced variables
-   * 2) for each variable, check whether it's in the environment upon handler
-   *    installation. If so, and it's a channel, add to the variable set
-   * 3) fold over variable set in order to resolve to channels *)
 
 (* TODO: Maybe it would be nice to have some kind of visitors for the IR?
  * Or is it just me that's crazy enough to have to traverse it? *)
-let affected_in_context (raise_env: Value.env) comp =
+let variables_in_computation comp =
   let open Ir in
   let variable_set = ref IntSet.empty in
   let add_variable var =
@@ -108,12 +102,22 @@ let affected_in_context (raise_env: Value.env) comp =
     traverse_computation (h.ih_comp);
     traverse_stringmap (traverse_clause) h.ih_clauses in
   traverse_computation comp;
-  let final_variable_set = !variable_set in
+  IntSet.elements (!variable_set)
 
-  IntSet.fold (fun v acc ->
-    match (Value.Env.lookup v raise_env ) with
-      | Some ((`SessionChannel _) as c) -> c :: acc
-      | _ -> acc) final_variable_set []
+(* Key point: IR variables are unique (HURRAH!) -- so no need to
+ * worry about shadowing. All we need to do is:
+   * 1) traverse each frame's computation to gather the referenced variables
+   * 2) for each variable, check whether it's in the environment upon handler
+   *    installation. If so, and it's a channel, add to the variable set
+   * 3) fold over variable set in order to resolve to channels *)
+
+let affected_in_context (raise_env: Value.env) comp =
+  variables_in_computation comp
+  |> List.fold_left (fun acc v ->
+     match (Value.Env.lookup v raise_env) with
+       | Some ((`SessionChannel _) as c) -> c :: acc
+       | _ -> acc) []
+
 (*
 let show_frames =
   List.iter (fun (sc, v, env, comp) ->

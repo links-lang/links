@@ -56,7 +56,7 @@ let inspect_ir_variables code =
 *)
 
 
-  let rec go cmd = 
+  let rec go cmd =
     match cmd with
       | Var s -> add_var s
       | Fn (_, cmd) -> go cmd
@@ -585,10 +585,10 @@ module Higher_Order_Continuation : CONTINUATION = struct
       "}\n" ^
       "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
       "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
-        "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
-          "function is_continuation(kappa) {\n" ^
-            "return kappa !== null && typeof kappa === 'object' && _lsHead(kappa) !== undefined && _lsTail(kappa) !== undefined;\n" ^
-              "}"
+      "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
+      "function is_continuation(kappa) {\n" ^
+        "return kappa !== null && typeof kappa === 'object' && _lsHead(kappa) !== undefined && _lsTail(kappa) !== undefined;\n" ^
+      "}"
 
   let contify_with_env fn =
     let name = __kappa in
@@ -975,7 +975,7 @@ end = functor (K : CONTINUATION) -> struct
                   *   installation to this part to get channels created or rebound
                   *   as a result of operations
                   * - (tricky part #2) inspect the continuation to find channels that
-                  *   are affected. 
+                  *   are affected.
                   *
                   *   We can get the list of *variables* that are affected statically.
                   *   This is fine, in the IR, statically determinable.
@@ -1002,7 +1002,7 @@ end = functor (K : CONTINUATION) -> struct
                Dict [ ("_label", strlit name)
                     ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
              in
-             (* If this is a session fail operation, hook to invoke the 
+             (* If this is a session fail operation, hook to invoke the
               * session failure logic before invoking the "otherwise" block *)
              let reified_seta =
                if (name = Value.session_exception_operation) then
@@ -1023,11 +1023,26 @@ end = functor (K : CONTINUATION) -> struct
 
              bind_skappa (bind_seta (apply_yielding (reified_seta) [op] kappas)))
       | `Handle { Ir.ih_comp = comp; Ir.ih_clauses = clauses; _ } ->
+         let open Pervasives in
          (** Generate body *)
          let gb env binder body kappas =
            let env' = VEnv.bind env (name_binder binder) in
            snd (generate_computation env' body kappas)
          in
+         if StringMap.mem (Value.session_exception_operation) clauses then
+           begin
+             Debug.print ("Session fail handle clause found!");
+             let ir_variables = ChannelVarUtils.variables_in_computation comp in
+             let js_variables =
+               List.fold_left (fun acc v ->
+                 match VEnv.find env v with
+                   | Some str -> str :: acc
+                   | None -> acc) [] ir_variables |> List.rev in
+              Debug.print ("IR variables: ");
+              List.iter (Debug.print -<- string_of_int) ir_variables;
+              Debug.print ("JS variables: ");
+              List.iter (Debug.print) js_variables
+           end else ();
          let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
          let return =
            let (_, xb, body) = return_clause in
@@ -1158,7 +1173,13 @@ end = functor (K : CONTINUATION) -> struct
     let (venv, code) = generate_computation env comp (K.reflect (Var "_start")) in
     (venv, GenStubs.bindings bs code)
 
-  let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.binding -> Json.json_state * venv * string option * (code -> code) =
+  let generate_toplevel_binding :
+    Value.env ->
+    Json.json_state ->
+    venv ->
+    Ir.binding ->
+    Json.json_state * venv * string option * (code -> code) =
+
     fun valenv state varenv ->
       function
       | `Let (b, _) ->
