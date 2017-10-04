@@ -1,5 +1,5 @@
-alien javascript "/js/alert.js" alertBox : (String) ~%~> ();
-alien javascript "/js/alert.js" wait : forall e1 :: Row, e2 :: Row . (Int, () ~e1~> ()) ~e2~> ();
+alien javascript "/examples/handlers/js/alert.js" alertBox : (String) ~%~> ();
+alien javascript "/examples/handlers/js/alert.js" wait : forall e1 :: Row, e2 :: Row . (Int, () ~e1~> ()) ~e2~> ();
 
 
 fun await() {
@@ -37,7 +37,7 @@ fun mainPage(_) {
 
 fun main() {
   addRoute("/", mainPage);
-  addStaticRoute("/js", "js", [("js", "text/javascript")]);
+  addStaticRoute("/examples/handlers/js", "examples/handlers/js", [("js", "text/javascript")]);
   servePages()
 }
 
