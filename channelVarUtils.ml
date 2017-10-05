@@ -27,6 +27,7 @@ let channels_in_env e =
 (* TODO: Maybe it would be nice to have some kind of visitors for the IR?
  * Or is it just me that's crazy enough to have to traverse it? *)
 let variables_in_computation comp =
+  Debug.print ("Getting variables in computation: " ^ (Ir.Show_computation.show comp));
   let open Ir in
   let variable_set = ref IntSet.empty in
   let add_variable var =
@@ -76,6 +77,7 @@ let variables_in_computation comp =
   and traverse_binding = function
     | `Let (_, (_, tc)) -> traverse_tail_computation tc
     | `Fun fd ->
+        Debug.print "traversing fundef";
         traverse_fundef fd
     | `Rec fds -> List.iter traverse_fundef fds
     | `Module (_, (Some bs)) -> List.iter traverse_binding bs
