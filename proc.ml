@@ -804,34 +804,48 @@ and Session : SESSION = struct
   let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
   let forward_tbl = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
 
-  let rec cancel chan =
-    let send_ep = send_port chan in
-    let local_ep = receive_port chan in
+  let cancel chan =
 
-    (* foldM_ *)
+    (* foldM_ specialised to LWT *)
     let sequence act =
       List.fold_left (fun acc c -> acc >>= fun _ -> (act c)) (Lwt.return ()) in
 
-    let notify_peer =
-      match lookup_endpoint send_ep with
-        | Local ->
-            OptionUtils.opt_iter (Proc.awaken) (Session.unblock send_ep);
-            Lwt.return ()
-        | Remote _ -> failwith "remote cancellation notifications not yet implemented" in
+    let rec cancel_inner = function
+      | `List vs -> sequence (cancel_inner) vs
+      | `Record r -> sequence (fun (_, v) -> cancel_inner v) r
+      | `Variant (_, v) -> cancel_inner v
+      | `FunctionPtr (_, (Some fvs)) -> cancel_inner fvs
+      | (`SessionChannel c) as cv ->
+          Debug.print ("cancelling affected channel: " ^ (Value.string_of_value cv));
+          cancel_chan c
+      | v ->
+          Debug.print ("not cancelling non-affected value: " ^ (Value.string_of_value v));
+          Lwt.return ()
+    and cancel_chan chan =
+      let send_ep = send_port chan in
+      let local_ep = receive_port chan in
+      let notify_peer =
+        match lookup_endpoint send_ep with
+          | Local ->
+              OptionUtils.opt_iter (Proc.awaken) (Session.unblock send_ep);
+              Lwt.return ()
+          | Remote _ -> failwith "remote cancellation notifications not yet implemented" in
 
-    (* Cancelling a channel twice is a no-op *)
-    if is_endpoint_cancelled local_ep then Lwt.return () else
-    begin
+      (* Cancelling a channel twice is a no-op *)
+      if is_endpoint_cancelled local_ep then Lwt.return () else
+      begin
       cancel_endpoint local_ep;
       match lookup_endpoint local_ep with
         | Local ->
-            let buf = Hashtbl.find buffers local_ep |> Queue.to_list |> List.filter (Value.is_channel) in
-            sequence (fun c -> cancel (Value.unbox_channel c)) buf >>= fun _ ->
+            let buf = Hashtbl.find buffers local_ep |> Queue.to_list in
+            sequence (cancel_inner) buf >>= fun _ ->
             notify_peer
         | Remote _client_id ->
             Debug.print "Trying to cancel remote buffer. This probably shouldn't happen. Maybe due to delegation?";
             Lwt.return ()
-    end
+      end in
+  cancel_chan chan
+
 
   (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)
   let fresh_chan () =

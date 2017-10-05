@@ -64,10 +64,19 @@ let variables_in_computation comp =
         traverse_value scrutinee;
         traverse_stringmap (fun (_, c) -> traverse_computation c) cases;
         OptionUtils.opt_iter (fun (_, c) -> traverse_computation c) case_opt
-  and traverse_fundef (_, (_, _, c), _, _) = traverse_computation c
+  and traverse_fundef (bnd, (_, _, _), _, _) =
+    let fun_var = Var.var_of_binder bnd in
+    match Tables.(lookup fun_defs fun_var) with
+      | Some (_, _, (Some fvs_var), _) ->
+          Debug.print ("fvs_var: " ^ (string_of_int fvs_var));
+          add_variable fvs_var
+      | Some _fd -> Debug.print ("fundef without fvs var attached")
+      | _ -> ()
+    (* traverse_computation c *)
   and traverse_binding = function
     | `Let (_, (_, tc)) -> traverse_tail_computation tc
-    | `Fun fd -> traverse_fundef fd
+    | `Fun fd ->
+        traverse_fundef fd
     | `Rec fds -> List.iter traverse_fundef fds
     | `Module (_, (Some bs)) -> List.iter traverse_binding bs
     | `Module _
@@ -117,7 +126,6 @@ let sessions_in_value v =
   let add_value v = values := (v :: (!values)) in
 
   let rec go = function
-    | #primitive_value -> ()
     | `List vs -> List.iter (go) vs
     | `Record r -> List.iter (fun (_, v) -> go v) r
     | `Variant (_, v) -> go v
