@@ -111,12 +111,39 @@ let variables_in_computation comp =
    *    installation. If so, and it's a channel, add to the variable set
    * 3) fold over variable set in order to resolve to channels *)
 
+
+let sessions_in_value v =
+  let values = ref [] in
+  let add_value v = values := (v :: (!values)) in
+
+  let rec go = function
+    | #primitive_value -> ()
+    | `List vs -> List.iter (go) vs
+    | `Record r -> List.iter (fun (_, v) -> go v) r
+    | `Variant (_, v) -> go v
+    | `FunctionPtr (_, (Some fvs)) -> go fvs
+    | (`SessionChannel _) as c ->
+        Debug.print ("affected value: " ^ (Value.string_of_value c));
+        add_value c
+    | v ->
+        Debug.print ("not-affected value: " ^ (Value.string_of_value v)) in
+  go v; (!values)
+
+
 let affected_in_context (raise_env: Value.env) comp =
-  variables_in_computation comp
-  |> List.fold_left (fun acc v ->
-     match (Value.Env.lookup v raise_env) with
-       | Some ((`SessionChannel _) as c) -> c :: acc
-       | _ -> acc) []
+  let open Pervasives in
+  let show_values xs =
+    String.concat "," (List.map (string_of_value) xs) in
+  (* Excuse the eta, OCaml whines otherwise *)
+  let affected_values =
+    List.fold_left (fun acc v ->
+      match Value.Env.lookup v raise_env with
+        | Some v -> v :: acc
+        | None -> acc
+    ) [] (variables_in_computation comp) in
+  let res = List.map (sessions_in_value) affected_values |> List.concat in
+  Debug.print ("Final affected values: " ^ (show_values res));
+  res
 
 (*
 let show_frames =
