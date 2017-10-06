@@ -39,48 +39,6 @@ type code = | Var    of string
             | Nothing
   deriving (Show)
 
-let inspect_ir_variables code =
-  let open Pervasives in
-  let vars = ref (StringSet.empty) in
-  let add_var s = vars := (StringSet.add s (!vars)) in
-  let get_vars () =
-    let res = StringSet.elements (!vars) in
-    Debug.print "affected client vars: \n";
-    List.iter (Debug.print) res;
-    List.map (fun x -> Var(x)) res in
-
-  (*
-  let get_vars () =
-    StringSet.elements (!vars)
-      |> List.map (fun x -> Var(x)) in
-*)
-
-
-  let rec go cmd =
-    match cmd with
-      | Var s -> add_var s
-      | Fn (_, cmd) -> go cmd
-      | LetFun ((_, _, cmd1, _), cmd2) -> go cmd1; go cmd2
-      | LetRec (xs, cmd) ->
-          List.iter (fun (_, _, cmd, _) -> go cmd) xs;
-          go cmd
-      | Call (c, cs) -> go c; List.iter (go) cs
-      | Unop (_, c) -> go c
-      | Binop (c1, _, c2) -> go c1; go c2
-      | If (i, t, e) -> List.iter (go) [i;t;e]
-      | Dict xs -> List.iter (go -<- snd) xs
-      | Arr xs -> List.iter (go) xs
-      | Bind (_, c1, c2) -> go c1; go c2
-      | Return c -> go c
-      | Case (_, sm, sc_opt) ->
-          StringMap.iter (fun _ (_, code) -> go code) sm;
-          OptionUtils.opt_iter (go -<- snd) sc_opt
-      | Lit _ | Die _ | Nothing -> () in
-  go code;
-  get_vars ()
-
-
-
 
 (** IR variable environment *)
 module VEnv = Env.Int
@@ -88,6 +46,66 @@ module VEnv = Env.Int
 (** Type of environments mapping IR variables to source variables *)
 type venv = string VEnv.t
 
+
+module VariableInspection = struct
+  let inspect_code_variables code =
+    let open Pervasives in
+    let vars = ref (StringSet.empty) in
+    let add_var s = vars := (StringSet.add s (!vars)) in
+
+    let binders = ref (StringSet.empty) in
+    let add_binder s = binders := (StringSet.add s (!binders)) in
+    let add_binders = List.iter (add_binder) in
+
+    let get_vars () =
+      let res = StringSet.diff (!vars) (!binders) |> StringSet.elements in
+      Debug.print "affected client vars: \n";
+      List.iter (Debug.print) res;
+      res in
+
+    let rec go cmd =
+      match cmd with
+        | Var s -> add_var s
+        | Fn (bnds, cmd) ->
+            add_binders bnds;
+            go cmd
+        | LetFun ((bnd1, bnds, cmd1, _), cmd2) ->
+            add_binder bnd1; add_binders bnds;
+            go cmd1; go cmd2
+        | LetRec (xs, cmd) ->
+            List.iter (fun (bnd1, bnds, cmd, _) ->
+              add_binder bnd1; add_binders bnds; go cmd) xs;
+            go cmd
+        | Call (c, cs) -> go c; List.iter (go) cs
+        | Unop (_, c) -> go c
+        | Binop (c1, _, c2) -> go c1; go c2
+        | If (i, t, e) -> List.iter (go) [i;t;e]
+        | Dict xs -> List.iter (go -<- snd) xs
+        | Arr xs -> List.iter (go) xs
+        | Bind (bnd, c1, c2) -> add_binder bnd; go c1; go c2
+        | Return c -> go c
+        | Case (bnd, sm, sc_opt) ->
+            add_var bnd;
+            StringMap.iter (fun _ (s, code) -> add_binder s; go code) sm;
+            OptionUtils.opt_iter (fun (bnd, c) -> add_binder bnd; go c) sc_opt
+        | Lit _ | Die _ | Nothing -> () in
+    go code;
+    get_vars ()
+
+(*
+  let filter_resolvable env vars =
+    let open Pervasives in
+    List.map (fun var ->
+      if (VEnv.has env var) then [var] else []) vars
+    |> List.concat
+*)
+
+  let get_affected_variables code =
+    let open Pervasives in
+    inspect_code_variables code
+    (* |> filter_resolvable env *)
+    |> List.map (fun v -> Var(v))
+end
 
 (** Continuation parameter name (convention) *)
 let __kappa = "__kappa"
@@ -1008,7 +1026,6 @@ end = functor (K : CONTINUATION) -> struct
                   *   We might have type information I suppose?) *)
   (* val bind : t -> (t -> code) -> code *)
   (* val pop : t -> (code -> code) * t * t *)
-
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
@@ -1023,30 +1040,34 @@ end = functor (K : CONTINUATION) -> struct
              (* eta -- effect continuation *)
              let bind_seta, seta, kappas   = K.pop kappas in
              let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
-             let op    =
-               Dict [ ("_label", strlit name)
-                    ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
-             in
-             (* If this is a session fail operation, hook to invoke the
-              * session failure logic before invoking the "otherwise" block *)
-             let reified_seta =
-               if (name = Value.session_exception_operation) then
+             (* Session exceptions need to be compiled specially *)
+             let op =
+             if (name = Value.session_exception_operation) then
+               let affected_variables =
+                 VariableInspection.get_affected_variables (K.reify kappa) in
+               let affected_arr = Dict ([("1", Arr affected_variables)]) in
+                 Dict [ ("_label", strlit name)
+                   ; ("_value", Dict [("p", affected_arr); ("s", resumption)])]
+                 (*
                  (* skappa is the pure continuation *)
-                 (
-                 Debug.print ("skappa: " ^ (K.to_string skappa) ^ "\n");
-                 Debug.print ("kappas: " ^ (K.to_string kappas) ^ "\n");
-                 Debug.print ("seta: " ^ (K.to_string seta) ^ "\n");
                  (* Debug.print ("setas: " ^ (String.concat "," (List.map (K.to_string) setas) ^ "\n"); *)
-                 let affected_variables =
-                   inspect_ir_variables (K.reify skappa) in
+                 Debug.print ("affected variables in doOp compilation: " ^ (List.map string_of_int));
                  (* TODO: Is there a better way of sequencing a side-effecting op here? *)
                  let dummy_var_name = gensym () in
                    Bind (dummy_var_name,
                     Call (Var "_handleSessionException", [Arr affected_variables]),
                     K.reify seta))
-               else K.reify seta in
-
-             bind_skappa (bind_seta (apply_yielding (reified_seta) [op] kappas)))
+             (* If this is a session fail operation, hook to invoke the
+              * session failure logic before invoking the "otherwise" block *)
+             let reified_seta =
+               K.reify seta in
+               else
+                 *)
+             else
+               Dict [ ("_label", strlit name)
+                    ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
+             in
+             bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
       | `Handle { Ir.ih_comp = comp; Ir.ih_clauses = clauses; _ } ->
          let open Pervasives in
          (** Generate body *)
@@ -1054,6 +1075,17 @@ end = functor (K : CONTINUATION) -> struct
            let env' = VEnv.bind env (name_binder binder) in
            snd (generate_computation env' body kappas)
          in
+
+         let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
+         let return =
+           let (_, xb, body) = return_clause in
+           let x_name = snd @@ name_binder xb in
+           contify (fun kappa ->
+             Fn ([x_name;],
+                 let bind, _, kappa = K.pop kappa in
+                 bind @@ gb env xb body kappa))
+         in
+         (*
          if StringMap.mem (Value.session_exception_operation) clauses then
            begin
              Debug.print ("Session fail handle clause found!");
@@ -1068,19 +1100,22 @@ end = functor (K : CONTINUATION) -> struct
               Debug.print ("JS variables: ");
               List.iter (Debug.print) js_variables
            end else ();
-         let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
-         let return =
-           let (_, xb, body) = return_clause in
-           let x_name = snd @@ name_binder xb in
-           contify (fun kappa ->
-             Fn ([x_name;],
-                 let bind, _, kappa = K.pop kappa in
-                 bind @@ gb env xb body kappa))
-         in
+           *)
+
          let operations =
            (** Generate clause *)
-           let gc env (ct, xb, body) kappas =
+           let gc clause_name env (ct, xb, body) kappas =
+             (* env: environment
+              * ct: Resumption / NoResumption indicator
+              * xb: Binder for the operation
+              * body: Body of the clause
+              * kappas: Continuation stack
+              *)
+
+             (* Calculate JS name of the binder *)
              let x_name = snd @@ name_binder xb in
+
+             (* Bind the resumption *)
              let env', r_name =
                match ct with
                | `ResumptionBinder rb ->
@@ -1091,20 +1126,56 @@ end = functor (K : CONTINUATION) -> struct
                   let dummy = name_binder dummy_binder in
                   VEnv.bind env dummy, snd dummy
              in
+
+             (* Project the arguments and continuation from the record compiled in DoOperation *)
              let p = Call (Var "LINKS.project", [Var x_name; strlit "p"]) in
              let s = Call (Var "LINKS.project", [Var x_name; strlit "s"]) in
              let r = Call (Var "_makeFun", [s]) in
+
+             (* Bind the names, and generate the body of the clause *)
+             (* The difference in compiling a "regular" operation and a session exception
+              * handler comes in the compilation of the clause body.
+              * For a "regular" clause body, we just bind the names and generate the
+              * clause body. For an exception handler body, we need to insert a call into
+              * _handleSessionException, taking the "return clause" and captured environments
+              * as arguments, before invoking the clause body. *)
              let clause_body =
-               Bind (r_name, r,
-                     Bind (x_name, p, gb env' xb body kappas))
+               if (clause_name = Value.session_exception_operation) then
+                 (* Gather the free variables in the return clause, and bind them
+                  * to the return environment binder *)
+                 let (_, _, return_comp) = return_clause in
+                 let ir_variables = ChannelVarUtils.variables_in_computation return_comp in
+                 (* Only include free variables (i.e. those which cannot be resolved
+                  * wrt the Handle environment. Resolve to their JS names. *)
+                 let js_variables =
+                   List.fold_left (fun acc v ->
+                     match VEnv.find env v with
+                       | Some str ->
+                           if not (Arithmetic.is str || Comparison.is str || StringOp.is str) then
+                             Var(str) :: acc
+                           else
+                             acc
+                       | None -> acc) [] ir_variables |> List.rev in
+                 (*
+                   Bind (dummy_var_name,
+                    Call (Var "_handleSessionException", [Arr affected_variables]),
+                    K.reify seta)) *)
+                 let dummy_var_name = gensym () in
+                 Bind (r_name, r,
+                   Bind (x_name, Call(Var "LINKS.project", [p; strlit "1"]),
+                     Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name; Arr js_variables]),
+                      gb env' xb body kappas)))
+               else
+                 Bind (r_name, r,
+                   Bind (x_name, p, gb env' xb body kappas))
              in
              x_name, clause_body
            in
            let clauses kappas =
-             StringMap.map
-               (fun clause ->
-                 gc env clause kappas)
-               operation_clauses
+             StringMap.fold
+               (fun clause_name clause ->
+                 StringMap.add clause_name (gc clause_name env clause kappas))
+               operation_clauses (StringMap.empty)
            in
            let forward ks =
              let z_name = "_z" in

@@ -34,6 +34,6 @@ fun go() {
   }
 }
 
-
+go()
 #goBadly()
 #goAlright()

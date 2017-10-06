@@ -63,20 +63,34 @@ object (o : 'self_type)
          * we'll never use the continuation (and this is invoked after pattern
          * deanonymisation in desugarHandlers), generate a fresh name for the
          * continuation argument. *)
-        let dummy_name = Utility.gensym ~prefix:"dsh" () in
+        let return_captured_pat = mk_var_pat "_return_captured" in
+        let cont_captured_pat = mk_var_pat "_cont_captured" in
+        let cont_pat = mk_var_pat @@ Utility.gensym ~prefix:"dsh" () in
 
 
-        let otherwise_pat =
-          (`Variant (failure_op_name, Some (mk_var_pat dummy_name)), dp) in
+        (* Bit of a hack on the otherwise front. We make a pair of binders.
+         * The _first_ contains the free variables of the Return clause.
+         * The _second_ contains the free variables of the continuation.
+         * The resumption (third) is never used. *)
+        let tpl_pat : Sugartypes.pattern =
+          let record_list = [("1", return_captured_pat); ("2", cont_captured_pat); ("3", cont_pat)] in
+          (`Record (record_list, None), dp) in
+        let otherwise_pat : Sugartypes.pattern =
+          ((`Variant (failure_op_name, Some (tpl_pat))), dp) in
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 
         let clauses = [return_clause ; otherwise_clause] in
+        let otherwise_dt_override =
+          Types.make_empty_closed_row ()
+            |> Types.row_with ("1", (`Present `Not_typed))
+            |> Types.row_with ("2", (`Present `Not_typed))
+            |> Types.row_with ("3", (`Present `Not_typed)) in
 
         (* Manually construct a row with the two hardwired handler cases. *)
         let raw_row =
           Types.make_empty_closed_row ()
             |> Types.row_with ("Return", (`Present as_dt))
-            |> Types.row_with (failure_op_name, (`Present otherwise_dt)) in
+            |> Types.row_with (failure_op_name, (`Present (`Record (otherwise_dt_override)))) in
 
         (* Dummy types *)
         let types =
@@ -88,8 +102,6 @@ object (o : 'self_type)
           shd_types = types;
           shd_raw_row = raw_row
         } in
-
-        (* let try_operation = (`DoOperation ("_SessionFail", [], Some try_dt), snd try_phr) in *)
 
         let hndlr = {
           sh_expr = try_phr;

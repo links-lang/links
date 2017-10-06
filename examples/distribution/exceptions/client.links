@@ -1,22 +1,28 @@
 #open Cancel2
 
 fun makePage() {
-    #var _ = spawnClient { Cancel2.go() };
     fun foo() {
-      var t = fork(fun(t) { ignore(send(10, t)) });
-      try {
-        var s = fork(fun(s) { ignore(send(5, s)) });
-        raise;
-        var (x, s) = receive(s);
-        var (y, t) = receive(t);
-        x + y
-      } as (x) in {
-        print(intToString(x))
-      } otherwise {
-        print("error!")
+        var t = fork(fun(t) { ignore(send(10, t)) });
+        var u = fork(fun(u) { ignore(send(15, u)) });
+        try {
+          var s = fork(fun(s) { ignore(send(5, s)) });
+          raise;
+          var (x, s) = receive(s);
+          var (y, t) = receive(t);
+          x + y
+        } as (x) in {
+          var (res, _) = receive(u);
+          var res = (-1);
+          print(intToString(x + res))
+        } otherwise {
+          #print("error!")
+          var (res, _) = receive(u);
+          print("error! but received " ^^ (intToString(res) ^^ " from u"))
+        }
       }
-    }
-    var _ = spawnClient { foo() };
+    var _ = spawnClient {
+      foo()
+    };
 
     page
         <#><h1>Yup</h1></#>
