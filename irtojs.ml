@@ -1035,6 +1035,7 @@ end = functor (K : CONTINUATION) -> struct
          let nil = Var "lsNil" in
          K.bind kappa
            (fun kappas ->
+             Debug.print ("kappa: " ^ (K.to_string kappa));
              (* kappa -- pure continuation *)
              let bind_skappa, skappa, kappas = K.pop kappas in
              (* eta -- effect continuation *)
@@ -1048,21 +1049,6 @@ end = functor (K : CONTINUATION) -> struct
                let affected_arr = Dict ([("1", Arr affected_variables)]) in
                  Dict [ ("_label", strlit name)
                    ; ("_value", Dict [("p", affected_arr); ("s", resumption)])]
-                 (*
-                 (* skappa is the pure continuation *)
-                 (* Debug.print ("setas: " ^ (String.concat "," (List.map (K.to_string) setas) ^ "\n"); *)
-                 Debug.print ("affected variables in doOp compilation: " ^ (List.map string_of_int));
-                 (* TODO: Is there a better way of sequencing a side-effecting op here? *)
-                 let dummy_var_name = gensym () in
-                   Bind (dummy_var_name,
-                    Call (Var "_handleSessionException", [Arr affected_variables]),
-                    K.reify seta))
-             (* If this is a session fail operation, hook to invoke the
-              * session failure logic before invoking the "otherwise" block *)
-             let reified_seta =
-               K.reify seta in
-               else
-                 *)
              else
                Dict [ ("_label", strlit name)
                     ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
