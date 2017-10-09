@@ -409,7 +409,7 @@ end
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
-let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
+let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"; "send"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
@@ -934,7 +934,11 @@ end = functor (K : CONTINUATION) -> struct
                      let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
                      K.apply ~strategy:`Direct kappa arg
                    else
-                     apply_yielding (gv (`Variable f)) (List.map gv vs) kappa
+                     if (f_name = "send" || f_name = "receive") then
+                       let code_vs = List.map gv vs in
+                       generate_cancel_stub env f_name code_vs kappa
+                     else
+                       apply_yielding (gv (`Variable f)) (List.map gv vs) kappa
               end
            | _ ->
               apply_yielding (gv f) (List.map gv vs) kappa
@@ -988,8 +992,10 @@ end = functor (K : CONTINUATION) -> struct
          K.bind kappa
            (fun kappa -> apply_yielding (gv v) [K.reify kappa] kappa)
       | `Select (l, c) ->
-         let arg = Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c]) in
-         K.apply ~strategy:`Direct kappa arg
+  (* and generate_cancel_stub env (f: Ir.var) (args: Ir.value list) (kappa: K.t) = *)
+         let args =
+          [Dict ["_label", strlit l; "_value", Dict []]; gv c] in
+         generate_cancel_stub env "send" args kappa
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in
@@ -1001,10 +1007,20 @@ end = functor (K : CONTINUATION) -> struct
                let (c, cname) = name_binder cb in
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
              let branches = StringMap.map generate_branch bs in
+             let compiled_doOp =
+                   generate_special env (`DoOperation (
+                     Value.session_exception_operation,
+                     [], `Not_typed)) kappa in
+             let cancellation_thunk_name =
+                  gensym ~prefix:"cancellation_thunk" () in
              let recv_cont_name = "__recv_cont" in
-             Bind (recv_cont_name,
-              Call (Var "_makeCont", [Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]),
-              Call (Var "receive", [gv c; Var recv_cont_name])))
+
+             let cancellation_thunk = Fn ([], compiled_doOp) in
+                (* Thunk will be passed as final non-continuation arg *)
+                Bind (recv_cont_name,
+                  Call (Var "_makeCont", [Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]),
+                  Bind (cancellation_thunk_name, cancellation_thunk,
+                    (Call (Var "receive", [gv c; Var cancellation_thunk_name; Var recv_cont_name])))))
       | `DoOperation (name, args, _) ->
           let open Pervasives in (* christ this is such BS *)
               (* Essentially, we have:
@@ -1250,7 +1266,18 @@ end = functor (K : CONTINUATION) -> struct
        xs_names @ [__kappa],
        body,
        location)
-
+  and generate_cancel_stub env (f_name: string) (args: code list) (kappa: K.t) =
+    (* Compile a thunk to be invoked if the operation fails *)
+    let compiled_doOp =
+      generate_special env (`DoOperation (
+        Value.session_exception_operation,
+        [], `Not_typed)) kappa in
+    let cancellation_thunk_name =
+      gensym ~prefix:"cancellation_thunk" () in
+    let cancellation_thunk = Fn ([], compiled_doOp) in
+    (* Thunk will be passed as final non-continuation arg *)
+    Bind (cancellation_thunk_name, cancellation_thunk,
+      (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) kappa))
   and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
     let (venv, code) = generate_computation env comp (K.reflect (Var "_start")) in
     (venv, GenStubs.bindings bs code)
