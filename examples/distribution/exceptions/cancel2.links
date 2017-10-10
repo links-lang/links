@@ -22,8 +22,8 @@ fun go() {
   var ap = new(); # Yay synchronisation!
   try {
     var s = fork (fun (s) {
-      ignore(request(ap));
       cancel(s);
+      ignore(request(ap))
     });
     ignore(accept(ap));
     ignore(send(5, s))
