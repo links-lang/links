@@ -89,6 +89,13 @@ module type WEBSOCKETS =
       channel_id ->
       (channel_id * Value.t list) list ->
       unit Lwt.t
+
+  (** Send a cancellation notification *)
+  val send_cancellation :
+      client_id ->
+      notify_ep:channel_id ->
+      cancelled_ep:channel_id ->
+      unit Lwt.t
   end
 
 module type MAILBOX =
@@ -144,6 +151,9 @@ sig
 
   val handle_lost_message_response :
     channel_id -> ((channel_id * (Value.t list)) list) -> unit Lwt.t
+
+  val handle_remote_cancel :
+    notify_ep:channel_id -> cancelled_ep:channel_id -> unit Lwt.t
 
   val link : chan -> chan -> unit
 end

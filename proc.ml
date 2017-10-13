@@ -354,6 +354,12 @@ module type WEBSOCKETS =
       (channel_id * Value.t list) list ->
       unit Lwt.t
 
+  (** Send a cancellation notification *)
+  val send_cancellation :
+      client_id ->
+      notify_ep:channel_id ->
+      cancelled_ep:channel_id ->
+      unit Lwt.t
   end
 
 module type MAILBOX =
@@ -403,6 +409,10 @@ sig
 
   val handle_lost_message_response :
     channel_id -> ((channel_id * (Value.t list)) list) -> unit Lwt.t
+
+
+  val handle_remote_cancel :
+    notify_ep:channel_id -> cancelled_ep:channel_id -> unit Lwt.t
 
   val link : chan -> chan -> unit
 end
@@ -485,7 +495,10 @@ struct
           Session.send_from_remote client_id deleg_chans v chan_id >>= fun _ -> Lwt.return ()
       | LostMessageResponse (carrier_chan_id, lost_message_table) ->
           Session.handle_lost_message_response carrier_chan_id lost_message_table
-
+      | ChannelCancellation cancel_data ->
+          let notify_ep = cancel_data.notify_ep in
+          let cancelled_ep = cancel_data.cancelled_ep in
+          Session.handle_remote_cancel ~notify_ep:notify_ep ~cancelled_ep:cancelled_ep
 
     let recvLoop client_id frame =
     let open Frame in
@@ -602,6 +615,12 @@ struct
        "\"lost_messages\":{" ^ json_table ^ "}}" in
     send_or_buffer_message client_id json_str
 
+  let send_cancellation client_id ~notify_ep ~cancelled_ep =
+    let json_str =
+      "{\"opcode\":\"CHANNEL_CANCELLATION\"," ^
+      "\"notify_ep\":" ^ (ChannelID.to_json notify_ep) ^ "," ^
+      "\"cancelled_ep\":" ^ (ChannelID.to_json cancelled_ep) ^ "}" in
+    send_or_buffer_message client_id json_str
 
   (* Debug *)
   let _send_raw_string wsocket str = send_message wsocket str
@@ -771,6 +790,11 @@ and Session : SESSION = struct
     cancelled_endpoints := ChannelIDSet.add c (!cancelled_endpoints)
   let is_endpoint_cancelled c = ChannelIDSet.mem c (!cancelled_endpoints)
 
+  (* Maps client IDs to the list of channels they own *)
+  let client_channel_map = (Hashtbl.create 10000 : (client_id, chan list) Hashtbl.t)
+
+
+
   (* Delegating channels: channels being used as a carrier for delegation. Any channel in this
    * set should *not* be delegated *)
   let delegation_carriers = ref ChannelIDSet.empty
@@ -829,7 +853,8 @@ and Session : SESSION = struct
           | Local ->
               OptionUtils.opt_iter (Proc.awaken) (Session.unblock send_ep);
               Lwt.return ()
-          | Remote _ -> failwith "remote cancellation notifications not yet implemented" in
+          | Remote cl_id ->
+              Websockets.send_cancellation cl_id ~notify_ep:send_ep ~cancelled_ep:local_ep in
 
       (* Cancelling a channel twice is a no-op *)
       if is_endpoint_cancelled local_ep then Lwt.return () else
@@ -846,6 +871,14 @@ and Session : SESSION = struct
       end in
   cancel_chan chan
 
+  let handle_remote_cancel ~notify_ep ~cancelled_ep =
+    match lookup_endpoint notify_ep with
+      | Local ->
+          cancel_endpoint cancelled_ep;
+          OptionUtils.opt_iter (Proc.awaken) (Session.unblock notify_ep);
+          Lwt.return ()
+      | Remote client_id ->
+          Websockets.send_cancellation client_id ~notify_ep ~cancelled_ep
 
   (** Creates a fresh server channel, where both endpoints of the channel reside on the server *)
   let fresh_chan () =
