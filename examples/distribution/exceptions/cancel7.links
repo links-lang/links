@@ -10,8 +10,9 @@ fun go() {
     });
     var t = request(ap);
     var (res, _) = receive(t);
+    #cancel(t);
     cancel(s);
-    res
+    1
   } as (x) in {
     print("success: " ^^ intToString(x))
   } otherwise {

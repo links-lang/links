@@ -70,11 +70,12 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode = function
-    | `Raise -> (o, `DoOperation (failure_op_name, [], Some `Not_typed), `Not_typed)
+    | `Raise ->
+        let unit_phr = (`RecordLit ([], None), dp) in
+        (o, `DoOperation (failure_op_name, [unit_phr; unit_phr; unit_phr], Some `Not_typed), `Not_typed)
     | `TryInOtherwise (_, _, _, _, None) -> assert false
     | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
         let open Pervasives in (* Let me have those sweet, sweet pipes *)
-        (* TODO: Typing is not worked out yet. Types are probably garbage. *)
         let (o, try_phr, try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
