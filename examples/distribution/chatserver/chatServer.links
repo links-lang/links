@@ -17,8 +17,7 @@ fun clientHandlerLoop(nick, clientToServerChan, loopPid) {
         loopPid ! BroadcastChangeTopic(newTopic);
         (nick, clientToServerChan, loopPid)
     }
-  } as (fuuuuck) in {
-    var (nick, chan, pid) = fuuuuck;
+  } as (nick, chan, pid) in {
     clientHandlerLoop(nick, chan, pid)
   } otherwise {
     loopPid ! BroadcastUserLeft(nick)

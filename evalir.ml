@@ -238,9 +238,8 @@ struct
        * The reason is that we actually use these three parameters on the client
        * in compilation, whereas on the server we necessarily do the hook in DoOperation
        * as opposed to in user code. *)
-      let unit_val = `Extend (StringMap.empty, None) in
       special env cont (`DoOperation (Value.session_exception_operation,
-        [unit_val; unit_val; unit_val], `Not_typed)) in
+        [], `Not_typed)) in
     function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) = find_fun f in
@@ -564,9 +563,8 @@ struct
              | _              -> eval_error "Conditional was not a boolean")
   and special env (cont : continuation) : Ir.special -> result =
     let invoke_session_exception () =
-      let unit_val = `Extend (StringMap.empty, None) in
       special env cont (`DoOperation (Value.session_exception_operation,
-        [unit_val; unit_val; unit_val], `Not_typed)) in
+        [], `Not_typed)) in
     function
     | `Wrong _                    -> raise Exceptions.Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))

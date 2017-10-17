@@ -10,24 +10,6 @@ open Sugartypes
    _SessionFail _ _ -> N'
  }
 
-
-SCRATCH:
-  | `Handle           of handler
-
-
-and clause = pattern * phrase
-and funlit = pattern list list * phrase
-and handlerlit = [`Deep | `Shallow] * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
-and handler = {
-    sh_expr: phrase;
-    sh_clauses: clause list;
-    sh_descr: handler_descriptor
-  }
-and handler_descriptor = {
-    shd_depth: [`Deep | `Shallow];
-    shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
-    shd_raw_row: Types.row;
-  }
 *)
 
 
@@ -71,15 +53,14 @@ object (o : 'self_type)
 
   method! phrasenode = function
     | `Raise ->
-        let unit_phr = (`RecordLit ([], None), dp) in
-        (o, `DoOperation (failure_op_name, [unit_phr; unit_phr; unit_phr], Some `Not_typed), `Not_typed)
+        (o, `DoOperation (failure_op_name, [], Some `Not_typed), `Not_typed)
     | `TryInOtherwise (_, _, _, _, None) -> assert false
     | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
         let open Pervasives in (* Let me have those sweet, sweet pipes *)
         let (o, try_phr, try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
-        let (o, as_phr, as_dt) = o#phrase as_phr in
+        let (o, as_phr, _as_dt) = o#phrase as_phr in
         let o = o#restore_envs envs in
         let (o, otherwise_phr, otherwise_dt) = o#phrase otherwise_phr in
         (* Now, to create a handler... *)
@@ -90,34 +71,20 @@ object (o : 'self_type)
          * we'll never use the continuation (and this is invoked after pattern
          * deanonymisation in desugarHandlers), generate a fresh name for the
          * continuation argument. *)
-        let return_captured_pat = mk_var_pat "_return_captured" in
-        let cont_captured_pat = mk_var_pat "_cont_captured" in
         let cont_pat = dummy_pat () in
 
-
-        (* Bit of a hack on the otherwise front. We make a pair of binders.
-         * The _first_ contains the free variables of the Return clause.
-         * The _second_ contains the free variables of the continuation.
-         * The resumption (third) is never used. *)
-        let tpl_pat : Sugartypes.pattern =
-          let record_list = [("1", return_captured_pat); ("2", cont_captured_pat); ("3", cont_pat)] in
-          (`Record (record_list, None), dp) in
         let otherwise_pat : Sugartypes.pattern =
-          ((`Variant (failure_op_name, Some (tpl_pat))), dp) in
+          ((`Variant (failure_op_name, Some (cont_pat))), dp) in
+
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 
         let clauses = [return_clause ; otherwise_clause] in
-        let otherwise_dt_override =
-          Types.make_empty_closed_row ()
-            |> Types.row_with ("1", (`Present `Not_typed))
-            |> Types.row_with ("2", (`Present `Not_typed))
-            |> Types.row_with ("3", (`Present `Not_typed)) in
 
         (* Manually construct a row with the two hardwired handler cases. *)
         let raw_row =
           Types.make_empty_closed_row ()
-            |> Types.row_with ("Return", (`Present as_dt))
-            |> Types.row_with (failure_op_name, (`Present (`Record (otherwise_dt_override)))) in
+            |> Types.row_with ("Return", (`Present try_dt))
+            |> Types.row_with (failure_op_name, (`Present (otherwise_dt))) in
 
         (* Dummy types *)
         let types =
@@ -125,7 +92,7 @@ object (o : 'self_type)
           Types.make_empty_closed_row (), otherwise_dt) in
 
         let hndl_desc = {
-          shd_depth = `Shallow; (* I think? *)
+          shd_depth = `Shallow; (* Doesn't matter either way, since we don't invoke the resumption. *)
           shd_types = types;
           shd_raw_row = raw_row
         } in

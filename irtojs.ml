@@ -1022,26 +1022,7 @@ end = functor (K : CONTINUATION) -> struct
                   Bind (cancellation_thunk_name, cancellation_thunk,
                     (Call (Var "receive", [gv c; Var cancellation_thunk_name; Var recv_cont_name])))))
       | `DoOperation (name, args, _) ->
-          let open Pervasives in (* christ this is such BS *)
-              (* Essentially, we have:
-                  * - Environment
-                  * - Operation details
-                  * - Continuation kappa
-               *)
-              (* What we want to do:
-                  * - Hook in if op is __SessionFail
-                  * - (tricky part #1) do a diff on the venv from handler
-                  *   installation to this part to get channels created or rebound
-                  *   as a result of operations
-                  * - (tricky part #2) inspect the continuation to find channels that
-                  *   are affected.
-                  *
-                  *   We can get the list of *variables* that are affected statically.
-                  *   This is fine, in the IR, statically determinable.
-                  *   But the *inspection* needs to be done at runtime (I think, anyway.
-                  *   We might have type information I suppose?) *)
-  (* val bind : t -> (t -> code) -> code *)
-  (* val pop : t -> (code -> code) * t * t *)
+         let open Pervasives in
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
@@ -1087,22 +1068,6 @@ end = functor (K : CONTINUATION) -> struct
                  let bind, _, kappa = K.pop kappa in
                  bind @@ gb env xb body kappa))
          in
-         (*
-         if StringMap.mem (Value.session_exception_operation) clauses then
-           begin
-             Debug.print ("Session fail handle clause found!");
-             let ir_variables = ChannelVarUtils.variables_in_computation comp in
-             let js_variables =
-               List.fold_left (fun acc v ->
-                 match VEnv.find env v with
-                   | Some str -> str :: acc
-                   | None -> acc) [] ir_variables |> List.rev in
-              Debug.print ("IR variables: ");
-              List.iter (Debug.print -<- string_of_int) ir_variables;
-              Debug.print ("JS variables: ");
-              List.iter (Debug.print) js_variables
-           end else ();
-           *)
 
          let operations =
            (** Generate clause *)
@@ -1139,33 +1104,13 @@ end = functor (K : CONTINUATION) -> struct
               * handler comes in the compilation of the clause body.
               * For a "regular" clause body, we just bind the names and generate the
               * clause body. For an exception handler body, we need to insert a call into
-              * _handleSessionException, taking the "return clause" and captured environments
-              * as arguments, before invoking the clause body. *)
+              * _handleSessionException before invoking the clause body. *)
              let clause_body =
                if (clause_name = Value.session_exception_operation) then
-                 (* Gather the free variables in the return clause, and bind them
-                  * to the return environment binder *)
-                 let (_, _, return_comp) = return_clause in
-                 let ir_variables = ChannelVarUtils.variables_in_computation return_comp in
-                 (* Only include free variables (i.e. those which cannot be resolved
-                  * wrt the Handle environment. Resolve to their JS names. *)
-                 let js_variables =
-                   List.fold_left (fun acc v ->
-                     match VEnv.find env v with
-                       | Some str ->
-                           if not (Arithmetic.is str || Comparison.is str || StringOp.is str) then
-                             Var(str) :: acc
-                           else
-                             acc
-                       | None -> acc) [] ir_variables |> List.rev in
-                 (*
-                   Bind (dummy_var_name,
-                    Call (Var "_handleSessionException", [Arr affected_variables]),
-                    K.reify seta)) *)
                  let dummy_var_name = gensym () in
                  Bind (r_name, r,
                    Bind (x_name, Call(Var "LINKS.project", [p; strlit "1"]),
-                     Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name; Arr js_variables]),
+                     Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name]),
                       gb env' xb body kappas)))
                else
                  Bind (r_name, r,

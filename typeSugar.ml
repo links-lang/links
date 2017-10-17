@@ -333,6 +333,8 @@ sig
 
   val try_in_unless_pat : griper
   val try_in_unless_branches : griper
+  val try_in_unless_linearity : SourceCode.pos -> string -> unit
+
 end
   = struct
     type griper =
@@ -1307,6 +1309,11 @@ end
       with_but2 pos
         ("Both branches of a try-as-in-unless block should have the same type")
         l r
+
+    let try_in_unless_linearity pos v =
+      die pos ("All variables in the as- and unless- branches of an " ^
+               "exception handler must be unrestricted, but " ^ nl () ^
+               "variable " ^ v ^ " is linear.")
 end
 
 type context = Types.typing_environment = {
@@ -3175,12 +3182,36 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             (* vs: variables bound in the pattern. *)
             let vs = Env.domain (pattern_env pat) in
 
-            (* in_usages: usages in the in_phrase *not* bound in the pattern *)
-            let in_usages = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages in_phrase) in
-
             let unless_phrase = tc unless_phrase in
             unify ~handle:Gripers.try_in_unless_branches
                 (pos_and_typ in_phrase, pos_and_typ unless_phrase);
+
+            (* in_usages: usages in the in_phrase *not* bound in the pattern *)
+            let in_usages = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages in_phrase) in
+
+            (* Now, we need to ensure that all variables used in the in- and unless-
+             * phrases are unrestricted (apaart from the pattern variables!) *)
+            let () =
+              StringMap.iter (fun v n ->
+                if n == 0 then () else
+                if Env.has (pattern_env pat) v then () else
+                  let ty = Env.lookup context.var_env v in
+                  if Types.type_can_be_unl ty then
+                    Types.make_type_unl ty
+                  else
+                    Gripers.try_in_unless_linearity pos v
+              ) (usages in_phrase) in
+
+            let () =
+              StringMap.iter (fun v n ->
+                if n == 0 then () else
+                let ty = Env.lookup context.var_env v in
+                  if Types.type_can_be_unl ty then
+                    Types.make_type_unl ty
+                  else
+                    Gripers.try_in_unless_linearity pos v
+              ) (usages unless_phrase) in
+
 
             (* Calculate resulting usages *)
             let usages_res =
