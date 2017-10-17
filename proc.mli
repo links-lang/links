@@ -156,6 +156,11 @@ sig
     notify_ep:channel_id -> cancelled_ep:channel_id -> unit Lwt.t
 
   val link : chan -> chan -> unit
+
+  val cancel_client_channels : client_id -> unit Lwt.t
+  val register_client_channel : client_id -> chan -> unit
+  val register_server_channel : chan -> unit
+
 end
 
 module rec Websockets : WEBSOCKETS

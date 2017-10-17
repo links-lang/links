@@ -415,6 +415,11 @@ sig
     notify_ep:channel_id -> cancelled_ep:channel_id -> unit Lwt.t
 
   val link : chan -> chan -> unit
+
+  val cancel_client_channels : client_id -> unit Lwt.t
+  val register_client_channel : client_id -> chan -> unit
+  val register_server_channel : chan -> unit
+
 end
 
 module rec Websockets : WEBSOCKETS =
@@ -509,6 +514,7 @@ struct
              * For now, it might be best to just do the nuclear option and delete all
              * associated state (buffers, entries in access points, etc.) *)
             deregister_websocket client_id;
+            async (fun () -> Session.cancel_client_channels client_id);
             Debug.print @@
             Printf.sprintf "Websocket closed for client %s\n"
               (ClientID.to_string client_id)
@@ -791,6 +797,7 @@ and Session : SESSION = struct
   let is_endpoint_cancelled c = ChannelIDSet.mem c (!cancelled_endpoints)
 
   (* Maps client IDs to the list of channels they own *)
+  (* Channels of the form (peer EP, ep on client) *)
   let client_channel_map = (Hashtbl.create 10000 : (client_id, chan list) Hashtbl.t)
 
 
@@ -828,12 +835,50 @@ and Session : SESSION = struct
   let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
   let forward_tbl = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
 
+  (* foldM_ specialised to LWT *)
+  let sequence act =
+    List.fold_left (fun acc c -> acc >>= fun _ -> (act c)) (Lwt.return ())
+
+
+  let register_channel location ch =
+    begin
+    match Hashtbl.lookup endpoint_states (snd ch) with
+      | Some(Local) -> ()
+      | Some(Remote old_cid) ->
+          (* If we're reassigning a channel, we need to firstly remove it from
+           * the previous client's channel list *)
+          begin
+            match Hashtbl.lookup client_channel_map old_cid with
+              | Some chans ->
+                  let chans = List.filter (fun x -> x != ch) chans in
+                  Hashtbl.replace client_channel_map old_cid chans
+              | None -> ()
+          end;
+      | None -> ()
+      end;
+    (* Next, we need to ensure that if the location is a client, then it's stored
+     * in the client_channel_map *)
+    begin
+      match location with
+        | Local -> ()
+        | Remote new_cid ->
+            begin
+              match Hashtbl.lookup client_channel_map new_cid with
+                | Some(chans) ->
+                    Hashtbl.replace client_channel_map new_cid (ch :: chans)
+                | None ->
+                    Hashtbl.add client_channel_map new_cid [ch]
+            end
+    end;
+    (* Finally, we need to update the endpoint_states table with the new CID *)
+    Hashtbl.replace endpoint_states (snd ch) location
+
+  let register_server_channel = register_channel (Local)
+
+  let register_client_channel client_id =
+    register_channel (Remote client_id)
+
   let cancel chan =
-
-    (* foldM_ specialised to LWT *)
-    let sequence act =
-      List.fold_left (fun acc c -> acc >>= fun _ -> (act c)) (Lwt.return ()) in
-
     let rec cancel_inner = function
       | `List vs -> sequence (cancel_inner) vs
       | `Record r -> sequence (fun (_, v) -> cancel_inner v) r
@@ -848,13 +893,22 @@ and Session : SESSION = struct
     and cancel_chan chan =
       let send_ep = send_port chan in
       let local_ep = receive_port chan in
-      let notify_peer =
+      let notify_peer owner_cl_id =
         match lookup_endpoint send_ep with
           | Local ->
               OptionUtils.opt_iter (Proc.awaken) (Session.unblock send_ep);
               Lwt.return ()
           | Remote cl_id ->
-              Websockets.send_cancellation cl_id ~notify_ep:send_ep ~cancelled_ep:local_ep in
+              let do_cancellation =
+                Websockets.send_cancellation
+                  cl_id ~notify_ep:send_ep ~cancelled_ep:local_ep in
+              begin
+              match owner_cl_id with
+                | Some owner_cl_id ->
+                    if cl_id != owner_cl_id then do_cancellation
+                    else Lwt.return ()
+                | None -> do_cancellation
+              end in
 
       (* Cancelling a channel twice is a no-op *)
       if is_endpoint_cancelled local_ep then Lwt.return () else
@@ -864,12 +918,24 @@ and Session : SESSION = struct
         | Local ->
             let buf = Hashtbl.find buffers local_ep |> Queue.to_list in
             sequence (cancel_inner) buf >>= fun _ ->
-            notify_peer
-        | Remote _client_id ->
-            Debug.print "Trying to cancel remote buffer. This probably shouldn't happen. Maybe due to delegation?";
-            Lwt.return ()
+            notify_peer None
+        | Remote client_id ->
+            (* Trying to cancel remote buffer. This happens when a client goes
+             * offline and we cancel all the channels which were resident on that client. *)
+            (* We don't need to inspect buffers, since all will be contained in the map of
+             * cancelled channels. We do, however, need to notify the peers of the failure. *)
+            notify_peer (Some client_id)
       end in
   cancel_chan chan
+
+  let cancel_client_channels client_id =
+    match Hashtbl.lookup client_channel_map client_id with
+      | Some channels ->
+          (sequence (fun c -> cancel c) channels) >>= fun _ ->
+          Hashtbl.remove client_channel_map client_id;
+          Lwt.return ()
+      | None -> Lwt.return ()
+
 
   let handle_remote_cancel ~notify_ep ~cancelled_ep =
     match lookup_endpoint notify_ep with
@@ -947,7 +1013,7 @@ and Session : SESSION = struct
 
       let register_and_notify_peer their_cid their_pid ch =
         let their_end_of_chan = flip_chan ch in
-        Hashtbl.replace endpoint_states (snd their_end_of_chan) (Remote their_cid);
+        register_client_channel their_cid their_end_of_chan;
         Websockets.send_ap_response their_cid their_pid their_end_of_chan in
 
       let res =
@@ -1008,7 +1074,7 @@ and Session : SESSION = struct
   let ap_accept_from_client cid pid apid =
     accept_core apid (Some (cid, pid)) >>= fun (ch, action, blocked) ->
     (* Mark endpoint as remote *)
-    Hashtbl.replace endpoint_states (snd ch) (Remote cid);
+    register_client_channel cid ch;
     begin
     if not blocked then
       Websockets.send_ap_response cid pid ch
@@ -1025,7 +1091,7 @@ and Session : SESSION = struct
           | None -> ServerRequest ch in
 
       let register_and_notify_peer their_cid their_pid ch =
-        Hashtbl.replace endpoint_states (snd ch) (Remote their_cid);
+        register_client_channel their_cid ch;
         Websockets.send_ap_response their_cid their_pid ch in
 
       let state = Hashtbl.find access_points apid in
@@ -1083,7 +1149,7 @@ and Session : SESSION = struct
 
   let ap_request_from_client cid pid apid =
     request_core apid (Some (cid, pid)) >>= fun (ch, action, blocked) ->
-    Hashtbl.replace endpoint_states (snd ch) (Remote cid);
+    register_client_channel cid ch;
     begin
     if not blocked then
       Websockets.send_ap_response cid pid ch
@@ -1117,7 +1183,8 @@ and Session : SESSION = struct
    * not to worry -- they'll both be set correctly (atomically) in the send step. *)
   let record_chan_locations owner_cid chans =
     List.iter (fun (ch, _) ->
-      Hashtbl.replace endpoint_states (fst ch) (Remote owner_cid)) chans
+      let ch = flip_chan ch in
+      register_client_channel owner_cid ch) chans
 
   let do_local_send awaken msg send_port=
     let p = find_active send_port in
@@ -1135,7 +1202,7 @@ and Session : SESSION = struct
   let delegate_to_client source_client_id_opt deleg_chans dest_client_id msg send_port =
     (* Update endpoint states for channels *)
     List.iter (fun (chan, _buf) ->
-      Hashtbl.replace endpoint_states (snd chan) (Remote dest_client_id)) deleg_chans;
+      register_client_channel dest_client_id chan) deleg_chans;
     let lost_msg_eps = List.map (snd -<- fst) deleg_chans in
     (* Only need to send a GLM if we're delegating from a client, not the server *)
     match source_client_id_opt with
@@ -1151,7 +1218,7 @@ and Session : SESSION = struct
     List.iter (fun (chan, buf) ->
       let chan_ep = snd chan in
       Debug.print @@ "Updating buffer for " ^ (ChannelID.to_string chan_ep);
-      Hashtbl.replace endpoint_states chan_ep Local;
+      register_server_channel chan;
       Hashtbl.replace forward_tbl chan_ep (Unionfind.fresh chan_ep);
       Hashtbl.replace orphans chan_ep (Queue.create ());
       Hashtbl.replace pending_buffers chan_ep buf) deleg_chans;
