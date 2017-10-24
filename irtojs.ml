@@ -114,6 +114,7 @@ struct
         StringMap.fold (fun l c s ->
                           s ^ show_case v l c)
           cases "" in
+    
     let show_default v = opt_app
       (fun (x, e) ->
          "default:{var " ^ x ^ "=" ^ v ^ ";" ^ show e ^ ";" ^ "break;}") "" in
@@ -138,7 +139,11 @@ struct
         | Case (v, cases, default) ->
             "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
-        | Arr elems -> "[" ^ arglist elems ^ "]"
+        | Arr elems -> 
+          let rec show_list = function 
+            | [] ->  "Nil"
+            | x :: xs -> "{_head:" ^ (show x) ^ ",_tail:" ^ (show_list xs) ^ "}" in 
+          show_list elems
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
         | Return expr -> "return " ^ (show expr) ^ ";"
         | Nothing -> ""
@@ -227,7 +232,11 @@ struct
                                        group (PP.text "'" ^^ PP.text name ^^
                                                 PP.text "':" ^^ show value))
                                   elems)))
-        | Arr elems -> brackets(hsep(punctuate "," (List.map show elems)))
+        | Arr elems -> 
+            let rec show_list = function 
+              | [] -> PP.text "Nil"
+              | x :: xs -> PP.braces (PP.text "_head:" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "_tail:" ^+^  (show_list xs))) in 
+            show_list elems
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
               break ^^ show body
