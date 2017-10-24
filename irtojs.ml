@@ -128,8 +128,8 @@ struct
         | LetRec (defs, rest) ->
             String.concat ";\n" (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs) ^ show rest
         | Call (Var "LINKS.project", [record; label]) -> (paren record) ^ "[" ^ show label ^ "]"
-        | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
-        | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
+        | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(hd(%s))" (paren kappa) (paren list)
+        | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(tl(%s)" (paren kappa) (paren list)
         | Call (Var "_yield", fn :: args) -> Printf.sprintf "_yield(function() { %s(%s) })" (paren fn) (arglist args)
         | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
         | Unop (op, body) -> op ^ paren body
@@ -205,10 +205,10 @@ struct
         | Fn _ as f -> show_func "" f
         | Call (Var "LINKS.project", [record; label]) ->
             maybe_parenise record ^^ (brackets (show label))
-        | Call (Var "hd", [list;kappa]) ->
-            (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text "[0]"))
-        | Call (Var "tl", [list;kappa]) ->
-            (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text ".slice(1)"))
+        | Call (Var "hd", [list;kappa]) -> 
+            (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
+        | Call (Var "tl", [list;kappa]) -> 
+            (maybe_parenise kappa) ^^ PP.text "tl" ^^ (parens (  maybe_parenise list))
         | Call (Var "_yield", (fn :: args)) ->
             PP.text "_yield" ^^ (parens (PP.text "function () { " ^^ maybe_parenise fn ^^
                                     parens (hsep(punctuate "," (List.map show args))) ^^ PP.text " }"))
