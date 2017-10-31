@@ -124,9 +124,9 @@ struct
              serialize_call_to_client req_data (cont, name, args) in
          Proc.abort ("text/plain", call_package)
 
-    let handle_session_exception raise_env install_env frames =
+    let handle_session_exception raise_env frames =
       let affected_channels =
-        ChannelVarUtils.affected_channels raise_env install_env frames in
+        ChannelVarUtils.affected_channels raise_env frames in
       (* List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels *)
       List.fold_left (fun acc v -> acc >>= (fun _ -> Value.unbox_channel v |> Session.cancel))
         (Lwt.return ())
@@ -670,11 +670,11 @@ struct
        match K.Eval.trap cont (name, Value.box vs) with
          | Trap cont_thunk -> cont_thunk ()
          | SessionTrap st_res ->
-             handle_session_exception env st_res.handle_env st_res.frames >>= fun _ ->
+             handle_session_exception env st_res.frames >>= fun _ ->
              st_res.continuation_thunk ()
          | UnhandledSessionException frames ->
              Debug.print ("unhandled session exception");
-             handle_session_exception env env frames >>= fun _ ->
+             handle_session_exception env frames >>= fun _ ->
              (* TODO: How to do this properly? *)
              Proc.finish (env, Value.box_unit())
        end

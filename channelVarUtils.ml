@@ -1,28 +1,6 @@
 open Value
 open Utility
 open Pervasives (* PIPES *)
-  (** Subtraction **)
-  (* e1 - e2:
-    *   e1'[x |-> V] - e2'[x |-> V] = e1' - e2'
-    *   e1'[x |-> V] - e2'[x |-> W], where V =/= W = e1'[x |-> V] - e2'
-    *   e1' - e2'[x |-> V], where x not in dom(e1') = e1' - e2'
-    *   e1' - empty = e1'
-  *)
-
-let subtract_env (e1: Value.env) (e2: Value.env) =
-  Env.fold (fun var (v, scope) (acc_env: Value.env) ->
-    match Env.lookup var e2 with
-      | Some v2 when v = v2 -> acc_env
-      | Some v2 -> Env.bind var (v2, scope) acc_env
-      | None -> Env.bind var (v, scope) acc_env) e1 Env.empty
-
-(* Bound channels in an environment *)
-let channels_in_env e =
-  Env.fold (fun _var (v, _scope) acc ->
-    match v with
-      | (`SessionChannel _c) as c -> c :: acc
-      | _ -> acc) e []
-
 
 (* TODO: Maybe it would be nice to have some kind of visitors for the IR?
  * Or is it just me that's crazy enough to have to traverse it? *)
@@ -144,7 +122,6 @@ let affected_in_context (raise_env: Value.env) comp =
   let open Pervasives in
   let show_values xs =
     String.concat "," (List.map (string_of_value) xs) in
-  (* Excuse the eta, OCaml whines otherwise *)
   let affected_values =
     List.fold_left (fun acc v ->
       match Value.Env.lookup v raise_env with
@@ -165,13 +142,10 @@ let show_frames =
       (Ir.Show_computation.show comp))
 *)
 
-let affected_channels raise_env install_env frames =
-  let added_before_raise =
-    subtract_env raise_env install_env |> channels_in_env in
-  (* show_frames frames; *)
+let affected_channels raise_env frames =
   let affected_context_chans =
     List.fold_left (
       fun acc c ->
         (affected_in_context raise_env c) @ acc) [] frames in
-  unduplicate (fun v1 v2 -> v1 = v2) (added_before_raise @ affected_context_chans)
+  unduplicate (fun v1 v2 -> v1 = v2) (affected_context_chans)
 
