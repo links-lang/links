@@ -1482,65 +1482,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
 	(* END OF DEBUGGING FUNCTIONS *)
 
-	(* FOR MANIPULATING LISTS *)
-
-	"lsTake",
-	(`Client, datatype "(Int, a) -> a", PURE);
-
-	"lsDrop",
-	(`Client, datatype "(Int, a) -> a", PURE);
-
-	(* 1 *)
-
-	"lsLength",
-	(`Client, datatype "(a) -> Int", PURE);
-
-	"lsHead",
-	(`Client, datatype "(a) -> b", PURE);
-
-	"lsTail",
-	(`Client, datatype "(a) -> a", PURE);
-
-	"lsLast",
-	(`Client, datatype "(a) -> b", PURE);
-
-
-	"lsNilF",
-	(`Client, datatype "() -> a", PURE);
-
-	"lsCons",
-	(`Client, datatype "(a, b) -> c", PURE);
-
-	"lsAt",
-	(`Client, datatype "(a, Int) -> c", PURE);
-
-	"lsEmpty",
-	(`Client, datatype "(a) -> Bool", PURE);
-
-	"lsZip",
-	(`Client, datatype "(a, b) -> c", PURE);
-(*
-	"lsMap",
-	(`Client, datatype "((a) -b-> c, d) -b-> e", IMPURE);
-
-	"lsFilter",
-	(`Client, datatype "((a) -> Bool, b) -> b", PURE);
-
-	"lsMapIgnore",
-	(`Client, datatype "((a) -b-> c, d) -b-> ()", IMPURE);
-*)
-	(*("map", datatype "((a) -b-> c, [a]) -b-> [c]");  *)
-
-	"lsAppend",
-	(`Client, datatype "(a, a) -> a", PURE);
-
-	"lsRange",
-	(`Client, datatype "(Int, Int) -> a", PURE);
-
-	"ls",
-	(`Client, datatype "([a]) -> b", PURE);
-
-	(* END OF LIST MANIPULATING FUNCTIONS *)
 
 	(* EQUALITY *)
 
