@@ -17,9 +17,7 @@ let parse_json str =
 
 let parse_json_b64 str = parse_json(Utility.base64decode str)
 
-let rec string_listify : string list -> string = function
-  | [] -> "Nil"
-  | x::xs -> Printf.sprintf "{_head:%s, _tail:%s}" x (string_listify xs)
+let nil_literal = "[]"
 
 (* Helper functions for jsonization *)
 (*
@@ -96,7 +94,11 @@ let rec jsonize_value' : Value.t -> json_string =
       "{" ^
         mapstrcat "," (fun (kj, s) -> "\"" ^ kj ^ "\":" ^ s) (List.combine ls ss)
       ^ "}"
-  | `List l -> string_listify (List.map jsonize_value' l)
+  | `List l -> 
+    let rec string_listify : string list -> string = function
+    | [] -> nil_literal
+    | x::xs -> Printf.sprintf "{\"_head\":%s, \"_tail\":%s}" x (string_listify xs) in
+    string_listify (List.map jsonize_value' l)
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
       "{\"_clientAPID\": " ^ (AccessPointID.to_json apid) ^
       ", \"_clientId\":" ^ (ClientID.to_json cid) ^  "}"

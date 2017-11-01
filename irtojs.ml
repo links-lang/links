@@ -54,6 +54,8 @@ module VEnv = Env.Int
 (** Type of environments mapping IR variables to source variables *)
 type venv = string VEnv.t
 
+let nilLiteral = "[]"
+
 
 (** Continuation parameter name (convention) *)
 let __kappa = "__kappa"
@@ -141,8 +143,8 @@ struct
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
         | Arr elems -> 
           let rec show_list = function 
-            | [] ->  "Nil"
-            | x :: xs -> "{_head:" ^ (show x) ^ ",_tail:" ^ (show_list xs) ^ "}" in 
+            | [] ->  Json.nil_literal
+            | x :: xs -> "{\"_head\":" ^ (show x) ^ ",\"_tail\":" ^ (show_list xs) ^ "}" in 
           show_list elems
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
         | Return expr -> "return " ^ (show expr) ^ ";"
@@ -234,8 +236,8 @@ struct
                                   elems)))
         | Arr elems -> 
             let rec show_list = function 
-              | [] -> PP.text "Nil"
-              | x :: xs -> PP.braces (PP.text "_head:" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "_tail:" ^+^  (show_list xs))) in 
+              | [] -> PP.text Json.nil_literal
+              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in 
             show_list elems
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
