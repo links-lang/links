@@ -183,7 +183,7 @@ let show_handlers evt_handlers =
        JS Array. This Array is supposed to be processes  by jslib code only*)
     let jsonize_to_array_if_list = function
       | `List elems -> "["^ String.concat "," (List.map jsonize_value' elems) ^ "]"
-      | other ->  jsonize_value' proc in
+      | _ ->  jsonize_value' proc in
     "{\"key\": " ^ string_of_int key ^ "," ^
     " \"eventHandlers\":" ^ jsonize_to_array_if_list proc ^ "}" in
   let bnds = IntMap.bindings evt_handlers in
