@@ -492,10 +492,10 @@ module Higher_Order_Continuation : CONTINUATION = struct
          | Identity
 
   (* Auxiliary functions for manipulating the continuation stack *)
-  let nil = Var "lsNil"
-  let cons x xs = Call (Var "_lsCons", [x; xs])
-  let head xs = Call (Var "_lsHead", [xs])
-  let tail xs = Call (Var "_lsTail", [xs])
+  let nil = Var "Nil"
+  let cons x xs = Call (Var "_Cons", [x; xs])
+  let head xs = Call (Var "_hd", [xs])
+  let tail xs = Call (Var "_tl", [xs])
   let toplevel = Cons (Var "_idk", Cons (Var "_efferr", Reflect nil))
 
   let reflect x = Reflect x
@@ -550,13 +550,13 @@ module Higher_Order_Continuation : CONTINUATION = struct
 
   let primitive_bindings =
     "function _makeCont(k) {\n" ^
-      "  return _lsCons(k, _lsSingleton(_efferr));\n" ^
+      "  return _Cons(k, _singleton(_efferr));\n" ^
       "}\n" ^
       "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
       "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
         "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
           "function is_continuation(kappa) {\n" ^
-            "return kappa !== null && typeof kappa === 'object' && _lsHead(kappa) !== undefined && _lsTail(kappa) !== undefined;\n" ^
+            "return kappa !== null && typeof kappa === 'object' && _hd(kappa) !== undefined && _tl(kappa) !== undefined;\n" ^
               "}"
 
   let contify_with_env fn =
@@ -929,9 +929,9 @@ end = functor (K : CONTINUATION) -> struct
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
          let cons k ks =
-           Call (Var "_lsCons", [k;ks])
+           Call (Var "_Cons", [k;ks])
          in
-         let nil = Var "lsNil" in
+         let nil = Var "Nil" in
          K.bind kappa
            (fun kappas ->
              let bind_skappa, skappa, kappas = K.pop kappas in
@@ -994,9 +994,9 @@ end = functor (K : CONTINUATION) -> struct
                  let bind2, h', ks' = K.pop ks' in
                  let bind code = bind1 (bind2 code) in
                  let resumption =
-                   Fn (["s"], Return (Call (Var "_lsCons",
+                   Fn (["s"], Return (Call (Var "_Cons",
                                             [K.reify h';
-                                             Call (Var "_lsCons", [K.reify k'; Var "s"])])))
+                                             Call (Var "_Cons", [K.reify k'; Var "s"])])))
                  in
                  let vmap = Call (Var "_vmapOp", [resumption; Var z_name]) in
                  bind (apply_yielding (K.reify h') [vmap] ks'))
