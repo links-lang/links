@@ -243,7 +243,7 @@ value:
 | array                              { $1 }
 | TRUE                               { `Bool true }
 | FALSE                              { `Bool false }
-| NULL                               { `Record [] (* Or an error? *) }
+| NULL                               { `List [] }
 
 string:
 | STRING                             { Value.box_string $1 }

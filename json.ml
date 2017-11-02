@@ -17,7 +17,7 @@ let parse_json str =
 
 let parse_json_b64 str = parse_json(Utility.base64decode str)
 
-let nil_literal = "[]"
+let nil_literal = "null"
 
 (* Helper functions for jsonization *)
 (*

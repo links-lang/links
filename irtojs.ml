@@ -54,7 +54,6 @@ module VEnv = Env.Int
 (** Type of environments mapping IR variables to source variables *)
 type venv = string VEnv.t
 
-let nilLiteral = "[]"
 
 
 (** Continuation parameter name (convention) *)
