@@ -1213,16 +1213,19 @@ end = functor (K : CONTINUATION) -> struct
        location)
   and generate_cancel_stub env (f_name: string) (args: code list) (kappa: K.t) =
     (* Compile a thunk to be invoked if the operation fails *)
+    let cancellation_thunk_name =
+      gensym ~prefix:"cancellation_thunk" () in
+
     let compiled_doOp =
       generate_special env (`DoOperation (
         Value.session_exception_operation,
-        [], `Not_typed)) kappa in
-    let cancellation_thunk_name =
-      gensym ~prefix:"cancellation_thunk" () in
+        [], `Not_typed)) (K.reflect (Var __kappa)) in
+
     let cancellation_thunk = Fn ([], compiled_doOp) in
     (* Thunk will be passed as final non-continuation arg *)
-    Bind (cancellation_thunk_name, cancellation_thunk,
-      (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) kappa))
+    Bind (__kappa, K.reify kappa,
+      Bind (cancellation_thunk_name, cancellation_thunk,
+        (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) (K.reflect (Var __kappa)))))
   and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
     let (venv, code) = generate_computation env comp (K.reflect (Var "_start")) in
     (venv, GenStubs.bindings bs code)

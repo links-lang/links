@@ -113,3 +113,7 @@ let desugar_session_exceptions env =
   ((new desugar_session_exceptions env) :
     desugar_session_exceptions :> TransformSugar.transform)
 
+let show prog =
+  Printf.printf "%s\n\n" (Sugartypes.Show_program.show prog);
+  prog
+
