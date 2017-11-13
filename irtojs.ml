@@ -594,7 +594,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
            bs, ks, v
         | Reflect v ->
            (* Similar to Identity -- create a fresh continuation name, bind it using binding function.
-            * ks is unchanced. Return name of freshly-created continuation. *)
+            * ks is unchanged. Return name of freshly-created continuation. *)
            let k = gensym ~prefix:"_kappa" () in
            (fun code -> bs (Bind (k, v, code))), ks, Var k
         | Cons ((Var _) as v, kappas) ->
@@ -1215,17 +1215,19 @@ end = functor (K : CONTINUATION) -> struct
     (* Compile a thunk to be invoked if the operation fails *)
     let cancellation_thunk_name =
       gensym ~prefix:"cancellation_thunk" () in
+    let () = Debug.print ("Kappa outside: " ^ K.to_string kappa) in
 
-    (* Thunk will be passed as final non-continuation arg *)
-    K.bind kappa
-      (fun kappa ->
-        let compiled_doOp =
-          generate_special env (`DoOperation (
-            Value.session_exception_operation,
-            [], `Not_typed)) kappa in
-        let cancellation_thunk = Fn ([], compiled_doOp) in
-        Bind (cancellation_thunk_name, cancellation_thunk,
-          (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) kappa)))
+    let raiseOp =
+      generate_special env (`DoOperation (
+        Value.session_exception_operation,
+        [], `Not_typed)) in
+
+    let fresh_kappa = gensym ~prefix:"kappa" () in
+    let cancellation_thunk = Fn ([fresh_kappa], raiseOp (K.reflect (Var fresh_kappa))) in
+
+    Bind (cancellation_thunk_name, cancellation_thunk,
+      (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) kappa))
+
   and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
     let (venv, code) = generate_computation env comp (K.reflect (Var "_start")) in
     (venv, GenStubs.bindings bs code)
