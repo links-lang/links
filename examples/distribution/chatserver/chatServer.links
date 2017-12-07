@@ -6,16 +6,21 @@ open ChatClient
 # Alas, we can't make this an inner function at the moment since we need a type
 # annotation, and type annotations are broken for inner functions at the moment
 fun clientHandlerLoop(nick, clientToServerChan, loopPid) {
-
-  offer(clientToServerChan) {
-    case ChatMessage(clientToServerChan) ->
-      var (msg, clientToServerChan) = receive(clientToServerChan);
-      loopPid ! BroadcastMessage(nick, msg);
-      clientHandlerLoop(nick, clientToServerChan, loopPid)
-    case ChangeTopic(clientToServerChan) ->
-      var (newTopic, clientToServerChan) = receive(clientToServerChan);
-      loopPid ! BroadcastChangeTopic(newTopic);
-      clientHandlerLoop(nick, clientToServerChan, loopPid)
+  try {
+    offer(clientToServerChan) {
+      case ChatMessage(clientToServerChan) ->
+        var (msg, clientToServerChan) = receive(clientToServerChan);
+        loopPid ! BroadcastMessage(nick, msg);
+        (nick, clientToServerChan, loopPid)
+      case ChangeTopic(clientToServerChan) ->
+        var (newTopic, clientToServerChan) = receive(clientToServerChan);
+        loopPid ! BroadcastChangeTopic(newTopic);
+        (nick, clientToServerChan, loopPid)
+    }
+  } as (nick, chan, pid) in {
+    clientHandlerLoop(nick, chan, pid)
+  } otherwise {
+    loopPid ! BroadcastUserLeft(nick)
   }
 }
 
@@ -74,6 +79,9 @@ fun serverLoop(topic, nicks, pids) {
     case BroadcastChangeTopic(newTopic) ->
       broadcastMessage(DeliverNewTopic(newTopic), pids);
       serverLoop(newTopic, nicks, pids)
+    case BroadcastUserLeft(nick) ->
+      broadcastMessage(DeliverUserLeft(nick), pids);
+      serverLoop(topic, filter(fun(x) { not(x == nick) }, nicks), pids)
     case NewClient(nick, pid) ->
       broadcastMessage(DeliverNewUser(nick), pids);
       serverLoop(topic, nick :: nicks, pid :: pids)

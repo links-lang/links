@@ -99,7 +99,7 @@ sig
   val lookup : Ir.var -> 'a t -> 'a option
   val lookupS : Ir.var -> 'a t -> ('a * Ir.scope) option
   val shadow : 'a t -> by:'a t -> 'a t
-  val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
+  val fold : (Ir.var -> ('a * Ir.scope) -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val globals : 'a t -> 'a t
   (* used only by json.ml, webif.ml ... *)
   val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
@@ -109,6 +109,17 @@ end
 
 module Env : ENV
 
+module Trap : sig
+  type ('v, 'r) result =
+    | Trap of (unit -> 'r)
+    | SessionTrap of ('v, 'r) session_result
+    | UnhandledSessionException of (Ir.computation list)
+  and ('v, 'r) session_result = {
+    handle_env: 'v Env.t;
+    frames: Ir.computation list;
+    continuation_thunk: (unit -> 'r)
+  }
+end
 (* Continuation *)
 module type FRAME = sig
   type 'v t
@@ -121,6 +132,7 @@ module type CONTINUATION_EVALUATOR = sig
   type v
   type result
   type 'v t
+  type trap_result = (v, result) Trap.result
 
   val apply : env:v Env.t ->            (* the current environment *)
               v t ->                    (* the continuation *)
@@ -130,7 +142,7 @@ module type CONTINUATION_EVALUATOR = sig
   (* trap invocation *)
   val trap : v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
-             result
+             trap_result
 end
 
 module type CONTINUATION = sig
@@ -161,7 +173,10 @@ module type CONTINUATION = sig
                 val reify : v t -> v                                         (* continuation reification *)
             end) ->
     sig
-      include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
+      include CONTINUATION_EVALUATOR with
+        type v = E.v
+        and type result = E.result
+        and type 'v t := 'v t
     end
 
   val to_string : 'v t -> string
@@ -254,3 +269,7 @@ val xml_of_variants : t -> xml
 val xmlitem_of_variant : t -> xmlitem
 
 val split_html : xml -> xml * xml
+
+val is_channel : t -> bool
+
+val session_exception_operation : string
