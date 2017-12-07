@@ -1,0 +1,8 @@
+(jbuild_version 1)
+
+(library
+ ((name links_postgres)
+  (public_name links-postgres)
+  (wrapped false)
+  (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
+  (libraries (threads postgresql links-lib))))
