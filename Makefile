@@ -14,8 +14,8 @@ install:
 uninstall:
 	jbuilder uninstall
 
-tests: links
-	@OCAMLRUNPARAM="" ./run-tests
+uninstall:
+	jbuilder uninstall
 
 clean:
 	jbuilder clean
