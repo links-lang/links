@@ -13,7 +13,8 @@ available: [
 ]
 
 build: [
-  [ make "nc" ]
+  [ "jbuilder" "subst" "-n" name ] {pinned}
+  [ "jbuilder" "build" "-p" name "-j" jobs ]
 ]
 
 install: [
@@ -63,18 +64,5 @@ remove: [
 depends: [
   "ocamlfind" {build}
   "deriving" {build}
-  "cgi"
-  "base64"
-  "linenoise"
-  "ANSITerminal"
-  "lwt"
-  "cohttp"
-  "websocket-lwt"
-  "safepass"
-]
-
-depopts: [
-  "mysql"
-  "postgresql"
-  "sqlite3"
+  "links-lib"
 ]

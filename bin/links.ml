@@ -211,6 +211,20 @@ let rec directives
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, extending the current environment");
 
+    "dload",
+    ((fun envs args ->
+      match args with
+      | [filename] ->
+         begin try
+             Dynlink.loadfile (Sys.expand filename)
+           with
+           | Dynlink.Error e -> prerr_endline (Printf.sprintf "dynamic linking error: %s" (Dynlink.error_message e))
+           | Sys.Unknown_environment_variable _ -> prerr_endline (Printf.sprintf "dynamic linking error: file %s not found." filename)
+           end;
+         envs
+      | _ -> prerr_endline "syntax: @dload \"filename.cmxs\""; envs),
+     "dynamically load in a Links extension");
+
     "withtype",
     ((fun (_, _, {Types.var_env = tenv; Types.tycon_env = aliases; _} as envs) args ->
         match args with
