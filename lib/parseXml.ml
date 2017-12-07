@@ -14,7 +14,7 @@ class source_code = SourceCode.source_code
 let read : context:XmlLexer.lexer_context
         -> ?nlhook:(unit -> unit)
         -> parse:('intermediate grammar)
-        -> infun:(string -> int -> int)
+        -> infun:(bytes -> int -> int)
         -> name:string
         -> 'result * source_code =
 fun ~context ?nlhook ~parse ~infun ~name ->
