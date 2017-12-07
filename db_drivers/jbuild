@@ -1,7 +1,0 @@
-(jbuild_version 1)
-
-(library
- ((name links_postgres)
-  (public_name links.postgres)
-  (wrapped false)
-  (libraries (postgresql links.lib))))
