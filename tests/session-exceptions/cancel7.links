@@ -4,17 +4,19 @@ fun go() {
   try {
     var s = fork (fun(s) {
       var t = accept(ap);
+      var clos = linfun() { send(5, t) };
       raise;
-      ignore(send(linfun() { send(5, t) }, s))
+      ignore(send(clos, s))
     });
     var t = request(ap);
     var (res, _) = receive(t);
+    #cancel(t);
     cancel(s);
-    res
+    1
   } as (x) in {
-    print("success: " ^^ intToString(x))
+    "success: " ^^ intToString(x)
   } otherwise {
-    print("exception")
+    "exception"
   }
 }
 

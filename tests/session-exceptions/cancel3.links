@@ -14,9 +14,9 @@ fun go() {
     var (res, _) = receive(carried);
     res
   } as (x) in {
-    print("received from carried: " ^^ intToString(x))
+    "received from carried: " ^^ intToString(x)
   } otherwise {
-    print("receive from carried channel failed")
+    "exception"
   }
 }
 

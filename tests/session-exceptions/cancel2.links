@@ -11,9 +11,9 @@ fun goAlright() {
     ignore(accept(ap));
     ignore(send(5, s))
   } as (_) in {
-    print("send successful")
+    "send successful"
   } otherwise {
-    print("an exception occurred!")
+    "exception"
   }
 }
 
@@ -28,9 +28,9 @@ fun go() {
     ignore(accept(ap));
     ignore(send(5, s))
   } as (_) in {
-    print("send successful")
+    "send successful"
   } otherwise {
-    print("an exception occurred!")
+    "exception"
   }
 }
 

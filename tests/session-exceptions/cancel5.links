@@ -11,9 +11,9 @@ fun go() {
     var (x, _) = receive(t);
     x
   } as (x) in {
-    print(intToString(x))
+    intToString(x)
   } otherwise {
-    print("error!")
+   "exception"
   }
 }
 

@@ -1,5 +1,0 @@
-Test 1: Simple receive cancellation
-Test 2: Simple send cancellation
-Test 3: Cancellation of carried endpoint
-Test 4: Nested try-as-in-otherwise block -- inner fails, outer succeeds
-Test 5: Cancellation of a channel guarded by a cancelled channel

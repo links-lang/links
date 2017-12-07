@@ -4,9 +4,9 @@ fun goAlright() {
     var (res, _) = receive(s);
     res
   } as (x) in {
-    print("result: " ^^ intToString(x))
+    "result: " ^^ intToString(x)
   } otherwise {
-    print("an exception occurred!")
+    "exception"
   }
 }
 
@@ -16,9 +16,9 @@ fun go() {
     var (res, _) = receive(s);
     res
   } as (x) in {
-    print("result: " ^^ intToString(x))
+    "result: " ^^ intToString(x)
   } otherwise {
-    print("an exception occurred!")
+    "exception"
   }
 }
 

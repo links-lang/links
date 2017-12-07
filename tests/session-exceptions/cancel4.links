@@ -15,9 +15,9 @@ fun go() {
       };
     x
   } as (x) in {
-    print(intToString(x))
+    intToString(x)
   } otherwise {
-    print("outer try failed!")
+    "exception"
   }
 }
 
