@@ -496,7 +496,6 @@ struct
       | ChanSend (chan_id, deleg_chans, v) ->
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Proc.resolve_external_processes v;
-          (* TODO: Have to send a cancellation notification if the send doesn't succeed *)
           Session.send_from_remote client_id deleg_chans v chan_id >>= fun _ -> Lwt.return ()
       | LostMessageResponse (carrier_chan_id, lost_message_table) ->
           Session.handle_lost_message_response carrier_chan_id lost_message_table
@@ -510,9 +509,6 @@ struct
     let rec loop () =
       match frame.opcode with
         | Opcode.Close ->
-            (* FIXME: Need to be smarter here. Try and reconnect? Schedule a cleanup?
-             * For now, it might be best to just do the nuclear option and delete all
-             * associated state (buffers, entries in access points, etc.) *)
             deregister_websocket client_id;
             async (fun () -> Session.cancel_client_channels client_id);
             Debug.print @@

@@ -281,3 +281,7 @@ module Readline = struct
   (* Enable native readline? *)
   let native_readline = Settings.add_bool("native_readline", true, `User)
 end
+
+module Sessions = struct
+  let exceptions_enabled = Settings.add_bool ("session_exceptions", false, `User)
+end

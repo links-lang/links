@@ -234,10 +234,6 @@ struct
           apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
   and apply (cont : continuation) env : Value.t * Value.t list -> result =
     let invoke_session_exception () =
-      (* The three unit val thing is a bit of a hack, alas.
-       * The reason is that we actually use these three parameters on the client
-       * in compilation, whereas on the server we necessarily do the hook in DoOperation
-       * as opposed to in user code. *)
       special env cont (`DoOperation (Value.session_exception_operation,
         [], `Not_typed)) in
     function
@@ -425,8 +421,12 @@ struct
           match res with
             | SendOK -> apply_cont cont env chan
             | SendPartnerCancelled ->
-                Session.cancel unboxed_chan >>= fun _ ->
-                invoke_session_exception ()
+                (* If send fails, we need to cancel all carried channels *)
+                let contained_channels = Value.get_contained_channels v in
+                List.fold_left
+                  (fun acc c -> acc >>= fun _ -> Session.cancel c)
+                  (Lwt.return ()) contained_channels >>= fun _ ->
+                apply_cont cont env chan
         end
     | `PrimitiveFunction ("receive", _), [chan] ->
       begin
@@ -434,28 +434,35 @@ struct
         Debug.print("receiving from channel: " ^ Value.string_of_value chan);
         let unboxed_chan = Value.unbox_channel chan in
         let peer_ep = Session.send_port unboxed_chan in
+        let block () =
+          (* Here, we have to extend the environment with a fresh variable
+           * representing the channel, since we can't create an IR application
+           * involving a Value.t (only an Ir.value).
+           * This *should* be safe, but still feels a bit unsatisfactory.
+           * It would be nice to refine this further. *)
+          let fresh_var = Var.fresh_raw_var () in
+          let extended_env = Value.Env.bind fresh_var (chan, `Local) env in
+          let grab_frame = K.Frame.of_expr extended_env (Lib.prim_appln "receive" [`Variable fresh_var]) in
+          let inp = (snd unboxed_chan) in
+          Session.block inp (Proc.get_current_pid ());
+          Proc.block (fun () -> apply_cont K.(grab_frame &> cont) env (`Record [])) in
+
+        let throw_or_block () =
+          if Settings.get_value (Basicsettings.Sessions.exceptions_enabled) then
+            invoke_session_exception ()
+          else block () in
+
         if Session.is_endpoint_cancelled peer_ep then
-          invoke_session_exception ()
+          throw_or_block ()
         else
           match Session.receive unboxed_chan with
             | ReceiveOK v ->
               Debug.print ("grabbed: " ^ Value.string_of_value v);
               apply_cont cont env (Value.box_pair v chan)
-            | ReceiveBlocked ->
-              (* Here, we have to extend the environment with a fresh variable
-               * representing the channel, since we can't create an IR application
-               * involving a Value.t (only an Ir.value).
-               * This *should* be safe, but still feels a bit unsatisfactory.
-               * It would be nice to refine this further. *)
-              let fresh_var = Var.fresh_raw_var () in
-              let extended_env = Value.Env.bind fresh_var (chan, `Local) env in
-              let grab_frame = K.Frame.of_expr extended_env (Lib.prim_appln "receive" [`Variable fresh_var]) in
-                let inp = (snd unboxed_chan) in
-                Session.block inp (Proc.get_current_pid ());
-                Proc.block (fun () -> apply_cont K.(grab_frame &> cont) env (`Record []))
+            | ReceiveBlocked -> block ()
             | ReceivePartnerCancelled ->
-                Session.cancel unboxed_chan >>= fun _ ->
-                invoke_session_exception ()
+              Session.cancel unboxed_chan >>= fun _ ->
+              throw_or_block ()
         end
     | `PrimitiveFunction ("link", _), [chanl; chanr] ->
         let unblock p =
@@ -586,12 +593,12 @@ struct
            already been applied here *)
         match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
           | `Database (db, params), name, keys, `Record row ->
-	      let unboxed_keys =
-		List.map
-		  (fun key ->
-		    List.map Value.unbox_string (Value.unbox_list key))
-		  (Value.unbox_list keys)
-	      in
+        let unboxed_keys =
+    List.map
+      (fun key ->
+        List.map Value.unbox_string (Value.unbox_list key))
+      (Value.unbox_list keys)
+        in
               apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
           | _ -> eval_error "Error evaluating table handle"
       end
@@ -607,33 +614,33 @@ struct
            | None -> computation env cont e
            | Some (db, p) ->
                begin
-		 if db#driver_name() <> "postgresql"
-		 then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
-		 let get_fields t =
+     if db#driver_name() <> "postgresql"
+     then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
+     let get_fields t =
                    match t with
                    | `Record fields ->
                        StringMap.to_list (fun name p -> (name, `Primitive p)) fields
                    | _ -> assert false
-		 in
+     in
                  let execute_shredded_raw (q, t) =
-		   Database.execute_select_result (get_fields t) q db, t in
-		 let raw_results =
-		   Queryshredding.Shred.pmap execute_shredded_raw p in
-		 let mapped_results =
-		   Queryshredding.Shred.pmap Queryshredding.Stitch.build_stitch_map raw_results in
+       Database.execute_select_result (get_fields t) q db, t in
+     let raw_results =
+       Queryshredding.Shred.pmap execute_shredded_raw p in
+     let mapped_results =
+       Queryshredding.Shred.pmap Queryshredding.Stitch.build_stitch_map raw_results in
                  apply_cont cont env
-		   (Queryshredding.Stitch.stitch_mapped_query mapped_results)
+       (Queryshredding.Stitch.stitch_mapped_query mapped_results)
                end
-	 end
+   end
        else (* shredding disabled *)
          begin
            match Query.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
                let (fieldMap, _, _), _ =
-		 Types.unwrap_row(TypeUtils.extract_row t) in
+               Types.unwrap_row(TypeUtils.extract_row t) in
                let fields =
-		 StringMap.fold
+               StringMap.fold
                    (fun name t fields ->
                      match t with
                      | `Present t -> (name, t)::fields
@@ -643,7 +650,7 @@ struct
                    []
                in
                apply_cont cont env (Database.execute_select fields q db)
-	 end
+   end
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
@@ -687,7 +694,6 @@ struct
          | UnhandledSessionException frames ->
              Debug.print ("unhandled session exception");
              handle_session_exception env frames >>= fun _ ->
-             (* TODO: How to do this properly? *)
              Proc.finish (env, Value.box_unit())
        end
     (* Session stuff *)
@@ -706,6 +712,13 @@ struct
         Debug.print("choosing from: " ^ Value.string_of_value chan);
         let unboxed_chan = Value.unbox_channel chan in
         let inp = receive_port unboxed_chan in
+        let block () =
+          let choice_frame =
+             K.Frame.of_expr env (`Special (`Choice (v, cases)))
+          in
+             Session.block inp (Proc.get_current_pid ());
+             Proc.block (fun () -> apply_cont K.(choice_frame &> cont) env (`Record [])) in
+
         match Session.receive unboxed_chan with
           | ReceiveOK v ->
             let label = fst @@ Value.unbox_variant v in
@@ -717,16 +730,16 @@ struct
                   computation (Value.Env.bind var (chan, `Local) env) cont body
                 | None -> eval_error "Choice pattern matching failed"
               end
-          | ReceiveBlocked ->
-             let choice_frame =
-               K.Frame.of_expr env (`Special (`Choice (v, cases)))
-             in
-               Session.block inp (Proc.get_current_pid ());
-               Proc.block (fun () -> apply_cont K.(choice_frame &> cont) env (`Record []))
+          | ReceiveBlocked -> block ()
           | ReceivePartnerCancelled ->
-              (* Cancel this endpoint, then invoke the session exception. *)
-              Session.cancel unboxed_chan >>= fun _ ->
-              invoke_session_exception ()
+              (* If session exceptions enabled, then cancel this endpoint and
+               * invoke the session exception. Otherwise, block, as per old semantics. *)
+              if (Settings.get_value Basicsettings.Sessions.exceptions_enabled) then
+                begin
+                  Session.cancel unboxed_chan >>= fun _ ->
+                  invoke_session_exception ()
+                end
+              else block ()
       end
   and finish env v = Proc.finish (env, v)
     (*****************)
