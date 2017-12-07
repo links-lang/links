@@ -46,18 +46,24 @@ run_database_testsuite () {
       cp $1/config.sample $1/config
     fi
 
-    # Check whether the config file specifies a user name to access the
-    # database.  If so, use it with psql.
+    # Check whether the config file specifies a user name and/or port
+    # to access the database.  If so, use it with psql.
     user_string=""
     user=`grep database_args $1/config \
           | sed 's/database_args=[^:]*:[^:]*:\([^:]*\):.*/\1/'`
     if [ "$user" != "" ]; then
         user_string="-U $user"
     fi
+    port_string=""
+    port=`grep database_args $1/config \
+          | sed 's/database_args=[^:]*:\([^:]*\):[^:]*:.*/\1/'`
+    if [ "$port" != "" ]; then
+        port_string="-p $port"
+    fi
 
     # Prepare the database by running all the *.sql files
     for s in $1/*.sql; do
-        cmnd="psql -v $user_string ON_ERROR_STOP=1 -q -d links -f $s"
+        cmnd="psql $user_string $port_string -v ON_ERROR_STOP=1 -q -d links -f $s"
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?

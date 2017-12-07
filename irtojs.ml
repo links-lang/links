@@ -8,7 +8,15 @@ let js_pretty_print = Basicsettings.Js.pp
 
 let js_hide_database_info = Basicsettings.Js.hide_database_info
 
-let get_js_lib_url () = Settings.get_value js_lib_url
+let get_js_lib_url () =
+  let open Pervasives in
+  let base_url = Settings.get_value Basicsettings.Appserver.external_base_url |> strip_slashes in
+  let base_url = Utility.strip_slashes base_url in
+  let js_url = Settings.get_value js_lib_url |> strip_slashes in
+  if base_url = "" then
+    "/" ^ js_url ^ "/"
+  else
+    "/" ^ base_url ^ "/" ^ js_url ^ "/"
 
 (* strip any top level polymorphism from an expression *)
 let rec strip_poly =

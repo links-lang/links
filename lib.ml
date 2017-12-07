@@ -1662,7 +1662,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     "serveWebsockets",
     (`PFun (fun _ -> assert false),
     datatype "() ~> ()",
-    IMPURE)
+    IMPURE);
+
+    (* Crypt API *)
+
+    "crypt",
+    (`Server (p1 (Value.box_string -<- Bcrypt.string_of_hash -<-  (Bcrypt.hash ?count:None ?seed:None) -<- Value.unbox_string)),
+    datatype "(String) ~> String",
+    PURE);
+
+    "verify",
+    (`Server (p2 (fun str -> Value.box_bool -<- (Bcrypt.verify (Value.unbox_string str)) -<- Bcrypt.hash_of_string -<- Value.unbox_string)),
+    datatype "(String, String) ~> Bool",
+    PURE)
 ]
 
 (* HACK
