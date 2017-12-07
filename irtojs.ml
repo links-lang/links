@@ -1032,7 +1032,6 @@ end = functor (K : CONTINUATION) -> struct
          let nil = Var "lsNil" in
          K.bind kappa
            (fun kappas ->
-             Debug.print ("kappa: " ^ (K.to_string kappa));
              (* kappa -- pure continuation *)
              let bind_skappa, skappa, kappas = K.pop kappas in
              (* eta -- effect continuation *)
@@ -1215,7 +1214,6 @@ end = functor (K : CONTINUATION) -> struct
     (* Compile a thunk to be invoked if the operation fails *)
     let cancellation_thunk_name =
       gensym ~prefix:"cancellation_thunk" () in
-    let () = Debug.print ("Kappa outside: " ^ K.to_string kappa) in
 
     let raiseOp =
       generate_special env (`DoOperation (
