@@ -43,15 +43,15 @@ object (self)
   (* Given a function `infun' as required by Lexing.from_function,
      return another such function that stores the text read in `code'.
   *)
-  method parse_into (infun : string -> int -> int) : string -> int -> int =
+  method parse_into (infun : bytes -> int -> int) : bytes -> int -> int =
     fun buffer nchars ->
       let nchars = infun buffer nchars in
         List.iter (fun linepos ->
                      Hashtbl.add lines
                        (Hashtbl.length lines)
                        (linepos + Buffer.length text))
-          (Utility.find_char (StringLabels.sub buffer ~pos:0 ~len:nchars) '\n');
-        Buffer.add_substring text buffer 0 nchars;
+          (Utility.find_char (Bytes.sub buffer 0 nchars) '\n');
+        Buffer.add_subbytes text buffer 0 nchars;
         nchars
 
   (* Retrieve the last line of source code read. *)
