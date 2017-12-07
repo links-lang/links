@@ -1,5 +1,5 @@
 opam-version: "1.2"
-name: "links-postgresql"
+name: "links-mysql"
 version: "0.1"
 maintainer: "Jan Stolarek <jan.stolarek@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
@@ -19,6 +19,6 @@ build: [
 depends: [
   "ocamlfind" {build}
   "deriving" {build}
-  "postgresql"
+  "mysql"
   "links-core"
 ]

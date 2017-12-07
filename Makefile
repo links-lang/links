@@ -4,7 +4,7 @@
 nc:
 	jbuilder build @install
 	cp _build/default/bin/links.exe links
-	ln -s links linx
+	ln -f -s links linx
 
 native: nc
 
