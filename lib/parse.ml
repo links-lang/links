@@ -17,7 +17,7 @@ class source_code = SourceCode.source_code
 let read : context:Lexer.lexer_context
         -> ?nlhook:(unit -> unit)
         -> parse:('intermediate grammar)
-        -> infun:(string -> int -> int)
+        -> infun:(bytes -> int -> int)
         -> name:string
         -> 'result * source_code =
 fun ~context ?nlhook ~parse ~infun ~name ->
@@ -76,8 +76,8 @@ let reader_of_string ?pp string =
     | Some command -> Utility.filter_through ~command string in
   let current_pos = ref 0 in
     fun buffer nchars ->
-      let nchars = min nchars (String.length string - !current_pos) in
-        StringLabels.blit ~src:string ~src_pos:!current_pos ~dst:buffer ~dst_pos:0 ~len:nchars;
+        let nchars = min nchars (String.length string - !current_pos) in
+        Bytes.blit (Bytes.of_string string) !current_pos buffer 0 nchars;
         current_pos := !current_pos + nchars;
         nchars
 
