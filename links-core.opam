@@ -17,8 +17,18 @@ build: [
   [ "jbuilder" "build" "-p" name "-j" jobs ]
 ]
 
+install: [
+]
+
+remove: [
+  [ "rm" "-rf" "%{links-core:lib}%"            ]
+  [ "rm" "-rf" "%{links-core:share}%/examples" ]
+  [ "rm" "-rf" "%{links-core:etc}%/config"     ]
+  [ "rm" "-rf" "%{links-core:doc}%/README"     ]
+]
+
 depends: [
-  "jbuilder" {build}
+  "ocamlfind" {build}
   "deriving" {build}
   "cgi"
   "base64"
