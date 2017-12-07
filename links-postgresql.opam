@@ -20,4 +20,5 @@ depends: [
   "ocamlfind" {build}
   "deriving" {build}
   "postgresql"
+  "links-core"
 ]

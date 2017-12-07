@@ -1,8 +1,10 @@
 (jbuild_version 1)
 
 (library
- ((name links_postgres)
-  (public_name links-postgres)
+ ((name links_postgresql)
+  (public_name links-postgresql)
+  (synopsis "PostgreSQL database backend for Links")
   (wrapped false)
+  (optional)
   (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
-  (libraries (threads postgresql links-lib))))
+  (libraries (postgresql links-core))))

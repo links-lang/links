@@ -4,12 +4,17 @@
 (ocamllex (jsonlex lexer xmlLexer))
 
 (library
- ((name links_lib)
-  (public_name links-lib)
-  (synopsis "Links base")
+ ((name links_core)
+  (public_name links-core)
+  (synopsis "Links core")
   (wrapped false)
   (modes (native))
   (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
   (libraries (str deriving unix safepass cgi base64 ANSITerminal linenoise
               cohttp lwt websocket websocket-lwt.cohttp))
   (preprocess (action (run deriving/deriving ${<})))))
+
+(install
+  ((section lib)
+   (files ())
+   (package links-core)))
