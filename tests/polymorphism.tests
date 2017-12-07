@@ -137,3 +137,7 @@ stdout : fun : (a) ~> a
 Missing quantifier with mixed kinds (2)
 sig f : forall e::Row.(a) ~e~> a fun f(x) {f(x)} f
 stdout : fun : (a) ~> a
+
+Flexible quantifier elimination (fix introduced in 514187b)
+sig a : (() {A:() |e}~> a) -> () {A{_} |e}~> a fun a(m)() { error("a") } sig b : (() {B:() |e}~> a) -> () {B{_} |e}~> a fun b(m)() { error("b") } sig c : (() {A:(),B:() |e}~> a) {A{_}, B{_} |e}~> a fun c(m) { a(b(m))() }
+stdout : () : ()

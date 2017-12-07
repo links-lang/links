@@ -41,8 +41,7 @@ fun sameFringe(x, y) {
       case (Yielded(v1,k1),Yielded(v2,k2)) ->
         if (v1 <> v2) false
         else sameFringe_aux(k1, k2)
-      case (Done(_),_) -> false
-      case (_,Done(_)) -> false
+      case _ -> false
     }
   }
   var sameFringe_aux = gen2(sameFringe_aux);

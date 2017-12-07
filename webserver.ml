@@ -4,6 +4,7 @@ open Lwt
 open ProcessTypes
 open Utility
 open Webserver_types
+open Pervasives
 
 let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
 let host_name = Basicsettings.Appserver.hostname
@@ -255,8 +256,18 @@ struct
           | _ :: t, path_is_file -> up (t, path_is_file) in
         up (Trie.longest_match (Str.split (Str.regexp "/") path) !rt, String.length path == 1 ||path.[String.length path - 1] <> '/') in
 
-      if is_prefix_of (Settings.get_value Basicsettings.Js.lib_url) path then
-        let liburl_length = String.length (Settings.get_value Basicsettings.Js.lib_url) in
+        let prefixed_lib_url =
+          let base_url = Settings.get_value Basicsettings.Appserver.internal_base_url in
+          let js_url = Settings.get_value Basicsettings.Js.lib_url in
+          if base_url = "" then js_url else
+          "/" ^
+          (base_url |> Utility.strip_slashes) ^ "/" ^
+          (js_url |> Utility.strip_slashes) ^ "/" in
+        Debug.print ("Prefixed_lib_url: " ^ prefixed_lib_url) ;
+        Debug.print ("Path: " ^ path) ;
+
+        if is_prefix_of prefixed_lib_url path then
+        let liburl_length = String.length prefixed_lib_url in
         let uri_path = (String.sub path liburl_length (String.length path - liburl_length)) in
         let linkslib = match Settings.get_value jslibdir with
           | "" ->

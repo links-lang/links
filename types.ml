@@ -1263,26 +1263,25 @@ let normalise_quantifier = fun q ->
             | _ -> (* TODO: shouldn't this be an error? *) q
         end
 
-let rec flexible_of_type t =
-  match concrete_type t with
-    | `MetaTypeVar point as t ->
-        begin
-          match Unionfind.find point with
-            | `Var (_, _, `Flexible) -> Some t
-            | _ -> None
-        end
-    | `ForAll (qs, t) when
-        List.for_all (fun q -> not (is_rigid_quantifier q)) (unbox_quantifiers qs) ->
-          begin
-            match flexible_of_type t with
-              | Some t ->
-                  (* WARNING: side-effect! *)
-                  qs := [];
-                  Some t
-              | None -> None
-          end
-    | _ -> None
-
+(* let rec flexible_of_type t = *)
+(*   match concrete_type t with *)
+(*     | `MetaTypeVar point as t -> *)
+(*         begin *)
+(*           match Unionfind.find point with *)
+(*             | `Var (_, _, `Flexible) -> Some t *)
+(*             | _ -> None *)
+(*         end *)
+(*     | `ForAll (qs, t) when *)
+(*         List.for_all (fun q -> not (is_rigid_quantifier q)) (unbox_quantifiers qs) -> *)
+(*           begin *)
+(*             match flexible_of_type t with *)
+(*               | Some t -> *)
+(*                   (\* WARNING: side-effect! *\) *)
+(*                   qs := []; *)
+(*                   Some t *)
+(*               | None -> None *)
+(*           end *)
+(*     | _ -> None *)
 
 let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
   concrete_type (`ForAll (box_quantifiers qs, t))

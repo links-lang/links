@@ -3065,26 +3065,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	          )
 	          () ks
 	     | `Shallow -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
-	        let poly_presence_row = `Record (make_operations_presence_polymorphic input_effect_row) in
-
-            (** FIXME BUG:
-                links> fun h1(m) { shallowhandle(m) { case Op(k) -> h1(fun() { k(1) }) case Return(x) -> x } };
-                h1 = fun : (() {Op:Int|a}~> b) {Op{_}|a}~> b
-                links> fun h2(m) { shallowhandle(m) { case Op(k) -> h1(fun() { k(2) }) case Return(x) -> x } };
-                <stdin>:1: Type error: The codomain of continuation `k' has type
-                `_'
-                but a type compatible with
-                `_'
-                was expected.
-                In expression:  shallowhandle(m) { case Op(k) -> h1(fun() { k(2) }) case Return(x) -> x }.
-                links> fun h2(m) { shallowhandle(m) { case Op(k) -> h1(fun() { k(2) }) case Return(x) -> x : Int } };
-                h2 = fun : (() {Op:Int|a}~> Int) {Op{_}|a}~> Int
-            **)
+	        let effect_row = `Record input_effect_row in
                 let t      = typ m in
 	        let (p,_)  = pos_and_typ m in
 	        List.fold_left
 	          (fun _ (k,ktail) ->
-                    unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k);
+                    unify ~handle:Gripers.continuation_effect_rows (no_pos effect_row, ppos_and_row k);
 		    unify ~handle:Gripers.handle_continuation_codomains ((ppos_and_typ ktail), (p,t))
 	          )
 	          () ks
