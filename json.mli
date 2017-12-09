@@ -29,6 +29,7 @@ end
 type json_state = JsonState.t
 
 (* Parsing *)
+val nil_literal : string
 
 (** Parses a JSON string into a value *)
 val parse_json : json_string -> Value.t

@@ -55,6 +55,7 @@ module VEnv = Env.Int
 type venv = string VEnv.t
 
 
+
 (** Continuation parameter name (convention) *)
 let __kappa = "__kappa"
 (**
@@ -114,6 +115,7 @@ struct
         StringMap.fold (fun l c s ->
                           s ^ show_case v l c)
           cases "" in
+    
     let show_default v = opt_app
       (fun (x, e) ->
          "default:{var " ^ x ^ "=" ^ v ^ ";" ^ show e ^ ";" ^ "break;}") "" in
@@ -127,8 +129,8 @@ struct
         | LetRec (defs, rest) ->
             String.concat ";\n" (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs) ^ show rest
         | Call (Var "LINKS.project", [record; label]) -> (paren record) ^ "[" ^ show label ^ "]"
-        | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(%s[0])" (paren kappa) (paren list)
-        | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(%s.slice(1))" (paren kappa) (paren list)
+        | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(hd(%s))" (paren kappa) (paren list)
+        | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(tl(%s)" (paren kappa) (paren list)
         | Call (Var "_yield", fn :: args) -> Printf.sprintf "_yield(function() { %s(%s) })" (paren fn) (arglist args)
         | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
         | Unop (op, body) -> op ^ paren body
@@ -138,7 +140,11 @@ struct
         | Case (v, cases, default) ->
             "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
-        | Arr elems -> "[" ^ arglist elems ^ "]"
+        | Arr elems -> 
+          let rec show_list = function 
+            | [] ->  Json.nil_literal
+            | x :: xs -> "{\"_head\":" ^ (show x) ^ ",\"_tail\":" ^ (show_list xs) ^ "}" in 
+          show_list elems
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
         | Return expr -> "return " ^ (show expr) ^ ";"
         | Nothing -> ""
@@ -200,10 +206,10 @@ struct
         | Fn _ as f -> show_func "" f
         | Call (Var "LINKS.project", [record; label]) ->
             maybe_parenise record ^^ (brackets (show label))
-        | Call (Var "hd", [list;kappa]) ->
-            (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text "[0]"))
-        | Call (Var "tl", [list;kappa]) ->
-            (maybe_parenise kappa) ^^ (parens (maybe_parenise list ^^ PP.text ".slice(1)"))
+        | Call (Var "hd", [list;kappa]) -> 
+            (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
+        | Call (Var "tl", [list;kappa]) -> 
+            (maybe_parenise kappa) ^^ PP.text "tl" ^^ (parens (  maybe_parenise list))
         | Call (Var "_yield", (fn :: args)) ->
             PP.text "_yield" ^^ (parens (PP.text "function () { " ^^ maybe_parenise fn ^^
                                     parens (hsep(punctuate "," (List.map show args))) ^^ PP.text " }"))
@@ -227,7 +233,11 @@ struct
                                        group (PP.text "'" ^^ PP.text name ^^
                                                 PP.text "':" ^^ show value))
                                   elems)))
-        | Arr elems -> brackets(hsep(punctuate "," (List.map show elems)))
+        | Arr elems -> 
+            let rec show_list = function 
+              | [] -> PP.text Json.nil_literal
+              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in 
+            show_list elems
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
               break ^^ show body
@@ -482,10 +492,10 @@ module Higher_Order_Continuation : CONTINUATION = struct
          | Identity
 
   (* Auxiliary functions for manipulating the continuation stack *)
-  let nil = Var "lsNil"
-  let cons x xs = Call (Var "_lsCons", [x; xs])
-  let head xs = Call (Var "_lsHead", [xs])
-  let tail xs = Call (Var "_lsTail", [xs])
+  let nil = Var "Nil"
+  let cons x xs = Call (Var "_Cons", [x; xs])
+  let head xs = Call (Var "_hd", [xs])
+  let tail xs = Call (Var "_tl", [xs])
   let toplevel = Cons (Var "_idk", Cons (Var "_efferr", Reflect nil))
 
   let reflect x = Reflect x
@@ -540,13 +550,13 @@ module Higher_Order_Continuation : CONTINUATION = struct
 
   let primitive_bindings =
     "function _makeCont(k) {\n" ^
-      "  return _lsCons(k, _lsSingleton(_efferr));\n" ^
+      "  return _Cons(k, _singleton(_efferr));\n" ^
       "}\n" ^
       "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
       "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
         "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
           "function is_continuation(kappa) {\n" ^
-            "return kappa !== null && typeof kappa === 'object' && _lsHead(kappa) !== undefined && _lsTail(kappa) !== undefined;\n" ^
+            "return kappa !== null && typeof kappa === 'object' && _hd(kappa) !== undefined && _tl(kappa) !== undefined;\n" ^
               "}"
 
   let contify_with_env fn =
@@ -919,9 +929,9 @@ end = functor (K : CONTINUATION) -> struct
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
          let cons k ks =
-           Call (Var "_lsCons", [k;ks])
+           Call (Var "_Cons", [k;ks])
          in
-         let nil = Var "lsNil" in
+         let nil = Var "Nil" in
          K.bind kappa
            (fun kappas ->
              let bind_skappa, skappa, kappas = K.pop kappas in
@@ -984,9 +994,9 @@ end = functor (K : CONTINUATION) -> struct
                  let bind2, h', ks' = K.pop ks' in
                  let bind code = bind1 (bind2 code) in
                  let resumption =
-                   Fn (["s"], Return (Call (Var "_lsCons",
+                   Fn (["s"], Return (Call (Var "_Cons",
                                             [K.reify h';
-                                             Call (Var "_lsCons", [K.reify k'; Var "s"])])))
+                                             Call (Var "_Cons", [K.reify k'; Var "s"])])))
                  in
                  let vmap = Call (Var "_vmapOp", [resumption; Var z_name]) in
                  bind (apply_yielding (K.reify h') [vmap] ks'))

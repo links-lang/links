@@ -3,32 +3,32 @@
 #
 
 fun lsMap(f, l) {
-    if (lsEmpty(l)) lsNilF()
-    else lsCons(f(lsHead(l)), lsMap(f, lsTail(l)))
+    if (empty(l)) []
+    else f(hd(l)) :: lsMap(f, tl(l))
 }
 
 fun lsFilter(p, l) {
-    if (lsEmpty(l)) lsNilF()
-    else if (p(lsHead(l))) lsCons(lsHead(l), lsFilter(p, lsTail(l)))
-    else lsFilter(p, lsTail(l))
+    if (empty(l)) []
+    else if (p(hd(l))) hd(l) :: lsFilter(p, tl(l))
+    else lsFilter(p, tl(l))
 }
 
 fun lsMapIgnore(f, l) {
-    if (lsEmpty(l)) ()
-    else { var _ = f(lsHead(l)); lsMapIgnore(f, lsTail(l)) }
+    if (empty(l)) ()
+    else { var _ = f(hd(l)); lsMapIgnore(f, tl(l)) }
 }
 
 fun lsCatMaybes(l) {
-    if (lsEmpty(l)) lsNilF()
-    else switch (lsHead(l)) {
-        case Just(x) -> lsCons(x, lsCatMaybes(lsTail(l)))
-        case Nothing -> lsCatMaybes(lsTail(l))
+    if (empty(l)) []
+    else switch (hd(l)) {
+        case Just(x) -> x :: lsCatMaybes(tl(l))
+        case Nothing -> lsCatMaybes(tl(l))
     }
 }
 
 fun lsFoldLeft(f, i, l) {
-    if (lsEmpty(l)) i
-    else lsFoldLeft(f, f(i, lsHead(l)), lsTail(l))
+    if (empty(l)) i
+    else lsFoldLeft(f, f(i, hd(l)), tl(l))
 }
 
 #
@@ -244,10 +244,10 @@ typename Timeouts = (eaten: Int, trapped: Int, vulnerable: Int, transition: Int,
 
 typename GameMetaState = [| Run | Download | Restart |];
 typename GameState = [| On | Eaten | Eaten2 | Ate | Over | NextLevel | NextLevel2 | Won |];
-typename Ls = Float; # THIS SHOULDN'T WORK, BUT OH WELL
+typename Pill = (Planet,[(Float,Float,PillType)]);
 typename Game = (pillman: EntityDescription, roger: EntityDescription,
                  johnny: EntityDescription, greg: EntityDescription,
-                 bill: EntityDescription, pills: Ls, pillCount: Int, score: Int,
+                 bill: EntityDescription, pills: [Pill], pillCount: Int, score: Int,
                  lives: Int, level: Int, state: GameState, timeout: Int,
                  timeouts: Timeouts, metaState: GameMetaState);
 
@@ -265,7 +265,7 @@ fun main() {
 
     var initializeProcId = spawnClient {
         # LIST STUFF
-        var lsNil = lsNilF();
+        var lsNil = [];
         
         #
         # CONSTANTS
@@ -358,7 +358,7 @@ fun main() {
         var rightBottomPlanet          = (x = innerRightBottomPlanet.x +. 64.0, y = innerRightBottomPlanet.y, r = smallR );
 
         
-        var planets = ls([
+        var planets = [
             innerLeftTopPlanet        ,
             innerRightTopPlanet       ,
             leftTopPlanet             ,
@@ -386,9 +386,9 @@ fun main() {
             leftBottomPlanet          ,
             rightBottomPlanet         ,
             bottomPlanet
-        ]);
+        ];
 
-        var connections = ls([
+        var connections = [
             (ghostPlanet, innerLeftGhostPlanet),
             (ghostPlanet, innerRightGhostPlanet),
             (innerLeftGhostPlanet, leftGhostPlanet),
@@ -423,51 +423,49 @@ fun main() {
             (innerLeftTopPlanet, topPlanet),
             (innerRightTopPlanet, topPlanet),
             (topPlanet, overGhostPlanet)
-        ]);
+        ];
 
         # pills
         var initialPills = lsMap(fun (x) {
             var rr2 = (x.r +. 5.0 +. margin);
-            if (x == ghostPlanet || x == leftPortal || x == rightPortal) (x, lsNil)
-            else {# if (x == bottomPlanet) {
-                
+            var dummy = (0.0,0.0,Regular);
+            if (x == ghostPlanet || x == leftPortal || x == rightPortal) (x, [])
+            else {
                 var (specialPill, pillRange) =
                     if (x == leftBottomPlanet) {
-                        ((x.x +. rr2 *. sin(-.0.5 *. pi), x.y +. rr2 *. cos(-.0.5 *. pi), Power), lsRange(-4, 15))
+                        ((x.x +. rr2 *. sin(-.0.5 *. pi), x.y +. rr2 *. cos(-.0.5 *. pi), Power), intRange(-4, 15))
                     }
                     else if (x == rightBottomPlanet)
-                        ((x.x +. rr2 *. sin(-.1.5 *. pi), x.y +. rr2 *. cos(-.1.5 *. pi), Power), lsRange(-15, 4))
-    #~              else if (x == bottomPlanet)
-    #~                  ((x.x +. rr2 *. sin(-.1.5 *. pi), x.y +. rr2 *. cos(-.1.5 *. pi), Power), lsRange(-15, 4))
+                        ((x.x +. rr2 *. sin(-.1.5 *. pi), x.y +. rr2 *. cos(-.1.5 *. pi), Power), intRange(-15, 4))
                     else if (x == leftOverGhostPlanet)
-                        ((x.x +. rr2 *. sin(-.0.5 *. pi), x.y +. rr2 *. cos(-.0.5 *. pi), Power), lsRange(-4, 15))
+                        ((x.x +. rr2 *. sin(-.0.5 *. pi), x.y +. rr2 *. cos(-.0.5 *. pi), Power), intRange(-4, 15))
                     else if (x == rightOverGhostPlanet)
-                        ((x.x +. rr2 *. sin(-.1.5 *. pi), x.y +. rr2 *. cos(-.1.5 *. pi), Power), lsRange(-15, 4))
-                    else (lsNil, lsRange(0, 21));
+                        ((x.x +. rr2 *. sin(-.1.5 *. pi), x.y +. rr2 *. cos(-.1.5 *. pi), Power), intRange(-15, 4))
+                    else (dummy, intRange(0, 21));
 
                 var regularPills = lsMap(fun (y) {
                         (x.x +. rr2 *. sin(intToFloat(y) /. 11.0 *. pi),
                             x.y +. rr2 *. cos(intToFloat(y) /. 11.0 *. pi), Regular)
                     }, pillRange);
 
-                (x, if (specialPill == lsNil) regularPills else lsCons(specialPill, regularPills))
-            }# else (x, lsNil) 
+                (x, if (specialPill == dummy) regularPills else specialPill :: regularPills)
+            }
         }, planets);
 
         fun countPills(l, n) {
             fun pillLength(l, n) {
-                if (lsEmpty(l)) n
+                if (empty(l)) n
                 else {
-                    var p = lsHead(l);
-                    if (p.3 == Regular) pillLength(lsTail(l), n + 1)
-                    else pillLength(lsTail(l), n)
+                    var p = hd(l);
+                    if (p.3 == Regular) pillLength(tl(l), n + 1)
+                    else pillLength(tl(l), n)
                 }
             }
         
-            if (lsEmpty(l)) n
+            if (empty(l)) n
             else {
-                var p = lsHead(l);
-                countPills(lsTail(l), n + pillLength(p.2, 0))
+                var p = hd(l);
+                countPills(tl(l), n + pillLength(p.2, 0))
             }
         }
         
@@ -722,7 +720,7 @@ fun main() {
                     var x = intToFloat(x);
                     var pos = (20.0 +. x *. 2.5 *. pillmanR, 90.0);
                     drawPillman((pillmanDescription with position = pos, planet = (x = pos.1, y = pos.2, r = -.10.0)), (gameState with state = On))
-                }, lsRange(0, gameState.lives - 1))
+                }, intRange(0, gameState.lives - 1))
             };
         
             # draw the game area
@@ -930,14 +928,14 @@ fun main() {
 
         # entity manipulation
         fun getNextPlanet(entity, connections) {
-            if (lsEmpty(connections)) entity.planet
+            if (empty(connections)) entity.planet
             else {
-                var x = lsHead(connections);
+                var x = hd(connections);
                 if(lineCircleCollision(((x.1.x, x.1.y), (x.2.x, x.2.y)),
                                         (entity.position, entity.r)))
                     if (entity.planet == x.2) x.1
                     else x.2
-                else getNextPlanet(entity, lsTail(connections))
+                else getNextPlanet(entity, tl(connections))
             }
         }
 
@@ -1027,9 +1025,9 @@ fun main() {
         # eats a pill if possible and updates the game state
         fun getNewPillPlanets(l, headPlanets, gameState) {
             fun getNewPills(l, headPills, gameState) {
-                if (lsEmpty(l)) (gameState, headPills)
+                if (empty(l)) (gameState, headPills)
                 else {
-                    var pill = lsHead(l);
+                    var pill = hd(l);
                     
                     if (circleCircleCollision(((pill.1, pill.2), pillR), (gameState.pillman.position, pillmanR))) {
                         var gameState = switch (pill.3) {
@@ -1046,26 +1044,26 @@ fun main() {
                                         bill = transformGhost(gameState.bill, gameState))
                             case _ -> gameState
                         };
-                        (gameState, lsAppend(headPills, lsTail(l)))
+                        (gameState, headPills ++ tl(l))
                     }
                     else
-                        getNewPills(lsTail(l), lsAppend(headPills, lsCons(pill, lsNil)), gameState)
+                        getNewPills(tl(l), headPills ++ [pill], gameState)
                 }
             }
 
-            if (lsEmpty(l)) gameState
+            if (empty(l)) gameState
             else {
-                var pillPlanet = lsHead(l);
+                var pillPlanet = hd(l);
                 
                 if (gameState.pillman.planet == pillPlanet.1) {
                     var (gameState, newPills) = getNewPills(pillPlanet.2, lsNil, gameState);
-                    var t = ls([(gameState.pillman.planet, newPills)]);
-                    var d = lsAppend(t, lsTail(l));
+                    var t = [(gameState.pillman.planet, newPills)];
+                    var d = t ++ tl(l);
 
-                    (gameState with pills = lsAppend(headPlanets, d))
+                    (gameState with pills = headPlanets ++ d)
                 }
                 else
-                    getNewPillPlanets(lsTail(l), lsAppend(headPlanets, ls([pillPlanet])), gameState)
+                    getNewPillPlanets(tl(l), headPlanets ++ [pillPlanet], gameState)
             }
         }
 
@@ -1231,7 +1229,7 @@ fun main() {
                         );
 
                     # handle pill collisions
-                    var gameState = getNewPillPlanets(gameState.pills, lsNilF(), gameState);
+                    var gameState = getNewPillPlanets(gameState.pills, [], gameState);
 
                     # handle ghost collisions
                     var ghostScore =

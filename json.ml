@@ -17,6 +17,7 @@ let parse_json str =
 
 let parse_json_b64 str = parse_json(Utility.base64decode str)
 
+let nil_literal = "null"
 
 (* Helper functions for jsonization *)
 (*
@@ -62,6 +63,10 @@ let jsonize_location : Ir.location -> string = function
   | `Native  -> "native"
   | `Unknown -> "unknown"
 
+let rec string_listify : string list -> string = function
+  | [] -> nil_literal
+  | x::xs -> Printf.sprintf "{\"_head\":%s, \"_tail\":%s}" x (string_listify xs)
+
 let rec jsonize_value' : Value.t -> json_string =
   function
   | `PrimitiveFunction _
@@ -93,10 +98,7 @@ let rec jsonize_value' : Value.t -> json_string =
       "{" ^
         mapstrcat "," (fun (kj, s) -> "\"" ^ kj ^ "\":" ^ s) (List.combine ls ss)
       ^ "}"
-  | `List [] -> "[]"
-  | `List (elems) ->
-    let ss = jsonize_values elems in
-      "[" ^ String.concat "," ss ^ "]"
+  | `List l ->  string_listify (List.map jsonize_value' l)
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
       "{\"_clientAPID\": " ^ (AccessPointID.to_json apid) ^
       ", \"_clientId\":" ^ (ClientID.to_json cid) ^  "}"
@@ -144,7 +146,7 @@ and json_of_xmlitem = function
           "\"tagName\": \"" ^ tag ^ "\"," ^
           (if (String.length(ns) > 0) then "\"namespace\": \"" ^ ns ^ "\"," else "") ^
           "\"attrs\": {" ^ String.concat "," attrs ^ "}," ^
-          "\"children\": [" ^ String.concat "," body ^ "]" ^
+          "\"children\":" ^ string_listify body ^
         "}"
   | Value.Node (name, children) -> json_of_xmlitem (Value.NsNode ("", name, children))
   | _ -> failwith "Cannot jsonize a detached attribute."
@@ -167,19 +169,23 @@ let show_processes procs =
   (* Show the JSON for a prcess, including the PID, process to be run, and mailbox *)
   let show_process (pid, (proc, msgs)) =
     let ps = jsonize_value' proc in
-    let ms = jsonize_value' (`List msgs) in
+    let ms = String.concat "," (List.map jsonize_value' msgs) in
     "{\"pid\":" ^ (ProcessID.to_json pid) ^ "," ^
     " \"process\":" ^ ps ^ "," ^
-    " \"messages\":" ^ ms ^ "}" in
+    " \"messages\": [" ^ ms ^ "]}" in
   let bnds = PidMap.bindings procs in
   String.concat "," (List.map show_process bnds)
 
 let show_handlers evt_handlers =
-  (* Show the JSON for an event handler: the evt handler key, and the associated process *)
+  (* Show the JSON for an event handler: the evt handler key, and the associated process(es) *)
   let show_evt_handler (key, proc) =
-    let h_proc_json = jsonize_value' proc in
+    (* If the list of processes handling each key is represented by a 'List term, we translate it to a 
+       JS Array. This Array is supposed to be processes  by jslib code only*)
+    let jsonize_handler_list = function
+      | `List elems -> string_listify (List.map jsonize_value' elems)
+      | _ ->  jsonize_value' proc in
     "{\"key\": " ^ string_of_int key ^ "," ^
-    " \"eventHandlers\":" ^ h_proc_json ^ "}" in
+    " \"eventHandlers\":" ^ jsonize_handler_list proc ^ "}" in
   let bnds = IntMap.bindings evt_handlers in
   String.concat "," (List.map show_evt_handler bnds)
 
