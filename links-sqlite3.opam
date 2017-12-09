@@ -17,8 +17,8 @@ build: [
 ]
 
 depends: [
+  "jbuilder" {build}
   "ocamlfind" {build}
-  "deriving" {build}
   "sqlite3"
   "links-core"
 ]
