@@ -62,6 +62,6 @@ remove: [
 
 depends: [
   "jbuilder" {build}
-  "ocamlfind" {build}
+  "ocamlfind"
   "links-core"
 ]
