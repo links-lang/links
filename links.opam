@@ -21,7 +21,7 @@ install: [
 # Install Links prelude
   [ "mkdir" "-p" "%{links:lib}%"                                      ]
   [ "cp" "prelude.links" "%{links:lib}%"                              ]
-  [ "./links" "%{links:lib}%/prelude.links"                           ]
+  [ "jbuilder" "exec" "linx" "--" "%{links:lib}%/prelude.links"       ]
 # Install JS libraries
   [ "cp" "-r" "lib/js" "%{links:lib}%"                                ]
   [ "cp" "-r" "stdlib" "%{links:lib}%"                                ]
@@ -48,18 +48,20 @@ install: [
   [ "sh" "-c" "echo jslibdir=%{links:lib}%/js >> config"               ]
   [ "sh" "-c" "echo #database_driver=postgresql >> config"             ]
   [ "sh" "-c" "echo #database_args=localhost:5432:user:pass >> config" ]
-  [ "mkdir" "%{links:etc}%"                                           ]
+  [ "mkdir" "-p" "%{links:etc}%"                                      ]
   [ "cp" "config" "%{links:etc}%"                                     ]
-# Install links as linx
-  [ "cp" "links" "%{links:bin}%/linx"                                 ]
 ]
 
 remove: [
-  [ "rm" "-f"  "%{links:bin}%/linx"       ]
+  [ "rm" "-f"  "%{links:bin}%/linx" ]
+  [ "rm" "-f"  "%{links:lib}%/prelude.links" ]
+  [ "rm" "-rf" "%{links:share}%/examples" ]
+  [ "rm" "-f"  "%{links:etc}%/config" ]
+  [ "rm" "-f"  "%{links:doc}%/README" ]
 ]
 
 depends: [
   "jbuilder" {build}
-  "ocamlfind" {build}
+  "ocamlfind"
   "links-core"
 ]
