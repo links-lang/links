@@ -6,5 +6,5 @@
   (synopsis "PostgreSQL database backend for Links")
   (wrapped false)
   (optional)
-  (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
+  (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g))
   (libraries (postgresql links-core))))

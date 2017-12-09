@@ -544,6 +544,9 @@ let _ =
     | None -> ()
   end;
 
+  (* Load database drivers *)
+  Dyn_db_hack.load ();
+
   if Settings.get_value BS.cache_whole_program
   then whole_program_caching_main ()
   else main()

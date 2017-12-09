@@ -7,7 +7,7 @@
   (modes (native))
   (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
   (link_flags -linkall)
-  (libraries (threads dynlink links-core))))
+  (libraries (findlib.dynload threads dynlink links-core))))
 
 
 (install
