@@ -576,6 +576,9 @@ struct
           str;
         !count
       end
+
+  let replace pattern replacement =
+    Str.global_replace (Str.regexp_string pattern) replacement
 end
 include StringUtils
 
