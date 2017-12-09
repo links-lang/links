@@ -17,8 +17,8 @@ build: [
 ]
 
 depends: [
+  "jbuilder" {build}
   "ocamlfind" {build}
-  "deriving" {build}
   "mysql"
   "links-core"
 ]

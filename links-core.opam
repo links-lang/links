@@ -28,6 +28,7 @@ remove: [
 ]
 
 depends: [
+  "jbuilder" {build}
   "ocamlfind" {build}
   "deriving" {build}
   "cgi"
