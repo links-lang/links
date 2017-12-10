@@ -1,0 +1,8 @@
+fun foo() {
+  sig bar : (Int) ~> String
+  fun bar(i) {
+    if (i <= 0) { "Hello!" } else { bar(i - 1) }
+  }
+  bar(5)
+}
+foo()
