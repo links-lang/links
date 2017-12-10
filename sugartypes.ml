@@ -267,7 +267,7 @@ and phrasenode = [
 (* | `Fork             of binder * phrase *)
 | `CP               of cp_phrase
 | `TryInOtherwise   of (phrase * pattern * phrase * phrase * Types.datatype option)
-| `Raise (* TEMPORARY, FOR TESTING ONLY *)
+| `Raise
 ]
 and phrase = phrasenode * position
 and bindingnode = [
