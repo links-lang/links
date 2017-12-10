@@ -304,7 +304,7 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
         | `ForAll (vars, t) -> t, Types.unbox_quantifiers vars
         | t -> t, [] in
     let tenv, renv, penv =
-      if (List.length vars <> List.length tyargs) then        
+      if (List.length vars <> List.length tyargs) then
         (Debug.print (Printf.sprintf "# Type variables (total %d)" (List.length vars));
          let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.Show_quantifier.show t) vars in
          Debug.print tyvars;
@@ -393,7 +393,9 @@ let alias name tyargs env =
         let tenv, renv, penv =
           List.fold_right2
             (fun q arg (tenv, renv, penv) ->
-              assert (primary_kind_of_quantifier q = primary_kind_of_type_arg arg);
+              if not (primary_kind_of_quantifier q = primary_kind_of_type_arg arg)
+              then failwith (Printf.sprintf
+"Argument '%s' to type alias '%s' has the wrong kind ('%s' instead of '%s')" (Types.string_of_type_arg arg) name (Types.string_of_primary_kind (primary_kind_of_type_arg arg)) (Types.string_of_primary_kind (primary_kind_of_quantifier q)));
               let x = var_of_quantifier q in
                 match arg with
                 | `Type t ->

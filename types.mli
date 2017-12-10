@@ -352,6 +352,7 @@ val string_of_row_var    : ?policy:(unit -> Print.policy)
                         -> ?refresh_tyvar_names:bool -> row_var    -> string
 val string_of_tycon_spec : ?policy:(unit -> Print.policy)
                         -> ?refresh_tyvar_names:bool -> tycon_spec -> string
+val string_of_primary_kind : primary_kind -> string
 val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
 
@@ -363,6 +364,6 @@ val add_tyvar_names : ('a -> Vars.vars_list)
                    -> ('a list)
                    -> unit
 (* Function type constructors *)
-val make_pure_function_type : datatype -> datatype -> datatype		   
+val make_pure_function_type : datatype -> datatype -> datatype
 val make_function_type      : datatype -> row -> datatype -> datatype
-val make_thunk_type : row -> datatype -> datatype  
+val make_thunk_type : row -> datatype -> datatype

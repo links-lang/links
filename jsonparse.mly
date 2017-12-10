@@ -100,6 +100,7 @@ object_:
 | LBRACE RBRACE         { `Record [] }
 | LBRACE members RBRACE { match $2 with
                             | ["_c", c] -> Value.box_char ((Value.unbox_string c).[0])
+                            | ["_tail", xs; "_head", x] -> `List (x :: (Value.unbox_list xs))
                             | ["_label", l; "_value", v]
                             | ["_value", v; "_label", l] ->
                                 Value.box_variant (Value.unbox_string l) v
@@ -229,8 +230,7 @@ members:
 | members COMMA id  COLON value      { ($3, $5) :: $1 }
 
 array:
-| LBRACKET RBRACKET                  { `List ([]) }
-| LBRACKET elements RBRACKET         { `List (List.rev $2) }
+| LBRACKET RBRACKET                  { `List ([]) (* For now, we denote Nil as [] *) }
 
 elements:
 | value                              { [$1] }
@@ -243,7 +243,7 @@ value:
 | array                              { $1 }
 | TRUE                               { `Bool true }
 | FALSE                              { `Bool false }
-| NULL                               { `Record [] (* Or an error? *) }
+| NULL                               { `List [] }
 
 string:
 | STRING                             { Value.box_string $1 }

@@ -3,37 +3,37 @@
 #
 
 fun lsMap(f, l) {
-    if (lsEmpty(l)) lsNilF()
-    else lsCons(f(lsHead(l)), lsMap(f, lsTail(l)))
+    if (empty(l)) []
+    else f(hd(l)) :: lsMap(f, tl(l))
 }
 
 fun lsFilter(p, l) {
-    if (lsEmpty(l)) lsNilF()
-    else if (p(lsHead(l))) lsCons(lsHead(l), lsFilter(p, lsTail(l)))
-    else lsFilter(p, lsTail(l))
+    if (empty(l)) []
+    else if (p(hd(l))) hd(l) :: lsFilter(p, tl(l))
+    else lsFilter(p, tl(l))
 }
 
 fun lsMapIgnore(f, l) {
-    if (lsEmpty(l)) ()
-    else { var _ = f(lsHead(l)); lsMapIgnore(f, lsTail(l)) }
+    if (empty(l)) ()
+    else { var _ = f(hd(l)); lsMapIgnore(f, tl(l)) }
 }
 
 fun lsCatMaybes(l) {
-    if (lsEmpty(l)) lsNilF()
-    else switch (lsHead(l)) {
-        case Just(x) -> lsCons(x, lsCatMaybes(lsTail(l)))
-        case Nothing -> lsCatMaybes(lsTail(l))
+    if (empty(l)) []
+    else switch (hd(l)) {
+        case Just(x) -> x :: lsCatMaybes(tl(l))
+        case Nothing -> lsCatMaybes(tl(l))
     }
 }
 
 fun lsFoldLeft(f, i, l) {
-    if (lsEmpty(l)) i
-    else lsFoldLeft(f, f(i, lsHead(l)), lsTail(l))
+    if (empty(l)) i
+    else lsFoldLeft(f, f(i, hd(l)), tl(l))
 }
 
 #~ fun lsReplicate(n, item) {
-#~   if (n == 0) lsNilF()
-#~   else lsCons(item, lsReplicate(n - 1, item))
+#~   if (n == 0) []
+#~   else item ::  lsReplicate(n - 1, item)
 #~ }
 
 #

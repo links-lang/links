@@ -264,7 +264,7 @@ let interact envs =
 
                       Env.String.fold (* TBD: Make Env.String.foreach. *)
                         (fun name spec () ->
-                             prerr_endline (name ^" = "^
+                             print_endline (name ^" = "^
                                             Types.string_of_tycon_spec spec); ())
                         (tyenv'.Types.tycon_env)
                         ();
@@ -291,7 +291,7 @@ let interact envs =
                                let t = Var.info_type finfo in v, t
                              | _ -> assert false
                            in
-                           prerr_endline(name
+                           print_endline(name
                                          ^" = "^Value.string_of_value v
                                          ^" : "^Types.string_of_datatype t))
                         nenv'
