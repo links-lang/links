@@ -4,6 +4,7 @@ open Notfound
 open ProcessTypes
 
 let serialiser = Basicsettings.Serialisation.serialiser
+let session_exception_operation = "_SessionFail"
 
 class type otherfield =
 object
@@ -241,7 +242,7 @@ sig
   val lookup : Ir.var -> 'a t -> 'a option
   val lookupS : Ir.var -> 'a t -> ('a * Ir.scope) option
   val shadow : 'a t -> by:'a t -> 'a t
-  val fold : (Ir.var -> ('a * Ir.scope) -> 'a -> 'a) -> 'a t -> 'a -> 'a
+  val fold : (Ir.var -> ('a * Ir.scope) -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val globals : 'a t -> 'a t
   (* used only by json.ml, webif.ml ... *)
   val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
@@ -331,6 +332,18 @@ module Env = struct
     with NotFound str -> failwith("In uncompress_env: " ^ str)
 end
 
+module Trap = struct
+  type ('v, 'r) result =
+    | Trap of (unit -> 'r)
+    | SessionTrap of ('v, 'r) session_result
+    | UnhandledSessionException of (Ir.computation list)
+  and ('v, 'r) session_result = {
+    handle_env: 'v Env.t;
+    frames: Ir.computation list;
+    continuation_thunk: (unit -> 'r)
+  }
+end
+
 module type FRAME = sig
   type 'v t
 
@@ -363,6 +376,7 @@ module type CONTINUATION_EVALUATOR = sig
   type v
   type result
   type 'v t
+  type trap_result = (v, result) Trap.result
 
   val apply : env:v Env.t ->            (* the current environment *)
               v t ->                    (* the continuation *)
@@ -371,7 +385,7 @@ module type CONTINUATION_EVALUATOR = sig
 
   val trap : v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
-             result
+             trap_result
 end
 
 module type EVAL = sig
@@ -382,7 +396,7 @@ module type EVAL = sig
   val computation : v Env.t -> v t -> Ir.computation -> result
   val finish : v Env.t -> v -> result
   val reify : v t -> v
-  end
+end
 
 module type CONTINUATION = sig
   type 'v t
@@ -405,7 +419,10 @@ module type CONTINUATION = sig
   module Evaluation :
   functor(E : EVAL with type 'v t := 'v t) ->
   sig
-    include CONTINUATION_EVALUATOR with type v = E.v and type result = E.result and type 'v t := 'v t
+    include CONTINUATION_EVALUATOR with
+      type v = E.v
+      and type result = E.result
+      and type 'v t := 'v t
   end
 
   val to_string : 'v t -> string
@@ -454,6 +471,8 @@ module Pure_Continuation = struct
   struct
     type v = E.v
     type result = E.result
+    type trap_result = (v, result) Trap.result
+
     let apply  ~env k v =
     match k with
     | [] -> E.finish env v
@@ -612,6 +631,7 @@ module Eff_Handler_Continuation = struct
     struct
       type v = E.v
       type result = E.result
+      type trap_result = (v, result) Trap.result
 
       let return k h v =
         let ((var,_), comp) = h.return_clause in
@@ -634,8 +654,9 @@ module Eff_Handler_Continuation = struct
            E.computation env (Continuation k) comp
 
       let trap k (opname, arg) =
+        let open Trap in
         let rec handle k' = function
-          | (User_defined h, pk) :: k ->
+          | ((User_defined h, pk) :: k) ->
              begin match StringMap.lookup opname h.op_clauses with
              | Some (kb, (var, _), comp) ->
                 let env =
@@ -649,15 +670,39 @@ module Eff_Handler_Continuation = struct
                      Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
                   | _ -> h.env
                 in
-                E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp
+                let continuation_thunk =
+                  fun () -> E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp in
+
+                if (opname = session_exception_operation) then
+                 let comps = List.map (fun (_, _, _, c) -> c) pk in
+                 SessionTrap ({
+                   handle_env = env;
+                   frames = comps;
+                   continuation_thunk = continuation_thunk
+                 }) else (Trap continuation_thunk)
              | None -> handle ((User_defined h, pk) :: k') k
              end
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
-          | [] -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname)
+          | [] ->
+              begin
+              if opname = session_exception_operation then
+                (* TODO: Is this correct??? *)
+                let comps =
+                  begin
+                  match (List.rev k') with
+                    | [] -> []
+                    | (User_defined _, pk) :: _
+                    | (_, pk) :: _ -> List.map (fun (_, _, _, comp) -> comp) pk
+                  end in
+                UnhandledSessionException comps
+              else
+                Trap (fun () -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname))
+              end
         in match k with
         | Empty -> handle [] []
         | Continuation k -> handle [] k
         | ShallowContinuation (pk,k) -> handle [(Identity, pk)] k
+
     end
   let to_string _ = "generalised_continuation"
 
@@ -1067,6 +1112,10 @@ type 'a serialiser = {
   load : string -> 'a;
 }
 
+let is_channel = function
+  | `SessionChannel _ -> true
+  | _ -> false
+
 (** {1 Serialization of values. } *)
 
 let marshal_save : 'a -> string = fun v -> Marshal.to_string v []
@@ -1195,17 +1244,17 @@ and xmlitem_of_variant =
     | `Variant ("NsAttr", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", boxed_value) ])) ->
         let ns = unbox_string(boxed_ns) in
         let name = unbox_string(boxed_name) in
-        if (String.contains ns ':') 
+        if (String.contains ns ':')
         then failwith "Illegal character in namespace"
-        else if (String.contains name ':') 
+        else if (String.contains name ':')
         then failwith "Illegal character in attrname"
         else NsAttr(ns, name, unbox_string(boxed_value))
     | `Variant ("NsNode", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", variant_children) ])) ->
         let ns = unbox_string(boxed_ns) in
         let name = unbox_string(boxed_name) in
-        if (String.contains ns ':') 
+        if (String.contains ns ':')
         then failwith "Illegal character in namespace"
-        else if (String.contains name ':') 
+        else if (String.contains name ':')
         then failwith "Illegal character in tagname"
         else NsNode(ns, name, xml_of_variants variant_children)
     | _ -> failwith "Cannot construct xml from variant"

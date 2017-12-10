@@ -80,6 +80,7 @@ SOURCES = $(OPC)                                \
           defaultAliases.ml                     \
           requestData.mli requestData.ml        \
           value.mli value.ml                    \
+					channelVarUtils.mli channelVarUtils.ml \
           eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
@@ -97,6 +98,7 @@ SOURCES = $(OPC)                                \
           desugarInners.mli desugarInners.ml             \
 	  desugarCP.mli desugarCP.ml                     \
 	  desugarHandlers.mli desugarHandlers.ml         \
+          desugarSessionExceptions.mli desugarSessionExceptions.ml \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
           experimentalExtensions.ml \

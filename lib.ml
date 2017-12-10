@@ -453,6 +453,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "forall s::Type(Any, Session).(AP(s)) ~> ~s",
    IMPURE);
 
+  "cancel",
+  (`PFun (fun _ -> assert false),
+   datatype "forall s::Type(Any, Session).(s) ~> ()",
+   IMPURE);
+
   (* Lists and collections *)
   "Nil",
   (`List [],

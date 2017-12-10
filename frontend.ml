@@ -54,6 +54,8 @@ struct
         (*->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)*)
        ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
        ->- after_typing ((DesugarInners.desugar_inners tyenv)#program ->- snd3)
+       ->- after_typing ((DesugarSessionExceptions.insert_toplevel_handlers tyenv)#program ->- snd3)
+       ->- after_typing ((DesugarSessionExceptions.desugar_session_exceptions tyenv)#program ->- snd3)
        ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#program ->- snd3)
        ->- after_typing ((DesugarDbs.desugar_dbs tyenv)#program ->- snd3)
        ->- after_typing ((DesugarFors.desugar_fors tyenv)#program ->- snd3)
