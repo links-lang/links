@@ -6,7 +6,7 @@ services:
 before_install:
   - sudo add-apt-repository -y ppa:avsm/ppa
   - sudo apt-get -qq update
-  - sudo apt-get install -y --allow-unauthenticated ocaml-nox ocaml-native-compilers camlp4-extra opam
+  - sudo apt-get install -y ocaml-nox ocaml-native-compilers camlp4-extra opam
   - opam init -a
   - opam switch 4.04.0
   - eval `opam config env`
