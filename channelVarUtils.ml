@@ -2,8 +2,10 @@ open Value
 open Utility
 open Pervasives (* PIPES *)
 
-(* TODO: Maybe it would be nice to have some kind of visitors for the IR?
- * Or is it just me that's crazy enough to have to traverse it? *)
+(* We can't use the visitor in ir.ml, since we don't have access to the
+ * typing environment at this point. It would be good to replace this with
+ * a visitor (or better, an implementation using the built tables) but that
+ * will have to come later. *)
 let variables_in_computation comp =
   Debug.print ("Getting variables in computation: " ^ (Ir.Show_computation.show comp));
   let open Ir in
