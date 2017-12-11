@@ -3,7 +3,9 @@
 
 nc:
 	jbuilder build @install
-	cp _build/default/bin/links.exe links
+	@echo "#!/bin/sh" > links
+	@echo "LINKS_LIB=\"_build/*/bin\" LINKS_LD_LIBRARY_PATH=\"_build/*/pg-driver\" jbuilder exec linx -- \$$@" >> links
+	@chmod +x links
 	ln -f -s links linx
 
 native: nc
