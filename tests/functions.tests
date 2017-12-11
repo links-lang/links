@@ -73,3 +73,19 @@ Quantification of alien functions (#280)
 filemode : true
 exit : 1
 stderr : @\*\*\* Fatal error.*
+
+Type annotation on inner function (correct, basic)
+./tests/functions/innerfun1.links
+filemode : true
+stdout : "Hello!" : String
+
+Type annotation on inner function (incorrect, basic)
+./tests/functions/innerfun2.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Type annotation on inner function (correct, recursive)
+./tests/functions/innerfun3.links
+filemode : true
+stdout : "Hello!" : String
