@@ -99,18 +99,9 @@ module VariableInspection = struct
     go code;
     get_vars ()
 
-(*
-  let filter_resolvable env vars =
-    let open Pervasives in
-    List.map (fun var ->
-      if (VEnv.has env var) then [var] else []) vars
-    |> List.concat
-*)
-
   let get_affected_variables code =
     let open Pervasives in
     inspect_code_variables code
-    (* |> filter_resolvable env *)
     |> List.map (fun v -> Var(v))
 end
 
@@ -174,7 +165,7 @@ struct
         StringMap.fold (fun l c s ->
                           s ^ show_case v l c)
           cases "" in
-    
+
     let show_default v = opt_app
       (fun (x, e) ->
          "default:{var " ^ x ^ "=" ^ v ^ ";" ^ show e ^ ";" ^ "break;}") "" in
@@ -199,10 +190,10 @@ struct
         | Case (v, cases, default) ->
             "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
         | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
-        | Arr elems -> 
-          let rec show_list = function 
+        | Arr elems ->
+          let rec show_list = function
             | [] ->  Json.nil_literal
-            | x :: xs -> "{\"_head\":" ^ (show x) ^ ",\"_tail\":" ^ (show_list xs) ^ "}" in 
+            | x :: xs -> "{\"_head\":" ^ (show x) ^ ",\"_tail\":" ^ (show_list xs) ^ "}" in
           show_list elems
         | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
         | Return expr -> "return " ^ (show expr) ^ ";"
@@ -265,9 +256,9 @@ struct
         | Fn _ as f -> show_func "" f
         | Call (Var "LINKS.project", [record; label]) ->
             maybe_parenise record ^^ (brackets (show label))
-        | Call (Var "hd", [list;kappa]) -> 
+        | Call (Var "hd", [list;kappa]) ->
             (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
-        | Call (Var "tl", [list;kappa]) -> 
+        | Call (Var "tl", [list;kappa]) ->
             (maybe_parenise kappa) ^^ PP.text "tl" ^^ (parens (  maybe_parenise list))
         | Call (Var "_yield", (fn :: args)) ->
             PP.text "_yield" ^^ (parens (PP.text "function () { " ^^ maybe_parenise fn ^^
@@ -292,10 +283,10 @@ struct
                                        group (PP.text "'" ^^ PP.text name ^^
                                                 PP.text "':" ^^ show value))
                                   elems)))
-        | Arr elems -> 
-            let rec show_list = function 
+        | Arr elems ->
+            let rec show_list = function
               | [] -> PP.text Json.nil_literal
-              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in 
+              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
             show_list elems
         | Bind (name, value, body) ->
             PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
