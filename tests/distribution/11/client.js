@@ -13,13 +13,6 @@ let sum = 0;
 
 let initialised_channel_count = 0;
 
-// - Client A and B connect via a server access point to get channel c,
-//   with channels {c1,c2} and {c2,c1}. A gets {c1, c2}. B gets {c2, c1}.
-// - Client B and C connect via a server access point to get channel d.
-// (- Client A sends 1, 2 along c.)
-// - Client B then wants to delegate {c2,c1} along d so, sends {c2, c1} to C
-//   along {d1, d2}.
-
 function assert(b, str) {
   if (!b) {
     throw("Assertion failed: " + str);

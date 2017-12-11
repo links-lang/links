@@ -429,8 +429,8 @@ class transform (env : Types.typing_environment) =
           let (o, t) = o#datatype t in
           (o, `ConstructorLit (name, e, Some t), t)
       | `DoOperation (name, ps, Some t) ->
-	 let (o, ps, _) = list o (fun o -> o#phrase) ps in
-	 (o, `DoOperation (name, ps, Some t), t)
+         let (o, ps, _) = list o (fun o -> o#phrase) ps in
+         (o, `DoOperation (name, ps, Some t), t)
       | `Handle { sh_expr; sh_clauses; sh_descr } ->
          let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
          let (o, expr, _) = o#phrase sh_expr in
@@ -445,7 +445,7 @@ class transform (env : Types.typing_environment) =
          let (o, input_t) = o#datatype input_t in
          let (o, output_row) = o#row output_row in
          let (o, output_t) = o#datatype output_t in
-	 let (o, raw_row) = o#row sh_descr.shd_raw_row in
+         let (o, raw_row) = o#row sh_descr.shd_raw_row in
          let descr = {
                        shd_depth = sh_descr.shd_depth;
                        shd_types = (input_row, input_t, output_row, output_t);
@@ -453,6 +453,14 @@ class transform (env : Types.typing_environment) =
                      }
          in
          (o, `Handle { sh_expr = expr; sh_clauses = cases; sh_descr = descr }, output_t)
+      | `TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->
+          let (o, try_phr, _) = o#phrase try_phr in
+          let (o, as_pat) = o#pattern as_pat in
+          let (o, as_phr, _) = o#phrase as_phr in
+          let (o, otherwise_phr, _) = o#phrase otherwise_phr in
+          let (o, dt) = o#datatype dt in
+          (o, `TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)), dt)
+      | `Raise -> (o, `Raise, `Not_typed) (* TEMP *)
       | `Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =

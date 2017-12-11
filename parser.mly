@@ -213,6 +213,7 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
 %token TYPE ROW PRESENCE
+%token TRY OTHERWISE RAISE
 %token <string> PREFIXOP POSTFIXOP
 %token <string> INFIX0 INFIXL0 INFIXR0
 %token <string> INFIX1 INFIXL1 INFIXR1
@@ -786,6 +787,8 @@ case_expression:
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
 | handle_depth LPAREN exp RPAREN LBRACE cases RBRACE           { let hndlr = Sugartypes.make_untyped_handler $3 $6 $1 in
                                                                  `Handle hndlr, pos() }
+| RAISE                                                        { `Raise, pos () }
+| TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
 
 handle_depth:
 | HANDLE                                                       { `Deep }

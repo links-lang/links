@@ -62,10 +62,10 @@ module Pinger {
     }
   }
 
-  fun setup(clLoc, srvAP) {
+  fun setup(srvAP) {
     # Spawn a thread on the client to request a channel from
     # srvAP, and handle communication.
-    var clPid = spawnAt(clLoc, { commThread(srvAP) } );
+    var clPid = spawnClient { commThread(srvAP) };
     makePage(clPid, true)
   }
 
@@ -96,10 +96,10 @@ module Ponger {
     }
   }
 
-  fun setup(clLoc, srvAP) {
+  fun setup(srvAP) {
     # Spawn a thread on the client to request a channel from
     # srvAP, and handle communication.
-    var clPid = spawnAt(clLoc, { commThread(srvAP) } );
+    var clPid = spawnClient { commThread(srvAP) };
     makePage(clPid, false)
   }
 }
@@ -107,8 +107,8 @@ module Ponger {
 
 fun main() {
   var srvAP = new();
-  addRoute("/pinger", fun(_, clientLoc) { Pinger.setup(clientLoc, srvAP) });
-  addRoute("/ponger", fun(_, clientLoc) { Ponger.setup(clientLoc, srvAP) });
+  addRoute("/pinger", fun(_) { Pinger.setup(srvAP) });
+  addRoute("/ponger", fun(_) { Ponger.setup(srvAP) });
   serveWebsockets();
   servePages();
 }

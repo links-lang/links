@@ -54,6 +54,65 @@ module VEnv = Env.Int
 (** Type of environments mapping IR variables to source variables *)
 type venv = string VEnv.t
 
+module VariableInspection = struct
+  let inspect_code_variables code =
+    let open Pervasives in
+    let vars = ref (StringSet.empty) in
+    let add_var s = vars := (StringSet.add s (!vars)) in
+
+    let binders = ref (StringSet.empty) in
+    let add_binder s = binders := (StringSet.add s (!binders)) in
+    let add_binders = List.iter (add_binder) in
+
+    let get_vars () =
+      let res = StringSet.diff (!vars) (!binders) |> StringSet.elements in
+      Debug.print "affected client vars: \n";
+      List.iter (Debug.print) res;
+      res in
+
+    let rec go cmd =
+      match cmd with
+        | Var s -> add_var s
+        | Fn (bnds, cmd) ->
+            add_binders bnds;
+            go cmd
+        | LetFun ((bnd1, bnds, cmd1, _), cmd2) ->
+            add_binder bnd1; add_binders bnds;
+            go cmd1; go cmd2
+        | LetRec (xs, cmd) ->
+            List.iter (fun (bnd1, bnds, cmd, _) ->
+              add_binder bnd1; add_binders bnds; go cmd) xs;
+            go cmd
+        | Call (c, cs) -> go c; List.iter (go) cs
+        | Unop (_, c) -> go c
+        | Binop (c1, _, c2) -> go c1; go c2
+        | If (i, t, e) -> List.iter (go) [i;t;e]
+        | Dict xs -> List.iter (go -<- snd) xs
+        | Arr xs -> List.iter (go) xs
+        | Bind (bnd, c1, c2) -> add_binder bnd; go c1; go c2
+        | Return c -> go c
+        | Case (bnd, sm, sc_opt) ->
+            add_var bnd;
+            StringMap.iter (fun _ (s, code) -> add_binder s; go code) sm;
+            OptionUtils.opt_iter (fun (bnd, c) -> add_binder bnd; go c) sc_opt
+        | Lit _ | Die _ | Nothing -> () in
+    go code;
+    get_vars ()
+
+(*
+  let filter_resolvable env vars =
+    let open Pervasives in
+    List.map (fun var ->
+      if (VEnv.has env var) then [var] else []) vars
+    |> List.concat
+*)
+
+  let get_affected_variables code =
+    let open Pervasives in
+    inspect_code_variables code
+    (* |> filter_resolvable env *)
+    |> List.map (fun v -> Var(v))
+end
 
 
 (** Continuation parameter name (convention) *)
@@ -367,7 +426,7 @@ end
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
-let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
+let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"; "send"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
@@ -415,6 +474,9 @@ module type CONTINUATION = sig
 
   (* Generates appropriate bindings for primitives *)
   val primitive_bindings : string
+
+  (* Generates a string dump of the continuation, for debugging purposes. *)
+  val to_string : t -> string
 end
 
 (* (\* The standard Links continuation (no extensions) *\) *)
@@ -468,18 +530,24 @@ module Default_Continuation : CONTINUATION = struct
     "function _makeCont(k) { return k; }\n" ^
       "var _idy = function(x) { return; };\n" ^
       "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
-        "var _cont_kind = \"Default_Continuation\";\n" ^
-          "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }"
+      "var _cont_kind = \"Default_Continuation\";\n" ^
+        "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }\n" ^
+      "const exceptions_enabled = false;\n"
+
 
   let contify_with_env fn =
     match fn Identity with
     | env, (Fn _ as k) -> env, reflect k
-    | _ -> failwith "error: contify: none function argument."
+    | _ -> failwith "error: contify: non-function argument."
 
   (* Pop returns the code in "the singleton list" as the second
      component, and returns a fresh singleton list containing the
      identity element in the third component. *)
   let pop k = (fun code -> code), k, Identity
+
+  let to_string = function
+    | Identity -> "IDENTITY"
+    | Code code -> "CODE: " ^ (Show_code.show code)
 end
 
 (* The higher-order continuation structure for effect handlers
@@ -521,12 +589,14 @@ module Higher_Order_Continuation : CONTINUATION = struct
        append a b
 
   let bind kappas body =
+    (* Binds a continuation *)
     let rec bind bs ks =
       fun kappas ->
         match kappas with
         | Identity ->
+           (* Generate a new continuation name *)
            let k = gensym ~prefix:"_kappa" () in
-          (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k
+             (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k
         | Reflect ((Var _) as v) ->
            bs, ks, v
         | Reflect v ->
@@ -554,10 +624,11 @@ module Higher_Order_Continuation : CONTINUATION = struct
       "}\n" ^
       "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
       "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
-        "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
-          "function is_continuation(kappa) {\n" ^
-            "return kappa !== null && typeof kappa === 'object' && _hd(kappa) !== undefined && _tl(kappa) !== undefined;\n" ^
-              "}"
+      "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
+      "function is_continuation(kappa) {\n" ^
+        "return kappa !== null && typeof kappa === 'object' && _hd(kappa) !== undefined && _tl(kappa) !== undefined;\n" ^
+      "}\n" ^
+      "const exceptions_enabled = " ^ (string_of_bool @@ Settings.get_value (Basicsettings.Sessions.exceptions_enabled)) ^ ";\n"
 
   let contify_with_env fn =
     let name = __kappa in
@@ -576,6 +647,13 @@ module Higher_Order_Continuation : CONTINUATION = struct
                Bind (__ks, tail ks, code))),
        (reflect (Var __k)), reflect (Var __ks)
     | Identity -> pop toplevel
+
+  let rec to_string = function
+    | Identity -> "IDENTITY"
+    | Reflect code -> "REFLECT: " ^ (Show_code.show code)
+    | Cons (code, k) ->
+        "CONS: " ^ (Show_code.show code) ^ ", \n" ^ (to_string k)
+
 end
 
 (** Compiler interface *)
@@ -853,7 +931,11 @@ end = functor (K : CONTINUATION) -> struct
                      let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
                      K.apply ~strategy:`Direct kappa arg
                    else
-                     apply_yielding (gv (`Variable f)) (List.map gv vs) kappa
+                     if (f_name = "send" || f_name = "receive") then
+                       let code_vs = List.map gv vs in
+                       generate_cancel_stub env f_name code_vs kappa
+                     else
+                       apply_yielding (gv (`Variable f)) (List.map gv vs) kappa
               end
            | _ ->
               apply_yielding (gv f) (List.map gv vs) kappa
@@ -907,8 +989,10 @@ end = functor (K : CONTINUATION) -> struct
          K.bind kappa
            (fun kappa -> apply_yielding (gv v) [K.reify kappa] kappa)
       | `Select (l, c) ->
-         let arg = Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c]) in
-         K.apply ~strategy:`Direct kappa arg
+  (* and generate_cancel_stub env (f: Ir.var) (args: Ir.value list) (kappa: K.t) = *)
+         let args =
+          [Dict ["_label", strlit l; "_value", Dict []]; gv c] in
+         generate_cancel_stub env "send" args kappa
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in
@@ -920,11 +1004,22 @@ end = functor (K : CONTINUATION) -> struct
                let (c, cname) = name_binder cb in
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
              let branches = StringMap.map generate_branch bs in
+             let compiled_doOp =
+                   generate_special env (`DoOperation (
+                     Value.session_exception_operation,
+                     [], `Not_typed)) kappa in
+             let cancellation_thunk_name =
+                  gensym ~prefix:"cancellation_thunk" () in
              let recv_cont_name = "__recv_cont" in
-             Bind (recv_cont_name,
-              Call (Var "_makeCont", [Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]),
-              Call (Var "receive", [gv c; Var recv_cont_name])))
+
+             let cancellation_thunk = Fn ([], compiled_doOp) in
+                (* Thunk will be passed as final non-continuation arg *)
+                Bind (recv_cont_name,
+                  Call (Var "_makeCont", [Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]),
+                  Bind (cancellation_thunk_name, cancellation_thunk,
+                    (Call (Var "receive", [gv c; Var cancellation_thunk_name; Var recv_cont_name])))))
       | `DoOperation (name, args, _) ->
+         let open Pervasives in
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
@@ -934,20 +1029,32 @@ end = functor (K : CONTINUATION) -> struct
          let nil = Var "Nil" in
          K.bind kappa
            (fun kappas ->
+             (* kappa -- pure continuation *)
              let bind_skappa, skappa, kappas = K.pop kappas in
+             (* eta -- effect continuation *)
              let bind_seta, seta, kappas   = K.pop kappas in
              let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
-             let op    =
+             (* Session exceptions need to be compiled specially *)
+             let op =
+             if (name = Value.session_exception_operation) then
+               let affected_variables =
+                 VariableInspection.get_affected_variables (K.reify kappa) in
+               let affected_arr = Dict ([("1", Arr affected_variables)]) in
+                 Dict [ ("_label", strlit name)
+                   ; ("_value", Dict [("p", affected_arr); ("s", resumption)])]
+             else
                Dict [ ("_label", strlit name)
                     ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
              in
              bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
       | `Handle { Ir.ih_comp = comp; Ir.ih_clauses = clauses; _ } ->
+         let open Pervasives in
          (** Generate body *)
          let gb env binder body kappas =
            let env' = VEnv.bind env (name_binder binder) in
            snd (generate_computation env' body kappas)
          in
+
          let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
          let return =
            let (_, xb, body) = return_clause in
@@ -957,10 +1064,21 @@ end = functor (K : CONTINUATION) -> struct
                  let bind, _, kappa = K.pop kappa in
                  bind @@ gb env xb body kappa))
          in
+
          let operations =
            (** Generate clause *)
-           let gc env (ct, xb, body) kappas =
+           let gc clause_name env (ct, xb, body) kappas =
+             (* env: environment
+              * ct: Resumption / NoResumption indicator
+              * xb: Binder for the operation
+              * body: Body of the clause
+              * kappas: Continuation stack
+              *)
+
+             (* Calculate JS name of the binder *)
              let x_name = snd @@ name_binder xb in
+
+             (* Bind the resumption *)
              let env', r_name =
                match ct with
                | `ResumptionBinder rb ->
@@ -971,20 +1089,36 @@ end = functor (K : CONTINUATION) -> struct
                   let dummy = name_binder dummy_binder in
                   VEnv.bind env dummy, snd dummy
              in
+
+             (* Project the arguments and continuation from the record compiled in DoOperation *)
              let p = Call (Var "LINKS.project", [Var x_name; strlit "p"]) in
              let s = Call (Var "LINKS.project", [Var x_name; strlit "s"]) in
              let r = Call (Var "_makeFun", [s]) in
+
+             (* Bind the names, and generate the body of the clause *)
+             (* The difference in compiling a "regular" operation and a session exception
+              * handler comes in the compilation of the clause body.
+              * For a "regular" clause body, we just bind the names and generate the
+              * clause body. For an exception handler body, we need to insert a call into
+              * _handleSessionException before invoking the clause body. *)
              let clause_body =
-               Bind (r_name, r,
-                     Bind (x_name, p, gb env' xb body kappas))
+               if (clause_name = Value.session_exception_operation) then
+                 let dummy_var_name = gensym () in
+                 Bind (r_name, r,
+                   Bind (x_name, Call(Var "LINKS.project", [p; strlit "1"]),
+                     Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name]),
+                      gb env' xb body kappas)))
+               else
+                 Bind (r_name, r,
+                   Bind (x_name, p, gb env' xb body kappas))
              in
              x_name, clause_body
            in
            let clauses kappas =
-             StringMap.map
-               (fun clause ->
-                 gc env clause kappas)
-               operation_clauses
+             StringMap.fold
+               (fun clause_name clause ->
+                 StringMap.add clause_name (gc clause_name env clause kappas))
+               operation_clauses (StringMap.empty)
            in
            let forward ks =
              let z_name = "_z" in
@@ -1073,12 +1207,33 @@ end = functor (K : CONTINUATION) -> struct
        xs_names @ [__kappa],
        body,
        location)
+  and generate_cancel_stub env (f_name: string) (args: code list) (kappa: K.t) =
+    (* Compile a thunk to be invoked if the operation fails *)
+    let cancellation_thunk_name =
+      gensym ~prefix:"cancellation_thunk" () in
+
+    let raiseOp =
+      generate_special env (`DoOperation (
+        Value.session_exception_operation,
+        [], `Not_typed)) in
+
+    let fresh_kappa = gensym ~prefix:"kappa" () in
+    let cancellation_thunk = Fn ([fresh_kappa], raiseOp (K.reflect (Var fresh_kappa))) in
+
+    Bind (cancellation_thunk_name, cancellation_thunk,
+      (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) kappa))
 
   and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
     let (venv, code) = generate_computation env comp (K.reflect (Var "_start")) in
     (venv, GenStubs.bindings bs code)
 
-  let generate_toplevel_binding : Value.env -> Json.json_state -> venv -> Ir.binding -> Json.json_state * venv * string option * (code -> code) =
+  let generate_toplevel_binding :
+    Value.env ->
+    Json.json_state ->
+    venv ->
+    Ir.binding ->
+    Json.json_state * venv * string option * (code -> code) =
+
     fun valenv state varenv ->
       function
       | `Let (b, _) ->

@@ -499,7 +499,7 @@ struct
 	   let (vs, _, o) = o#list (fun o -> o#value) vs in
 	   (`DoOperation (name, vs, t), t, o)
 
-    method bindings : binding list -> (binding list * 'self_type) =
+   method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
         let bs, o =
           List.fold_left
