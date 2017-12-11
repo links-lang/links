@@ -1,5 +1,5 @@
 (* This module automatically discovers and loads database
-   drivers. This is a temporarily hack until we have a proper
+   drivers. This is a temporary hack until we have a proper
    interface for loading plugins. *)
 open Utility
 let load () =
