@@ -426,7 +426,7 @@ end
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
-let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"; "send"]
+let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
 let name_binder (x, info) =
@@ -931,7 +931,7 @@ end = functor (K : CONTINUATION) -> struct
                      let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
                      K.apply ~strategy:`Direct kappa arg
                    else
-                     if (f_name = "send" || f_name = "receive") then
+                     if (f_name = "receive") then
                        let code_vs = List.map gv vs in
                        generate_cancel_stub env f_name code_vs kappa
                      else
@@ -989,10 +989,8 @@ end = functor (K : CONTINUATION) -> struct
          K.bind kappa
            (fun kappa -> apply_yielding (gv v) [K.reify kappa] kappa)
       | `Select (l, c) ->
-  (* and generate_cancel_stub env (f: Ir.var) (args: Ir.value list) (kappa: K.t) = *)
-         let args =
-          [Dict ["_label", strlit l; "_value", Dict []]; gv c] in
-         generate_cancel_stub env "send" args kappa
+         let arg = Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c]) in
+         K.apply ~strategy:`Direct kappa arg
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in

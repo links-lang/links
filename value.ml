@@ -685,8 +685,10 @@ module Eff_Handler_Continuation = struct
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
           | [] ->
               begin
+              (* If this is a session exception operation, we need to gather all
+               * of the computations in the pure continuation stack, so we can inspect
+               * their free variables. *)
               if opname = session_exception_operation then
-                (* TODO: Is this correct??? *)
                 let comps =
                   begin
                   match (List.rev k') with

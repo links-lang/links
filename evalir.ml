@@ -593,13 +593,12 @@ struct
            already been applied here *)
         match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
           | `Database (db, params), name, keys, `Record row ->
-        let unboxed_keys =
-    List.map
-      (fun key ->
-        List.map Value.unbox_string (Value.unbox_list key))
-      (Value.unbox_list keys)
-        in
-              apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
+            let unboxed_keys =
+              List.map
+                (fun key ->
+                  List.map Value.unbox_string (Value.unbox_list key))
+                (Value.unbox_list keys)
+            in apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
           | _ -> eval_error "Error evaluating table handle"
       end
     | `Query (range, e, _t) ->
@@ -613,25 +612,25 @@ struct
            match Queryshredding.compile_shredded env (range, e) with
            | None -> computation env cont e
            | Some (db, p) ->
-               begin
-     if db#driver_name() <> "postgresql"
-     then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
-     let get_fields t =
-                   match t with
-                   | `Record fields ->
-                       StringMap.to_list (fun name p -> (name, `Primitive p)) fields
-                   | _ -> assert false
-     in
-                 let execute_shredded_raw (q, t) =
-       Database.execute_select_result (get_fields t) q db, t in
-     let raw_results =
-       Queryshredding.Shred.pmap execute_shredded_raw p in
-     let mapped_results =
-       Queryshredding.Shred.pmap Queryshredding.Stitch.build_stitch_map raw_results in
+             begin
+               if db#driver_name() <> "postgresql"
+                 then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
+               let get_fields t =
+                             match t with
+                             | `Record fields ->
+                                 StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                             | _ -> assert false
+               in
+               let execute_shredded_raw (q, t) =
+                 Database.execute_select_result (get_fields t) q db, t in
+               let raw_results =
+                 Queryshredding.Shred.pmap execute_shredded_raw p in
+               let mapped_results =
+                 Queryshredding.Shred.pmap Queryshredding.Stitch.build_stitch_map raw_results in
                  apply_cont cont env
-       (Queryshredding.Stitch.stitch_mapped_query mapped_results)
-               end
-   end
+                 (Queryshredding.Stitch.stitch_mapped_query mapped_results)
+             end
+         end
        else (* shredding disabled *)
          begin
            match Query.compile env (range, e) with
@@ -650,7 +649,7 @@ struct
                    []
                in
                apply_cont cont env (Database.execute_select fields q db)
-   end
+         end
     | `Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
