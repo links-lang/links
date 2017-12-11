@@ -904,6 +904,8 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
+| signature FUN var arg_lists block                            {  annotate $1 (`Fun ($3, `Unl, ($4, (`Block $5, pos ())), `Unknown, pos ())) }
+| signature LINFUN var arg_lists block                         {  annotate $1 (`Fun ($3, `Lin, ($4, (`Block $5, pos ())), `Unknown, pos ())) }
 | FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
 | typedecl SEMICOLON                                           { $1 }
