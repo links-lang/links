@@ -924,7 +924,11 @@ end = functor (K : CONTINUATION) -> struct
                    else
                      if (f_name = "receive") then
                        let code_vs = List.map gv vs in
-                       generate_cancel_stub env f_name code_vs kappa
+        (* and generate_cancel_stub env (action: code -> code) (kappa: K.t)  = *)
+        (* (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) kappa))) *)
+                       let action cancel_thunk =
+                         apply_yielding (Var f_name) (code_vs @ [cancel_thunk]) kappa in
+                       generate_cancel_stub env action kappa
                      else
                        apply_yielding (gv (`Variable f)) (List.map gv vs) kappa
               end
@@ -985,29 +989,24 @@ end = functor (K : CONTINUATION) -> struct
       | `Choice (c, bs) ->
          let result = gensym () in
          let received = gensym () in
-         K.bind kappa
-           (fun kappa ->
+         let bind, skappa, skappas = K.pop kappa in
+         let skappa' =
+           contify (fun kappa ->
              let scrutinee = Call (Var "LINKS.project", [Var result; strlit "1"]) in
              let channel = Call (Var "LINKS.project", [Var result; strlit "2"]) in
              let generate_branch (cb, b) =
                let (c, cname) = name_binder cb in
-               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b kappa)) in
+               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b K.(skappa <> kappa))) in
              let branches = StringMap.map generate_branch bs in
-             let compiled_doOp =
-                   generate_special env (`DoOperation (
-                     Value.session_exception_operation,
-                     [], `Not_typed)) kappa in
-             let cancellation_thunk_name =
-                  gensym ~prefix:"cancellation_thunk" () in
-             let recv_cont_name = "__recv_cont" in
+             Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))) in
 
-             let cancellation_thunk = Fn ([], compiled_doOp) in
-                (* Thunk will be passed as final non-continuation arg *)
-                Bind (recv_cont_name,
-                  Call (Var "_makeCont", [Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))]),
-                  Bind (cancellation_thunk_name, cancellation_thunk,
-                    (Call (Var "receive", [gv c; Var cancellation_thunk_name; Var recv_cont_name])))))
+         let cont = K.(skappa' <> skappas) in
+         let action cancel_stub =
+           Call (Var "receive", [gv c; cancel_stub; K.reify cont]) in
+
+         bind (generate_cancel_stub env action cont)
       | `DoOperation (name, args, _) ->
+         let () = Debug.print ("DoOperation continuation 1: " ^ (K.to_string kappa)) in
          let open Pervasives in
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
@@ -1023,17 +1022,20 @@ end = functor (K : CONTINUATION) -> struct
              (* eta -- effect continuation *)
              let bind_seta, seta, kappas   = K.pop kappas in
              let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
-             (* Session exceptions need to be compiled specially *)
+             let () = Debug.print ("DoOperation continuation 2: " ^ (K.to_string kappa)) in
+
+             (* Session exceptions arising as a result of "raise" (i.e. those without an
+              * environment passed as an argument already) need to be compiled specially *)
              let op =
-             if (name = Value.session_exception_operation) then
-               let affected_variables =
-                 VariableInspection.get_affected_variables (K.reify kappa) in
-               let affected_arr = Dict ([("1", Arr affected_variables)]) in
+               if ((name = Value.session_exception_operation) && List.length args = 0) then
+                 let affected_variables =
+                   VariableInspection.get_affected_variables (K.reify kappa) in
+                 let affected_arr = Dict ([("1", Arr affected_variables)]) in
+                   Dict [ ("_label", strlit name)
+                        ; ("_value", Dict [("p", affected_arr); ("s", resumption)]) ]
+               else
                  Dict [ ("_label", strlit name)
-                   ; ("_value", Dict [("p", affected_arr); ("s", resumption)])]
-             else
-               Dict [ ("_label", strlit name)
-                    ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
+                      ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
              in
              bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
       | `Handle { Ir.ih_comp = comp; Ir.ih_clauses = clauses; _ } ->
@@ -1196,21 +1198,31 @@ end = functor (K : CONTINUATION) -> struct
        xs_names @ [__kappa],
        body,
        location)
-  and generate_cancel_stub env (f_name: string) (args: code list) (kappa: K.t) =
+  and generate_cancel_stub env (action: code -> code) (kappa: K.t)  =
+    let open Pervasives in
     (* Compile a thunk to be invoked if the operation fails *)
     let cancellation_thunk_name =
       gensym ~prefix:"cancellation_thunk" () in
-
+    let () = Debug.print ("Kappa in GCS: " ^ K.to_string kappa) in
+    (* Grab affected variables from the continuation *)
+    let affected_vars_name = gensym ~prefix:"affected_vars" () in
+    let fresh_var = Var.fresh_raw_var () in
+    let affected_variables =
+       VariableInspection.get_affected_variables (K.reify kappa) in
+    (* Bind affected variables array to a fresh variable *)
+    let env = VEnv.bind env (fresh_var, affected_vars_name) in
+    (* Compile raise operation WRT reflected, bound continuation *)
     let raiseOp =
       generate_special env (`DoOperation (
         Value.session_exception_operation,
-        [], `Not_typed)) in
-
+        [`Variable fresh_var], `Not_typed)) in
     let fresh_kappa = gensym ~prefix:"kappa" () in
     let cancellation_thunk = Fn ([fresh_kappa], raiseOp (K.reflect (Var fresh_kappa))) in
 
-    Bind (cancellation_thunk_name, cancellation_thunk,
-      (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) kappa))
+    (* Generate binding code *)
+    Bind (affected_vars_name, Arr affected_variables,
+      Bind (cancellation_thunk_name, cancellation_thunk,
+        action (Var cancellation_thunk_name)))
 
   and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
     let (venv, code) = generate_computation env comp (K.reflect (Var "_start")) in

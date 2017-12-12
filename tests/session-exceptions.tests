@@ -58,3 +58,9 @@ filemode : args
 args : --session-exceptions --enable-handlers
 stderr : @.*
 exit : 1
+
+Offering where peer endpoint is cancelled
+./tests/session-exceptions/cancel11.links
+filemode : args
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
