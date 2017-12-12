@@ -4,7 +4,7 @@
 nc:
 	jbuilder build @install
 	@echo "#!/bin/sh" > links
-	@echo "LINKS_LIB=\"_build/default/bin\" LINKS_LD_LIBRARY_PATH=\"_build/default/pg-driver\" jbuilder exec linx -- \"\$$@\"" >> links
+	@echo "LINKS_LIB=\"$(shell pwd)/_build/default/bin\" LINKS_LD_LIBRARY_PATH=\"$(shell pwd)/_build/default/pg-driver\" $(shell pwd)/_build/default/bin/links.exe \"\$$@\"" >> links
 	@chmod +x links
 	ln -f -s links linx
 
