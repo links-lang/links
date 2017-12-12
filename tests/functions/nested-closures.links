@@ -1,0 +1,16 @@
+fun main() {
+  var x = 42;
+  fun foo() {
+    fun bar() {
+      x
+    }
+    fun baz() {
+      bar
+    }
+    baz
+  }
+
+  true
+}
+
+main()
