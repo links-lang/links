@@ -388,10 +388,7 @@ let run_file prelude envs filename =
       let external_files = source.external_dependencies in
       ((globals @ locals, main), t), (nenv, tyenv), external_files
   in
-    if Settings.get_value BS.web_mode then
-       Webif.serve_request envs prelude filename
-    else
-      ignore (evaluate parse_and_desugar envs filename)
+    ignore (evaluate parse_and_desugar envs filename)
 
 
 let run_file prelude envs filename =
@@ -502,33 +499,6 @@ let main () =
    Assumes web mode and single source file.
  *)
 
-let whole_program_caching_main () =
-  let open Getopt in
-  Debug.print ("Whole program caching mode activated.");
-
-  if Settings.get_value BS.interacting
-  then Settings.set_value BS.interacting false;
-
-  if !to_precompile <> []
-  then failwith "Cannot precompile in whole program caching mode";
-
-  if !to_evaluate <> []
-  then failwith "Cannot evaluate in whole program caching mode";
-
-  (* caching_main assumes exactly one source file *)
-  let file_list = ref [] in
-  Errors.display_fatal_l (lazy
-			    (parse_cmdline ParseSettings.options
-			       (fun i -> push_back i file_list)));
-  if(length (!file_list) <> 1)
-  then failwith "Whole program caching mode expects exactly one source file";
-
-  let filename = hd (!file_list) in
-  let _ = Loader.activate_wpcache filename in
-
-  let prelude, envs = measure "prelude" cache_load_prelude ()
-  in
-   Webif.serve_request envs prelude filename
 
 let _ =
   (match !ParseSettings.print_cache with
@@ -547,6 +517,4 @@ let _ =
   (* Load database drivers *)
   Dyn_db_hack.load ();
 
-  if Settings.get_value BS.cache_whole_program
-  then whole_program_caching_main ()
-  else main()
+  main()

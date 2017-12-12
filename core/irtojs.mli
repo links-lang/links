@@ -1,16 +1,15 @@
 (* JavaScript code generation *)
 
-val generate_program_page : ?cgi_env:(string * string) list ->
+val generate_program_page : 
   (Var.var Env.String.t * Types.typing_environment) ->
   Ir.program -> Loader.ext_dep list -> string
 
-val generate_real_client_page : ?cgi_env:(string * string) list ->
+val generate_real_client_page : 
   (Var.var Env.String.t * Types.typing_environment) ->
   Ir.binding list -> (Value.env * Value.t) ->
   Webserver_types.websocket_url option -> Loader.ext_dep list -> string
 
 val make_boiler_page :
-  ?cgi_env:(string * string) list ->
   ?onload:string ->
   ?body:string ->
   ?html:string ->

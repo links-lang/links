@@ -108,13 +108,6 @@ struct
     ((safe_getenv "REQUEST_METHOD") = "POST" &&
         string_starts_with (safe_getenv "CONTENT_TYPE") "multipart/form-data")
 
-  let get_cgi_args() =
-    if is_multipart() then
-      map (fun (name, { Cgi.value=value; _ }) -> (name, value))
-        (Cgi.parse_multipart_args())
-    else
-      Cgi.parse_args()
-
   let should_contain_client_id cgi_args =
     (is_remote_call cgi_args) || (is_client_return cgi_args)
 
@@ -197,37 +190,6 @@ struct
          Debug.print("Doing EvalMain");
          run ()
 
-  let run_main (valenv, _, _) (globals, (locals, main)) cgi_args (external_files : string list) () =
-    ("text/html",
-     if is_client_program (globals @ locals, main) then
-       if Settings.get_value realpages then
-         begin
-           Debug.print "Running client program from server";
-           let (valenv, v) = Eval.run_program valenv (locals, main) in
-           (* Debug.print ("valenv" ^ Value.Show_env.show valenv); *)
-           Irtojs.generate_real_client_page
-             ~cgi_env:cgi_args
-             (Lib.nenv, Lib.typing_env)
-             (globals @ locals)
-             (valenv, v)
-             (get_websocket_url ())
-             external_files
-         end
-       else
-         let program = (globals @ locals, main) in
-         Debug.print "Running client program.";
-         let res =
-           lazy (Irtojs.generate_program_page
-                   ~cgi_env:cgi_args
-                   (Lib.nenv, Lib.typing_env)
-                   program external_files) in
-         measure_as res "irtojs"
-     else
-       let program = locals, main in
-       Debug.print "Running server program";
-       let (_env, v) = Eval.run_program valenv program in
-       Value.string_of_value v)
-
   let do_request ((valenv, _, _) as env) cgi_args run render_cont render_servercont_cont response_printer =
     let request = parse_request env cgi_args in
     let (>>=) f g = Lwt.bind f g in
@@ -241,130 +203,4 @@ struct
        | exc -> Lwt.return ("text/html; charset=utf-8", error_page (Errors.format_exception_html exc)))
     >>= fun (content_type, content) ->
     response_printer [("Content-type", content_type)] content
-
-  let serve_request_program
-      (valenv, env2, env3)
-      (globals, (locals, main), render_cont)
-      response_printer
-      cgi_args
-      req_data
-      (external_files : string list) =
-    let valenv' = Value.Env.set_request_data valenv req_data in
-    let env = (valenv', env2, env3) in
-    let render_servercont_cont = (fun (v: Value.t) ->
-      Irtojs.generate_real_client_page
-           ~cgi_env:cgi_args
-           (Lib.nenv, Lib.typing_env)
-           (globals @ locals)
-           (valenv, v)
-           (get_websocket_url ())
-           external_files) in
-
-    Proc.run (fun () -> do_request env cgi_args
-                                   (fun () -> Lwt.return (run_main env (globals, (locals, main)) cgi_args external_files ()))
-                                   render_cont
-                                   render_servercont_cont
-                                   (fun headers body -> Lwt.return (response_printer headers body))
-                                   )
-
-  (* does the preprocessing to turn prelude+filename into a program *)
-  (* result can be cached *)
-
-  let make_program (_, nenv, tyenv) prelude filename =
-    (* Warning: cache call nested inside another cache call *)
-    let source =
-      Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
-    in
-    let open Loader in
-    let (nenv', tyenv') = source.envs in
-    let (globals, (locals, main), t) = source.program in
-    let external_files = source.external_dependencies in
-    begin
-      try
-        Unify.datatypes (t, Instantiate.alias "Page" [] tyenv.Types.tycon_env)
-      with
-        Unify.Failure error ->
-        begin match error with
-          | `Msg s -> Debug.print ("Unification error: " ^ s)
-          | _ -> ()
-        end;
-        failwith("Web programs must have type Page but this one has type "
-                 ^ Types.string_of_datatype t)
-    end;
-
-    (* Debug.print ("un-closure-converted IR: " ^ Ir.Show_program.show (prelude@globals@locals, main)); *)
-
-    let nenv'' = Env.String.extend nenv nenv' in
-    let tyenv'' = Types.extend_typing_environment tyenv tyenv' in
-
-    (* let module Show_IntStringEnv = Env.Int.Show_t(Deriving_Show.Show_string) in *)
-    (* let module Show_StringIntEnv = Env.String.Show_t(Deriving_Show.Show_int) in *)
-
-    (* Debug.print ("nenv''" ^ Show_StringIntEnv.show nenv''); *)
-
-    let tenv0 = Var.varify_env (nenv, tyenv.Types.var_env) in
-    let gs0 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty in
-    (* Debug.print("gs0: "^Show_intset.show gs0); *)
-    let globals = Closures.bindings tenv0 gs0 globals in
-
-    let tenv1 = Var.varify_env (nenv'', tyenv''.Types.var_env) in
-    let gs1 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv'' IntSet.empty in
-    let (locals, main) = Closures.program tenv1 gs1 (locals, main) in
-
-    (* Debug.print ("closure-converted locals: " ^ Ir.Show_program.show (locals, main)); *)
-
-    let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
-    let globals = prelude@globals in
-    (* Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main)); *)
-
-    BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
-    (render_cont, (nenv'', tyenv''), (globals, (locals, main)), external_files)
-
-  (* Processes a CGI-based request *)
-  let serve_request ((valenv, _, _) as envs) prelude filename : unit =
-    let cgi_args = get_cgi_args() in
-    Debug.print ("cgi_args: " ^ mapstrcat "," (fun (k, v) -> k ^ "="  ^ v) cgi_args);
-    let cookies =
-      begin
-        match getenv "HTTP_COOKIE" with
-        | Some header ->
-           let cookies = Str.split (Str.regexp "[ \t]*;[ \t]*") header in
-           concat_map
-             (fun str ->
-              match Str.split (Str.regexp "[ \t]*=[ \t]*") str with
-              | [nm; vl] -> [nm, vl]
-              | _ -> Debug.print ("Warning: ill-formed cookie: "^str); [])
-             cookies
-        | None ->
-           []
-      end in
-
-    (* Set up record containing mutable fields used for primitive library calls.
-     * This record is specific to this request. All fields are mutable since the
-     * library functions may need to modify the environments, and we don't want
-     * to do a state-passing transformation. *)
-    (* Client ID is always 0 in CGI mode. *)
-    let req_data =
-      RequestData.new_request_data cgi_args cookies dummy_client_id in
-
-    (* Compute cacheable stuff in one call *)
-    let (render_cont, (nenv,tyenv), ((globals : Ir.binding list), ((locals : Ir.binding list), main)), external_files) =
-      Loader.wpcache "program" (fun () ->
-        make_program envs prelude filename
-     )
-    in
-
-    (* We can evaluate the definitions here because we know they are pure. *)
-    let valenv = Eval.run_defs valenv globals in
-
-    Errors.display (lazy (serve_request_program
-  			  (valenv, nenv, tyenv)
-  			  (globals, (locals, main),
-                           render_cont)
-          (fun hdrs bdy -> Lib.print_http_response hdrs bdy req_data)
-          cgi_args
-          req_data
-          external_files
-      )
-    )
 end
