@@ -28,8 +28,8 @@ include Functional
 (** {0 Simulating infix function words (a la Haskell backticks)} *)
 
 (** left-associative *)
-let ( <| ) arg f = f arg
-let ( |> ) f arg = f arg
+let ( <| ) f arg = f arg
+(*let ( |> ) arg f = f arg*)
 
 (** {0 Maps and sets} *)
 module type OrderedShow = sig
@@ -533,7 +533,7 @@ struct
 
   let is_numeric str =
     List.for_all
-      (fun ch -> ch <|List.mem|> ['0';'1';'2';'3';'4';'5';'6';'7';'8';'9'])
+      (fun ch -> ch |>List.mem<| ['0';'1';'2';'3';'4';'5';'6';'7';'8';'9'])
       (explode str)
 
   let implode : char list -> string =
