@@ -44,11 +44,11 @@ SOURCES = $(OPC)                                \
           multipart.ml                          \
           notfound.ml                           \
           utility.ml                            \
-	  processTypes.mli processTypes.ml      \
+          processTypes.mli processTypes.ml      \
           env.mli env.ml                        \
           settings.mli settings.ml              \
           basicsettings.ml                      \
-	  parseSettings.ml \
+          parseSettings.ml \
           debug.mli debug.ml                    \
           performance.mli performance.ml        \
           graph.ml                              \
@@ -71,15 +71,16 @@ SOURCES = $(OPC)                                \
           closures.ml                           \
           parse.mli parse.ml                    \
           sugarTraversals.mli  sugarTraversals.ml       \
-	  moduleUtils.mli moduleUtils.ml \
+          moduleUtils.mli moduleUtils.ml \
           resolvePositions.mli resolvePositions.ml       \
-					chaser.mli chaser.ml \
-					desugarAlienBlocks.mli desugarAlienBlocks.ml \
-					desugarModules.mli desugarModules.ml \
+          chaser.mli chaser.ml \
+          desugarAlienBlocks.mli desugarAlienBlocks.ml \
+          desugarModules.mli desugarModules.ml \
           desugarDatatypes.mli desugarDatatypes.ml      \
           defaultAliases.ml                     \
           requestData.mli requestData.ml        \
           value.mli value.ml                    \
+          channelVarUtils.mli channelVarUtils.ml \
           eventHandlers.mli eventHandlers.ml    \
           xmlParser.mly xmlLexer.mll            \
           parseXml.mli parseXml.ml              \
@@ -95,24 +96,25 @@ SOURCES = $(OPC)                                \
           desugarFuns.mli desugarFuns.ml                 \
           desugarProcesses.mli desugarProcesses.ml       \
           desugarInners.mli desugarInners.ml             \
-	  desugarCP.mli desugarCP.ml                     \
-	  desugarHandlers.mli desugarHandlers.ml         \
+          desugarCP.mli desugarCP.ml                     \
+          desugarHandlers.mli desugarHandlers.ml         \
+          desugarSessionExceptions.mli desugarSessionExceptions.ml \
           typeSugar.mli typeSugar.ml                     \
           checkXmlQuasiquotes.ml                \
           experimentalExtensions.ml \
           frontend.ml                           \
           dumpTypes.ml                          \
           compilePatterns.ml                    \
-					websocketMessages.ml \
+          websocketMessages.ml \
           jsonparse.mly                         \
           jsonlex.mll                           \
           js.ml                                 \
           json.mli json.ml                      \
           proc.mli proc.ml                      \
-					resolveJsonState.mli resolveJsonState.ml \
+          resolveJsonState.mli resolveJsonState.ml \
           database.mli database.ml              \
           linksregex.ml                         \
-	  lib.mli lib.ml                        \
+          lib.mli lib.ml                        \
           sugartoir.mli sugartoir.ml            \
           loader.mli loader.ml                  \
           $(DB_CODE)                            \
@@ -121,10 +123,10 @@ SOURCES = $(OPC)                                \
           queryshredding.ml                     \
           webserver_types.mli webserver_types.ml \
           webserver.mli                         \
-	  evalir.ml                             \
+          evalir.ml                             \
           buildTables.ml                        \
           webif.mli webif.ml                    \
-	  webserver.ml                          \
+          webserver.ml                          \
           links.ml                              \
 
 # TODO: get these working again

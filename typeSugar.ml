@@ -96,6 +96,8 @@ struct
     | `DoOperation _
     | `DBDelete _
     | `DBInsert _
+    | `TryInOtherwise _
+    | `Raise
     | `DBUpdate _ -> false
   and is_pure_binding (bind, _ : binding) = match bind with
       (* need to check that pattern matching cannot fail *)
@@ -328,6 +330,11 @@ sig
   val cp_link_dual : griper
 
   val non_linearity : SourceCode.pos -> int -> string -> Types.datatype -> unit
+
+  val try_in_unless_pat : griper
+  val try_in_unless_branches : griper
+  val try_in_unless_linearity : SourceCode.pos -> string -> unit
+
 end
   = struct
     type griper =
@@ -1289,6 +1296,24 @@ end
       die pos ("Variable " ^ v ^ " has linear type " ^ nli () ^
                 code ppr_t                           ^ nl  () ^
                "but is used " ^ string_of_int uses ^ " times.")
+
+    (* Affine session exception handling *)
+    let try_in_unless_pat ~pos ~t1:l ~t2:r ~error:_ =
+      build_tyvar_names [snd l; snd r];
+      with_but2things pos
+        ("The 'try' clause should match the pattern defined in the 'as' clause")
+        ("pattern", l) ("expression", r)
+
+    let try_in_unless_branches ~pos ~t1:l ~t2:r ~error:_ =
+      build_tyvar_names [snd l; snd r];
+      with_but2 pos
+        ("Both branches of a try-as-in-unless block should have the same type")
+        l r
+
+    let try_in_unless_linearity pos v =
+      die pos ("All variables in the as- and unless- branches of an " ^
+               "exception handler must be unrestricted, but " ^ nl () ^
+               "variable " ^ v ^ " is linear.")
 end
 
 type context = Types.typing_environment = {
@@ -3115,7 +3140,77 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify ~handle:Gripers.switch_pattern (pos_and_typ e, no_pos pattern_type) in
               `Switch (erase e, erase_cases binders, Some body_type), body_type, merge_usages [usages e; usages_cases binders]
+        | `TryInOtherwise (try_phrase, pat, in_phrase, unless_phrase, _) ->
+            let try_phrase = tc try_phrase in
+
+            (* Pattern type variable *)
+            let pat = tpc pat in
+
+            (* Check whether pattern corresponds to try_phrase *)
+            let () =
+              unify ~handle:Gripers.try_in_unless_pat
+                (ppos_and_typ pat, (exp_pos try_phrase, (typ try_phrase))) in
+
+            let in_context = context ++ (pattern_env pat) in
+            let in_phrase = type_check in_context in_phrase in
+
+            (* Pattern we have just bound should either be used, or should be
+             * able to be made unrestricted *)
+            let () =
+              Env.iter (fun v t ->
+                let uses = uses_of v (usages in_phrase) in
+                if uses <> 1 then
+                  if Types.type_can_be_unl t then
+                    Types.make_type_unl t
+                  else
+                    Gripers.non_linearity pos uses v t) (pattern_env pat) in
+
+            (* vs: variables bound in the pattern. *)
+            let vs = Env.domain (pattern_env pat) in
+
+            let unless_phrase = tc unless_phrase in
+            unify ~handle:Gripers.try_in_unless_branches
+                (pos_and_typ in_phrase, pos_and_typ unless_phrase);
+
+            (* in_usages: usages in the in_phrase *not* bound in the pattern *)
+            let in_usages = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages in_phrase) in
+
+            (* Now, we need to ensure that all variables used in the in- and unless-
+             * phrases are unrestricted (apaart from the pattern variables!) *)
+            let () =
+              StringMap.iter (fun v n ->
+                if n == 0 then () else
+                if Env.has (pattern_env pat) v then () else
+                  let ty = Env.lookup context.var_env v in
+                  if Types.type_can_be_unl ty then
+                    Types.make_type_unl ty
+                  else
+                    Gripers.try_in_unless_linearity pos v
+              ) (usages in_phrase) in
+
+            let () =
+              StringMap.iter (fun v n ->
+                if n == 0 then () else
+                let ty = Env.lookup context.var_env v in
+                  if Types.type_can_be_unl ty then
+                    Types.make_type_unl ty
+                  else
+                    Gripers.try_in_unless_linearity pos v
+              ) (usages unless_phrase) in
+
+
+            (* Calculate resulting usages *)
+            let usages_res =
+              merge_usages [usages try_phrase;
+              (usage_compat [in_usages; (usages unless_phrase)])] in
+
+            let return_type = typ in_phrase in
+
+            `TryInOtherwise
+              (erase try_phrase, erase_pat pat, erase in_phrase,
+                erase unless_phrase, Some return_type), return_type, usages_res
         | `QualifiedVar _ -> assert false
+        | `Raise -> (`Raise, Types.fresh_type_variable (`Any, `Any), StringMap.empty)
     in (e, pos), t, usages
 
 (** [type_binding] takes XXX YYY (FIXME)

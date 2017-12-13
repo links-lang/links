@@ -1,0 +1,23 @@
+fun go() {
+  var ap = new();
+  var syncAP = new();
+  try {
+    var t = fork(fun(t) {
+      var carried = request(ap);
+      # Ensure the send takes place before cancellation
+      var _ = send(carried, t);
+      ignore(request(syncAP))
+      });
+    var carried = accept(ap);
+    ignore(accept(syncAP));
+    cancel(t);
+    var (res, _) = receive(carried);
+    res
+  } as (x) in {
+    "received from carried: " ^^ intToString(x)
+  } otherwise {
+    "exception"
+  }
+}
+
+go()

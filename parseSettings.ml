@@ -39,7 +39,8 @@ let options : opt list =
     (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
     (noshort, "config",              None,                             Some (fun name -> config_file := Some name));
     (noshort, "enable-handlers",     set BS.Handlers.enabled true,     None);
-    ('r',     "rlwrap",              set BS.Readline.native_readline false,     None);
+    ('r',     "rlwrap",              set BS.Readline.native_readline false, None);
+    (noshort, "session-exceptions",  set BS.Sessions.exceptions_enabled true, None);
     ]
 
 
