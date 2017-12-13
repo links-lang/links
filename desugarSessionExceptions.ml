@@ -105,6 +105,34 @@ object (o : 'self_type)
     | e -> super#phrasenode e
 end
 
+
+let contains_session_exceptions prog =
+  let o =
+    object
+      inherit SugarTraversals.predicate as super
+      val has_exceptions = false
+      method satisfied = has_exceptions
+
+      method! phrasenode = function
+        | `TryInOtherwise _
+        | `Raise -> {< has_exceptions = true >}
+        | p -> super#phrasenode p
+    end in
+  (o#program prog)#satisfied
+
+
+
+let settings_check prog =
+  if not (contains_session_exceptions prog) then () else
+  if not (Settings.get_value Basicsettings.Sessions.exceptions_enabled) then
+    failwith ("File contains session exceptions but session_exceptions not enabled. " ^
+              "Please set 'session_exceptions' configuration flag to true.")
+  else if not (Settings.get_value Basicsettings.Handlers.enabled) then
+    failwith ("File contains session exceptions, which require handlers, " ^
+              " but handlers are not enabled. " ^
+              "Please set 'enable_handlers' configuration flag to true.")
+  else ()
+
 let insert_toplevel_handlers env =
   ((new insert_toplevel_handlers env) :
     insert_toplevel_handlers :> TransformSugar.transform)

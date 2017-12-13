@@ -907,7 +907,8 @@ and Session : SESSION = struct
               end in
 
       (* Cancelling a channel twice is a no-op *)
-      if is_endpoint_cancelled local_ep then Lwt.return () else
+      if ((is_endpoint_cancelled local_ep) ||
+         (not @@ Settings.get_value Basicsettings.Sessions.exceptions_enabled)) then Lwt.return () else
       begin
       cancel_endpoint local_ep;
       match lookup_endpoint local_ep with

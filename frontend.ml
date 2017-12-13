@@ -45,6 +45,7 @@ struct
               "modules flag to true, or run with -m.")
       else (program, ModuleUtils.get_ffi_files program) in
       let _program = CheckXmlQuasiquotes.checker#program program in
+      let () = DesugarSessionExceptions.settings_check program in
       ((( ExperimentalExtensions.check#program
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program

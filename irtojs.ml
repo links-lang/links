@@ -5,8 +5,8 @@ open Utility
 
 let js_lib_url = Basicsettings.Js.lib_url
 let js_pretty_print = Basicsettings.Js.pp
-
 let js_hide_database_info = Basicsettings.Js.hide_database_info
+let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exceptions_enabled)
 
 let get_js_lib_url () =
   let open Pervasives in
@@ -523,8 +523,7 @@ module Default_Continuation : CONTINUATION = struct
       "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
       "var _cont_kind = \"Default_Continuation\";\n" ^
         "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }\n" ^
-      "const exceptions_enabled = false;\n"
-
+      "var receive = _default_receive;"
 
   let contify_with_env fn =
     match fn Identity with
@@ -619,7 +618,10 @@ module Higher_Order_Continuation : CONTINUATION = struct
       "function is_continuation(kappa) {\n" ^
         "return kappa !== null && typeof kappa === 'object' && _hd(kappa) !== undefined && _tl(kappa) !== undefined;\n" ^
       "}\n" ^
-      "const exceptions_enabled = " ^ (string_of_bool @@ Settings.get_value (Basicsettings.Sessions.exceptions_enabled)) ^ ";\n"
+      if session_exceptions_enabled then
+        "var receive = _exn_receive;"
+      else
+        "var receive = _default_receive;"
 
   let contify_with_env fn =
     let name = __kappa in
@@ -922,13 +924,11 @@ end = functor (K : CONTINUATION) -> struct
                      let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
                      K.apply ~strategy:`Direct kappa arg
                    else
-                     if (f_name = "receive") then
+                     if (f_name = "receive" && session_exceptions_enabled) then
                        let code_vs = List.map gv vs in
-        (* and generate_cancel_stub env (action: code -> code) (kappa: K.t)  = *)
-        (* (apply_yielding (Var f_name) (args @ [Var cancellation_thunk_name]) kappa))) *)
                        let action cancel_thunk =
                          apply_yielding (Var f_name) (code_vs @ [cancel_thunk]) kappa in
-                       generate_cancel_stub env action kappa
+                         generate_cancel_stub env action kappa
                      else
                        apply_yielding (gv (`Variable f)) (List.map gv vs) kappa
               end
@@ -1001,12 +1001,13 @@ end = functor (K : CONTINUATION) -> struct
              Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))) in
 
          let cont = K.(skappa' <> skappas) in
-         let action cancel_stub =
-           Call (Var "receive", [gv c; cancel_stub; K.reify cont]) in
-
-         bind (generate_cancel_stub env action cont)
+         if (session_exceptions_enabled) then
+           let action cancel_stub =
+             Call (Var "receive", [gv c; cancel_stub; K.reify cont]) in
+           bind (generate_cancel_stub env action cont)
+         else
+           bind (Call (Var "receive", [gv c; K.reify cont]))
       | `DoOperation (name, args, _) ->
-         let () = Debug.print ("DoOperation continuation 1: " ^ (K.to_string kappa)) in
          let open Pervasives in
          let box vs =
            Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
@@ -1022,12 +1023,13 @@ end = functor (K : CONTINUATION) -> struct
              (* eta -- effect continuation *)
              let bind_seta, seta, kappas   = K.pop kappas in
              let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
-             let () = Debug.print ("DoOperation continuation 2: " ^ (K.to_string kappa)) in
 
              (* Session exceptions arising as a result of "raise" (i.e. those without an
               * environment passed as an argument already) need to be compiled specially *)
              let op =
-               if ((name = Value.session_exception_operation) && List.length args = 0) then
+               if (session_exceptions_enabled &&
+                   name = Value.session_exception_operation &&
+                   List.length args = 0) then
                  let affected_variables =
                    VariableInspection.get_affected_variables (K.reify kappa) in
                  let affected_arr = Dict ([("1", Arr affected_variables)]) in
@@ -1093,7 +1095,8 @@ end = functor (K : CONTINUATION) -> struct
               * clause body. For an exception handler body, we need to insert a call into
               * _handleSessionException before invoking the clause body. *)
              let clause_body =
-               if (clause_name = Value.session_exception_operation) then
+               if (session_exceptions_enabled &&
+                   clause_name = Value.session_exception_operation) then
                  let dummy_var_name = gensym () in
                  Bind (r_name, r,
                    Bind (x_name, Call(Var "LINKS.project", [p; strlit "1"]),
