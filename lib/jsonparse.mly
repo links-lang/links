@@ -74,6 +74,10 @@ let websocket_req assoc_list =
 
         let msg_table = List.map parse_lost_message_entry unboxed_msgs in
         LostMessageResponse (carrier_chan, msg_table)
+    | "CHANNEL_CANCELLATION" ->
+        let notify_ep = get_and_unbox_str "notify_ep" |> ChannelID.of_string in
+        let cancelled_ep = get_and_unbox_str "cancelled_ep" |> ChannelID.of_string in
+        ChannelCancellation ( { notify_ep = notify_ep; cancelled_ep = cancelled_ep } )
     | _ -> failwith "Invalid opcode in websocket message"
 %}
 

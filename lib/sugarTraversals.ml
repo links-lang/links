@@ -250,9 +250,9 @@ class map =
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
           in `ConstructorLit ((_x, _x_i1, _x_i2))
       | `DoOperation (name, ps, t) ->
-	 let ps  = o#list (fun o -> o#phrase) ps in
-	 let t   = o#option (fun o -> o#unknown) t in
-	 `DoOperation (name, ps, t)
+          let ps  = o#list (fun o -> o#phrase) ps in
+          let t   = o#option (fun o -> o#unknown) t in
+          `DoOperation (name, ps, t)
       | `Handle { sh_expr; sh_clauses; sh_descr } ->
           let m = o#phrase sh_expr in
           let cases =
@@ -371,6 +371,14 @@ class map =
       | `FormBinding ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#pattern _x_i1 in `FormBinding ((_x, _x_i1))
+      | `TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
+          let _p1 = o#phrase _p1 in
+          let _pat = o#pattern _pat in
+          let _p2 = o#phrase _p2 in
+          let _p3 = o#phrase _p3 in
+          `TryInOtherwise (_p1, _pat, _p2, _p3, _ty)
+      | `Raise -> `Raise
+
 
     method phrase : phrase -> phrase =
       fun (_x, _x_i1) ->
@@ -975,6 +983,13 @@ class fold =
       | `PagePlacement _x -> let o = o#phrase _x in o
       | `FormBinding ((_x, _x_i1)) ->
           let o = o#phrase _x in let o = o#pattern _x_i1 in o
+      | `TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
+          let o = o#phrase _p1 in
+          let o = o#pattern _pat in
+          let o = o#phrase _p2 in
+          let o = o#phrase _p3 in
+          o
+      | `Raise -> o
 
     method phrase : phrase -> 'self_type =
       fun (_x, _x_i1) ->
@@ -1627,6 +1642,13 @@ class fold_map =
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#pattern _x_i1
           in (o, (`FormBinding ((_x, _x_i1))))
+      | `TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
+          let (o, _p1) = o#phrase _p1 in
+          let (o, _pat) = o#pattern _pat in
+          let (o, _p2) = o#phrase _p2 in
+          let (o, _p3) = o#phrase _p3 in
+          (o, (`TryInOtherwise (_p1, _pat, _p2, _p3, _ty)))
+      | `Raise -> (o, `Raise)
 
     method phrase : phrase -> ('self_type * phrase) =
       fun (_x, _x_i1) ->

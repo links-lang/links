@@ -1,5 +1,10 @@
 open ProcessTypes
 
+type channel_cancellation = {
+  notify_ep: channel_id;
+  cancelled_ep: channel_id
+}
+
 type incoming_websocket_message =
   (* Mailbox message from client to other client *)
   | ClientToClient of (client_id * process_id * Value.t)
@@ -13,3 +18,6 @@ type incoming_websocket_message =
   | ChanSend of (channel_id * (Value.delegated_chan list) * Value.t)
   (* Lost message response, containing lost messages for a set of channels *)
   | LostMessageResponse of (channel_id * ((channel_id * (Value.t list)) list))
+  (* Channel cancellation notification: a channel has been cancelled on a client,
+   * where the other EP is either on the server or another client *)
+  | ChannelCancellation of channel_cancellation
