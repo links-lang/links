@@ -441,7 +441,7 @@ let to_evaluate : string list ref = ParseSettings.to_evaluate
 let file_list : string list ref = ParseSettings.file_list
 
 let main () =
-  let prelude, ((_valenv, nenv, tyenv) as envs) = measure "prelude" load_prelude () in
+  let prelude, ((_valenv, _, _) as envs) = measure "prelude" load_prelude () in
 
   for_each !to_evaluate (evaluate_string_in envs);
     (* TBD: accumulate type/value environment so that "interact" has access *)

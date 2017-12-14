@@ -14,19 +14,7 @@ type source = {
   external_dependencies: ext_dep list
 }
 
-(** Marshal an IR program to a file along with naming and typing
-    environments and the fresh variable counters.
-*)
-let write_a filename x : unit =
-  let counters = (!Utility.gensym_counter, !Types.type_variable_counter, !Var.variable_counter) in
-    call_with_open_outfile filename ~binary:true
-      (fun fh ->
-         Marshal.to_channel fh
-           ((x, counters) : 'a * (int * int * int))
-           [])
 
-let write_program filename envs program : unit =
-  write_a filename (envs,program)
 
 (** Unmarshal an IR program from a file along with naming and typing
     environments and the fresh variable counters.
