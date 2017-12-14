@@ -1590,11 +1590,11 @@ end = functor (K : CONTINUATION) -> struct
     (nenv, venv, tenv)
 
   let generate_program_page (nenv, tyenv) program external_files =
-    let printed_code = Loader.wpcache "irtojs" (fun () ->
+    let printed_code = 
       let _, venv, _ = initialise_envs (nenv, tyenv) in
       let _, code = generate_program venv program in
       let code = GenStubs.wrap_with_server_lib_stubs code in
-      show code)
+      show code
     in
     (make_boiler_page
        ~body:printed_code

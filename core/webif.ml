@@ -6,7 +6,6 @@ open Proc
 open ProcessTypes
 
 open Webserver_types
-open Performance
 open Utility
 
 let realpages = Basicsettings.Webif.realpages
@@ -30,19 +29,6 @@ struct
     | EvalMain
         deriving (Show)
 
-  (** Does at least one of the functions have to run on the client? *)
-  let is_client_program : Ir.program -> bool =
-    fun (bs, _main) ->
-      exists
-        (function
-           | `Fun (_, _, _, `Client)
-           | `Alien (_, _, "javascript") -> true
-           | `Rec defs ->
-               exists
-                 (fun (_, _, _, location) -> location = `Client)
-                 defs
-           | _ -> false)
-        bs
 
   let parse_remote_call (valenv, _, _) cgi_args =
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
@@ -104,10 +90,6 @@ struct
       body ^
       "\n  </body></html>\n"
 
-  let is_multipart () =
-    ((safe_getenv "REQUEST_METHOD") = "POST" &&
-        string_starts_with (safe_getenv "CONTENT_TYPE") "multipart/form-data")
-
   let should_contain_client_id cgi_args =
     (is_remote_call cgi_args) || (is_client_return cgi_args)
 
@@ -121,18 +103,6 @@ struct
     then parse_server_cont env cgi_args
     else EvalMain
 
-  (** In web mode, we wrap the continuation of the whole program in a
-      call to renderPage. We also return the resulting continuation so
-      that we can use it elsewhere (i.e. in processing ServerCont).
-  *)
-  let wrap_with_render_page (nenv, {Types.tycon_env=tycon_env; _ })
-                            (bs, body) =
-    let xb, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
-    let render_page = Env.String.lookup nenv "renderPage" in
-    let tail = `Apply (`Variable render_page, [`Variable x]) in
-    let frame = Value.Continuation.Frame.make `Global x Value.Env.empty ([], tail) in
-    let cont = Value.Continuation.(frame &> empty) in
-      (bs @ [`Let (xb, ([], body))], tail), cont
 
   let get_websocket_url () =
     if Webs.is_accepting_websocket_requests () then
