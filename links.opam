@@ -18,13 +18,6 @@ build: [
 ]
 
 install: [
-# Install Links prelude
-  [ "mkdir" "-p" "%{links:lib}%"                                      ]
-  [ "cp" "prelude.links" "%{links:lib}%"                              ]
-  [ "jbuilder" "exec" "linx" "--" "%{links:lib}%/prelude.links"       ]
-# Install JS libraries
-  [ "cp" "-r" "lib/js" "%{links:lib}%"                                ]
-  [ "cp" "-r" "stdlib" "%{links:lib}%"                                ]
 # Install documentation
   [ "mkdir" "-p" "%{links:doc}%"                                      ]
   [ "cp" "INSTALL" "%{links:doc}%/README"                             ]
@@ -44,8 +37,8 @@ install: [
   [ "sh" "-c" "cp -r examples/css %{links:share}%/examples/"          ]
 # Generate and install a config file
   [ "touch" "config"                                                  ]
-  [ "sh" "-c" "echo jsliburl=/lib/ > config"                          ]
-  [ "sh" "-c" "echo jslibdir=%{links:lib}%/js >> config"               ]
+  [ "sh" "-c" "echo jsliburl=/lib/js > config"                          ]
+  [ "sh" "-c" "echo jslibdir=%{links:lib}% >> config"               ]
   [ "sh" "-c" "echo #database_driver=postgresql >> config"             ]
   [ "sh" "-c" "echo #database_args=localhost:5432:user:pass >> config" ]
   [ "mkdir" "-p" "%{links:etc}%"                                      ]
@@ -55,6 +48,8 @@ install: [
 remove: [
   [ "rm" "-f"  "%{links:bin}%/linx" ]
   [ "rm" "-f"  "%{links:lib}%/prelude.links" ]
+  [ "rm" "-rf" "%{links:lib}%/stdlib" ]
+  [ "rm" "-rf" "%{links:lib}%/js" ]
   [ "rm" "-rf" "%{links:share}%/examples" ]
   [ "rm" "-f"  "%{links:etc}%/config" ]
   [ "rm" "-f"  "%{links:doc}%/README" ]

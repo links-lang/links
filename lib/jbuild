@@ -1,0 +1,10 @@
+(jbuild_version 1)
+
+(install
+  ((section lib)
+   (files (prelude.links))
+   (package links)))
+
+(rule
+ ((targets (prelude.links))
+  (action (copy ${SCOPE_ROOT}/prelude.links prelude.links))))
