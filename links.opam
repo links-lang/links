@@ -38,7 +38,7 @@ install: [
 # Generate and install a config file
   [ "touch" "config"                                                  ]
   [ "sh" "-c" "echo jsliburl=/lib/js > config"                          ]
-  [ "sh" "-c" "echo jslibdir=%{links:lib}% >> config"               ]
+  [ "sh" "-c" "echo jslibdir=%{links:lib}%/js >> config"               ]
   [ "sh" "-c" "echo #database_driver=postgresql >> config"             ]
   [ "sh" "-c" "echo #database_args=localhost:5432:user:pass >> config" ]
   [ "mkdir" "-p" "%{links:etc}%"                                      ]
