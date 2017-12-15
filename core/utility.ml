@@ -542,11 +542,11 @@ struct
   let contains p = explode ->- List.exists p
 
   (* Find all occurrences of a character within a string *)
-  let find_char (s : string) (c : char) : int list =
+  let find_char (s : bytes) (c : char) : int list =
     let rec aux offset occurrences =
-      try let index = String.index_from s offset c in
+      try let index = Bytes.index_from s offset c in
             aux (index + 1) (index :: occurrences)
-      with NotFound _ -> occurrences
+      with Not_found -> occurrences
     in List.rev (aux 0 [])
 
   let mapstrcat glue f list = String.concat glue (List.map f list)
@@ -576,6 +576,9 @@ struct
           str;
         !count
       end
+
+  let replace pattern replacement =
+    Str.global_replace (Str.regexp_string pattern) replacement
 end
 include StringUtils
 

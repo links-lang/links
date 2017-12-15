@@ -35,13 +35,19 @@ doc/*.log
 doc/*.pdf
 doc/*.toc
 
-# ocamlbuild artefacts
+# build artefacts
 _build
-links.byte
-links.native
+links
+linx
 
 # database configuration
 tests/database/config
 
 # shredding configuration
 tests/shredding/config
+
+# OPAM install files
+*.install
+
+# Merlin
+*.merlin

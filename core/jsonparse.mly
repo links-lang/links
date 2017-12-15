@@ -236,10 +236,6 @@ members:
 array:
 | LBRACKET RBRACKET                  { `List ([]) (* For now, we denote Nil as [] *) }
 
-elements:
-| value                              { [$1] }
-| elements COMMA value               { $3 :: $1 }
-
 value:
 | string                             { $1 }
 | number                             { $1 }

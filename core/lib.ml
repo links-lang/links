@@ -1308,7 +1308,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 		       | c :: cs -> Bytes.set s i c; aux (i + 1) cs
 		   in
 		     aux 0 chars;
-		     Value.box_string s),
+		     Value.box_string (Bytes.to_string s)),
     datatype ("([Char]) ~> String"),
     PURE));
 

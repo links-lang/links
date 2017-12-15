@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(install
+  ((section lib)
+   (files ((jslib.js as js/jslib.js)
+           (regex.js as js/regex.js)))
+   (package links)))

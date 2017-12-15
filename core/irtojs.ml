@@ -3,6 +3,8 @@
 (** JavaScript generation *)
 open Utility
 
+let _ = ParseSettings.config_file
+
 let js_lib_url = Basicsettings.Js.lib_url
 let js_pretty_print = Basicsettings.Js.pp
 let js_hide_database_info = Basicsettings.Js.hide_database_info

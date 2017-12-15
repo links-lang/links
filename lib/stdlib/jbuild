@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(install
+  ((section lib)
+   (files ((binaryTree.links as stdlib/binaryTree.links)
+           (comparators.links as stdlib/comparators.links)))
+   (package links)))

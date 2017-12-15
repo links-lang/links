@@ -3,6 +3,8 @@ open Utility
 open Notfound
 open ProcessTypes
 
+let _ = ParseSettings.config_file
+
 let serialiser = Basicsettings.Serialisation.serialiser
 let session_exception_operation = "_SessionFail"
 

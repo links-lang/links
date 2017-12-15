@@ -1,5 +1,7 @@
-#!/bin/sh -e
+#!/bin/sh
 DERIVING_LIB=$(ocamlfind query deriving.syntax)
+grep "(\*pp deriving" "$@" -q
+[ $? -ne 0 ] && cat "$@" || \
 camlp4o $DERIVING_LIB/pa_deriving_common.cma \
         $DERIVING_LIB/pa_deriving_classes.cma \
         $DERIVING_LIB/pa_deriving_std.cma "$@"
