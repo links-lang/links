@@ -94,7 +94,8 @@ object (o : 'self_type)
         let hndl_desc = {
           shd_depth = `Shallow; (* Doesn't matter either way, since we don't invoke the resumption. *)
           shd_types = types;
-          shd_raw_row = raw_row
+          shd_raw_row = raw_row;
+          shd_params = None;
         } in
 
         let hndlr = {

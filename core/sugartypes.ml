@@ -197,15 +197,20 @@ and clause = pattern * phrase
 and funlit = pattern list list * phrase
 and handlerlit = [`Deep | `Shallow] * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
 and handler = {
-    sh_expr: phrase;
-    sh_clauses: clause list;
-    sh_descr: handler_descriptor
-  }
+  sh_expr: phrase;
+  sh_clauses: clause list;
+  sh_descr: handler_descriptor
+}
 and handler_descriptor = {
-    shd_depth: [`Deep | `Shallow];
-    shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
-    shd_raw_row: Types.row;
-  }
+  shd_depth: [`Deep | `Shallow];
+  shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
+  shd_raw_row: Types.row;
+  shd_params: handler_parameterisation option
+}
+and handler_parameterisation = {
+  shp_pats: pattern list;
+  shp_type: Types.datatype list
+}
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
@@ -312,13 +317,21 @@ type program = binding list * phrase option
   deriving (Show)
 
 
-let make_untyped_handler expr clauses depth =
+let make_untyped_handler ?(parameters : pattern list option) expr clauses depth =
+  let shd_params =
+    match parameters with
+    | None -> None
+    | Some patterns ->
+       Some { shp_pats = patterns;
+              shp_type = [] }
+  in
   { sh_expr = expr;
     sh_clauses = clauses;
     sh_descr = {
         shd_depth = depth;
         shd_types = (Types.make_empty_closed_row (), `Not_typed, Types.make_empty_closed_row (), `Not_typed);
         shd_raw_row = Types.make_empty_closed_row ();
+        shd_params = shd_params
       };
   }
 

@@ -785,14 +785,11 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| handle_depth LPAREN exp RPAREN LBRACE cases RBRACE           { let hndlr = Sugartypes.make_untyped_handler $3 $6 $1 in
-                                                                 `Handle hndlr, pos() }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { `Handle (make_untyped_handler $3 $6 `Shallow), pos() }
+| HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle (make_untyped_handler $3 $6 `Deep), pos() }
+| HANDLE LPAREN exp RPAREN LPAREN patterns RPAREN LBRACE cases RBRACE { `Handle (make_untyped_handler ~parameters:$6 $3 $9 `Deep), pos() }
 | RAISE                                                        { `Raise, pos () }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
-
-handle_depth:
-| HANDLE                                                       { `Deep }
-| SHALLOWHANDLE                                                { `Shallow }
 
 iteration_expression:
 | case_expression                                              { $1 }

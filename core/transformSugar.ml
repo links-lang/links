@@ -446,11 +446,23 @@ class transform (env : Types.typing_environment) =
          let (o, output_row) = o#row output_row in
          let (o, output_t) = o#datatype output_t in
          let (o, raw_row) = o#row sh_descr.shd_raw_row in
+         let (o, params)  =
+           match sh_descr.shd_params with
+           | None -> o, None
+           | Some { shp_pats; shp_type } ->
+              let (o, pats) =
+                listu o (fun o -> o#pattern) shp_pats
+              in
+              o, Some {
+                shp_pats = pats;
+                shp_type = shp_type (* TODO FIXME *)
+              }
+         in
          let descr = {
-                       shd_depth = sh_descr.shd_depth;
-                       shd_types = (input_row, input_t, output_row, output_t);
-                       shd_raw_row = raw_row;
-                     }
+           shd_depth = sh_descr.shd_depth;
+           shd_types = (input_row, input_t, output_row, output_t);
+           shd_raw_row = raw_row;
+           shd_params = params }
          in
          (o, `Handle { sh_expr = expr; sh_clauses = cases; sh_descr = descr }, output_t)
       | `TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->
