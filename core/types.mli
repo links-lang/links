@@ -95,6 +95,7 @@ type typ =
     | `Lolli of (typ * row * typ)
     | `Record of row
     | `Variant of row
+    | `Effect of row
     | `Table of typ * typ * typ
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)

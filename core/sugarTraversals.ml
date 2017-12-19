@@ -411,6 +411,11 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
           in `Variant ((_x, _x_i1))
+      | `Effect (name, ps, k) ->
+         let name = o#name name in
+         let ps = o#option (fun o -> o#pattern) ps in
+         let k  = o#option (fun o -> o#pattern) k in
+         `Effect (name, ps, k)
       | `Negative _x ->
           let _x = o#list (fun o -> o#name) _x
           in `Negative _x
@@ -526,6 +531,7 @@ class map =
           let _x = o#list (fun o -> o#datatype) _x in `Tuple _x
       | `Record _x -> let _x = o#row _x in `Record _x
       | `Variant _x -> let _x = o#row _x in `Variant _x
+      | `Effect r -> let r = o#row r in `Effect r
       | `Table (_x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
@@ -1019,6 +1025,11 @@ class fold =
       | `Variant ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
+      | `Effect (name, ps, k) ->
+         let o = o#name name in
+         let o = o#option (fun o -> o#pattern) ps in
+         let o = o#option (fun o -> o#pattern) k in
+         o
       | `Negative _x ->
           let o = o#list (fun o -> o#name) _x in o
       | `Record ((_x, _x_i1)) ->
@@ -1121,6 +1132,7 @@ class fold =
       | `Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
       | `Record _x -> let o = o#row _x in o
       | `Variant _x -> let o = o#row _x in o
+      | `Effect r -> let o = o#row r in o
       | `Table (_x, _x_i1, _x_i2) ->
           let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
       | `List _x -> let o = o#datatype _x in o
@@ -1705,6 +1717,11 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
           in (o, (`Variant ((_x, _x_i1))))
+      | `Effect (name, ps, k) ->
+         let (o, name) = o#name name in
+         let (o, ps) = o#option (fun o -> o#pattern) ps in
+         let (o, k) = o#option (fun o -> o#pattern) k in
+         (o, `Effect (name, ps, k))
       | `Negative _x ->
           let (o, _x) = o#list (fun o -> o#name) _x in (o, (`Negative _x))
       | `Record ((_x, _x_i1)) ->
@@ -1830,6 +1847,7 @@ class fold_map =
           in (o, (`Tuple _x))
       | `Record _x -> let (o, _x) = o#row _x in (o, (`Record _x))
       | `Variant _x -> let (o, _x) = o#row _x in (o, (`Variant _x))
+      | `Effect r -> let (o, r) = o#row r in (o, `Effect r)
       | `Table (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in

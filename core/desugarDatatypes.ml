@@ -172,6 +172,7 @@ struct
               `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
         | `Record r -> `Record (row var_env alias_env r)
         | `Variant r -> `Variant (row var_env alias_env r)
+        | `Effect r -> `Effect (row var_env alias_env r)
         | `Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
         | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
         | `TypeApplication (tycon, ts) ->

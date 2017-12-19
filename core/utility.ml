@@ -435,6 +435,12 @@ struct
         | e::[] -> e
         | e::xs -> e ^ ", " ^ (print_list_inner xs) in
     "[" ^ print_list_inner xs ^ "]"
+
+  let rec zip xs ys =
+    match xs, ys with
+    | [], _
+    | _, [] -> []
+    | x :: xs, y :: ys -> (x, y) :: zip xs ys
 end
 include ListUtils
 

@@ -87,6 +87,11 @@ let rec eq_types : (datatype * datatype) -> bool =
               `Variant r -> eq_rows (l, r)
             | _          -> false
           end
+      | `Effect l ->
+         begin match unalias t2 with
+         | `Effect r -> eq_rows (l, r)
+         | _         -> false
+         end
       | `Application (s, ts) ->
           begin match unalias t2 with
               `Application (s', ts') -> s = s' && List.for_all2 (Utility.curry eq_type_args) ts ts'
@@ -570,6 +575,7 @@ fun rec_env ->
                ut (lto, rto))
           | `Record l, `Record r -> ur (l, r)
           | `Variant l, `Variant r -> ur (l, r)
+          | `Effect l, `Effect r -> ur (l, r)
           | `Table (lf, ld, lr), `Table (rf, rd, rr) ->
               (ut (lf, rf);
                ut (ld, rd);

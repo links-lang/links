@@ -102,7 +102,18 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
         | `Variant (name, None) -> `Variant (name, `Any), empty
         | `Variant (name, Some p) ->
             let p, env = pp p in
-              `Variant (name, p), env
+            `Variant (name, p), env
+        | `Effect (name, p, k) ->
+           let any = `Any, SourceCode.dummy_pos in
+           let p, k =
+             match p, k with
+             | None, None -> any, any
+             | Some p, None -> p, any
+             | None, Some k -> any, k
+             | Some p, Some k -> p, k
+           in
+           let _ = `Effect (name, Some p, Some k), empty in
+           assert false (* TODO FIXME *)
         | `Negative names -> `Negative (StringSet.from_list names), empty
         | `Record (bs, p) ->
             let bs, env =
