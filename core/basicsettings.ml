@@ -264,7 +264,13 @@ module StdLib = struct
   let use_stdlib = Settings.add_bool ("use_stdlib", true, `User)
 
   (* Standard library path *)
-  let stdlib_path = Settings.add_string ("stdlib_path", "", `User)
+  let stdlib_path =
+    let dir =
+      match Utility.getenv "LINKS_LIB" with
+      | Some path -> Filename.concat path "stdlib"
+      | None -> ""
+    in
+    Settings.add_string ("stdlib_path", dir, `User)
 end
 
 module Readline = struct
