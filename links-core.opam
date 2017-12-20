@@ -1,7 +1,7 @@
 opam-version: "1.2"
 name: "links-core"
 version: "0.7.2"
-maintainer: "Jan Stolarek <jan.stolarek@ed.ac.uk>"
+maintainer: "Simon Fowler <simon.fowler@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
 homepage: "http://www.links-lang.org"
 dev-repo: "https://github.com/links-lang/links.git"
@@ -9,7 +9,7 @@ bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-2"
 
 available: [
-  ocaml-version >= "4.04.0"
+  ocaml-version >= "4.04.0" & ocaml-version < "4.04.6"
 ]
 
 build: [
