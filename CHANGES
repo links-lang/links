@@ -1,4 +1,44 @@
 # Changes
+
+## Version 0.7.2
+
+Version 0.7.2 contains mainly behind-the-scenes improvements, however they may
+have a large impact on performance.
+
+### Package Structure and JBuilder
+
+Links now uses JBuilder as its build system. In particular, this means that
+there are now multiple Links packages:
+
+  - `links` contains the executable
+  - `links-core` exposes the Links source as a library
+  - (optional) `links-postgresql` is a dynamic loadable database driver for PostgreSQL.
+
+Additionally, `links-mysql` and `links-sqlite` are dynamically-loadable database
+drivers for MySQL and SQLite3 respectively, but while present in the source, are
+not formally released or officially supported.
+
+### Exception Handling with Session Types
+
+A recent [draft paper](http://simonjf.com/drafts/chomp-draft-nov17.pdf)
+describes an exception handling mechanism which works in the presence of session
+types. This is included in 0.7.2.
+You can find out more on the [wiki](https://github.com/links-lang/links/wiki/Exceptions-and-Session-Types).
+
+### Performance Improvements
+
+  - The JavaScript runtime library is now tail-call-optimised.
+
+  - Links now uses linked lists on the client-side, as opposed to JS arrays. As
+    a rough idea of the performance increase: "The running time for calling map
+    on a 100,000 element list went from browser-angrily-kills-page-after-30-seconds
+    to taking around 1 second."
+
+### Bugfixes
+  - Issue 293: REPL responses now go to stdout and not stderr.
+  - Issue 149: inner functions may now have type annotations.
+  - Issue 280: polymorphic FFI annotations are now correctly universally quantified.
+
 ## Version 0.7.1
 
 Fixes some issues with configuration files, and allows better navigation on the examples pages.
