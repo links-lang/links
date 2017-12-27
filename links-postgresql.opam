@@ -9,7 +9,7 @@ bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-2"
 
 available: [
-  ocaml-version >= "4.04.0" & ocaml-version < "4.04.6"
+  ocaml-version >= "4.04.0"
 ]
 
 build: [
@@ -19,5 +19,5 @@ build: [
 depends: [
   "jbuilder" {build}
   "postgresql"
-  "links-core"
+  "links"
 ]

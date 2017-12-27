@@ -7,4 +7,4 @@
   (wrapped false)
   (optional)
   (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
-  (libraries (sqlite3 links-core))))
+  (libraries (sqlite3 links))))
