@@ -9,7 +9,7 @@ bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-2"
 
 available: [
-  ocaml-version >= "4.04.0"
+  ocaml-version >= "4.04.0" & ocaml-version < "4.06"
 ]
 
 build: [
@@ -57,6 +57,13 @@ remove: [
 
 depends: [
   "jbuilder" {build}
-  "ocamlfind"
-  "links-core"
+  "deriving" {build}
+  "cgi"
+  "base64"
+  "linenoise"
+  "ANSITerminal"
+  "lwt"
+  "cohttp"
+  "websocket-lwt"
+  "safepass"
 ]

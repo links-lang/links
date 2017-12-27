@@ -19,5 +19,5 @@ build: [
 depends: [
   "jbuilder" {build}
   "sqlite3"
-  "links-core"
+  "links"
 ]

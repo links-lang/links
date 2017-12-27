@@ -19,5 +19,5 @@ build: [
 depends: [
   "jbuilder" {build}
   "mysql"
-  "links-core"
+  "links"
 ]
