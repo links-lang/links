@@ -43,6 +43,7 @@ let concrete_type t =
     ct (IntSet.empty) t
 
 let extract_row t = match concrete_type t with
+  | `Effect row
   | `Record row -> row
   | `Variant row -> row
   | t ->

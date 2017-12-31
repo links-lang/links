@@ -130,11 +130,8 @@ struct
     | `Tuple ps -> List.for_all is_safe_pattern ps
     | `HasType (p, _)
     | `As (_, p) -> is_safe_pattern p
-    | `Effect (_, p, k) ->
-       match p, k with
-       | None, None -> true
-       | Some p, Some q -> is_safe_pattern p && is_safe_pattern q
-       | Some p, _ | _, Some p -> is_safe_pattern p
+    | `Effect (_, None, k) -> is_safe_pattern k
+    | `Effect (_, Some p, k) -> is_safe_pattern p && is_safe_pattern k
   and is_pure_regex = function
       (* don't check whether it can fail; just check whether it
          contains non-generilisable sub-expressions *)
@@ -203,6 +200,7 @@ sig
   val continuation_effect_rows : griper
   val type_continuation : griper
   val type_continuation_with_annotation : griper
+  val type_resumption_with_annotation : griper
   val should_not_go_wrong : griper
   val handle_return : griper
   val handle_comp_effects : griper
@@ -561,7 +559,18 @@ end
                   "is" ^ nl() ^
                   tab() ^ code (show_type lt) ^ nl() ^
                   "but it is annotated with type" ^ nl() ^
+                    tab() ^ code (show_type rt))
+
+    let type_resumption_with_annotation ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("\
+                The resumption" ^ nl() ^
+                  tab() ^ code resume ^ nl() ^
+                  "has type" ^ nl() ^
+                  tab() ^ code (show_type lt) ^ nl() ^
+                  "but it is annotated with type" ^ nl() ^
                   tab() ^ code (show_type rt))
+
 
     let should_not_go_wrong ~pos ~t1:_ ~t2:_ ~error:_ =
       die pos "Unification error: This is unexpected!"
@@ -1590,7 +1599,7 @@ let check_for_duplicate_names : Sugartypes.position -> pattern list -> string li
          let binderss' =
            opt_app (fun p -> gather binderss p) binderss p
          in
-         opt_app (fun k -> gather binderss' k) binderss' k
+         gather binderss' k
       | `Negative _ -> binderss
       | `Record (ps, p) ->
           let binderss = List.fold_right (fun (_, p) binderss -> gather binderss p) ps binderss in
@@ -1705,65 +1714,54 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
            let no_pos t = (_UNKNOWN_POS_, t) in
            let pos_and_typ p = (pos p, ot p) in
            let pos' = snd kpat in
-           (* TODO FIXME GRIPERS *)
            match fst kpat with
-           | `Any        ->
-              let k = tp kpat in
-              unify ~handle:Gripers.type_continuation (pos_and_typ k, no_pos (fresh_resumption_type ()));
-              k
-           | `Variable _ ->
-              let k = tp kpat in
-              unify ~handle:Gripers.type_continuation (pos_and_typ k, no_pos (fresh_resumption_type ()));
-              k
-           | `As (b, pat') ->
-              let (pattern, env, dt) as pat = type_resumption_pat pat' in
-              let bt =
-                let t = Types.fresh_type_variable (`Unl, `Any) in
-                unify ~handle:Gripers.type_continuation (pos_and_typ pat, no_pos t);
-                t
-              in
-              pattern, Env.bind env (fst3 b, bt), dt
-           | `HasType (pat', t) ->
-              let t =
-                match t with
-                | _, Some t -> t
-                | _ -> assert false
-              in
-              let (k : (pattern * Types.environment * (Types.datatype * Types.datatype))) = type_resumption_pat pat' in
-              unify ~handle:Gripers.type_continuation (pos_and_typ k, no_pos t);
-              k
+           | `Any ->
+              let t = fresh_resumption_type () in
+              (`Any, pos'), Env.empty, (t, t)
+           | `Variable (x,_,pos'') ->
+              let xtype = fresh_resumption_type () in
+              ((`Variable (x, Some xtype, pos''), pos'), Env.bind Env.empty (x, xtype), (xtype, xtype))
+           | `As ((x,_,pos''), pat') ->
+              let p = type_resumption_pat pat' in
+              let env' = Env.bind (env p) (x, it p) in
+              (`As (((x, Some (it p), pos''), erase p)), pos'), env', (ot p, it p)
+           | `HasType (p, (_, Some t as t')) ->
+              let p = type_resumption_pat p in
+              let () = unify ~handle:Gripers.type_resumption_with_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
+              erase p, env p, (ot p, t)
            | _ -> Gripers.die pos' "Improper pattern matching on resumption"
          in
-         (* Now, actually type effect pattern *)
+         (* Typing of effect patterns *)
          let p = opt_map tp p in
-         let k = opt_map type_resumption_pat k in
+         let k = type_resumption_pat k in
          let eff typ =
-           match p, k with
-           | None, Some k ->
-              let domain =
-                match Types.concrete_type (typ k) with
+           let t =
+             (* Construct operation type, i.e. op : A -> B or op : B *)
+             match p with
+             | None ->
+                begin match Types.concrete_type (typ k) with
                 | `Function (f, _, _) ->
                    unwrap_dom (Types.concrete_type f)
                 | _ -> assert false
-              in
-              `Effect (make_singleton_row (name, `Present domain))
-           | Some p, Some k ->
-              let domain = typ p in
-              let codomain =
-                match Types.concrete_type (typ k) with
-                | `Function (f, _, _) ->
-                   unwrap_dom (Types.concrete_type f)
-                | _ -> assert false
-              in
-              `Effect (make_singleton_row (name, `Present (Types.make_pure_function_type domain codomain)))
-           | _, None -> assert false (* TODO FIXME *)
+                end
+             | Some p ->
+                let domain = typ p in
+                let codomain =
+                  match Types.concrete_type (typ k) with
+                  | `Function (f, _, _) ->
+                     unwrap_dom (Types.concrete_type f)
+                  | _ -> assert false
+                in
+                Types.make_pure_function_type domain codomain
+           in
+           `Effect (make_singleton_row (name, `Present t))
          in
          let env =
            let penv = from_option Env.empty (opt_map env p) in
-           let kenv = from_option Env.empty (opt_map env k)  in
+           let kenv = env k  in
            penv ++ kenv
          in
-         `Effect (name, opt_map erase p, opt_map erase k), env, (eff ot, eff it)
+         `Effect (name, opt_map erase p, erase k), env, (eff ot, eff it)
       | `Negative names ->
         let row_var = Types.fresh_row_variable (`Any, `Any) in
 
@@ -1839,9 +1837,8 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `HasType (p,_) -> pattern_env p
     | `Variant (_, Some p) -> pattern_env p
     | `Variant (_, None) -> Env.empty
-    | `Effect (_, None, None) -> Env.empty
-    | `Effect (_, Some p, None) | `Effect (_, None, Some p) -> pattern_env p
-    | `Effect (_, Some p, Some k) ->
+    | `Effect (_, None, k) -> pattern_env k
+    | `Effect (_, Some p, k) ->
        Env.extend (pattern_env p) (pattern_env k)
     | `Negative _ -> Env.empty
     | `Record (ps, Some p) ->
@@ -3181,15 +3178,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         begin match pat' with
                         | `Tuple ps, pos' ->
                            let kpat, pats = pop_last ps in
-                           let eff = `Effect (opname, Some (`Tuple pats, pos'), Some kpat) in
+                           let eff = `Effect (opname, Some (`Tuple pats, pos'), kpat) in
                            eff, pos
-                        | (`Variable _, _) as kpat ->
-                           let eff = `Effect (opname, None, Some kpat) in
-                           eff, pos
-                        | (`Any, _) as kpat ->
-                           let eff = `Effect(opname, None, Some kpat) in
-                           eff, pos
-                        | _ -> assert false
+                        | _ -> `Effect (opname, None, pat'), pos
                         end
                      | _, pos -> Gripers.die pos "Improper pattern matching"
                    in
@@ -3203,70 +3194,85 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                       to information not contained within the
                       pattern. TODO: augment the pattern with arity
                       information. *)
+                   let (pat, env, effrow) = pat in
+                   let effname, kpat =
+                     match fst pat with
+                     | `Effect (name,_,kpat) -> name, kpat
+                     | _ -> assert false
+                   in
                    let pat, kpat =
-                     let rec resumption_name = function
-                       | `Any, _ -> assert false (* TODO FIXME *)
-                       | `Variable b, _
-                       | `As (b,_), _ -> fst3 b
-                       | `HasType (pat,_),_ -> resumption_name pat
-                       | _ -> assert false
+                     let rec find_effect_type eff = function
+                       | (eff', t) :: xs when eff = eff' ->
+                          begin match t with
+                          | `Present t -> t
+                          | _ -> assert false
+                          end
+                       | _ :: xs -> find_effect_type eff xs
+                       | [] -> raise Not_found
                      in
                      match descr.shd_params with
                      | Some params when descr.shd_depth = `Deep ->
                         let arity = List.length params.shp_pats in
-                        let span n =
-                          let rec span acc = function
-                            | 0 -> acc
-                            | n -> span (n :: acc) (n - 1)
-                          in
-                          span [] n
+                        let handler_params =
+                          params.shp_type
                         in
-                        let formal_params =
-                          List.map2 (fun i t -> string_of_int i, t) (span arity) params.shp_type
-                        in
-                        begin match pat with
-                          | (`Effect (opname, p, Some k), pos), env, `Effect row ->
-                             let kname = resumption_name k in
-                             let kt =
-                               match Env.find env kname with
-                               | Some typ ->
-                                  let domain, effs, codomain =
-                                    match Types.concrete_type typ with
-                                    | `Function (domain, effs, codomain) ->
-                                       begin match Types.concrete_type domain with
-                                       | `Record (fields,_,_) ->
-                                          begin match StringMap.find "1" fields with
-                                          | `Present domain -> domain, effs, codomain
-                                          | _-> assert false
-                                          end
-                                       | _ -> assert false
-                                       end
-                                    | _ -> assert false
-                                  in
-                                  let params =
-                                    StringMap.from_alist (formal_params @ [(string_of_int @@ arity + 1, domain)])
-                                  in
-                                  `Function (Types.make_record_type params, effs, codomain)
-                               | _ -> assert false
+                        begin match fst kpat with
+                        | `Any ->
+                           let kt =
+                             let k_params =
+                               handler_params @ [Types.fresh_type_variable (`Unl, `Any)]
                              in
-                             let env = Env.bind env (kname, kt) in
-                             let env' = Env.bind Env.empty (kname, kt) in
-                             ((`Effect (opname, p, Some k), pos), env, `Effect row), (k, env', kt)
-                          | _ -> assert false
+                             `Function (Types.make_tuple_type k_params, Types.make_empty_open_row (`Unl, `Any), Types.fresh_type_variable (`Unl, `Any))
+                           in
+                           (pat, env, effrow), (kpat, Env.empty, kt)
+                        | `As ((kname,_,_),_)
+                        | `Variable (kname,_,_) ->
+                           let kt =
+                             let (fields,_,_) = TypeUtils.extract_row effrow in
+                             let kt = find_effect_type effname (StringMap.to_alist fields) in
+                             let op_param =
+                               match Types.concrete_type kt with
+                               | `Function (_, _, codomain) -> codomain
+                               | t -> t
+                             in
+                             match Env.find env kname with
+                             | Some typ ->
+                                let effs, codomain =
+                                  match Types.concrete_type typ with
+                                  | `Function (_, effs, codomain) ->
+                                     effs, codomain
+                                  | _ -> assert false
+                                in
+                                let k_params =
+                                  handler_params @ [op_param]
+                                in
+                                `Function (Types.make_tuple_type k_params, effs, codomain)
+                             | None -> assert false
+                           in
+                           let env = Env.bind env (kname, kt) in
+                           let env' = Env.bind Env.empty (kname, kt) in
+                           (pat, env, effrow), (kpat, env', kt)
+                        | _ -> assert false
                         end
                      | _ ->
-                        begin match pat with
-                          | (`Effect (name, p, Some k), pos), env, `Effect row ->
-                             let kname = resumption_name k in
-                             let kt =
-                               match Env.find env kname with
-                               | Some kt -> kt
-                               | None -> assert false
-                             in
-                             let env' = Env.bind Env.empty (kname, kt) in
-                             ((`Effect (name, p, Some k), pos), env, `Effect row), (k, env', kt)
-                          | _ -> assert false
-                        end
+                        match fst kpat with
+                        | `As ((kname,_,_),_)
+                        | `Variable (kname,_,_) ->
+                           let kt =
+                             match Env.find env kname with
+                             | Some t -> t
+                             | None -> assert false
+                           in
+                           let env' = Env.bind Env.empty (kname, kt) in
+                           (pat, env, effrow), (kpat, env', kt)
+                        | `Any ->
+                           let kt =
+                             Types.make_function_type (Types.make_tuple_type [Types.fresh_type_variable (`Unl, `Any)])
+                                                      (Types.make_empty_open_row (`Unl, `Any))
+                                                      (Types.fresh_type_variable (`Unl, `Any))
+                           in
+                           (pat, env, effrow), (kpat, Env.empty, kt)
+                        | _ -> assert false
                    in
                    (pat, kpat, body) :: cases)
                  eff_cases []
@@ -3286,7 +3292,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (* Type operation clause bodies and resumptions *)
              let eff_cases =
                List.fold_right
-                 (fun (pat, kpat, body) cases ->
+                 (fun (pat, (kpat : pattern * Types.datatype Env.t * Types.datatype), body) cases ->
                    let body = type_check (context ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
@@ -3294,6 +3300,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    let () =
                      let (_,_,pos) = SourceCode.resolve_pos @@ snd (fst3 kpat) in
                      let t = TypeUtils.return_type (pattern_typ kpat) in
+                     (* TODO FIXME Gripers *)
                      match descr.shd_depth with
                      | `Deep ->
                         let eff = context.effect_row in
