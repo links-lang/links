@@ -792,7 +792,7 @@ case_expression:
 | TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
 
 names:
-| /* empty */ { [] }
+| name             { [$1] }
 | name COMMA names { $1 :: $3 }
 
 name:

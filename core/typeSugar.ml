@@ -3005,6 +3005,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 let names = (* Slight hack *)
                   List.map (fun (name, pos) -> `Var name, pos) shp_names
                 in
+                let _ =
+                  let names =
+                    List.map (fun (name, pos) -> `Variable (name, None, pos), pos) shp_names
+                  in
+                  check_for_duplicate_names pos names
+                in
                 let typed_names = List.map tc names in
                 let types =
                   List.map (fun (_,t,_) -> t) typed_names
@@ -3059,9 +3065,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                       type as `type_pattern' cannot infer the
                       principal type for a resumption in a
                       parameterised handler since it requires access
-                      to information not contained within the
-                      pattern. TODO: augment the pattern with arity
-                      information. *)
+                      to information that is conveyed by
+                      pattern. TODO: perhaps augment the pattern with
+                      arity information. *)
                    let (pat, env, effrow) = pat in
                    let effname, kpat =
                      match fst pat with
