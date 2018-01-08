@@ -643,10 +643,6 @@ and match_variant
               end
         | _ -> assert false
 
-and match_effect
-    : var list -> (annotation * ((pattern * pattern) list * bound_computation) list) StringMap.t -> bound_computation -> var -> bound_computation =
-  fun vars bs def var env -> assert false
-
 and match_negative
     : var list -> clause -> bound_computation -> var -> bound_computation =
   fun vars clause def var env ->
@@ -920,7 +916,7 @@ let compile_handle_cases
                | `Present t ->
                   begin match t with
                   | `Function (domain, _, _) -> domain (* n-ary operation *)
-                  | t -> Types.unit_type (* nullary operation *)
+                  | _ -> Types.unit_type (* nullary operation *)
                   end
                | _ -> assert false)
               fields'

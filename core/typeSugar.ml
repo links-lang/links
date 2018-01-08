@@ -1711,8 +1711,6 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
              let effrow = Types.make_empty_open_row (`Unl, `Any) in
              `Function (Types.make_tuple_type [domain], effrow, codomain)
            in
-           let no_pos t = (_UNKNOWN_POS_, t) in
-           let pos_and_typ p = (pos p, ot p) in
            let pos' = snd kpat in
            match fst kpat with
            | `Any ->
@@ -1725,7 +1723,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
               let p = type_resumption_pat pat' in
               let env' = Env.bind (env p) (x, it p) in
               (`As (((x, Some (it p), pos''), erase p)), pos'), env', (ot p, it p)
-           | `HasType (p, (_, Some t as t')) ->
+           | `HasType (p, (_, Some t)) ->
               let p = type_resumption_pat p in
               let () = unify ~handle:Gripers.type_resumption_with_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
               erase p, env p, (ot p, t)
@@ -1993,143 +1991,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and tc : phrase -> phrase * Types.datatype * usagemap = type_check context
     and expr_string (_,pos : Sugartypes.phrase) : string =
       let (_,_,e) = SourceCode.resolve_pos pos in e
-    and erase_cases = List.map (fun ((p, _, _t), (e, _, _)) -> p, e)
-    (* Convenient function for working with rows *)
-    and unPresent = function
-      | `Present x -> x
-      | _ -> assert false
-    in
-    let type_operation_pattern : pattern -> ((pattern * Types.environment * Types.datatype) * Types.datatype) StringMap.t -> ((pattern * Types.environment * Types.datatype)) * (((pattern * Types.environment * Types.datatype) * Types.datatype) StringMap.t) =
-      fun pat kenv ->
-        let fresh_continuation_type () =
-          let domain = Types.fresh_type_variable (`Unl, `Any) in
-          let codomain = Types.fresh_type_variable (`Unl, `Any) in
-          let effrow = Types.make_empty_open_row (`Unl, `Any) in
-          `Function (Types.make_tuple_type [domain], effrow, codomain)
-        in
-        let rec type_continuation tenv kt pat =
-          let (_,_,pat_pos) = SourceCode.resolve_pos (snd pat) in
-          match fst pat with
-          | `Any        -> ()
-          | `Variable b ->
-             let kt' =
-               match Env.find tenv (fst3 b) with
-               | Some t -> t
-               | None -> assert false
-             in
-             unify ~handle:Gripers.type_continuation ((pat_pos, kt'), no_pos kt)
-          | `As (b,pat') ->
-             let kt' =
-               match Env.find tenv (fst3 b) with
-               | Some t -> t
-               | None -> assert false
-             in
-             let _ = unify ~handle:Gripers.type_continuation ((pat_pos, kt'), no_pos kt) in
-             type_continuation tenv kt pat'
-          | `HasType (pat',t) ->
-             let t = match t with
-	         _, Some t -> t
-	       | _ -> assert false
-	     in
-	     let _ = unify ~handle:Gripers.type_continuation_with_annotation ((pat_pos, kt), (pat_pos, t)) in (* Unify with t *)
-	     type_continuation tenv kt pat'
-          | _ -> Gripers.die (snd pat) "Improper pattern matching on continuation parameter."
-        in
-        let (pat,tenv,_) as p' = tpo pat in
-        let kenv =
-          match fst pat with
-          | `Variant (_, None) -> Gripers.die (snd pat) "Arity mismatch."
-          | `Variant ("Return", _   ) -> kenv
-          | `Variant (opname, Some pat') ->
-             begin
-               let kt = fresh_continuation_type () in
-               match fst pat' with
-               | `Tuple pat' when List.length pat' > 0 ->
-                  let k = List.hd (List.rev pat') in
-                  let _ = type_continuation tenv kt k in
-                  let k = tpo k in
-                  let _ = unify ~handle:Gripers.should_not_go_wrong (no_pos kt, ppos_and_typ k) in
-                  StringMap.add opname (k,kt) kenv
-               | `Any
-               | `As _
-               | `HasType _
-               | `Variable _ ->
-                  let _ = type_continuation tenv kt pat' in
-                  let k = tpo pat' in
-                  let _ = unify ~handle:Gripers.should_not_go_wrong (no_pos kt, ppos_and_typ k) in
-                  StringMap.add opname (k,kt) kenv
-               | _ -> Gripers.die (snd pat') (Printf.sprintf "Improper pattern matching on operation %s." opname)
-             end
-          | _ -> Gripers.die (snd pat) "Improper pattern matching."
-        in
-        p', kenv
-    in
-    let type_handler_cases binders =
-      let pt = Types.fresh_type_variable (`Unl, `Any) in
-      let bt = Types.fresh_type_variable (`Unl, `Any) in
-      let ret_pos = ref SourceCode.dummy_pos in (* Slight hack to retrieve the position of the return case (used for more informative error messages) *)
-      let binders, pats, kenv =
-        List.fold_right
-          (fun (pat, body) (binders, pats, kenv) ->
-            let () =
-              match fst pat with
-              | `Variant ("Return",_) -> ret_pos := snd body
-              | _ -> ()
-            in
-          (*	   let (pat,k) = type_operation_case pat in*)
-            let (pat, kenv) = type_operation_pattern pat kenv in
-            let () =
-              unify ~handle:Gripers.handle_patterns
-                (ppos_and_typ pat, no_pos pt)
-            in
-            (pat, body)::binders, pat :: pats, kenv)
-          binders ([], [], StringMap.empty) in
-      let pt = close_pattern_type (List.map fst3 pats) pt in
-      let operations = TypeUtils.extract_row pt in
-      let (ret,(opfields,row_var,dualised)) =
-        if StringMap.mem "Return" (fst3 operations) then
-	  TypeUtils.split_row "Return" operations
-        else
-	  Gripers.die SourceCode.dummy_pos "Missing Return-case"
-      in
-    (* Prettify operation signatures *)
-      let operations = StringMap.to_alist opfields in
-      let operations =
-        List.map
-	  (fun (opname,p) ->
-            let kt = snd (StringMap.find opname kenv) in
-            let r  = List.hd (TypeUtils.arg_types kt) in
-	    let t  =
-              match unPresent p with
-	      | `Variant (fields,_,_)
-              | `Record (fields,_,_) ->
-                 let (_,fields) = StringMap.pop (string_of_int (StringMap.size fields)) fields in
-	         let ps = Types.make_tuple_type (List.rev (StringMap.fold (fun _ p ps -> (unPresent p) :: ps) fields [])) in
-	         let r  = List.hd (TypeUtils.arg_types kt) in
-	         `Function (ps, Types.make_empty_closed_row (), r)
-	      | _ -> r
-            in
-	    (opname,t)
-	  ) operations
-      in
-      let operations = List.fold_left (fun fields (name, optype) -> StringMap.add name optype fields) StringMap.empty operations in
-      let effect_row = (operations,row_var,dualised) in
-    (* NOTE: it is important to type the patterns in isolation first in order
-       to allow them to be closed before typing the bodies *)
-      let binders =
-        List.fold_right
-          (fun (pat, body) binders ->
-            let body = type_check (context ++ pattern_env pat) body in
-            let () = unify ~handle:Gripers.handle_branches
-	      (pos_and_typ body, no_pos bt) in
-            let vs = Env.domain (pattern_env pat) in
-            let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
-            (pat, update_usages body us)::binders)
-          binders []
-      in
-      let ks = StringMap.to_list (fun _ (k,_) -> k) kenv in
-      binders, pt, bt, ks, (effect_row,ret,!ret_pos)
-    in
+    and erase_cases = List.map (fun ((p, _, _t), (e, _, _)) -> p, e) in
     let type_cases binders =
       let pt = Types.fresh_type_variable (`Any, `Any) in
       let bt = Types.fresh_type_variable (`Any, `Any) in
@@ -3208,7 +3070,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    in
                    let pat, kpat =
                      let rec find_effect_type eff = function
-                       | (eff', t) :: xs when eff = eff' ->
+                       | (eff', t) :: _ when eff = eff' ->
                           begin match t with
                           | `Present t -> t
                           | _ -> assert false
@@ -3218,7 +3080,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      in
                      match descr.shd_params with
                      | Some params when descr.shd_depth = `Deep ->
-                        let arity = List.length params.shp_names in
                         let handler_params = params.shp_types in
                         begin match fst kpat with
                         | `Any ->
@@ -3364,7 +3225,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               computation `m' in a fresh effect context.  *)
            let m_context = { context with effect_row = Types.make_empty_open_row (`Unl, `Any) } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
-           let m_effects = `Record m_context.effect_row in
+           let m_effects = `Effect m_context.effect_row in
            (** Most of the work is done by `type_cases'. *)
            let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases cases in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
@@ -3375,9 +3236,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            (** Finalise construction of the effect row of the input computation *)
            let inner_eff, outer_eff =
              let (_,_,m_pos) = SourceCode.resolve_pos pos in
-             let m_eff = `Effect m_context.effect_row in
-             let (_,_,p)  = SourceCode.resolve_pos pos in
-             let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_eff), no_pos (`Effect inner_eff)) in
+             let (_,_,_p)  = SourceCode.resolve_pos pos in
+             let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
              let inner_eff' = make_operations_presence_polymorphic inner_eff in
              (* Printf.printf "inner_eff': %s\n%!" (Types.string_of_row inner_eff'); *)
              let () = unify ~handle:Gripers.handle_unify_effect_rows (no_pos (`Effect outer_eff), no_pos (`Effect inner_eff')) in
