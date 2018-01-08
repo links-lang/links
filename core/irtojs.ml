@@ -1042,7 +1042,7 @@ end = functor (K : CONTINUATION) -> struct
                       ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
              in
              bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
-      | `Handle { Ir.ih_comp = comp; Ir.ih_clauses = clauses; _ } ->
+      | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; _ } ->
          let open Pervasives in
          (** Generate body *)
          let gb env binder body kappas =
@@ -1050,9 +1050,9 @@ end = functor (K : CONTINUATION) -> struct
            snd (generate_computation env' body kappas)
          in
 
-         let (return_clause, operation_clauses) = StringMap.pop "Return" clauses in
+         let (return_clause, operation_clauses) = (return, eff_cases) in
          let return =
-           let (_, xb, body) = return_clause in
+           let (xb, body) = return_clause in
            let x_name = snd @@ name_binder xb in
            contify (fun kappa ->
              Fn ([x_name;],
@@ -1062,7 +1062,7 @@ end = functor (K : CONTINUATION) -> struct
 
          let operations =
            (** Generate clause *)
-           let gc clause_name env (ct, xb, body) kappas =
+           let gc clause_name env (xb, rb, body) kappas =
              (* env: environment
               * ct: Resumption / NoResumption indicator
               * xb: Binder for the operation
@@ -1075,14 +1075,8 @@ end = functor (K : CONTINUATION) -> struct
 
              (* Bind the resumption *)
              let env', r_name =
-               match ct with
-               | `ResumptionBinder rb ->
-                  let rb' = name_binder rb in
-                  VEnv.bind env rb', snd rb'
-               | _ ->
-                  let dummy_binder = Var.fresh_binder (Var.make_local_info (`Not_typed, "_dummy_resume")) in
-                  let dummy = name_binder dummy_binder in
-                  VEnv.bind env dummy, snd dummy
+               let rb' = name_binder rb in
+               VEnv.bind env rb', snd rb'
              in
 
              (* Project the arguments and continuation from the record compiled in DoOperation *)

@@ -431,15 +431,22 @@ class transform (env : Types.typing_environment) =
       | `DoOperation (name, ps, Some t) ->
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
          (o, `DoOperation (name, ps, Some t), t)
-      | `Handle { sh_expr; sh_clauses; sh_descr } ->
+      | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
          let (o, expr, _) = o#phrase sh_expr in
-         let (o, cases) =
+         let (o, eff_cases) =
            listu o
               (fun o (p, e) ->
                 let (o, p) = o#pattern p in
                 let (o, e, _) = o#phrase e in (o, (p, e)))
-              sh_clauses
+              sh_effect_cases
+         in
+         let (o, val_cases) =
+           listu o
+              (fun o (p, e) ->
+                let (o, p) = o#pattern p in
+                let (o, e, _) = o#phrase e in (o, (p, e)))
+              sh_value_cases
          in
          let (o, input_row) = o#row input_row in
          let (o, input_t) = o#datatype input_t in
@@ -449,13 +456,13 @@ class transform (env : Types.typing_environment) =
          let (o, params)  =
            match sh_descr.shd_params with
            | None -> o, None
-           | Some { shp_pats; shp_type } ->
-              let (o, pats) =
-                listu o (fun o -> o#pattern) shp_pats
-              in
+           | Some { shp_names; shp_types } ->
+              (* let (o, names) =
+               *   listu o (fun o -> o#name) shp_names
+               * in *)
               o, Some {
-                shp_pats = pats;
-                shp_type = shp_type (* TODO FIXME *)
+                shp_names = shp_names;
+                shp_types = shp_types (* TODO FIXME *)
               }
          in
          let descr = {
@@ -464,7 +471,7 @@ class transform (env : Types.typing_environment) =
            shd_raw_row = raw_row;
            shd_params = params }
          in
-         (o, `Handle { sh_expr = expr; sh_clauses = cases; sh_descr = descr }, output_t)
+         (o, `Handle { sh_expr = expr; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr }, output_t)
       | `TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->
           let (o, try_phr, _) = o#phrase try_phr in
           let (o, as_pat) = o#pattern as_pat in

@@ -134,6 +134,10 @@ struct
     exception Not_disjoint of key * string
     (* module S = Deriving_Show.Show_map(Ord)(Ord.Show_t) *)
 
+    let lookup elem map =
+      try Some (find elem map)
+      with NotFound _ -> None
+
     let find elem map =
       try find elem map
       with NotFound _ -> raise (NotFound (Ord.Show_t.show elem ^

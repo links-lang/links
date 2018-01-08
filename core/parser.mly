@@ -787,9 +787,16 @@ case_expression:
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
 | SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { `Handle (make_untyped_handler $3 $6 `Shallow), pos() }
 | HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle (make_untyped_handler $3 $6 `Deep), pos() }
-| HANDLE LPAREN exp RPAREN LPAREN patterns RPAREN LBRACE cases RBRACE { `Handle (make_untyped_handler ~parameters:$6 $3 $9 `Deep), pos() }
+| HANDLE LPAREN exp RPAREN LPAREN names RPAREN LBRACE cases RBRACE { `Handle (make_untyped_handler ~parameters:$6 $3 $9 `Deep), pos() }
 | RAISE                                                        { `Raise, pos () }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
+
+names:
+| /* empty */ { [] }
+| name COMMA names { $1 :: $3 }
+
+name:
+| VARIABLE { $1, pos () }
 
 iteration_expression:
 | case_expression                                              { $1 }

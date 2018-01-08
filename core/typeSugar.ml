@@ -3106,7 +3106,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else
                 Gripers.upcast_subtype pos t2 t1
         | `Upcast _ -> assert false
-        | `Handle { sh_expr = m; sh_clauses = cases; sh_descr = descr } ->
+        | `Handle { sh_expr = m; sh_effect_cases = cases; sh_descr = descr; _ } ->
            let rec pop_last = function
              | [] -> assert false
              | [x] -> x, []
@@ -3139,10 +3139,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            (* type parameters *)
            let descr =
              match descr.shd_params with
-             | Some { shp_pats; _ } ->
-                let pats = List.map tpo shp_pats in
-                { descr with shd_params = Some { shp_pats = List.map erase pats;
-                                                 shp_type = List.map (fun (_,_,t) -> t) pats } }
+             | Some { shp_names; _ } ->
+                let names = (* Slight hack *)
+                  List.map (fun (name, pos) -> `Var name, pos) shp_names
+                in
+                let typed_names = List.map tc names in
+                let types =
+                  List.map (fun (_,t,_) -> t) typed_names
+                in
+                { descr with shd_params = Some { shp_names = shp_names;
+                                                 shp_types = types } }
              | None -> descr
            in
            let type_cases cases =
@@ -3212,10 +3218,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      in
                      match descr.shd_params with
                      | Some params when descr.shd_depth = `Deep ->
-                        let arity = List.length params.shp_pats in
-                        let handler_params =
-                          params.shp_type
-                        in
+                        let arity = List.length params.shp_names in
+                        let handler_params = params.shp_types in
                         begin match fst kpat with
                         | `Any ->
                            let kt =
@@ -3297,6 +3301,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
                    in
+                   let vs = Env.domain (pattern_env pat) in
+                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
                    let () =
                      let (_,_,pos) = SourceCode.resolve_pos @@ snd (fst3 kpat) in
                      let t = TypeUtils.return_type (pattern_typ kpat) in
@@ -3315,10 +3321,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         unify ~handle:Gripers.type_continuation
                           ((pos, `Effect eff), no_pos (`Effect inner_eff))
                    in
-                   (pat, kpat, body) :: cases)
+                   (pat, kpat, update_usages body us) :: cases)
                  eff_cases []
              in
-             (val_cases, rt), eff_cases, inner_eff, outer_eff
+             (val_cases, rt), eff_cases, bt, inner_eff, outer_eff
            in
        (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
@@ -3360,7 +3366,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = `Record m_context.effect_row in
            (** Most of the work is done by `type_cases'. *)
-           let (val_cases, rt), eff_cases, inner_eff, outer_eff = type_cases cases in
+           let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases cases in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
            (** Patch the result type of `m' *)
            let () =
@@ -3377,72 +3383,83 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let () = unify ~handle:Gripers.handle_unify_effect_rows (no_pos (`Effect outer_eff), no_pos (`Effect inner_eff')) in
              inner_eff, outer_eff
            in
+           let eff_cases =
+             List.map (fun (p, _, body) -> (p, body)) eff_cases
+           in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
            (***)
-           let cases, pattern_type, body_type, continuations, (effect_row, ret,ret_pos) = type_handler_cases cases in  (* Type check cases. *)
-           let effects         = TypeUtils.extract_row pattern_type in
-           (** Next, we construct the effect row for the computation
-              `m'.  It is important to construct the entire type for `m'
-              before typing continuations, as we need to know the
-              return type of `m' to type continuations in shallow
-              handlers *)
-           let input_effect_row =
-             let fresh_row = Types.make_empty_open_row (`Unl, `Any) in
-	     let row = Types.extend_row (fst3 effect_row) fresh_row in
-             allow_wild row
-           in
-           let (_,_,p)  = SourceCode.resolve_pos pos in
-           let (_,_,ret_pos) = SourceCode.resolve_pos ret_pos in
-           let m_pos    = fst @@ pos_and_typ m in
-           let () = unify ~handle:Gripers.handle_return (pos_and_typ m, (ret_pos, ret)) in (* Unify m and and the constructed type. *)
-           let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), (p, `Record input_effect_row)) in
-
-       (** Next, construct the (output) effect row for the handler *)
-           let output_effect_row =
-	     let wild_effect_row = allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
-	     let _ = unify ~handle:Gripers.handle_intro_effects ((p, `Record context.effect_row), no_pos (`Record wild_effect_row)) in
-	     context.effect_row
-           in
-
-       (** Unify the input and output effect rows  *)
-           let _ =
-	     let input_effect_row = make_operations_presence_polymorphic input_effect_row in
-	     unify ~handle:Gripers.handle_unify_effect_rows ((m_pos, `Record input_effect_row), (p, `Record output_effect_row))
-           in
-
-       (** Next, type continuation effect rows *)
-           let _ =
-	 (* Pair up continuations with their codomains *)
-	     let ks = List.fold_right
-	       (fun ((kpat, tenv, t) as k) ks ->
-		 (k, (kpat, tenv, TypeUtils.return_type t)) :: ks
-	       ) continuations []
-	     in
-	     match descr.shd_depth with
-	     | `Deep -> (* Deep handlers: Make continuation codomains and body type agree *)
-	        let poly_presence_row = `Record (make_operations_presence_polymorphic output_effect_row) in
-	        List.fold_left
-	          (fun _ (k, ktail) ->
-	            unify ~handle:Gripers.handle_continuation_codomains ((ppos_and_typ ktail), (p,body_type));
-	            unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
-	          )
-	          () ks
-	     | `Shallow -> (* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *)
-	        let effect_row = `Record input_effect_row in
-                let t      = typ m in
-	        let (p,_)  = pos_and_typ m in
-	        List.fold_left
-	          (fun _ (k,ktail) ->
-                    unify ~handle:Gripers.continuation_effect_rows (no_pos effect_row, ppos_and_row k);
-		    unify ~handle:Gripers.handle_continuation_codomains ((ppos_and_typ ktail), (p,t))
-	          )
-	          () ks
-           in
            let descr = { descr with
-                         shd_types = (input_effect_row, typ m, output_effect_row, body_type);
-                         shd_raw_row = effects; }
+                         shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
+                         shd_raw_row = Types.make_empty_closed_row (); }
            in
-           `Handle { sh_expr = erase m; sh_clauses = erase_cases cases; sh_descr = descr }, body_type, merge_usages [usages m; usages_cases cases]
+           `Handle { sh_expr = erase m;
+                     sh_effect_cases = erase_cases eff_cases;
+                     sh_value_cases = erase_cases val_cases;
+                     sh_descr = descr }, body_type, merge_usages [usages m; usages_cases eff_cases; usages_cases val_cases]
+           (* let cases, pattern_type, body_type, continuations, (effect_row, ret,ret_pos) = type_handler_cases cases in  (\* Type check cases. *\)
+        *     let effects         = TypeUtils.extract_row pattern_type in
+        *     (\** Next, we construct the effect row for the computation
+        *        `m'.  It is important to construct the entire type for `m'
+        *        before typing continuations, as we need to know the
+        *        return type of `m' to type continuations in shallow
+        *        handlers *\)
+        *     let input_effect_row =
+        *       let fresh_row = Types.make_empty_open_row (`Unl, `Any) in
+        *       let row = Types.extend_row (fst3 effect_row) fresh_row in
+        *       allow_wild row
+        *     in
+        *     let (_,_,p)  = SourceCode.resolve_pos pos in
+        *     let (_,_,ret_pos) = SourceCode.resolve_pos ret_pos in
+        *     let m_pos    = fst @@ pos_and_typ m in
+        *     let () = unify ~handle:Gripers.handle_return (pos_and_typ m, (ret_pos, ret)) in (\* Unify m and and the constructed type. *\)
+        *     let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), (p, `Record input_effect_row)) in
+        * 
+        * (\** Next, construct the (output) effect row for the handler *\)
+        *     let output_effect_row =
+        *       let wild_effect_row = allow_wild (Types.make_empty_open_row (`Unl, `Any)) in
+        *       let _ = unify ~handle:Gripers.handle_intro_effects ((p, `Record context.effect_row), no_pos (`Record wild_effect_row)) in
+        *       context.effect_row
+        *     in
+        * 
+        * (\** Unify the input and output effect rows  *\)
+        *     let _ =
+        *       let input_effect_row = make_operations_presence_polymorphic input_effect_row in
+        *       unify ~handle:Gripers.handle_unify_effect_rows ((m_pos, `Record input_effect_row), (p, `Record output_effect_row))
+        *     in
+        * 
+        * (\** Next, type continuation effect rows *\)
+        *     let _ =
+        *   (\* Pair up continuations with their codomains *\)
+        *       let ks = List.fold_right
+        *         (fun ((kpat, tenv, t) as k) ks ->
+        *  	 (k, (kpat, tenv, TypeUtils.return_type t)) :: ks
+        *         ) continuations []
+        *       in
+        *       match descr.shd_depth with
+        *       | `Deep -> (\* Deep handlers: Make continuation codomains and body type agree *\)
+        *          let poly_presence_row = `Record (make_operations_presence_polymorphic output_effect_row) in
+        *          List.fold_left
+        *            (fun _ (k, ktail) ->
+        *              unify ~handle:Gripers.handle_continuation_codomains ((ppos_and_typ ktail), (p,body_type));
+        *              unify ~handle:Gripers.continuation_effect_rows (no_pos poly_presence_row, ppos_and_row k)
+        *            )
+        *            () ks
+        *       | `Shallow -> (\* Shallow handlers: Make continuation codomains and input computation m's codomain type agree *\)
+        *          let effect_row = `Record input_effect_row in
+        *          let t      = typ m in
+        *          let (p,_)  = pos_and_typ m in
+        *          List.fold_left
+        *            (fun _ (k,ktail) ->
+        *              unify ~handle:Gripers.continuation_effect_rows (no_pos effect_row, ppos_and_row k);
+        *  	    unify ~handle:Gripers.handle_continuation_codomains ((ppos_and_typ ktail), (p,t))
+        *            )
+        *            () ks
+        *     in
+        *     let descr = { descr with
+        *                   shd_types = (input_effect_row, typ m, output_effect_row, body_type);
+        *                   shd_raw_row = effects; }
+        *     in
+        *     `Handle { sh_expr = erase m; sh_clauses = erase_cases cases; sh_descr = descr }, body_type, merge_usages [usages m; usages_cases cases] *)
         | `DoOperation (opname, args, _) ->
            (* Strategy:
               1. List.map tc args

@@ -65,8 +65,7 @@ object (o : 'self_type)
         let (o, otherwise_phr, otherwise_dt) = o#phrase otherwise_phr in
         (* Now, to create a handler... *)
 
-        let return_pat = (`Variant ("Return", Some (pat)), dp) in
-        let return_clause = (return_pat, as_phr) in
+        let return_clause = (pat, as_phr) in
         (* Otherwise clause: Distinguished 'session failure' name. Since
          * we'll never use the continuation (and this is invoked after pattern
          * deanonymisation in desugarHandlers), generate a fresh name for the
@@ -74,11 +73,12 @@ object (o : 'self_type)
         let cont_pat = dummy_pat () in
 
         let otherwise_pat : Sugartypes.pattern =
-          ((`Variant (failure_op_name, Some (cont_pat))), dp) in
+          ((`Effect (failure_op_name, None, cont_pat)), dp) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 
-        let clauses = [return_clause ; otherwise_clause] in
+        let value_cases = [return_clause] in
+        let effect_cases = [otherwise_clause] in
 
         (* Manually construct a row with the two hardwired handler cases. *)
         let raw_row =
@@ -86,10 +86,17 @@ object (o : 'self_type)
             |> Types.row_with ("Return", (`Present try_dt))
             |> Types.row_with (failure_op_name, (`Present (otherwise_dt))) in
 
+        let inner_eff =
+            Types.make_empty_closed_row ()
+            |> Types.row_with ("wild", `Present Types.unit_type)
+            |> Types.row_with (failure_op_name, `Present otherwise_dt)
+            |> Types.flatten_row
+        in
+
         (* Dummy types *)
         let types =
-          (Types.make_empty_closed_row (), try_dt,
-          Types.make_empty_closed_row (), otherwise_dt) in
+          (inner_eff, try_dt,
+           Types.make_empty_closed_row (), otherwise_dt) in
 
         let hndl_desc = {
           shd_depth = `Shallow; (* Doesn't matter either way, since we don't invoke the resumption. *)
@@ -100,7 +107,8 @@ object (o : 'self_type)
 
         let hndlr = {
           sh_expr = try_phr;
-          sh_clauses = clauses;
+          sh_effect_cases = effect_cases;
+          sh_value_cases = value_cases;
           sh_descr = hndl_desc
         } in (o, `Handle hndlr, dt)
     | e -> super#phrasenode e

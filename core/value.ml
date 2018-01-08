@@ -408,7 +408,7 @@ module type CONTINUATION = sig
   module Handler : sig
       type 'v t
 
-      val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
+      val make : env:'v Env.t -> return:(Ir.binder * Ir.computation) -> clauses:Ir.effect_case Ir.name_map -> depth:[`Deep of Ir.var list | `Shallow] -> 'v t
   end
 
   (* A continuation has a monoidal structure *)
@@ -462,8 +462,8 @@ module Pure_Continuation = struct
   module Handler = struct
       type 'v t = unit
 
-      let make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
-        = fun ~env ~clauses ~depth -> ignore(env); ignore(clauses); ignore(depth); ()
+      let make : env:'v Env.t -> return:(Ir.binder * Ir.computation) -> clauses:Ir.effect_case Ir.name_map -> depth:[`Deep of Ir.var list | `Shallow] -> 'v t
+        = fun ~env ~return ~clauses ~depth -> ignore(env); ignore(return); ignore(clauses); ignore(depth); ()
   end
 
   let set_trap_point ~handler k = ignore(handler); k
@@ -493,9 +493,9 @@ module Eff_Handler_Continuation = struct
       | User_defined of 'v user_defined_handler
     and 'v user_defined_handler = {
         env: 'v Env.t;
-        op_clauses: Ir.clause Ir.name_map;
-        return_clause: Ir.binder * Ir.computation;
-        depth: [`Deep | `Shallow];
+        cases: Ir.effect_case Ir.name_map;
+        return: Ir.binder * Ir.computation;
+        depth: [`Deep of Ir.var list | `Shallow];
       }
     and 'v k = ('v handler * 'v Frame.t list) list
     and 'v continuation =
@@ -504,7 +504,7 @@ module Eff_Handler_Continuation = struct
       | ShallowContinuation of 'v Frame.t list * 'v k
       deriving (Show)
 
-    type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep | `Shallow]
+    type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep of Ir.var list | `Shallow]
     and 'cv ck = ('cv compressed_handler * ('cv Frame.compressed_t list)) list
     and 'cv compressed_continuation =
       | CompressedEmpty
@@ -520,7 +520,7 @@ module Eff_Handler_Continuation = struct
   module Debug = struct
     type debug_handler = {
         _op_names: string list;
-        _depth:[`Deep | `Shallow];
+        _depth:[`Deep of Ir.var list | `Shallow];
         _kind:[`Identity | `User_defined];
     }
     and debug_handler_stack = {
@@ -531,10 +531,10 @@ module Eff_Handler_Continuation = struct
       let operation_names : 'v K.handler -> string list = function
         | Identity -> []
         | User_defined h ->
-           StringMap.fold (fun name _ names -> name :: names) h.op_clauses []
+           StringMap.fold (fun name _ names -> name :: names) h.cases []
       in
       function
-      | Identity -> { _op_names = operation_names Identity; _depth = `Deep; _kind = `Identity; }
+      | Identity -> { _op_names = operation_names Identity; _depth = `Deep []; _kind = `Identity; }
       | User_defined h ->
          { _op_names = operation_names (User_defined h); _depth = h.depth; _kind = `User_defined }
 
@@ -555,7 +555,7 @@ module Eff_Handler_Continuation = struct
       let string_of_kind = function
         | `Identity -> "Identity" | `User_defined -> "User defined"
       in
-      let string_of_depth = function `Deep -> "Deep" | `Shallow -> "Shallow" in
+      let string_of_depth = function `Deep _ -> "Deep" | `Shallow -> "Shallow" in
       let rec string_of_op_names = function
         | [] -> ""
         | [name] -> name
@@ -603,21 +603,20 @@ module Eff_Handler_Continuation = struct
     type 'v t = 'v handler
       deriving (Show)
 
-    let make ~env ~clauses ~depth =
-      let ((_,b,comp), op_clauses) = StringMap.pop "Return" clauses in
-      User_defined { env; op_clauses; return_clause = (b,comp); depth }
+    let make ~env ~return ~clauses ~depth =
+      User_defined { env; return; cases = clauses; depth }
 
     let compress ~compress_val = function
       | User_defined h -> (Env.compress compress_val h.env, h.depth)
-      | Identity -> (Env.compress compress_val Env.empty, `Deep)
+      | Identity -> (Env.compress compress_val Env.empty, `Deep [])
 
     let uncompress ~uncompress_val globals h =
       let xb = Var.fresh_binder_of_type `Not_typed in
       let x  = Var.var_of_binder xb in
       User_defined
         { env = Env.uncompress uncompress_val globals (fst h);
-        op_clauses = StringMap.empty;
-        return_clause =
+        cases = StringMap.empty;
+        return =
           (xb, ([], `Return (`Variable x)));
         depth = snd h; }
   end
@@ -636,7 +635,7 @@ module Eff_Handler_Continuation = struct
       type trap_result = (v, result) Trap.result
 
       let return k h v =
-        let ((var,_), comp) = h.return_clause in
+        let ((var,_), comp) = h.return in
         E.computation (Env.bind var (v, `Local) h.env) k comp
 
       let rec apply ~env k v =
@@ -659,18 +658,15 @@ module Eff_Handler_Continuation = struct
         let open Trap in
         let rec handle k' = function
           | ((User_defined h, pk) :: k) ->
-             begin match StringMap.lookup opname h.op_clauses with
-             | Some (kb, (var, _), comp) ->
+             begin match StringMap.lookup opname h.cases with
+             | Some ((var, _), resumeb, comp) ->
                 let env =
-                  match kb with
-                  | `ResumptionBinder rb ->
-                     let resume =
-                       match h.depth with
-                       | `Shallow -> ShallowContinuation (pk, List.rev k')
-                       | `Deep -> Continuation ( List.rev ((User_defined h,pk) :: k') )
-                     in
-                     Env.bind (Var.var_of_binder rb) (E.reify resume, `Local) h.env
-                  | _ -> h.env
+                  let resume =
+                    match h.depth with
+                    | `Shallow -> ShallowContinuation (pk, List.rev k')
+                    | `Deep _ -> Continuation ( List.rev ((User_defined h,pk) :: k') )
+                  in
+                  Env.bind (Var.var_of_binder resumeb) (E.reify resume, `Local) h.env
                 in
                 let continuation_thunk =
                   fun () -> E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp in

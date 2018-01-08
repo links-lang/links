@@ -200,7 +200,8 @@ and funlit = pattern list list * phrase
 and handlerlit = [`Deep | `Shallow] * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
 and handler = {
   sh_expr: phrase;
-  sh_clauses: clause list;
+  sh_effect_cases: clause list;
+  sh_value_cases: clause list;
   sh_descr: handler_descriptor
 }
 and handler_descriptor = {
@@ -210,8 +211,8 @@ and handler_descriptor = {
   shd_params: handler_parameterisation option
 }
 and handler_parameterisation = {
-  shp_pats: pattern list;
-  shp_type: Types.datatype list
+  shp_names: (name * position) list;
+  shp_types: Types.datatype list
 }
 and iterpatt = [
 | `List of pattern * phrase
@@ -319,16 +320,17 @@ type program = binding list * phrase option
   deriving (Show)
 
 
-let make_untyped_handler ?(parameters : pattern list option) expr clauses depth =
+let make_untyped_handler ?parameters expr clauses depth =
   let shd_params =
     match parameters with
     | None -> None
-    | Some patterns ->
-       Some { shp_pats = patterns;
-              shp_type = [] }
+    | Some names ->
+       Some { shp_names = names;
+              shp_types = [] }
   in
   { sh_expr = expr;
-    sh_clauses = clauses;
+    sh_effect_cases = clauses;
+    sh_value_cases = [];
     sh_descr = {
         shd_depth = depth;
         shd_types = (Types.make_empty_closed_row (), `Not_typed, Types.make_empty_closed_row (), `Not_typed);
@@ -463,8 +465,8 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
-    | `Handle { sh_expr = e; sh_clauses = cases; _ } ->
-       union (phrase e) (union_map case cases)
+    | `Handle { sh_expr = e; sh_effect_cases = eff_cases; sh_value_cases = val_cases;  _ } ->
+       union (phrase e) (union (union_map case eff_cases) (union_map case val_cases))
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | `CP cp -> cp_phrase cp

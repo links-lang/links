@@ -153,7 +153,7 @@ module type CONTINUATION = sig
 
   module Handler : sig
     type 'v t
-    val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
+    val make : env:'v Env.t -> return:(Ir.binder * Ir.computation) -> clauses:Ir.effect_case Ir.name_map -> depth:[`Deep of Ir.var list | `Shallow] -> 'v t
   end
   (* A continuation has a monoidal structure *)
   val empty : 'v t

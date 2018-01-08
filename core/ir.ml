@@ -90,13 +90,14 @@ and special =
   | `Handle of handler
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
-and clause = [`ResumptionBinder of binder | `NoResumption] * binder * computation
+and effect_case = binder * binder * computation
 and handler = {
     ih_comp: computation;
-    ih_clauses: clause name_map;
+    ih_cases: effect_case name_map;
+    ih_return: binder * computation;
     ih_depth: handler_depth;
 }
-and handler_depth = [`Deep | `Shallow]
+and handler_depth = [`Deep of var list | `Shallow]
   deriving (Show)
 
 let binding_scope : binding -> scope =
@@ -474,25 +475,24 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
-	| `Handle ({ ih_comp; ih_clauses; _ } as hndlr) ->
+	| `Handle ({ ih_comp; ih_cases; ih_return; _ } as hndlr) ->
 	   let (comp, _, o) = o#computation ih_comp in
-	   let (clauses, branch_types, o) =
+	   let (cases, branch_types, o) =
 	     o#name_map
-               (fun o (cc, b, c) ->
-                 let (cc, o) =
-                   match cc with
-                   | `ResumptionBinder b ->
-                      let (b, o) = o#binder b in
-                      `ResumptionBinder b, o
-                   | _ -> (cc, o)
-                 in
-		 let (b, o) = o#binder b in
+               (fun o (x, resume, c) ->
+                 let (x, o) = o#binder x in
+		 let (resume, o) = o#binder resume in
 		 let (c, t, o) = o#computation c in
-		 (cc, b, c), t, o)
-	       ih_clauses
+		 (x, resume, c), t, o)
+	       ih_cases
 	   in
-    	   let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-	   `Handle { hndlr with ih_comp = comp; ih_clauses = clauses }, t, o
+           let (return, t, o) =
+             let (b, o) = o#binder (fst ih_return) in
+             let (comp, t, o) = o#computation (snd ih_return) in
+             (b, comp), t, o
+           in
+           (* TODO FIXME traverse parameters *)
+	   `Handle { hndlr with ih_comp = comp; ih_cases = cases; ih_return = return; }, t, o
 	| `DoOperation (name, vs, t) ->
 	   (* FIXME: the typing isn't right here for non-zero argument
 	   operations *)

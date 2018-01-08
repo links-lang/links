@@ -17,6 +17,7 @@ type pattern = [
 | `Nil
 | `Cons     of pattern * pattern
 | `Variant  of name * pattern
+| `Effect   of name * pattern * pattern
 | `Negative of StringSet.t
 | `Record   of (pattern StringMap.t) * pattern option
 | `Constant of constant
@@ -103,10 +104,13 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
         | `Variant (name, Some p) ->
             let p, env = pp p in
             `Variant (name, p), env
-        | `Effect (name, p, k) ->
-           let p = from_option (`Any, SourceCode.dummy_pos) p in
-           let _ = `Effect (name, Some p, k), empty in
-           assert false (* TODO FIXME *)
+        | `Effect (name, None, k) ->
+           let k, env = pp k in
+           `Effect (name, `Any, k), env
+        | `Effect (name, Some p, k) ->
+           let p, env = pp p in
+           let k, env' = pp k in
+           `Effect (name, p, k), env ++ env'
         | `Negative names -> `Negative (StringSet.from_list names), empty
         | `Record (bs, p) ->
             let bs, env =
@@ -216,7 +220,7 @@ type raw_clause = pattern list * raw_bound_computation
 type clause = annotated_pattern list * bound_computation
 type annotated_clause = annotation * clause
 
-type pattern_type = [ `List | `Variant | `Negative | `Record | `Constant | `Variable ]
+type pattern_type = [ `List | `Variant | `Negative | `Record | `Constant | `Variable | `Effect ]
 
 let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * Types.datatype -> computation =
   fun env pat (value, value_type) (body, body_type) ->
@@ -278,7 +282,8 @@ let let_pattern : raw_env -> pattern -> value * Types.datatype -> computation * 
               [letmv (xb, value)]
               (lp t pattern value body)
         | `HasType (pat, t) ->
-            lp t pat (`Coerce (value, t)) body
+           lp t pat (`Coerce (value, t)) body
+        | `Effect _ -> assert false (* This pattern cannot appear in a let expression *)
     in
       lp value_type pat value body
 
@@ -292,6 +297,7 @@ let rec get_pattern_type : pattern -> pattern_type =
     | `Any | `Variable _ -> `Variable
     | `As (_, pattern) -> get_pattern_type pattern
     | `HasType (pattern, _) -> get_pattern_type pattern
+    | `Effect _ -> `Effect
 
 let get_clause_pattern_type : clause -> pattern_type =
   function
@@ -310,7 +316,7 @@ let rec reduce_pattern : pattern -> annotated_pattern = function
         `Binder binder :: annotations, pattern
   | `HasType (pattern, t) ->
       let annotations, pattern = reduce_pattern pattern in
-        `Type t :: annotations, pattern
+      `Type t :: annotations, pattern
   | pattern -> [], pattern
 
 (* reduce a raw clause to a clause  *)
@@ -472,7 +478,8 @@ let rec match_cases : var list -> clause list -> bound_computation -> bound_comp
                    | `Record ->
                        match_record vars (arrange_record_clauses clauses) comp var
                    | `Constant ->
-                       match_constant vars (arrange_constant_clauses clauses) comp var
+                      match_constant vars (arrange_constant_clauses clauses) comp var
+                   | `Effect -> assert false (* TODO FIXME have proper pattern matching compilation of effect patterns *)
               ) clausess def env
       | _, _ -> assert false
 
@@ -635,6 +642,10 @@ and match_variant
                   | _ -> assert false
               end
         | _ -> assert false
+
+and match_effect
+    : var list -> (annotation * ((pattern * pattern) list * bound_computation) list) StringMap.t -> bound_computation -> var -> bound_computation =
+  fun vars bs def var env -> assert false
 
 and match_negative
     : var list -> clause -> bound_computation -> var -> bound_computation =
@@ -867,73 +878,211 @@ let compile_cases
       result
 
 (* Handler cases compilation *)
+(* let compile_handle_cases
+ *     : raw_env -> (raw_clause list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
+ *   fun (nenv, tenv, eff) (raw_clauses, desc) m ->
+ *   let open Sugartypes in
+ *   let (_,input_type,_,_) = desc.shd_types in
+ *   let clauses = List.map reduce_clause raw_clauses in
+ *   let raw_row = desc.shd_raw_row in
+ *   (\* THE FOLLOWING IS ONE BIG HACK -- watch out! *\)
+ *   (\* Essentially, we use match_cases to generate appropriate code by
+ *      creating a dummy variable whose type is the raw input effect
+ *      signature cast as a variant.  Afterwards we transform the `Case
+ *      to a `Handle construct. *\)
+ *   let dummy_var = Var.(make_local_info ->- fresh_binder ->- var_of_binder) (`Variant raw_row, "_m") in
+ *   let (_,tc) =  (\* The compiled cases *\)
+ *     let tenv = TEnv.bind tenv (dummy_var, `Variant raw_row) in (\* Override the type with a variant type s.t. match_cases is happy *\)
+ *     let initial_env = (nenv, tenv, eff, PEnv.empty) in
+ *     let compiled_cases = match_cases [dummy_var] clauses (fun _ -> ([], `Special (`Wrong input_type))) initial_env in
+ *     compiled_cases
+ *   in
+ *   (\* Urgh *\)
+ *   let arities =
+ *     List.fold_left
+ *       (fun xs -> function
+ *         | ([(_, pattern)], _) ->
+ *            let (opname, arity) =
+ *              match pattern with
+ *              | `Variant (name, `Any)          -> (name, 0)
+ *              | `Variant (name, `Record (r,_)) -> (name, StringMap.size r)
+ *              | `Variant (name, _)             -> (name, 1)
+ *              | _ -> assert false
+ *            in
+ *            (opname, arity) :: xs
+ *         | _ -> assert false)
+ *       [] clauses
+ *   in
+ *   let fix_continuation_param opname (bs,tc) =
+ *     let arity = List.assoc opname arities in
+ *     let (cc,bs') =
+ *       if arity > 0 then
+ *         let kb =
+ *           match List.nth bs (arity-1) with
+ *           | `Let (kb, _) -> kb
+ *           | _ -> assert false
+ *         in
+ *         `ResumptionBinder kb, ListUtils.drop_nth bs (arity-1)
+ *       else
+ *         `NoResumption, bs
+ *     in
+ *     (cc, (bs',tc))
+ *   in
+ *   let compiled_handle =
+ *     match tc with
+ *     | `Case (_, clauses, _) ->
+ *        let (return_clause, clauses) = StringMap.pop "Return" clauses in
+ *        let clauses =
+ *          StringMap.fold
+ *            (fun opname (b,comp) clauses ->
+ *              let (clause_class, comp) = fix_continuation_param opname comp in
+ *              StringMap.add opname (clause_class,b,comp) clauses)
+ *            clauses (StringMap.add "Return" (`NoResumption, fst return_clause, snd return_clause) StringMap.empty)
+ *        in ([], `Special (`Handle { ih_comp = m; ih_clauses = clauses; ih_depth = desc.shd_depth }))
+ *     | _ -> assert false
+ *     in
+ *     (\* END OF THE BIG HACK *\)
+ *     Debug.if_set (show_pattern_compilation)
+ *                  (fun () -> "Compiled handler cases: "^(string_of_computation compiled_handle));
+ *     compiled_handle *)
+
 let compile_handle_cases
-    : raw_env -> (raw_clause list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
-  fun (nenv, tenv, eff) (raw_clauses, desc) m ->
-  let open Sugartypes in
-  let (_,input_type,_,_) = desc.shd_types in
-  let clauses = List.map reduce_clause raw_clauses in
-  let raw_row = desc.shd_raw_row in
-  (* THE FOLLOWING IS ONE BIG HACK -- watch out! *)
-  (* Essentially, we use match_cases to generate appropriate code by
-     creating a dummy variable whose type is the raw input effect
-     signature cast as a variant.  Afterwards we transform the `Case
-     to a `Handle construct. *)
-  let dummy_var = Var.(make_local_info ->- fresh_binder ->- var_of_binder) (`Variant raw_row, "_m") in
-  let (_,tc) =  (* The compiled cases *)
-    let tenv = TEnv.bind tenv (dummy_var, `Variant raw_row) in (* Override the type with a variant type s.t. match_cases is happy *)
-    let initial_env = (nenv, tenv, eff, PEnv.empty) in
-    let compiled_cases = match_cases [dummy_var] clauses (fun _ -> ([], `Special (`Wrong input_type))) initial_env in
-    compiled_cases
-  in
-  (* Urgh *)
-  let arities =
-    List.fold_left
-      (fun xs -> function
-        | ([(_, pattern)], _) ->
-           let (opname, arity) =
-             match pattern with
-             | `Variant (name, `Any)          -> (name, 0)
-             | `Variant (name, `Record (r,_)) -> (name, StringMap.size r)
-             | `Variant (name, _)             -> (name, 1)
-             | _ -> assert false
-           in
-           (opname, arity) :: xs
-        | _ -> assert false)
-      [] clauses
-  in
-  let fix_continuation_param opname (bs,tc) =
-    let arity = List.assoc opname arities in
-    let (cc,bs') =
-      if arity > 0 then
-        let kb =
-          match List.nth bs (arity-1) with
-          | `Let (kb, _) -> kb
+    : raw_env -> (raw_clause list * raw_clause list * Ir.var list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
+  fun (nenv, tenv, eff) (raw_value_clauses, raw_effect_clauses, params, desc) m ->
+  (* Observation: reduced continuation patterns are always trivial,
+     i.e. a reduced continuation pattern is either a variable or a
+     wildcard. Thus continuation patterns _always_ match and therefore
+     have no impact on whether a given effect clause match. In this
+     sense effect pattern compilation reduces to compilation of
+     variants, almost. There is one catch: continuation patterns still
+     need to be compiled. However, we can handle this in a
+     post-processing step.
+
+     The idea is to transform effect patterns into variant patterns by
+     dropping the continuation pattern, and the compile them into a
+     case expression. This requires constructing a (correct) type for
+     the variant pattern. We can construct this type from the
+     computation signature of the handler. Afterwards, we create a
+     fresh continuation binder for each compiled clause. We gather the
+     continuation binders for each raw clause, and bind them in their
+     respective compiled clause bodies such that each raw continuation
+     binder is an alias of the fresh continuation binder. *)
+  let compiled_effect_cases =  (* The compiled cases *)
+    if List.length raw_effect_clauses = 0 then
+      StringMap.empty
+    else begin
+        let (comp_eff, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
+        let variant_type =
+          let (fields,_,_) = comp_eff in
+          let fields' =
+            StringMap.filter
+              (fun _ ->
+                function
+                | `Present _ -> true
+                | _ -> false)
+              fields
+          in
+          let fields'' =
+            StringMap.map
+              (function
+               | `Present t ->
+                  begin match t with
+                  | `Function (domain, _, _) -> domain (* n-ary operation *)
+                  | t -> Types.unit_type (* nullary operation *)
+                  end
+               | _ -> assert false)
+              fields'
+          in
+          Types.make_variant_type fields''
+        in
+        let transformed_effect_clauses =
+          let raw_cases =
+            List.map
+              (fun (ps, body) ->
+                match ps with
+                | [`Effect (name, p, _)] ->
+                   [`Variant (name, p)], body
+                | _ -> assert false)
+              raw_effect_clauses
+          in
+          List.map reduce_clause raw_cases
+        in
+        let compiled_transformed_effect_cases =
+          let dummy_var = Var.(make_local_info ->- fresh_binder ->- var_of_binder) (variant_type, "_m") in
+          let tenv = TEnv.bind tenv (dummy_var, variant_type) in
+          let initial_env = (nenv, tenv, eff, PEnv.empty) in (* Need to bind raw continuation binders in tenv and nenv? *)
+          match snd @@ match_cases [dummy_var] transformed_effect_clauses (fun _ -> ([], `Special (`Wrong comp_ty))) initial_env with
+          | `Case (_, clauses, _) -> clauses (* No default effect pattern *)
           | _ -> assert false
         in
-        `ResumptionBinder kb, ListUtils.drop_nth bs (arity-1)
-      else
-        `NoResumption, bs
-    in
-    (cc, (bs',tc))
+        let continuation_binders =
+          let upd effname ks map =
+            match StringMap.lookup effname map with
+            | None -> StringMap.add effname ks map
+            | Some ks' -> StringMap.add effname (ks @ ks') map
+          in
+          let rec gather_binders = function
+            | `Any -> []
+            | `Variable b -> [b]
+            | `As (b, p) -> b :: gather_binders p
+            | _ -> assert false
+          in
+          List.fold_left
+            (fun acc -> function
+              | [`Effect (name, _, k)] ->
+                 upd name (gather_binders k) acc
+              | _ -> assert false)
+            StringMap.empty (List.map fst raw_effect_clauses)
+        in
+        StringMap.mapi
+          (fun effname (x, body) ->
+            match StringMap.find effname continuation_binders with
+            | [] ->
+               let resume =
+                 Var.(make_local_info ->- fresh_binder) (`Not_typed, "_resume")
+               in
+               (x, resume, body)
+            | [resume] -> (* micro-optimisation: if there is only one
+                             resumption binder then just use it. *)
+               (x, resume, body)
+            | ks ->
+               let resume_ty =
+                 Var.type_of_binder (List.hd ks)
+               in
+               let resume_b =
+                 Var.(make_local_info ->- fresh_binder) (resume_ty, "_resume")
+               in
+               let resume_v = Var.var_of_binder resume_b in
+               let body =
+                 List.fold_left
+                   (fun (bs, tc) kb ->
+                     letmv (kb, `Variable resume_v) :: bs, tc)
+                   body ks
+               in
+               (x, resume_b, body))
+          compiled_transformed_effect_cases
+      end
   in
-  let compiled_handle =
-    match tc with
-    | `Case (_, clauses, _) ->
-       let (return_clause, clauses) = StringMap.pop "Return" clauses in
-       let clauses =
-         StringMap.fold
-           (fun opname (b,comp) clauses ->
-             let (clause_class, comp) = fix_continuation_param opname comp in
-             StringMap.add opname (clause_class,b,comp) clauses)
-           clauses (StringMap.add "Return" (`NoResumption, fst return_clause, snd return_clause) StringMap.empty)
-       in ([], `Special (`Handle { ih_comp = m; ih_clauses = clauses; ih_depth = desc.shd_depth }))
-    | _ -> assert false
-    in
-    (* END OF THE BIG HACK *)
-    Debug.if_set (show_pattern_compilation)
-                 (fun () -> "Compiled handler cases: "^(string_of_computation compiled_handle));
-    compiled_handle
+  let return : binder * computation =
+    let (_, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
+    let scrutinee = Var.(make_local_info ->- fresh_binder) (comp_ty, "_return_value") in
+    let tenv = TEnv.bind tenv (Var.var_of_binder scrutinee, comp_ty) in
+    let initial_env = (nenv, tenv, eff, PEnv.empty) in
+    let clauses = List.map reduce_clause raw_value_clauses in
+    scrutinee, match_cases [Var.var_of_binder scrutinee] clauses (fun _ -> ([], `Special (`Wrong comp_ty))) initial_env
+  in
+  let handle =
+    `Handle {
+        ih_comp = m;
+        ih_return = return;
+        ih_cases = compiled_effect_cases;
+        ih_depth =
+          match Sugartypes.(desc.shd_depth) with
+          | `Shallow -> `Shallow
+          | `Deep -> `Deep params
+      }
+  in
+  ([], `Special handle)
 
 (* Session typing choice compilation *)
 let match_choices : var -> clause list -> bound_computation =
@@ -970,3 +1119,4 @@ let compile_choices
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled choices: "^(string_of_computation result));
       result
+
