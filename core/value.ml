@@ -654,11 +654,23 @@ module Eff_Handler_Continuation = struct
            let k = (h, pk) :: k in
            E.computation env (Continuation k) comp
 
+      let session_exn_enabled = Settings.get_value Basicsettings.Sessions.exceptions_enabled
       let trap k (opname, arg) =
         let open Trap in
         let rec handle k' = function
           | ((User_defined h, pk) :: k) ->
              begin match StringMap.lookup opname h.cases with
+             | Some ((var, _), _, comp)
+                  when session_exn_enabled && opname = session_exception_operation ->
+                let continuation_thunk =
+                  fun () -> E.computation (Env.bind var (arg, `Local) h.env) (Continuation k) comp
+                in
+                let comps = List.map (fun (_, _, _, c) -> c) pk in
+                SessionTrap ({
+                      handle_env = h.env;
+                      frames = comps;
+                      continuation_thunk = continuation_thunk
+                  })
              | Some ((var, _), resumeb, comp) ->
                 let env =
                   let resume =
@@ -666,38 +678,27 @@ module Eff_Handler_Continuation = struct
                     | `Shallow -> ShallowContinuation (pk, List.rev k')
                     | `Deep _ -> Continuation ( List.rev ((User_defined h,pk) :: k') )
                   in
-                  Env.bind (Var.var_of_binder resumeb) (E.reify resume, `Local) h.env
+                  let env = Env.bind var (arg, `Local) h.env in
+                  Env.bind (Var.var_of_binder resumeb) (E.reify resume, `Local) env
                 in
-                let continuation_thunk =
-                  fun () -> E.computation (Env.bind var (arg, `Local) env) (Continuation k) comp in
-
-                if (opname = session_exception_operation) then
-                 let comps = List.map (fun (_, _, _, c) -> c) pk in
-                 SessionTrap ({
-                   handle_env = env;
-                   frames = comps;
-                   continuation_thunk = continuation_thunk
-                 }) else (Trap continuation_thunk)
+                let cont = Continuation k in
+                Trap (fun () -> E.computation env cont comp)
              | None -> handle ((User_defined h, pk) :: k') k
              end
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
-          | [] ->
-              begin
+          | [] when session_exn_enabled && opname = session_exception_operation ->
               (* If this is a session exception operation, we need to gather all
                * of the computations in the pure continuation stack, so we can inspect
                * their free variables. *)
-              if opname = session_exception_operation then
-                let comps =
-                  begin
-                  match (List.rev k') with
-                    | [] -> []
-                    | (User_defined _, pk) :: _
-                    | (_, pk) :: _ -> List.map (fun (_, _, _, comp) -> comp) pk
-                  end in
-                UnhandledSessionException comps
-              else
-                Trap (fun () -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname))
-              end
+             let comps =
+               match (List.rev k') with
+               | [] -> []
+               | (User_defined _, pk) :: _
+               | (_, pk) :: _ -> List.map (fun (_, _, _, comp) -> comp) pk
+             in
+             UnhandledSessionException comps
+          | [] ->
+             Trap (fun () -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname))
         in match k with
         | Empty -> handle [] []
         | Continuation k -> handle [] k
