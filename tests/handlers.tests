@@ -357,10 +357,10 @@ gen0(handler { case Foo(k : ((()) {Foo- |_}~> Int)) -> 42 case Return(x) -> x }(
 stdout : fun : Comp ({ |a },Int)
 flags : --enable-handlers -e
 
-Unification error
+Recursive nesting of deep handlers
 { fun h1(m,h) { handle(m()) { case Foo(k) -> h(fun() { k(()) },h1) case Return(x) -> x } } fun h2(m,h) { handle(m()) { case Foo(k) -> h(fun() { k(()) },h2) case Return(x) -> x } } h1(fun(){42},h2) }
+stdout : 42 : Int
 flags : --enable-handlers -e
-ignore : Known unification bug (*** Error: "Assert_failure unify.ml:136:14")
 
 Examples
 ./examples/handlers/tests.links
