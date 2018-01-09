@@ -385,6 +385,11 @@ module type CONTINUATION_EVALUATOR = sig
               v ->                      (* the argument *)
               result
 
+  val apply_many : env:v Env.t ->
+                   v t * v list ->
+                   v t ->
+                   result
+
   val trap : v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
              trap_result
@@ -475,12 +480,14 @@ module Pure_Continuation = struct
     type result = E.result
     type trap_result = (v, result) Trap.result
 
-    let apply  ~env k v =
+    let apply ~env k v =
     match k with
     | [] -> E.finish env v
     | (scope, var, locals, comp) :: cont ->
        let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
        E.computation env cont comp
+
+    let apply_many ~env _ _ = ignore(env); E.error "Continuation applied to multiple arguments"
 
     let trap _ _ = E.error "no trap"
   end
@@ -653,6 +660,31 @@ module Eff_Handler_Continuation = struct
            let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
            let k = (h, pk) :: k in
            E.computation env (Continuation k) comp
+
+      let apply_many ~env (k',vs) k =
+        let v, vs = ListUtils.last vs, ListUtils.curtail vs in
+        let k' = match k' with
+          | Empty -> E.error "Non-parameterised continuation applied to multiple (or zero) arguments"
+          | ShallowContinuation _ -> E.error "Shallow continuation applied to multiple (or zero) arguments"
+          | Continuation k ->
+             match List.rev k with
+             | (User_defined h, pk) :: rest ->
+                begin match h.depth with
+                | `Deep xs ->
+                   let pairs = List.map2 (fun x v -> (x, v)) xs vs in
+                   let params =
+                     List.fold_left
+                       (fun acc (x, v) ->
+                         Env.bind x (v, `Local) acc)
+                       Env.empty pairs
+                   in
+                   let env = Env.shadow h.env ~by:params in
+                   Continuation (List.rev ((User_defined { h with env = env }, pk) :: rest))
+                | _ -> assert false
+                end
+             | _ -> assert false
+        in
+        apply ~env (k' <> k) v
 
       let session_exn_enabled = Settings.get_value Basicsettings.Sessions.exceptions_enabled
       let trap k (opname, arg) =

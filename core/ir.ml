@@ -477,7 +477,7 @@ struct
            `Choice (v, bs), t, o
 	| `Handle ({ ih_comp; ih_cases; ih_return; _ } as hndlr) ->
 	   let (comp, _, o) = o#computation ih_comp in
-	   let (cases, branch_types, o) =
+	   let (cases, _branch_types, o) =
 	     o#name_map
                (fun o (x, resume, c) ->
                  let (x, o) = o#binder x in

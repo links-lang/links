@@ -532,8 +532,8 @@ struct
        eval_error "Continuation applied to multiple (or zero) arguments"
     | `ReifiedContinuation cont', [p] ->
        apply_cont K.(cont' <> cont) env p
-    | `ReifiedContinuation _, _ ->
-       eval_error "Continuation applied to multiple (or zero) arguments"
+    | `ReifiedContinuation cont', vs ->
+       K.Eval.apply_many ~env (cont', vs) cont
     | _                        -> eval_error "Application of non-function"
   and apply_cont (cont : continuation) env v =
     Proc.yield (fun () -> K.Eval.apply ~env cont v)

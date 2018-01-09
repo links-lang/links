@@ -139,6 +139,11 @@ module type CONTINUATION_EVALUATOR = sig
               v ->                      (* the argument *)
               result
 
+  val apply_many : env:v Env.t ->
+                   v t * v list ->
+                   v t ->
+                   result
+
   (* trap invocation *)
   val trap : v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
