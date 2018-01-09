@@ -494,8 +494,6 @@ struct
            (* TODO FIXME traverse parameters *)
 	   `Handle { hndlr with ih_comp = comp; ih_cases = cases; ih_return = return; }, t, o
 	| `DoOperation (name, vs, t) ->
-	   (* FIXME: the typing isn't right here for non-zero argument
-	   operations *)
 	   let (vs, _, o) = o#list (fun o -> o#value) vs in
 	   (`DoOperation (name, vs, t), t, o)
 
