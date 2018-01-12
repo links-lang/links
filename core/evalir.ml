@@ -682,11 +682,15 @@ struct
        let handler = K.Handler.make ~env ~return ~clauses ~depth in
        let cont = K.set_trap_point ~handler cont in
        computation env cont m
-    | `DoOperation (name, v, _) ->
+    | `DoOperation (name, vs, _) ->
        let open Value.Trap in
-       let vs = List.map (value env) v in
+       let v =
+         match List.map (value env) vs with
+         | [v] -> v
+         | vs  -> Value.box vs
+       in
        begin
-       match K.Eval.trap cont (name, Value.box vs) with
+       match K.Eval.trap cont (name, v) with
          | Trap cont_thunk -> cont_thunk ()
          | SessionTrap st_res ->
              handle_session_exception env st_res.frames >>= fun _ ->

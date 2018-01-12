@@ -915,7 +915,15 @@ let compile_handle_cases
               (function
                | `Present t ->
                   begin match t with
-                  | `Function (domain, _, _) -> domain (* n-ary operation *)
+                  | `Function (domain, _, _) ->
+                     let (fields, _, _) = TypeUtils.extract_row domain in
+                     let arity = StringMap.size fields in
+                     if arity = 1 then
+                       match StringMap.find "1" fields with
+                       | `Present t -> t
+                       | _ -> assert false
+                     else
+                       domain (* n-ary operation *)
                   | _ -> Types.unit_type (* nullary operation *)
                   end
                | _ -> assert false)
