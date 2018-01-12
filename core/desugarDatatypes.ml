@@ -119,11 +119,11 @@ struct
         | `QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | `Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
-                       row var_env alias_env e,
+                       effect_row (row var_env alias_env e),
                        datatype var_env t)
         | `Lolli (f, e, t) ->
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
-                       row var_env alias_env e,
+                       effect_row (row var_env alias_env e),
                        datatype var_env t)
         | `Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
@@ -244,7 +244,19 @@ struct
             (k, fieldspec var_env alias_env p))
           fields
     in
-      fold_right Types.row_with fields seed
+    fold_right Types.row_with fields seed
+  and effect_row (fields, rho, dual) =
+    let fields =
+      StringMap.mapi
+        (fun name ->
+          function
+          | `Present t when not (TypeUtils.is_builtin_effect name || TypeUtils.is_function_type t) ->
+             let eff = Types.make_empty_closed_row () in
+             `Present (Types.make_function_type [] eff t)
+          | t -> t)
+        fields
+    in
+    (fields, rho, dual)
   and type_arg var_env alias_env =
     function
       | `Type t -> `Type (datatype var_env alias_env t)

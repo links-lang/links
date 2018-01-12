@@ -162,7 +162,7 @@ let rec arg_types t = match concrete_type t with
 (*   which is wrong; the formal parameter should be wrapped inside a `Record. *)
 (* *\) (\*error ("arg_types: " ^ (string_of_datatype t') ^ ", ret: " ^ string_of_datatype t'')*\) *)
   | t ->
-      error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
+     error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 
 let rec effect_row t = match concrete_type t with
   | `ForAll (_, t) -> effect_row t
@@ -170,6 +170,19 @@ let rec effect_row t = match concrete_type t with
   | `Lolli (_, effects, _) -> effects
   | t ->
       error ("Attempt to take effects of non-function: " ^ string_of_datatype t)
+
+
+let is_function_type t = match concrete_type t with
+  | `Lolli (_, _, _)
+  | `Function (_, _, _) -> true
+  | _ -> false
+
+let is_thunk_type t =
+  is_function_type t && arg_types t = []
+
+let is_builtin_effect = function
+  | "wild" | "hear" -> true
+  | _ -> false
 
 let rec element_type t = match concrete_type t with
   | `ForAll (_, t) -> element_type t
