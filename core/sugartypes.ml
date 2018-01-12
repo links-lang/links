@@ -157,7 +157,7 @@ type patternnode = [
 | `Cons     of pattern * pattern
 | `List     of pattern list
 | `Variant  of name * pattern option
-| `Effect   of name * pattern option * pattern
+| `Effect   of name * pattern list * pattern
 | `Negative of name list
 | `Record   of (name * pattern) list * pattern option
 | `Tuple    of pattern list
@@ -376,7 +376,7 @@ struct
     | `List ps               -> union_map pattern ps
     | `Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | `Variant (_, popt)     -> option_map pattern popt
-    | `Effect (_, popt, kopt) -> union (option_map pattern popt) (pattern kopt)
+    | `Effect (_, ps, kopt) -> union (union_map pattern ps) (pattern kopt)
     | `Record (fields, popt) ->
         union (option_map pattern popt)
           (union_map (snd ->- pattern) fields)

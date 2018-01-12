@@ -113,7 +113,7 @@ let rec deanonymize : pattern -> pattern
       | `Nil                         -> `Nil
       | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
       | `List ps                     -> `List (List.map deanonymize ps)
-      | `Effect (name, pat_opt, kpat) -> `Effect (name, opt_map deanonymize pat_opt, deanonymize kpat)
+      | `Effect (name, ps, kpat)     -> `Effect (name, List.map deanonymize ps, deanonymize kpat)
       | `Variant (name, pat_opt)     -> `Variant (name, opt_map deanonymize pat_opt)
       | `Negative ns                 -> `Negative ns
       | `Record (name_pats, pat_opt) -> `Record (List.map (fun (n,p) -> (n, deanonymize p)) name_pats, opt_map deanonymize pat_opt)

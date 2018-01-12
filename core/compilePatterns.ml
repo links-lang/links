@@ -17,7 +17,7 @@ type pattern = [
 | `Nil
 | `Cons     of pattern * pattern
 | `Variant  of name * pattern
-| `Effect   of name * pattern * pattern
+| `Effect   of name * pattern list * pattern
 | `Negative of StringSet.t
 | `Record   of (pattern StringMap.t) * pattern option
 | `Constant of constant
@@ -104,13 +104,16 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
         | `Variant (name, Some p) ->
             let p, env = pp p in
             `Variant (name, p), env
-        | `Effect (name, None, k) ->
-           let k, env = pp k in
-           `Effect (name, `Any, k), env
-        | `Effect (name, Some p, k) ->
-           let p, env = pp p in
+        | `Effect (name, ps, k) ->
+           let ps, env =
+             List.fold_right
+               (fun p (ps, env) ->
+                 let p', env' = pp p in
+                 (p' :: ps, env ++ env'))
+               ps ([], empty)
+           in
            let k, env' = pp k in
-           `Effect (name, p, k), env ++ env'
+           `Effect (name, ps, k), env ++ env'
         | `Negative names -> `Negative (StringSet.from_list names), empty
         | `Record (bs, p) ->
             let bs, env =
@@ -913,20 +916,20 @@ let compile_handle_cases
           let fields'' =
             StringMap.map
               (function
-               | `Present t ->
-                  begin match t with
-                  | `Function (domain, _, _) ->
-                     let (fields, _, _) = TypeUtils.extract_row domain in
-                     let arity = StringMap.size fields in
-                     if arity = 1 then
-                       match StringMap.find "1" fields with
-                       | `Present t -> t
-                       | _ -> assert false
-                     else
-                       domain (* n-ary operation *)
-                  | _ -> Types.unit_type (* nullary operation *)
-                  end
-               | _ -> assert false)
+              | `Present t ->
+                 begin match TypeUtils.concrete_type t with
+                 | `Function (domain, _, _) ->
+                    let (fields, _, _) = TypeUtils.extract_row domain in
+                    let arity = StringMap.size fields in
+                    if arity = 1 then
+                      match StringMap.find "1" fields with
+                      | `Present t -> t
+                      | _ -> assert false
+                    else
+                      domain (* n-ary operation *)
+                 | _ -> Types.unit_type (* nullary operation *)
+                 end
+              | _ -> assert false)
               fields'
           in
           Types.make_variant_type fields''
@@ -935,10 +938,23 @@ let compile_handle_cases
           let raw_cases =
             List.map
               (fun (ps, body) ->
-                match ps with
-                | [`Effect (name, p, _)] ->
-                   [`Variant (name, p)], body
-                | _ -> assert false)
+                let variant_pat =
+                  match ps with
+                  | [`Effect (name, [], _)] ->
+                     `Variant (name, `Any)
+                  | [`Effect (name, [p], _)] ->
+                     `Variant (name, p)
+                  | [`Effect (name, ps, _)] ->
+                     let packaged_args =
+                       let fields =
+                         List.mapi (fun i p -> (string_of_int (i+1), p)) ps
+                       in
+                       `Record (StringMap.from_alist fields, None)
+                     in
+                     `Variant (name, packaged_args)
+                  | _ -> assert false
+                in
+              [variant_pat], body)
               raw_effect_clauses
           in
           List.map reduce_clause raw_cases

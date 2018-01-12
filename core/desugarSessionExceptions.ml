@@ -73,7 +73,7 @@ object (o : 'self_type)
         let cont_pat = dummy_pat () in
 
         let otherwise_pat : Sugartypes.pattern =
-          ((`Effect (failure_op_name, None, cont_pat)), dp) in
+          ((`Effect (failure_op_name, [], cont_pat)), dp) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 

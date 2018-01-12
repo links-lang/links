@@ -421,7 +421,7 @@ class map =
           in `Variant ((_x, _x_i1))
       | `Effect (name, ps, k) ->
          let name = o#name name in
-         let ps = o#option (fun o -> o#pattern) ps in
+         let ps = o#list (fun o -> o#pattern) ps in
          let k  = o#pattern k in
          `Effect (name, ps, k)
       | `Negative _x ->
@@ -1043,7 +1043,7 @@ class fold =
           let o = o#option (fun o -> o#pattern) _x_i1 in o
       | `Effect (name, ps, k) ->
          let o = o#name name in
-         let o = o#option (fun o -> o#pattern) ps in
+         let o = o#list (fun o -> o#pattern) ps in
          let o = o#pattern k in
          o
       | `Negative _x ->
@@ -1743,7 +1743,7 @@ class fold_map =
           in (o, (`Variant ((_x, _x_i1))))
       | `Effect (name, ps, k) ->
          let (o, name) = o#name name in
-         let (o, ps) = o#option (fun o -> o#pattern) ps in
+         let (o, ps) = o#list (fun o -> o#pattern) ps in
          let (o, k) = o#pattern k in
          (o, `Effect (name, ps, k))
       | `Negative _x ->

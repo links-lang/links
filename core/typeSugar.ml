@@ -130,8 +130,8 @@ struct
     | `Tuple ps -> List.for_all is_safe_pattern ps
     | `HasType (p, _)
     | `As (_, p) -> is_safe_pattern p
-    | `Effect (_, None, k) -> is_safe_pattern k
-    | `Effect (_, Some p, k) -> is_safe_pattern p && is_safe_pattern k
+    | `Effect (_, ps, k) ->
+       List.for_all is_safe_pattern ps && is_safe_pattern k
   and is_pure_regex = function
       (* don't check whether it can fail; just check whether it
          contains non-generilisable sub-expressions *)
@@ -1543,21 +1543,12 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             (end_pos, end_pos, buf)
           in
 
-          let rec unwrap_at : string -> pattern -> pattern list = fun name p ->
+          let unwrap_at : string -> pattern -> pattern list = fun name p ->
             match fst p with
-              | `Variable _ | `Any -> [ `Any, end_pos p ]
-              | `As (_, p) | `HasType (p, _) -> unwrap_at name p
-              | `Variant (name', None) when name=name' ->
-                    [(`Record ([], None), end_pos p)]
-              | `Variant (name', Some p) when name=name' -> [p]
-              | `Variant _ -> []
-              | `Effect (name', None, _) when name=name' ->
-                 []
-              | `Effect (name', Some p, _) when name=name' -> [p]
+              | `Effect (name', ps, _) when name=name' -> ps
               | `Effect _ -> []
-              | `Negative names when List.mem name names -> []
-              | `Negative _ -> [ `Any, end_pos p ]
-              | `Nil | `Cons _ | `List _ | `Tuple _ | `Record _ | `Constant _ -> assert false in
+              | `Variable _ | `Any | `As _ | `HasType _ | `Negative _
+              | `Nil | `Cons _ | `List _ | `Tuple _ | `Record _ | `Variant _ | `Constant _ -> assert false in
           let rec are_open : pattern list -> bool =
             function
               | [] -> false
@@ -1575,23 +1566,28 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
               (fun name field_spec env ->
                  match field_spec with
                  | `Present t ->
-                    Printf.printf "Closing %s : %s \n%!" name (Types.string_of_datatype t);
                     begin match TypeUtils.concrete_type t with
                     | `Function (domain, effs, codomain) ->
-                       Printf.printf "domain: %s\n%!" (Types.string_of_datatype domain);
-                       let domain, arity =
+                       (* TODO FIXME we need to be careful here. Unary
+                          operations must be treated specially due to
+                          ... *)
+                       let arity =
                          let (fields,_,_) = TypeUtils.extract_row domain in
-                         (* TODO FIXME we need to be careful here. Unary operations must be treated specially due to ... *)
-                         let arity = StringMap.size fields in
-                         if arity = 1 then
-                           match StringMap.find "1" fields with
-                           | `Present t -> t, arity
-                           | _ -> assert false
-                         else
-                           domain, arity
+                         StringMap.size fields
                        in
-                       let pats = concat_map (unwrap_at name) pats in
-                       Printf.printf "pats: %s\n%!" (string_of_list Sugartypes.Show_pattern.show pats);
+                       let pats =
+                         let pats = concat_map (unwrap_at name) pats in
+                         if arity = 1 then
+                           pats
+                         else
+                           [`Tuple pats, SourceCode.dummy_pos]
+                       in
+                       let domain =
+                         if arity = 1 then
+                           List.hd (TypeUtils.arg_types t)
+                         else
+                           domain
+                       in
                        let domain = cpt pats domain in
                        let t =
                          if arity = 1 then
@@ -1671,9 +1667,9 @@ let check_for_duplicate_names : Sugartypes.position -> pattern list -> string li
           List.fold_right (fun p binderss -> gather binderss p) ps binderss
       | `Variant (_, p) ->
          opt_app (fun p -> gather binderss p) binderss p
-      | `Effect (_, p, k) ->
+      | `Effect (_, ps, k) ->
          let binderss' =
-           opt_app (fun p -> gather binderss p) binderss p
+           List.fold_right (fun p binderss -> gather binderss p) ps binderss
          in
          gather binderss' k
       | `Negative _ -> binderss
@@ -1770,13 +1766,8 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
         let p = tp p in
         let vtype typ = `Variant (make_singleton_row (name, `Present (typ p))) in
         `Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
-      | `Effect (name, p, k) ->
+      | `Effect (name, ps, k) ->
          (* Auxiliary machinery for typing effect patterns *)
-         let unwrap_dom = function
-           | `Record row ->
-              Types.extract_tuple row
-           | t -> [t]
-         in
          let rec type_resumption_pat (kpat : pattern) : pattern * Types.environment * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
              let domain = Types.fresh_type_variable (`Unl, `Any) in
@@ -1803,52 +1794,34 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
            | _ -> Gripers.die pos' "Improper pattern matching on resumption"
          in
          (* Typing of effect patterns *)
-         let p = opt_map tp p in
+         let ps = List.map tp ps in
          let k = type_resumption_pat k in
          let eff typ =
+           let domain = List.map typ ps in
+           let codomain = TypeUtils.arg_types (typ k) in
            let t =
              (* Construct operation type, i.e. op : A -> B or op : B *)
-             match p with
-             | None ->
-                begin match Types.concrete_type (typ k) with
-                | `Function (f, _, _) ->
-                   let xs = unwrap_dom (Types.concrete_type f) in
-                   let nargs = List.length xs in
-                   if nargs > 1 then
-                     Types.make_tuple_type xs
-                   else if nargs = 1 then
-                     List.hd xs
-                   else
-                     assert false
-                | _ -> assert false
-                end
-             | Some p ->
-                let domain =
-                  unwrap_dom (typ p)
-                in
-                let codomain =
-                  match Types.concrete_type (typ k) with
-                  | `Function (f, _, _) ->
-                     let xs = unwrap_dom (Types.concrete_type f) in
-                     let nargs = List.length xs in
-                     if nargs > 1 then
-                       Types.make_tuple_type xs
-                     else if nargs = 1 then
-                       List.hd xs
-                     else
-                       assert false
-                  | _ -> assert false
-                in
-                Types.make_function_type domain (Types.make_empty_closed_row ()) codomain
+             match domain, codomain with
+             | [], [] | _, [] -> assert false (* The continuation is at least unary *)
+             | [], [t] -> t
+             | [], ts -> Types.make_tuple_type ts
+             | ts, [t] ->
+                Types.make_function_type ts (Types.make_empty_closed_row ()) t
+             | ts, ts' ->
+                (* parameterised continuation *)
+                let t = ListUtils.last ts' in
+                Types.make_function_type ts (Types.make_empty_closed_row ()) t
            in
            `Effect (make_singleton_row (name, `Present t))
          in
          let env =
-           let penv = from_option Env.empty (opt_map env p) in
-           let kenv = env k  in
+           let penv =
+             List.fold_right (env ->- (++)) ps Env.empty
+           in
+           let kenv = env k in
            penv ++ kenv
          in
-         `Effect (name, opt_map erase p, erase k), env, (eff ot, eff it)
+         `Effect (name, List.map erase ps, erase k), env, (eff ot, eff it)
       | `Negative names ->
         let row_var = Types.fresh_row_variable (`Any, `Any) in
 
@@ -1924,9 +1897,9 @@ let rec pattern_env : pattern -> Types.datatype Env.t =
     | `HasType (p,_) -> pattern_env p
     | `Variant (_, Some p) -> pattern_env p
     | `Variant (_, None) -> Env.empty
-    | `Effect (_, None, k) -> pattern_env k
-    | `Effect (_, Some p, k) ->
-       Env.extend (pattern_env p) (pattern_env k)
+    | `Effect (_, ps, k) ->
+       let env = List.fold_right (pattern_env ->- Env.extend) ps Env.empty in
+       Env.extend env (pattern_env k)
     | `Negative _ -> Env.empty
     | `Record (ps, Some p) ->
         List.fold_right (snd ->- pattern_env ->- Env.extend) ps (pattern_env p)
@@ -3141,21 +3114,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         begin match pat' with
                         | `Tuple ps, pos' ->
                            let kpat, pats = pop_last ps in
-                           let args =
-                             let nargs = List.length pats in
-                             if nargs = 0 then
-                               None
-                             else if nargs > 1 then
-                               Some (`Tuple pats, pos')
-                             else
-                               match List.hd pats with
-                               | ((`Tuple _, _) as p) | ((`Record _,_) as p) ->
-                                  Some (`Tuple [p], pos')
-                               | p -> Some p
-                           in
-                           let eff = `Effect (opname, args, kpat) in
+                           let eff = `Effect (opname, pats, kpat) in
                            eff, pos
-                        | _ -> `Effect (opname, None, pat'), pos
+                        | _ -> `Effect (opname, [], pat'), pos
                         end
                      | _, pos -> Gripers.die pos "Improper pattern matching"
                    in
@@ -3172,7 +3133,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    let (pat, env, effrow) = pat in
                    let effname, kpat =
                      match fst pat with
-                     | `Effect (name,_,kpat) -> name, kpat
+                     | `Effect (name, _, kpat) -> name, kpat
                      | _ -> assert false
                    in
                    let pat, kpat =
@@ -3191,10 +3152,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         begin match fst kpat with
                         | `Any ->
                            let kt =
-                             let k_params =
+                             let domain =
                                handler_params @ [Types.fresh_type_variable (`Unl, `Any)]
                              in
-                             `Function (Types.make_tuple_type k_params, Types.make_empty_open_row (`Unl, `Any), Types.fresh_type_variable (`Unl, `Any))
+                             let effects = Types.make_empty_open_row (`Unl, `Any) in
+                             let codomain =  Types.fresh_type_variable (`Unl, `Any) in
+                             Types.make_function_type domain effects codomain
                            in
                            (pat, env, effrow), (kpat, Env.empty, kt)
                         | `As ((kname,_,_),_)
@@ -3202,24 +3165,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                            let kt =
                              let (fields,_,_) = TypeUtils.extract_row effrow in
                              let kt = find_effect_type effname (StringMap.to_alist fields) in
-                             let op_param =
-                               match Types.concrete_type kt with
-                               | `Function (_, _, codomain) -> codomain
-                               | t -> t
+                             let op_param = TypeUtils.return_type kt in
+                             let typ = Env.lookup env kname in
+                             let domain =
+                               handler_params @ [op_param]
                              in
-                             match Env.find env kname with
-                             | Some typ ->
-                                let effs, codomain =
-                                  match Types.concrete_type typ with
-                                  | `Function (_, effs, codomain) ->
-                                     effs, codomain
-                                  | _ -> assert false
-                                in
-                                let k_params =
-                                  handler_params @ [op_param]
-                                in
-                                `Function (Types.make_tuple_type k_params, effs, codomain)
-                             | None -> assert false
+                             let effs, codomain =
+                               TypeUtils.(effect_row typ, return_type typ)
+                             in
+                             Types.make_function_type domain effs codomain
                            in
                            let env = Env.bind env (kname, kt) in
                            let env' = Env.bind Env.empty (kname, kt) in
@@ -3252,7 +3206,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
              (* Closing of subpatterns in effect patterns *)
              let inner_eff = TypeUtils.extract_row (close_pattern_type (List.map (fst3 ->- fst3) eff_cases) (`Effect inner_eff)) in
-             print_endline (Types.string_of_row inner_eff);
+             (* print_endline (Types.string_of_row inner_eff); *)
              (* Type value clause bodies *)
              let val_cases =
                List.fold_right
@@ -3298,7 +3252,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
              (val_cases, rt), eff_cases, bt, inner_eff, outer_eff
            in
-       (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
+           (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
 	     = fun row ->
              let is_builtin_effect = function
@@ -3352,6 +3306,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let inner_eff' = make_operations_presence_polymorphic inner_eff in
              (* Printf.printf "inner_eff': %s\n%!" (Types.string_of_row inner_eff'); *)
              let () = unify ~handle:Gripers.handle_unify_effect_rows (no_pos (`Effect outer_eff), no_pos (`Effect inner_eff')) in
+             let () = unify ~handle:Gripers.handle_unify_effect_rows (no_pos (`Effect outer_eff), no_pos (`Effect context.effect_row)) in
              inner_eff, outer_eff
            in
            let eff_cases =
