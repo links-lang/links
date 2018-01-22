@@ -118,9 +118,9 @@ struct
   let get_client_id_or_die cgi_args =
     match extract_client_id cgi_args with
       | Some client_id ->
-          printaroonie ("Found client ID: " ^ client_id);
+          Debug.print ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
-          printaroonie ("Decoded client ID: " ^ decoded_client_id);
+          Debug.print ("Decoded client ID: " ^ decoded_client_id);
           ClientID.of_string decoded_client_id
       | None -> failwith "Client ID expected but not found."
 
@@ -165,8 +165,8 @@ struct
       (* Add headers as cgi args. Is this really what we want to do? *)
       let cgi_args = cgi_args @ Header.to_list (Request.headers req) in
       let cookies = Cohttp.Cookie.Cookie_hdr.extract (Request.headers req) in
-      printaroonie (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
-      List.iter (fun (k, v) -> printaroonie (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
+      Debug.print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
+      List.iter (fun (k, v) -> Debug.print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
       (* Precondition: valenv has been initialised with the correct request data *)
@@ -224,7 +224,7 @@ struct
                  else
                    loop rest in
             loop mime_types in
-          printaroonie (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
+          Debug.print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
           Cohttp_lwt_unix.Server.respond_file ~headers ~fname () in
 
       let is_websocket_request = is_prefix_of ws_url in
@@ -261,8 +261,8 @@ struct
           "/" ^
           (base_url |> Utility.strip_slashes) ^ "/" ^
           (js_url |> Utility.strip_slashes) ^ "/" in
-        printaroonie ("Prefixed_lib_url: " ^ prefixed_lib_url) ;
-        printaroonie ("Path: " ^ path) ;
+        Debug.print ("Prefixed_lib_url: " ^ prefixed_lib_url) ;
+        Debug.print ("Path: " ^ path) ;
 
         if is_prefix_of prefixed_lib_url path then
         let liburl_length = String.length prefixed_lib_url in
@@ -283,7 +283,7 @@ struct
         (* TODO: Sanity checking of client ID here *)
         let client_id = ClientID.of_string @@
           String.sub path ws_url_length ((String.length path) - ws_url_length) in
-        printaroonie (Printf.sprintf "Creating websocket for client with ID %s\n"
+        Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
           (ClientID.to_string client_id));
         Cohttp_lwt.Body.drain_body body >>= fun () ->
         Proc.Websockets.accept client_id req (fst conn)
@@ -305,12 +305,12 @@ struct
       in
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
       let ctx = Cohttp_lwt_unix.Net.init ~ctx () in
-      printaroonie ("Starting server (2)?\n");
+      Debug.print ("Starting server (2)?\n");
       Cohttp_lwt_unix.Server.create ~ctx ~mode:(`TCP (`Port port)) (Cohttp_lwt_unix.Server.make ~callback:(callback rt render_cont) ()) in
 
-    printaroonie ("Starting server?\n");
+    Debug.print ("Starting server?\n");
     Lwt.async_exception_hook :=
-      (fun exn -> printaroonie ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
+      (fun exn -> Debug.print ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
     Settings.set_value Basicsettings.web_mode true;
     Settings.set_value webs_running true;
     start_server (Settings.get_value host_name) (Settings.get_value port) rt
