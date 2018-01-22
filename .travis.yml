@@ -12,11 +12,6 @@ before_install:
   - eval `opam config env`
   - opam install -y postgresql
   - psql -c 'create database links;' -U postgres
-after_failure:
-  - echo "in after_failure"
-  - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.env
-  - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.out
-  - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.err
 script:
   - opam pin add links . -y
   - opam pin add links-postgresql . -y
