@@ -10,17 +10,15 @@ before_install:
   - opam init -a
   - opam switch 4.04.0
   - eval `opam config env`
-  - psql -c 'create database links;' -U postgres
-install:
   - opam install -y postgresql
-  - opam pin add links . -y
-  - opam pin add links-postgresql . -y
+  - psql -c 'create database links;' -U postgres
 after_failure:
   - echo "in after_failure"
   - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.env
   - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.out
   - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.err
 script:
-  - make nc
+  - opam pin add links . -y
+  - opam pin add links-postgresql . -y
   - make tests
   - ./run-tests db-only shredding
