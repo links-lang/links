@@ -15,6 +15,10 @@ install:
   - opam install -y postgresql
   - opam pin add links . -y
   - opam pin add links-postgresql . -y
+after_failure:
+  - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.env
+  - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.out
+  - cat /home/travis/.opam/4.04.0/build/links.0.7.1/*.err
 script:
   - make nc
   - make tests
