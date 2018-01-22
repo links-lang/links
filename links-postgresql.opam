@@ -8,11 +8,11 @@ bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-2"
 
 available: [
-  ocaml-version >= "4.04.0"
+  ocaml-version >= "4.04.0" & ocaml-version < "4.06"
 ]
 
 build: [
-  [ "jbuilder" "build" "-p" name "-j" jobs ]
+  [ "jbuilder" "build" "-p" name "-j" "1" ]
 ]
 
 depends: [
