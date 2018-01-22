@@ -2,7 +2,7 @@
 .DEFAULT_GOAL: nc
 
 nc:
-	jbuilder build -p links,links-postgresql -j 4 @install
+	jbuilder build -p links,links-postgresql @install
 	@echo "#!/bin/sh" > links
 	@echo "LINKS_LIB=\"$(shell pwd)/_build/default/lib\" LINKS_LD_LIBRARY_PATH=\"$(shell pwd)/_build/default/database/pg-driver\" $(shell pwd)/_build/default/bin/links.exe \"\$$@\"" >> links
 	@chmod +x links
