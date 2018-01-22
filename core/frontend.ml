@@ -23,10 +23,17 @@ struct
     Debug.print (s ^ ": " ^ Sugartypes.Show_sentence.show sentence);
     sentence
 
+  let session_exceptions = Settings.get_value Basicsettings.Sessions.exceptions_enabled
 
   (* (These functions correspond to 'first' in an arrow) *)
   let after_typing f (a, b, c) = (f a, b, c)
   let _after_alias_expansion f (a, b) = (f a, b)
+  let extension enabled f g (a, b, c) =
+    if enabled
+    then f g (a, b, c)
+    else (a, b, c)
+
+  let after_typing_ext enabled = extension enabled after_typing
 
   let program =
     fun tyenv pos_context program ->
@@ -55,8 +62,8 @@ struct
         (*->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)*)
        ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
        ->- after_typing ((DesugarInners.desugar_inners tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarSessionExceptions.insert_toplevel_handlers tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarSessionExceptions.desugar_session_exceptions tyenv)#program ->- snd3)
+       ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.insert_toplevel_handlers tyenv)#program ->- snd3)
+       ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.desugar_session_exceptions tyenv)#program ->- snd3)
        ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#program ->- snd3)
        ->- after_typing ((DesugarDbs.desugar_dbs tyenv)#program ->- snd3)
        ->- after_typing ((DesugarFors.desugar_fors tyenv)#program ->- snd3)
