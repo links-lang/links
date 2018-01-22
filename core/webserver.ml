@@ -5,12 +5,17 @@ open ProcessTypes
 open Utility
 open Webserver_types
 open Pervasives
-open Debug
 
 let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
 let host_name = Basicsettings.Appserver.hostname
 let port = Basicsettings.Appserver.port
 
+(*** Debugging ***)
+let debugging_enabled = Basicsettings.debugging_enabled
+
+(** print a debug message if debugging is enabled *)
+let printaroonie message =
+  (if Settings.get_value(debugging_enabled) then prerr_endline message; flush stderr)
 
 module Trie =
 struct
@@ -121,9 +126,9 @@ struct
   let get_client_id_or_die cgi_args =
     match extract_client_id cgi_args with
       | Some client_id ->
-          print ("Found client ID: " ^ client_id);
+          printaroonie ("Found client ID: " ^ client_id);
           let decoded_client_id = Utility.base64decode client_id in
-          print ("Decoded client ID: " ^ decoded_client_id);
+          printaroonie ("Decoded client ID: " ^ decoded_client_id);
           ClientID.of_string decoded_client_id
       | None -> failwith "Client ID expected but not found."
 
@@ -168,8 +173,8 @@ struct
       (* Add headers as cgi args. Is this really what we want to do? *)
       let cgi_args = cgi_args @ Header.to_list (Request.headers req) in
       let cookies = Cohttp.Cookie.Cookie_hdr.extract (Request.headers req) in
-      print (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
-      List.iter (fun (k, v) -> print (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
+      printaroonie (Printf.sprintf "%n cgi_args:" (List.length cgi_args));
+      List.iter (fun (k, v) -> printaroonie (Printf.sprintf "   %s: \"%s\"" k v)) cgi_args;
       let path = Uri.path (Request.uri req) in
 
       (* Precondition: valenv has been initialised with the correct request data *)
@@ -227,7 +232,7 @@ struct
                  else
                    loop rest in
             loop mime_types in
-          print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
+          printaroonie (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
           Server.respond_file ~headers ~fname () in
 
       let is_websocket_request = is_prefix_of ws_url in
@@ -264,8 +269,8 @@ struct
           "/" ^
           (base_url |> Utility.strip_slashes) ^ "/" ^
           (js_url |> Utility.strip_slashes) ^ "/" in
-        print ("Prefixed_lib_url: " ^ prefixed_lib_url) ;
-        print ("Path: " ^ path) ;
+        printaroonie ("Prefixed_lib_url: " ^ prefixed_lib_url) ;
+        printaroonie ("Path: " ^ path) ;
 
         if is_prefix_of prefixed_lib_url path then
         let liburl_length = String.length prefixed_lib_url in
@@ -286,7 +291,7 @@ struct
         (* TODO: Sanity checking of client ID here *)
         let client_id = ClientID.of_string @@
           String.sub path ws_url_length ((String.length path) - ws_url_length) in
-        print (Printf.sprintf "Creating websocket for client with ID %s\n"
+        printaroonie (Printf.sprintf "Creating websocket for client with ID %s\n"
           (ClientID.to_string client_id));
         Cohttp_lwt.Body.drain_body body >>= fun () ->
         Proc.Websockets.accept client_id req (fst conn)
@@ -308,12 +313,12 @@ struct
       in
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
       let ctx = Cohttp_lwt_unix_net.init ~ctx () in
-      print ("Starting server (2)?\n");
+      printaroonie ("Starting server (2)?\n");
       Server.create ~ctx ~mode:(`TCP (`Port port)) (Server.make ~callback:(callback rt render_cont) ()) in
 
-    print ("Starting server?\n");
+    printaroonie ("Starting server?\n");
     Lwt.async_exception_hook :=
-      (fun exn -> print ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
+      (fun exn -> printaroonie ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
     Settings.set_value Basicsettings.web_mode true;
     Settings.set_value webs_running true;
     start_server (Settings.get_value host_name) (Settings.get_value port) rt
