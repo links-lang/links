@@ -151,7 +151,7 @@ struct
     let callback rt render_cont conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
-      Cohttp_lwt_body.to_string body >>= fun body_string ->
+      Cohttp_lwt.Body.to_string body >>= fun body_string ->
 
       let cgi_args : (string * string) list =
         match Request.meth req, content_type with
@@ -287,7 +287,7 @@ struct
           String.sub path ws_url_length ((String.length path) - ws_url_length) in
         Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
           (ClientID.to_string client_id));
-        Cohttp_lwt_body.drain_body body >>= fun () ->
+        Cohttp_lwt.Body.drain_body body >>= fun () ->
         Proc.Websockets.accept client_id req (fst conn)
       else
         route rt in

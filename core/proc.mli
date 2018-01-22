@@ -50,7 +50,7 @@ module type WEBSOCKETS =
       client_id ->
       Cohttp.Request.t ->
       Conduit_lwt_unix.flow ->
-      (Cohttp.Response.t * Cohttp_lwt_body.t) Lwt.t
+      (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t
 
     (** Sends a message to the given PID. *)
     val deliver_process_message :
