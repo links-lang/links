@@ -9,13 +9,6 @@ let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
 let host_name = Basicsettings.Appserver.hostname
 let port = Basicsettings.Appserver.port
 
-(*** Debugging ***)
-let debugging_enabled = Basicsettings.debugging_enabled
-
-(** print a debug message if debugging is enabled *)
-let printaroonie message =
-  (if Settings.get_value(debugging_enabled) then prerr_endline message; flush stderr)
-
 module Trie =
 struct
   type ('a, 'b) t =
