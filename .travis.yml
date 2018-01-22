@@ -20,5 +20,6 @@ after_failure:
 script:
   - opam pin add links . -y
   - opam pin add links-postgresql . -y
+  - make nc
   - make tests
   - ./run-tests db-only shredding
