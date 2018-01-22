@@ -1,6 +1,5 @@
 opam-version: "1.2"
-name: "links-mysql"
-version: "0.1"
+name: "links-sqlite3"
 maintainer: "Jan Stolarek <jan.stolarek@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
 homepage: "http://www.links-lang.org"
@@ -18,6 +17,6 @@ build: [
 
 depends: [
   "jbuilder" {build}
-  "mysql"
+  "sqlite3"
   "links"
 ]
