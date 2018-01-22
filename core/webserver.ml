@@ -1,5 +1,4 @@
 open Cohttp
-open Cohttp_lwt_unix
 open Lwt
 open ProcessTypes
 open Utility
@@ -233,13 +232,13 @@ struct
                    loop rest in
             loop mime_types in
           printaroonie (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
-          Server.respond_file ~headers ~fname () in
+          Cohttp_lwt_unix.Server.respond_file ~headers ~fname () in
 
       let is_websocket_request = is_prefix_of ws_url in
 
       let route rt =
         let rec up = function
-          | [], _ -> Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
+          | [], _ -> Cohttp_lwt_unix.Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
           | ([] as remaining, { as_page = Some (Left (file_path, mime_types)); _ }) :: _, true
           | (remaining, { as_directory = Some (Left (file_path, mime_types)); _ }) :: _, true ->
              serve_static file_path (String.concat "/" remaining) mime_types
@@ -312,9 +311,9 @@ struct
         Value.Continuation.(frame &> empty)
       in
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
-      let ctx = Cohttp_lwt_unix_net.init ~ctx () in
+      let ctx = Cohttp_lwt_unix.Net.init ~ctx () in
       printaroonie ("Starting server (2)?\n");
-      Server.create ~ctx ~mode:(`TCP (`Port port)) (Server.make ~callback:(callback rt render_cont) ()) in
+      Cohttp_lwt_unix.Server.create ~ctx ~mode:(`TCP (`Port port)) (Cohttp_lwt_unix.Server.make ~callback:(callback rt render_cont) ()) in
 
     printaroonie ("Starting server?\n");
     Lwt.async_exception_hook :=
