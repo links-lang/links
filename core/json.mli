@@ -22,6 +22,13 @@ module JsonState : sig
   (** Adds an access point ID to the state *)
   val add_ap_id : apid -> t -> t
 
+  val add_carried_channel : Value.chan -> t -> t
+
+  val get_carried_channels : t -> Value.chan list
+
+  (** Adds a buffer to the state *)
+  val add_buffer : channel_id -> Value.t list -> t -> t
+
   (** Serialises the state as a JSON string *)
   val to_string : t -> json_string
 end

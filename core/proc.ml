@@ -420,6 +420,7 @@ sig
   val register_client_channel : client_id -> chan -> unit
   val register_server_channel : chan -> unit
 
+  val get_buffer : channel_id -> (Value.t list) option
 end
 
 module rec Websockets : WEBSOCKETS =
@@ -835,6 +836,11 @@ and Session : SESSION = struct
   let sequence act =
     List.fold_left (fun acc c -> acc >>= fun _ -> (act c)) (Lwt.return ())
 
+
+  let get_buffer ch_id =
+    match Hashtbl.lookup buffers ch_id with
+      | Some queue -> Some (Queue.to_list queue)
+      | None -> None
 
   let register_channel location ch =
     begin

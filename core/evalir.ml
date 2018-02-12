@@ -99,10 +99,11 @@ struct
          Some (Settings.get_value Basicsettings.websocket_url) else
          None in
      let st = List.fold_left
-       (fun st_acc arg -> ResolveJsonState.add_val_event_handlers arg st_acc)
+       (fun st_acc arg -> ResolveJsonState.add_value_information arg st_acc)
        (JsonState.empty client_id conn_url) args in
      let st = ResolveJsonState.add_ap_information client_id st in
      let st = ResolveJsonState.add_process_information client_id st in
+     let st = ResolveJsonState.add_channel_information client_id st in
      Json.jsonize_call st continuation name args
 
    let client_call :
