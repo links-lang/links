@@ -72,7 +72,7 @@ let string_of_location = function
 | `Native -> "native"
 | `Unknown -> "unknown"
 
-type restriction = [ `Any | `Base | `Session ]
+type restriction = [ `Any | `Base | `Session | `Effect ]
     deriving (Eq, Show)
 type linearity   = [ `Any | `Unl ]
     deriving (Eq, Show)

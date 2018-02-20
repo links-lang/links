@@ -119,11 +119,11 @@ struct
         | `QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | `Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
-                       effect_row (row var_env alias_env e),
+                       effect_row var_env alias_env e,
                        datatype var_env t)
         | `Lolli (f, e, t) ->
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
-                       effect_row (row var_env alias_env e),
+                       effect_row var_env alias_env e,
                        datatype var_env t)
         | `Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
@@ -178,9 +178,39 @@ struct
         | `TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
               | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
-              | Some (`Alias _) -> let ts = List.map (type_arg var_env alias_env) ts in
-                  (* TODO: check that the kinds match up *)
-                  Instantiate.alias tycon ts alias_env
+              | Some (`Alias (qs, dt)) ->
+                 let exception Kind_mismatch (* TODO add more information *) in
+                 let match_kinds (q, t) =
+                   let primary_kind_of_type_arg : Sugartypes.type_arg -> primary_kind = function
+                     | `Type _ -> `Type
+                     | `Row _ -> `Row
+                     | `Presence _ -> `Presence
+                   in
+                   if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
+                     raise Kind_mismatch
+                   else (q, t)
+                 in
+                 let type_arg' var_env alias_env = function
+                   | `Row r -> `Row (effect_row var_env alias_env r)
+                   | t -> type_arg var_env alias_env t
+                 in
+                 begin try
+                         let ts = ListUtils.zip' qs ts in
+                         let ts = List.map
+                           (fun (q,t) ->
+                             let (q, t) = match_kinds (q, t) in
+                             match subkind_of_quantifier q with
+                             | (_, `Effect) -> type_arg' var_env alias_env t
+                             | _ -> type_arg var_env alias_env t)
+                           ts
+                         in
+                         Instantiate.alias tycon ts alias_env
+                   with
+                   | ListUtils.Lists_length_mismatch ->
+                      failwith (Printf.sprintf "Arity mismatch: the type constructor %s expects %d arguments, but %d arguments were provided" tycon (List.length qs) (List.length ts))
+                   | Kind_mismatch ->
+                      failwith "Kind mismatch"
+                 end
               | Some (`Abstract abstype) ->
                   (* TODO: check that the kinds match up *)
                   `Application (abstype, List.map (type_arg var_env alias_env) ts)
@@ -245,7 +275,8 @@ struct
           fields
     in
     fold_right Types.row_with fields seed
-  and effect_row (fields, rho, dual) =
+  and effect_row var_env alias_env row' =
+    let (fields, rho, dual) = row var_env alias_env row' in
     let fields =
       StringMap.mapi
         (fun name ->
@@ -253,6 +284,17 @@ struct
           | `Present t when not (TypeUtils.is_builtin_effect name || TypeUtils.is_function_type t) ->
              let eff = Types.make_empty_closed_row () in
              `Present (Types.make_function_type [] eff t)
+          | `Present t when not (TypeUtils.is_builtin_effect name) && TypeUtils.is_function_type t ->
+             let domain = TypeUtils.arg_types t in
+             let eff =
+               let row = TypeUtils.effect_row t in
+               if is_empty_row row then
+                 Types.make_empty_closed_row ()
+               else
+                 row
+             in
+             let codomain = TypeUtils.return_type t in
+             `Present (make_function_type domain eff codomain)
           | t -> t)
         fields
     in

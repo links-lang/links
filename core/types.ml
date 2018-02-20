@@ -19,7 +19,7 @@ type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
 
 type linearity   = [ `Any | `Unl ]
     deriving (Eq, Show)
-type restriction = [ `Any | `Base | `Session ]
+type restriction = [ `Any | `Base | `Session | `Effect ]
     deriving (Eq, Show)
 
 type subkind = linearity * restriction
@@ -305,6 +305,10 @@ let primary_kind_of_quantifier : quantifier -> primary_kind =
   | _, _, `Row _      -> `Row
   | _, _, `Presence _ -> `Presence
 
+let subkind_of_quantifier : quantifier -> subkind
+  = fun q ->
+    snd (kind_of_quantifier q)
+
 let primary_kind_of_type_arg : type_arg -> primary_kind =
   function
   | `Type _     -> `Type
@@ -313,7 +317,6 @@ let primary_kind_of_type_arg : type_arg -> primary_kind =
 
 let add_quantified_vars qs vars =
   List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
-
 
 (* unl type stuff *)
 
@@ -497,6 +500,8 @@ let is_sessionable_point : (var_set -> 'a -> bool) -> var_set -> [< 'a meta_max_
     | `Var (_, (_, `Any),     `Flexible) -> true
     | `Var (_, (_, `Base),    `Rigid)
     | `Var (_, (_, `Any),     `Rigid)
+    | `Var (_, (_, `Effect),  `Rigid)
+    | `Var (_, (_, `Effect),  `Flexible)
     | `Var (_, (_, `Base),    `Flexible) -> false
     | `Body t -> f rec_vars t
     | `Recursive (var, t) ->
@@ -1566,7 +1571,9 @@ struct
     let restriction = function
       | `Any -> "Any"
       | `Base -> "Base"
-      | `Session -> "Session" in
+      | `Session -> "Session"
+      | `Effect -> "Eff"
+    in
     let full (l, r) = "(" ^ linearity l ^ "," ^ restriction r ^ ")" in
 
     fun (policy, _vars) ->
@@ -1580,6 +1587,7 @@ struct
       | (`Any, `Any) -> "Any"
       | (`Unl, `Base) -> restriction `Base
       | (`Any, `Session) -> restriction `Session
+      | (`Unl, `Effect) -> restriction `Effect
       | (l, r) -> full (l, r)
 
   let primary_kind : primary_kind -> string = function
@@ -1591,7 +1599,9 @@ struct
     let restriction = function
       | `Any -> "Any"
       | `Base -> "Base"
-      | `Session -> "Session" in
+      | `Session -> "Session"
+      | `Effect -> "Eff"
+    in
     let full (policy, _vars) (k, sk) =
       primary_kind k ^ subkind (policy, _vars) sk in
     fun (policy, _vars) (k, sk) ->
@@ -1606,6 +1616,7 @@ struct
       | `Type, (`Any, `Session) -> restriction `Session
       | `Type, sk -> subkind ({policy with kinds="full"}, _vars) sk
       | `Row, (`Unl, `Any) -> primary_kind `Row
+      | `Row, (`Unl, `Effect) -> primary_kind `Row
       | `Presence, (`Unl, `Any) -> primary_kind `Presence
       | `Row, _
       | `Presence, _ -> full ({policy with kinds="full"}, _vars) (k, sk)

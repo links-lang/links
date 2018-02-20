@@ -108,6 +108,7 @@ let kind_of pos =
   | "Any" -> `Type, Some (`Any, `Any)
   | "Base" -> `Type, Some (`Unl, `Base)
   | "Session" -> `Type, Some (`Any, `Session)
+  | "Eff"     -> `Row, Some (`Unl, `Effect)
   | k -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos))
 
 let subkind_of pos =
@@ -116,6 +117,7 @@ let subkind_of pos =
   | "Any" -> Some (`Any, `Any)
   | "Base" -> Some (`Unl, `Base)
   | "Session" -> Some (`Any, `Session)
+  | "Eff"  -> Some (`Unl, `Effect)
   | sk -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos))
 
 let attach_kind _pos (t, k) = (t, k, `Rigid)

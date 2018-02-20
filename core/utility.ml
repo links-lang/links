@@ -445,6 +445,14 @@ struct
     | [], _
     | _, [] -> []
     | x :: xs, y :: ys -> (x, y) :: zip xs ys
+
+  exception Lists_length_mismatch
+
+  let rec zip' xs ys =
+    match xs, ys with
+    | [], [] -> []
+    | x :: xs, y :: ys -> (x, y) :: zip' xs ys
+    | _, _ -> raise Lists_length_mismatch
 end
 include ListUtils
 
