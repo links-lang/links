@@ -1248,7 +1248,7 @@ end = functor (K : CONTINUATION) -> struct
          let varenv = VEnv.bind varenv (x, x_name) in
          let value = Value.Env.find x valenv in
          let jsonized_val = Json.jsonize_value value in
-         let state = ResolveJsonState.add_val_event_handlers value state in
+         let state = ResolveJsonState.add_value_information value state in
          (state,
           varenv,
           Some x_name,
@@ -1384,7 +1384,7 @@ end = functor (K : CONTINUATION) -> struct
     let json_state = JsonState.empty client_id ws_conn_url in
 
     (* Add the event handlers for the final value to be sent *)
-    let json_state = ResolveJsonState.add_val_event_handlers v json_state in
+    let json_state = ResolveJsonState.add_value_information v json_state in
     (* Json.jsonize_state req_data v in *)
 
     (* divide HTML into head and body secitions (as we need to augment the head) *)
@@ -1399,6 +1399,9 @@ end = functor (K : CONTINUATION) -> struct
 
     (* Add process information to the JSON state; mark all processes as active *)
     let json_state = ResolveJsonState.add_process_information client_id json_state in
+
+    (* Add channel information to the JSON state; mark all as residing on client *)
+    let json_state = ResolveJsonState.add_channel_information client_id json_state in
 
     let state_string = JsonState.to_string json_state in
 

@@ -161,6 +161,8 @@ sig
   val register_client_channel : client_id -> chan -> unit
   val register_server_channel : chan -> unit
 
+  val get_buffer : channel_id -> (Value.t list) option
+
 end
 
 module rec Websockets : WEBSOCKETS
