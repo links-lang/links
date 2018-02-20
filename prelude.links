@@ -1266,7 +1266,7 @@ fun lf(f) {
 }
 
 ### Handler stuff
-typename Comp(e::Row, a) = () ~e~> a;
+typename Comp(e::Eff, a) = () ~e~> a;
 typename Zero = [||];
 
 # Composition operators

@@ -48,12 +48,12 @@ flags : --enable-handlers -e
 
 Operation invocation sugar (1)
 { fun() { do Foo } }
-stdout : fun : () {Foo:a|_}-> a
+stdout : fun : () {Foo:() {}-> a|_}-> a
 flags : --enable-handlers -e
 
 Operation invocation sugar (2)
 { fun() { do Foo() } }
-stdout : fun : () {Foo:a|_}-> a
+stdout : fun : () {Foo:() {}-> a|_}-> a
 flags : --enable-handlers -e
 
 Operation invocation sugar (3)
@@ -63,12 +63,12 @@ flags : --enable-handlers -e
 
 Operation invocation sugar (4)
 fun() { do Foo }
-stdout : fun : () {Foo:a|_}-> a
+stdout : fun : () {Foo:() {}-> a|_}-> a
 flags : --enable-handlers -e
 
 Operation invocation sugar (5)
 fun() { do Foo() }
-stdout : fun : () {Foo:a|_}-> a
+stdout : fun : () {Foo:() {}-> a|_}-> a
 flags : --enable-handlers -e
 
 Operation invocation sugar (6)

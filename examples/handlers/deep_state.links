@@ -1,7 +1,7 @@
 # Deep state handlers
 
 # Standard types
-typename Comp(e::Row, a) = () ~e~> a;
+typename Comp(e::Eff, a) = () ~e~> a;
 typename Unit = [|Unit|];
 
 # The run handler forces evaluation of a computation

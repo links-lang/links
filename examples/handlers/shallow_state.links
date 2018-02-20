@@ -1,7 +1,7 @@
 # Shallow state handlers
 
 # Standard types
-typename Comp(e::Row, a) = () ~e~> a;
+typename Comp(e::Eff, a) = () ~e~> a;
 typename Unit = [|Unit|];
 
 # Convenient auxiliary function: turns a shallow continuation into a

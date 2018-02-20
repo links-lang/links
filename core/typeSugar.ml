@@ -1577,29 +1577,22 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                           unary tuples are treated differently from
                           nullary and n-ary ones in the type
                           checker. *)
-                       let arity =
-                         let (fields,_,_) = TypeUtils.extract_row domain in
-                         StringMap.size fields
+                       let is_unary =
+                         StringMap.size (fst3 (TypeUtils.extract_row domain)) = 1
                        in
                        let pats =
                          let pats = concat_map (unwrap_at name) pats in
-                         if arity = 1 then
-                           pats
-                         else
-                           [`Tuple pats, SourceCode.dummy_pos]
+                         if is_unary then pats
+                         else [`Tuple pats, SourceCode.dummy_pos]
                        in
                        let domain =
-                         if arity = 1 then
-                           List.hd (TypeUtils.arg_types t)
-                         else
-                           domain
+                         if is_unary then List.hd (TypeUtils.arg_types t)
+                         else domain
                        in
                        let domain = cpt pats domain in
                        let t =
-                         if arity = 1 then
-                           Types.make_function_type [domain] effs codomain
-                         else
-                           `Function (domain, effs, codomain)
+                         if is_unary then Types.make_function_type [domain] effs codomain
+                         else `Function (domain, effs, codomain)
                        in
                        StringMap.add name (`Present t) env
                     | _ ->
