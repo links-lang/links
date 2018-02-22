@@ -3134,7 +3134,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                       type as `type_pattern' cannot infer the
                       principal type for a resumption in a
                       parameterised handler since it requires access
-                      to information that is conveyed by
+                      to information which is not conveyed by
                       pattern. TODO: perhaps augment the pattern with
                       arity information. *)
                    let (pat, env, effrow) = pat in
