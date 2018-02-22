@@ -15,7 +15,7 @@ module type EVALUATOR = sig
   type v = Value.t
   type result = Proc.thread_result Lwt.t
 
-  val reify : Value.continuation -> v
+  val reify : Value.resumption -> v
   val error : string -> 'a
   val computation : Value.env -> Value.continuation -> Ir.computation -> result
   val finish : Value.env -> v -> result
@@ -33,12 +33,14 @@ end
 
 module Evaluator = functor (ContEval : Value.CONTINUATION_EVALUATOR with type v = Value.t
                                                                     and type result = Proc.thread_result Lwt.t
-                                                                    and type 'v t := 'v Value.Continuation.t)
+                                                                    and type 'v t := 'v Value.Continuation.t
+                                                                    and type 'v resumption := 'v Value.Continuation.resumption)
                    (Webs : WEBSERVER) ->
 struct
   type v = Value.t
   type result = Proc.thread_result Lwt.t
   type continuation = Value.continuation
+  type resumption = Value.resumption
 
   module K = struct
     include Value.Continuation
@@ -530,11 +532,11 @@ struct
     | `Continuation c,      [p] -> apply_cont c env p
     | `Continuation _,       _  ->
        eval_error "Continuation applied to multiple (or zero) arguments"
-    | `ReifiedContinuation cont', [p] ->
-       apply_cont K.(cont' <> cont) env p
-    | `ReifiedContinuation cont', vs ->
-       K.Eval.apply_many ~env (cont', vs) cont
+    | `Resumption r, vs ->
+       resume env cont r vs
     | _                        -> eval_error "Application of non-function"
+  and resume env (cont : continuation) (r : resumption) vs =
+    Proc.yield (fun () -> K.Eval.resume ~env cont r vs)
   and apply_cont (cont : continuation) env v =
     Proc.yield (fun () -> K.Eval.apply ~env cont v)
   and computation_yielding env cont body =
@@ -762,7 +764,7 @@ struct
   and finish env v = Proc.finish (env, v)
     (*****************)
 
-  let reify k = `ReifiedContinuation k
+  let reify (r : resumption) = `Resumption r
   let eval : Value.env -> program -> result =
     fun env -> computation env K.empty
 

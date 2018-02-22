@@ -378,6 +378,7 @@ module type CONTINUATION_EVALUATOR = sig
   type v
   type result
   type 'v t
+  type 'v resumption
   type trap_result = (v, result) Trap.result
 
   val apply : env:v Env.t ->            (* the current environment *)
@@ -385,10 +386,11 @@ module type CONTINUATION_EVALUATOR = sig
               v ->                      (* the argument *)
               result
 
-  val apply_many : env:v Env.t ->
-                   v t * v list ->
-                   v t ->
-                   result
+  val resume : env:v Env.t ->
+               v t ->
+               v resumption ->
+               v list ->
+               result
 
   val trap : v t ->                        (* the continuation *)
              (Ir.name * v) ->              (* operation name and its argument *)
@@ -397,16 +399,18 @@ end
 
 module type EVAL = sig
   type 'v t
+  type 'v resumption
   type v
   type result
   val error : string -> 'a
   val computation : v Env.t -> v t -> Ir.computation -> result
   val finish : v Env.t -> v -> result
-  val reify : v t -> v
+  val reify : v resumption -> v
 end
 
 module type CONTINUATION = sig
   type 'v t
+  and 'v resumption
      deriving (Show)
 
   module Frame : FRAME
@@ -424,12 +428,13 @@ module type CONTINUATION = sig
   val set_trap_point : handler:'v Handler.t -> 'v t -> 'v t  (* installs a handler *)
 
   module Evaluation :
-  functor(E : EVAL with type 'v t := 'v t) ->
+  functor(E : EVAL with type 'v t := 'v t and type 'v resumption := 'v resumption) ->
   sig
     include CONTINUATION_EVALUATOR with
       type v = E.v
       and type result = E.result
       and type 'v t := 'v t
+      and type 'v resumption := 'v resumption
   end
 
   val to_string : 'v t -> string
@@ -439,13 +444,18 @@ module type COMPRESSABLE_CONTINUATION = sig
   include CONTINUATION
 
   type 'cv compressed_t
+  and 'cv compressed_r
      deriving (Show, Eq, Typeable, Dump, Pickle)
   val compress : compress_val:('v -> 'cv) -> 'v t -> 'cv compressed_t
   val uncompress : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_t -> 'v t
+
+  val compress_r : compress_val:('v -> 'cv) -> 'v resumption -> 'cv compressed_r
+  val uncompress_r : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_r -> 'v resumption
 end
 
 module Pure_Continuation = struct
   type 'v t = ('v Frame.t) list
+  and 'v resumption = 'v t
       deriving (Show)
 
   let empty = []
@@ -456,11 +466,16 @@ module Pure_Continuation = struct
 
   (** Compression **)
   type 'cv compressed_t = ('cv Frame.compressed_t) list
+  and 'cv compressed_r = unit
         deriving (Show, Eq, Typeable, Dump, Pickle)
   let compress ~compress_val cont =
     List.map (Frame.compress compress_val) cont
   let uncompress ~uncompress_val globals cont =
     List.map (Frame.uncompress uncompress_val globals) cont
+  let compress_r ~compress_val _cont =
+    ignore(compress_val); assert false
+  let uncompress_r ~uncompress_val _globals _cont =
+    ignore(uncompress_val); assert false
 
   module Frame = Frame
 
@@ -474,7 +489,7 @@ module Pure_Continuation = struct
   let set_trap_point ~handler k = ignore(handler); k
 
   module Evaluation =
-    functor(E : EVAL with type 'v t := 'v t) ->
+    functor(E : EVAL with type 'v t := 'v t and type 'v resumption := 'v resumption) ->
   struct
     type v = E.v
     type result = E.result
@@ -487,7 +502,7 @@ module Pure_Continuation = struct
        let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
        E.computation env cont comp
 
-    let apply_many ~env _ _ = ignore(env); E.error "Continuation applied to multiple arguments"
+    let resume ~env _ _ _ = ignore(env); E.error "Continuation applied to multiple arguments"
 
     let trap _ _ = E.error "no trap"
   end
@@ -505,105 +520,90 @@ module Eff_Handler_Continuation = struct
         depth: [`Deep of Ir.var list | `Shallow];
       }
     and 'v k = ('v handler * 'v Frame.t list) list
-    and 'v continuation =
-      | Empty
-      | Continuation of 'v k
-      | ShallowContinuation of 'v Frame.t list * 'v k
+    and 'v r =
+      | Deep of 'v k
+      | Shallow of 'v Frame.t list * 'v k
       deriving (Show)
 
     type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep of Ir.var list | `Shallow]
-    and 'cv ck = ('cv compressed_handler * ('cv Frame.compressed_t list)) list
-    and 'cv compressed_continuation =
-      | CompressedEmpty
-      | CompressedContinuation of 'cv ck
-      | CompressedShallowContinuation of 'cv Frame.compressed_t list * 'cv ck
+    and 'cv compressed_continuation = ('cv compressed_handler * ('cv Frame.compressed_t list)) list
+    and 'cv compressed_resumption =
+      | CompressedDeep of 'cv compressed_continuation
+      | CompressedShallow of 'cv Frame.compressed_t list * 'cv compressed_continuation
       deriving (Show, Eq, Typeable, Dump, Pickle)
   end
 
   open K
-  type 'v t = 'v continuation
+  type 'v t = 'v k
+  and 'v resumption = 'v r
       deriving (Show)
 
-  module Debug = struct
-    type debug_handler = {
-        _op_names: string list;
-        _depth:[`Deep of Ir.var list | `Shallow];
-        _kind:[`Identity | `User_defined];
-    }
-    and debug_handler_stack = {
-         _handlers: debug_handler list;
-    }
+  (* module Debug = struct *)
+  (*   type debug_handler = { *)
+  (*       _op_names: string list; *)
+  (*       _depth:[`Deep of Ir.var list | `Shallow]; *)
+  (*       _kind:[`Identity | `User_defined]; *)
+  (*   } *)
+  (*   and debug_handler_stack = { *)
+  (*        _handlers: debug_handler list; *)
+  (*   } *)
 
-    let _debug_handler : 'v handler -> debug_handler =
-      let operation_names : 'v K.handler -> string list = function
-        | Identity -> []
-        | User_defined h ->
-           StringMap.fold (fun name _ names -> name :: names) h.cases []
-      in
-      function
-      | Identity -> { _op_names = operation_names Identity; _depth = `Deep []; _kind = `Identity; }
-      | User_defined h ->
-         { _op_names = operation_names (User_defined h); _depth = h.depth; _kind = `User_defined }
+  (*   let _debug_handler : 'v handler -> debug_handler = *)
+  (*     let operation_names : 'v K.handler -> string list = function *)
+  (*       | Identity -> [] *)
+  (*       | User_defined h -> *)
+  (*          StringMap.fold (fun name _ names -> name :: names) h.cases [] *)
+  (*     in *)
+  (*     function *)
+  (*     | Identity -> { _op_names = operation_names Identity; _depth = `Deep []; _kind = `Identity; } *)
+  (*     | User_defined h -> *)
+  (*        { _op_names = operation_names (User_defined h); _depth = h.depth; _kind = `User_defined } *)
 
-    let _debug_handler_stack : 'v continuation -> debug_handler_stack =
-      fun k ->
-      let rec debug_stack = function
-        | Empty
-        | Continuation [] -> []
-        | Continuation ((h, _) :: rest) ->
-           let h' = _debug_handler h in
-           h' :: (debug_stack (Continuation rest))
-        | ShallowContinuation (_,k) -> debug_stack (Continuation k)
-      in
-      { _handlers = debug_stack k }
+  (*   let _debug_handler_stack : 'v continuation -> debug_handler_stack = *)
+  (*     fun k -> *)
+  (*     let rec debug_stack = function *)
+  (*       | Empty *)
+  (*       | Continuation [] -> [] *)
+  (*       | Continuation ((h, _) :: rest) -> *)
+  (*          let h' = _debug_handler h in *)
+  (*          h' :: (debug_stack (Continuation rest)) *)
+  (*       | ShallowContinuation (_,k) -> debug_stack (Continuation k) *)
+  (*     in *)
+  (*     { _handlers = debug_stack k } *)
 
-    let _string_of_debug_handler : debug_handler -> string
-      = fun { _op_names; _depth; _kind; } ->
-      let string_of_kind = function
-        | `Identity -> "Identity" | `User_defined -> "User defined"
-      in
-      let string_of_depth = function `Deep _ -> "Deep" | `Shallow -> "Shallow" in
-      let rec string_of_op_names = function
-        | [] -> ""
-        | [name] -> name
-        | name :: names -> Printf.sprintf "%s, %s" name (string_of_op_names names)
-      in
-      Printf.sprintf "Handler:\n  Kind: %s\n  Depth: %s\n  Operations: %s\n%!" (string_of_kind _kind) (string_of_depth _depth) (string_of_op_names _op_names)
+  (*   let _string_of_debug_handler : debug_handler -> string *)
+  (*     = fun { _op_names; _depth; _kind; } -> *)
+  (*     let string_of_kind = function *)
+  (*       | `Identity -> "Identity" | `User_defined -> "User defined" *)
+  (*     in *)
+  (*     let string_of_depth = function `Deep _ -> "Deep" | `Shallow -> "Shallow" in *)
+  (*     let rec string_of_op_names = function *)
+  (*       | [] -> "" *)
+  (*       | [name] -> name *)
+  (*       | name :: names -> Printf.sprintf "%s, %s" name (string_of_op_names names) *)
+  (*     in *)
+  (*     Printf.sprintf "Handler:\n  Kind: %s\n  Depth: %s\n  Operations: %s\n%!" (string_of_kind _kind) (string_of_depth _depth) (string_of_op_names _op_names) *)
 
-    let _string_of_debug_handler_stack : debug_handler_stack -> string
-      = fun { _handlers } ->
-      let rec string_of = function
-        | [] -> ""
-        | [h] -> Printf.sprintf "+%s" (_string_of_debug_handler h)
-        | h :: rest -> Printf.sprintf "+%s\n%s" (_string_of_debug_handler h) (string_of rest)
-      in
-      string_of _handlers
-  end
+  (*   let _string_of_debug_handler_stack : debug_handler_stack -> string *)
+  (*     = fun { _handlers } -> *)
+  (*     let rec string_of = function *)
+  (*       | [] -> "" *)
+  (*       | [h] -> Printf.sprintf "+%s" (_string_of_debug_handler h) *)
+  (*       | h :: rest -> Printf.sprintf "+%s\n%s" (_string_of_debug_handler h) (string_of rest) *)
+  (*     in *)
+  (*     string_of _handlers *)
+  (* end *)
 
-  let empty = Empty
+  let empty = []
 
-  (* TODO: decide semantics for shallow cases *)
   let (&>) f = function
-    | Empty
-    | Continuation [] -> Continuation [(Identity, [f])]
-    | Continuation ((h, fs) :: rest) -> Continuation ((h, f :: fs) :: rest)
-    | ShallowContinuation (_f', []) -> assert false (*ShallowContinuation (f', [(Identity, [f])])*)
-    | ShallowContinuation (_f', (_h, _fs) :: _rest) -> assert false (*ShallowContinuation (f', (h, f :: fs) :: rest)*)
+    | [] -> [(Identity, [f])]
+    | (h, fs) :: rest -> (h, f :: fs) :: rest
 
-  let rec (<>) k k' =
-    let prepend_frames fs = function
-      | Empty | Continuation [] | ShallowContinuation _ -> assert false
-      | Continuation ((h, fs') :: rest) -> Continuation ((h, fs @ fs') :: rest)
-    in
+  let (<>) k k' =
     match k, k' with
-    | Empty, k
-    | k, Empty -> k
-    | Continuation k, Continuation k' -> Continuation (k @ k')
-    | ShallowContinuation (_fs, _k), ShallowContinuation (_fs', _k') -> assert false (*ShallowContinuation (fs @ fs', k @ k')*)
-    | ShallowContinuation (fs, k'), k ->
-       let k'' = prepend_frames fs k in
-       (Continuation k') <> k''
-    | _k, ShallowContinuation (_fs, _k') -> assert false (*(Continuation k') <> (List.fold_left (fun k f -> f &> k) k fs)*)
+    | [], k | k, [] -> k
+    | k, k' -> k @ k'
 
   module Handler = struct
     open K
@@ -628,14 +628,10 @@ module Eff_Handler_Continuation = struct
         depth = snd h; }
   end
 
-  (* TODO: decide semantics for shallow case *)
-  let set_trap_point ~handler = function
-    | Empty -> Continuation [(handler,[])]
-    | Continuation k -> Continuation ((handler, []) :: k)
-    | ShallowContinuation (_pk,_k) -> assert false (*Continuation ((handler, pk) :: k)*)
+  let set_trap_point ~handler k = (handler, []) :: k
 
   module Evaluation =
-    functor (E : EVAL with type 'v t := 'v t) ->
+    functor (E : EVAL with type 'v t := 'v t and type 'v resumption := 'v resumption) ->
     struct
       type v = E.v
       type result = E.result
@@ -646,29 +642,22 @@ module Eff_Handler_Continuation = struct
         E.computation (Env.bind var (v, `Local) h.env) k comp
 
       let rec apply ~env k v =
-        let k = match k with
-          | Empty -> []
-          | ShallowContinuation (fs, k) -> (Identity, fs) :: k
-          | Continuation k -> k
-        in
         match k with
         | [] -> E.finish env v
-        | (Identity, []) :: k -> apply ~env (Continuation k) v
-        | (User_defined h, []) :: k -> return (Continuation k) h v
+        | (Identity, []) :: k -> apply ~env k v
+        | (User_defined h, []) :: k -> return k h v
         | (h, f :: pk) :: k ->
            let (scope, var, locals, comp) = f in
            let env = Env.bind var (v, scope) (Env.shadow env ~by:locals) in
            let k = (h, pk) :: k in
-           E.computation env (Continuation k) comp
+           E.computation env k comp
 
-      let apply_many ~env (k',vs) k =
+      let resume ~env k r vs =
         let v, vs = ListUtils.last vs, ListUtils.curtail vs in
-        let k' = match k' with
-          | Empty -> E.error "Non-parameterised continuation applied to multiple (or zero) arguments"
-          | ShallowContinuation _ -> E.error "Shallow continuation applied to multiple (or zero) arguments"
-          | Continuation k ->
-             match List.rev k with
-             | (User_defined h, pk) :: rest ->
+        let k = match r with
+          | Deep k' ->
+             begin match k' with
+             | (User_defined h, fs) :: rest ->
                 begin match h.depth with
                 | `Deep xs ->
                    let pairs = List.map2 (fun x v -> (x, v)) xs vs in
@@ -679,12 +668,24 @@ module Eff_Handler_Continuation = struct
                        Env.empty pairs
                    in
                    let env = Env.shadow h.env ~by:params in
-                   Continuation (List.rev ((User_defined { h with env = env }, pk) :: rest))
+                   let k' = List.rev ((User_defined { h with env = env }, fs) :: rest) in
+                   k' <> k
                 | _ -> assert false
                 end
              | _ -> assert false
+             end
+          | Shallow (fs', k') ->
+             let prepend_frames fs = function
+               | [] -> assert false
+               | (h, fs') :: rest -> (h, fs @ fs') :: rest
+             in
+             match k with
+             | [] -> assert false
+             | k ->
+                let k = prepend_frames fs' k in
+                k' <> k
         in
-        apply ~env (k' <> k) v
+        apply ~env k v
 
       let session_exn_enabled = Settings.get_value Basicsettings.Sessions.exceptions_enabled
       let trap k (opname, arg) =
@@ -695,7 +696,7 @@ module Eff_Handler_Continuation = struct
              | Some ((var, _), _, comp)
                   when session_exn_enabled && opname = session_exception_operation ->
                 let continuation_thunk =
-                  fun () -> E.computation (Env.bind var (arg, `Local) h.env) (Continuation k) comp
+                  fun () -> E.computation (Env.bind var (arg, `Local) h.env) k comp
                 in
                 let comps = List.map (fun (_, _, _, c) -> c) pk in
                 SessionTrap ({
@@ -707,14 +708,13 @@ module Eff_Handler_Continuation = struct
                 let env =
                   let resume =
                     match h.depth with
-                    | `Shallow -> ShallowContinuation (pk, List.rev k')
-                    | `Deep _ -> Continuation ( List.rev ((User_defined h,pk) :: k') )
+                    | `Shallow -> Shallow (pk, List.rev k')
+                    | `Deep _ -> Deep ((User_defined h,pk) :: k')
                   in
                   let env = Env.bind var (arg, `Local) h.env in
                   Env.bind (Var.var_of_binder resumeb) (E.reify resume, `Local) env
                 in
-                let cont = Continuation k in
-                Trap (fun () -> E.computation env cont comp)
+                Trap (fun () -> E.computation env k comp)
              | None -> handle ((User_defined h, pk) :: k') k
              end
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
@@ -731,30 +731,41 @@ module Eff_Handler_Continuation = struct
              UnhandledSessionException comps
           | [] ->
              Trap (fun () -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname))
-        in match k with
-        | Empty -> handle [] []
-        | Continuation k -> handle [] k
-        | ShallowContinuation (pk,k) -> handle [(Identity, pk)] k
+        in handle [] k
 
     end
   let to_string _ = "generalised_continuation"
 
   type 'cv compressed_t = 'cv K.compressed_continuation
+  and 'cv compressed_r  = 'cv K.compressed_resumption
         deriving (Show, Eq, Typeable, Dump, Pickle)
-  let compress ~compress_val =
+  let compress ~compress_val k =
     let compress_frame = Frame.compress compress_val in
     let compress (h, fs) = (Handler.compress ~compress_val h, List.map compress_frame fs) in
-    function
-    | Empty -> CompressedEmpty
-    | Continuation k -> CompressedContinuation (List.map compress k)
-    | ShallowContinuation (fs, k) -> CompressedShallowContinuation (List.map compress_frame fs, List.map compress k)
-  let uncompress ~uncompress_val globals =
+    List.map compress k
+    (* function *)
+    (* | Empty -> CompressedEmpty *)
+    (* | Continuation k -> CompressedContinuation (List.map compress k) *)
+    (* | ShallowContinuation (fs, k) -> CompressedShallowContinuation (List.map compress_frame fs, List.map compress k) *)
+  let uncompress ~uncompress_val globals k =
     let uncompress_frame = Frame.uncompress uncompress_val globals in
     let uncompress (h, fs) = (Handler.uncompress ~uncompress_val globals h, List.map uncompress_frame fs) in
+    List.map uncompress k
+    (* | CompressedEmpty -> Empty *)
+    (* | CompressedDeep k -> Deep (List.map uncompress k) *)
+  (* | CompressedShallow (fs, k) -> Shallow (List.map uncompress_frame fs, List.map uncompress k) *)
+
+  let compress_r ~compress_val =
     function
-    | CompressedEmpty -> Empty
-    | CompressedContinuation k -> Continuation (List.map uncompress k)
-    | CompressedShallowContinuation (fs, k) -> ShallowContinuation (List.map uncompress_frame fs, List.map uncompress k)
+    | Deep k -> CompressedDeep (compress ~compress_val k)
+    | Shallow (fs, k) -> CompressedShallow (List.map (Frame.compress compress_val) fs, compress ~compress_val k)
+  let uncompress_r ~uncompress_val globals =
+    function
+    | CompressedDeep k -> Deep (uncompress ~uncompress_val globals k)
+    | CompressedShallow (fs, k) -> Shallow (List.map (Frame.uncompress uncompress_val globals) fs, uncompress ~uncompress_val globals k)
+    (* | CompressedEmpty -> Empty *)
+    (* | CompressedDeep k -> Deep (List.map uncompress k) *)
+    (* | CompressedShallow (fs, k) -> Shallow (List.map uncompress_frame fs, List.map uncompress k) *)
 
   module Frame = Frame
 end
@@ -775,7 +786,7 @@ type t = [
 | `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of continuation
-| `ReifiedContinuation of continuation
+| `Resumption of resumption
 | `Pid of dist_pid
 | `AccessPointID of access_point
 | `SessionChannel of chan
@@ -783,6 +794,7 @@ type t = [
 | `SpawnLocation of spawn_location
 ]
 and continuation = t Continuation.t
+and resumption = t Continuation.resumption
 and env = t Env.t
   deriving (Show)
 
@@ -797,6 +809,7 @@ type compressed_primitive_value = [
   deriving (Show, Eq, Typeable, Pickle, Dump)
 
 type compressed_continuation = compressed_t Continuation.compressed_t
+and compressed_resumption = compressed_t Continuation.compressed_r
 and compressed_t = [
 | compressed_primitive_value
 | `List of compressed_t list
@@ -807,7 +820,7 @@ and compressed_t = [
 | `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of compressed_continuation
-| `ReifiedContinuation of compressed_continuation ]
+| `Resumption of compressed_resumption ]
 and compressed_env = compressed_t Env.compressed_t
   deriving (Show, Eq, Typeable, Dump, Pickle)
 
@@ -819,6 +832,7 @@ let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
     | `Database (_database, s) -> `Database s
 
 let rec compress_continuation cont : compressed_continuation = Continuation.compress ~compress_val cont
+and compress_resumption res : compressed_resumption = Continuation.compress_r ~compress_val res
 and compress_val (v : t) : compressed_t =
   let cv = compress_val in
     match v with
@@ -832,7 +846,7 @@ and compress_val (v : t) : compressed_t =
       | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (compress_continuation cont)
-      | `ReifiedContinuation cont -> `ReifiedContinuation (compress_continuation cont)
+      | `Resumption r -> `Resumption (compress_resumption r)
       | `Pid _ -> assert false (* mmmmm *)
       | `Socket (_inc, _outc) -> assert false
       | `SessionChannel _ -> assert false (* mmmmm *)
@@ -857,6 +871,8 @@ let uncompress_primitive_value : compressed_primitive_value -> [> primitive_valu
 let rec uncompress_continuation globals cont
         : continuation =
   Continuation.uncompress ~uncompress_val globals cont
+and uncompress_resumption globals res : resumption =
+  Continuation.uncompress_r ~uncompress_val globals res
 and uncompress_val globals (v : compressed_t) : t =
   let uv = uncompress_val globals in
     match v with
@@ -869,7 +885,7 @@ and uncompress_val globals (v : compressed_t) : t =
       | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
-      | `ReifiedContinuation cont -> `ReifiedContinuation (uncompress_continuation globals cont)
+      | `Resumption res -> `Resumption (uncompress_resumption globals res)
 
 let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
@@ -924,7 +940,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
      fprintf ppf "Spawn location: server"
   | `XML xml -> p_xmlitem ~close_tags:false ppf xml
   | `Continuation cont -> fprintf ppf "Continuation%s" (Continuation.to_string cont)
-  | `ReifiedContinuation cont -> fprintf ppf "ReifiedContinuation %s" (Continuation.to_string cont)
+  | `Resumption _res -> fprintf ppf "Resumption"
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
      fprintf ppf "Client access point on client %s, APID: %s" (ClientID.to_string cid) (AccessPointID.to_string apid)
   | `AccessPointID (`ServerAccessPoint (apid)) ->
