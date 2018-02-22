@@ -134,7 +134,7 @@ sig
   val handle : env -> (tail_computation sem *
                          (CompilePatterns.pattern * (env -> tail_computation sem)) list *
                          (CompilePatterns.pattern * (env -> tail_computation sem)) list *
-                          var list *
+                         ((env -> tail_computation sem) * CompilePatterns.pattern * Types.datatype) list *
                           Sugartypes.handler_descriptor)
                -> tail_computation sem
 
@@ -623,6 +623,10 @@ struct
     M.bind vs (fun vs -> lift (`Special (`DoOperation (name, vs, t)), t))
 
   let handle env (m, val_cases, eff_cases, params, desc) =
+    let params =
+      List.map
+        (fun (body, p, t) -> reify (body env), p, t) params
+    in
     let val_cases, eff_cases =
       let reify cases =
         List.map
@@ -811,27 +815,36 @@ struct
              let vs = evs ps in
              I.do_operation (name, vs, t)
           | `Handle { Sugartypes.sh_expr; Sugartypes.sh_effect_cases; Sugartypes.sh_value_cases; Sugartypes.sh_descr } ->
-              let eff_cases =
-                List.map
-                  (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern `Local p in
-                       (p, fun env -> eval (env ++ penv) body))
-                  sh_effect_cases
-              in
-              let val_cases =
-                List.map
-                  (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern `Local p in
-                       (p, fun env -> eval (env ++ penv) body))
-                  sh_value_cases
-              in
-              let params =
+             let henv, params =
+               let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (`Any, `Any)) in
                 match Sugartypes.(sh_descr.shd_params) with
-                | None -> []
-                | Some { Sugartypes.shp_names = raw_names; _ } ->
-                  List.map (fun (name,_) -> fst (lookup_name_and_type name env)) raw_names
-              in
-              I.handle env (ec sh_expr, val_cases, eff_cases, params, sh_descr)
+                | None -> empty_env, []
+                | Some { Sugartypes.shp_bindings = bindings; Sugartypes.shp_types = types } ->
+                   let env, bindings =
+                     List.fold_left2
+                       (fun (env, bindings) (body, p) t ->
+                         let p, penv = CompilePatterns.desugar_pattern `Local p in
+                         let bindings = ((fun env -> eval env body), p, t) :: bindings in
+                         ((env ++ penv), bindings))
+                       (empty_env, []) bindings types
+                   in
+                   env, List.rev bindings
+             in
+             let eff_cases =
+               List.map
+                 (fun (p, body) ->
+                   let p, penv = CompilePatterns.desugar_pattern `Local p in
+                   (p, fun env -> eval ((env ++ henv) ++ penv) body))
+                 sh_effect_cases
+             in
+             let val_cases =
+                List.map
+                  (fun (p, body) ->
+                    let p, penv = CompilePatterns.desugar_pattern `Local p in
+                    (p, fun env -> eval ((env ++ henv) ++ penv) body))
+                  sh_value_cases
+             in
+             I.handle env (ec sh_expr, val_cases, eff_cases, params, sh_descr)
           | `Switch (e, cases, Some t) ->
               let cases =
                 List.map

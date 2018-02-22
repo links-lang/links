@@ -679,6 +679,20 @@ struct
        apply cont env (value env f, [`Continuation cont])
     (* Handlers *)
     | `Handle { ih_comp = m; ih_cases = clauses; ih_return = return; ih_depth = depth } ->
+       (* Slight hack *)
+       let env, depth =
+        match depth with
+        | `Shallow -> env, `Shallow
+        | `Deep params ->
+           let env, vars =
+             List.fold_right
+               (fun (b, initial_value) (env, vars) ->
+                 let var = Var.var_of_binder b in
+                 Value.Env.bind var (value env initial_value, `Local) env, var :: vars)
+               params (env, [])
+           in
+           env, `Deep vars
+       in
        let handler = K.Handler.make ~env ~return ~clauses ~depth in
        let cont = K.set_trap_point ~handler cont in
        computation env cont m

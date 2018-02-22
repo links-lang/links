@@ -211,7 +211,7 @@ and handler_descriptor = {
   shd_params: handler_parameterisation option
 }
 and handler_parameterisation = {
-  shp_names: (name * position) list;
+  shp_bindings: (phrase * pattern) list;
   shp_types: Types.datatype list
 }
 and iterpatt = [
@@ -324,8 +324,8 @@ let make_untyped_handler ?parameters expr clauses depth =
   let shd_params =
     match parameters with
     | None -> None
-    | Some names ->
-       Some { shp_names = names;
+    | Some pps ->
+       Some { shp_bindings = pps;
               shp_types = [] }
   in
   { sh_expr = expr;
@@ -465,8 +465,16 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
-    | `Handle { sh_expr = e; sh_effect_cases = eff_cases; sh_value_cases = val_cases;  _ } ->
-       union (phrase e) (union (union_map case eff_cases) (union_map case val_cases))
+    | `Handle { sh_expr = e; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr } ->
+       let params_bound =
+         option_map
+           (fun params -> union_map (snd ->- pattern) params.shp_bindings)
+           descr.shd_params
+       in
+       union_all [phrase e;
+                  union_map case eff_cases;
+                  union_map case val_cases;
+                  diff (option_map (fun params -> union_map (fst ->- phrase) params.shp_bindings) descr.shd_params) params_bound]
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | `CP cp -> cp_phrase cp

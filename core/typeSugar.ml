@@ -3059,25 +3059,34 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              List.rev ret, List.rev ops
            in
            (* type parameters *)
-           let descr =
+           let henv = context in
+           let (param_env, params, descr) =
              match descr.shd_params with
-             | Some { shp_names; _ } ->
-                let names = (* Slight hack *)
-                  List.map (fun (name, pos) -> `Var name, pos) shp_names
-                in
+             | Some { shp_bindings; _ } ->
                 let _ =
-                  let names =
-                    List.map (fun (name, pos) -> `Variable (name, None, pos), pos) shp_names
-                  in
-                  check_for_duplicate_names pos names
+                  check_for_duplicate_names pos (List.map snd shp_bindings)
                 in
-                let typed_names = List.map tc names in
-                let types =
-                  List.map (fun (_,t,_) -> t) typed_names
+                let type_binding (body, pat) =
+                  let body = tc body in
+                  let pat = tpc pat in
+                  let a = Types.fresh_type_variable (`Any, `Any) in (* TODO FIX GRIPERS *)
+                  unify ~handle:Gripers.form_binding_body (pos_and_typ body, no_pos a);
+                  unify ~handle:Gripers.form_binding_pattern (ppos_and_typ pat, (exp_pos body, a));
+                  (body, pat)
                 in
-                { descr with shd_params = Some { shp_names = shp_names;
-                                                 shp_types = types } }
-             | None -> descr
+                let typed_bindings = List.map type_binding shp_bindings in
+                let pat_types =
+                  List.map (snd ->- pattern_typ) typed_bindings
+                in
+                let param_env =
+                  List.fold_left
+                    (fun env p ->
+                      env ++ pattern_env p)
+                    henv (List.map snd typed_bindings)
+                in
+                (param_env, typed_bindings, { descr with shd_params = Some { shp_bindings = List.map (fun (body, pat) -> erase body, erase_pat pat) typed_bindings;
+                                                                             shp_types = pat_types } })
+             | None -> (henv, [], descr)
            in
            let type_cases cases =
              let wild_row () =
@@ -3209,11 +3218,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let val_cases =
                List.fold_right
                  (fun (pat, body) cases ->
-                   let body = type_check (context ++ pattern_env pat) body in
+                   let body = type_check (param_env ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
 	                      (pos_and_typ body, no_pos bt) in
                    let vs = Env.domain (pattern_env pat) in
-                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
+                   let vs' = Env.domain param_env.var_env in
+                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
                    (pat, update_usages body us) :: cases)
                  val_cases []
              in
@@ -3221,7 +3231,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let eff_cases =
                List.fold_right
                  (fun (pat, (kpat : pattern * Types.datatype Env.t * Types.datatype), body) cases ->
-                   let body = type_check (context ++ pattern_env pat) body in
+                   let body = type_check (param_env ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
                    in
@@ -3319,7 +3329,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            `Handle { sh_expr = erase m;
                      sh_effect_cases = erase_cases eff_cases;
                      sh_value_cases = erase_cases val_cases;
-                     sh_descr = descr }, body_type, merge_usages [usages m; usages_cases eff_cases; usages_cases val_cases]
+                     sh_descr = descr }, body_type, merge_usages [usage_compat (List.map (fun ((_, _, m),_) -> m) params); usages m; usages_cases eff_cases; usages_cases val_cases]
         | `DoOperation (opname, args, _) ->
            (* Strategy:
               1. List.map tc args
@@ -3335,7 +3345,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 	       let inp_t  = List.map typ ps in
 	       let out_t  = Types.fresh_type_variable (`Unl, `Any) in
 	       let optype = Types.make_pure_function_type inp_t out_t in
-               let effrow = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Any) in
+               let effrow = Types.make_singleton_open_row (opname, `Present optype) (`Unl, `Effect) in
 	       (effrow, out_t, ps)
 	     in
 	     let (_,_,p) = SourceCode.resolve_pos pos in

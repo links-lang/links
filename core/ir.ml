@@ -97,7 +97,7 @@ and handler = {
     ih_return: binder * computation;
     ih_depth: handler_depth;
 }
-and handler_depth = [`Deep of var list | `Shallow]
+and handler_depth = [`Deep of (binder * value) list | `Shallow]
   deriving (Show)
 
 let binding_scope : binding -> scope =
@@ -475,8 +475,23 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
-	| `Handle ({ ih_comp; ih_cases; ih_return; _ } as hndlr) ->
+	| `Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
 	   let (comp, _, o) = o#computation ih_comp in
+           (* TODO FIXME traverse parameters *)
+           let (depth, o) =
+             match ih_depth with
+             | `Deep params ->
+                let (o, bindings) =
+                  List.fold_left
+                    (fun (o, bvs) (b,v) ->
+                      let (b, o) = o#binder b in
+                      let (v, _, o) = o#value v in
+                      (o, (b,v) :: bvs))
+                    (o, []) params
+                in
+                `Deep (List.rev bindings), o
+             | `Shallow -> `Shallow, o
+           in
 	   let (cases, _branch_types, o) =
 	     o#name_map
                (fun o (x, resume, c) ->
@@ -491,8 +506,7 @@ struct
              let (comp, t, o) = o#computation (snd ih_return) in
              (b, comp), t, o
            in
-           (* TODO FIXME traverse parameters *)
-	   `Handle { hndlr with ih_comp = comp; ih_cases = cases; ih_return = return; }, t, o
+	   `Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t, o
 	| `DoOperation (name, vs, t) ->
 	   let (vs, _, o) = o#list (fun o -> o#value) vs in
 	   (`DoOperation (name, vs, t), t, o)

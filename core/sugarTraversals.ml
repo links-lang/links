@@ -271,7 +271,10 @@ class map =
 	      )
               sh_value_cases
 	  in
-          `Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr }
+          let params =
+            o#option (fun o -> o#handle_params) sh_descr.shd_params
+          in
+          `Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -497,6 +500,17 @@ class map =
 	    )
 	) params in
 	(depth,m,cases,params)
+
+    method handle_params : handler_parameterisation -> handler_parameterisation =
+      fun params ->
+        let bindings =
+          o#list
+            (fun o (expr, pat) ->
+              let pat = o#pattern pat in
+              let expr = o#phrase expr in (expr, pat))
+            params.shp_bindings
+        in
+        { params with shp_bindings = bindings }
 
     method fieldspec : fieldspec -> fieldspec =
       function
@@ -890,7 +904,7 @@ class fold =
          let o = o#name name in
 	 let o = o#option (fun o -> o#unknown) t in
 	 let o = o#list (fun o -> o#phrase) ps in o
-      | `Handle { sh_expr; sh_effect_cases; sh_value_cases; _ } ->
+      | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let o = o#phrase sh_expr in
           let o =
             o#list
@@ -907,7 +921,10 @@ class fold =
 	       let o = o#phrase rhs in o
 	      )
               sh_value_cases
-	  in o
+	  in
+          let o =
+            o#option (fun o -> o#handle_params) sh_descr.shd_params
+          in o
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
@@ -1110,6 +1127,14 @@ class fold =
 	        (fun o -> o#pattern)
 	      )
 	    ) params in o
+
+    method handle_params : handler_parameterisation -> 'self_type =
+      fun params ->
+        o#list
+          (fun o (expr, pat) ->
+            let o = o#pattern pat in
+            o#phrase expr)
+          params.shp_bindings
 
     method fieldspec : fieldspec -> 'self_type =
       function
@@ -1557,7 +1582,10 @@ class fold_map =
 	      )
               sh_value_cases
 	  in
-          (o, (`Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr }))
+          let (o, params) =
+            o#option (fun o -> o#handle_params) sh_descr.shd_params
+          in
+          (o, (`Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }))
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -1819,6 +1847,17 @@ class fold_map =
 	    )
 	) params in
 	(o, (depth, m, cases, params))
+
+    method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
+      fun params ->
+        let (o, bindings) =
+          o#list
+            (fun o (expr, pat) ->
+              let (o, pat) = o#pattern pat in
+              let (o, expr) = o#phrase expr in (o, (expr, pat)))
+            params.shp_bindings
+        in
+        (o, { params with shp_bindings = bindings })
 
     method fieldspec : fieldspec -> ('self_type * fieldspec) =
       function

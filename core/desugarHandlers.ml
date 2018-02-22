@@ -186,18 +186,18 @@ object
 
   method! phrase (node, pos) =
     match node with
-    | `Handle handler when handler.sh_descr.shd_depth = `Deep ->
-       begin match handler.sh_descr.shd_params with
-       | Some { shp_names; _ } ->
-          let local_bindings =
-            List.fold_right
-              (fun (name, pos) acc ->
-                (`Val ([], (`Variable (name, None, pos), dp), (`Var name, pos), `Unknown, None), dp) :: acc)
-              shp_names []
-          in
-          `Block (local_bindings, (`Handle handler, pos)), dp
-       | None -> `Handle handler, pos
-       end
+    (* | `Handle handler when handler.sh_descr.shd_depth = `Deep -> *)
+    (*    begin match handler.sh_descr.shd_params with *)
+    (*    | Some { shp_names; _ } -> *)
+    (*       let local_bindings = *)
+    (*         List.fold_right *)
+    (*           (fun (name, pos) acc -> *)
+    (*             (`Val ([], (`Variable (name, None, pos), dp), (`Var name, pos), `Unknown, None), dp) :: acc) *)
+    (*           shp_names [] *)
+    (*       in *)
+    (*       `Block (local_bindings, (`Handle handler, pos)), dp *)
+    (*    | None -> `Handle handler, pos *)
+    (*    end *)
     | _ -> super#phrase (node, pos)
 
   method! bindingnode = function

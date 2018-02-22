@@ -93,7 +93,7 @@ and handler = {
     ih_return: binder * computation;
     ih_depth: handler_depth;
 }
-and handler_depth = [`Deep of var list | `Shallow]
+and handler_depth = [`Deep of (binder * value) list | `Shallow]
   deriving (Show)
 
 val binding_scope : binding -> scope

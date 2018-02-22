@@ -877,8 +877,31 @@ let compile_cases
       result
 
 (* Handler cases compilation *)
+let handle_parameter_pattern : raw_env -> (pattern * Types.datatype) -> Ir.computation -> (Ir.binder * Ir.value) * (Ir.binding list * Ir.binding list)
+  = fun env (pat, t) body ->
+    let pb, p = Var.fresh_var_of_type t in
+    let pb', p' = Var.fresh_var_of_type t in
+    let outer_bindings =
+      let (bs, tc) = body in
+      bs @ [letm (pb', tc)]
+    in
+    let inner_bindings =
+      fst @@ let_pattern env pat (`Variable p, t) (([], `Special (`Wrong t)), t)
+    in
+    (pb, `Variable p'), (inner_bindings, outer_bindings)
+
+let compile_handle_parameters : raw_env -> (Ir.computation * pattern * Types.datatype) list -> (Ir.binder * Ir.value) list * (Ir.binding list * Ir.binding list)
+  = fun env parameters ->
+    List.fold_right
+      (fun (body, pat, t) (bvs, (inner, outer)) ->
+        let (bv, (inner', outer')) =
+          handle_parameter_pattern env (pat, t) body
+        in
+        (bv :: bvs, (inner' @ inner, outer' @ outer)))
+      parameters ([], ([], []))
+
 let compile_handle_cases
-    : raw_env -> (raw_clause list * raw_clause list * Ir.var list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
+    : raw_env -> (raw_clause list * raw_clause list * (Ir.computation * pattern * Types.datatype) list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
   fun (nenv, tenv, eff) (raw_value_clauses, raw_effect_clauses, params, desc) m ->
   (* Observation: reduced continuation patterns are always trivial,
      i.e. a reduced continuation pattern is either a variable or a
@@ -898,6 +921,9 @@ let compile_handle_cases
      continuation binders for each raw clause, and bind them in their
      respective compiled clause bodies such that each raw continuation
      binder is an alias of the fresh continuation binder. *)
+  let (params, (inner_param_bindings, outer_param_bindings)) =
+    compile_handle_parameters (nenv, tenv, eff) params
+  in
   let compiled_effect_cases =  (* The compiled cases *)
     if List.length raw_effect_clauses = 0 then
       StringMap.empty
@@ -988,6 +1014,9 @@ let compile_handle_cases
         in
         StringMap.mapi
           (fun effname (x, body) ->
+            let body =
+              with_bindings inner_param_bindings body
+            in
             match StringMap.find effname continuation_binders with
             | [] ->
                let resume =
@@ -1021,20 +1050,21 @@ let compile_handle_cases
     let tenv = TEnv.bind tenv (Var.var_of_binder scrutinee, comp_ty) in
     let initial_env = (nenv, tenv, eff, PEnv.empty) in
     let clauses = List.map reduce_clause raw_value_clauses in
-    scrutinee, match_cases [Var.var_of_binder scrutinee] clauses (fun _ -> ([], `Special (`Wrong comp_ty))) initial_env
+    let body = match_cases [Var.var_of_binder scrutinee] clauses (fun _ -> ([], `Special (`Wrong comp_ty))) initial_env in
+    scrutinee, with_bindings inner_param_bindings body
   in
   let handle =
     `Handle {
-        ih_comp = m;
+        ih_comp   = m;
         ih_return = return;
-        ih_cases = compiled_effect_cases;
-        ih_depth =
+        ih_cases  = compiled_effect_cases;
+        ih_depth  =
           match Sugartypes.(desc.shd_depth) with
           | `Shallow -> `Shallow
           | `Deep -> `Deep params
       }
   in
-  ([], `Special handle)
+  (outer_param_bindings, `Special handle)
 
 (* Session typing choice compilation *)
 let match_choices : var -> clause list -> bound_computation =
