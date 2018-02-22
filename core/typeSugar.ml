@@ -3060,7 +3060,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            (* type parameters *)
            let henv = context in
-           let (param_env, params, descr) =
+           let (henv, params, descr) =
              match descr.shd_params with
              | Some { shp_bindings; _ } ->
                 let _ =
@@ -3160,7 +3160,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         | `Any ->
                            let kt =
                              let domain =
-                               handler_params @ [Types.fresh_type_variable (`Unl, `Any)]
+                               (Types.fresh_type_variable (`Unl, `Any)) :: handler_params
                              in
                              let effects = Types.make_empty_open_row (`Unl, `Any) in
                              let codomain =  Types.fresh_type_variable (`Unl, `Any) in
@@ -3175,7 +3175,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                              let op_param = TypeUtils.return_type kt in
                              let typ = Env.lookup env kname in
                              let domain =
-                               handler_params @ [op_param]
+                               op_param :: handler_params
                              in
                              let effs, codomain =
                                TypeUtils.(effect_row typ, return_type typ)
@@ -3218,11 +3218,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let val_cases =
                List.fold_right
                  (fun (pat, body) cases ->
-                   let body = type_check (param_env ++ pattern_env pat) body in
+                   let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
 	                      (pos_and_typ body, no_pos bt) in
                    let vs = Env.domain (pattern_env pat) in
-                   let vs' = Env.domain param_env.var_env in
+                   let vs' = Env.domain henv.var_env in
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
                    (pat, update_usages body us) :: cases)
                  val_cases []
@@ -3231,12 +3231,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let eff_cases =
                List.fold_right
                  (fun (pat, (kpat : pattern * Types.datatype Env.t * Types.datatype), body) cases ->
-                   let body = type_check (param_env ++ pattern_env pat) body in
+                   let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
                    in
                    let vs = Env.domain (pattern_env pat) in
-                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
+                   let vs' = Env.domain henv.var_env in
+                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
                    let () =
                      let (_,_,pos) = SourceCode.resolve_pos @@ snd (fst3 kpat) in
                      let t = TypeUtils.return_type (pattern_typ kpat) in

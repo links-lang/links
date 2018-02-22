@@ -652,40 +652,41 @@ module Eff_Handler_Continuation = struct
            let k = (h, pk) :: k in
            E.computation env k comp
 
-      let resume ~env k r vs =
-        let v, vs = ListUtils.last vs, ListUtils.curtail vs in
-        let k = match r with
-          | Deep k' ->
-             begin match k' with
-             | (User_defined h, fs) :: rest ->
-                begin match h.depth with
-                | `Deep xs ->
-                   let pairs = List.map2 (fun x v -> (x, v)) xs vs in
-                   let params =
-                     List.fold_left
-                       (fun acc (x, v) ->
-                         Env.bind x (v, `Local) acc)
-                       Env.empty pairs
-                   in
-                   let env = Env.shadow h.env ~by:params in
-                   let k' = List.rev ((User_defined { h with env = env }, fs) :: rest) in
-                   k' <> k
+      let resume ~env k r = function
+        | [] -> E.error "Resumption applied to zero arguments"
+        | v :: vs ->
+           let k = match r with
+             | Deep k' ->
+                begin match k' with
+                | (User_defined h, fs) :: rest ->
+                   begin match h.depth with
+                   | `Deep xs ->
+                      let pairs = List.map2 (fun x v -> (x, v)) xs vs in
+                      let params =
+                        List.fold_left
+                          (fun acc (x, v) ->
+                            Env.bind x (v, `Local) acc)
+                          Env.empty pairs
+                      in
+                      let env = Env.shadow h.env ~by:params in
+                      let k' = List.rev ((User_defined { h with env = env }, fs) :: rest) in
+                      k' <> k
+                   | _ -> assert false
+                   end
                 | _ -> assert false
                 end
-             | _ -> assert false
-             end
-          | Shallow (fs', k') ->
-             let prepend_frames fs = function
-               | [] -> assert false
-               | (h, fs') :: rest -> (h, fs @ fs') :: rest
-             in
-             match k with
-             | [] -> assert false
-             | k ->
-                let k = prepend_frames fs' k in
-                k' <> k
-        in
-        apply ~env k v
+             | Shallow (fs', k') ->
+                let prepend_frames fs = function
+                  | [] -> assert false
+                  | (h, fs') :: rest -> (h, fs @ fs') :: rest
+                in
+                match k with
+                | [] -> assert false
+                | k ->
+                   let k = prepend_frames fs' k in
+                   k' <> k
+           in
+           apply ~env k v
 
       let session_exn_enabled = Settings.get_value Basicsettings.Sessions.exceptions_enabled
       let trap k (opname, arg) =
