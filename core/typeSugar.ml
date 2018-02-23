@@ -194,6 +194,7 @@ sig
   val switch_patterns : griper
   val switch_branches : griper
 
+  val handle_parameter_pattern : griper
   val handle_value_patterns : griper
   val handle_effect_patterns : griper
   val handle_branches : griper
@@ -202,6 +203,8 @@ sig
   val type_continuation : griper
   val type_continuation_with_annotation : griper
   val type_resumption_with_annotation : griper
+  val deep_resumption : griper
+  val deep_resumption_effects : griper
   val should_not_go_wrong : griper
   val handle_return : griper
   val handle_comp_effects : griper
@@ -470,6 +473,12 @@ end
                   "while the subsequent expressions have type" ^ nli () ^
                   code ppr_rt)
 
+    let handle_parameter_pattern ~pos ~t1:l ~t2:(rexpr, rt) ~error:_ =
+      build_tyvar_names [snd l; rt];
+        with_but2things pos
+          ("The parameter pattern must match the expression in a handle parameter binding")
+          ("pattern", l) ("expression", (rexpr, rt))
+
     let handle_value_patterns ~pos ~t1:(lexpr,lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
       let ppr_lt = show_type lt in
@@ -591,6 +600,18 @@ end
                   "but it is annotated with type" ^ nl() ^
                   tab() ^ code (show_type rt))
 
+    let deep_resumption ~pos ~t1:(resume,lt) ~t2:(handle,rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      with_but2things pos
+          ("Resumption typing error")
+          ("deep resumption", (resume, lt)) ("expression", (handle, rt))
+
+    let deep_resumption_effects ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("Continuation typing error: the type " ^nl() ^
+                  tab () ^ code (show_type lt) ^ nl()^
+                  "is not unifiable with" ^ nl() ^
+                  tab() ^ code (show_type rt))
 
     let should_not_go_wrong ~pos ~t1:_ ~t2:_ ~error:_ =
       die pos "Unification error: This is unexpected!"
@@ -3069,9 +3090,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 let type_binding (body, pat) =
                   let body = tc body in
                   let pat = tpc pat in
-                  let a = Types.fresh_type_variable (`Any, `Any) in (* TODO FIX GRIPERS *)
-                  unify ~handle:Gripers.form_binding_body (pos_and_typ body, no_pos a);
-                  unify ~handle:Gripers.form_binding_pattern (ppos_and_typ pat, (exp_pos body, a));
+                  unify ~handle:Gripers.handle_parameter_pattern (ppos_and_typ pat, (pos_and_typ body));
                   (body, pat)
                 in
                 let typed_bindings = List.map type_binding shp_bindings in
@@ -3239,22 +3258,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    let vs' = Env.domain henv.var_env in
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
                    let () =
-                     let (_,_,pos) = SourceCode.resolve_pos @@ snd (fst3 kpat) in
-                     let t = TypeUtils.return_type (pattern_typ kpat) in
+                     let (_,_,pos') = SourceCode.resolve_pos @@ snd (fst3 kpat) in
+                     let (_,_,pos'') = SourceCode.resolve_pos pos in
+                     let kt = TypeUtils.return_type (pattern_typ kpat) in
                      (* TODO FIXME Gripers *)
                      match descr.shd_depth with
                      | `Deep ->
                         let eff = context.effect_row in
-                        unify ~handle:Gripers.type_continuation
-                          ((pos, t), no_pos bt);
-                        unify ~handle:Gripers.type_continuation
-                          ((pos, `Effect eff), no_pos (`Effect outer_eff))
+                        unify ~handle:Gripers.deep_resumption
+                          ((pos', kt), (pos'', bt));
+                        unify ~handle:Gripers.deep_resumption_effects
+                          ((pos', `Effect eff), (pos'', `Effect outer_eff))
                      | `Shallow ->
                         let eff = TypeUtils.effect_row (pattern_typ kpat) in
                         unify ~handle:Gripers.type_continuation
-                          ((pos, t), no_pos rt);
+                          ((pos', kt), (pos'', rt));
                         unify ~handle:Gripers.type_continuation
-                          ((pos, `Effect eff), no_pos (`Effect inner_eff))
+                          ((pos', `Effect eff), (pos'', `Effect inner_eff))
                    in
                    (pat, kpat, update_usages body us) :: cases)
                  eff_cases []
