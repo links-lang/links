@@ -877,7 +877,7 @@ let compile_cases
       result
 
 (* Handler cases compilation *)
-let handle_parameter_pattern : raw_env -> (pattern * Types.datatype) -> Ir.computation -> (Ir.binder * Ir.value) * (Ir.binding list * Ir.binding list)
+let handle_parameter_pattern : raw_env -> (pattern * Types.datatype) -> Ir.computation -> (Ir.binder * Ir.value) * ((Ir.computation -> Ir.computation) * Ir.binding list)
   = fun env (pat, t) body ->
     let pb, p = Var.fresh_var_of_type t in
     let pb', p' = Var.fresh_var_of_type t in
@@ -886,19 +886,19 @@ let handle_parameter_pattern : raw_env -> (pattern * Types.datatype) -> Ir.compu
       bs @ [letm (pb', tc)]
     in
     let inner_bindings =
-      fst @@ let_pattern env pat (`Variable p, t) (([], `Special (`Wrong t)), t)
+         fun cont -> let_pattern env pat (`Variable p, t) (cont, `Not_typed)
     in
     (pb, `Variable p'), (inner_bindings, outer_bindings)
 
-let compile_handle_parameters : raw_env -> (Ir.computation * pattern * Types.datatype) list -> (Ir.binder * Ir.value) list * (Ir.binding list * Ir.binding list)
+let compile_handle_parameters : raw_env -> (Ir.computation * pattern * Types.datatype) list -> (Ir.binder * Ir.value) list * ((Ir.computation -> Ir.computation) * Ir.binding list)
   = fun env parameters ->
     List.fold_right
       (fun (body, pat, t) (bvs, (inner, outer)) ->
         let (bv, (inner', outer')) =
           handle_parameter_pattern env (pat, t) body
         in
-        (bv :: bvs, (inner' @ inner, outer' @ outer)))
-      parameters ([], ([], []))
+        (bv :: bvs, ((fun comp -> inner' (inner comp)), outer' @ outer)))
+      parameters ([], ((fun x -> x), []))
 
 let compile_handle_cases
     : raw_env -> (raw_clause list * raw_clause list * (Ir.computation * pattern * Types.datatype) list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
@@ -921,7 +921,7 @@ let compile_handle_cases
      continuation binders for each raw clause, and bind them in their
      respective compiled clause bodies such that each raw continuation
      binder is an alias of the fresh continuation binder. *)
-  let (params, (inner_param_bindings, outer_param_bindings)) =
+  let (params, (with_parameters, outer_param_bindings)) =
     compile_handle_parameters (nenv, tenv, eff) params
   in
   let compiled_effect_cases =  (* The compiled cases *)
@@ -1015,7 +1015,7 @@ let compile_handle_cases
         StringMap.mapi
           (fun effname (x, body) ->
             let body =
-              with_bindings inner_param_bindings body
+              with_parameters body
             in
             match StringMap.find effname continuation_binders with
             | [] ->
@@ -1051,7 +1051,7 @@ let compile_handle_cases
     let initial_env = (nenv, tenv, eff, PEnv.empty) in
     let clauses = List.map reduce_clause raw_value_clauses in
     let body = match_cases [Var.var_of_binder scrutinee] clauses (fun _ -> ([], `Special (`Wrong comp_ty))) initial_env in
-    scrutinee, with_bindings inner_param_bindings body
+    scrutinee, with_parameters body
   in
   let handle =
     `Handle {
