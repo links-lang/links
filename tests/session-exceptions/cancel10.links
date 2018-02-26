@@ -4,11 +4,10 @@ fun go() {
     raise; 10
   } as (x) in {
     var (res, _) = receive(s);
-    print("x: " ^^ intToString(x));
-    print("Res: " ^^ intToString(res))
+    x + res
   } otherwise {
     var (res, _) = receive(s);
-    print("Received from s: " ^^ intToString(res))
+    res
   }
 }
 

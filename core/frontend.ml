@@ -34,12 +34,12 @@ struct
     else (a, b, c)
 
   let after_typing_ext enabled = extension enabled after_typing
+  let before_typing_ext enabled f x = if enabled then f x else x
 
   let program =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
       let program = DesugarAlienBlocks.transform_alien_blocks program in
-
       (* Module-y things *)
       let (program, ffi_files) =
         if ModuleUtils.contains_modules program then
@@ -54,6 +54,7 @@ struct
       let _program = CheckXmlQuasiquotes.checker#program program in
       let () = DesugarSessionExceptions.settings_check program in
       ((( ExperimentalExtensions.check#program
+       ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
        ->- RefineBindings.refine_bindings#program
