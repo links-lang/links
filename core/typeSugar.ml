@@ -198,18 +198,14 @@ sig
   val handle_value_patterns : griper
   val handle_effect_patterns : griper
   val handle_branches : griper
-  val handle_continuation_codomains : griper
-  val continuation_effect_rows : griper
-  val type_continuation : griper
-  val type_continuation_with_annotation : griper
   val type_resumption_with_annotation : griper
   val deep_resumption : griper
   val deep_resumption_effects : griper
-  val should_not_go_wrong : griper
+  val shallow_resumption : griper
+  val shallow_resumption_effects : griper
   val handle_return : griper
   val handle_comp_effects : griper
   val handle_unify_effect_rows : griper
-  val handle_intro_effects : griper
 
   val do_operation : griper
 
@@ -516,34 +512,25 @@ end
 		  "while the subsequent clauses have type" ^ nl() ^
 		  tab() ^ code (show_type rt))
 
-    let handle_return ~pos ~t1:(hexpr, lt) ~t2:(ret, rt) ~error:_ =
+    let handle_return ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
-      die pos ("The inferred type of the handled expression " ^ nl () ^
-                 tab() ^ code hexpr ^ nl() ^
-                   "is " ^ nl() ^
-                     tab() ^ code (show_type lt) ^ nl () ^
-                       "but the return clause " ^ nl() ^
-                         tab() ^ code ret ^ nl() ^
-                           "expects an expression that produces a value of type " ^ nl() ^
-                             tab() ^ code (show_type rt))
+      die pos ("The type of an input to a handle should match the type of " ^
+               "its value patterns, but the expression" ^ nl() ^
+               tab() ^ code hexpr ^ nl() ^
+               "has type" ^ nl() ^
+               tab() ^ code (show_type lt) ^ nl () ^
+               "while the value patterns have type" ^ nl() ^
+               tab() ^ code (show_type rt))
 
-    let handle_comp_effects ~pos ~t1:(hexpr, lt) ~t2:(handle, rt) ~error:_ =
+    let handle_comp_effects ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
-      die pos ("The inferred effect signature for the handled expression " ^ nl() ^
-                 tab() ^ code hexpr ^ nl() ^
-                   "is " ^ nl() ^
-                     tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
-                       "but the handler " ^ nl() ^
-                         tab() ^ code handle ^ nl() ^
-                           "expects an expression whose effect signature is compatible with " ^ nl() ^
-                             tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
-
-    let handle_intro_effects ~pos ~t1:(_ctx, lt) ~t2:(_wild_ctx, rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("The handler introduces the following effects " ^ nl() ^
-                  tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
-                  "but this effect row cannot be unified with " ^ nl() ^
-                  tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
+      die pos ("The effect type of an input to a handle should match the type of " ^
+               "its computation patterns, but the expression" ^ nl() ^
+               tab() ^ code hexpr ^ nl() ^
+               "has effect type" ^ nl() ^
+               tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
+               "while the handler handles effects" ^ nl() ^
+               tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
     let handle_unify_effect_rows ~pos ~t1:(inp, lt) ~t2:(out, rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -556,39 +543,6 @@ end
                            "whose inferred effect signature is " ^ nl() ^
                              tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
-    let handle_continuation_codomains ~pos ~t1:(kexpr,kt) ~t2:(_,body_type) ~error:_ =
-      build_tyvar_names [kt;body_type];
-      die pos ("The codomain of continuation " ^ code kexpr ^ " has type" ^ nl() ^
-		  tab() ^ code (show_type kt) ^ nl() ^
-		  "but a type compatible with" ^ nl() ^
-		  tab() ^ code (show_type body_type) ^ nl() ^
-		  "was expected.")
-
-    let continuation_effect_rows ~pos ~t1:(_,lt) ~t2:(rexpr,rt)	~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("The continuation " ^ code rexpr ^ nl() ^ " has effect row" ^ nl() ^
-		  tab() ^ code (show_row (TypeUtils.extract_row rt)) ^ nl() ^
-		  "but it is not unifiable with the current effect context" ^ nl() ^
-		  tab() ^ code (show_row (TypeUtils.extract_row lt))
-      )
-
-
-    let type_continuation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("Continuation typing error: the type " ^nl() ^
-                  tab () ^ code (show_type lt) ^ nl()^
-                  "is not unifiable with" ^ nl() ^
-                  tab() ^ code (show_type rt))
-
-    let type_continuation_with_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("\
-                The inferred type of the continuation" ^ nl() ^
-                  tab() ^ code lexpr ^ nl() ^
-                  "is" ^ nl() ^
-                  tab() ^ code (show_type lt) ^ nl() ^
-                  "but it is annotated with type" ^ nl() ^
-                    tab() ^ code (show_type rt))
 
     let type_resumption_with_annotation ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -600,21 +554,47 @@ end
                   "but it is annotated with type" ^ nl() ^
                   tab() ^ code (show_type rt))
 
-    let deep_resumption ~pos ~t1:(resume,lt) ~t2:(handle,rt) ~error:_ =
+    let deep_resumption ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
       build_tyvar_names [lt;rt];
-      with_but2things pos
-          ("Resumption typing error")
-          ("deep resumption", (resume, lt)) ("expression", (handle, rt))
-
-    let deep_resumption_effects ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("Continuation typing error: the type " ^nl() ^
-                  tab () ^ code (show_type lt) ^ nl()^
-                  "is not unifiable with" ^ nl() ^
+      die pos ("\
+                 The return type of a deep resumption must be the same as the body type of its handler, " ^ nl() ^
+                 "but the deep resumption" ^ nl() ^
+                  tab() ^ code resume ^ nl() ^
+                  "has return type" ^ nl() ^
+                  tab() ^ code (show_type lt) ^ nl() ^
+                  "while the body type of its handler is" ^ nl() ^
                   tab() ^ code (show_type rt))
 
-    let should_not_go_wrong ~pos ~t1:_ ~t2:_ ~error:_ =
-      die pos "Unification error: This is unexpected!"
+    let deep_resumption_effects ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("A deep resumption may only perform the same effects as its handler, " ^ nl() ^
+                  "but the deep resumption" ^nl() ^
+                  tab() ^ code resume ^ nl() ^
+                  "can perform effects" ^ nl() ^
+                  tab() ^ code (show_type lt) ^ nl() ^
+                  "while its handler can perform effects" ^ nl() ^
+                  tab() ^ code (show_type rt))
+
+    let shallow_resumption ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("\
+                 The return type of a shallow resumption must be the same as the return type of the computation being handled, " ^ nl() ^
+                  "but the shallow resumption" ^ nl() ^
+                  tab() ^ code resume ^ nl() ^
+                  "has return type" ^ nl() ^
+                  tab() ^ code (show_type lt) ^ nl() ^
+                  "while the computation has return type" ^ nl() ^
+                  tab() ^ code (show_type rt))
+
+    let shallow_resumption_effects ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("A shallow resumption may only perform the same effects as the computation being handled, " ^ nl() ^
+                  "but the shallow resumption" ^nl() ^
+                  tab() ^ code resume ^ nl() ^
+                  "can perform effects" ^ nl() ^
+                  tab() ^ code (show_type lt) ^ nl() ^
+                  "while the computation can perform effects" ^ nl() ^
+                  tab() ^ code (show_type rt))
 
     let do_operation ~pos ~t1:(_,lt) ~t2:(rexpr,rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -3232,7 +3212,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
              (* Closing of subpatterns in effect patterns *)
              let inner_eff = TypeUtils.extract_row (close_pattern_type (List.map (fst3 ->- fst3) eff_cases) (`Effect inner_eff)) in
-             (* print_endline (Types.string_of_row inner_eff); *)
              (* Type value clause bodies *)
              let val_cases =
                List.fold_right
@@ -3259,22 +3238,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
                    let () =
                      let (_,_,pos') = SourceCode.resolve_pos @@ snd (fst3 kpat) in
-                     let (_,_,pos'') = SourceCode.resolve_pos pos in
                      let kt = TypeUtils.return_type (pattern_typ kpat) in
-                     (* TODO FIXME Gripers *)
                      match descr.shd_depth with
                      | `Deep ->
                         let eff = context.effect_row in
                         unify ~handle:Gripers.deep_resumption
-                          ((pos', kt), (pos'', bt));
+                          ((pos', kt), no_pos bt);
                         unify ~handle:Gripers.deep_resumption_effects
-                          ((pos', `Effect eff), (pos'', `Effect outer_eff))
+                          ((pos', `Effect eff), no_pos (`Effect outer_eff))
                      | `Shallow ->
                         let eff = TypeUtils.effect_row (pattern_typ kpat) in
-                        unify ~handle:Gripers.type_continuation
-                          ((pos', kt), (pos'', rt));
-                        unify ~handle:Gripers.type_continuation
-                          ((pos', `Effect eff), (pos'', `Effect inner_eff))
+                        unify ~handle:Gripers.shallow_resumption
+                          ((pos', kt), no_pos rt);
+                        unify ~handle:Gripers.shallow_resumption_effects
+                          ((pos', `Effect eff), no_pos (`Effect inner_eff))
                    in
                    (pat, kpat, update_usages body us) :: cases)
                  eff_cases []
@@ -3300,23 +3277,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
 	     (operations', rho, dual)
            in
-           (** A handler takes as input an abstract computation, and
-              produces another, possibly, abstract computation, as
-              output. The output computation is produced by applying a
-              transformation to the input computation. This
-              transformation may cause several of the abstract
-              operations in the input computation to be instantiated
-              in the output computation. Thus a handler is a operator
-              on computations.
-
-              Although, the typing of handlers looks rather involved,
-              it is actually fairly simple. Due to the legacy of the
-              Links code base we have to jump through some hoops
-              making the whole typing look more complicated than is
-              necessary.
-
-              We begin by constructing a type for the input
-              computation `m' in a fresh effect context.  *)
            let m_context = { context with effect_row = Types.make_empty_open_row (`Unl, `Any) } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = `Effect m_context.effect_row in
@@ -3329,8 +3289,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            (** Finalise construction of the effect row of the input computation *)
            let inner_eff, outer_eff =
-             let (_,_,m_pos) = SourceCode.resolve_pos pos in
-             let (_,_,_p)  = SourceCode.resolve_pos pos in
+             let m_pos = exp_pos m in
              let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
              let inner_eff' = make_operations_presence_polymorphic inner_eff in
              (* Printf.printf "inner_eff': %s\n%!" (Types.string_of_row inner_eff'); *)
