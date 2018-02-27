@@ -107,11 +107,12 @@ type var_env = { tenv : Types.meta_type_var StringMap.t;
 let empty_env = {tenv = StringMap.empty; renv = StringMap.empty; penv = StringMap.empty}
 
 exception UnexpectedFreeVar of string
+exception UnexpectedOperationEffects of string
 
 module Desugar =
 struct
   let rec datatype var_env (alias_env : Types.tycon_environment) t =
-  let datatype var_env t = datatype var_env alias_env t in
+    let datatype var_env t = datatype var_env alias_env t in
     let lookup_type t = StringMap.find t var_env.tenv in
       match t with
         | `TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
@@ -280,17 +281,23 @@ struct
       (* Closes any empty, open arrow rows on user-defined
          operations. Note any row which can be closed will have an
          unbound effect variable.  *)
-      let is_unbound (rv,_,_) =
-          not (StringMap.mem rv var_env.renv)
-      in
-      List.map
-        (function
-        | (name, `Present (`Function (domain, ([], `Open rv), codomain)))
-            when not (TypeUtils.is_builtin_effect name) && is_unbound rv ->
-           (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
-           (name, `Present (`Function (domain, ([], `Closed), codomain)))
-        | x -> x)
-        fields
+      try List.map
+            (function
+            | (name, `Present (`Function (domain, (fields, rv), codomain))) as op
+                when not (TypeUtils.is_builtin_effect name) ->
+               (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
+               begin match rv, fields with
+               | `Closed, [] -> op
+               | `Open _, []
+               | (`Recursive _), [] -> (* might need an extra check on recursive rows *)
+                  (name, `Present (`Function (domain, ([], `Closed), codomain)))
+               | _,_ -> raise (UnexpectedOperationEffects name)
+               end
+            | x -> x)
+            fields
+      with
+        UnexpectedOperationEffects op_name ->
+          failwith (Printf.sprintf "The abstract operation %s has unexpected effects in its signature. The effect signature on an abstract operation arrow is always supposed to be empty, since any effects it might have are ultimately conferred by its handler." op_name)
     in
     let (fields, rho, dual) = row var_env alias_env (fields, rv) in
     let fields =
@@ -302,6 +309,17 @@ struct
              (* Elaborates `Op : a' to `Op : () {}-> a' *)
              let eff = Types.make_empty_closed_row () in
              `Present (Types.make_function_type [] eff t)
+          (* | `Present t *)
+          (*     when not (TypeUtils.is_builtin_effect name) && TypeUtils.is_function_type t -> *)
+          (*    let domain = TypeUtils.arg_types t in *)
+          (*    let eff = TypeUtils.effect_row t in *)
+          (*    let codomain = TypeUtils.return_type t in *)
+          (*    let t = *)
+          (*      if Types.is_empty_row eff *)
+          (*      then Types.make_function_type domain (Types.make_empty_closed_row ()) codomain *)
+          (*      else t *)
+          (*    in *)
+          (*    `Present t *)
           | t -> t)
         fields
     in
