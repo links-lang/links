@@ -797,9 +797,6 @@ handle_params:
 | logical_expression RARROW pattern { [($1, $3)] }
 | handle_params COMMA logical_expression RARROW pattern  { ($3,$5) :: $1 }
 
-name:
-| VARIABLE { $1, pos () }
-
 iteration_expression:
 | case_expression                                              { $1 }
 | FOR LPAREN perhaps_generators RPAREN
