@@ -178,7 +178,7 @@ struct
         | `TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
               | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
-              | Some (`Alias (qs, dt)) ->
+              | Some (`Alias (qs, _dt)) ->
                  let exception Kind_mismatch (* TODO add more information *) in
                  let match_kinds (q, t) =
                    let primary_kind_of_type_arg : Sugartypes.type_arg -> primary_kind = function
@@ -275,26 +275,33 @@ struct
           fields
     in
     fold_right Types.row_with fields seed
-  and effect_row var_env alias_env row' =
-    let (fields, rho, dual) = row var_env alias_env row' in
+  and effect_row var_env alias_env (fields, rv) =
+    let fields =
+      (* Closes any empty, open arrow rows on user-defined
+         operations. Note any row which can be closed will have an
+         unbound effect variable.  *)
+      let is_unbound (rv,_,_) =
+          not (StringMap.mem rv var_env.renv)
+      in
+      List.map
+        (function
+        | (name, `Present (`Function (domain, ([], `Open rv), codomain)))
+            when not (TypeUtils.is_builtin_effect name) && is_unbound rv ->
+           (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
+           (name, `Present (`Function (domain, ([], `Closed), codomain)))
+        | x -> x)
+        fields
+    in
+    let (fields, rho, dual) = row var_env alias_env (fields, rv) in
     let fields =
       StringMap.mapi
         (fun name ->
           function
-          | `Present t when not (TypeUtils.is_builtin_effect name || TypeUtils.is_function_type t) ->
+          | `Present t
+              when not (TypeUtils.is_builtin_effect name || TypeUtils.is_function_type t) ->
+             (* Elaborates `Op : a' to `Op : () {}-> a' *)
              let eff = Types.make_empty_closed_row () in
              `Present (Types.make_function_type [] eff t)
-          | `Present t when not (TypeUtils.is_builtin_effect name) && TypeUtils.is_function_type t ->
-             let domain = TypeUtils.arg_types t in
-             let eff =
-               let row = TypeUtils.effect_row t in
-               if is_empty_row row then
-                 Types.make_empty_closed_row ()
-               else
-                 row
-             in
-             let codomain = TypeUtils.return_type t in
-             `Present (make_function_type domain eff codomain)
           | t -> t)
         fields
     in
