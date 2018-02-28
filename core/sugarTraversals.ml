@@ -254,27 +254,27 @@ class map =
           let t   = o#option (fun o -> o#unknown) t in
           `DoOperation (name, ps, t)
       | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
-          let m = o#phrase sh_expr in
-          let eff_cases =
-            o#list
-              (fun o (lhs, rhs) ->
-                 let lhs = o#pattern lhs in
-                 let rhs = o#phrase rhs in (lhs, rhs)
-	      )
-              sh_effect_cases
-	  in
-          let val_cases =
-            o#list
-              (fun o (lhs, rhs) ->
-                 let lhs = o#pattern lhs in
-                 let rhs = o#phrase rhs in (lhs, rhs)
-	      )
-              sh_value_cases
-	  in
-          let params =
+         let m = o#phrase sh_expr in
+         let params =
             o#option (fun o -> o#handle_params) sh_descr.shd_params
-          in
-          `Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }
+         in
+         let eff_cases =
+           o#list
+             (fun o (lhs, rhs) ->
+               let lhs = o#pattern lhs in
+               let rhs = o#phrase rhs in (lhs, rhs)
+	     )
+             sh_effect_cases
+	 in
+         let val_cases =
+           o#list
+             (fun o (lhs, rhs) ->
+               let lhs = o#pattern lhs in
+               let rhs = o#phrase rhs in (lhs, rhs)
+	     )
+             sh_value_cases
+	 in
+         `Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -905,26 +905,26 @@ class fold =
 	 let o = o#option (fun o -> o#unknown) t in
 	 let o = o#list (fun o -> o#phrase) ps in o
       | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
-          let o = o#phrase sh_expr in
-          let o =
-            o#list
-              (fun o (lhs, rhs) ->
+         let o = o#phrase sh_expr in
+         let o =
+           o#option (fun o -> o#handle_params) sh_descr.shd_params
+         in
+         let o =
+           o#list
+             (fun o (lhs, rhs) ->
                let o = o#pattern lhs in
 	       let o = o#phrase rhs in o
-	      )
-              sh_effect_cases
-	  in
-          let o =
-            o#list
-              (fun o (lhs, rhs) ->
+	     )
+             sh_effect_cases
+	 in
+         let o =
+           o#list
+             (fun o (lhs, rhs) ->
                let o = o#pattern lhs in
 	       let o = o#phrase rhs in o
-	      )
-              sh_value_cases
-	  in
-          let o =
-            o#option (fun o -> o#handle_params) sh_descr.shd_params
-          in o
+	     )
+             sh_value_cases
+	 in o
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
@@ -1566,6 +1566,9 @@ class fold_map =
 	 (o, `DoOperation (name, ps, t))
       | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let (o, m) = o#phrase sh_expr in
+          let (o, params) =
+            o#option (fun o -> o#handle_params) sh_descr.shd_params
+          in
           let (o, eff_cases) =
             o#list
               (fun o (lhs, rhs) ->
@@ -1582,9 +1585,6 @@ class fold_map =
 	      )
               sh_value_cases
 	  in
-          let (o, params) =
-            o#option (fun o -> o#handle_params) sh_descr.shd_params
-          in
           (o, (`Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }))
       | `Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
