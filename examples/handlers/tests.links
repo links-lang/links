@@ -61,6 +61,12 @@ fun fringe() {
   assert((==), [true, false, false, false, true, true, false, false, true, true], Fringe.unitTest(), listToString(boolToString), "Fringe")
 }
 
+# Parameterised handlers
+fun light_switch() {
+  open Light_switch
+  assert(boolEq, true, Light_switch.unitTest(6), boolToString, "Light_switch")
+}
+
 # Test runner
 fun runTests() {
    var tests = [ shallow_state
@@ -68,6 +74,7 @@ fun runTests() {
 #               , deep_pipes
                , exceptions
                , fringe
+#               , light_switch
                ];
    ignore(map(fun(t) { t() }, tests))
 }
