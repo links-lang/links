@@ -506,8 +506,8 @@ class map =
         let bindings =
           o#list
             (fun o (expr, pat) ->
-              let pat = o#pattern pat in
-              let expr = o#phrase expr in (expr, pat))
+              let expr = o#phrase expr in
+              let pat = o#pattern pat in (expr, pat))
             params.shp_bindings
         in
         { params with shp_bindings = bindings }
@@ -1132,8 +1132,8 @@ class fold =
       fun params ->
         o#list
           (fun o (expr, pat) ->
-            let o = o#pattern pat in
-            o#phrase expr)
+            let o = o#phrase expr in
+            o#pattern pat)
           params.shp_bindings
 
     method fieldspec : fieldspec -> 'self_type =
@@ -1853,8 +1853,8 @@ class fold_map =
         let (o, bindings) =
           o#list
             (fun o (expr, pat) ->
-              let (o, pat) = o#pattern pat in
-              let (o, expr) = o#phrase expr in (o, (expr, pat)))
+              let (o, expr) = o#phrase expr in
+              let (o, pat) = o#pattern pat in (o, (expr, pat)))
             params.shp_bindings
         in
         (o, { params with shp_bindings = bindings })
