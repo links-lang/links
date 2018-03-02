@@ -1010,131 +1010,213 @@ end = functor (K : CONTINUATION) -> struct
          else
            bind (Call (Var "receive", [gv c; K.reify cont]))
       | `DoOperation (name, args, _) ->
-         let open Pervasives in
-         let box vs =
-           Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
+         let maybe_box = function
+           | [v] -> gv v
+           | vs -> Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
-         let cons k ks =
-           Call (Var "_Cons", [k;ks])
+         let singleton k =
+           Call (Var "_singleton", [k])
          in
-         let nil = Var "Nil" in
          K.bind kappa
            (fun kappas ->
-             (* kappa -- pure continuation *)
              let bind_skappa, skappa, kappas = K.pop kappas in
-             (* eta -- effect continuation *)
-             let bind_seta, seta, kappas   = K.pop kappas in
-             let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
-
-             (* Session exceptions arising as a result of "raise" (i.e. those without an
-              * environment passed as an argument already) need to be compiled specially *)
+             let bind_seta, seta, kappas = K.pop kappas in
+             let resumption = singleton (K.reify skappa) in
              let op =
-               if (session_exceptions_enabled &&
-                   name = Value.session_exception_operation &&
-                   List.length args = 0) then
-                 let affected_variables =
-                   VariableInspection.get_affected_variables (K.reify kappa) in
-                 let affected_arr = Dict ([("1", Arr affected_variables)]) in
-                   Dict [ ("_label", strlit name)
-                        ; ("_value", Dict [("p", affected_arr); ("s", resumption)]) ]
-               else
-                 Dict [ ("_label", strlit name)
-                      ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
+               Dict [ ("_label", strlit name);
+                      ("_value", Dict [("p", maybe_box args); ("s", resumption)]) ]
              in
-             bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
+             bind_skappa
+               (bind_seta
+                  (apply_yielding (K.reify seta) [op] kappas)))
+         (* let cons k ks = *)
+         (*   Call (Var "_Cons", [k;ks]) *)
+         (* in *)
+         (* let nil = Var "Nil" in *)
+         (* K.bind kappa *)
+         (*   (fun kappas -> *)
+         (*     (\* kappa -- pure continuation *\) *)
+         (*     let bind_skappa, skappa, kappas = K.pop kappas in *)
+         (*     (\* eta -- effect continuation *\) *)
+         (*     let bind_seta, seta, kappas   = K.pop kappas in *)
+         (*     let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in *)
+
+         (*     (\* Session exceptions arising as a result of "raise" (i.e. those without an *)
+         (*      * environment passed as an argument already) need to be compiled specially *\) *)
+         (*     let op = *)
+         (*       if (session_exceptions_enabled && *)
+         (*           name = Value.session_exception_operation && *)
+         (*           List.length args = 0) then *)
+         (*         let affected_variables = *)
+         (*           VariableInspection.get_affected_variables (K.reify kappa) in *)
+         (*         let affected_arr = Dict ([("1", Arr affected_variables)]) in *)
+         (*           Dict [ ("_label", strlit name) *)
+         (*                ; ("_value", Dict [("p", affected_arr); ("s", resumption)]) ] *)
+         (*       else *)
+         (*         Dict [ ("_label", strlit name) *)
+         (*              ; ("_value", Dict [("p", box args); ("s", resumption)]) ] *)
+         (*     in *)
+         (*     bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas))) *)
       | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth } ->
-         let open Pervasives in
-         (** Generate body *)
-         let gb env binder body kappas =
-           let env' = VEnv.bind env (name_binder binder) in
+         let generate_body env binder body kappas =
+           let env' = VEnv.bind env binder in
            snd (generate_computation env' body kappas)
          in
-
-         let (return_clause, operation_clauses) = (return, eff_cases) in
-         let return =
-           let (xb, body) = return_clause in
-           let x_name = snd @@ name_binder xb in
+         let value_case =
+           let (xb, body) = return in
+           let xb = name_binder xb in
            contify (fun kappa ->
-             Fn ([x_name;],
-                 let bind, _, kappa = K.pop kappa in
-                 bind @@ gb env xb body kappa))
+             Fn ([snd xb],
+                 let bind, _, kappa' = K.pop kappa in
+                 bind (generate_body env xb body kappa')))
          in
-
-         let operations =
-           (** Generate clause *)
-           let gc clause_name env (xb, rb, body) kappas =
-             (* env: environment
-              * ct: Resumption / NoResumption indicator
-              * xb: Binder for the operation
-              * body: Body of the clause
-              * kappas: Continuation stack
-              *)
-
-             (* Calculate JS name of the binder *)
-             let x_name = snd @@ name_binder xb in
-
-             (* Bind the resumption *)
-             let env', r_name =
-               let rb' = name_binder rb in
-               VEnv.bind env rb', snd rb'
-             in
-
-             (* Project the arguments and continuation from the record compiled in DoOperation *)
-             let p = Call (Var "LINKS.project", [Var x_name; strlit "p"]) in
-             let s = Call (Var "LINKS.project", [Var x_name; strlit "s"]) in
-             let r = Call (Var "_makeFun", [s]) in
-
-             (* Bind the names, and generate the body of the clause *)
-             (* The difference in compiling a "regular" operation and a session exception
-              * handler comes in the compilation of the clause body.
-              * For a "regular" clause body, we just bind the names and generate the
-              * clause body. For an exception handler body, we need to insert a call into
-              * _handleSessionException before invoking the clause body. *)
-             let clause_body =
-               if (session_exceptions_enabled &&
-                   clause_name = Value.session_exception_operation) then
-                 let dummy_var_name = gensym () in
-                 Bind (r_name, r,
-                   Bind (x_name, Call(Var "LINKS.project", [p; strlit "1"]),
-                     Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name]),
-                      gb env' xb body kappas)))
-               else
-                 Bind (r_name, r,
-                   Bind (x_name, p, gb env' xb body kappas))
-             in
-             x_name, clause_body
+         let eff_cases =
+           let handle_name =
+             gensym ~prefix:"_handle" ()
            in
-           let clauses kappas =
+           let cons v vs =
+             Call (Var "_Cons", [v; vs])
+           in
+           let vmap r y =
+             Call (Var "_vmapOp", [r; y])
+           in
+           let translate_eff_case env (xb, resume, body) kappas =
+             let project record label =
+               Call (Var "LINKS.project", [record; label])
+             in
+             let xb = name_binder xb in
+             let resume = name_binder resume in
+             let p = project (Var (snd xb)) (strlit "p") in
+             let r =
+               let s = project (Var (snd xb)) (strlit "s") in
+               Call (Var "_makeFun", [cons (Var handle_name) s])
+             in
+             let env' = VEnv.bind env resume in
+             snd xb, Bind (snd resume, r,
+                           Bind (snd xb, p, generate_body env' xb body kappas))
+           in
+           let eff_cases kappas =
              StringMap.fold
-               (fun clause_name clause ->
-                 StringMap.add clause_name (gc clause_name env clause kappas))
-               operation_clauses (StringMap.empty)
+               (fun operation_name clause ->
+                 StringMap.add operation_name (translate_eff_case env clause kappas))
+               eff_cases StringMap.empty
            in
-           let forward ks =
-             let z_name = "_z" in
-             K.bind ks
+           let forward y kappas =
+             K.bind kappas
                (fun ks ->
-                 let bind1, k', ks' = K.pop ks in
-                 let bind2, h', ks' = K.pop ks' in
-                 let bind code = bind1 (bind2 code) in
+                 let bind_k', k', ks' = K.pop ks in
+                 let bind_h', h', ks' = K.pop ks' in
+                 let bind_k'', k'', ks'' = K.pop ks' in
+                 let bind code = bind_k' (bind_h' (bind_k'' code)) in
                  let resumption =
-                   Fn (["s"], Return (Call (Var "_Cons",
-                                            [K.reify h';
-                                             Call (Var "_Cons", [K.reify k'; Var "s"])])))
+                   Fn (["s"], Return (cons (K.reify h')
+                                        (cons (K.reify k')
+                                           (cons (Var handle_name) (Var "s")))))
                  in
-                 let vmap = Call (Var "_vmapOp", [resumption; Var z_name]) in
-                 bind (apply_yielding (K.reify h') [vmap] ks'))
+                 bind (apply_yielding (K.reify k'') [vmap resumption y] ks''))
            in
-           contify
-             (fun ks ->
-               Fn (["_z"],
-                   Case ("_z",
-                         clauses ks,
-                         Some ("_z", forward ks))))
+           let body =
+             let ks = K.reflect (Var "ks") in
+             Case ("_z",
+                   eff_cases ks,
+                   Some ("_y", forward (Var "_y") ks))
+           in
+           K.reflect (LetFun ((handle_name, ["_z"; "ks"], body, `Client), Nothing))
          in
-         let kappa = K.(return <> operations <> kappa) in
-         let _, comp = generate_computation env comp kappa in
-         comp
+         let kappa = K.(value_case <> eff_cases <> kappa) in
+         snd (generate_computation env comp kappa)
+  (* | LetRec of ((string * string list * code * Ir.location) list * code) *)
+         (* (\** Generate body *\) *)
+         (* let gb env binder body kappas = *)
+         (*   let env' = VEnv.bind env (name_binder binder) in *)
+         (*   snd (generate_computation env' body kappas) *)
+         (* in *)
+
+         (* let (return_clause, operation_clauses) = (return, eff_cases) in *)
+         (* let return = *)
+         (*   let (xb, body) = return_clause in *)
+         (*   let x_name = snd @@ name_binder xb in *)
+         (*   contify (fun kappa -> *)
+         (*     Fn ([x_name;], *)
+         (*         let bind, _, kappa = K.pop kappa in *)
+         (*         bind @@ gb env xb body kappa)) *)
+         (* in *)
+
+         (* let operations = *)
+         (*   (\** Generate clause *\) *)
+         (*   let gc clause_name env (xb, rb, body) kappas = *)
+         (*     (\* env: environment *)
+         (*      * ct: Resumption / NoResumption indicator *)
+         (*      * xb: Binder for the operation *)
+         (*      * body: Body of the clause *)
+         (*      * kappas: Continuation stack *)
+         (*      *\) *)
+
+         (*     (\* Calculate JS name of the binder *\) *)
+         (*     let x_name = snd @@ name_binder xb in *)
+
+         (*     (\* Bind the resumption *\) *)
+         (*     let env', r_name = *)
+         (*       let rb' = name_binder rb in *)
+         (*       VEnv.bind env rb', snd rb' *)
+         (*     in *)
+
+         (*     (\* Project the arguments and continuation from the record compiled in DoOperation *\) *)
+         (*     let p = Call (Var "LINKS.project", [Var x_name; strlit "p"]) in *)
+         (*     let s = Call (Var "LINKS.project", [Var x_name; strlit "s"]) in *)
+         (*     let r = Call (Var "_makeFun", [s]) in *)
+
+         (*     (\* Bind the names, and generate the body of the clause *\) *)
+         (*     (\* The difference in compiling a "regular" operation and a session exception *)
+         (*      * handler comes in the compilation of the clause body. *)
+         (*      * For a "regular" clause body, we just bind the names and generate the *)
+         (*      * clause body. For an exception handler body, we need to insert a call into *)
+         (*      * _handleSessionException before invoking the clause body. *\) *)
+         (*     let clause_body = *)
+         (*       if (session_exceptions_enabled && *)
+         (*           clause_name = Value.session_exception_operation) then *)
+         (*         let dummy_var_name = gensym () in *)
+         (*         Bind (r_name, r, *)
+         (*           Bind (x_name, Call(Var "LINKS.project", [p; strlit "1"]), *)
+         (*             Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name]), *)
+         (*              gb env' xb body kappas))) *)
+         (*       else *)
+         (*         Bind (r_name, r, *)
+         (*           Bind (x_name, p, gb env' xb body kappas)) *)
+         (*     in *)
+         (*     x_name, clause_body *)
+         (*   in *)
+         (*   let clauses kappas = *)
+         (*     StringMap.fold *)
+         (*       (fun clause_name clause -> *)
+         (*         StringMap.add clause_name (gc clause_name env clause kappas)) *)
+         (*       operation_clauses (StringMap.empty) *)
+         (*   in *)
+         (*   let forward ks = *)
+         (*     let z_name = "_z" in *)
+         (*     K.bind ks *)
+         (*       (fun ks -> *)
+         (*         let bind1, k', ks' = K.pop ks in *)
+         (*         let bind2, h', ks' = K.pop ks' in *)
+         (*         let bind code = bind1 (bind2 code) in *)
+         (*         let resumption = *)
+         (*           Fn (["s"], Return (Call (Var "_Cons", *)
+         (*                                    [K.reify h'; *)
+         (*                                     Call (Var "_Cons", [K.reify k'; Var "s"])]))) *)
+         (*         in *)
+         (*         let vmap = Call (Var "_vmapOp", [resumption; Var z_name]) in *)
+         (*         bind (apply_yielding (K.reify h') [vmap] ks')) *)
+         (*   in *)
+         (*   contify *)
+         (*     (fun ks -> *)
+         (*       Fn (["_z"], *)
+         (*           Case ("_z", *)
+         (*                 clauses ks, *)
+         (*                 Some ("_z", forward ks)))) *)
+         (* in *)
+         (* let kappa = K.(return <> operations <> kappa) in *)
+         (* let _, comp = generate_computation env comp kappa in *)
+         (* comp *)
 
   and generate_computation env : Ir.computation -> continuation -> (venv * code) =
     fun (bs, tc) kappa ->
