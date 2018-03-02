@@ -1042,7 +1042,7 @@ end = functor (K : CONTINUATION) -> struct
                       ; ("_value", Dict [("p", box args); ("s", resumption)]) ]
              in
              bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
-      | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; _ } ->
+      | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth } ->
          let open Pervasives in
          (** Generate body *)
          let gb env binder body kappas =
