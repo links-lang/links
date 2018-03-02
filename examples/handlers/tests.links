@@ -7,6 +7,8 @@ fun intersperse(y, xs) {
    }
 }
 
+fun boolToString(b) { if (b) "true" else "false" }
+
 fun pairToString(fstToString, sndToString)(pair) {
   "(" ^^ fstToString(pair.1) ^^ ", " ^^ sndToString(pair.2) ^^ ")"
 }
@@ -57,8 +59,13 @@ fun exceptions() {
 # Fringe tests
 fun fringe() {
   open Fringe
-  fun boolToString(b) { if (b) "true" else "false" }
   assert((==), [true, false, false, false, true, true, false, false, true, true], Fringe.unitTest(), listToString(boolToString), "Fringe")
+}
+
+# Parameterised handlers
+fun light_switch() {
+  open Light_switch
+  assert((==), true, Light_switch.unitTest(6), boolToString, "Light_switch")
 }
 
 # Test runner
@@ -68,6 +75,7 @@ fun runTests() {
 #               , deep_pipes
                , exceptions
                , fringe
+#               , light_switch
                ];
    ignore(map(fun(t) { t() }, tests))
 }
