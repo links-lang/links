@@ -1106,14 +1106,12 @@ end = functor (K : CONTINUATION) -> struct
                (fun ks ->
                  let bind_k', k', ks' = K.pop ks in
                  let bind_h', h', ks' = K.pop ks' in
-                 let bind_k'', k'', ks'' = K.pop ks' in
-                 let bind code = bind_k' (bind_h' (bind_k'' code)) in
+                 let bind code = bind_k' (bind_h' code) in
                  let resumption =
-                   Fn (["s"], Return (cons (K.reify h')
-                                        (cons (K.reify k')
-                                           (cons (Var handle_name) (Var "s")))))
+                   Fn (["s"], Return (cons (K.reify k')
+                                           (cons (Var handle_name) (Var "s"))))
                  in
-                 bind (apply_yielding (K.reify k'') [vmap resumption y] ks''))
+                 bind (apply_yielding (K.reify h') [vmap resumption y] ks'))
            in
            let body =
              let ks = K.reflect (Var "ks") in
