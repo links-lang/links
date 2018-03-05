@@ -1057,72 +1057,138 @@ end = functor (K : CONTINUATION) -> struct
          (*              ; ("_value", Dict [("p", box args); ("s", resumption)]) ] *)
          (*     in *)
          (*     bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas))) *)
-      | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth } ->
+      | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth = depth } ->
          let generate_body env binder body kappas =
            let env' = VEnv.bind env binder in
            snd (generate_computation env' body kappas)
          in
-         let value_case =
-           let (xb, body) = return in
-           let xb = name_binder xb in
-           contify (fun kappa ->
-             Fn ([snd xb],
-                 let bind, _, kappa' = K.pop kappa in
-                 bind (generate_body env xb body kappa')))
+         let cons v vs =
+           Call (Var "_Cons", [v; vs])
          in
-         let eff_cases =
-           let handle_name =
-             gensym ~prefix:"_handle" ()
-           in
-           let cons v vs =
-             Call (Var "_Cons", [v; vs])
-           in
-           let vmap r y =
-             Call (Var "_vmapOp", [r; y])
-           in
-           let translate_eff_case env (xb, resume, body) kappas =
-             let project record label =
-               Call (Var "LINKS.project", [record; label])
-             in
-             let xb = name_binder xb in
-             let resume = name_binder resume in
-             let p = project (Var (snd xb)) (strlit "p") in
-             let r =
-               let s = project (Var (snd xb)) (strlit "s") in
-               Call (Var "_makeFun", [cons (Var handle_name) s])
-             in
-             let env' = VEnv.bind env resume in
-             snd xb, Bind (snd resume, r,
-                           Bind (snd xb, p, generate_body env' xb body kappas))
-           in
-           let eff_cases kappas =
-             StringMap.fold
-               (fun operation_name clause ->
-                 StringMap.add operation_name (translate_eff_case env clause kappas))
-               eff_cases StringMap.empty
-           in
-           let forward y kappas =
-             K.bind kappas
-               (fun ks ->
-                 let bind_k', k', ks' = K.pop ks in
-                 let bind_h', h', ks' = K.pop ks' in
-                 let bind code = bind_k' (bind_h' code) in
-                 let resumption =
-                   Fn (["s"], Return (cons (K.reify k')
+         let project record label =
+           Call (Var "LINKS.project", [record; label])
+         in
+         let vmap r y =
+           Call (Var "_vmapOp", [r; y])
+         in
+         begin match depth with
+         | `Shallow -> failwith "Not yet implemented"
+         | `Deep params ->
+            let handle_name =
+              gensym ~prefix:"_handle" ()
+            in
+            let fresh_binder ?(prefix="") () =
+              let generate =
+                Var.make_local_info ->- Var.fresh_binder ->- name_binder
+              in
+              generate (`Not_typed, gensym ~prefix ())
+            in
+            let is_parameterised = List.length params > 0 in
+            let translate_parameters env params =
+              let param_binder =
+                fresh_binder ~prefix:(handle_name ^ "_params") ()
+              in
+              let params =
+                List.mapi (fun i (binder, value) -> (i, name_binder binder, gv value)) params
+              in
+              let env, projections =
+                List.fold_left
+                  (fun (env, projections) (i, binder, _) ->
+                    let env = VEnv.bind env binder in
+                    (env, (fun body -> Bind (snd binder, project (Var (snd param_binder)) (intlit i), projections body))))
+                  (env, (fun code -> code)) params
+              in
+              let initial_values =
+                Dict (List.map (fun (i, _, value) -> (string_of_int i, value)) params)
+              in
+              let initial_values_binder =
+                fresh_binder ~prefix:(handle_name ^ "_params_initial") ()
+              in
+              let bind_initial_values =
+                if is_parameterised
+                then (fun code -> Bind (snd initial_values_binder, initial_values, code))
+                else (fun code -> code)
+              in
+              let env = VEnv.bind env initial_values_binder in
+              env, (snd param_binder, projections), (snd initial_values_binder, bind_initial_values)
+            in
+            let env, (param_binder_name, bind_parameters), (initial_values_name, bind_initial_values) =
+              translate_parameters env params
+            in
+            let parameterise = function
+              | Fn (params, body) ->
+                 Fn (params @ [param_binder_name ^ " = " ^ initial_values_name], bind_parameters body)
+              | LetFun ((name, params, body, loc), cont) ->
+                 LetFun ((name, params @ [param_binder_name ^ " = " ^ initial_values_name], body, loc), cont)
+              | _ -> assert false
+            in
+            let value_case =
+              let (xb, body) = return in
+              let xb = name_binder xb in
+              let f =
+                Fn ([snd xb; "_kappa"],
+                    let reflect_and_pop = K.(reflect ->- pop) in
+                    let bind, _, kappa' = reflect_and_pop (Var "_kappa") in
+                    bind (generate_body env xb body kappa'))
+              in
+              K.reflect
+                (if is_parameterised
+                 then parameterise f
+                 else f)
+            in
+            let eff_cases =
+              let translate_eff_case env (xb, resume, body) kappas =
+                let xb = name_binder xb in
+                let resume = name_binder resume in
+                let p = project (Var (snd xb)) (strlit "p") in
+                let r =
+                  let s = project (Var (snd xb)) (strlit "s") in
+                  if is_parameterised
+                  then Call (Var "_makeParamFun", [Var param_binder_name; Var handle_name; s])
+                  else Call (Var "_makeFun", [Var handle_name; s])
+                in
+                let env' = VEnv.bind env resume in
+                let body =
+                  bind_parameters (generate_body env' xb body kappas)
+                in
+                snd xb, Bind (snd resume, r,
+                              Bind (snd xb, p, body))
+              in
+              let eff_cases kappas =
+                StringMap.fold
+                  (fun operation_name clause ->
+                    StringMap.add operation_name (translate_eff_case env clause kappas))
+                  eff_cases StringMap.empty
+              in
+              let forward y kappas =
+                K.bind kappas
+                  (fun ks ->
+                    let bind_k', k', ks' = K.pop ks in
+                    let bind_h', h', ks' = K.pop ks' in
+                    let bind code = bind_k' (bind_h' code) in
+                    let resumption =
+                      Fn (["s"], Return (cons (K.reify k')
                                            (cons (Var handle_name) (Var "s"))))
-                 in
-                 bind (apply_yielding (K.reify h') [vmap resumption y] ks'))
-           in
-           let body =
-             let ks = K.reflect (Var "ks") in
-             Case ("_z",
-                   eff_cases ks,
-                   Some ("_y", forward (Var "_y") ks))
-           in
-           K.reflect (LetFun ((handle_name, ["_z"; "ks"], body, `Client), Nothing))
-         in
-         let kappa = K.(value_case <> eff_cases <> kappa) in
-         snd (generate_computation env comp kappa)
+                    in
+                    bind (apply_yielding (K.reify h') [vmap resumption y] ks'))
+              in
+              let body =
+                let ks = K.reflect (Var "ks") in
+                Case ("_z",
+                      eff_cases ks,
+                      Some ("_y", forward (Var "_y") ks))
+              in
+              let h =
+                LetFun ((handle_name, ["_z"; "ks"], body, `Client), Nothing)
+              in
+              K.reflect
+                (if is_parameterised
+                 then parameterise h
+                 else h)
+            in
+            let kappa = K.(value_case <> eff_cases <> kappa) in
+            bind_initial_values (snd (generate_computation env comp kappa))
+         end
   (* | LetRec of ((string * string list * code * Ir.location) list * code) *)
          (* (\** Generate body *\) *)
          (* let gb env binder body kappas = *)
