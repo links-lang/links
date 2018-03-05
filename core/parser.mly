@@ -794,7 +794,6 @@ case_expression:
 | TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
 
 handle_params:
-| var { let (name, pos) = $1 in [(`Var name, pos), (`Variable (name, None, pos), pos)] }
 | logical_expression RARROW pattern { [($1, $3)] }
 | handle_params COMMA logical_expression RARROW pattern  { ($3,$5) :: $1 }
 
