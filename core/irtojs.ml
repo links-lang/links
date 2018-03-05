@@ -1029,34 +1029,6 @@ end = functor (K : CONTINUATION) -> struct
              bind_skappa
                (bind_seta
                   (apply_yielding (K.reify seta) [op] kappas)))
-         (* let cons k ks = *)
-         (*   Call (Var "_Cons", [k;ks]) *)
-         (* in *)
-         (* let nil = Var "Nil" in *)
-         (* K.bind kappa *)
-         (*   (fun kappas -> *)
-         (*     (\* kappa -- pure continuation *\) *)
-         (*     let bind_skappa, skappa, kappas = K.pop kappas in *)
-         (*     (\* eta -- effect continuation *\) *)
-         (*     let bind_seta, seta, kappas   = K.pop kappas in *)
-         (*     let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in *)
-
-         (*     (\* Session exceptions arising as a result of "raise" (i.e. those without an *)
-         (*      * environment passed as an argument already) need to be compiled specially *\) *)
-         (*     let op = *)
-         (*       if (session_exceptions_enabled && *)
-         (*           name = Value.session_exception_operation && *)
-         (*           List.length args = 0) then *)
-         (*         let affected_variables = *)
-         (*           VariableInspection.get_affected_variables (K.reify kappa) in *)
-         (*         let affected_arr = Dict ([("1", Arr affected_variables)]) in *)
-         (*           Dict [ ("_label", strlit name) *)
-         (*                ; ("_value", Dict [("p", affected_arr); ("s", resumption)]) ] *)
-         (*       else *)
-         (*         Dict [ ("_label", strlit name) *)
-         (*              ; ("_value", Dict [("p", box args); ("s", resumption)]) ] *)
-         (*     in *)
-         (*     bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas))) *)
       | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth = depth } ->
          let generate_body env binder body kappas =
            let env' = VEnv.bind env binder in
@@ -1074,6 +1046,7 @@ end = functor (K : CONTINUATION) -> struct
          begin match depth with
          | `Shallow -> failwith "Not yet implemented"
          | `Deep params ->
+            let comp_env = env in
             let handle_name =
               gensym ~prefix:"_handle" ()
             in
@@ -1084,43 +1057,73 @@ end = functor (K : CONTINUATION) -> struct
               generate (`Not_typed, gensym ~prefix ())
             in
             let is_parameterised = List.length params > 0 in
+            (** I use a slight hack to implement parameterised
+                handlers. An efficient way to implement parameterised
+                handlers is as locally mutable closures. By local, I
+                mean that only the handler itself can modify its own
+                environment. Ideally, I would compile parameterised
+                handlers as classes such that handler installation
+                corresponds to object instantiation. However, our
+                current compilation scheme does not support this
+                approach (it would require a major
+                rewrite). Therefore, I resort to the dark magic of
+                reference cells.
+
+                The idea is box the parameters inside a mutable
+                container and maintain a pointer to it. For each body
+                clause (effect and value cases) we generate some
+                administrative code which projects and binds the
+                parameters using the pointer.
+
+                The values of the parameters are updated whenever a
+                resumption is invoked. I use a bit of runtime magic to
+                grab hold of these values via the primitive
+                "_makeParamFun" which essentially exploits the fact
+                that JavaScript has no notion of arity. Finally, I
+                exploit default function parameter values to
+                initialise the parameter pointer. *)
             let translate_parameters env params =
-              let param_binder =
-                fresh_binder ~prefix:(handle_name ^ "_params") ()
+              (* Local pointer to the parameter box *)
+              let param_pointer =
+                fresh_binder ~prefix:(handle_name ^ "_box") ()
               in
               let params =
                 List.mapi (fun i (binder, value) -> (i, name_binder binder, gv value)) params
               in
+              (* Bind parameters in the environment, generate parameter bindings *)
               let env, projections =
                 List.fold_left
                   (fun (env, projections) (i, binder, _) ->
                     let env = VEnv.bind env binder in
-                    (env, (fun body -> Bind (snd binder, project (Var (snd param_binder)) (intlit i), projections body))))
+                    (env, (fun body -> Bind (snd binder, project (Var (snd param_pointer)) (intlit i), projections body))))
                   (env, (fun code -> code)) params
               in
-              let initial_values =
+              (* Box the initial parameter values *)
+              let initial_values_container =
                 Dict (List.map (fun (i, _, value) -> (string_of_int i, value)) params)
               in
-              let initial_values_binder =
+              (* Pointer to the initial parameter values box *)
+              let initial_values_pointer =
                 fresh_binder ~prefix:(handle_name ^ "_params_initial") ()
               in
               let bind_initial_values =
                 if is_parameterised
-                then (fun code -> Bind (snd initial_values_binder, initial_values, code))
+                then (fun code -> Bind (snd initial_values_pointer, initial_values_container, code))
                 else (fun code -> code)
               in
-              let env = VEnv.bind env initial_values_binder in
-              env, (snd param_binder, projections), (snd initial_values_binder, bind_initial_values)
+              let env = VEnv.bind env initial_values_pointer in
+              env, (snd param_pointer, projections), (snd initial_values_pointer, bind_initial_values)
             in
-            let env, (param_binder_name, bind_parameters), (initial_values_name, bind_initial_values) =
+            let env, (param_pointer_name, bind_parameters), (initial_values_pointer_name, bind_initial_values) =
               translate_parameters env params
             in
             let parameterise = function
-              | Fn (params, body) ->
-                 Fn (params @ [param_binder_name ^ " = " ^ initial_values_name], bind_parameters body)
-              | LetFun ((name, params, body, loc), cont) ->
-                 LetFun ((name, params @ [param_binder_name ^ " = " ^ initial_values_name], body, loc), cont)
-              | _ -> assert false
+              | Fn (params, body) when is_parameterised ->
+                 (* Initialises the parameter pointer *)
+                 Fn (params @ [param_pointer_name ^ " = " ^ initial_values_pointer_name], bind_parameters body)
+              | LetFun ((name, params, body, loc), cont) when is_parameterised ->
+                 LetFun ((name, params @ [param_pointer_name ^ " = " ^ initial_values_pointer_name], body, loc), cont)
+              | x -> x
             in
             let value_case =
               let (xb, body) = return in
@@ -1131,10 +1134,7 @@ end = functor (K : CONTINUATION) -> struct
                     let bind, _, kappa' = reflect_and_pop (Var "_kappa") in
                     bind (generate_body env xb body kappa'))
               in
-              K.reflect
-                (if is_parameterised
-                 then parameterise f
-                 else f)
+              K.reflect (parameterise f)
             in
             let eff_cases =
               let translate_eff_case env (xb, resume, body) kappas =
@@ -1144,7 +1144,7 @@ end = functor (K : CONTINUATION) -> struct
                 let r =
                   let s = project (Var (snd xb)) (strlit "s") in
                   if is_parameterised
-                  then Call (Var "_makeParamFun", [Var param_binder_name; Var handle_name; s])
+                  then Call (Var "_makeParamFun", [Var param_pointer_name; Var handle_name; s])
                   else Call (Var "_makeFun", [Var handle_name; s])
                 in
                 let env' = VEnv.bind env resume in
@@ -1181,106 +1181,11 @@ end = functor (K : CONTINUATION) -> struct
               let h =
                 LetFun ((handle_name, ["_z"; "ks"], body, `Client), Nothing)
               in
-              K.reflect
-                (if is_parameterised
-                 then parameterise h
-                 else h)
+              K.reflect (parameterise h)
             in
             let kappa = K.(value_case <> eff_cases <> kappa) in
-            bind_initial_values (snd (generate_computation env comp kappa))
+            bind_initial_values (snd (generate_computation comp_env comp kappa))
          end
-  (* | LetRec of ((string * string list * code * Ir.location) list * code) *)
-         (* (\** Generate body *\) *)
-         (* let gb env binder body kappas = *)
-         (*   let env' = VEnv.bind env (name_binder binder) in *)
-         (*   snd (generate_computation env' body kappas) *)
-         (* in *)
-
-         (* let (return_clause, operation_clauses) = (return, eff_cases) in *)
-         (* let return = *)
-         (*   let (xb, body) = return_clause in *)
-         (*   let x_name = snd @@ name_binder xb in *)
-         (*   contify (fun kappa -> *)
-         (*     Fn ([x_name;], *)
-         (*         let bind, _, kappa = K.pop kappa in *)
-         (*         bind @@ gb env xb body kappa)) *)
-         (* in *)
-
-         (* let operations = *)
-         (*   (\** Generate clause *\) *)
-         (*   let gc clause_name env (xb, rb, body) kappas = *)
-         (*     (\* env: environment *)
-         (*      * ct: Resumption / NoResumption indicator *)
-         (*      * xb: Binder for the operation *)
-         (*      * body: Body of the clause *)
-         (*      * kappas: Continuation stack *)
-         (*      *\) *)
-
-         (*     (\* Calculate JS name of the binder *\) *)
-         (*     let x_name = snd @@ name_binder xb in *)
-
-         (*     (\* Bind the resumption *\) *)
-         (*     let env', r_name = *)
-         (*       let rb' = name_binder rb in *)
-         (*       VEnv.bind env rb', snd rb' *)
-         (*     in *)
-
-         (*     (\* Project the arguments and continuation from the record compiled in DoOperation *\) *)
-         (*     let p = Call (Var "LINKS.project", [Var x_name; strlit "p"]) in *)
-         (*     let s = Call (Var "LINKS.project", [Var x_name; strlit "s"]) in *)
-         (*     let r = Call (Var "_makeFun", [s]) in *)
-
-         (*     (\* Bind the names, and generate the body of the clause *\) *)
-         (*     (\* The difference in compiling a "regular" operation and a session exception *)
-         (*      * handler comes in the compilation of the clause body. *)
-         (*      * For a "regular" clause body, we just bind the names and generate the *)
-         (*      * clause body. For an exception handler body, we need to insert a call into *)
-         (*      * _handleSessionException before invoking the clause body. *\) *)
-         (*     let clause_body = *)
-         (*       if (session_exceptions_enabled && *)
-         (*           clause_name = Value.session_exception_operation) then *)
-         (*         let dummy_var_name = gensym () in *)
-         (*         Bind (r_name, r, *)
-         (*           Bind (x_name, Call(Var "LINKS.project", [p; strlit "1"]), *)
-         (*             Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name]), *)
-         (*              gb env' xb body kappas))) *)
-         (*       else *)
-         (*         Bind (r_name, r, *)
-         (*           Bind (x_name, p, gb env' xb body kappas)) *)
-         (*     in *)
-         (*     x_name, clause_body *)
-         (*   in *)
-         (*   let clauses kappas = *)
-         (*     StringMap.fold *)
-         (*       (fun clause_name clause -> *)
-         (*         StringMap.add clause_name (gc clause_name env clause kappas)) *)
-         (*       operation_clauses (StringMap.empty) *)
-         (*   in *)
-         (*   let forward ks = *)
-         (*     let z_name = "_z" in *)
-         (*     K.bind ks *)
-         (*       (fun ks -> *)
-         (*         let bind1, k', ks' = K.pop ks in *)
-         (*         let bind2, h', ks' = K.pop ks' in *)
-         (*         let bind code = bind1 (bind2 code) in *)
-         (*         let resumption = *)
-         (*           Fn (["s"], Return (Call (Var "_Cons", *)
-         (*                                    [K.reify h'; *)
-         (*                                     Call (Var "_Cons", [K.reify k'; Var "s"])]))) *)
-         (*         in *)
-         (*         let vmap = Call (Var "_vmapOp", [resumption; Var z_name]) in *)
-         (*         bind (apply_yielding (K.reify h') [vmap] ks')) *)
-         (*   in *)
-         (*   contify *)
-         (*     (fun ks -> *)
-         (*       Fn (["_z"], *)
-         (*           Case ("_z", *)
-         (*                 clauses ks, *)
-         (*                 Some ("_z", forward ks)))) *)
-         (* in *)
-         (* let kappa = K.(return <> operations <> kappa) in *)
-         (* let _, comp = generate_computation env comp kappa in *)
-         (* comp *)
 
   and generate_computation env : Ir.computation -> continuation -> (venv * code) =
     fun (bs, tc) kappa ->
