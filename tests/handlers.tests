@@ -362,11 +362,6 @@ Recursive nesting of deep handlers
 stdout : 42 : Int
 flags : --enable-handlers -e
 
-Instantiate.ArityMismatch (parameterised handlers)
-fun(m) { var s = []; handle(m())(s) { case Return(x) -> x case Op(p,resume) -> resume((), p :: s) } }
-ignore : true
-flags : --enable-handlers -e
-
 Examples
 ./examples/handlers/tests.links
 stdout : () : ()
