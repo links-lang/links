@@ -51,7 +51,7 @@ fun evalState(m)(st)() client {
 
 fun toggleButton() client {
   var s0 = false;
-  var x = runState(toggle)(s0)();
+  var x = evalState(toggle)(s0)();
   ()
 }
 

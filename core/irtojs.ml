@@ -1056,7 +1056,6 @@ end = functor (K : CONTINUATION) -> struct
               in
               generate (`Not_typed, gensym ~prefix ())
             in
-            let is_parameterised = List.length params > 0 in
             (** I use a slight hack to implement parameterised
                 handlers. An efficient way to implement parameterised
                 handlers is as locally mutable closures. By local, I
@@ -1082,6 +1081,7 @@ end = functor (K : CONTINUATION) -> struct
                 that JavaScript has no notion of arity. Finally, I
                 exploit default function parameter values to
                 initialise the parameter pointer. *)
+            let is_parameterised = List.length params > 0 in
             let translate_parameters env params =
               (* Local pointer to the parameter box *)
               let param_pointer =
