@@ -1092,8 +1092,8 @@ end = functor (K : CONTINUATION) -> struct
               in
               let eff_cases kappas =
                 StringMap.fold
-                  (fun operation_name clause ->
-                    StringMap.add operation_name (translate_eff_case env clause kappas))
+                  (fun operation_name clause cases ->
+                    StringMap.add operation_name (translate_eff_case env clause kappas) cases)
                   eff_cases StringMap.empty
               in
               let body =
@@ -1216,8 +1216,8 @@ end = functor (K : CONTINUATION) -> struct
               in
               let eff_cases kappas =
                 StringMap.fold
-                  (fun operation_name clause ->
-                    StringMap.add operation_name (translate_eff_case env clause kappas))
+                  (fun operation_name clause cases ->
+                    StringMap.add operation_name (translate_eff_case env clause kappas) cases)
                   eff_cases StringMap.empty
               in
               let body =
