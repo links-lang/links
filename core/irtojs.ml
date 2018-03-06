@@ -1030,10 +1030,7 @@ end = functor (K : CONTINUATION) -> struct
                (bind_seta
                   (apply_yielding (K.reify seta) [op] kappas)))
       | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth = depth } ->
-         let generate_body env binder body kappas =
-           let env' = VEnv.bind env binder in
-           snd (generate_computation env' body kappas)
-         in
+         let comp_env = env in
          let cons v vs =
            Call (Var "_Cons", [v; vs])
          in
@@ -1043,10 +1040,73 @@ end = functor (K : CONTINUATION) -> struct
          let vmap r y =
            Call (Var "_vmapOp", [r; y])
          in
+         let generate_body env binder body kappas =
+           let env' = VEnv.bind env binder in
+           snd (generate_computation env' body kappas)
+         in
+         let generate_forward y h kappas =
+           K.bind kappas
+             (fun ks ->
+               let bind_k', k', ks' = K.pop ks in
+               let bind_h', h', ks' = K.pop ks' in
+               let bind code = bind_k' (bind_h' code) in
+               let resumption =
+                 Fn (["s"], Return (cons (K.reify k')
+                                      (cons h (Var "s"))))
+               in
+               bind (apply_yielding (K.reify h') [vmap resumption y] ks'))
+         in
          begin match depth with
-         | `Shallow -> failwith "Not yet implemented"
+         | `Shallow ->
+            let handle_name =
+              gensym ~prefix:"_shallowhandle" ()
+            in
+            let forwarder_name =
+              handle_name ^ "_forwarder"
+            in
+            let forwarder handler =
+              LetFun ((forwarder_name, ["_y"; "ks"], generate_forward (Var "_y") (Var forwarder_name) (K.reflect (Var "ks")), `Client), handler)
+            in
+            let value_case =
+              let (xb, body) = return in
+              let xb = name_binder xb in
+              K.reflect (
+                Fn ([snd xb; "_kappa"],
+                    let reflect_and_pop = K.(reflect ->- pop) in
+                    let bind, _, kappa' = reflect_and_pop (Var "_kappa") in
+                    bind (generate_body env xb body kappa')))
+            in
+            let eff_cases =
+              let translate_eff_case env (xb, resume, body) kappas =
+                let xb = name_binder xb in
+                let resume = name_binder resume in
+                let p = project (Var (snd xb)) (strlit "p") in
+                let r =
+                  let s = project (Var (snd xb)) (strlit "s") in
+                  Call (Var "_makeFun", [Var forwarder_name; s])
+                in
+                let env' = VEnv.bind env resume in
+                let body = generate_body env' xb body kappas in
+                snd xb, Bind (snd resume, r,
+                              Bind (snd xb, p, body))
+              in
+              let eff_cases kappas =
+                StringMap.fold
+                  (fun operation_name clause ->
+                    StringMap.add operation_name (translate_eff_case env clause kappas))
+                  eff_cases StringMap.empty
+              in
+              let body =
+                let ks = K.reflect (Var "ks") in
+                Case ("_z",
+                      eff_cases ks,
+                      Some ("_y", generate_forward (Var "_y") (Var handle_name) ks))
+              in
+              K.reflect (LetFun ((handle_name, ["_z"; "ks"], body, `Client), Nothing))
+            in
+            let kappa = K.(value_case <> eff_cases <> kappa) in
+            forwarder (snd (generate_computation comp_env comp kappa))
          | `Deep params ->
-            let comp_env = env in
             let handle_name =
               gensym ~prefix:"_handle" ()
             in
@@ -1160,23 +1220,11 @@ end = functor (K : CONTINUATION) -> struct
                     StringMap.add operation_name (translate_eff_case env clause kappas))
                   eff_cases StringMap.empty
               in
-              let forward y kappas =
-                K.bind kappas
-                  (fun ks ->
-                    let bind_k', k', ks' = K.pop ks in
-                    let bind_h', h', ks' = K.pop ks' in
-                    let bind code = bind_k' (bind_h' code) in
-                    let resumption =
-                      Fn (["s"], Return (cons (K.reify k')
-                                           (cons (Var handle_name) (Var "s"))))
-                    in
-                    bind (apply_yielding (K.reify h') [vmap resumption y] ks'))
-              in
               let body =
                 let ks = K.reflect (Var "ks") in
                 Case ("_z",
                       eff_cases ks,
-                      Some ("_y", forward (Var "_y") ks))
+                      Some ("_y", generate_forward (Var "_y") (Var handle_name) ks))
               in
               let h =
                 LetFun ((handle_name, ["_z"; "ks"], body, `Client), Nothing)
