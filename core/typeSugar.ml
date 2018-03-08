@@ -205,7 +205,7 @@ sig
   val shallow_resumption_effects : griper
   val handle_return : griper
   val handle_comp_effects : griper
-  val handle_unify_effect_rows : griper
+  val handle_unify_with_context : griper
 
   val do_operation : griper
 
@@ -532,16 +532,13 @@ end
                "while the handler handles effects" ^ nl() ^
                tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
-    let handle_unify_effect_rows ~pos ~t1:(inp, lt) ~t2:(out, rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("The inferred effect signature for the handled expression " ^ nl() ^
-                 tab() ^ code inp ^ nl() ^
-                   "is " ^ nl() ^
-                     tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
-                       "but it is incompatible with the handler " ^ nl() ^
-                         tab() ^ code out ^ nl() ^
-                           "whose inferred effect signature is " ^ nl() ^
-                             tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
+
+    let handle_unify_with_context ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names[lt;rt];
+      die pos ("The handle has effect type " ^ nl() ^
+                  tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
+		  "but, the currently allowed effects are" ^ nl() ^
+                  tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
 
     let type_resumption_with_annotation ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
@@ -3261,15 +3258,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
 	     = fun row ->
-             let is_builtin_effect = function
-               | "wild" | "hear" -> true
-               | _ -> false
-             in
-             let (operations, rho, dual) = Types.flatten_row row in
+             let (operations, rho, dual) = row in
 	     let operations' =
                StringMap.mapi
                  (fun name p ->
-                   if is_builtin_effect name
+                   if TypeUtils.is_builtin_effect name
                    then p
                    else Types.fresh_presence_variable (`Unl, `Any)) (* It is questionable whether it is ever correct to
                                                                        make absent operations polymorphic in their presence. *)
@@ -3293,8 +3286,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
              let inner_eff' = make_operations_presence_polymorphic inner_eff in
              (* Printf.printf "inner_eff': %s\n%!" (Types.string_of_row inner_eff'); *)
-             let () = unify ~handle:Gripers.handle_unify_effect_rows (no_pos (`Effect outer_eff), no_pos (`Effect inner_eff')) in
-             let () = unify ~handle:Gripers.handle_unify_effect_rows (no_pos (`Effect outer_eff), no_pos (`Effect context.effect_row)) in
+             let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect inner_eff'), no_pos (`Effect outer_eff)) in
+             let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect outer_eff), no_pos (`Effect context.effect_row)) in
              inner_eff, outer_eff
            in
            let eff_cases =
