@@ -661,12 +661,11 @@ module Eff_Handler_Continuation = struct
                 | (User_defined h, fs) :: rest ->
                    begin match h.depth with
                    | `Deep xs ->
-                      let pairs = List.map2 (fun x v -> (x, v)) xs vs in
                       let params =
-                        List.fold_left
-                          (fun acc (x, v) ->
+                        List.fold_left2
+                          (fun acc x v ->
                             Env.bind x (v, `Local) acc)
-                          Env.empty pairs
+                          Env.empty xs vs
                       in
                       let env = Env.shadow h.env ~by:params in
                       let k' = List.rev ((User_defined { h with env = env }, fs) :: rest) in
