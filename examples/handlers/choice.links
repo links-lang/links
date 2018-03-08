@@ -42,12 +42,12 @@ fun failure(m)() client {
   }
 }
 
-fun allChoicesShallow(m)() client {
-  shallowhandle(m()) {
-    case Return(x) -> [x]
-    case Choose(k) -> allChoicesShallow(fun() {k(true)})() ++ allChoicesShallow(fun() {k(false)})()
-  }
-}
+# fun allChoicesShallow(m)() client {
+#   shallowhandle(m()) {
+#     case Return(x) -> [x]
+#     case Choose(k) -> allChoicesShallow(fun() {k(true)})() ++ allChoicesShallow(fun() {k(false)})()
+#   }
+# }
 
 fun toss() client {
   if (do Choose) Heads else Tails
@@ -62,8 +62,9 @@ fun run() client {
   print(showList(showList(showToss))(xs));
   var ys = failure(allChoices(drunkToss))();
   print(showList(showList(showToss))(ys));
-  var zs = allChoicesShallow(toss)();
-  print(showList(showToss)(zs))
+  ()
+  # var zs = allChoicesShallow(toss)();
+  # print(showList(showToss)(zs))
 }
 
 # Page
