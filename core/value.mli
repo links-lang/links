@@ -132,12 +132,19 @@ module type CONTINUATION_EVALUATOR = sig
   type v
   type result
   type 'v t
+  type 'v resumption
   type trap_result = (v, result) Trap.result
 
   val apply : env:v Env.t ->            (* the current environment *)
               v t ->                    (* the continuation *)
               v ->                      (* the argument *)
               result
+
+  val resume : env:v Env.t ->
+               v t ->
+               v resumption ->
+               v list ->
+               result
 
   (* trap invocation *)
   val trap : v t ->                        (* the continuation *)
@@ -147,13 +154,14 @@ end
 
 module type CONTINUATION = sig
   type 'v t
-     deriving (Show)
+  and 'v resumption
+    deriving (Show)
 
   module Frame : FRAME
 
   module Handler : sig
     type 'v t
-    val make : env:'v Env.t -> clauses:Ir.clause Ir.name_map -> depth:[`Deep | `Shallow] -> 'v t
+    val make : env:'v Env.t -> return:(Ir.binder * Ir.computation) -> clauses:Ir.effect_case Ir.name_map -> depth:[`Deep of Ir.var list | `Shallow] -> 'v t
   end
   (* A continuation has a monoidal structure *)
   val empty : 'v t
@@ -170,13 +178,14 @@ module type CONTINUATION = sig
                 val error : string -> 'a
                 val computation : v Env.t -> v t -> Ir.computation -> result (* computation evaluator *)
                 val finish : v Env.t -> v -> result                          (* ends program evaluation *)
-                val reify : v t -> v                                         (* continuation reification *)
+                val reify : v resumption -> v                                (* continuation reification *)
             end) ->
     sig
       include CONTINUATION_EVALUATOR with
         type v = E.v
         and type result = E.result
         and type 'v t := 'v t
+        and type 'v resumption := 'v resumption
     end
 
   val to_string : 'v t -> string
@@ -194,7 +203,7 @@ type t = [
 | `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of continuation
-| `ReifiedContinuation of continuation
+| `Resumption of resumption
 | `Pid of dist_pid
 | `AccessPointID of access_point
 | `SessionChannel of chan
@@ -202,6 +211,7 @@ type t = [
 | `SpawnLocation of spawn_location
 ]
 and continuation = t Continuation.t
+and resumption = t Continuation.resumption
 and env = t Env.t
     deriving (Show)
 

@@ -15,7 +15,7 @@ type 'a point = 'a Unionfind.point
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     deriving (Show)
 
-type restriction = [ `Any | `Base | `Session ]
+type restriction = [ `Any | `Base | `Session | `Effect ]
     deriving (Eq, Show)
 type linearity   = [ `Any | `Unl ]
     deriving (Eq, Show)
@@ -95,6 +95,7 @@ type typ =
     | `Lolli of (typ * row * typ)
     | `Record of row
     | `Variant of row
+    | `Effect of row
     | `Table of typ * typ * typ
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
@@ -208,6 +209,7 @@ val free_bound_row_type_vars : ?include_aliases:bool -> row -> Vars.vars_list
 val var_of_quantifier : quantifier -> int
 val primary_kind_of_quantifier : quantifier -> primary_kind
 val kind_of_quantifier : quantifier -> kind
+val subkind_of_quantifier : quantifier -> subkind
 val type_arg_of_quantifier : quantifier -> type_arg
 val freshen_quantifier : quantifier -> quantifier * type_arg
 val freshen_quantifier_flexible : quantifier -> quantifier * type_arg
@@ -364,6 +366,6 @@ val add_tyvar_names : ('a -> Vars.vars_list)
                    -> ('a list)
                    -> unit
 (* Function type constructors *)
-val make_pure_function_type : datatype -> datatype -> datatype
-val make_function_type      : datatype -> row -> datatype -> datatype
+val make_pure_function_type : datatype list -> datatype -> datatype
+val make_function_type      : datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype

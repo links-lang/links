@@ -134,6 +134,10 @@ struct
     exception Not_disjoint of key * string
     (* module S = Deriving_Show.Show_map(Ord)(Ord.Show_t) *)
 
+    let lookup elem map =
+      try Some (find elem map)
+      with NotFound _ -> None
+
     let find elem map =
       try find elem map
       with NotFound _ -> raise (NotFound (Ord.Show_t.show elem ^
@@ -435,6 +439,20 @@ struct
         | e::[] -> e
         | e::xs -> e ^ ", " ^ (print_list_inner xs) in
     "[" ^ print_list_inner xs ^ "]"
+
+  let rec zip xs ys =
+    match xs, ys with
+    | [], _
+    | _, [] -> []
+    | x :: xs, y :: ys -> (x, y) :: zip xs ys
+
+  exception Lists_length_mismatch
+
+  let rec zip' xs ys =
+    match xs, ys with
+    | [], [] -> []
+    | x :: xs, y :: ys -> (x, y) :: zip' xs ys
+    | _, _ -> raise Lists_length_mismatch
 end
 include ListUtils
 

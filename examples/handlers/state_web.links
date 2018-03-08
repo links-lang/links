@@ -38,9 +38,30 @@ fun runState(m)(st)() client {
   run(st)
 }
 
+sig evalState : (Comp({Get:s,Put:(s) {}-> ()  |e},  a  )) ->
+                (s)                                       ->
+                 Comp({Get{_},Put{_} |e},  a)
+fun evalState(m)(st)() client {
+  handle(m())(st -> st) {
+    case Return(x)      -> x
+    case Get(resume)    -> resume(st, st)
+    case Put(p,resume)  -> resume((), p)
+  }
+}
+
+# sig shallowState : (Comp({Get:s ,Put:(s) {}-> ()  |e},  a  )) ->
+#                    (s)   {Get{_},Put{_}           |e}         ~> a
+# fun shallowState(m)(st) {
+#   shallowhandle(m()) {
+#     case Return(x) -> x
+#     case Get(resume) -> shallowState(fun() { resume(st) })(st)
+#     case Put(p,resume) -> shallowState(fun() { resume(()) })(p)
+#   }
+# }
+
 fun toggleButton() client {
   var s0 = false;
-  var x = runState(toggle)(s0)();
+  var x = evalState(toggle)(s0)();
   ()
 }
 

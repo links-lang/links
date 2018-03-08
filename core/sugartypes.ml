@@ -72,7 +72,7 @@ let string_of_location = function
 | `Native -> "native"
 | `Unknown -> "unknown"
 
-type restriction = [ `Any | `Base | `Session ]
+type restriction = [ `Any | `Base | `Session | `Effect ]
     deriving (Eq, Show)
 type linearity   = [ `Any | `Unl ]
     deriving (Eq, Show)
@@ -117,6 +117,7 @@ type datatype =
   | `Tuple           of datatype list
   | `Record          of row
   | `Variant         of row
+  | `Effect          of row
   | `Table           of datatype * datatype * datatype
   | `List            of datatype
   | `TypeApplication of (string * type_arg list)
@@ -156,6 +157,7 @@ type patternnode = [
 | `Cons     of pattern * pattern
 | `List     of pattern list
 | `Variant  of name * pattern option
+| `Effect   of name * pattern list * pattern
 | `Negative of name list
 | `Record   of (name * pattern) list * pattern option
 | `Tuple    of pattern list
@@ -197,15 +199,21 @@ and clause = pattern * phrase
 and funlit = pattern list list * phrase
 and handlerlit = [`Deep | `Shallow] * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
 and handler = {
-    sh_expr: phrase;
-    sh_clauses: clause list;
-    sh_descr: handler_descriptor
-  }
+  sh_expr: phrase;
+  sh_effect_cases: clause list;
+  sh_value_cases: clause list;
+  sh_descr: handler_descriptor
+}
 and handler_descriptor = {
-    shd_depth: [`Deep | `Shallow];
-    shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
-    shd_raw_row: Types.row;
-  }
+  shd_depth: [`Deep | `Shallow];
+  shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
+  shd_raw_row: Types.row;
+  shd_params: handler_parameterisation option
+}
+and handler_parameterisation = {
+  shp_bindings: (phrase * pattern) list;
+  shp_types: Types.datatype list
+}
 and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
@@ -312,13 +320,22 @@ type program = binding list * phrase option
   deriving (Show)
 
 
-let make_untyped_handler expr clauses depth =
+let make_untyped_handler ?parameters expr clauses depth =
+  let shd_params =
+    match parameters with
+    | None -> None
+    | Some pps ->
+       Some { shp_bindings = pps;
+              shp_types = [] }
+  in
   { sh_expr = expr;
-    sh_clauses = clauses;
+    sh_effect_cases = clauses;
+    sh_value_cases = [];
     sh_descr = {
         shd_depth = depth;
         shd_types = (Types.make_empty_closed_row (), `Not_typed, Types.make_empty_closed_row (), `Not_typed);
         shd_raw_row = Types.make_empty_closed_row ();
+        shd_params = shd_params
       };
   }
 
@@ -359,6 +376,7 @@ struct
     | `List ps               -> union_map pattern ps
     | `Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | `Variant (_, popt)     -> option_map pattern popt
+    | `Effect (_, ps, kopt) -> union (union_map pattern ps) (pattern kopt)
     | `Record (fields, popt) ->
         union (option_map pattern popt)
           (union_map (snd ->- pattern) fields)
@@ -447,8 +465,16 @@ struct
 (*                      diff (phrase body) pat_bound; *)
 (*                      diff (option_map phrase where) pat_bound; *)
 (*                      diff (option_map phrase orderby) pat_bound] *)
-    | `Handle { sh_expr = e; sh_clauses = cases; _ } ->
-       union (phrase e) (union_map case cases)
+    | `Handle { sh_expr = e; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr } ->
+       let params_bound =
+         option_map
+           (fun params -> union_map (snd ->- pattern) params.shp_bindings)
+           descr.shd_params
+       in
+       union_all [phrase e;
+                  union_map case eff_cases;
+                  union_map case val_cases;
+                  diff (option_map (fun params -> union_map (fst ->- phrase) params.shp_bindings) descr.shd_params) params_bound]
     | `Switch (p, cases, _)
     | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | `CP cp -> cp_phrase cp

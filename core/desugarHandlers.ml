@@ -113,6 +113,7 @@ let rec deanonymize : pattern -> pattern
       | `Nil                         -> `Nil
       | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
       | `List ps                     -> `List (List.map deanonymize ps)
+      | `Effect (name, ps, kpat)     -> `Effect (name, List.map deanonymize ps, deanonymize kpat)
       | `Variant (name, pat_opt)     -> `Variant (name, opt_map deanonymize pat_opt)
       | `Negative ns                 -> `Negative ns
       | `Record (name_pats, pat_opt) -> `Record (List.map (fun (n,p) -> (n, deanonymize p)) name_pats, opt_map deanonymize pat_opt)
@@ -132,6 +133,7 @@ let rec phrase_of_pattern : pattern -> phrase
       | `Nil                         -> `ListLit ([], None)
       | `Cons (hd, tl)               -> `InfixAppl (([], `Cons), phrase_of_pattern hd, phrase_of_pattern tl) (* x :: xs => (phrase_of_pattern x) :: (phrase_of_pattern xs) *)
       | `List ps                     -> `ListLit (List.map phrase_of_pattern ps, None)
+      | `Effect _                    -> assert false
       | `Variant (name, pat_opt)     -> `ConstructorLit (name, opt_map phrase_of_pattern pat_opt, None)
       | `Negative _                 -> failwith "desugarHandlers.ml: phrase_of_pattern case for `Negative not yet implemented!"
       | `Record (name_pats, pat_opt) -> `RecordLit (List.map (fun (n,p) -> (n, phrase_of_pattern p)) name_pats, opt_map phrase_of_pattern pat_opt)
@@ -182,20 +184,25 @@ object
        super#phrasenode funlit
     | e -> super#phrasenode e
 
+  method! phrase (node, pos) =
+    match node with
+    (* | `Handle handler when handler.sh_descr.shd_depth = `Deep -> *)
+    (*    begin match handler.sh_descr.shd_params with *)
+    (*    | Some { shp_names; _ } -> *)
+    (*       let local_bindings = *)
+    (*         List.fold_right *)
+    (*           (fun (name, pos) acc -> *)
+    (*             (`Val ([], (`Variable (name, None, pos), dp), (`Var name, pos), `Unknown, None), dp) :: acc) *)
+    (*           shp_names [] *)
+    (*       in *)
+    (*       `Block (local_bindings, (`Handle handler, pos)), dp *)
+    (*    | None -> `Handle handler, pos *)
+    (*    end *)
+    | _ -> super#phrase (node, pos)
+
   method! bindingnode = function
     | `Handler (binder, hnlit, annotation) ->
        let fnlit  = funlit_of_handlerlit hnlit in
        `Fun (binder, `Unl, ([], fnlit), `Unknown, annotation)
     | b -> super#bindingnode b
 end
-
-let thunk_computation env =
-  object (o : 'self_type)
-    inherit (TransformSugar.transform env) as super
-    method! phrasenode = function
-      | `Handle ({ sh_expr = m; _ } as hndlr) ->
-         let (input_row, _, _, output_type) = hndlr.sh_descr.shd_types in
-         let thunk = `FunLit (Some [Types.unit_type, input_row], `Unl, ([[]], m), `Unknown), dp in
-         o, `Handle { hndlr with sh_expr = thunk }, output_type
-      | e -> super#phrasenode e
-  end

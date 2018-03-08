@@ -22,6 +22,13 @@ fun filter(p, l) {
   concatMap (fun (x) {if(p(x)) [x] else []}, l)
 }
 
+fun iter(f, xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: xs -> ignore(f(x)); iter(f, xs)
+  }
+}
+
 # TBD: rename this 'sortOn' to follow Haskell usage?
 sig sortBy : ((a) ~b~> c, [a]) ~b~> [a]
 fun sortBy (f, l) {
@@ -1259,7 +1266,7 @@ fun lf(f) {
 }
 
 ### Handler stuff
-typename Comp(e::Row, a) = () ~e~> a;
+typename Comp(e::Eff, a) = () ~e~> a;
 typename Zero = [||];
 
 # Composition operators

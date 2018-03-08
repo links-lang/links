@@ -57,6 +57,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * field_spec IntMap
           | `Lolli (f, m, t) -> `Lolli (inst rec_env f, inst_row rec_env m, inst rec_env t)
           | `Record row -> `Record (inst_row rec_env row)
           | `Variant row -> `Variant (inst_row rec_env row)
+          | `Effect row -> `Effect (inst_row rec_env row)
           | `Table (f, d, r) -> `Table (inst rec_env f, inst rec_env d, inst rec_env r)
           | `ForAll (qs, t) ->
               `ForAll (qs, inst rec_env t)

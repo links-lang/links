@@ -131,7 +131,12 @@ sig
 
   val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 
-  val handle : env -> (tail_computation sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Sugartypes.handler_descriptor) -> tail_computation sem
+  val handle : env -> (tail_computation sem *
+                         (CompilePatterns.pattern * (env -> tail_computation sem)) list *
+                         (CompilePatterns.pattern * (env -> tail_computation sem)) list *
+                         ((env -> tail_computation sem) * CompilePatterns.pattern * Types.datatype) list *
+                          Sugartypes.handler_descriptor)
+               -> tail_computation sem
 
   val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
@@ -617,25 +622,22 @@ struct
     let vs = lift_list vs in
     M.bind vs (fun vs -> lift (`Special (`DoOperation (name, vs, t)), t))
 
-  let handle env (m, cases, desc) =
-    let cases =
+  let handle env (m, val_cases, eff_cases, params, desc) =
+    let params =
       List.map
-        (fun (p, body) -> ([p], fun env -> reify (body env))) cases
+        (fun (body, p, t) -> reify (body env), p, t) params
+    in
+    let val_cases, eff_cases =
+      let reify cases =
+        List.map
+          (fun (p, body) -> ([p], fun env -> reify (body env))) cases
+      in
+      reify val_cases, reify eff_cases
     in
     let comp = reify m in
-    let (bs, tc) = CompilePatterns.compile_handle_cases env (cases, desc) comp in
+    let (bs, tc) = CompilePatterns.compile_handle_cases env (val_cases, eff_cases, params, desc) comp in
     let (_,_,_,t) = desc.Sugartypes.shd_types in
     reflect (bs, (tc, t))
-    (* bind m *)
-    (*   (fun v -> *)
-    (*     M.bind *)
-    (*       (comp_binding (Var.info_of_type (sem_type m), `Return v)) *)
-    (*       (fun var -> *)
-    (*         let nenv, tenv, eff = env in *)
-    (*         let tenv = TEnv.bind tenv (var, sem_type m) in *)
-    (*         let (bs, tc) = CompilePatterns.compile_handle_cases (nenv, tenv, eff) (var, cases, desc) in *)
-    (*         let (_,_,_,t) = desc.shd_types in *)
-    (*         reflect (bs, (tc, t)))) *)
 
   let switch env (v, cases, t) =
     let cases =
@@ -812,15 +814,37 @@ struct
           | `DoOperation (name, ps, Some t) ->
              let vs = evs ps in
              I.do_operation (name, vs, t)
-          | `Handle { Sugartypes.sh_expr; Sugartypes.sh_clauses; Sugartypes.sh_descr } ->
-              let cases =
+          | `Handle { Sugartypes.sh_expr; Sugartypes.sh_effect_cases; Sugartypes.sh_value_cases; Sugartypes.sh_descr } ->
+             let henv, params =
+               let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (`Any, `Any)) in
+                match Sugartypes.(sh_descr.shd_params) with
+                | None -> empty_env, []
+                | Some { Sugartypes.shp_bindings = bindings; Sugartypes.shp_types = types } ->
+                   let env, bindings =
+                     List.fold_left2
+                       (fun (env, bindings) (body, p) t ->
+                         let p, penv = CompilePatterns.desugar_pattern `Local p in
+                         let bindings = ((fun env -> eval env body), p, t) :: bindings in
+                         ((env ++ penv), bindings))
+                       (empty_env, []) bindings types
+                   in
+                   env, List.rev bindings
+             in
+             let eff_cases =
+               List.map
+                 (fun (p, body) ->
+                   let p, penv = CompilePatterns.desugar_pattern `Local p in
+                   (p, fun env -> eval ((env ++ henv) ++ penv) body))
+                 sh_effect_cases
+             in
+             let val_cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern `Local p in
-                       (p, fun env -> eval (env ++ penv) body))
-                  sh_clauses
-              in
-              I.handle env (ec sh_expr, cases, sh_descr)
+                    let p, penv = CompilePatterns.desugar_pattern `Local p in
+                    (p, fun env -> eval ((env ++ henv) ++ penv) body))
+                  sh_value_cases
+             in
+             I.handle env (ec sh_expr, val_cases, eff_cases, params, sh_descr)
           | `Switch (e, cases, Some t) ->
               let cases =
                 List.map

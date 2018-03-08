@@ -70,7 +70,7 @@ let rec string_listify : string list -> string = function
 let rec jsonize_value' : Value.t -> json_string =
   function
   | `PrimitiveFunction _
-  | `ReifiedContinuation _
+  | `Resumption _
   | `Continuation _
   | `Socket _
       as r ->

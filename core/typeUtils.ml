@@ -43,6 +43,7 @@ let concrete_type t =
     ct (IntSet.empty) t
 
 let extract_row t = match concrete_type t with
+  | `Effect row
   | `Record row -> row
   | `Variant row -> row
   | t ->
@@ -141,7 +142,7 @@ let rec erase_type names t =
       in
         `Record (field_env, row_var, duality)
   | t -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
-	       
+
 let rec return_type t = match concrete_type t with
   | `ForAll (_, t) -> return_type t
   | `Function (_, _, t) -> t
@@ -149,24 +150,19 @@ let rec return_type t = match concrete_type t with
   | t ->
       error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
 
-let is_thunk_type t =
-  match t with
-    `Function (t,_,_) -> t = Types.unit_type
-  | _ -> false
-	    
 let rec arg_types t = match concrete_type t with
   | `ForAll (_, t) -> arg_types t
   | `Function (`Record row, _, _) ->
       extract_tuple row
   | `Lolli (`Record row, _, _) ->
      extract_tuple row
-  | `Function (t', _, _) when is_thunk_type t' -> [Types.unit_type] (* THIS IS A HACK. TODO: Trace down cause of bug. At some point during the compilation process the formal parameter to (() {Op: a -> b} -> c) -> d gets unwrapped yielding a function type composed internally as
- `Function ((`Function (), {Op: a -> b}, c)
-           , <empty effects>, d)
-  which is wrong; the formal parameter should be wrapped inside a `Record.
-*) (*error ("arg_types: " ^ (string_of_datatype t') ^ ", ret: " ^ string_of_datatype t'')*)
+(*   | `Function (t', _, _) when is_thunk_type t' -> [Types.unit_type] (\* THIS IS A HACK. TODO: Trace down cause of bug. At some point during the compilation process the formal parameter to (() {Op: a -> b} -> c) -> d gets unwrapped yielding a function type composed internally as *)
+(*  `Function ((`Function (), {Op: a -> b}, c) *)
+(*            , <empty effects>, d) *)
+(*   which is wrong; the formal parameter should be wrapped inside a `Record. *)
+(* *\) (\*error ("arg_types: " ^ (string_of_datatype t') ^ ", ret: " ^ string_of_datatype t'')*\) *)
   | t ->
-      error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
+     error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 
 let rec effect_row t = match concrete_type t with
   | `ForAll (_, t) -> effect_row t
@@ -174,6 +170,19 @@ let rec effect_row t = match concrete_type t with
   | `Lolli (_, effects, _) -> effects
   | t ->
       error ("Attempt to take effects of non-function: " ^ string_of_datatype t)
+
+
+let is_function_type t = match concrete_type t with
+  | `Lolli (_, _, _)
+  | `Function (_, _, _) -> true
+  | _ -> false
+
+let is_thunk_type t =
+  is_function_type t && arg_types t = []
+
+let is_builtin_effect = function
+  | "wild" | "hear" -> true
+  | _ -> false
 
 let rec element_type t = match concrete_type t with
   | `ForAll (_, t) -> element_type t

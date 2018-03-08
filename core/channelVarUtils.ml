@@ -91,7 +91,9 @@ let variables_in_computation comp =
   and traverse_clause (_, _, c) = traverse_computation c
   and traverse_handler (h: Ir.handler) =
     traverse_computation (h.ih_comp);
-    traverse_stringmap (traverse_clause) h.ih_clauses in
+    traverse_stringmap (traverse_clause) h.ih_cases;
+    traverse_computation (snd h.ih_return)
+  in
   traverse_computation comp;
   IntSet.elements (!variable_set)
 

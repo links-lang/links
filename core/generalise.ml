@@ -47,6 +47,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
             and to_gens = gt t in
               from_gens @ effect_gens @ to_gens
         | `Record row
+        | `Effect row
         | `Variant row -> get_row_type_args kind bound_vars row
         | `Table (r, w, n) -> gt r @ gt w @ gt n
         | `Alias ((_, ts), t) ->

@@ -48,12 +48,12 @@ flags : --enable-handlers -e
 
 Operation invocation sugar (1)
 { fun() { do Foo } }
-stdout : fun : () {Foo:a|_}-> a
+stdout : fun : () {Foo:() {}-> a|_}-> a
 flags : --enable-handlers -e
 
 Operation invocation sugar (2)
 { fun() { do Foo() } }
-stdout : fun : () {Foo:a|_}-> a
+stdout : fun : () {Foo:() {}-> a|_}-> a
 flags : --enable-handlers -e
 
 Operation invocation sugar (3)
@@ -63,12 +63,12 @@ flags : --enable-handlers -e
 
 Operation invocation sugar (4)
 fun() { do Foo }
-stdout : fun : () {Foo:a|_}-> a
+stdout : fun : () {Foo:() {}-> a|_}-> a
 flags : --enable-handlers -e
 
 Operation invocation sugar (5)
 fun() { do Foo() }
-stdout : fun : () {Foo:a|_}-> a
+stdout : fun : () {Foo:() {}-> a|_}-> a
 flags : --enable-handlers -e
 
 Operation invocation sugar (6)
@@ -180,6 +180,11 @@ sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose- |e},[a]) shallowhand
 stdout : () : ()
 flags : --enable-handlers -e
 
+Type inference for deep handler
+fun() { handle({do A; do B}) { case A(k) -> k(()) case Return(x) -> x } }
+stdout : fun : () {A{_},B:() {}-> b|_}~> b
+flags : --enable-handlers -e
+
 Soundness
 {fun mapk(m) { handle(m()) {case Map(p,k) -> map(k,p) case Return(x) -> [x]} } }
 stderr : @.
@@ -192,7 +197,12 @@ stdout : 6 : Int
 flags : --enable-handlers -e
 
 Deep state handling (2)
-{handler state(s) { case Get(k) -> k(s)(s) case Put(p,k) -> k(())(p) case Return(x) -> x } fun runState(s0, c) { state(s0)(c)() } runState(2, fun() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get }) }
+{fun state(m)(s) { handle(m())(s -> s) { case Get(k) -> k(s,s) case Put(p,k) -> k((),p) case Return(x) -> x } } fun runState(s0, c) { state(c)(s0) } runState(2, fun() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get }) }
+stdout : 6 : Int
+flags : --enable-handlers -e
+
+Deep state handling (3)
+handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(2 -> s) { case Get(k) -> k(s,s) case Put(p,k) -> k((),p) case Return(x) -> x }
 stdout : 6 : Int
 flags : --enable-handlers -e
 
@@ -202,99 +212,146 @@ stdout : 6 : Int
 flags : --enable-handlers -e
 
 Shallow state handling (2)
-{ shallowhandler simpleState(s) { case Get(k) -> simpleState(s)(fun() { k(s) })() case Put(s,k) -> simpleState(s)(fun() { k(()) })() case Return(x) -> x } fun count() { var n = do Get; if (n == 0) {n} else {do Put(n-1); count() }} simpleState(10)(count)() }
+{ fun simpleState(m)(s) { shallowhandle(m()) { case Get(k) -> simpleState(fun() { k(s) })(s) case Put(s,k) -> simpleState(fun() { k(()) })(s) case Return(x) -> x } } fun count() { var n = do Get; if (n == 0) {n} else {do Put(n-1); count() }} simpleState(count)(10) }
 stdout : 0 : Int
 flags : --enable-handlers -e
 
 Shadowing handler parameter (1)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)()  }
+{ handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(0 -> s) { case Get(k) -> k(s,s) case Put(s,k) -> k((),s) case Return(x) -> x } }
 stdout : 2 : Int
 flags : --enable-handlers -e
 
 Shadowing handler parameter (2)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(p as s,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)()  }
+{ handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(0 -> s) { case Get(k) -> k(s,s) case Put(p as s,k) -> k((),s) case Return(x) -> x } }
 stdout : 2 : Int
 flags : --enable-handlers -e
 
 Shadowing handler parameter (3)
-{ handler state(s) { case Get(k) -> k(s)(s) case Put(s as p,k) -> k(())(s) case Return(x) -> x } fun comp() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get } state(0)(comp)()  }
+{ handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(0 -> s) { case Get(k) -> k(s,s) case Put(s as p,k) -> k((),s) case Return(x) -> x } }
 stdout : 2 : Int
 flags : --enable-handlers -e
 
 Operation parameter pattern-matching (1)
-handler h1 { case Op1(_) -> 1 case Op2(_,k) -> 2 case Op3(_,_) -> 3 case Return(x) -> x }
+ignore(fun (m) { handle(m()) { case Op1(_) -> 1 case Op2(_,k) -> 2 case Op3(_,_) -> 3 case Return(x) -> x } })
 stdout : () : ()
 flags : --enable-handlers -e
 
 Operation parameter pattern-matching (2)
-handler h1 { case Op1(p as q,k) -> k(q) case Op2(s,t as w,k) -> k(t) case Op3(a,b,c as d,_) -> d case Return(x) -> x }
+ignore(fun(m) { handle(m()) { case Op1(p as q,k) -> k(q) case Op2(s,t as w,k) -> k(t) case Op3(a,b,c as d,_) -> d case Return(x) -> x } })
 stdout : () : ()
 flags : --enable-handlers -e
 
 Operation parameter pattern-matching (3)
-handler h1 { case Op1(1,k) -> k(1) case Op2(s,2,k) -> k(s) case Op3(a,b,3,_) -> 3 case Return(x) -> x }
+ignore(fun(m) { handle(m()) { case Op1(1,k) -> k(1) case Op2(s,2,k) -> k(s) case Op3(a,b,3,_) -> 3 case Return(x) -> x } })
 stdout : () : ()
 flags : --enable-handlers -e
 
 Operation parameter pattern-matching (4)
-handler h1 { case Op1(1.0,k) -> k(1.0) case Op2(s,2.0,k) -> k(s) case Op3(a,b,3.0,_) -> 3.0 case Return(x) -> x }
+ignore(fun(m) { handle(m()) { case Op1(1.0,k) -> k(1.0) case Op2(s,2.0,k) -> k(s) case Op3(a,b,3.0,_) -> 3.0 case Return(x) -> x } })
 stdout : () : ()
 flags : --enable-handlers -e
 
 Operation parameter pattern-matching (5)
-handler h1 { case Op1(Alice,k) -> k(1) case Op2(s,Bob,k) -> k(s) case Op3(a,b,Jenny,_) -> a case Return(x) -> x }
+ignore(fun(m) { handle(m()) { case Op1(Alice,k) -> k(1) case Op2(s,Bob,k) -> k(s) case Op3(a,b,Jenny,_) -> a case Return(x) -> x } })
 stdout : () : ()
 flags : --enable-handlers -e
 
 Operation parameter pattern-matching (6)
-handler h1 { case Op1((_,y),k) -> k(y) case Op2((x,y,z),k) -> k(z) case Op3(_,(a,b,c),_) -> a case Return(x) -> x }
+ignore(fun(m) { handle(m()) { case Op1((_,y),k) -> k(y) case Op2((x,y,z),k) -> k(z) case Op3(_,(a,b,c),_) -> a case Return(x) -> x } })
 stdout : () : ()
 flags : --enable-handlers -e
 
 Pattern-matching on continuation parameter (1)
-handler h1 { case Op(_) -> 0 case Return(x) -> x }
+ignore(fun(m) { handle(m()) { case Op(_) -> 0 case Return(x) -> x } })
 stdout : () : ()
 flags : --enable-handlers -e
 
 Pattern-matching on continuation parameter (2)
-handler h1 { case Op(k as f) -> f(1) case Return(x) -> x }
+ignore(fun(m) { handle(m()) { case Op(k as f) -> f(1) case Return(x) -> x } })
 stdout : () : ()
 flags : --enable-handlers -e
 
 Pattern-matching on continuation parameter (3)
-handler h1 { case Op(2) -> f(1) case Return(x) -> x }
+ignore(fun(m) { handle(m()) { case Op(2) -> f(1) case Return(x) -> x } })
 stderr : @.
 exit : 1
 flags : --enable-handlers -e
 
-Return parameter pattern-matching (1)
-handler h1 { case Op1(k) -> 1 case Return(_) -> 0 }
+Value parameter pattern-matching (1)
+ignore(fun(m) { handle(m()) { case Op1(k) -> 1 case Return(_) -> 0 } })
 stdout : () : ()
 flags : --enable-handlers -e
 
-Return parameter pattern-matching (2)
-handler h1 { case Op1(k) -> 1 case Return(x as y) -> y }
+Value parameter pattern-matching (2)
+ignore(fun(m) { handle(m()) { case Op1(k) -> 1 case Return(x as y) -> y } })
 stdout : () : ()
 flags : --enable-handlers -e
 
-Return parameter pattern-matching (3)
-handler h1 { case Op1(k) -> 1 case Return(10) -> 10 }
+Value parameter pattern-matching (3)
+ignore(fun(m) { handle(m()) { case Op1(k) -> 1 case Return(10) -> 10 } })
 stdout : () : ()
 flags : --enable-handlers -e
 
-Return parameter pattern-matching (4)
-handler h1 { case Op1(k) -> 1 case Return(100.0) -> 0 }
+Value parameter pattern-matching (4)
+ignore(fun(m) { handle(m()) { case Op1(k) -> 1 case Return(100.0) -> 0 } })
 stdout : () : ()
 flags : --enable-handlers -e
 
-Return parameter pattern-matching (5)
-handler h1 { case Op1(k) -> 1 case Return(Alice) -> 0 }
+Value parameter pattern-matching (5)
+ignore(fun(m) { handle(m()) { case Op1(k) -> 1 case Return(Alice) -> 0 } })
 stdout : () : ()
 flags : --enable-handlers -e
 
-Return parameter pattern-matching (6)
-handler h1 { case Op1(k) -> 1 case Return((x,y)) -> 0 }
+Value parameter pattern-matching (6)
+ignore(fun(m) { handle(m()) { case Op1(k) -> 1 case Return((x,y)) -> 0 } })
 stdout : () : ()
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (1)
+handle(true)(100 -> _) { case Return(x) -> x }
+stdout : true : Bool
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (2)
+handle(true)(100 -> 100) { case Return(x) -> x}
+stdout : true : Bool
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (2)
+handle(true)(99 -> 100) { case Return(x) -> x}
+stderr : @.
+exit : 1
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (3)
+handle(true)(Foo(42) -> Foo(s)) { case Return(_) -> s}
+stdout : 42 : Int
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (4)
+handle(true)(Bar(42) -> Foo(s)) { case Return(_) -> s}
+stderr : @.
+exit : 1
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (5)
+handle(true)((2,1) -> (x,y)) { case Return(_) -> x + y}
+stdout : 3 : Int
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (6)
+handle(true)("Hello" -> "Hello") { case Return(x) -> x}
+stdout : true : Bool
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (7)
+handle(true)((a=44,b=(-2)) -> (a=x, b=y)) { case Return(_) -> x + y}
+stdout : 42 : Int
+flags : --enable-handlers -e
+
+Pattern-matching on handler parameter (8)
+handle(true)((a=44,b=(-2)) -> r) { case Return(_) -> r.a + r.b}
+stdout : 42 : Int
 flags : --enable-handlers -e
 
 Deep Handler composition
@@ -348,19 +405,44 @@ stdout : Just(42) : Maybe (Int)
 flags : --enable-handlers -e
 
 Generalise (1)
-gen0(handler { case Foo(k) -> 42 case Return(x) -> x }(fun(){42}))
+gen0(fun(m)() { handle(m()) { case Foo(k) -> 42 case Return(x) -> x } }(fun(){42}))
 stdout : fun : Comp ({ |a },Int)
 flags : --enable-handlers -e
 
 Generalise (2)
-gen0(handler { case Foo(k : ((()) {Foo- |_}~> Int)) -> 42 case Return(x) -> x }(fun(){42}))
+gen0(fun(m)() { handle(m()) { case Foo(k : ((()) {Foo- |_}~> Int)) -> 42 case Return(x) -> x } }(fun(){42}))
 stdout : fun : Comp ({ |a },Int)
 flags : --enable-handlers -e
 
-Unification error
+Recursive nesting of deep handlers
 { fun h1(m,h) { handle(m()) { case Foo(k) -> h(fun() { k(()) },h1) case Return(x) -> x } } fun h2(m,h) { handle(m()) { case Foo(k) -> h(fun() { k(()) },h2) case Return(x) -> x } } h1(fun(){42},h2) }
+stdout : 42 : Int
 flags : --enable-handlers -e
-ignore : Known unification bug (*** Error: "Assert_failure unify.ml:136:14")
+
+Parameterised handler with multiple parameters (1)
+handle({do A; do B; do C; do D})(0 -> a, 1 -> b, 2 -> c, 3 -> d) { case A(k) -> k((),a+1,b,c,d) case B(k) -> k((),a,b+1,c,d) case C(k) -> k((),a,b,c+1,d) case D(k) -> k((),a,b,c,d+1) case Return(_) -> (a,b,c,d) }
+stdout : (1, 2, 3, 4) : (Int, Int, Int, Int)
+flags : --enable-handlers -e
+
+Parameterised handler with multiple parameters (2)
+handle({do A; do B; do C; do D})(0 -> a, false -> b, (true,0) -> (c0,c1) as c, "Hello" -> d) { case A(k) -> k((),a+1,b,c,d) case B(k) -> k((),a,not(b),c,d) case C(k) -> k((),a,b,(not(c0), c1+1),d) case D(k) -> k((),a,b,c,d ^^ " World") case Return(_) -> (a,b,c,d) }
+stdout : (1, true, (false, 1), "Hello World") : (Int, Bool, (Bool, Int), String)
+flags : --enable-handlers -e
+
+Effect type sugar (1)
+fun(g : (() {A:a,B:(a) -> b|_}~> b)) { g }(fun(){error("N/A")})
+stdout : fun : () {A:() {}-> a,B:(a) {}-> b|_}~> b
+flags : --enable-handlers -e
+
+Effect type sugar (2)
+fun(g : (() {:a|_}~> a)) { g }(fun(){error("N/A")})
+stdout : fun : () {:a|_}~> a
+flags : --enable-handlers -e
+
+Effect type sugar (3)
+fun(g : (() {wild:()|_}-> a)) { g }(fun(){error("N/A")})
+stdout : fun : () ~> _
+flags : --enable-handlers -e
 
 Examples
 ./examples/handlers/tests.links

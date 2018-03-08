@@ -108,6 +108,7 @@ let kind_of pos =
   | "Any" -> `Type, Some (`Any, `Any)
   | "Base" -> `Type, Some (`Unl, `Base)
   | "Session" -> `Type, Some (`Any, `Session)
+  | "Eff"     -> `Row, Some (`Unl, `Effect)
   | k -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos))
 
 let subkind_of pos =
@@ -116,6 +117,7 @@ let subkind_of pos =
   | "Any" -> Some (`Any, `Any)
   | "Base" -> Some (`Unl, `Base)
   | "Session" -> Some (`Any, `Session)
+  | "Eff"  -> Some (`Unl, `Effect)
   | sk -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos))
 
 let attach_kind _pos (t, k) = (t, k, `Rigid)
@@ -785,14 +787,15 @@ case_expression:
 | conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
-| handle_depth LPAREN exp RPAREN LBRACE cases RBRACE           { let hndlr = Sugartypes.make_untyped_handler $3 $6 $1 in
-                                                                 `Handle hndlr, pos() }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { `Handle (make_untyped_handler $3 $6 `Shallow), pos() }
+| HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle (make_untyped_handler $3 $6 `Deep), pos() }
+| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE cases RBRACE { `Handle (make_untyped_handler ~parameters:(List.rev $6) $3 $9 `Deep), pos() }
 | RAISE                                                        { `Raise, pos () }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
 
-handle_depth:
-| HANDLE                                                       { `Deep }
-| SHALLOWHANDLE                                                { `Shallow }
+handle_params:
+| logical_expression RARROW pattern { [($1, $3)] }
+| handle_params COMMA logical_expression RARROW pattern  { ($3,$5) :: $1 }
 
 iteration_expression:
 | case_expression                                              { $1 }

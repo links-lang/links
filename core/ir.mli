@@ -86,13 +86,14 @@ and special =
   | `Handle of handler
   | `DoOperation of (name * value list * Types.datatype) ]
 and computation = binding list * tail_computation
-and clause = [`ResumptionBinder of binder | `NoResumption] * binder * computation
+and effect_case = binder * binder * computation
 and handler = {
     ih_comp: computation;
-    ih_clauses: clause name_map;
+    ih_cases: effect_case name_map;
+    ih_return: binder * computation;
     ih_depth: handler_depth;
 }
-and handler_depth = [`Deep | `Shallow]
+and handler_depth = [`Deep of (binder * value) list | `Shallow]
   deriving (Show)
 
 val binding_scope : binding -> scope

@@ -14,6 +14,13 @@ fun showList(showX)(xs) {
   "[" ^^ xs ^^ "]"
 }
 
+fun showToss(toss) {
+  switch(toss) {
+    case Heads -> "Heads"
+    case Tails -> "Tails"
+  }
+}
+
 fun positive(m) client {
   handle(m()) {
     case Return(x) -> x
@@ -35,22 +42,29 @@ fun failure(m)() client {
   }
 }
 
+# fun allChoicesShallow(m)() client {
+#   shallowhandle(m()) {
+#     case Return(x) -> [x]
+#     case Choose(k) -> allChoicesShallow(fun() {k(true)})() ++ allChoicesShallow(fun() {k(false)})()
+#   }
+# }
+
 fun toss() client {
-  if (do Choose) 0 else 1
+  if (do Choose) Heads else Tails
 }
 
 fun drunkToss() client {
   if (do Choose) toss() else do Fail
 }
 
-# fun run() client {
-#   print(showList(showList(intToString))(allChoices(failure(drunkToss))()))
-# }
-
 fun run() client {
-  var xs = allChoices(failure(toss))();
-  var i = length(xs);
-  print(intToString(i))
+  var xs = allChoices(failure(drunkToss))();
+  print(showList(showList(showToss))(xs));
+  var ys = failure(allChoices(drunkToss))();
+  print(showList(showList(showToss))(ys));
+  ()
+  # var zs = allChoicesShallow(toss)();
+  # print(showList(showToss)(zs))
 }
 
 # Page

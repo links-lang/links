@@ -63,6 +63,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
                 | _ ->
                     isgr row
             end
+        | `Effect row
         | `Variant row -> isgv row
         | `Table (f, d, r) -> isg f && isg d && isg r
         | `Alias (_, t) -> is_guarded bound_vars var t
@@ -128,6 +129,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
             isp f || isnr m || isn t
         | `ForAll (qs, t) -> is_negative (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row -> isnr row
+        | `Effect row
         | `Variant row -> isnr row
         | `Table (f, d, r) -> isn f || isn d || isn r
         | `Alias (_, t) -> isn t
@@ -191,6 +193,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
             isn f || ispr m || isp t
         | `ForAll (qs, t) -> is_positive (bind_quantifiers (unbox_quantifiers qs) bound_vars) var t
         | `Record row -> ispr row
+        | `Effect row
         | `Variant row -> ispr row
         | `Table (f, d, r) -> isp f || isp d || isp r
         | `Alias (_, t) -> isp t

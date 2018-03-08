@@ -107,11 +107,12 @@ type var_env = { tenv : Types.meta_type_var StringMap.t;
 let empty_env = {tenv = StringMap.empty; renv = StringMap.empty; penv = StringMap.empty}
 
 exception UnexpectedFreeVar of string
+exception UnexpectedOperationEffects of string
 
 module Desugar =
 struct
   let rec datatype var_env (alias_env : Types.tycon_environment) t =
-  let datatype var_env t = datatype var_env alias_env t in
+    let datatype var_env t = datatype var_env alias_env t in
     let lookup_type t = StringMap.find t var_env.tenv in
       match t with
         | `TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
@@ -119,11 +120,11 @@ struct
         | `QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | `Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
-                       row var_env alias_env e,
+                       effect_row var_env alias_env e,
                        datatype var_env t)
         | `Lolli (f, e, t) ->
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
-                       row var_env alias_env e,
+                       effect_row var_env alias_env e,
                        datatype var_env t)
         | `Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
@@ -172,14 +173,45 @@ struct
               `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
         | `Record r -> `Record (row var_env alias_env r)
         | `Variant r -> `Variant (row var_env alias_env r)
+        | `Effect r -> `Effect (row var_env alias_env r)
         | `Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
         | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
         | `TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
               | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
-              | Some (`Alias _) -> let ts = List.map (type_arg var_env alias_env) ts in
-                  (* TODO: check that the kinds match up *)
-                  Instantiate.alias tycon ts alias_env
+              | Some (`Alias (qs, _dt)) ->
+                 let exception Kind_mismatch (* TODO add more information *) in
+                 let match_kinds (q, t) =
+                   let primary_kind_of_type_arg : Sugartypes.type_arg -> primary_kind = function
+                     | `Type _ -> `Type
+                     | `Row _ -> `Row
+                     | `Presence _ -> `Presence
+                   in
+                   if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
+                     raise Kind_mismatch
+                   else (q, t)
+                 in
+                 let type_arg' var_env alias_env = function
+                   | `Row r -> `Row (effect_row var_env alias_env r)
+                   | t -> type_arg var_env alias_env t
+                 in
+                 begin try
+                         let ts = ListUtils.zip' qs ts in
+                         let ts = List.map
+                           (fun (q,t) ->
+                             let (q, t) = match_kinds (q, t) in
+                             match subkind_of_quantifier q with
+                             | (_, `Effect) -> type_arg' var_env alias_env t
+                             | _ -> type_arg var_env alias_env t)
+                           ts
+                         in
+                         Instantiate.alias tycon ts alias_env
+                   with
+                   | ListUtils.Lists_length_mismatch ->
+                      failwith (Printf.sprintf "Arity mismatch: the type constructor %s expects %d arguments, but %d arguments were provided" tycon (List.length qs) (List.length ts))
+                   | Kind_mismatch ->
+                      failwith "Kind mismatch"
+                 end
               | Some (`Abstract abstype) ->
                   (* TODO: check that the kinds match up *)
                   `Application (abstype, List.map (type_arg var_env alias_env) ts)
@@ -243,7 +275,55 @@ struct
             (k, fieldspec var_env alias_env p))
           fields
     in
-      fold_right Types.row_with fields seed
+    fold_right Types.row_with fields seed
+  and effect_row var_env alias_env (fields, rv) =
+    let fields =
+      (* Closes any empty, open arrow rows on user-defined
+         operations. Note any row which can be closed will have an
+         unbound effect variable.  *)
+      try List.map
+            (function
+            | (name, `Present (`Function (domain, (fields, rv), codomain))) as op
+                when not (TypeUtils.is_builtin_effect name) ->
+               (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
+               begin match rv, fields with
+               | `Closed, [] -> op
+               | `Open _, []
+               | (`Recursive _), [] -> (* might need an extra check on recursive rows *)
+                  (name, `Present (`Function (domain, ([], `Closed), codomain)))
+               | _,_ -> raise (UnexpectedOperationEffects name)
+               end
+            | x -> x)
+            fields
+      with
+        UnexpectedOperationEffects op_name ->
+          failwith (Printf.sprintf "The abstract operation %s has unexpected effects in its signature. The effect signature on an abstract operation arrow is always supposed to be empty, since any effects it might have are ultimately conferred by its handler." op_name)
+    in
+    let (fields, rho, dual) = row var_env alias_env (fields, rv) in
+    let fields =
+      StringMap.mapi
+        (fun name ->
+          function
+          | `Present t
+              when not (TypeUtils.is_builtin_effect name || TypeUtils.is_function_type t) ->
+             (* Elaborates `Op : a' to `Op : () {}-> a' *)
+             let eff = Types.make_empty_closed_row () in
+             `Present (Types.make_function_type [] eff t)
+          (* | `Present t *)
+          (*     when not (TypeUtils.is_builtin_effect name) && TypeUtils.is_function_type t -> *)
+          (*    let domain = TypeUtils.arg_types t in *)
+          (*    let eff = TypeUtils.effect_row t in *)
+          (*    let codomain = TypeUtils.return_type t in *)
+          (*    let t = *)
+          (*      if Types.is_empty_row eff *)
+          (*      then Types.make_function_type domain (Types.make_empty_closed_row ()) codomain *)
+          (*      else t *)
+          (*    in *)
+          (*    `Present t *)
+          | t -> t)
+        fields
+    in
+    (fields, rho, dual)
   and type_arg var_env alias_env =
     function
       | `Type t -> `Type (datatype var_env alias_env t)
