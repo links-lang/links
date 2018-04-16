@@ -1015,7 +1015,8 @@ let string_of_pretty pretty_fun arg : string =
   let out_functions = {out_string = out_string;
                        out_flush = out_flush;
                        out_newline = ignore;
-                       out_spaces = function 0 -> () | _ -> out_string " " 0 1; } in
+                       out_spaces = (function 0 -> () | _ -> out_string " " 0 1);
+                       out_indent = (pp_get_formatter_out_functions f ()).out_indent;} in
   pp_set_formatter_out_functions f out_functions;
   pretty_fun f arg;
   pp_print_flush f ();
