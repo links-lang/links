@@ -5,42 +5,42 @@
 open Utility
 
 type scope = Var.scope
-  deriving (Show)
+  [@@deriving show]
 (* term variables *)
 type var = Var.var
-  deriving (Show, Eq, Typeable, Pickle, Dump)
+  [@@deriving show,eq,yojson]
 type var_info = Var.var_info
-  deriving (Show)
+  [@@deriving show]
 type binder = Var.binder
-  deriving (Show)
+  [@@deriving show]
 
 (* type variables *)
 type tyvar = Types.quantifier
-  deriving (Show)
+  [@@deriving show]
 type tyarg = Types.type_arg
-  deriving (Show)
+  [@@deriving show]
 
 type name = string
-  deriving (Show)
+  [@@deriving show]
 
 type name_set = Utility.stringset
-  deriving (Show)
+  [@@deriving show]
 type 'a name_map = 'a Utility.stringmap
-  deriving (Show)
+  [@@deriving show]
 
 type 'a var_map = 'a Utility.intmap
-  deriving (Show)
+  [@@deriving show]
 
 type language = string
-  deriving (Show)
+  [@@deriving show]
 
 let var_of_binder (x, _) = x
 
 type constant = Constant.constant
-  deriving (Show)
+  [@@deriving show]
 
 type location = Sugartypes.location
-  deriving (Show)
+  [@@deriving show]
 
 type value =
   [ `Constant of constant
@@ -98,7 +98,7 @@ and handler = {
     ih_depth: handler_depth;
 }
 and handler_depth = [`Deep of (binder * value) list | `Shallow]
-  deriving (Show)
+  [@@deriving show]
 
 let binding_scope : binding -> scope =
   function
@@ -139,7 +139,7 @@ let rec is_atom =
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
 
 type program = computation
-  deriving (Show)
+  [@@deriving show]
 
 let string_of_var = string_of_int
 
@@ -351,7 +351,7 @@ struct
               with
                   Instantiate.ArityMismatch ->
                     prerr_endline ("Arity mismatch in type application (Ir.Transform)");
-                    prerr_endline ("expression: "^Show_value.show (`TApp (v, ts)));
+                    prerr_endline ("expression: "^show_value (`TApp (v, ts)));
                     prerr_endline ("type: "^Types.string_of_datatype t);
                     prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts));
                     failwith "fatal internal error"
@@ -887,4 +887,4 @@ struct
 end
 
 type eval_fun_def = var_info * (var list * computation) * Var.var option * location
-  deriving (Show)
+  [@@deriving show]

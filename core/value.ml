@@ -13,15 +13,11 @@ object
   method show : string
 end
 
-module Show_otherfield =
-  Deriving_Show.Defaults
-    (struct
-      type a = otherfield
-      let format formatter obj = Format.pp_print_string formatter (obj # show)
-     end)
+
+let show_otherfield formatter obj = Format.pp_print_string formatter (obj # show)
 
 type db_status = [ `QueryOk | `QueryError of string ]
-  deriving (Show)
+  [@@deriving show]
 
 class virtual dbvalue = object (self)
   method virtual status : db_status
@@ -76,13 +72,13 @@ class virtual database = object(self)
       failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
 end
 
-module Eq_database = Deriving_Eq.Eq_mutable(struct type a = database end)
-module Typeable_database = Deriving_Typeable.Primitive_typeable
+let equal_database db1 db2 = db1 == db2
+(**module Typeable_database = Deriving_Typeable.Primitive_typeable
   (struct
     type t = database
     let magic = "database"
-   end)
-module Show_database = Deriving_Show.Show_unprintable(struct type a = database end)
+   end)**)
+let pp_database = fun fmt _ -> Utility.format_omission fmt (** Supress output **)
 
 (* Here we could do something better, like pickling enough information
    about the database to be able to restore the connection on
@@ -148,7 +144,7 @@ type xmlitem =   Text of string
                | NsAttr of (string * string * string)
                | NsNode of (string * string * xml)
 and xml = xmlitem list
-    deriving (Typeable, Show, Eq, Pickle, Dump)
+    [@@deriving show,eq,yojson]
 
 
 let is_attr = function
@@ -176,7 +172,7 @@ let split_html : xml -> xml * xml =
   | xs -> [], xs
 
 type table = (database * string) * string * string list list * Types.row
-  deriving (Show)
+  [@@deriving show]
 
 type primitive_value_basis =  [
 | `Bool of bool
@@ -185,21 +181,21 @@ type primitive_value_basis =  [
 | `Int of int
 | `XML of xmlitem
 | `String of string ]
-  deriving (Show, Typeable, Eq, Pickle, Dump)
+  [@@deriving show,eq,yojson]
 
 type primitive_value = [
 | primitive_value_basis
 | `Database of (database * string)
 | `Table of table
 ]
-  deriving (Show)
+  [@@deriving show]
 
-module Show_in_channel = Deriving_Show.Show_unprintable(struct type a = in_channel end)
-module Show_out_channel = Deriving_Show.Show_unprintable(struct type a = out_channel end)
+let pp_in_channel = fun fmt _ -> Utility.format_omission fmt (** Supress output**)
+let pp_out_channel = fun fmt _ -> Utility.format_omission fmt (** Supress output**)
 (* not so sure about these two... *)
-module Eq_in_channel = Deriving_Eq.Eq_mutable(struct type a = in_channel end)
-module Eq_out_channel = Deriving_Eq.Eq_mutable(struct type a = out_channel end)
-module Typeable_in_channel = Deriving_Typeable.Primitive_typeable
+let equal_in_channel ic1 ic2 = ic1 == ic2
+let equal_out_channel oc1 oc2 = oc1 == oc2
+(**module Typeable_in_channel = Deriving_Typeable.Primitive_typeable
   (struct
     type t = in_channel
     let magic = "in_channel"
@@ -208,33 +204,33 @@ module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
   (struct
     type t = out_channel
     let magic = "out_channel"
-   end)
+   end)**)
 
 type spawn_location = [
   | `ClientSpawnLoc of client_id
   | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
 ]
-  deriving (Show)
+  [@@deriving show]
 
 type dist_pid = [
   | `ClientPid of (client_id * process_id)
   | `ServerPid of process_id (* Again, will need a server address here later *)
 ]
-  deriving (Show)
+  [@@deriving show]
 
 type access_point = [
   | `ClientAccessPoint of (client_id * apid)
   | `ServerAccessPoint of apid
 ]
-  deriving (Show)
+  [@@deriving show]
 
 type chan = (channel_id * channel_id)
-  deriving (Show)
+  [@@deriving show]
 
 module type ENV =
 sig
   type 'a t
-     deriving (Show)
+     [@@deriving show]
   val set_request_data : 'a t -> RequestData.request_data -> 'a t
   val request_data : 'a t -> RequestData.request_data
   val empty : 'a t
@@ -258,7 +254,7 @@ module Env = struct
       globals : ('a * Ir.scope) Utility.intmap;
       request_data : RequestData.request_data
     }
-    deriving (Show)
+    [@@deriving show]
 
   let set_request_data env rd = { env with request_data = rd }
   let request_data env = env.request_data
@@ -312,7 +308,7 @@ module Env = struct
 
   (** Compression **)
   type 'cv compressed_t = (Ir.var * 'cv) list
-        deriving (Show, Eq, Typeable, Dump, Pickle)
+        [@@deriving show,eq,yojson]
   let compress (compress_val : 'v -> 'cv) (env : 'v t)  : 'cv compressed_t =
     List.rev
     (fold
@@ -355,7 +351,7 @@ end
 
 module Frame = struct
   type 'v t = Ir.scope * Ir.var * 'v Env.t * Ir.computation
-     deriving (Show)
+     [@@deriving show]
 
   let make scope var env comp = (scope, var, env, comp)
   let of_expr env tc =
@@ -363,7 +359,7 @@ module Frame = struct
 
   (** Compression **)
   type 'cv compressed_t = Ir.var * 'cv Env.compressed_t
-     deriving (Show, Eq, Typeable, Dump, Pickle)
+     [@@deriving show,eq,yojson]
   let compress (compress_val : 'v -> 'cv) (_, var, locals, _) : 'cv compressed_t =
     (var, Env.compress compress_val locals)
   let uncompress (uncompress_val : 'v Env.t -> 'cv -> 'v) globals (var, env) : 'v t =
@@ -411,7 +407,7 @@ end
 module type CONTINUATION = sig
   type 'v t
   and 'v resumption
-     deriving (Show)
+     [@@deriving show]
 
   module Frame : FRAME
   module Handler : sig
@@ -445,7 +441,7 @@ module type COMPRESSABLE_CONTINUATION = sig
 
   type 'cv compressed_t
   and 'cv compressed_r
-     deriving (Show, Eq, Typeable, Dump, Pickle)
+     [@@deriving show,eq,yojson]
   val compress : compress_val:('v -> 'cv) -> 'v t -> 'cv compressed_t
   val uncompress : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_t -> 'v t
 
@@ -456,7 +452,7 @@ end
 module Pure_Continuation = struct
   type 'v t = ('v Frame.t) list
   and 'v resumption = 'v t
-      deriving (Show)
+      [@@deriving show]
 
   let empty = []
   let (<>) k k' = k @ k'
@@ -467,7 +463,7 @@ module Pure_Continuation = struct
   (** Compression **)
   type 'cv compressed_t = ('cv Frame.compressed_t) list
   and 'cv compressed_r = unit
-        deriving (Show, Eq, Typeable, Dump, Pickle)
+        [@@deriving show,eq,yojson]
   let compress ~compress_val cont =
     List.map (Frame.compress compress_val) cont
   let uncompress ~uncompress_val globals cont =
@@ -523,20 +519,20 @@ module Eff_Handler_Continuation = struct
     and 'v r =
       | Deep of 'v k
       | Shallow of 'v Frame.t list * 'v k
-      deriving (Show)
+      [@@deriving show]
 
     type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep of Ir.var list | `Shallow]
     and 'cv compressed_continuation = ('cv compressed_handler * ('cv Frame.compressed_t list)) list
     and 'cv compressed_resumption =
       | CompressedDeep of 'cv compressed_continuation
       | CompressedShallow of 'cv Frame.compressed_t list * 'cv compressed_continuation
-      deriving (Show, Eq, Typeable, Dump, Pickle)
+      [@@deriving show,eq,yojson]
   end
 
   open K
   type 'v t = 'v k
   and 'v resumption = 'v r
-      deriving (Show)
+      [@@deriving show]
 
   (* module Debug = struct *)
   (*   type debug_handler = { *)
@@ -608,7 +604,7 @@ module Eff_Handler_Continuation = struct
   module Handler = struct
     open K
     type 'v t = 'v handler
-      deriving (Show)
+      [@@deriving show]
 
     let make ~env ~return ~clauses ~depth =
       User_defined { env; return; cases = clauses; depth }
@@ -738,7 +734,7 @@ module Eff_Handler_Continuation = struct
 
   type 'cv compressed_t = 'cv K.compressed_continuation
   and 'cv compressed_r  = 'cv K.compressed_resumption
-        deriving (Show, Eq, Typeable, Dump, Pickle)
+        [@@deriving show,eq,yojson]
   let compress ~compress_val k =
     let compress_frame = Frame.compress compress_val in
     let compress (h, fs) = (Handler.compress ~compress_val h, List.map compress_frame fs) in
@@ -796,7 +792,7 @@ type t = [
 and continuation = t Continuation.t
 and resumption = t Continuation.resumption
 and env = t Env.t
-  deriving (Show)
+  [@@deriving show]
 
 type delegated_chan = (chan * (t list))
 
@@ -806,7 +802,7 @@ type compressed_primitive_value = [
 | `Table of string * string * string list list * string
 | `Database of string
 ]
-  deriving (Show, Eq, Typeable, Pickle, Dump)
+  [@@deriving show,eq,yojson]
 
 type compressed_continuation = compressed_t Continuation.compressed_t
 and compressed_resumption = compressed_t Continuation.compressed_r
@@ -822,7 +818,7 @@ and compressed_t = [
 | `Continuation of compressed_continuation
 | `Resumption of compressed_resumption ]
 and compressed_env = compressed_t Env.compressed_t
-  deriving (Show, Eq, Typeable, Dump, Pickle)
+  [@@deriving show,eq,yojson]
 
 let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
   function
@@ -1174,13 +1170,11 @@ let continuation_serialisers : (string * compressed_continuation serialiser) lis
   "Marshal",
   { save = marshal_save ; load = marshal_load };
 
-  "Pickle",
-  { save = Pickle.to_string<compressed_continuation> ;
-    load = Pickle.from_string<compressed_continuation> };
-
-  "Dump",
-  { save = Dump.to_string<compressed_continuation> ;
-    load = Dump.from_string<compressed_continuation> }
+  "Yojson",
+  { save = (fun ccont -> (Yojson.Safe.to_string (compressed_continuation_to_yojson ccont )));
+    load = fun  str -> match compressed_continuation_of_yojson (Yojson.Safe.from_string str) with
+      | Ok ccont -> ccont
+      | Error msg -> failwith ("unmarshalling error: " ^ msg)};
 ]
 
 (*let continuation_serialisers : (string * compressed_continuation serialiser) list = [
@@ -1200,13 +1194,11 @@ let value_serialisers : (string * compressed_t serialiser) list = [
   "Marshal",
   { save = marshal_save ; load = marshal_load };
 
-  "Pickle",
-  { save = Pickle_compressed_t.to_string ;
-    load = Pickle_compressed_t.from_string };
-
-  "Dump",
-  { save = Dump_compressed_t.to_string ;
-    load = Dump_compressed_t.from_string };
+  "Yojson",
+  { save = (fun ccont -> (Yojson.Safe.to_string (compressed_t_to_yojson ccont )));
+    load = fun  str -> match compressed_t_of_yojson (Yojson.Safe.from_string str) with
+      | Ok ccont -> ccont
+      | Error msg -> failwith ("unmarshalling error: " ^ msg)};
 ]
 
 let retrieve_serialiser : (string * 'a serialiser) list -> 'a serialiser =
@@ -1232,7 +1224,7 @@ let marshal_continuation (c : continuation) : string =
 let marshal_value : t -> string =
   fun v ->
     let save = (value_serialiser ()).save in
-    (* Debug.print ("marshalling: "^Show_t.show v); *)
+    (* Debug.print ("marshalling: "^show v); *)
       base64encode (save (compress_val v))
 
 let unmarshal_continuation env : string -> continuation =
@@ -1244,7 +1236,7 @@ let unmarshal_value env : string -> t =
     let load = (value_serialiser ()).load in
     (* Debug.print ("unmarshalling string: " ^ s); *)
     let v = (load (base64decode s)) in
-    (* Debug.print ("unmarshalling: " ^ Show_compressed_t.show v); *)
+    (* Debug.print ("unmarshalling: " ^ show_compressed_t v); *)
       uncompress_val (Env.globals env) v
 
 (** Return the continuation frame that evaluates the given expression

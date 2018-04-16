@@ -4,14 +4,14 @@
 open Utility
 
 type scope = [ `Local | `Global ]
-  deriving (Show)
+  [@@deriving show]
 (** Term variables *)
 type var = int
-  deriving (Show, Eq, Typeable, Pickle, Dump)
+  [@@deriving show,eq,yojson]
 type var_info = Types.datatype * string * scope
-  deriving (Show)
+  [@@deriving show]
 type binder = var * var_info
-  deriving (Show)
+  [@@deriving show]
 
 let dummy_var = 0
 

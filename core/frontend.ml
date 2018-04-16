@@ -16,11 +16,11 @@ end
 =
 struct
   let _show s program =
-    Debug.print (s ^ ": " ^ Sugartypes.Show_program.show program);
+    Debug.print (s ^ ": " ^ Sugartypes.show_program program);
     program
 
   let _show_sentence s sentence =
-    Debug.print (s ^ ": " ^ Sugartypes.Show_sentence.show sentence);
+    Debug.print (s ^ ": " ^ Sugartypes.show_sentence sentence);
     sentence
 
   let session_exceptions = Settings.get_value Basicsettings.Sessions.exceptions_enabled

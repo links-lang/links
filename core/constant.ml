@@ -1,4 +1,3 @@
-(*pp deriving *)
 open Utility
 
 type constant =
@@ -7,7 +6,7 @@ type constant =
     | `String of string
     | `Bool   of bool
     | `Char   of char ]
-      deriving (Show)
+      [@@deriving show]
 
 let constant_type = function
   | `Float _  -> `Primitive `Float

@@ -2,7 +2,7 @@
 open ProcessTypes
 
 type request_data
-  deriving (Show)
+  [@@deriving show]
 
 val new_empty_request_data : unit -> request_data
 val new_request_data :

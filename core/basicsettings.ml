@@ -181,7 +181,7 @@ end
 
 (* Serialisation stuff *)
 module Serialisation = struct
-  let serialiser = Settings.add_string ("serialiser", "Dump", `User)
+  let serialiser = Settings.add_string ("serialiser", "Yojson", `User)
 end
 
 (* Typing stuff *)

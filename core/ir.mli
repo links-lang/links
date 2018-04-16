@@ -2,40 +2,40 @@
 (** Monadic IR *)
 
 type scope = Var.scope
-  deriving (Show)
+  [@@deriving show]
 
 (* term variables *)
 type var = Var.var
-  deriving (Show, Eq, Typeable, Pickle, Dump)
+  [@@deriving show,eq,yojson]
 type var_info = Var.var_info
-  deriving (Show)
+  [@@deriving show]
 type binder = Var.binder
-  deriving (Show)
+  [@@deriving show]
 
 (* type variables *)
 type tyvar = Types.quantifier
-  deriving (Show)
+  [@@deriving show]
 type tyarg = Types.type_arg
-  deriving (Show)
+  [@@deriving show]
 
 type name = string
-  deriving (Show)
+  [@@deriving show]
 
 type name_set = Utility.stringset
-  deriving (Show)
+  [@@deriving show]
 type 'a name_map = 'a Utility.stringmap
-  deriving (Show)
+  [@@deriving show]
 
 type 'a var_map = 'a Utility.intmap
-  deriving (Show)
+  [@@deriving show]
 
 type language = string
 
 type constant = Constant.constant
-  deriving (Show)
+  [@@deriving show]
 
 type location = Sugartypes.location
-  deriving (Show)
+  [@@deriving show]
 
 (* INVARIANT: all IR binders have unique names *)
 
@@ -94,7 +94,7 @@ and handler = {
     ih_depth: handler_depth;
 }
 and handler_depth = [`Deep of (binder * value) list | `Shallow]
-  deriving (Show)
+  [@@deriving show]
 
 val binding_scope : binding -> scope
 val binder_of_fun_def : fun_def -> binder
@@ -106,7 +106,7 @@ val letmv : binder * value -> binding
 (*val letv : tybinder * value -> binding*)
 
 type program = computation
-  deriving (Show)
+  [@@deriving show]
 
 val is_atom : value -> bool
 
@@ -183,4 +183,4 @@ sig
 end
 
 type eval_fun_def = var_info * (var list * computation) * Var.var option * location
-  deriving (Show)
+  [@@deriving show]

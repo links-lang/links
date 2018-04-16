@@ -56,6 +56,8 @@ remove: [
 depends: [
   "jbuilder" {build}
   "deriving" {build}
+  "ppx_deriving" {build}
+  "ppx_deriving_yojson"
   "cgi"
   "base64"
   "linenoise"

@@ -33,9 +33,11 @@ let ( <| ) f arg = f arg
 
 (** {0 Maps and sets} *)
 module type OrderedShow = sig
-  type t
+  type t (**[@@deriving show]**)
   val compare : t -> t -> int
-  module Show_t : Deriving_Show.Show with type a = t
+  val show : t -> string
+  val pp : Format.formatter -> t -> unit
+  
 end
 
 module type Map =
@@ -80,13 +82,14 @@ sig
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
 
-  module Show_t (A : Deriving_Show.Show) : Deriving_Show.Show
-    with type a = A.a t
+  val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
+  val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
 
 module String = struct
   include String
-  module Show_t = Deriving_Show.Show_string
+  let pp = Format.pp_print_string 
+  let show = fun x -> x
 end
 
 module Int = struct
@@ -94,12 +97,13 @@ module Int = struct
   (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
   let compare i j = i-j
-  module Show_t = Deriving_Show.Show_int
+  let pp = Format.pp_print_int
+  let show = string_of_int
 end
 
 module IntPair = struct
   type t = int * int
-	deriving (Show)
+	[@@deriving show]
   (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
   let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1
@@ -108,7 +112,9 @@ end
 module Char =
 struct
   include Char
-  module Show_t = Deriving_Show.Show_char
+  
+  let pp = Format.pp_print_char
+  let show = fun x  -> Format.asprintf "%a" pp x
   let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
   let isAlnum = function 'a'..'z' | 'A'..'Z' | '0'..'9' -> true | _ -> false
   let isWord = function 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> true | _ -> false
@@ -132,7 +138,6 @@ struct
     include Map.Make(Ord)
 
     exception Not_disjoint of key * string
-    (* module S = Deriving_Show.Show_map(Ord)(Ord.Show_t) *)
 
     let lookup elem map =
       try Some (find elem map)
@@ -140,7 +145,7 @@ struct
 
     let find elem map =
       try find elem map
-      with NotFound _ -> raise (NotFound (Ord.Show_t.show elem ^
+      with NotFound _ -> raise (NotFound (Ord.show elem ^
                                   " (in Map.find)"))
     let filterv f map =
       filter (fun _ -> f) map
@@ -173,7 +178,7 @@ struct
     let union_disjoint a b =
       fold
         (fun k v r ->
-           if (mem k r) then raise (Not_disjoint (k, Ord.Show_t.show k))
+           if (mem k r) then raise (Not_disjoint (k, Ord.show k))
            else
              add k v r) b a
 
@@ -195,8 +200,22 @@ struct
              p, add i v q)
         m (empty, empty)
 
-    module Show_t (V : Deriving_Show.Show) =
-      Deriving_Show.Show_map(Ord)(Ord.Show_t)(V)
+
+    let pp af formatter map = 
+      Format.pp_open_box formatter 0;
+      Format.pp_print_string formatter "{";
+      iter (fun key value -> 
+                Format.pp_open_box formatter 0;
+                Ord.pp formatter key;
+                Format.pp_print_string formatter " => ";
+                af formatter value;
+                Format.fprintf formatter ";@;";
+                Format.pp_close_box formatter ();
+             ) map;
+      Format.pp_print_string formatter "}";
+      Format.pp_close_box formatter ()
+    
+    let show = (fun af x  -> Format.asprintf "%a" (pp af) x)
   end
 end
 
@@ -210,7 +229,8 @@ sig
   val from_list : elt list -> t
   (** Construct a set from a list *)
 
-  module Show_t : Deriving_Show.Show with type a = t
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 end
 
 module Set :
@@ -226,7 +246,20 @@ struct
     include Set.Make(Ord)
     let union_all sets = List.fold_right union sets empty
     let from_list l = List.fold_right add l empty
-    module Show_t = Deriving_Show.Show_set(Ord)(Ord.Show_t)
+
+    let pp formatter set =
+      Format.pp_open_box formatter 0;
+      Format.pp_print_string formatter "{";
+      iter (fun elt -> 
+                Format.pp_open_box formatter 0;
+                Ord.pp formatter elt;
+                Format.fprintf formatter ";@;";
+                Format.pp_close_box formatter ();
+             ) set;
+      Format.pp_print_string formatter "}";
+      Format.pp_close_box formatter ()
+
+    let show : t -> string = fun x  -> Format.asprintf "%a" pp x
   end
 end
 
@@ -245,22 +278,22 @@ module CharSet : CHARSET = Set.Make(Char)
 module CharMap = Map.Make(Char)
 
 type stringset = StringSet.t
-    deriving (Show)
+    [@@deriving show]
 
-module Typeable_stringset : Deriving_Typeable.Typeable
+(**module Typeable_stringset : Deriving_Typeable.Typeable
   with type a = stringset =
   Deriving_Typeable.Primitive_typeable(struct
     type t = stringset
     let magic = "stringset"
-  end)
+  end)**)
 
 type 'a stringmap = 'a StringMap.t
-    deriving (Show)
+    [@@deriving show]
 
 type intset = IntSet.t
-    deriving (Show)
+    [@@deriving show]
 type 'a intmap = 'a IntMap.t
-    deriving (Show)
+    [@@deriving show]
 
 let list_to_set xs =
   List.fold_right (fun x set -> IntSet.add x set) xs IntSet.empty
@@ -680,7 +713,7 @@ let mem_assoc3 key : ('a * 'b * 'c) list -> bool =
 
 (** {0 either type} **)
 type ('a, 'b) either = Left of 'a | Right of 'b
-  deriving (Show)
+  [@@deriving show]
 
 let inLeft l = Left l
 let inRight r = Right r
@@ -969,3 +1002,6 @@ let strip_trailing_slash s =
     s
 
 let strip_slashes = (strip_leading_slash -<- strip_trailing_slash)
+
+
+let format_omission : Format.formatter -> unit = fun fmt -> Format.pp_print_string fmt "..."

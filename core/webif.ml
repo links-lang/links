@@ -28,7 +28,7 @@ struct
         Value.env *            (* closure environment *)
         Value.t list           (* arguments *)
     | EvalMain
-        deriving (Show)
+        [@@deriving show]
 
   (** Does at least one of the functions have to run on the client? *)
   let is_client_program : Ir.program -> bool =
@@ -47,7 +47,7 @@ struct
   let parse_remote_call (valenv, _, _) cgi_args =
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
-    (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
+    (* Debug.print ("args: " ^ Value.show (Json.parse_json args)); *)
     let args = Value.untuple (Json.parse_json args) in
 
     let fvs = Json.parse_json_b64 (assoc "__env" cgi_args) in
@@ -89,9 +89,9 @@ struct
         valenv
         (fixup_cont (assoc "__continuation" cgi_args))
     in
-    (* Debug.print("continuation: " ^ Value.Show_continuation.show continuation); *)
+    (* Debug.print("continuation: " ^ Value.show_continuation continuation); *)
     let arg = Json.parse_json_b64 (assoc "__result" cgi_args) in
-    (* Debug.print ("arg: "^Value.Show_t.show arg); *)
+    (* Debug.print ("arg: "^Value.show arg); *)
       ClientReturn(cont, arg)
 
   let error_page_stylesheet =
@@ -176,14 +176,14 @@ struct
       | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
           ^ ", client ID: " ^ client_id_str);
-        (* Debug.print ("func: " ^ Value.Show_t.show func); *)
-        (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
+        (* Debug.print ("func: " ^ Value.show func); *)
+        (* Debug.print ("args: " ^ mapstrcat ", " Value.show args); *)
         Proc.resolve_external_processes func;
         List.iter Proc.resolve_external_processes args;
         List.iter (Proc.resolve_external_processes -<- fst -<- snd)
           (IntMap.bindings (Value.Env.get_parameters env));
         Eval.apply Value.Continuation.empty env (func, args) >>= fun (_, r) ->
-        (* Debug.print ("result: "^Value.Show_t.show result); *)
+        (* Debug.print ("result: "^Value.show result); *)
         (*
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining  procs on server after remote call!";
@@ -204,7 +204,7 @@ struct
          begin
            Debug.print "Running client program from server";
            let (valenv, v) = Eval.run_program valenv (locals, main) in
-           (* Debug.print ("valenv" ^ Value.Show_env.show valenv); *)
+           (* Debug.print ("valenv" ^ Value.show_env valenv); *)
            Irtojs.generate_real_client_page
              ~cgi_env:cgi_args
              (Lib.nenv, Lib.typing_env)
@@ -292,7 +292,7 @@ struct
                  ^ Types.string_of_datatype t)
     end;
 
-    (* Debug.print ("un-closure-converted IR: " ^ Ir.Show_program.show (prelude@globals@locals, main)); *)
+    (* Debug.print ("un-closure-converted IR: " ^ Ir.show_program (prelude@globals@locals, main)); *)
 
     let nenv'' = Env.String.extend nenv nenv' in
     let tyenv'' = Types.extend_typing_environment tyenv tyenv' in
@@ -300,22 +300,22 @@ struct
     (* let module Show_IntStringEnv = Env.Int.Show_t(Deriving_Show.Show_string) in *)
     (* let module Show_StringIntEnv = Env.String.Show_t(Deriving_Show.Show_int) in *)
 
-    (* Debug.print ("nenv''" ^ Show_StringIntEnv.show nenv''); *)
+    (* Debug.print ("nenv''" ^ show_StringIntEnv nenv''); *)
 
     let tenv0 = Var.varify_env (nenv, tyenv.Types.var_env) in
     let gs0 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty in
-    (* Debug.print("gs0: "^Show_intset.show gs0); *)
+    (* Debug.print("gs0: "^show_intset gs0); *)
     let globals = Closures.bindings tenv0 gs0 globals in
 
     let tenv1 = Var.varify_env (nenv'', tyenv''.Types.var_env) in
     let gs1 = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv'' IntSet.empty in
     let (locals, main) = Closures.program tenv1 gs1 (locals, main) in
 
-    (* Debug.print ("closure-converted locals: " ^ Ir.Show_program.show (locals, main)); *)
+    (* Debug.print ("closure-converted locals: " ^ Ir.show_program (locals, main)); *)
 
     let (locals, main), render_cont = wrap_with_render_page (nenv, tyenv) (locals, main) in
     let globals = prelude@globals in
-    (* Debug.print ("closure-converted IR: " ^ Ir.Show_program.show (globals@locals, main)); *)
+    (* Debug.print ("closure-converted IR: " ^ Ir.show_program (globals@locals, main)); *)
 
     BuildTables.program tenv0 Lib.primitive_vars ((globals @ locals), main);
     (render_cont, (nenv'', tyenv''), (globals, (locals, main)), external_files)

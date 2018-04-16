@@ -47,7 +47,7 @@ type code = | Var    of string
 
             | Die    of (string)
             | Nothing
-  deriving (Show)
+  [@@deriving show]
 
 
 (** IR variable environment *)
@@ -425,7 +425,7 @@ let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
 let name_binder (x, info) =
   let name = Js.name_binder (x, info) in
   if (name = "") then
-    prerr_endline (Ir.Show_binder.show (x, info))
+    prerr_endline (Ir.show_binder (x, info))
   else
     ();
   assert (name <> "");
@@ -539,7 +539,7 @@ module Default_Continuation : CONTINUATION = struct
 
   let to_string = function
     | Identity -> "IDENTITY"
-    | Code code -> "CODE: " ^ (Show_code.show code)
+    | Code code -> "CODE: " ^ (show_code code)
 end
 
 (* The higher-order continuation structure for effect handlers
@@ -645,9 +645,9 @@ module Higher_Order_Continuation : CONTINUATION = struct
 
   let rec to_string = function
     | Identity -> "IDENTITY"
-    | Reflect code -> "REFLECT: " ^ (Show_code.show code)
+    | Reflect code -> "REFLECT: " ^ (show_code code)
     | Cons (code, k) ->
-        "CONS: " ^ (Show_code.show code) ^ ", \n" ^ (to_string k)
+        "CONS: " ^ (show_code code) ^ ", \n" ^ (to_string k)
 
 end
 

@@ -2,8 +2,8 @@ module type S =
 sig
   type name
   type 'a t
-  module Show_t (A : Deriving_Show.Show) :
-    Deriving_Show.Show with type a = A.a t
+  val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
   val empty : 'a t
   val bind : 'a t -> name * 'a -> 'a t
   val unbind : 'a t -> name -> 'a t
@@ -42,7 +42,8 @@ struct
   let map = M.map
   let iter = M.iter
   let fold = M.fold
-  module Show_t = M.Show_t
+  let pp = M.pp
+  let show = M.show
 end
 
 module String

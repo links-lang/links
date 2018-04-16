@@ -53,7 +53,7 @@ let read_program filename : (envs * program) =
 let read_file_source (nenv, tyenv) (filename:string) =
   let sugar, pos_context =
     ModuleUtils.try_parse_file filename in
-  (* printf "AST: \n %s \n" (Sugartypes.Show_program.show sugar); *)
+  (* printf "AST: \n %s \n" (Sugartypes.show_program sugar); *)
   let ((program, t, tenv), ffi_files) = Frontend.Pipeline.program tyenv pos_context sugar in
   let globals, main, nenv =
     Sugartoir.desugar_program
@@ -154,7 +154,7 @@ let load_file envs filename =
     the original file, as per the caching policy. *)
 let print_cache filename =
    let _envs, (globals, (locals, main), _t) = read_program filename in
-     print_string (Ir.Show_program.show (globals @ locals, main))
+     print_string (Ir.show_program (globals @ locals, main))
 
 (** precompile a cache file *)
 let precompile_cache envs infile : unit =

@@ -8,7 +8,7 @@ type request_data = {
   http_response_code : int ref;
   client_id : client_id ref;
 }
-  deriving (Show)
+  [@@deriving show]
 
 let new_empty_request_data () = {
   cgi_parameters = ref [];
