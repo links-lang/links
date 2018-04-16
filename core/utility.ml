@@ -734,6 +734,8 @@ let either_partition (f : 'a -> ('b, 'c) either) (l : 'a list)
   in aux ([], []) l
 
 
+(** This module isn't used but creates a dependency on deriving,
+which we would like to avoid
 module EitherMonad = Deriving_monad.MonadPlusUtils(
   struct
     type 'a m = (string, 'a) either
@@ -747,7 +749,7 @@ module EitherMonad = Deriving_monad.MonadPlusUtils(
     let mplus l r = match l with
       | Left _ -> r
       | m      -> m
-  end)
+  end)**)
 
 (* Extensions of queue module to handle queue -> list and list -> queue
  * conversions *)
