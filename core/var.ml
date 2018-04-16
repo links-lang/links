@@ -1,4 +1,3 @@
-(*pp deriving *)
 (** {0 IR variables} *)
 
 open Utility

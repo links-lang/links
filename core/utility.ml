@@ -1,4 +1,3 @@
-(*pp deriving *)
 (**** Various utility functions ****)
 
 open Notfound

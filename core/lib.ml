@@ -1,4 +1,3 @@
-(*pp deriving *)
 open List
 
 (*open Value*)

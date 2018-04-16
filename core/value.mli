@@ -1,4 +1,3 @@
-(*pp deriving *)
 (* Values and environments *)
 open ProcessTypes
 

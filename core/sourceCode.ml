@@ -1,4 +1,3 @@
-(*pp deriving *)
 open Utility
 
 (* Initial estimates for input size *)

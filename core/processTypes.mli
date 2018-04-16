@@ -1,4 +1,3 @@
-(*pp deriving *)
 
 module type NAME = sig
   type t

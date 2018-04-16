@@ -1,4 +1,3 @@
-(*pp deriving *)
 
 (** JavaScript generation *)
 open Utility

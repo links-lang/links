@@ -1,4 +1,3 @@
-(*pp deriving *)
 (** Monadic IR *)
 
 type scope = Var.scope
