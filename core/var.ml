@@ -2,6 +2,8 @@
 
 open Utility
 
+[@@@ocaml.warning "-39"] (** disable warnings about unused rec flags  in this module**)
+   
 type scope = [ `Local | `Global ]
   [@@deriving show]
 (** Term variables *)

@@ -2,6 +2,8 @@ open Utility
 open Notfound
 open ProcessTypes
 
+[@@@ocaml.warning "-39-32"] (** disable warnings about unused rec flags & functions in this module**)
+   
 let _ = ParseSettings.config_file
 
 let serialiser = Basicsettings.Serialisation.serialiser

@@ -1,5 +1,7 @@
 open Utility
 
+[@@@ocaml.warning "-32"] (** disable warnings about unused functions in this module**)
+   
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]

@@ -3,6 +3,8 @@
 
 open Utility
 
+[@@@ocaml.warning "-39-32"] (** disable warnings about unused rec flags & functions in this module**)
+
 type scope = Var.scope
   [@@deriving show]
 (* term variables *)

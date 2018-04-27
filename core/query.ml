@@ -1,5 +1,7 @@
 open Utility
 
+
+[@@@ocaml.warning "-32"] (** disable warning about unused functions in this module**)
 type t =
     [ `For of (Var.var * t) list * t list * t
     | `If of t * t * t
