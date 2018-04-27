@@ -41,7 +41,7 @@ and 'a info = {
   mutable descriptor: 'a
 }
 
-let pp_point f formatter v = Utility.format_omission formatter (** Suppress output **)
+let pp_point _ formatter _ = Utility.format_omission formatter (** Suppress output **)
 let show_point f v = Format.asprintf "%a" (pp_point f) v
 
 (** fresh desc creates a fresh point and returns it. It forms an equivalence class of its own, whose descriptor is desc. *)
