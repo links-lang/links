@@ -70,9 +70,9 @@ end
 
 type lexpos = Lexing.position
 module LexposType = struct type a = lexpos let tname = "SourceCode.lexpos" end
-let pp_lexpos = fun fmt _ -> Utility.format_omission  (** Supress lexpos output**)
+let pp_lexpos = fun fmt _ -> Utility.format_omission fmt (** Supress lexpos output**)
 module SourceCodePos = struct type a = source_code let tname = "SourceCode.source_code" end
-let pp_source_code = fun fmt _ -> Utility.format_omission (** Supress sourcecode output**)
+let pp_source_code = fun fmt _ -> Utility.format_omission fmt (** Supress sourcecode output**)
 
 
 (** unresolved position *)
