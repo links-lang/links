@@ -19,6 +19,10 @@
 
 (* Code from wserver.ml, (C) 1997 Daniel de Rauglaudre, INRIA. *)
 
+[@@@ocaml.warning "-39-32"] (** disable warnings about unused rec flags & functions in this module**)
+[@@@ocaml.warning "-3"] (** disable warnings about use of deprecated functionality in this module**)
+[@@@ocaml.warning "-52"] (** disable warning 52**)
+
 let hexa_digit x =
   if x >= 10 then Char.chr (Char.code 'A' + x - 10)
   else Char.chr (Char.code '0' + x)
