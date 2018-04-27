@@ -7,10 +7,6 @@ let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
 let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
 
-type var_env =
-    Types.meta_type_var StringMap.t *
-      Types.meta_row_var StringMap.t
-      [@@deriving show]
 
 module Env = Env.String
 

@@ -27,7 +27,6 @@ struct
         Value.env *            (* closure environment *)
         Value.t list           (* arguments *)
     | EvalMain
-        [@@deriving show]
 
   (** Does at least one of the functions have to run on the client? *)
   let is_client_program : Ir.program -> bool =

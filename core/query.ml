@@ -1102,7 +1102,6 @@ struct
     | `Apply of string * base list
     | `Empty of query
     | `Length of query ]
-      [@@deriving show]
 
   (* Table variables that are actually used are always bound in a for
      comprehension. In this case the IR variable from the for

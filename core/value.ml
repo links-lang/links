@@ -13,10 +13,8 @@ object
 end
 
 
-let show_otherfield formatter obj = Format.pp_print_string formatter (obj # show)
 
 type db_status = [ `QueryOk | `QueryError of string ]
-  [@@deriving show]
 
 class virtual dbvalue = object (self)
   method virtual status : db_status
@@ -143,7 +141,7 @@ type xmlitem =   Text of string
                | NsAttr of (string * string * string)
                | NsNode of (string * string * xml)
 and xml = xmlitem list
-    [@@deriving show,eq,yojson]
+    [@@deriving show,yojson]
 
 
 let is_attr = function
@@ -180,7 +178,7 @@ type primitive_value_basis =  [
 | `Int of int
 | `XML of xmlitem
 | `String of string ]
-  [@@deriving show,eq,yojson]
+  [@@deriving show,yojson]
 
 type primitive_value = [
 | primitive_value_basis
@@ -191,19 +189,6 @@ type primitive_value = [
 
 let pp_in_channel = fun fmt _ -> Utility.format_omission fmt (** Supress output**)
 let pp_out_channel = fun fmt _ -> Utility.format_omission fmt (** Supress output**)
-(* not so sure about these two... *)
-let equal_in_channel ic1 ic2 = ic1 == ic2
-let equal_out_channel oc1 oc2 = oc1 == oc2
-(**module Typeable_in_channel = Deriving_Typeable.Primitive_typeable
-  (struct
-    type t = in_channel
-    let magic = "in_channel"
-   end)
-module Typeable_out_channel = Deriving_Typeable.Primitive_typeable
-  (struct
-    type t = out_channel
-    let magic = "out_channel"
-   end)**)
 
 type spawn_location = [
   | `ClientSpawnLoc of client_id
@@ -307,7 +292,7 @@ module Env = struct
 
   (** Compression **)
   type 'cv compressed_t = (Ir.var * 'cv) list
-        [@@deriving show,eq,yojson]
+        [@@deriving yojson]
   let compress (compress_val : 'v -> 'cv) (env : 'v t)  : 'cv compressed_t =
     List.rev
     (fold
@@ -358,7 +343,7 @@ module Frame = struct
 
   (** Compression **)
   type 'cv compressed_t = Ir.var * 'cv Env.compressed_t
-     [@@deriving show,eq,yojson]
+     [@@deriving yojson]
   let compress (compress_val : 'v -> 'cv) (_, var, locals, _) : 'cv compressed_t =
     (var, Env.compress compress_val locals)
   let uncompress (uncompress_val : 'v Env.t -> 'cv -> 'v) globals (var, env) : 'v t =
@@ -440,7 +425,7 @@ module type COMPRESSABLE_CONTINUATION = sig
 
   type 'cv compressed_t
   and 'cv compressed_r
-     [@@deriving show,eq,yojson]
+     [@@deriving yojson]
   val compress : compress_val:('v -> 'cv) -> 'v t -> 'cv compressed_t
   val uncompress : uncompress_val:('v Env.t -> 'cv -> 'v) -> 'v Env.t -> 'cv compressed_t -> 'v t
 
@@ -462,7 +447,7 @@ module Pure_Continuation = struct
   (** Compression **)
   type 'cv compressed_t = ('cv Frame.compressed_t) list
   and 'cv compressed_r = unit
-        [@@deriving show,eq,yojson]
+        [@@deriving yojson]
   let compress ~compress_val cont =
     List.map (Frame.compress compress_val) cont
   let uncompress ~uncompress_val globals cont =
@@ -520,12 +505,12 @@ module Eff_Handler_Continuation = struct
       | Shallow of 'v Frame.t list * 'v k
       [@@deriving show]
 
-    type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep of Ir.var list | `Shallow]
-    and 'cv compressed_continuation = ('cv compressed_handler * ('cv Frame.compressed_t list)) list
-    and 'cv compressed_resumption =
+    type 'cv compressed_handler = 'cv Env.compressed_t * [`Deep of Ir.var list | `Shallow] [@@deriving yojson]
+    type 'cv compressed_continuation = ('cv compressed_handler * ('cv Frame.compressed_t list)) list [@@deriving yojson]
+    type  'cv compressed_resumption =
       | CompressedDeep of 'cv compressed_continuation
       | CompressedShallow of 'cv Frame.compressed_t list * 'cv compressed_continuation
-      [@@deriving show,eq,yojson]
+      [@@deriving yojson]
   end
 
   open K
@@ -603,7 +588,6 @@ module Eff_Handler_Continuation = struct
   module Handler = struct
     open K
     type 'v t = 'v handler
-      [@@deriving show]
 
     let make ~env ~return ~clauses ~depth =
       User_defined { env; return; cases = clauses; depth }
@@ -733,7 +717,7 @@ module Eff_Handler_Continuation = struct
 
   type 'cv compressed_t = 'cv K.compressed_continuation
   and 'cv compressed_r  = 'cv K.compressed_resumption
-        [@@deriving show,eq,yojson]
+        [@@deriving yojson]
   let compress ~compress_val k =
     let compress_frame = Frame.compress compress_val in
     let compress (h, fs) = (Handler.compress ~compress_val h, List.map compress_frame fs) in
@@ -801,7 +785,7 @@ type compressed_primitive_value = [
 | `Table of string * string * string list list * string
 | `Database of string
 ]
-  [@@deriving show,eq,yojson]
+  [@@deriving yojson]
 
 type compressed_continuation = compressed_t Continuation.compressed_t
 and compressed_resumption = compressed_t Continuation.compressed_r
@@ -817,7 +801,7 @@ and compressed_t = [
 | `Continuation of compressed_continuation
 | `Resumption of compressed_resumption ]
 and compressed_env = compressed_t Env.compressed_t
-  [@@deriving show,eq,yojson]
+   [@@deriving yojson]
 
 let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
   function
