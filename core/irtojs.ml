@@ -653,9 +653,6 @@ end
 
 (** Compiler interface *)
 module type WEB_COMPILER = sig
-  val generate_program_page : 
-    (Var.var Env.String.t * Types.typing_environment) ->
-    Ir.program -> Loader.ext_dep list -> string
 
   val generate_real_client_page : ?cgi_env:(string * string) list ->
     (Var.var Env.String.t * Types.typing_environment) ->
@@ -1460,9 +1457,6 @@ end = functor (K : CONTINUATION) -> struct
       Bind (cancellation_thunk_name, cancellation_thunk,
         action (Var cancellation_thunk_name)))
 
-  and generate_program env : Ir.program -> (venv * code) = fun ((bs, _) as comp) ->
-    let (venv, code) = generate_computation env comp (K.reflect (Var "_start")) in
-    (venv, GenStubs.bindings bs code)
 
   let generate_toplevel_binding :
     Value.env ->
@@ -1589,18 +1583,6 @@ end = functor (K : CONTINUATION) -> struct
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
-  let generate_program_page (nenv, tyenv) program external_files =
-    let printed_code = 
-      let _, venv, _ = initialise_envs (nenv, tyenv) in
-      let _, code = generate_program venv program in
-      let code = GenStubs.wrap_with_server_lib_stubs code in
-      show code
-    in
-    (make_boiler_page
-       ~body:printed_code
-       ~external_files:external_files
-     (*       ~head:(String.concat "\n" (generate_inclusions defs))*)
-       [])
 
 (* generate code to resolve JSONized toplevel let-bound values *)
   let resolve_toplevel_values : string list -> string =
@@ -1670,6 +1652,5 @@ module Continuation =
 
 module Compiler = CPS_Compiler(Continuation)
 
-let generate_program_page = Compiler.generate_program_page
 let generate_real_client_page = Compiler.generate_real_client_page
 let make_boiler_page = Compiler.make_boiler_page
