@@ -56,7 +56,6 @@ remove: [
 depends: [
   "jbuilder" {build}
   "deriving" {build}
-  "cgi"
   "base64"
   "linenoise"
   "ANSITerminal"

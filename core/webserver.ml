@@ -141,7 +141,7 @@ struct
         try
           let i = String.index s '=' in
           String.sub s 0 i,
-          Cgi.decode (String.sub s (succ i) (String.length s - i - 1))
+          RequestData.DecodeRequestHeaders.decode (String.sub s (succ i) (String.length s - i - 1))
         with
         | Not_found -> s,"" in
       List.map one_assoc assocs in
@@ -177,7 +177,6 @@ struct
         let applier env vp =
           Eval.apply (render_cont ()) env vp >>= fun (valenv, v) ->
           let page = Irtojs.generate_real_client_page
-                       ~cgi_env:cgi_args
                        (Lib.nenv, Lib.typing_env)
                        (* hypothesis: local definitions shouldn't matter,
                         * they should all end up in valenv... *)
@@ -198,7 +197,6 @@ struct
         let ws_conn_url =
           if !accepting_websocket_requests then Some (ws_url) else None in
         Irtojs.generate_real_client_page
-          ~cgi_env:cgi_args
           (Lib.nenv, Lib.typing_env)
           (!prelude @ !globals)
           (valenv, v)

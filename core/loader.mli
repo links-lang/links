@@ -14,13 +14,4 @@ type source = {
 val read_file_source : envs -> string -> source
 val load_file : envs -> string -> source
 
-val print_cache : string -> unit
-val precompile_cache : envs -> string -> unit
-
-val cache : string -> string -> (unit -> 'a) -> 'a
-
-(* Globally accessible root filename of the whole program cache *)
-
-(* Caching function for whole-program caching *)
-val activate_wpcache : string -> unit
-val wpcache : string -> (unit -> 'a) -> 'a
+val print : string -> unit

@@ -3,7 +3,6 @@ open Getopt
 module BS = Basicsettings
 
 let to_evaluate : string list ref = ref []
-let to_precompile : string list ref = ref []
 let file_list : string list ref = ref []
 
 let set_web_mode() = (
@@ -18,7 +17,6 @@ let set_web_mode() = (
   )
 
 let print_keywords = ref false
-let print_cache : (bool * string option) ref = ref (false, None)
 
 let config_file   : string option ref = ref BS.config_file_path
 let options : opt list =
@@ -31,9 +29,6 @@ let options : opt list =
     ('n',     "no-types",            set BS.printing_types false,      None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
     ('m',     "modules",             set BS.modules true,              None);
-    (noshort, "dump",                None,
-     Some (fun filename -> print_cache := (true, Some filename)));
-    (noshort, "precompile",          None,                             Some (fun file -> push_back file to_precompile));
     (noshort, "print-keywords",      Some (fun () -> print_keywords := true), None);
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));

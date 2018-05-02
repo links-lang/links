@@ -135,25 +135,11 @@ let database_args = Settings.add_string("database_args", "", `User)
     function. When [false], functions are simply printed as [fun] *)
 let printing_functions = Settings.add_bool ("printing_functions", false, `User)
 
-(** Caching *)
-let cache_directory =
-  Settings.add_string ("cache_directory", "", `User)
-let use_cache = Settings.add_bool("use_cache", false, `System)
-let make_cache = Settings.add_bool("make_cache", false, `System)
-
-(* if set to true, then Links will not check that the
-   cache is newer than the Links binary
-*)
-let allow_stale_cache = Settings.add_bool("allow_stale_cache", false, `System)
-
 (* Optimization pass? *)
 let optimise = Settings.add_bool("optimise", false, `User)
 
 (* Allow modules? *)
 let modules = Settings.add_bool("modules", false, `User)
-
-(* Compile & cache whole program, closures, and HTML *)
-let cache_whole_program = Settings.add_bool("cache_whole_program", false, `User)
 
 (* Use keys in shredding *)
 let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `User)

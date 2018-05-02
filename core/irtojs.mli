@@ -1,9 +1,5 @@
 (* JavaScript code generation *)
 
-val generate_program_page : ?cgi_env:(string * string) list ->
-  (Var.var Env.String.t * Types.typing_environment) ->
-  Ir.program -> Loader.ext_dep list -> string
-
 val generate_real_client_page : ?cgi_env:(string * string) list ->
   (Var.var Env.String.t * Types.typing_environment) ->
   Ir.binding list -> (Value.env * Value.t) ->
