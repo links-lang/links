@@ -141,7 +141,7 @@ struct
         try
           let i = String.index s '=' in
           String.sub s 0 i,
-          Cgi.decode (String.sub s (succ i) (String.length s - i - 1))
+          RequestData.DecodeRequestHeaders.decode (String.sub s (succ i) (String.length s - i - 1))
         with
         | Not_found -> s,"" in
       List.map one_assoc assocs in
