@@ -1,6 +1,7 @@
-(*pp deriving *)
 open Utility
 
+
+[@@@ocaml.warning "-32"] (** disable warning about unused functions in this module**)
 type t =
     [ `For of (Var.var * t) list * t list * t
     | `If of t * t * t
@@ -14,7 +15,7 @@ type t =
     | `Primitive of string
     | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
-    deriving (Show)
+    [@@deriving show]
 
 let unbox_xml =
   function
@@ -95,7 +96,7 @@ struct
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
     | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.constant ]
-      deriving (Show)
+      [@@deriving show]
 
   let rec pt_of_t : t -> pt = fun v ->
     let bt = pt_of_t in
@@ -119,7 +120,7 @@ struct
         | `Var v -> `Var v
         | `Constant c -> `Constant c
 
-  let t = Show_pt.show -<- pt_of_t
+  let t = show_pt -<- pt_of_t
 end
 let string_of_t = S.t
 
@@ -152,7 +153,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Project (`Var (_, field_types), name) -> StringMap.find name field_types
       | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
-      | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
+      | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
 let default_of_base_type =
   function
@@ -303,7 +304,7 @@ struct
             | `Client ->
               failwith ("Attempt to use client function: " ^ Js.var_name_binder (f, finfo) ^ " in query")
             | `Native ->
-              failwith ("Attempt to use native function: " ^ Var.Show_binder.show (f, finfo) ^ " in query")
+              failwith ("Attempt to use native function: " ^ Var.show_binder (f, finfo) ^ " in query")
           end
       end
     | None -> None
@@ -491,7 +492,7 @@ struct
     | `Closure (f, v) ->
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
-      (* Debug.print ("Converting evalir closure: " ^ Var.Show_binder.show (f, _finfo) ^ " to query closure"); *)
+      (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
       let env' = bind (Value.Env.empty, Env.Int.empty) (z, value env v) in
       `Closure ((xs, body), env')
@@ -511,9 +512,9 @@ struct
   and apply env : t * t list -> t = function
     | `Closure ((xs, body), closure_env), args ->
       (* Debug.print ("Applying closure"); *)
-      (* Debug.print ("body: " ^ Ir.Show_computation.show body); *)
-      (* Debug.print("Applying query closure: " ^ Show_t.show (`Closure ((xs, body), closure_env))); *)
-      (* Debug.print("args: " ^ mapstrcat ", " Show_t.show args); *)
+      (* Debug.print ("body: " ^ Ir.show_computation body); *)
+      (* Debug.print("Applying query closure: " ^ show_t (`Closure ((xs, body), closure_env))); *)
+      (* Debug.print("args: " ^ mapstrcat ", " show_t args); *)
         let env = env ++ closure_env in
         let env = List.fold_right2 (fun x arg env ->
             bind env (x, arg)) xs args env in
@@ -806,7 +807,7 @@ struct
         | (a, b) -> `Apply ("==", [a; b])
 
   let eval env e =
-(*    Debug.print ("e: "^Ir.Show_computation.show e); *)
+(*    Debug.print ("e: "^Ir.show_computation e); *)
     computation (env_of_value_env env) e
 end
 
@@ -1103,7 +1104,6 @@ struct
     | `Apply of string * base list
     | `Empty of query
     | `Length of query ]
-      deriving (Show)
 
   (* Table variables that are actually used are always bound in a for
      comprehension. In this case the IR variable from the for
@@ -1482,7 +1482,7 @@ end
 
 let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * string * Types.datatype) option =
   fun env (range, e) ->
-    (* Debug.print ("e: "^Ir.Show_computation.show e); *)
+    (* Debug.print ("e: "^Ir.show_computation e); *)
     let v = Eval.eval env e in
       (* Debug.print ("v: "^string_of_t v); *)
       match used_database v with
@@ -1497,9 +1497,9 @@ let compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
   fun db env ((x, table, field_types), where, body) ->
     let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
-(*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.Show_computation.show where)) where in*)
+(*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
     let where = opt_map (Eval.computation env) where in
-(*       Debug.print ("body: "^Ir.Show_computation.show body); *)
+(*       Debug.print ("body: "^Ir.show_computation body); *)
     let body = Eval.computation env body in
     let q = Sql.update db ((x, table), where, body) in
       Debug.print ("Generated update query: "^q);

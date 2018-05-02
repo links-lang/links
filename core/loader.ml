@@ -41,7 +41,7 @@ let read_program filename : (envs * program) =
 let read_file_source (nenv, tyenv) (filename:string) =
   let sugar, pos_context =
     ModuleUtils.try_parse_file filename in
-  (* printf "AST: \n %s \n" (Sugartypes.Show_program.show sugar); *)
+  (* printf "AST: \n %s \n" (Sugartypes.show_program sugar); *)
   let ((program, t, tenv), ffi_files) = Frontend.Pipeline.program tyenv pos_context sugar in
   let globals, main, nenv =
     Sugartoir.desugar_program
@@ -60,7 +60,7 @@ let read_file_source (nenv, tyenv) (filename:string) =
 (** Loads a named file and prints it as syntax *)
 let print filename =
    let _envs, (globals, (locals, main), _t) = read_program filename in
-     print_string (Ir.Show_program.show (globals @ locals, main))
+     print_string (Ir.show_program (globals @ locals, main))
 
 
 let load_file = read_file_source

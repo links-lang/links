@@ -1,4 +1,3 @@
-(*pp deriving *)
 (** Environments. *)
 
 module type S =
@@ -7,7 +6,7 @@ sig
   (** The type of names. *)
 
   type 'a t
-    deriving (Show)
+    [@@deriving show]
   (** The type of environments. *)
 
   val empty : 'a t

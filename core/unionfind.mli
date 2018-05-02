@@ -1,7 +1,5 @@
-(*pp deriving *)
-
 type 'a point
-  deriving (Show)
+  [@@deriving show]
 
 val fresh      : 'a -> 'a point
 val find       : 'a point -> 'a

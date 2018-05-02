@@ -1,4 +1,3 @@
-(*pp deriving *)
 (*** pattern matching compiler ***)
 (*
   This pattern matching compiler is tree-based (like the one used in
@@ -25,12 +24,11 @@ type pattern = [
 | `As       of binder * pattern
 | `HasType  of pattern * Types.datatype
 ]
-    deriving (Show)
+    [@@deriving show]
 
 module Const = struct
-  type t = Constant.constant
+  type t = Constant.constant [@@deriving show]
   let compare = Pervasives.compare
-  module Show_t = Constant.Show_constant
 end
 
 module type CONSTSET = Set with type elt = Constant.constant

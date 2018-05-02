@@ -1,4 +1,3 @@
-(*pp deriving *)
 
 module type NAME = sig
   type t
@@ -8,7 +7,8 @@ module type NAME = sig
   val to_string : t -> string
   val of_string : string -> t
   val to_json : t -> string
-  module Show_t : Deriving_Show.Show with type a = t
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 end
 
 
@@ -18,16 +18,16 @@ module AccessPointID : NAME
 module ChannelID : NAME
 
 type client_id = ClientID.t
-  deriving (Show)
+  [@@deriving show]
 
 type process_id = ProcessID.t
-  deriving (Show)
+  [@@deriving show]
 
 type apid = AccessPointID.t
-  deriving (Show)
+  [@@deriving show]
 
 type channel_id = ChannelID.t
-  deriving (Show)
+  [@@deriving show]
 
 (* Distinguished PID for main thread *)
 val main_process_pid : process_id

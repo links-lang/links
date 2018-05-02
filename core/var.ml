@@ -1,17 +1,18 @@
-(*pp deriving *)
 (** {0 IR variables} *)
 
 open Utility
 
+[@@@ocaml.warning "-39"] (** disable warnings about unused rec flags  in this module**)
+   
 type scope = [ `Local | `Global ]
-  deriving (Show)
+  [@@deriving show]
 (** Term variables *)
 type var = int
-  deriving (Show, Eq, Typeable, Pickle, Dump)
+  [@@deriving show,eq,yojson]
 type var_info = Types.datatype * string * scope
-  deriving (Show)
+  [@@deriving show]
 type binder = var * var_info
-  deriving (Show)
+  [@@deriving show]
 
 let dummy_var = 0
 

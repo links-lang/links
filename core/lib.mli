@@ -1,4 +1,3 @@
-(*pp deriving *)
 
 val equal : Value.t -> Value.t -> bool
 val less : Value.t -> Value.t -> bool
