@@ -657,12 +657,13 @@ module type WEB_COMPILER = sig
     (Var.var Env.String.t * Types.typing_environment) ->
     Ir.program -> Loader.ext_dep list -> string
 
-  val generate_real_client_page :
+  val generate_real_client_page : ?cgi_env:(string * string) list ->
     (Var.var Env.String.t * Types.typing_environment) ->
     Ir.binding list -> (Value.env * Value.t) ->
     Webserver_types.websocket_url option -> Loader.ext_dep list -> string
 
   val make_boiler_page :
+    ?cgi_env:(string * string) list ->
     ?onload:string ->
     ?body:string ->
     ?html:string ->
@@ -1517,8 +1518,7 @@ end = functor (K : CONTINUATION) -> struct
   let script_tag body =
     "<script type='text/javascript'><!--\n'use strict';\n" ^ body ^ "\n--> </script>\n"
 
-  let make_boiler_page  ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
-    let cgi_env = [] in 
+  let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
     let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
     let custom_ext_script_tag str = "<script type='text/javascript' src='" ^ str ^ "'></script>" in
     let ffiLibs = String.concat "\n" (List.map custom_ext_script_tag external_files) in
@@ -1607,7 +1607,7 @@ end = functor (K : CONTINUATION) -> struct
     fun names ->
       String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
-  let generate_real_client_page (nenv, tyenv) defs (valenv, v) ws_conn_url external_files = 
+  let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_conn_url external_files =
     let open Json in
     let req_data = Value.Env.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
@@ -1648,6 +1648,7 @@ end = functor (K : CONTINUATION) -> struct
       "_debug(\"Links version " ^ Basicsettings.version ^ "\");"
     in
     make_boiler_page
+      ~cgi_env:cgi_env
       ~body:printed_code
       ~html:(Value.string_of_xml ~close_tags:true bs)
       ~head:(script_tag welcome_msg ^ "\n" ^ script_tag (K.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
