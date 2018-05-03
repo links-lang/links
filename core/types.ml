@@ -574,14 +574,14 @@ type datatype = typ [@@deriving show]
 
 (* useful for debugging: types tend to be too big to read *)
 (*
-let pp_datatype = fun _ _ -> ()
-let pp_field_spec = fun _ _ -> ()
-let pp_field_spec_map = fun _ _ -> ()
-let pp_row_var = fun _ _ -> ()
-let pp_row = fun _ _ -> ()
-let pp_meta_type_var = fun _ _ -> ()
-let pp_meta_row_var = fun _ _ -> ()
 *)
+let pp_datatype = fun f _ -> Utility.format_omission f
+let pp_field_spec = fun f _ -> Utility.format_omission f
+let pp_field_spec_map = fun f _ -> Utility.format_omission f
+let pp_row_var = fun f _ -> Utility.format_omission f
+let pp_row = fun f _ -> Utility.format_omission f
+let pp_meta_type_var = fun f _ -> Utility.format_omission f
+let pp_meta_row_var = fun f _ -> Utility.format_omission f
 
 let type_var_number = var_of_quantifier
 

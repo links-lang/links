@@ -32,11 +32,8 @@ let ( <| ) f arg = f arg
 
 (** {0 Maps and sets} *)
 module type OrderedShow = sig
-  type t (**[@@deriving show]**)
+  type t [@@deriving show]
   val compare : t -> t -> int
-  val show : t -> string
-  val pp : Format.formatter -> t -> unit
-  
 end
 
 module type Map =
