@@ -1,4 +1,3 @@
-(*pp deriving *)
 open Utility
 
 (* Should be safe to not have an explicit lock due to the co-operative
@@ -12,7 +11,8 @@ module type NAME = sig
   val to_string : t -> string
   val of_string : string -> t
   val to_json : t -> string
-  module Show_t : Deriving_Show.Show with type a = t
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
 end
 
 let name_source : int ref = ref 0
@@ -84,7 +84,8 @@ struct
   let to_string n = n
   let of_string n = n
   let to_json n = "\"" ^ n ^ "\""
-  module Show_t = Deriving_Show.Show_string
+  let pp = Format.pp_print_string
+  let show = fun x  -> Format.asprintf "%a" pp x
 end
 
 module ClientID  : NAME = Simple_string_name(struct let prefix = "cid_" end)
@@ -117,16 +118,16 @@ module ChannelIDSet: CHANNELIDSET = Set.Make(ChannelID)
 
 
 type client_id = ClientID.t
-  deriving (Show)
+  [@@deriving show]
 
 type process_id = ProcessID.t
-  deriving (Show)
+  [@@deriving show]
 
 type apid = AccessPointID.t
-  deriving (Show)
+  [@@deriving show]
 
 type channel_id = ChannelID.t
-  deriving (Show)
+  [@@deriving show]
 
 type 'a pid_map = 'a PidMap.t
 type 'a client_id_map = 'a ClientIDMap.t

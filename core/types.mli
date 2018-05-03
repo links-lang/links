@@ -1,57 +1,56 @@
-(*pp deriving *)
 (** Core types *)
 
 (* field environments *)
-type 'a stringmap = 'a Utility.StringMap.t
-type 'a field_env = 'a stringmap deriving (Show)
+type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
+type 'a field_env = 'a stringmap [@@deriving show]
 
 (* type var sets *)
 module TypeVarSet : Utility.INTSET
 
 (* points *)
 type 'a point = 'a Unionfind.point
-  deriving (Show)
+  [@@deriving show]
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
-    deriving (Show)
+    [@@deriving show]
 
 type restriction = [ `Any | `Base | `Session | `Effect ]
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 type linearity   = [ `Any | `Unl ]
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 
 type subkind = linearity * restriction
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 
 type freedom = [`Rigid | `Flexible]
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 
 type primary_kind = [ `Type | `Row | `Presence ]
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 
 type kind = primary_kind * subkind
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 
 type 't meta_type_var_non_rec_basis =
     [ `Var of (int * subkind * freedom)
     | `Body of 't ]
-      deriving (Show)
+      [@@deriving show]
 
 type 't meta_type_var_basis =
     [ 't meta_type_var_non_rec_basis
     | `Recursive of (int * 't) ]
-      deriving (Show)
+      [@@deriving show]
 
 type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
-      deriving (Show)
+      [@@deriving show]
 
 type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
-      deriving (Show)
+      [@@deriving show]
 
 module Abstype :
 sig
-  type t deriving (Show, Eq)
+  type t [@@deriving eq,show]
   val make  : string -> kind list -> t
   val arity : t -> kind list
   val name  : t -> string
@@ -86,7 +85,7 @@ type ('t, 'r) session_type_basis =
     | `Choice of 'r
     | `Dual of 't
     | `End ]
-      deriving (Show)
+      [@@deriving show]
 
 type typ =
     [ `Not_typed
@@ -113,13 +112,13 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
-      deriving (Show)
+      [@@deriving show]
 
 type session_type = (typ, row) session_type_basis
-  deriving (Show)
+  [@@deriving show]
 
 type datatype = typ
-      deriving (Show)
+      [@@deriving show]
 
 (* base kind stuff *)
 val is_base_type : datatype -> bool
@@ -166,7 +165,7 @@ type environment        = datatype Env.String.t
  and typing_environment = { var_env   : environment ;
                             tycon_env : tycon_environment ;
                             effect_row : row }
-    deriving (Show)
+    [@@deriving show]
 
 val empty_typing_environment : typing_environment
 

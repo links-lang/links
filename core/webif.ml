@@ -1,4 +1,3 @@
-(*pp deriving *)
 
 open Notfound
 open List
@@ -27,13 +26,12 @@ struct
         Value.env *            (* closure environment *)
         Value.t list           (* arguments *)
     | EvalMain
-        deriving (Show)
 
 
   let parse_remote_call (valenv, _, _) cgi_args =
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
-    (* Debug.print ("args: " ^ Value.Show_t.show (Json.parse_json args)); *)
+    (* Debug.print ("args: " ^ Value.show (Json.parse_json args)); *)
     let args = Value.untuple (Json.parse_json args) in
 
     let fvs = Json.parse_json_b64 (assoc "__env" cgi_args) in
@@ -75,9 +73,9 @@ struct
         valenv
         (fixup_cont (assoc "__continuation" cgi_args))
     in
-    (* Debug.print("continuation: " ^ Value.Show_continuation.show continuation); *)
+    (* Debug.print("continuation: " ^ Value.show_continuation continuation); *)
     let arg = Json.parse_json_b64 (assoc "__result" cgi_args) in
-    (* Debug.print ("arg: "^Value.Show_t.show arg); *)
+    (* Debug.print ("arg: "^Value.show arg); *)
       ClientReturn(cont, arg)
 
   let error_page_stylesheet =
@@ -139,14 +137,14 @@ struct
       | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
           ^ ", client ID: " ^ client_id_str);
-        (* Debug.print ("func: " ^ Value.Show_t.show func); *)
-        (* Debug.print ("args: " ^ mapstrcat ", " Value.Show_t.show args); *)
+        (* Debug.print ("func: " ^ Value.show func); *)
+        (* Debug.print ("args: " ^ mapstrcat ", " Value.show args); *)
         Proc.resolve_external_processes func;
         List.iter Proc.resolve_external_processes args;
         List.iter (Proc.resolve_external_processes -<- fst -<- snd)
           (IntMap.bindings (Value.Env.get_parameters env));
         Eval.apply Value.Continuation.empty env (func, args) >>= fun (_, r) ->
-        (* Debug.print ("result: "^Value.Show_t.show result); *)
+        (* Debug.print ("result: "^Value.show result); *)
         (*
         if not(Proc.singlethreaded()) then
           (prerr_endline "Remaining  procs on server after remote call!";

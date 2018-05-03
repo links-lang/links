@@ -1,9 +1,8 @@
-(*pp deriving *)
 open Utility
 open Ir
 
 type fenv = (Ir.binder list) IntMap.t
-    deriving (Show)
+    [@@deriving show]
 
 module ClosureVars =
 struct
@@ -423,14 +422,14 @@ struct
 end
 
 let program tyenv globals program =
-  (* Debug.print ("Before closure conversion: " ^ Ir.Show_program.show program); *)
+  (* Debug.print ("Before closure conversion: " ^ Ir.show_program program); *)
   (* ensure that all top-level bindings are marked as global
      (desugaring can break this invariant) *)
   let program = Globalise.program program in
   let fenv = ClosureVars.program tyenv globals program in
-  (* Debug.print ("fenv: " ^ Closures.Show_fenv.show fenv); *)
+  (* Debug.print ("fenv: " ^ Closures.show_fenv fenv); *)
   let program = ClosureConvert.program tyenv fenv program in
-  (* Debug.print ("After closure conversion: " ^ Ir.Show_program.show program); *)
+  (* Debug.print ("After closure conversion: " ^ Ir.show_program program); *)
   program
 
 let bindings tyenv globals bs =

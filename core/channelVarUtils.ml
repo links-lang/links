@@ -7,7 +7,7 @@ open Pervasives (* PIPES *)
  * a visitor (or better, an implementation using the built tables) but that
  * will have to come later. *)
 let variables_in_computation comp =
-  Debug.print ("Getting variables in computation: " ^ (Ir.Show_computation.show comp));
+  Debug.print ("Getting variables in computation: " ^ (Ir.show_computation comp));
   let open Ir in
   let variable_set = ref IntSet.empty in
   let add_variable var =
@@ -140,10 +140,10 @@ let affected_in_context (raise_env: Value.env) comp =
 let show_frames =
   List.iter (fun (sc, v, env, comp) ->
     Printf.printf "FRAME: \n scope: %s \n var: %s \n env: %s \n comp: %s \n \n"
-      (Ir.Show_scope.show sc)
+      (Ir.show_scope sc)
       (string_of_int v)
-      (Value.Show_env.show env)
-      (Ir.Show_computation.show comp))
+      (Value.show_env env)
+      (Ir.show_computation comp))
 *)
 
 let affected_channels raise_env frames =

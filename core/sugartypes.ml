@@ -1,8 +1,6 @@
-(*pp deriving *)
-
 (** The syntax tree created by the parser. *)
 
-type name = string deriving (Show)
+type name = string [@@deriving show]
 
 (* The operators named here are the ones that it is difficult or
    impossible to define as "user" infix operators:
@@ -18,13 +16,13 @@ type unary_op = [
 | `Name of name
 ]
 and regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
-    deriving (Show)
+    [@@deriving show]
 type logical_binop = [`And | `Or ]
-    deriving (Show)
+    [@@deriving show]
 type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name ]
-deriving (Show)
+    [@@deriving show]
 type operator = [ unary_op | binop | `Project of name ]
-deriving (Show)
+    [@@deriving show]
 
 let string_of_unary_op =
   function
@@ -45,16 +43,16 @@ let string_of_binop =
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
 
-module Show_position = Deriving_Show.Show_unprintable(struct type a = position end)
+let pp_position : Format.formatter -> position -> unit = fun fmt _ -> Utility.format_omission fmt
 
 type binder = name * Types.datatype option * position
-    deriving (Show)
+    [@@deriving show]
 
 (* type variables *)
 type tyvar = Types.quantifier
-  deriving (Show)
+  [@@deriving show]
 type tyarg = Types.type_arg
-  deriving (Show)
+  [@@deriving show]
 
 (*
    NOTE: tyvar lists represent big-lambda binders.
@@ -64,7 +62,7 @@ type tyarg = Types.type_arg
 *)
 
 type location = [`Client | `Server | `Native | `Unknown]
-    deriving (Show)
+    [@@deriving show]
 
 let string_of_location = function
 | `Client -> "client"
@@ -73,38 +71,38 @@ let string_of_location = function
 | `Unknown -> "unknown"
 
 type restriction = [ `Any | `Base | `Session | `Effect ]
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 type linearity   = [ `Any | `Unl ]
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 
 type subkind = linearity * restriction
-    deriving (Eq, Show)
+    [@@deriving eq,show]
 
 let default_subkind = (`Unl, `Any)
 
 type freedom = [`Flexible | `Rigid]
-    deriving (Show)
+    [@@deriving show]
 
 type primary_kind = [`Type | `Row | `Presence]
-    deriving (Show)
+    [@@deriving show]
 
 type kind = primary_kind * subkind option
-    deriving (Show)
+    [@@deriving show]
 
 type type_variable = name * kind * freedom
-    deriving (Show)
+    [@@deriving show]
 
 (* type variable of primary kind Type? *)
 type known_type_variable = name * subkind option * freedom
-    deriving (Show)
+    [@@deriving show]
 
 type quantifier = type_variable
-  deriving (Show)
+  [@@deriving show]
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
 type fieldconstraint = [ `Readonly | `Default ]
-    deriving (Show)
+    [@@deriving show]
 
 type datatype =
   [ `TypeVar         of known_type_variable
@@ -142,14 +140,14 @@ and type_arg =
     [ `Type of datatype
     | `Row of row
     | `Presence of fieldspec ]
-      deriving (Show)
+      [@@deriving show]
 
 (* Store the denotation along with the notation once it's computed *)
 type datatype' = datatype * Types.datatype option
-    deriving (Show)
+    [@@deriving show]
 
 type constant = Constant.constant
-    deriving (Show)
+    [@@deriving show]
 
 type patternnode = [
 | `Any
@@ -167,10 +165,10 @@ type patternnode = [
 | `HasType  of pattern * datatype'
 ]
 and pattern = patternnode * position
-    deriving (Show)
+    [@@deriving show]
 
 type spawn_kind = [ `Angel | `Demon | `Wait ]
-    deriving (Show)
+    [@@deriving show]
 
 type replace_rhs = [
 | `Literal of string
@@ -314,10 +312,10 @@ and cp_phrasenode = [
 | `Link of binder * binder
 | `Comp of binder * cp_phrase * cp_phrase ]
 and cp_phrase = cp_phrasenode * position
-    deriving (Show)
+    [@@deriving show]
 
 type program = binding list * phrase option
-  deriving (Show)
+  [@@deriving show]
 
 
 let make_untyped_handler ?parameters expr clauses depth =

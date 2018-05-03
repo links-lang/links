@@ -1,8 +1,7 @@
-(*pp deriving *)
 open Utility
 
 type tag = int
-     deriving (Show)
+     [@@deriving show]
 
 type t =
     [ `For of tag option * (Var.var * t) list * t list * t
@@ -18,7 +17,7 @@ type t =
     | `Primitive of string
     | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.constant ]
 and env = Value.env * t Env.Int.t
-    deriving (Show)
+    [@@deriving show]
 
 (* takes a normal form expression and returns true iff it has list type *)
 let is_list = Query.is_list
@@ -72,25 +71,25 @@ struct
     [ `Primitive of Types.primitive
     | `Record of nested_type StringMap.t
     | `List of nested_type ]
-      deriving (Show)
+      [@@deriving show]
 
   type 'a shredded = [`Primitive of 'a | `Record of ('a shredded) StringMap.t]
-      deriving (Show)
+      [@@deriving show]
   type shredded_type = Types.primitive shredded
-      deriving (Show)
+      [@@deriving show]
   type shredded_value = Value.t shredded
-      deriving (Show)
+      [@@deriving show]
 
   type flat_type =
     [ `Primitive of Types.primitive
     | `Record of Types.primitive StringMap.t ]
-      deriving (Show)
+      [@@deriving show]
 
   type 'a package =
     [ `Primitive of Types.primitive
     | `Record of 'a package StringMap.t
     | `List of 'a package * 'a ]
-      deriving (Show)
+      [@@deriving show]
 
   type step = [ `List | `Record of string ]
   type path = step list
@@ -214,7 +213,7 @@ struct
               | _ -> assert false
           end
       | e ->
-         Debug.print ("Can't apply shouter to: " ^ Show_t.show e);
+         Debug.print ("Can't apply shouter to: " ^ show e);
          assert false
 
   and shred_outer q p = `Concat (shouter top p q)
@@ -315,7 +314,7 @@ struct
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
     | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.constant ]
-      deriving (Show)
+      [@@deriving show]
 
   let rec pt_of_t : t -> pt = fun v ->
     let bt = pt_of_t in
@@ -340,7 +339,7 @@ struct
         | `Constant c -> `Constant c
         | `Database _ -> assert false
 
-  let t = Show_pt.show -<- pt_of_t
+  let t = show_pt -<- pt_of_t
 end
 let string_of_t = S.t
 
@@ -375,7 +374,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Project (`Var (_, field_types), name) -> StringMap.find name field_types
       | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
-      | e -> Debug.print("Can't deduce type for: " ^ Show_t.show e); assert false
+      | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
 let default_of_base_type = Query.default_of_base_type
 
@@ -504,12 +503,12 @@ struct
           begin
             match location with
             | `Server | `Unknown ->
-              (* Debug.print ("looked up function: "^Var.Show_binder.show (var, finfo)); *)
+              (* Debug.print ("looked up function: "^Var.show_binder (var, finfo)); *)
               `Closure ((xs, body), env_of_value_env Value.Env.empty)
             | `Client ->
               failwith ("Attempt to use client function: " ^ Js.var_name_binder (var, finfo) ^ " in query")
             | `Native ->
-              failwith ("Attempt to use native function: " ^ Var.Show_binder.show (var, finfo) ^ " in query")
+              failwith ("Attempt to use native function: " ^ Var.show_binder (var, finfo) ^ " in query")
           end
       end
     | None ->
@@ -663,7 +662,7 @@ struct
     | `Closure (f, v) ->
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
-      (* Debug.print ("Converting evalir closure: " ^ Var.Show_binder.show (f, _finfo) ^ " to query closure"); *)
+      (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
       let env' = bind (Value.Env.empty, Env.Int.empty) (z, value env v) in
       `Closure ((xs, body), env')
@@ -683,9 +682,9 @@ struct
   and apply env : t * t list -> t = function
     | `Closure ((xs, body), closure_env), args ->
       (* Debug.print ("Applying closure"); *)
-      (* Debug.print ("body: " ^ Ir.Show_computation.show body); *)
-      (* Debug.print("Applying query closure: " ^ Show_t.show (`Closure ((xs, body), closure_env))); *)
-      (* Debug.print("args: " ^ mapstrcat ", " Show_t.show args); *)
+      (* Debug.print ("body: " ^ Ir.show_computation body); *)
+      (* Debug.print("Applying query closure: " ^ show (`Closure ((xs, body), closure_env))); *)
+      (* Debug.print("args: " ^ mapstrcat ", " show args); *)
         let env = env ++ closure_env in
         let env = List.fold_right2 (fun x arg env ->
             bind env (x, arg)) xs args env in
@@ -990,7 +989,7 @@ struct
         | (a, b) -> `Apply ("==", [a; b])
 
   let eval env e =
-(*    Debug.print ("e: "^Ir.Show_computation.show e); *)
+(*    Debug.print ("e: "^Ir.show_computation e); *)
     computation (env_of_value_env env) e
 end
 
@@ -1043,9 +1042,9 @@ end
 module LetInsertion =
 struct
   type let_clause = Var.var * t * Var.var * t
-      deriving (Show)
+      [@@deriving show]
   type query = let_clause list
-      deriving (Show)
+      [@@deriving show]
 
   type cond = t option
   type gen = Var.var * t
@@ -1143,7 +1142,7 @@ struct
       | `Primitive "in"  -> `Primitive "index"
       | `Constant c      -> `Constant c
       | e ->
-        Debug.print ("Can't apply lins_inner to: " ^ Show_t.show e);
+        Debug.print ("Can't apply lins_inner to: " ^ show e);
         assert false
 
   and lins_inner_query (z, z_fields) ys : t -> t =
@@ -1162,7 +1161,7 @@ struct
           *)
           | `Singleton _ -> `Singleton (`Record StringMap.empty)
           | e ->
-            Debug.print ("Can't apply lins_inner_query to: " ^ Show_t.show e);
+            Debug.print ("Can't apply lins_inner_query to: " ^ show e);
             assert false
 
   let rec lins c : let_clause =
@@ -1261,7 +1260,7 @@ struct
              fields
              StringMap.empty)
       | e ->
-        Debug.print ("Can't apply flatten_inner to: " ^ Show_t.show e);
+        Debug.print ("Can't apply flatten_inner to: " ^ show e);
         assert false
 
   and flatten_inner_query : t -> t = fun e -> flatten_comprehension e
@@ -1285,7 +1284,7 @@ struct
       | `Concat es ->
         `Concat (List.map flatten_comprehension es)
       | e ->
-        Debug.print ("Can't apply flatten_comprehension to: " ^ Show_t.show e);
+        Debug.print ("Can't apply flatten_comprehension to: " ^ show e);
         assert false
 
   let flatten_let_clause : LetInsertion.let_clause -> let_clause =
@@ -1518,7 +1517,7 @@ struct
     | `Empty of query
     | `Length of query
     | `RowNumber of (Var.var * string) list]
-      deriving (Show)
+      [@@deriving show]
 
   (* Table variables that are actually used are always bound in a for
      comprehension. In this case the IR variable from the for
@@ -1860,7 +1859,7 @@ struct
       | `Constant c -> `Constant c
       | `Primitive "index" -> `RowNumber index
       | e ->
-        Debug.print ("Not a base expression: " ^ Show_t.show e);
+        Debug.print ("Not a base expression: " ^ show e);
         assert false
 
   (* convert a regexp to a like if possible *)

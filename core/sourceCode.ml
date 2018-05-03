@@ -1,4 +1,3 @@
-(*pp deriving *)
 open Utility
 
 (* Initial estimates for input size *)
@@ -71,14 +70,15 @@ end
 
 type lexpos = Lexing.position
 module LexposType = struct type a = lexpos let tname = "SourceCode.lexpos" end
-module Show_lexpos = Deriving_Show.Show_unprintable(struct type a = lexpos end)
+let pp_lexpos = fun fmt _ -> Utility.format_omission fmt (** Supress lexpos output**)
 module SourceCodePos = struct type a = source_code let tname = "SourceCode.source_code" end
-module Show_source_code = Deriving_Show.Show_unprintable(struct type a = source_code end)
+let pp_source_code = fun fmt _ -> Utility.format_omission fmt (** Supress sourcecode output**)
+
 
 (** unresolved position *)
 (* start * end * code *)
 type pos = lexpos * lexpos * source_code option
-    deriving (Show)
+    [@@deriving show]
 let dummy_pos = (Lexing.dummy_pos, Lexing.dummy_pos, None)
 
 
@@ -88,7 +88,7 @@ let dummy_pos = (Lexing.dummy_pos, Lexing.dummy_pos, None)
 *)
 (* start * source line * source expression *)
 type position = lexpos * string * string
-    deriving (Show)
+    [@@deriving show]
 let dummy_position = Lexing.dummy_pos, "<dummy>", "<dummy>"
 
 (* generic syntax error *)

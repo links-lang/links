@@ -1,4 +1,3 @@
-(*pp deriving *)
 (**************************************************************************)
 (*  Mini, a type inference engine based on constraint solving.            *)
 (*  Copyright (C) 2006. François Pottier, Yann Régis-Gianas               *)
@@ -42,8 +41,8 @@ and 'a info = {
   mutable descriptor: 'a
 }
 
-module Show_point(S : Deriving_Show.Show)
-  = Deriving_Show.Show_unprintable(struct type a = S.a point end)
+let pp_point _ formatter _ = Utility.format_omission formatter (** Suppress output **)
+let show_point f v = Format.asprintf "%a" (pp_point f) v
 
 (** fresh desc creates a fresh point and returns it. It forms an equivalence class of its own, whose descriptor is desc. *)
 let fresh desc = {

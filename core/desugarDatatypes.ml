@@ -62,8 +62,8 @@ object (self)
       (* check that duplicate type variables have the same kind *)
       if tv <> tv' then
         failwith ("kind mismatch in type variable: " ^
-                  Sugartypes.Show_type_variable.show tv ^ " vs: " ^
-                  Sugartypes.Show_type_variable.show tv');
+                  Sugartypes.show_type_variable tv ^ " vs: " ^
+                  Sugartypes.show_type_variable tv');
       self#register tv
     else
       (self#register tv)#add_name name

@@ -1,4 +1,3 @@
-(*pp deriving *)
 open Utility
 
 (* Representation for a very limited subset of (OCaml) regular
@@ -16,7 +15,7 @@ and  regex = | Range of (char * char)
 	     | Group of regex
              | Repeat of (repeat * regex)
 	     | Replace of (regex * string)
-	          deriving (Show)
+               [@@deriving show]
 
 let string_of_regex : regex -> string = fun s ->
   (* Using points-free style here (i.e. omitting the s) triggers a bug in

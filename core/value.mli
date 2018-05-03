@@ -1,4 +1,3 @@
-(*pp deriving *)
 (* Values and environments *)
 open ProcessTypes
 
@@ -30,11 +29,11 @@ class virtual database :
     method virtual exec : string -> dbvalue
     method make_insert_query : (string * string list * string list list) -> string
     method make_insert_returning_query : (string * string list * string list list * string) -> string list
-  end
+  end 
 
-module Eq_database : Deriving_Eq.Eq with type a = database
-module Typeable_database : Deriving_Typeable.Typeable with type a = database
-module Show_database : Deriving_Show.Show with type a = database
+
+val equal_database : database -> database -> bool
+val pp_database : Format.formatter -> database -> unit
 
 type db_constructor = string -> database * string
 
@@ -49,10 +48,10 @@ type xmlitem =   Text of string
                | NsAttr of (string * string * string)
                | NsNode of (string * string * xml)
 and xml = xmlitem list
-  deriving (Show)
+  [@@deriving show]
 
 type table = (database * string) * string * string list list * Types.row
-  deriving (Show)
+  [@@deriving show]
 
 type primitive_value = [
 | `Bool of bool
@@ -64,32 +63,31 @@ type primitive_value = [
 | `XML of xmlitem
 | `String of string ]
 
-module Show_primitive_value : Deriving_Show.Show with type a = primitive_value
 
 type spawn_location = [
   | `ClientSpawnLoc of client_id
   | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
 ]
-  deriving (Show)
+  [@@deriving show]
 
 type dist_pid = [
   | `ClientPid of (client_id * process_id)
   | `ServerPid of process_id (* Again, will need a server address here later *)
 ]
-  deriving (Show)
+  [@@deriving show]
 
 type access_point = [
   | `ClientAccessPoint of (client_id * apid)
   | `ServerAccessPoint of apid
 ]
-  deriving (Show)
+  [@@deriving show]
 
 type chan = (channel_id * channel_id)
 
 module type ENV =
 sig
   type 'a t
-     deriving (Show)
+     [@@deriving show]
   val set_request_data : 'a t -> RequestData.request_data -> 'a t
   val request_data : 'a t -> RequestData.request_data
   val empty : 'a t
@@ -155,7 +153,7 @@ end
 module type CONTINUATION = sig
   type 'v t
   and 'v resumption
-    deriving (Show)
+    [@@deriving show]
 
   module Frame : FRAME
 
@@ -213,7 +211,7 @@ type t = [
 and continuation = t Continuation.t
 and resumption = t Continuation.resumption
 and env = t Env.t
-    deriving (Show)
+    [@@deriving show]
 
 type delegated_chan = (chan * (t list))
 

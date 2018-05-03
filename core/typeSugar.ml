@@ -1,4 +1,3 @@
-(*pp deriving *)
 open Utility
 open Sugartypes
 
@@ -8,10 +7,6 @@ let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
 let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
 
-type var_env =
-    Types.meta_type_var StringMap.t *
-      Types.meta_row_var StringMap.t
-      deriving (Show)
 
 module Env = Env.String
 
@@ -1603,7 +1598,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                    the patterns are open *)
           `Effect row
       | `Application (l, [`Type t])
-          when Types.Abstype.Eq_t.eq l Types.list ->
+          when Types.Abstype.equal l Types.list ->
           let rec unwrap p : pattern list =
             match fst p with
               | `Variable _ | `Any -> [p]
@@ -1938,8 +1933,8 @@ let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = function
 
 (* let show_context : context -> context = *)
 (*   fun context -> *)
-(*     Printf.fprintf stderr "Types  : %s\n" (Env.Dom.Show_t.show (Env.domain context.tycon_env)); *)
-(*     Printf.fprintf stderr "Values : %s\n" (Env.Dom.Show_t.show (Env.domain context.var_env)); *)
+(*     Printf.fprintf stderr "Types  : %s\n" (Env.Dom.show_t (Env.domain context.tycon_env)); *)
+(*     Printf.fprintf stderr "Values : %s\n" (Env.Dom.show_t (Env.domain context.var_env)); *)
 (*     flush stderr; *)
 (*     context *)
 
@@ -3910,7 +3905,7 @@ struct
     try
       Debug.if_set show_pre_sugar_typing
         (fun () ->
-           "before type checking: \n"^ Show_program.show (bindings, body));
+           "before type checking: \n"^ show_program (bindings, body));
       let tyenv', bindings, _ = type_bindings tyenv bindings in
       let tyenv' = Types.normalise_typing_environment tyenv' in
         if Settings.get_value check_top_level_purity then
@@ -3927,7 +3922,7 @@ struct
   let sentence tyenv sentence =
     Debug.if_set show_pre_sugar_typing
       (fun () ->
-         "before type checking: \n"^ Show_sentence.show sentence);
+         "before type checking: \n"^ show_sentence sentence);
     match sentence with
       | `Definitions bindings ->
           let tyenv', bindings, _ = type_bindings tyenv bindings in
