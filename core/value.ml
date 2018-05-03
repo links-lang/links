@@ -999,7 +999,7 @@ let string_of_pretty pretty_fun arg : string =
      is to ignore newlines introduced by pretty printing as well as
      indentation. *)
   let existing_functions = pp_get_formatter_out_functions f () in
-  let [@warning "-23"] out_functions =
+  let out_functions =
     let one_space = function
       | 0 -> ()
       | _ -> out_string " " 0 1
