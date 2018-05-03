@@ -994,19 +994,21 @@ and p_xmlitem ?(close_tags=false) ppf: xmlitem -> unit = function
 let string_of_pretty pretty_fun arg : string =
   let b = Buffer.create 200 in
   let f = Format.formatter_of_buffer b in
-  let (out_string, out_flush) = pp_get_formatter_output_functions f () in
+  let (out_string, _out_flush) = pp_get_formatter_output_functions f () in
   (* Redefine the meaning of the pretty printing functions. The idea
      is to ignore newlines introduced by pretty printing as well as
      indentation. *)
   let existing_functions = pp_get_formatter_out_functions f () in
   let [@warning "-23"] out_functions =
-    {existing_functions with
-      out_string = out_string;
-      out_flush = out_flush;
-      out_newline = ignore;
-      out_spaces = function 0 -> () | _ -> out_string " " 0 1;} in
-  (** FIXME: In ocaml 4.06.0, the type of out_functions was extended with a new field
-      out_indent, which we should set to ignore to achieve the  behavior described above **)
+    let one_space = function
+      | 0 -> ()
+      | _ -> out_string " " 0 1
+    in
+    { existing_functions with
+        out_newline = ignore;
+        out_spaces = one_space;
+        out_indent = one_space }
+  in
   pp_set_formatter_out_functions f out_functions;
   pretty_fun f arg;
   pp_print_flush f ();
