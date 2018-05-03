@@ -3,7 +3,7 @@ open Notfound
 open ProcessTypes
 
 [@@@ocaml.warning "-39-32"] (** disable warnings about unused rec flags & functions in this module**)
-   
+
 let _ = ParseSettings.config_file
 
 let serialiser = Basicsettings.Serialisation.serialiser
@@ -999,11 +999,12 @@ let string_of_pretty pretty_fun arg : string =
      is to ignore newlines introduced by pretty printing as well as
      indentation. *)
   let existing_functions = pp_get_formatter_out_functions f () in
-  let out_functions = {existing_functions with
-                       out_string = out_string;
-                       out_flush = out_flush;
-                       out_newline = ignore;
-                       out_spaces = function 0 -> () | _ -> out_string " " 0 1;} in
+  let [@warning "-23"] out_functions =
+    {existing_functions with
+      out_string = out_string;
+      out_flush = out_flush;
+      out_newline = ignore;
+      out_spaces = function 0 -> () | _ -> out_string " " 0 1;} in
   (** FIXME: In ocaml 4.06.0, the type of out_functions was extended with a new field
       out_indent, which we should set to ignore to achieve the  behavior described above **)
   pp_set_formatter_out_functions f out_functions;
