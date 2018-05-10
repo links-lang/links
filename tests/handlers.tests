@@ -444,6 +444,16 @@ fun(g : (() {wild:()|_}-> a)) { g }(fun(){error("N/A")})
 stdout : fun : () ~> _
 flags : --enable-handlers -e
 
+Implicit return case (1)
+handle(42) { }
+stdout : 42 : Int
+flags : --enable-handlers -e
+
+Implicit return case (2)
+handle(do Op) { case Op(resume) -> resume(true) }
+stdout : true : Bool
+flags : --enable-handlers -e
+
 Examples
 ./examples/handlers/tests.links
 stdout : () : ()

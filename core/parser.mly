@@ -176,7 +176,7 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE
-%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER LINEARHANDLE LINEARHANDLER
+%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP
@@ -788,8 +788,8 @@ case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { `Switch ($3, $6, None), pos() }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { `Receive ($3, None), pos() }
 | SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { `Handle (make_untyped_handler $3 $6 `Shallow), pos() }
-| HANDLE LPAREN exp RPAREN LBRACE cases RBRACE                 { `Handle (make_untyped_handler $3 $6 `Deep), pos() }
-| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE cases RBRACE { `Handle (make_untyped_handler ~parameters:(List.rev $6) $3 $9 `Deep), pos() }
+| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE                 { `Handle (make_untyped_handler $3 $6 `Deep), pos() }
+| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE perhaps_cases RBRACE { `Handle (make_untyped_handler ~parameters:(List.rev $6) $3 $9 `Deep), pos() }
 | RAISE                                                        { `Raise, pos () }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { `TryInOtherwise ($2, $4, $6, $8, None), pos () }
 

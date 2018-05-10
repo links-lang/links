@@ -175,8 +175,8 @@ let keywords = [
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;
- "handle"   , HANDLE; "linearhandle", LINEARHANDLE;
- "handler"  , HANDLER; "linearhandler", LINEARHANDLER;
+ "handle"   , HANDLE;
+ "handler"  , HANDLER;
  "if"       , IF;
  "in"       , IN;
  "open"     , OPEN;

@@ -149,6 +149,26 @@ let apply_params : phrase -> phrase list list -> phrase
   = fun h pss ->
     List.fold_right (fun ps acc -> `FnAppl (acc, ps),dp ) (List.rev pss) h
 
+let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (pattern * phrase) list
+  = fun cases ->
+    let ret, ops =
+      List.fold_left
+        (fun (val_cases, eff_cases) (pat, body) ->
+          match fst pat with
+          | `Variant ("Return", None)     -> failwith "Improper pattern-matching on return value"
+          | `Variant ("Return", Some pat) -> (pat, body) :: val_cases, eff_cases
+          | _                             -> val_cases, (pat, body) :: eff_cases)
+        ([], []) cases
+    in
+    match ret with
+    | [] ->
+       let x = "x" in
+       let xb = (x, None, dp) in
+       let id = ((`Variable xb, dp), (`Var x, dp)) in
+       ([id], List.rev ops)
+    | _ ->
+       (List.rev ret, List.rev ops)
+
 let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
   = fun (depth, m, cases, params) ->
     let pos = snd m in
@@ -186,6 +206,9 @@ object
 
   method! phrase (node, pos) =
     match node with
+    | `Handle h ->
+       let (val_cases, eff_cases) = split_handler_cases h.sh_effect_cases in
+       `Handle { h with sh_effect_cases = eff_cases; sh_value_cases = val_cases }, pos
     (* | `Handle handler when handler.sh_descr.shd_depth = `Deep -> *)
     (*    begin match handler.sh_descr.shd_params with *)
     (*    | Some { shp_names; _ } -> *)

@@ -3021,7 +3021,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else
                 Gripers.upcast_subtype pos t2 t1
         | `Upcast _ -> assert false
-        | `Handle { sh_expr = m; sh_effect_cases = cases; sh_descr = descr; _ } ->
+        | `Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
            let rec pop_last = function
              | [] -> assert false
              | [x] -> x, []
@@ -3079,7 +3079,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                                              shp_types = pat_types } })
              | None -> (henv, [], descr)
            in
-           let type_cases cases =
+           let type_cases val_cases eff_cases =
              let wild_row () =
                let fresh_row = Types.make_empty_open_row (`Unl, `Any) in
                allow_wild fresh_row
@@ -3088,7 +3088,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let bt = Types.fresh_type_variable (`Unl, `Any) in
              let inner_eff = wild_row () in
              let outer_eff = wild_row () in
-             let (val_cases, eff_cases) = split_handler_cases cases in
              (* Type value patterns *)
              let val_cases, val_pats =
                List.fold_right
@@ -3269,7 +3268,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = `Effect m_context.effect_row in
            (** Most of the work is done by `type_cases'. *)
-           let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases cases in
+           let (val_cases, eff_cases) =
+             (** The following is a slight hack until I get rid of the
+                 `handler' sugar. It is necessary because of "old
+                 fashioned" parameterised handlers. *)
+             match val_cases with
+             | [] -> split_handler_cases eff_cases
+             | _  -> val_cases, eff_cases
+           in
+           let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases val_cases eff_cases in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
            (** Patch the result type of `m' *)
            let () =
