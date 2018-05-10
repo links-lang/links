@@ -1,0 +1,167 @@
+# Pi estimation
+
+# Queue interface
+typename Queue(a) = (front:[a], back:[a]);
+typename Option(a) = [|Some:a|None|];
+
+sig emptyQueue : () -> Queue(a)
+fun emptyQueue() { (front=[], back=[]) }
+
+sig enqueue : (a, Queue(a)) -> Queue(a)
+fun enqueue(e, q) {
+  (q with front = e :: q.front)
+}
+
+sig dequeue : (Queue(a)) ~> (Option(a), Queue(a))
+fun dequeue(q) {
+  switch (q.back) {
+    case [] ->
+      switch (q.front) {
+        case [] -> (None, q)
+        case _ -> dequeue((front=[],back=reverse(q.front)))
+      }
+    case e :: es -> (Some(e), (q with back = es))
+  }
+}
+
+# Reference interface
+typename Ref(a) = Int;
+
+sig ref : (a) {Ref:(a) -> Ref(a) |_}-> Ref(a)
+fun ref(x) { do Ref(x) }
+
+sig get : (Ref(a)) {Get:(Ref(a)) -> a |_}-> a
+fun get(r) { do Get(r) }
+
+sig put : (Ref(a), a) {Put:(Ref(a), a) -> () |_}-> ()
+fun put(r, x) { do Put(r, x) }
+
+sig cells : (Comp({Ref:(a) -> Ref(a),Get: (Ref(a)) -> a,Put: (Ref(a), a) -> () |e}, b)) -> Comp({Ref{_},Get{_},Put{_} |e}, b)
+fun cells(m)() {
+  handle(m())([] -> store, 0 -> n) {
+    case Return(x) -> x
+    case Ref(x, resume) ->
+       resume(n, (n, x) :: store, n+1)
+    case Put(r, x, resume) ->
+       var store = removeAssoc(r, store);
+       resume((), (r, x) :: store, n)
+    case Get(r, resume) ->
+       var e =
+         switch (lookup(r, store)) {
+           case Just(x) -> x
+           case _       -> error("Assert false")
+         };
+       resume(e, store, n)
+  }
+}
+
+# Promise interface
+typename Promise(e::Eff, a) = [|Done:a|Waiting:[(a) ~e~> ()]|];
+
+# typename Async(e::Eff) = [|Async: (Co({ |e})) -> Promise({ |e}, ())
+#                           , Await: (Promise({ |e}, ())) -> ()
+
+# Concurrency interface
+typename Co(e::Eff) = Comp({Fork: (Co({ |e})) -> (), Suspend: () |e}, ());
+
+sig fork : (Co({ |e})) {Fork: (Co({ |e})) -> () |_}-> ()
+fun fork(f) { do Fork(f) }
+
+sig suspend : () {Suspend: () |_}-> ()
+fun suspend() { do Suspend }
+
+typename Scheduler(e::Eff) =
+   forall p0::Presence, p1::Presence . (Co({ |e})) {Fork{p0},Suspend{p1} |e}~> ();
+
+sig schedule : Scheduler({ |e})
+fun schedule(main) {
+  fun runNext(threads) {
+    switch (dequeue(threads)) {
+      case (None, _) -> ()
+      case (Some(resume), threads) -> resume((), threads)
+    }
+  }
+
+  fun withThreads(threads, f) {
+    handle(f())(threads -> threads) {
+      case Return(()) ->
+         runNext(threads)
+      case Suspend(resume) ->
+         runNext(enqueue(resume, threads))
+      case Fork(f, resume) ->
+         var threads = enqueue(resume, threads);
+         withThreads(threads, f)
+    }
+  }
+
+  withThreads(emptyQueue(), main)
+}
+
+fun test() {
+  print("M0");
+  fork(fun() { print("M1"); suspend(); print("M1 again") });
+  print("M0 again");
+  fork(fun() { print("M2"); suspend(); print("M2 again") });
+  suspend();
+  print("End of M0")
+}
+
+# Operations
+sig yield : (a) {Yield: (a) -> () |_}-> ()
+fun yield(x) { do Yield(x) }
+
+# Point type
+typename Point = (x:Float, y:Float);
+
+sig makePoint : (Float, Float) -> Point
+fun makePoint(x, y) { (x=x, y=y) }
+
+sig insideUnitCircle : (Point) -> Bool
+fun insideUnitCircle(p) {
+  (p.x *. p.x +. p.y *. p.y) <= 1.0
+}
+
+# Streams of random points
+sig randomPoints : () {Yield: (Point) -> () |_}~> a
+fun randomPoints() {
+  var p = makePoint(random(), random());
+  yield(p);
+  randomPoints()
+}
+
+# Synchronous take operation
+sig take : (Int, Comp({Yield: (a) -> () |e}, b)) {Yield{_} |e}~> [a]
+fun take(n, m) {
+  handle(m())(n -> n, [] -> st) {
+    case Return(_) -> st
+    case Yield(x, resume) ->
+       if (n <= 0) st
+       else resume((), n-1, x :: st)
+  }
+}
+
+# Compute pi
+
+sig computePi : (Int) -> Comp({Yield: (Float) -> () |_}, a)
+fun computePi(n)() {
+  fun loop(total, count) {
+     # Synchronously take `n' random points
+     var points = take(n, randomPoints);
+     # Sanitise the points
+     var inside = filter(insideUnitCircle, points);
+
+     var total = total + n;
+     var count = count + length(inside);
+     var ratio = intToFloat(count) /. intToFloat(total);
+     # The area A of a circle is given by the following formula
+     #       A = π * r²,
+     # hence π = A/r². So, given random points with
+     #       x in (0,1), y in (0,1),
+     # the ratio of those inside a unit circle should approach π / 4.
+     # Therefore, the value of π should be:
+     yield(ratio *. 4.0);
+
+     loop(total, count)
+  }
+  loop(0, 0)
+}
