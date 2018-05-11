@@ -258,8 +258,7 @@ fun literalPolarity(e,x) {
 ####
 
 # Parsing
-typename Option(a) = [|None|Some:a|];
-typename Parser(e::Eff, a) = () {Choose: Bool, Satisfies: ((Char) {}~> Bool) -> Char, Peek: Option(Char), Fail: Zero |e}~> a;
+typename Parser(e::Eff, a) = () {Choose: Bool, Satisfies: ((Char) {}~> Bool) -> Char, Peek: Maybe(Char), Fail: Zero |e}~> a;
 typename ExprParser = Parser({ }, Expr);
 
 sig satisfies : ((Char) {}~> Bool) -> Parser({ |e}, Char)
@@ -270,7 +269,7 @@ fun satisfies(pred)() {
 sig char : (Char) -> Parser({ |e}, Char)
 fun char(c) { satisfies(fun(k) { k == c }) }
 
-sig peek : Parser({ |e}, Option(Char))
+sig peek : Parser({ |e}, Maybe(Char))
 fun peek() { do Peek }
 
 sig succeed : (a) -> Parser({ |e}, a)
@@ -340,8 +339,8 @@ fun parens(p)() {
 sig parseEof : Parser({ |e}, ())
 fun parseEof() {
   switch (peek()) {
-    case None -> ()
-    case Some(_) -> fail()
+    case Nothing -> ()
+    case Just(_) -> fail()
   }
 }
 
@@ -375,8 +374,8 @@ fun parseOr() {
   var lhs = parseAnd();
 
   switch (peek()) {
-    case None -> lhs
-    case Some(c) ->
+    case Nothing -> lhs
+    case Just(c) ->
       if (c == '|') {
         ignore(parseString("||")());
         ignore(whitespace());
@@ -391,8 +390,8 @@ fun parseAnd() {
   var lhs = parseNeg();
 
   switch (peek()) {
-    case None -> lhs
-    case Some(c) ->
+    case Nothing -> lhs
+    case Just(c) ->
       if (c == '&') {
         ignore(parseString("&&")());
         ignore(whitespace());
@@ -405,8 +404,8 @@ fun parseAnd() {
 sig parseNeg : ExprParser
 fun parseNeg() {
   switch (peek()) {
-    case None -> fail()
-    case Some(c) ->
+    case Nothing -> fail()
+    case Just(c) ->
       if (c == '~') {
         ignore(char('~')());
         ignore(whitespace());
@@ -435,14 +434,14 @@ fun parseParenthesisedOrAtomicExpr() {
   else parseAtomicExpr()
 }
 
-sig parse : (Parser({ |e}, a), [Char]) -> () {Choose-,Satisfies-,Peek-,Fail: Zero |e}~> a
+sig parse : (Parser({ |e}, a), [Char]) -> Comp({Choose-,Satisfies-,Peek-,Fail: Zero |e}, a)
 fun parse(m, input)() {
   handle(m())(input -> tokens) {
     case Return(x) -> x
     case Peek(resume) ->
        switch (tokens) {
-          case []        -> resume(None, tokens)
-          case tok :: _  -> resume(Some(tok), tokens)
+          case []        -> resume(Nothing, tokens)
+          case tok :: _  -> resume(Just(tok), tokens)
        }
     case Satisfies(pred, resume) ->
        var pred = gen1(pred);
@@ -468,4 +467,10 @@ sig parseTextExpression : (String) ~> Maybe(Expr)
 fun parseTextExpression(textualInput) {
   var parse = gen0(maybe(parse(parseE, explode(textualInput))));
   parse()
+}
+
+fun unitTest() {
+   [ parseTextExpression(exprToString(ex1)) == Just(ex1)
+   , check(ex1)
+   ]
 }

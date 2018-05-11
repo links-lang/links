@@ -68,6 +68,12 @@ fun light_switch() {
   assert((==), true, Light_switch.unitTest(6), boolToString, "Light_switch")
 }
 
+# Satisfiability and parsing
+fun sat() {
+  open Sat
+  assert((==), [true, true], Sat.unitTest(), listToString(boolToString), "Sat")
+}
+
 # Test runner
 fun runTests() {
    var tests = [ shallow_state
