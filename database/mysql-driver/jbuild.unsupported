@@ -8,3 +8,9 @@
   (optional)
   (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
   (libraries (mysql links))))
+
+
+(install
+  ((section share)
+   (files   (links_mysql_dependencies.json))
+   (package links-mysql)))

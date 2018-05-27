@@ -8,3 +8,9 @@
   (optional)
   (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g))
   (libraries (postgresql links))))
+
+
+(install
+  ((section share)
+   (files   (links_postgresql_dependencies.json))
+   (package links-postgresql)))

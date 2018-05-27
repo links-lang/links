@@ -2,13 +2,21 @@
 .DEFAULT_GOAL: nc
 
 nc:
-	jbuilder build -p links,links-postgresql -j 4 @install
+	jbuilder build -p links -j 4 @install
 	@echo "#!/bin/sh" > links
-	@echo "LINKS_LIB=\"$(shell pwd)/_build/default/lib\" LINKS_LD_LIBRARY_PATH=\"$(shell pwd)/_build/default/database/pg-driver\" $(shell pwd)/_build/default/bin/links.exe \"\$$@\"" >> links
+	@echo "LINKS_LIB=\"$(shell pwd)/_build/default/lib\" $(shell pwd)/_build/default/bin/links.exe \"\$$@\"" >> links
 	@chmod +x links
 	ln -f -s links linx
 
 native: nc
+
+postgresql:
+        #Re-state links here because otherwise the version of links installed in
+        #opam may be used, leading to a linking error when loading the driver into the
+        #version of links built in the current folder
+	jbuilder build -p links,links-postgresql -j 4 @install
+
+all: nc postgresql
 
 install:
 	jbuilder install

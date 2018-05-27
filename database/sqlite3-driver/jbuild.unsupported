@@ -8,3 +8,8 @@
   (optional)
   (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
   (libraries (sqlite3 links))))
+
+(install
+  ((section share)
+   (files   (links_sqlite3_dependencies.json))
+   (package links-sqlite3)))

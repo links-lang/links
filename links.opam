@@ -64,4 +64,5 @@ depends: [
   "cohttp"
   "websocket-lwt"
   "safepass"
+  "ocamlfind"
 ]
