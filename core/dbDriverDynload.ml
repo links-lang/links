@@ -24,7 +24,7 @@ let searchpaths_user_provided _ =
   if driverpaths_setting = "" then
     []
   else
-    String.split_on_char ':' driverpaths_setting
+    List.map Utility.Sys.expand (String.split_on_char ':' driverpaths_setting)
 
 let searchpaths_opam_provided driver_name =
   let driver_opam_package_name = opam_package_name driver_name in
