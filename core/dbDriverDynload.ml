@@ -90,19 +90,27 @@ let get_dependencies driver_name =
 
 
 
-let rec dynload_first_existing_file  = function
-  | [] -> raise No_such_file
-  | f::fs ->
-     if Sys.file_exists f then
-       begin
-         try
-           Debug.print ("Loading " ^ f);
-           Dynlink.loadfile f
-         with
-         | Dynlink.Error e -> raise (Dynlink_Error (f, e))
-       end
-     else
-       dynload_first_existing_file fs
+let dynload_first_existing_file files =
+  let rec try_loading loaded_already = function
+    | [] -> if loaded_already then () else raise No_such_file
+    | f::fs ->
+       if Sys.file_exists f then
+         begin
+           if loaded_already then
+             Debug.print (Printf.sprintf "Warning: Alternative candidate for dynloading file %s exists: %s" (Filename.basename f)  f)
+           else
+             begin
+               try
+                 Debug.print ("Loading " ^ f);
+                 Dynlink.loadfile f
+               with
+               | Dynlink.Error e -> raise (Dynlink_Error (f, e))
+             end;
+           try_loading true fs
+         end
+       else
+         try_loading loaded_already fs in
+  try_loading false files
 
 let load_dependency driver_name dep =
     let folder = match opam_lib_folder_for_package dep.opam_package with
