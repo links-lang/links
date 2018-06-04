@@ -20,7 +20,7 @@ let opam_lib_folder_for_package pkg =
   with Findlib.No_such_package _ -> None
 
 let searchpaths_user_provided _ =
-  let driverpaths_setting = Settings.get_value Basicsettings.db_driver_paths in
+  let driverpaths_setting = Settings.get_value Basicsettings.db_driver_path in
   if driverpaths_setting = "" then
     []
   else
