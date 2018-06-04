@@ -1,3 +1,10 @@
+# 0.7.3
+
+This minor release contains various bug fixes and improves the dynamic
+loading facility for database drivers that was introduced in the
+previous release. The loading of database drivers is now deferred
+until an actual attempt to connect to a database is made.
+
 # 0.7.2
 
 Version 0.7.2 contains mainly behind-the-scenes improvements, however they may
