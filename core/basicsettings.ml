@@ -93,7 +93,7 @@ let default_db_driver_search_folders =
 
 (** List of directories where to look for database drivers, split by ':'
     Initialized to point to where the drivers are compiled to if building in the current directory **)
-let db_driver_dirs = Settings.add_string ("db_driver_dirs", String.concat ":" default_db_driver_search_folders, `System)
+let db_driver_paths = Settings.add_string ("db_driver_paths", String.concat ":" default_db_driver_search_folders, `System)
 
 (** The banner *)
 let version = "0.7.3 (Dalry)"
