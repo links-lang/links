@@ -5,10 +5,8 @@
 #
 # https://github.com/links-lang/links/wiki/Running-the-test-suite
 
-export LINKS_LD_LIBRARY_PATH="_build/default/pg-driver" # Location of loadable database driver
 DATABASE_TEST_DIR=tests/database   # Location of database tests
 SHREDDING_TEST_DIR=tests/shredding # Location of database tests
-HANDLERS_TEST_DIR=tests/handlers   # Location of handlers tests
 ret=0                              # Return code. If <> 0 then some tests failed
 STARTCOLOR="\e[31m"                # Control sequence to enable red text
 ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
