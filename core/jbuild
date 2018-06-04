@@ -10,5 +10,5 @@
   (wrapped false)
   (modes (native))
   (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
-  (libraries (str yojson ppx_deriving_yojson.runtime unix safepass base64 ANSITerminal linenoise              cohttp lwt websocket websocket-lwt.cohttp))
+  (libraries (str yojson ppx_deriving_yojson.runtime unix safepass base64 ANSITerminal linenoise cohttp lwt websocket websocket-lwt.cohttp findlib))
   (preprocess (pps (ppx_deriving.std ppx_deriving_yojson)))))

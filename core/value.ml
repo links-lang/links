@@ -103,6 +103,14 @@ let register_driver : (string * db_constructor) -> unit
     Debug.print ("registering driver for " ^ name);
     database_drivers := pair :: !database_drivers
 
+let resolve_database_driver driver_name =
+  match List.assoc_opt driver_name !database_drivers with
+  | Some driver -> driver
+  | None ->
+     DbDriverDynload.load driver_name;
+     (* Loading driver should make it register*)
+     List.assoc driver_name !database_drivers
+     
 let parse_db_string : string -> (string * string) =
   fun params ->
     match Str.bounded_split (Str.regexp ":") params 2 with
@@ -115,10 +123,7 @@ let database_connections = ref (StringMap.empty : (database * string) StringMap.
 
 let db_connect driver params =
   let s = reconstruct_db_string (driver, params) in
-  let constructor =
-    try List.assoc driver !database_drivers
-    with NotFound _ -> failwith ("No driver for database type `" ^ driver ^ "'")
-  in
+  let constructor = resolve_database_driver driver  in
     match StringMap.lookup s !database_connections with
       | None ->
           let db = constructor params in

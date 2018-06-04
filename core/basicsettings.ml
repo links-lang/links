@@ -80,6 +80,21 @@ let config_file_path = match Utility.getenv "LINKS_CONFIG" with
           with End_of_file ->
             None
 
+
+let default_db_driver_search_folders =
+  let install_path = Filename.concat  (Sys.getcwd ()) "_build/install/default" in
+  let start_folders = List.map (Filename.concat install_path)  ["lib"; "share"] in
+  let existing_start_folders = List.filter (Sys.file_exists) start_folders in
+  let potential_search_folders = List.map (fun folder ->
+                                 List.map (Filename.concat folder) (Array.to_list (Sys.readdir folder) ))
+                               existing_start_folders in
+  let links_db_driver_folder_regexp = Str.regexp ".+/links-[^/]+/?" in
+  List.filter (fun s -> Sys.is_directory s &&  Str.string_match links_db_driver_folder_regexp s 0) (List.flatten potential_search_folders)
+
+(** List of directories where to look for database drivers, split by ':'
+    Initialized to point to where the drivers are compiled to if building in the current directory **)
+let db_driver_path = Settings.add_string ("db_driver_path", String.concat ":" default_db_driver_search_folders, `System)
+
 (** The banner *)
 let version = "0.7.3 (Dalry)"
 let welcome_note = Settings.add_string ("welcome_note",

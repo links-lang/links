@@ -465,7 +465,5 @@ let _ =
     | None -> ()
   end;
 
-  (* Load database drivers *)
-  Dyn_db_hack.load ();
-
   main()
+

@@ -5,7 +5,6 @@
 #
 # https://github.com/links-lang/links/wiki/Running-the-test-suite
 
-export LINKS_LD_LIBRARY_PATH="_build/default/pg-driver" # Location of loadable database driver
 DATABASE_TEST_DIR=tests/database   # Location of database tests
 SHREDDING_TEST_DIR=tests/shredding # Location of database tests
 ret=0                              # Return code. If <> 0 then some tests failed
