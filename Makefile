@@ -1,22 +1,20 @@
 .PHONY: nc native clean tests install uninstall clean
 .DEFAULT_GOAL: nc
 
-nc:
-	jbuilder build -p links -j 4 @install
-	@echo "#!/bin/sh" > links
-	@echo "LINKS_LIB=\"$(shell pwd)/_build/default/lib\" $(shell pwd)/_build/default/bin/links.exe \"\$$@\"" >> links
-	@chmod +x links
-	ln -f -s links linx
+nc:    create-startup-script
+       jbuilder build -p links,links-postgresql -j 4 @install
 
 native: nc
+all: nc
 
-postgresql:
-        #Re-state links here because otherwise the version of links installed in
-        #opam may be used, leading to a linking error when loading the driver into the
-        #version of links built in the current folder
-	jbuilder build -p links,links-postgresql -j 4 @install
+no-db: create-startup-script
+       jbuilder build -p links -j 4 @install
 
-all: nc postgresql
+create-startup-script:
+       @echo "#!/bin/sh" > links
+       @echo "LINKS_LIB=\"$(shell pwd)/_build/default/lib\" $(shell pwd)/_build/default/bin/links.exe \"\$$@\"" >> links
+       @chmod +x links
+       ln -f -s links linx
 
 install:
 	jbuilder install
