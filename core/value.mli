@@ -29,7 +29,7 @@ class virtual database :
     method virtual exec : string -> dbvalue
     method make_insert_query : (string * string list * string list list) -> string
     method make_insert_returning_query : (string * string list * string list list * string) -> string list
-  end 
+  end
 
 
 val equal_database : database -> database -> bool

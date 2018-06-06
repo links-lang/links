@@ -179,7 +179,7 @@ let show_processes procs =
 let show_handlers evt_handlers =
   (* Show the JSON for an event handler: the evt handler key, and the associated process(es) *)
   let show_evt_handler (key, proc) =
-    (* If the list of processes handling each key is represented by a 'List term, we translate it to a 
+    (* If the list of processes handling each key is represented by a 'List term, we translate it to a
        JS Array. This Array is supposed to be processes  by jslib code only*)
     let jsonize_handler_list = function
       | `List elems -> string_listify (List.map jsonize_value' elems)

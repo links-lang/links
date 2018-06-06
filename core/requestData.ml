@@ -41,7 +41,7 @@ let get_client_id req_data = !(req_data.client_id)
 let set_client_id req_data x = req_data.client_id := x
 
 
-                             
+
 module DecodeRequestHeaders =
   struct
 
@@ -87,7 +87,7 @@ let raw_decode : string -> string = fun s ->
     let len = compute_len 0 0 in
     let s1 = Bytes.create len in
     Bytes.to_string (copy_decode_in s1 0 0)
-  else 
+  else
     s
 
 let decode : string -> string = fun s ->
@@ -100,13 +100,13 @@ let decode : string -> string = fun s ->
       else if s.[String.length s - 1] == ' ' then
         strip_heading_and_trailing_spaces
           (String.sub s 0 (String.length s - 1))
-      else 
+      else
 	s
-    else 
+    else
       s
   in
   strip_heading_and_trailing_spaces rs
 
-    
+
   end
-    
+

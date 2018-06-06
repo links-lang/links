@@ -1,7 +1,7 @@
 open Utility
 
 [@@@ocaml.warning "-32"] (** disable warnings about unused functions in this module**)
-   
+
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
@@ -2073,7 +2073,7 @@ and tycon_environment  = tycon_spec Env.t
 and typing_environment = { var_env    : environment
                          ; tycon_env  : tycon_environment
                          ; effect_row : row }
-     [@@deriving show] 
+     [@@deriving show]
 
 let empty_typing_environment = { var_env = Env.empty; tycon_env =  Env.empty; effect_row = make_empty_closed_row ()  }
 

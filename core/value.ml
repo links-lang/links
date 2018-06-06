@@ -110,7 +110,7 @@ let resolve_database_driver driver_name =
      DbDriverDynload.load driver_name;
      (* Loading driver should make it register*)
      List.assoc driver_name !database_drivers
-     
+
 let parse_db_string : string -> (string * string) =
   fun params ->
     match Str.bounded_split (Str.regexp ":") params 2 with

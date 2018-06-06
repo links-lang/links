@@ -532,15 +532,15 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "childNodes",
   (p1 (function
          | `List [`XML (Value.Node (_, children))] ->
-           let children = List.filter (function 
-             | (Value.Node _) -> true 
-             | (Value.NsNode _) -> true 
+           let children = List.filter (function
+             | (Value.Node _) -> true
+             | (Value.NsNode _) -> true
              | _ -> false) children in
            `List (map (fun x -> `XML x) children)
          | `List [ `XML (Value.NsNode (_, _, children)) ] ->
-           let children = List.filter (function 
-             | (Value.Node _) -> true 
-             | (Value.NsNode _) -> true 
+           let children = List.filter (function
+             | (Value.Node _) -> true
+             | (Value.NsNode _) -> true
              | _ -> false) children in
            `List (map (fun x -> `XML x) children)
          | _ -> failwith "non-XML given to childNodes"),
