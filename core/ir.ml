@@ -671,7 +671,7 @@ end
   bindings.
 
   A much more effective approach is to use one of Appel and Jim's
-  algorithms described in `Shrinking lambda reductions in linear
+  algorithms described in `Shrinking lambda expressions in linear
   time'.
 
   They describe three algorithms. All of them eliminate all dead
