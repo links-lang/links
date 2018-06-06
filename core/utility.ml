@@ -84,7 +84,7 @@ end
 
 module String = struct
   include String
-  let pp = Format.pp_print_string 
+  let pp = Format.pp_print_string
   let show = fun x -> x
 end
 
@@ -108,7 +108,7 @@ end
 module Char =
 struct
   include Char
-  
+
   let pp = Format.pp_print_char
   let show = fun x  -> Format.asprintf "%a" pp x
   let isAlpha = function 'a'..'z' | 'A'..'Z' -> true | _ -> false
@@ -197,10 +197,10 @@ struct
         m (empty, empty)
 
 
-    let pp af formatter map = 
+    let pp af formatter map =
       Format.pp_open_box formatter 0;
       Format.pp_print_string formatter "{";
-      iter (fun key value -> 
+      iter (fun key value ->
                 Format.pp_open_box formatter 0;
                 Ord.pp formatter key;
                 Format.pp_print_string formatter " => ";
@@ -210,7 +210,7 @@ struct
              ) map;
       Format.pp_print_string formatter "}";
       Format.pp_close_box formatter ()
-    
+
     let show = (fun af x  -> Format.asprintf "%a" (pp af) x)
   end
 end
@@ -246,7 +246,7 @@ struct
     let pp formatter set =
       Format.pp_open_box formatter 0;
       Format.pp_print_string formatter "{";
-      iter (fun elt -> 
+      iter (fun elt ->
                 Format.pp_open_box formatter 0;
                 Ord.pp formatter elt;
                 Format.fprintf formatter ";@;";
