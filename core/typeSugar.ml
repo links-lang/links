@@ -7,6 +7,7 @@ let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
 let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
 
+let dodgey_type_isomorphism = Basicsettings.TypeSugar.dodgey_type_isomorphism
 
 module Env = Env.String
 
@@ -2595,7 +2596,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let ps = List.map (tc) ps in
 
               (*
-                We take advantage of this type isomorphism:
+                SL: though superficially appealing, the following is unsound
+                as it evidently violates the value restriction!
+                Thus we disable it by default.
+
+                I think the isomorphism for projections is still OK.
+
+                We can take advantage of this type isomorphism:
 
                 forall X.P -> Q == P -> forall X.Q
                 where X is not free in P
@@ -2642,10 +2649,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                       (* quantifiers for the return type *)
                       let rqs =
-                        (fst -<- List.split -<- snd -<- List.split)
-                          (List.filter
-                             (fun (q, _) -> not (free_in_arg q))
-                             xs) in
+                        if Settings.get_value dodgey_type_isomorphism then
+                          (fst -<- List.split -<- snd -<- List.split)
+                            (List.filter
+                               (fun (q, _) -> not (free_in_arg q))
+                               xs)
+                        else
+                          [] in
 
                       (* type arguments to apply f to *)
                       let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
