@@ -2406,7 +2406,7 @@ struct
                                   | `Var (id,sk,fd) -> (`Var (id,sk,fd), o) end in
                                 (Unionfind.fresh newVar, o)
     method meta_var : meta_var -> (meta_var * 'self_type) = function
-      | `Type  mtv -> let (mtv', o) = o#meta_type_var mtv in (`Type mtv, o)
+      | `Type  mtv -> let (mtv', o) = o#meta_type_var mtv in (`Type mtv', o)
       | `Row mrv -> let (mrv', o) =  o#meta_row_var mrv in (`Row mrv', o)
       | `Presence mpv -> let (mpv', o) = o#meta_presence_var mpv in (`Presence mpv', o)
     method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) = fun point ->
