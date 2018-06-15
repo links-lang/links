@@ -1628,18 +1628,42 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
        (* TODO: expand applications? *)
       | `Application _ -> t
 
-let unify ~pos ~(handle:Gripers.griper) ((_,ltype as t1), (_,rtype as t2)) =
-  try
-    Utils.unify (ltype, rtype)
-  with
-      Unify.Failure error ->
-        begin
-          match error with
-            | `Msg s ->
-                Debug.print ("Unification error: "^s)
-            | _ -> ()
-        end;
-        handle ~pos ~t1 ~t2 ~error
+type unifyResult = UnifySuccess | UnifyFailure of (Unify.error * SourceCode.pos)
+
+let raiseUnify ~(handle:Gripers.griper) ~pos error t1 t2 =
+  begin
+    match error with
+    | `Msg s -> Debug.print ("Unification error: "^s)
+    | _ -> ()
+  end;
+  handle ~pos ~t1 ~t2 ~error
+
+let unify ~pos unifyTys  =
+  try Utils.unify unifyTys; UnifySuccess
+  with Unify.Failure error -> UnifyFailure (error, pos)
+
+let unifyOrRaise ~(handle:Gripers.griper) ~pos (_, ltype1 as lt1, (_, rtype1 as rt1)) =
+  begin
+  match unify ~pos (ltype1, rtype1) with
+  | UnifySuccess -> ()
+  | UnifyFailure (err, pos) -> raiseUnify ~handle ~pos err lt1 rt1
+  end
+
+(* Expects both unify arguments to succesfully unify.  Raises a unify exception
+   if at least one unification fails *)
+let unifyOr ~(handle:Gripers.griper) ~pos ((_, ltype1), (_, rtype1))
+                                          ((_, ltype2) as lt2, ((_, rtype2) as rt2)) =
+  begin
+  match unify ~pos (ltype1, rtype1) with
+  | UnifySuccess -> ()
+  | UnifyFailure _ ->
+     begin
+       match unify ~pos (ltype2, rtype2) with
+       | UnifySuccess -> ()
+       | UnifyFailure (err, pos) -> raiseUnify ~handle ~pos err lt2 rt2
+     end
+  end
+
 
 (** check for duplicate names in a list of pattern *)
 let check_for_duplicate_names : Sugartypes.position -> pattern list -> string list = fun pos ps ->
@@ -1706,7 +1730,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
   let rec type_pattern (pattern, pos' : pattern) : pattern * Types.environment * (Types.datatype * Types.datatype) =
     let _UNKNOWN_POS_ = "<unknown>" in
     let tp = type_pattern in
-    let unify (l, r) = unify ~pos:pos' (l, r)
+    let unify (l, r) = unifyOrRaise ~pos:pos' (l, r)
     and erase (p,_, _) = p
     and ot (_,_,(t,_)) = t
     and it (_,_,(_,t)) = t
@@ -1742,8 +1766,8 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
         let ps' = List.map tp ps in
         let env' = List.fold_right (env ->- (++)) ps' Env.empty in
         let list_type p ps typ =
-          let _ = List.iter (fun p' -> unify ~handle:Gripers.list_pattern ((pos p, typ p),
-                                                                           (pos p', typ p'))) ps in
+          let () = List.iter (fun p' -> unify ~handle:Gripers.list_pattern ((pos p, typ p),
+                                                                            (pos p', typ p'))) ps in
           Types.make_list_type (typ p) in
         let ts =
           match ps' with
@@ -2025,7 +2049,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
 
-    let unify (l, r) = unify ~pos:pos (l, r)
+    let unify (l, r) = unifyOrRaise ~pos:pos (l, r)
     and (++) env env' = {env with var_env = Env.extend env.var_env env'} in
 
     let typ (_,t,_) : Types.datatype = t
@@ -2687,17 +2711,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                   | ft ->
                       let rettyp = Types.fresh_type_variable (`Any, `Any) in
-                        begin
-                          try
-                            unify ~handle:Gripers.fun_apply
-                                  ((exp_pos f, ft), no_pos (`Function (Types.make_tuple_type (List.map typ ps),
-                                                                       context.effect_row, rettyp)))
-                          with _ ->
-                               unify ~handle:Gripers.fun_apply
-                                     ((exp_pos f, ft), no_pos (`Lolli (Types.make_tuple_type (List.map typ ps),
-                                                                          context.effect_row, rettyp)))
-                        end;
-                        `FnAppl (erase f, List.map erase ps), rettyp, merge_usages (usages f :: List.map usages ps)
+                      begin
+                        unifyOr ~handle:Gripers.fun_apply ~pos
+                                ((exp_pos f, ft), no_pos (`Function (Types.make_tuple_type (List.map typ ps),
+                                                                     context.effect_row, rettyp)))
+                                ((exp_pos f, ft), no_pos (`Lolli (Types.make_tuple_type (List.map typ ps),
+                                                                  context.effect_row, rettyp)))
+                      end;
+                      `FnAppl (erase f, List.map erase ps), rettyp, merge_usages (usages f :: List.map usages ps)
               end
         | `TAbstr (qs, e) ->
             let (e, _), t, u = tc e in
@@ -3428,7 +3449,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 and type_binding : context -> binding -> binding * context * usagemap =
   fun context (def, pos) ->
     let type_check = type_check in
-    let unify pos (l, r) = unify ~pos:pos (l, r)
+    let unify pos (l, r) = unifyOrRaise ~pos:pos (l, r)
     and typ (_,t,_) = t
     and erase (e, _, _) = e
     and usages (_,_,u) = u
@@ -3744,7 +3765,7 @@ and type_regex typing_env : regex -> regex =
         | `Repeat (repeat, r) -> `Repeat (repeat, tr r)
         | `Splice ((_pn, pos) as e) ->
             let e = type_check typing_env e in
-            let () = unify ~pos:pos ~handle:Gripers.splice_exp
+            let () = unifyOrRaise ~pos:pos ~handle:Gripers.splice_exp
               (no_pos (typ e), no_pos Types.string_type)
             in
               `Splice (erase e)
@@ -3785,7 +3806,7 @@ and type_cp (context : context) = fun (p, pos) ->
 
   let use s u = StringMap.add s 1 u in
 
-  let unify ~pos ~handle (t, u) = unify ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
+  let unify ~pos ~handle (t, u) = unifyOrRaise ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
 
   let (p, t, u) = match p with
     | `Unquote (bindings, e) ->
