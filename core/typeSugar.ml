@@ -1649,8 +1649,7 @@ let unifyOrRaise ~(handle:Gripers.griper) ~pos (_, ltype1 as lt1, (_, rtype1 as 
   | UnifyFailure (err, pos) -> raiseUnify ~handle ~pos err lt1 rt1
   end
 
-(* Expects both unify arguments to succesfully unify.  Raises a unify exception
-   if at least one unification fails *)
+(* Expects at least one pair of arguments to succesfully unify *)
 let unifyOr ~(handle:Gripers.griper) ~pos ((_, ltype1), (_, rtype1))
                                           ((_, ltype2) as lt2, ((_, rtype2) as rt2)) =
   begin
