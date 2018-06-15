@@ -82,7 +82,10 @@ let config_file_path = match Utility.getenv "LINKS_CONFIG" with
 
 
 let default_db_driver_search_folders =
-  let install_path = Filename.concat  (Sys.getcwd ()) "_build/install/default" in
+  let links_executable_folder = Filename.dirname Sys.argv.(0) in
+  let remove_build_subdirs = Str.regexp "_build/default/bin/?$" in
+  let links_base_folder =  Str.global_replace remove_build_subdirs "" links_executable_folder in
+  let install_path = Filename.concat links_base_folder "_build/install/default" in
   let start_folders = List.map (Filename.concat install_path)  ["lib"; "share"] in
   let existing_start_folders = List.filter (Sys.file_exists) start_folders in
   let potential_search_folders = List.map (fun folder ->
