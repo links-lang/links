@@ -12,7 +12,7 @@ struct
      each non-global function f to a list of its non-global free
      variables. *)
   class visitor tenv globals =
-    object (o : 'self) inherit Transform.visitor(tenv) as super
+    object (o : 'self) inherit IrTraversals.Transform.visitor(tenv) as super
       val globals = globals
       val bound_vars = IntSet.empty
       val free_vars = IntSet.empty
@@ -254,7 +254,7 @@ struct
                             StringMap.empty, None))
 
   class visitor tenv fenv =
-    object (o : 'self) inherit Transform.visitor(tenv) as super
+    object (o : 'self) inherit IrTraversals.Transform.visitor(tenv) as super
       (* currently active mutually recursive functions*)
       val parents : Ir.binder list = []
       (* currently active closure environment *)
@@ -421,7 +421,7 @@ struct
     e
 end
 
-let program tyenv globals program =
+let program globals tyenv program =
   (* Debug.print ("Before closure conversion: " ^ Ir.show_program program); *)
   (* ensure that all top-level bindings are marked as global
      (desugaring can break this invariant) *)
