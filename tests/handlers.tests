@@ -454,6 +454,21 @@ handle(do Op) { case Op(resume) -> resume(true) }
 stdout : true : Bool
 flags : --enable-handlers -e
 
+Omission of resumption for nullary operations (1)
+handle(do Foo) { case Foo -> 5 }
+stdout : 5 : Int
+flags : --enable-handlers -e
+
+Omission of resumption for nullary operations (2)
+handle(do Foo) { case Foo() -> 6 }
+stdout : 6 : Int
+flags : --enable-handlers -e
+
+Omission of resumption for nullary operations (3)
+fun(m) { handle(m()) { case Foo -> 5 } }
+stdout : fun : (() {Foo:() {}-> _|b}~> Int) {Foo{_}|b}~> Int
+flags : --enable-handlers -e
+
 Examples
 ./examples/handlers/tests.links
 stdout : () : ()

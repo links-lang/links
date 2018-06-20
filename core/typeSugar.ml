@@ -3119,12 +3119,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      match pat with
                      | `Variant (opname, Some pat'), pos ->
                         begin match pat' with
+                        | `Tuple [], _ ->
+                           `Effect (opname, [], (`Any, SourceCode.dummy_pos)), pos
                         | `Tuple ps, _ ->
                            let kpat, pats = pop_last ps in
                            let eff = `Effect (opname, pats, kpat) in
                            eff, pos
                         | _ -> `Effect (opname, [], pat'), pos
                         end
+                     | `Variant (opname, None), pos ->
+                        `Effect (opname, [], (`Any, SourceCode.dummy_pos)), pos
                      | _, pos -> Gripers.die pos "Improper pattern matching"
                    in
                    let pat = tpo pat in
