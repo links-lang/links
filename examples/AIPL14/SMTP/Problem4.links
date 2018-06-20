@@ -30,7 +30,7 @@ fun outer(s) {
   offer(s) {
     case MAIL(s) ->
       var (address, s) = receive(s);
-      print("S: received address as FROM: " ^^ address);
+      println("S: received address as FROM: " ^^ address);
       if (valid(address)) {
         var s = send("250 OK", select ACCEPT s);
         rcptLoop(s)
@@ -48,7 +48,7 @@ fun rcptLoop(s) {
   offer(s) {
     case RCPT(s) ->
       var (recipient, s) = receive(s);
-      print("S: received address as TO: " ^^ recipient);
+      println("S: received address as TO: " ^^ recipient);
       if (valid(recipient)) {
         var s = send("250 OK", select ACCEPT s);
         inner(s)
@@ -65,7 +65,7 @@ fun inner(s) {
   offer(s) {
     case RCPT(s) ->
       var (recipient, s) = receive(s);
-      print("S: received address as TO: " ^^ recipient);
+      println("S: received address as TO: " ^^ recipient);
       if (valid(recipient)) {
         var s = send("250 OK", select ACCEPT s);
         inner(s)
@@ -76,7 +76,7 @@ fun inner(s) {
       }
     case DATA(s) ->
       var (message, s) = receive(s);
-      print("S: received message: " ^^ message);
+      println("S: received message: " ^^ message);
       var s = send("250 OK", s);
       outer(s)
   }

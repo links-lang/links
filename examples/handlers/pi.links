@@ -98,12 +98,12 @@ fun schedule(main) {
 }
 
 fun test() {
-  print("M0");
-  fork(fun() { print("M1"); suspend(); print("M1 again") });
-  print("M0 again");
-  fork(fun() { print("M2"); suspend(); print("M2 again") });
+  println("M0");
+  fork(fun() { println("M1"); suspend(); println("M1 again") });
+  println("M0 again");
+  fork(fun() { println("M2"); suspend(); println("M2 again") });
   suspend();
-  print("End of M0")
+  println("End of M0")
 }
 
 # Operations

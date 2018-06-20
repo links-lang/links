@@ -17,15 +17,15 @@ fun yield() {do Yield}
 # example abstract concurrent computation
 sig test : Co({ |e})
 fun test() {
-  print("M1 ");
-  fork(fun () {print("A1 "); yield(); print ("A2 ")});
-  print("M2 ");
+  println("M1 ");
+  fork(fun () {println("A1 "); yield(); println ("A2 ")});
+  println("M2 ");
   yield();
-  fork(fun () {print("B1 "); yield(); print ("B2 ")});
+  fork(fun () {println("B1 "); yield(); println ("B2 ")});
   yield();
-  print("M3 ");
+  println("M3 ");
   yield();
-  print("\n");
+  println("\n");
 }
 
 ## queue interface

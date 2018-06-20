@@ -45,6 +45,6 @@ fun putR(v) {reflect(put(v))}
 # Operation polymorphism is necessary for this example to type check.
 # fun example() {
 #   var st = getR();
-#   print("The initial state is " ^^ intToString(st));
+#   println("The initial state is " ^^ intToString(st));
 #   putR(100)
 # }

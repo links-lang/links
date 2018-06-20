@@ -26,7 +26,7 @@ fun mailServer(s) {
   offer(s) {
     case MAIL(s) ->
       var (address, s) = receive(s);
-      print("S: received address as FROM: " ^^ address);
+      println("S: received address as FROM: " ^^ address);
       if (valid(address)) {
         var s = send("250 OK", select ACCEPT s);
         rcpt(s)
@@ -43,7 +43,7 @@ fun rcpt(s) {
   offer(s) {
     case RCPT(s) ->
       var (address, s) = receive(s);
-      print("S: received address as TO: " ^^ address);
+      println("S: received address as TO: " ^^ address);
       if (valid(address)) {
         var s = send("250 OK", select ACCEPT s);
         rcpt(s)
@@ -53,7 +53,7 @@ fun rcpt(s) {
       }
     case DATA(s) ->
       var (message, s) = receive(s);
-      print("S: received message: " ^^ message);
+      println("S: received message: " ^^ message);
       var s = send("250 OK", s);
       mailServer(s)
   }
@@ -72,18 +72,18 @@ fun mailClient(c) {
   offer (c) {
     case REJECT(c) ->
       var (error, c) = receive(c);
-      print("C: client sent MAIL, server replied: " ^^ error);
+      println("C: client sent MAIL, server replied: " ^^ error);
       wait(select QUIT c);
       ()
 
     case ACCEPT(c) ->
       var (reply, c) = receive(c);
-      print("C: client sent MAIL, server replied: " ^^ reply);
+      println("C: client sent MAIL, server replied: " ^^ reply);
 
       fun sendMessage(c) {
         var c = send("Hello to bravest warriors!", select DATA c);
         var (reply, c) = receive(c);
-        print("C: client sent DATA, server replied: " ^^ reply);
+        println("C: client sent DATA, server replied: " ^^ reply);
         var c = select QUIT c;
         wait(c);
         ()
@@ -93,23 +93,23 @@ fun mailClient(c) {
       offer (c) {
         case REJECT(c) ->
           var (error, c) = receive(c);
-          print("C: client sent RCPT, server replied: " ^^ error);
+          println("C: client sent RCPT, server replied: " ^^ error);
           sendMessage(c)
 
          case ACCEPT(c) ->
            var (reply, c) = receive(c);
-           print("C: client sent RCPT, server replied: " ^^ reply);
+           println("C: client sent RCPT, server replied: " ^^ reply);
 
            # choose more rcpt
            var c = send("bitter@sweet.com", select RCPT c);
            offer(c) {
              case REJECT(c) ->
                var (error, c) = receive(c);
-               print("C: client sent RCPT, server replied: " ^^ error);
+               println("C: client sent RCPT, server replied: " ^^ error);
                sendMessage(c)
              case ACCEPT(c) ->
                var (reply, c) = receive(c);
-               print("C: client sent RCPT, server replied: " ^^ reply);
+               println("C: client sent RCPT, server replied: " ^^ reply);
                sendMessage(c)
            }
       }

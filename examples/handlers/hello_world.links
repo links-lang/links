@@ -6,7 +6,7 @@ fun fooHandler(m) client {
 }
 
 fun foo(n)() client {
-  print(do Foo(n))
+  println(do Foo(n))
 }
 
 fun mainPage(_) {

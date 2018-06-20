@@ -10,7 +10,7 @@ typename Comp(e::Row, a) = () { |e}~> a;
 
 # Simulation of input via prompt
 sig input : (String) {Input:(String) {}-> a |_}~> a
-fun input(s) {print(s); do Input(s)}
+fun input(s) {println(s); do Input(s)}
 
 # Computation summing (simulated) user supplied integers
 sig sumUp : Comp({Input:(String) {}-> Int |_}, Int)
@@ -51,7 +51,7 @@ fun catchFail(m)() {
 sig printResult : (Comp({ |e}, Int)) ~e~> ()
 fun printResult(m) {
   handle(m()) {
-    case Return(x) -> print("Sum is " ^^ intToString(x))
+    case Return(x) -> println("Sum is " ^^ intToString(x))
   }
 }
 
@@ -65,7 +65,7 @@ sig catchResume : (Comp({Fail:(String) {}-> Int |e}, a)) -> Comp({Fail{_} |e}, a
 fun catchResume(m)() {
   handle(m()) {
     case Return(x) -> x
-    case Fail(s,k) -> print("Conversion failure: " ^^ s); k(0)
+    case Fail(s,k) -> println("Conversion failure: " ^^ s); k(0)
   }
 }
 

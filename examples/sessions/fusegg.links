@@ -1,5 +1,5 @@
 var x = link(fork (fun (s) {ignore(send(42, s))}),
-             fork (fun (c) {print(intToString(receive(c).1))}));
-var y = link(fork (fun (c) {print(intToString(receive(c).1))}),
+             fork (fun (c) {println(intToString(receive(c).1))}));
+var y = link(fork (fun (c) {println(intToString(receive(c).1))}),
              fork (fun (s) {ignore(send(42, s))}));
 ()

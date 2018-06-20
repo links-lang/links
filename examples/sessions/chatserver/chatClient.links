@@ -141,7 +141,7 @@ fun connect() {
     debug("sent nick");
     offer(s) {
       case Nope(s) ->
-        print("Nickname '" ^^ nick ^^ "' already taken")
+        println("Nickname '" ^^ nick ^^ "' already taken")
       case Join(s) ->
         var ((topic, nicks, incoming), s) = receive(s);
         debug("received data");

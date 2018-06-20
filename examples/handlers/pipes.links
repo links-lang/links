@@ -5,7 +5,7 @@
 # shallowhandler:
 #
 #   * Sometimes the wild effect appears more than once in a row
-#   
+#
 #   * Sometimes the guardedness check fails when an attempt is made to
 #   unify a row variable with a boxed version of itself
 #
@@ -67,7 +67,7 @@ sig printHandler : (Comp({PutString:(String) {}-> () |e}, a)) {PutString:_ |e}~>
 fun printHandler(m) {
   shallowhandle(m) {
     case Return(x)         -> x
-    case PutString(str,k)  -> { print(str); printHandler(fun() { k(()) }) }
+    case PutString(str,k)  -> { println(str); printHandler(fun() { k(()) }) }
   }
 }
 
@@ -75,7 +75,7 @@ sig printDeepHandler : (Comp({PutString:(String) {}-> () |e}, a)) {PutString:_ |
 fun printDeepHandler(m) {
   handle(m) {
     case Return(x)         -> x
-    case PutString(str,k)  -> { print(str); k(()) }
+    case PutString(str,k)  -> { println(str); k(()) }
   }
 }
 

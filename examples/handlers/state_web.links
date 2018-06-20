@@ -19,10 +19,10 @@ fun put(st) { do Put(st) }
 sig toggle : Comp({Get:Bool,Put:(Bool) {}-> () |_}, ())
 fun toggle() client {
   var bit = do Get;
-  print(boolToString(bit));
+  println(boolToString(bit));
   do Put(not(bit));
   var sbit = do Get;
-  print(boolToString(sbit))
+  println(boolToString(sbit))
 }
 
 # State handler

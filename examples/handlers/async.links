@@ -69,11 +69,11 @@ open handler future(m)(s) {
   }
   case New(k)           -> {
     var i = length(s);
-    #print("Allocating future with ID: " ^^ intToString(i+1));   
+    #println("Allocating future with ID: " ^^ intToString(i+1));   
     k(Future(i+1))((i+1,Nothing) :: s)
   }
   case Put(Future(i),r,k) -> {
-    #print("Putting " ^^ stringOfFuture(Future(i)) ^^ " = " ^^ intToString(r));
+    #println("Putting " ^^ stringOfFuture(Future(i)) ^^ " = " ^^ intToString(r));
     var s = filter(fun(x) { first(x) <> i }, s);
     k(())((i,Just(r)) :: s)
   }
@@ -165,7 +165,7 @@ open handler bfscheduler(m)(f) {
      fput(f,x);
      if (is_empty()) { x }
      else { var t = dequeue(); t(()) }
-   } 
+   }
 }
 
 #
@@ -176,10 +176,10 @@ fun fib(n) {
   else {
     var f1 = fork(fun() { fib(n-1) });
     var f2 = fork(fun() { fib(n-2) });
-    #print(intToString(n) ^^ " => " ^^ stringOfFuture(f1) ^^ " & " ^^ stringOfFuture(f2));
+    #println(intToString(n) ^^ " => " ^^ stringOfFuture(f1) ^^ " & " ^^ stringOfFuture(f2));
     var i = get(f1);
     var j = get(f2);
-    #print("RESULT: fib(" ^^ intToString(n) ^^ ") = " ^^ intToString(i) ^^ " + " ^^ intToString(j));
+    #println("RESULT: fib(" ^^ intToString(n) ^^ ") = " ^^ intToString(i) ^^ " + " ^^ intToString(j));
     i + j
   }
 }
