@@ -964,6 +964,7 @@ module StringLabels = Notfound.StringLabels
 module Sys = Notfound.Sys
 module Unix = Notfound.Unix
 module UnixLabels = Notfound.UnixLabels
+module Printexc = Notfound.Printexc
 
 exception NotFound = Notfound.NotFound
 
