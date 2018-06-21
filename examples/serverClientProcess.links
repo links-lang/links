@@ -12,7 +12,7 @@ fun f() server {
 }
 
 fun g() client {
-  print("!")
+  println("!")
 }
 
 fun dummy() client {

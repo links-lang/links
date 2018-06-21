@@ -856,7 +856,7 @@ let read_hex c =
    confused by all the backslashes and quotes and refuses to translate
    the file.
 *)
-let escape_regexp = Str.regexp "\\\\n\\|\\\\r\\|\\\\t\\|\\\\\"\\|\\\\\\\\\\|\\\\[0-3][0-7][0-7]\\|\\\\[xX][0-9a-fA-F][0-9a-fA-F]"
+let escape_regexp = Str.regexp "\\\\b\\|\\\\n\\|\\\\r\\|\\\\t\\|\\\\\"\\|\\\\\\\\\\|\\\\[0-3][0-7][0-7]\\|\\\\[xX][0-9a-fA-F][0-9a-fA-F]"
 let decode_escapes s =
   let unquoter s =
     (* Yes, the Str interface is stateful.  A pretty poor show.  PCRE
@@ -869,6 +869,7 @@ let decode_escapes s =
         | "\\n" -> "\n"
         | "\\r" -> "\r"
         | "\\t" -> "\t"
+        | "\\b" -> "\b"
         | other when other.[1] = 'x' || other.[1] = 'X' ->
             String.make 1 (read_hex (String.sub other 2 2))
         | other -> String.make 1 (read_octal (String.sub other 1 3)) in

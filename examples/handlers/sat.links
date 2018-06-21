@@ -457,7 +457,7 @@ fun parse(m, input)() {
         case Nothing ->
            switch(run @ maybe(fun() { resume(false, tokens) })) {
              case Just(x) -> x
-             case Nothing -> print("Parsing failed, left: " ^^ implode(tokens)); fail()
+             case Nothing -> println("Parsing failed, left: " ^^ implode(tokens)); fail()
            }
       }
   }

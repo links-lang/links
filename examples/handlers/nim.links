@@ -136,7 +136,7 @@ fun bfs(player,n,k) {
   }
 }
 
-# The perfect vs brute force handler assigns 
+# The perfect vs brute force handler assigns
 # Alice the perfect strategy and Bob the brute force strategy
 #sig pvb : StrategyHandler
 sig pvb : (Comp({Move:(Player,Int) {}-> Int}, Player)) {}~> Player
@@ -317,7 +317,7 @@ fun cpReport(n) {
 }
 
 # Alice cheats against Bob's perfect strategy
-# 
+#
 # (If n < 4 then Alice wins, otherwise Bob wins because Alice
 # cheats.)
 sig cpLose : (Int) {Move{_}}~> Player
@@ -422,7 +422,7 @@ sig scorerecorder : (Comp({Get:GameState,Put:(GameState) {}-> ()|e}, Player)) ->
 open handler scorerecorder(m) {
   case Return(x) -> {
     var s = updateScore(x, get()); # Update the game state
-    put(s);                        # Commit the change    
+    put(s);                        # Commit the change
   }
 }
 
@@ -459,7 +459,7 @@ fun repeatGame3(r)(m)() {
       var _ = m(); ()
     }, (), [1..r])
 }
-			    
+
 
 # (state -<- boardPrinter -<- randomFloat -< strategy(ms,ms)(repeatGame(10, scorerecorder -< game(33))))(initialState)();
 
@@ -490,15 +490,15 @@ fun printBoard(s) {
 	"| " ^^ player ^^ makeWhitespace(11 - strlen(player)) ^^ "|" ^^ makeWhitespace(8 - strlen(wins)) ^^ wins ^^ " |"
     }, sort(s));
 
-    print("/======================\\");
-    print("|     NIM HIGHSCORE    |");
-    print("|======================|");
-    print("|   Player   |  #Wins  |");
-    print("|============|=========|");
-    print(xs !! 0);
-    print("|============|=========|");
-    print(xs !! 1);
-    print("\\======================/");
+    println("/======================\\");
+    println("|     NIM HIGHSCORE    |");
+    println("|======================|");
+    println("|   Player   |  #Wins  |");
+    println("|============|=========|");
+    println(xs !! 0);
+    println("|============|=========|");
+    println(xs !! 1);
+    println("\\======================/");
 }
 
 # Auxiliary function

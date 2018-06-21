@@ -88,9 +88,9 @@ fun unitTest() {
 fun runExamples() {
   ignore(
     examples(fun(t1, t2) {
-      print(t1 ^^ " and " ^^ t2 ^^ " have the same fringe")
+      println(t1 ^^ " and " ^^ t2 ^^ " have the same fringe")
     },
     fun(t1, t2) {
-      print(t1 ^^ " and " ^^ t2 ^^ " have the different fringes")
+      println(t1 ^^ " and " ^^ t2 ^^ " have the different fringes")
     }))
 }

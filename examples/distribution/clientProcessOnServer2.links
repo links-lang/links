@@ -1,6 +1,6 @@
 fun spawnedFn() {
   receive {
-    case Hi() -> print("Received hi on client, sent from server RPC!")
+    case Hi() -> println("Received hi on client, sent from server RPC!")
   }
 }
 

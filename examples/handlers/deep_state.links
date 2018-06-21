@@ -18,7 +18,7 @@ fun get() {do Get}
 sig put : (a) {Put:(a) {}-> ()|_}~> ()
 fun put(p) {do Put(p)}
 
-# Print line operation
+# Println line operation
 sig logVal : (a) {Log:(a) {}-> ()|_}~> ()
 fun logVal(p) {do Log(p)}
 
@@ -45,13 +45,13 @@ fun logState(m)() {
   }
 }
 
-# Prints integers to stdout
+# Printlns integers to stdout
 sig logPrinter : (Comp({Log:(Int) {}-> () |e}, a)) ->
                   Comp({Log{_}            |e}, a)
 fun logPrinter(m)() {
   handle(m()) {
     case Return(x) -> x
-    case Log(p,k)  -> print(intToString(p));
+    case Log(p,k)  -> println(intToString(p));
                       k(())
   }
 }

@@ -2,7 +2,7 @@
 fun serverProc(i) server {
   receive {
     case Hi() ->
-      print("Received 'hi' from client! Number of requests:" ^^ (intToString(i)));
+      println("Received 'hi' from client! Number of requests:" ^^ (intToString(i)));
       serverProc(i + 1)
   }
 }

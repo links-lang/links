@@ -59,9 +59,9 @@ fun drunkToss() client {
 
 fun run() client {
   var xs = allChoices(failure(drunkToss))();
-  print(showList(showList(showToss))(xs));
+  println(showList(showList(showToss))(xs));
   var ys = failure(allChoices(drunkToss))();
-  print(showList(showList(showToss))(ys));
+  println(showList(showList(showToss))(ys));
   ()
   # var zs = allChoicesShallow(toss)();
   # print(showList(showToss)(zs))

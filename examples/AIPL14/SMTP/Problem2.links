@@ -20,19 +20,19 @@ fun mailServer(s) {
   offer(s) {
     case MAIL(s) ->
       var (address, s) = receive(s);
-      print("S: received address as FROM: " ^^ address);
+      println("S: received address as FROM: " ^^ address);
       if (valid(address)) {
         var s = send("250 OK", select ACCEPT s);
         offer(s) {
           case RCPT(s) ->
             var (address, s) = receive(s);
-            print("S: received address as TO: " ^^ address);
+            println("S: received address as TO: " ^^ address);
             if (valid(address)) {
               var s = send("250 OK", select ACCEPT s);
               offer(s) {
                 case DATA(s) ->
                   var (message, s) = receive(s);
-                  print("S: received message: " ^^ message);
+                  println("S: received message: " ^^ message);
                   var s = send("250 OK", s);
                   mailServer(s)
               }

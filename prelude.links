@@ -2,6 +2,10 @@ fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ();
 }
 
+fun println(msg) {
+  print(msg ^^ "\n")
+}
+
 # Don't use a for comprehension to define concatMap, as
 # for comprehensions are desugared into concatMap!
 fun concatMap(f, l) {

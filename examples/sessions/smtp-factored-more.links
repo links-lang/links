@@ -52,7 +52,7 @@ sig smtpClient : (SMTPClient, Message) ~> ()
 fun smtpClient(c, message) {
   var domain = extractDomain(message.sender);
   var c = send(domain, select HELO c);
-  print("C: HELO " ^^ domain);
+  println("C: HELO " ^^ domain);
   offer (c) {
     case REJECT(c) -> smtpClient(c, message)
     case ACCEPT(c) -> sendMail(c, message)
@@ -62,7 +62,7 @@ fun smtpClient(c, message) {
 sig sendMail : (SendMail, Message) ~> ()
 fun sendMail(c, message) {
   var c = send(message.sender, select MAIL c);
-  print("C: MAIL FROM:<" ^^ message.sender ^^ ">");
+  println("C: MAIL FROM:<" ^^ message.sender ^^ ">");
 
   offer (c) {
     case REJECT(c) -> sendMail(c, message)
@@ -76,7 +76,7 @@ fun sendRecipient(c, message) {
     case []    -> error("Messages must be sent to at least one recipient")(c)
     case x::xs ->
       var c = send(x, select RCPT c);
-      print("C: RCPT TO:<" ^^ x ^^ ">");
+      println("C: RCPT TO:<" ^^ x ^^ ">");
       offer(c) {
         case REJECT(c) ->
           # bad recipient
@@ -97,7 +97,7 @@ fun sendBody(c, message) {
       ()
     case x::xs ->
       var c = send(x, select RCPT c);
-      print("C: RCPT TO:<" ^^ x ^^ ">");
+      println("C: RCPT TO:<" ^^ x ^^ ">");
       offer (c) {
         case REJECT(c) ->
           # bad recipient
@@ -162,11 +162,11 @@ fun receiveBody(s, socket) {
       write("DATA\n", socket);
       var bodyMessage = read(socket);
       write("SUBJECT: " ^^ subject ^^ "\n", socket);
-      print("C: SUBJECT: " ^^ subject);
+      println("C: SUBJECT: " ^^ subject);
       write(message ^^ "\n", socket);
-      print("C: " ^^ message);
+      println("C: " ^^ message);
       write("\n.\n", socket);
-      print("C: .");
+      println("C: .");
       var acceptMessage = read(socket);
       receiveMail(s, socket)
     case QUIT(s) -> quit(socket)
@@ -186,7 +186,7 @@ fun checker(socket, s, accept, reject) {
 
 sig quit : (Socket) ~> ()
 fun quit(socket) {
-  print("C: QUIT");
+  println("C: QUIT");
   write("QUIT\n", socket);
   var farewellMessage = read(socket);
   closeSocket(socket)
@@ -197,7 +197,7 @@ fun quit(socket) {
 sig read : (Socket) ~> String
 fun read(socket) {
   switch(readFromSocket(socket)) {
-    case Just(s) -> print("S: " ^^ s); s
+    case Just(s) -> println("S: " ^^ s); s
     case Nothing -> read(socket)
   }
 }

@@ -3,18 +3,18 @@
 fun connectToIRCServer() {
     var rs = connectSocket("irc.freenode.net", 6667);
     var rs = fromJust(rs);
-    print("telnet irc.freenode.net 6667");
+    println("telnet irc.freenode.net 6667");
     readServer(rs, serverTime(), 1);
 
     writeToSocket("NICK LinksBotTest2\n", rs);
-    print("NICK LinksBotTest2");
+    println("NICK LinksBotTest2");
     writeToSocket("USER LinksBotTest2 8 * : Links Test 2\n", rs);
-    print("USER LinksBotTest 8 * : Links Test");
+    println("USER LinksBotTest 8 * : Links Test");
     readServer(rs, serverTime(), 1);
     writeToSocket("JOIN #irchacks\n", rs);
-    print("JOIN #irchacks");
+    println("JOIN #irchacks");
     readServer(rs, serverTime(), 7);
- 
+
     # Test addition:
 
     # 4 + 3
@@ -59,7 +59,7 @@ fun connectToIRCServer() {
     # 123456789 - 123456789
     writeExpressionToSocket("123456789-123456789", rs);
     readServer(rs, serverTime(), 1);
-    
+
     # Test multiplication.
 
     # 4 * 6
@@ -104,7 +104,7 @@ fun connectToIRCServer() {
     # 123456789 / 123456789
     writeExpressionToSocket("123456789/123456789", rs);
     readServer(rs, serverTime(), 1);
-    
+
     # Test invalid expressions, containing LinksCalc.
     writeExpressionToSocket("sweet*pop", rs);
     readServer(rs, serverTime(), 1);
@@ -117,12 +117,12 @@ fun connectToIRCServer() {
 
     # Test a general message that should be ignored by Links bot.
     writeToSocket("PRIVMSG #irchacks : This is a test message. Please do not reply.\n", rs);
-    print("PRIVMSG #irchacks : This is a test message. Please do not reply.");
+    println("PRIVMSG #irchacks : This is a test message. Please do not reply.");
     readServer(rs, serverTime(), 1);
 
     # End of tests.
     writeToSocket("QUIT\n", rs);
-    print("QUIT");
+    println("QUIT");
     closeSocket(rs);
     ()
 }
@@ -130,7 +130,7 @@ fun connectToIRCServer() {
 # Writes LinksCalc: and given expression to socket; prints it.
 fun writeExpressionToSocket(message, rs) {
     writeToSocket("PRIVMSG #irchacks : LinksCalc:" ^^ message ^^ "\n", rs);
-    print("PRIVMSG #irchacks : LinksCalc:" ^^ message)
+    println("PRIVMSG #irchacks : LinksCalc:" ^^ message)
 }
 
 # Reads the server's answer to queries.
@@ -140,11 +140,9 @@ fun readServer(rs, time, timeout) {
   else {
          var copyRs = rs;
          switch(readFromSocket(rs)) {
-           case Just(rs) -> print(rs); readServer(copyRs, time, timeout)
+           case Just(rs) -> println(rs); readServer(copyRs, time, timeout)
            case Nothing  -> readServer(rs, time, timeout)
-          }   
+          }
         }
 }
 connectToIRCServer()
-
-	

@@ -31,7 +31,7 @@ fun mailServer(s) {
   var realServer = fromJust(realServer);
   #var welcomeMessage = readFromSocket(realServer);
   var welcomeMessage = readServer(realServer);
-  print("S: " ^^ welcomeMessage);
+  println("S: " ^^ welcomeMessage);
   start(s, realServer) 
 }
 
@@ -42,10 +42,10 @@ fun start(s, realServer) {
 					writeToSocket("HELO " ^^ domain ^^ "\n", realServer);
 					#var smtpAnswer = readFromSocket(realServer);
           var smtpAnswer = readServer(realServer);
-					print("S: " ^^ smtpAnswer);
+					println("S: " ^^ smtpAnswer);
 					var status = parseServerAnswer(smtpAnswer);
 					if (status <> 250) {
-						<| REJECT s.{print("S: " ^^ smtpAnswer); <|{ {mailServer(s)} }|> } |>
+						<| REJECT s.{println("S: " ^^ smtpAnswer); <|{ {mailServer(s)} }|> } |>
 					}
 					else {
 						<| ACCEPT s.{outer(s, realServer)} |>
@@ -60,20 +60,20 @@ fun outer(s, realServer) {
 					writeToSocket("MAIL FROM:<" ^^ address ^^ ">\n", realServer);
 					#var smtpAnswer = readFromSocket(realServer);
           var smtpAnswer = readServer(realServer);
-					print("S: " ^^ smtpAnswer);
+					println("S: " ^^ smtpAnswer);
 					var status = parseServerAnswer(smtpAnswer);
 					if (status <> 250) {
-						<| REJECT s.{print("S: " ^^ smtpAnswer); <|{ {outer(s, realServer)} }|> } |>
+						<| REJECT s.{println("S: " ^^ smtpAnswer); <|{ {outer(s, realServer)} }|> } |>
 					}
 					else {
 						<| ACCEPT s.{rcptLoop(s, realServer)} |>
 					}
 	}
 	case QUIT -> { 
-	     print("C: QUIT");
+	     println("C: QUIT");
        writeToSocket("QUIT\n", realServer);
        var smtpAnswer = readServer(realServer);
-       print("S: " ^^ smtpAnswer);
+       println("S: " ^^ smtpAnswer);
        closeSocket(realServer); <| s[] |> } 
 
   } |>
@@ -85,10 +85,10 @@ fun rcptLoop(s, realServer) {
 					writeToSocket("RCPT TO:<" ^^ rcpt ^^ ">\n", realServer);
 					#var smtpAnswer = readFromSocket(realServer);
           var smtpAnswer = readServer(realServer);
-					print("S: " ^^ smtpAnswer);
+					println("S: " ^^ smtpAnswer);
 					var status = parseServerAnswer(smtpAnswer);
 					if (status <> 250) {
-						<| REJECT s.{print("S: " ^^ smtpAnswer); <|{ {rcptLoop(s, realServer)} }|> } |>
+						<| REJECT s.{println("S: " ^^ smtpAnswer); <|{ {rcptLoop(s, realServer)} }|> } |>
 					}
 					else {
 						<| ACCEPT s.{inner(s, realServer)} |>
@@ -103,10 +103,10 @@ fun inner(s, realServer) {
 					writeToSocket("RCPT TO:<" ^^ rcpt ^^ ">\n", realServer);
 					#var smtpAnswer = readFromSocket(realServer);
 					var smtpAnswer = readServer(realServer);
-          print("S: " ^^ smtpAnswer);
+          println("S: " ^^ smtpAnswer);
 					var status = parseServerAnswer(smtpAnswer);
 					if (status <> 250) {
-						<| REJECT s.{print("S: " ^^ smtpAnswer); <|{ {inner(s, realServer)} }|> } |>
+						<| REJECT s.{println("S: " ^^ smtpAnswer); <|{ {inner(s, realServer)} }|> } |>
 					}
 					else {
 						<| ACCEPT s.{inner(s, realServer)} |>
@@ -116,16 +116,16 @@ fun inner(s, realServer) {
 	  writeToSocket("DATA\n", realServer);
       #var smtpAnswer = readFromSocket(realServer);
       var smtpAnswer = readServer(realServer);
-      print("S: " ^^ smtpAnswer);   
+      println("S: " ^^ smtpAnswer);   
       writeToSocket("SUBJECT: " ^^ subject ^^ "\n", realServer);
-      print("C: SUBJECT: " ^^ subject);
+      println("C: SUBJECT: " ^^ subject);
       writeToSocket(message ^^ "\n", realServer);
-      print("C: " ^^ message);
+      println("C: " ^^ message);
       writeToSocket("\n.\n", realServer);
-      print("C: .");
+      println("C: .");
       #var smtpAnswer = readFromSocket(realServer);
       var smtpAnswer = readServer(realServer);
-      print("S: " ^^ smtpAnswer);
+      println("S: " ^^ smtpAnswer);
       outer(s, realServer) } 
 
   } |> 
@@ -167,7 +167,7 @@ sig mailClient : (~SMTPServer, (1:String, 2:[String], 3:String, 4:String), !().E
 fun mailClient(c, mail_form, return) {
 
 var domain = extractDomain(mail_form.1);
- <| HELO c.c[domain].{ print("C: HELO " ^^ domain);
+ <| HELO c.c[domain].{ println("C: HELO " ^^ domain);
             <| offer c {
                 case REJECT -> {mailClient(c, mail_form, return)}
                 case ACCEPT -> {outerClient(c, mail_form, return)}
@@ -178,7 +178,7 @@ var domain = extractDomain(mail_form.1);
 
 fun outerClient(c, mail_form, return) {
   var address = mail_form.1;
-  <| MAIL c.c[address].{ print("C: MAIL FROM:<" ^^ mail_form.1 ^^ ">");
+  <| MAIL c.c[address].{ println("C: MAIL FROM:<" ^^ mail_form.1 ^^ ">");
             <| offer c {
                 case REJECT -> {outerClient(c, mail_form, return)}
                 case ACCEPT -> {rcptLoopClient(c, mail_form, return)}
@@ -195,7 +195,7 @@ fun addOtherRecipients(c, mail_form, return) {
    switch(mail_form.2) {
       case []    -> addData(c, mail_form, return) # Recipients exhausted.
       case x::xs ->
-       	<| RCPT c.c[x].{ print("C: RCPT TO:<" ^^ x ^^ ">");
+       	<| RCPT c.c[x].{ println("C: RCPT TO:<" ^^ x ^^ ">");
             <| offer c {
                 case REJECT -> {var mail_form = (mail_form.1, xs, mail_form.3, mail_form.4);
                                 addOtherRecipients(c, mail_form, return)}
@@ -215,7 +215,7 @@ fun addOtherRecipients(c, mail_form, return) {
 fun rcptLoopClient(c, mail_form, return) {
   switch(mail_form.2) {
     case x::xs -> 
-    	<| RCPT c.c[x].{ print("C: RCPT TO:<" ^^ x ^^ ">");
+    	<| RCPT c.c[x].{ println("C: RCPT TO:<" ^^ x ^^ ">");
             <| offer c {
                 case REJECT -> {var mail_form = (mail_form.1, xs, mail_form.3, mail_form.4);
                                 rcptLoopClient(c, mail_form, return)}

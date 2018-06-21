@@ -38,17 +38,17 @@ fun mailServer(s) {
   var socket = connectSocket("smtp.inf.ed.ac.uk", 25);
   var socket = fromJust(socket);
   var welcomeMessage = read(socket);
-  print("S: " ^^ welcomeMessage);
+  println("S: " ^^ welcomeMessage);
   offer(s) {
     case HELO(s) ->
       var (domain, s) = receive(s);
       write("HELO " ^^ domain ^^ "\n", socket);
       var smtpAnswer = read(socket);
-      print("S: " ^^ smtpAnswer);
+      println("S: " ^^ smtpAnswer);
       var status = parseServerAnswer(smtpAnswer);
       if (status <> 250) {
         var s = select REJECT s;
-        print("S: " ^^ smtpAnswer);
+        println("S: " ^^ smtpAnswer);
         mailServer(s)
       } else {
         var s = select ACCEPT s;
@@ -65,11 +65,11 @@ fun receiveMail(s, socket) {
       var (address, s) = receive(s);
       write("MAIL FROM:<" ^^ address ^^ ">\n", socket);
       var smtpAnswer = read(socket);
-      print("S: " ^^ smtpAnswer);
+      println("S: " ^^ smtpAnswer);
       var status = parseServerAnswer(smtpAnswer);
       if (status <> 250) {
         var s = select REJECT s;
-        print("S: " ^^ smtpAnswer);
+        println("S: " ^^ smtpAnswer);
         receiveMail(s, socket)
       } else {
         var s = select ACCEPT s;
@@ -77,10 +77,10 @@ fun receiveMail(s, socket) {
       }
 
     case QUIT(s) ->
-      print("C: QUIT");
+      println("C: QUIT");
       write("QUIT\n", socket);
       var smtpAnswer = read(socket);
-      print("S: " ^^ smtpAnswer);
+      println("S: " ^^ smtpAnswer);
       closeSocket(socket);
       s
   }
@@ -93,11 +93,11 @@ fun receiveRecipient(s, socket) {
       var (rcpt, s) = receive(s);
       write("RCPT TO:<" ^^ rcpt ^^ ">\n", socket);
       var smtpAnswer = read(socket);
-      print("S: " ^^ smtpAnswer);
+      println("S: " ^^ smtpAnswer);
       var status = parseServerAnswer(smtpAnswer);
       if (status <> 250) {
         var s = select REJECT s;
-        print("S: " ^^ smtpAnswer);
+        println("S: " ^^ smtpAnswer);
         receiveRecipient(s, socket)
       } else {
         var s = select ACCEPT s;
@@ -113,11 +113,11 @@ fun receiveBody(s, socket) {
       var (rcpt, s) = receive(s);
       write("RCPT TO:<" ^^ rcpt ^^ ">\n", socket);
       var smtpAnswer = read(socket);
-      print("S: " ^^ smtpAnswer);
+      println("S: " ^^ smtpAnswer);
       var status = parseServerAnswer(smtpAnswer);
       if (status <> 250) {
         var s = select REJECT s;
-        print("S: " ^^ smtpAnswer);
+        println("S: " ^^ smtpAnswer);
         receiveBody(s, socket)
       } else {
         var s = select ACCEPT s;
@@ -128,15 +128,15 @@ fun receiveBody(s, socket) {
       var (message, s) = receive(s);
       write("DATA\n", socket);
       var smtpAnswer = read(socket);
-      print("S: " ^^ smtpAnswer);
+      println("S: " ^^ smtpAnswer);
       write("SUBJECT: " ^^ subject ^^ "\n", socket);
-      print("C: SUBJECT: " ^^ subject);
+      println("C: SUBJECT: " ^^ subject);
       write(message ^^ "\n", socket);
-      print("C: " ^^ message);
+      println("C: " ^^ message);
       write("\n.\n", socket);
-      print("C: .");
+      println("C: .");
       var smtpAnswer = read(socket);
-      print("S: " ^^ smtpAnswer);
+      println("S: " ^^ smtpAnswer);
       receiveMail(s, socket)
    }
 }
@@ -172,7 +172,7 @@ sig mailClient : (~SMTPServer, Message) ~> ()
 fun mailClient(c, message) {
   var domain = extractDomain(message.sender);
   var c = send(domain, select HELO c);
-  print("C: HELO " ^^ domain);
+  println("C: HELO " ^^ domain);
   offer (c) {
     case REJECT(c) ->
       mailClient(c, message)
@@ -185,7 +185,7 @@ fun mailClient(c, message) {
 sig sendMail : (~ReceiveMail, Message) ~> ()
 fun sendMail(c, message) {
   var c = send(message.sender, select MAIL c);
-  print("C: MAIL FROM:<" ^^ message.sender ^^ ">");
+  println("C: MAIL FROM:<" ^^ message.sender ^^ ">");
 
   offer (c) {
     case REJECT(c) ->
@@ -201,7 +201,7 @@ fun sendRecipient(c, message) {
     case []    -> error("Messages must be sent to at least one recipient")(c)
     case x::xs ->
       var c = send(x, select RCPT c);
-      print("C: RCPT TO:<" ^^ x ^^ ">");
+      println("C: RCPT TO:<" ^^ x ^^ ">");
       offer(c) {
         case REJECT(c) ->
           # ignore rejection
@@ -223,7 +223,7 @@ fun sendBody(c, message) {
       ()
     case x::xs ->
       var c = send(x, select RCPT c);
-      print("C: RCPT TO:<" ^^ x ^^ ">");
+      println("C: RCPT TO:<" ^^ x ^^ ">");
       offer (c) {
         case REJECT(c) ->
           # ignore rejection

@@ -88,8 +88,8 @@ fun strategy(player, s)(m)() {
   open handle(m) {
     case Return(x)     -> x
     case Move(p, n, k) ->
-      print("player: " ^^ showPlayer(player));
-      print("p: " ^^ showPlayer(p));
+      println("player: " ^^ showPlayer(player));
+      println("p: " ^^ showPlayer(p));
       if(p == player) {s(n, k)}
       else {
         var m = move(p, n);
