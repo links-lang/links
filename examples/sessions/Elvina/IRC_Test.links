@@ -127,7 +127,7 @@ fun connectToIRCServer() {
     ()
 }
 
-# Writes LinksCalc: and given expression to socket; printlns it.
+# Writes LinksCalc: and given expression to socket; prints it.
 fun writeExpressionToSocket(message, rs) {
     writeToSocket("PRIVMSG #irchacks : LinksCalc:" ^^ message ^^ "\n", rs);
     println("PRIVMSG #irchacks : LinksCalc:" ^^ message)
