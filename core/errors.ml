@@ -113,7 +113,8 @@ let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
   try
     Lazy.force e
   with exc ->
-    Printexc.print_backtrace stderr;
+    (if Printexc.print_backtraces
+     then Printexc.print_backtrace stderr);
     output_string stream (format_exception exc ^ "\n");
     flush stream;
     default exc

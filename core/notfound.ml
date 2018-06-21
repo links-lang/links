@@ -230,6 +230,10 @@ struct
     try getenv name
     with Not_found -> not_found "Sys.getenv" name
 
+  let getenv_opt name =
+    try Some (getenv name)
+    with NotFound _ -> None
+
   exception Unknown_environment_variable of string
   (* Windows shell identifier names: [][A-Za-z0-9#~.,$'()*+?@_`{} -]+
      Portable Unix shell identifier names: $[A-Za-z_][A-Za-z0-9_]*
@@ -255,8 +259,6 @@ struct
     Str.full_split shell_var_regexp string
     |> List.map (function | Str.Delim v -> getenv (normalize_env_var v) | Str.Text v -> v)
     |> String.concat ""
-
-
 end
 
 module Unix =
@@ -363,4 +365,27 @@ struct
   let getnameinfo x y =
     try getnameinfo x y
     with Not_found -> not_found "Unix.getnameinfo" x
+end
+
+module Printexc: sig
+  include module type of Printexc
+  val print_backtraces : bool
+end = struct
+  include Printexc
+
+  (* Checks whether printing of backtraces has been enabled via
+     OCAMLRUNPARAM or CAMLRUNPARAM *)
+  let print_backtraces =
+    let options =
+      match Sys.getenv_opt "OCAMLRUNPARAM",
+            Sys.getenv_opt "CAMLRUNPARAM"
+      with
+      | None, None -> []
+      | Some opts, None
+      | None, Some opts ->
+         String.split_on_char ',' opts
+      | Some opts, Some opts' ->
+         String.split_on_char ',' (String.concat "," [opts; opts'])
+    in
+    List.mem "b" options
 end
