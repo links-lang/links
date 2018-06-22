@@ -1628,7 +1628,7 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
        (* TODO: expand applications? *)
       | `Application _ -> t
 
-type unifyResult = UnifySuccess | UnifyFailure of (Unify.error * SourceCode.pos)
+type unify_result = UnifySuccess | UnifyFailure of (Unify.error * SourceCode.pos)
 
 let raise_unify ~(handle:Gripers.griper) ~pos error t1 t2 =
   begin
