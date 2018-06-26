@@ -462,6 +462,14 @@ struct
         if pred x then (f x)::(filter_map pred f xs) else
           (filter_map pred f xs)
 
+  let rec map_filter f pred = function
+    | [] -> []
+    | x :: xs ->
+       let y = f x in
+       if pred y
+       then y :: (map_filter f pred xs)
+       else (map_filter f pred xs)
+
   let print_list xs =
     let rec print_list_inner = function
         | [] -> ""
@@ -482,6 +490,12 @@ struct
     | [], [] -> []
     | x :: xs, y :: ys -> (x, y) :: zip' xs ys
     | _, _ -> raise Lists_length_mismatch
+
+  let rec transpose : 'a list list -> 'a list list = function
+    | [] -> []
+    | [] :: xss -> transpose xss
+    | (x :: xs) :: xss ->
+       (x :: (List.map List.hd xss)) :: transpose (xs :: List.map List.tl xss)
 end
 include ListUtils
 

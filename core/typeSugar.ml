@@ -1565,29 +1565,48 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
                  match field_spec with
                  | `Present t ->
                     begin match TypeUtils.concrete_type t with
-                    | `Function (domain, effs, codomain) ->
-                       (* TODO FIXME we need to be careful here. Unary
-                          operations must be treated specially because
-                          unary tuples are treated differently from
-                          nullary and n-ary ones in the type
-                          checker. *)
-                       let is_unary =
-                         StringMap.size (fst3 (TypeUtils.extract_row domain)) = 1
-                       in
-                       let pats =
-                         let pats = concat_map (unwrap_at name) pats in
-                         if is_unary then pats
-                         else [`Tuple pats, SourceCode.dummy_pos]
-                       in
-                       let domain =
-                         if is_unary then List.hd (TypeUtils.arg_types t)
-                         else domain
-                       in
-                       let domain = cpt pats domain in
+                    | `Function (_, effs, codomain) ->
+                       (* Idea: For each operation `name' extract its
+                          patterns `ps' from `Effect(name, ps, _)' and
+                          arrange each such ps as a row in and n x p
+                          matrix, where n is the number of cases for
+                          `name' and p is |ps|. Afterwards, point-wise
+                          close the patterns by recursively calling
+                          close_pattern_type on each column. *)
                        let t =
-                         if is_unary then Types.make_function_type [domain] effs codomain
-                         else `Function (domain, effs, codomain)
+                       (* Construct an p x n matrix (i.e. the
+                          transposition of p x n matrix as it is easier
+                          to map column-wise) *)
+                         let pmat : pattern list list =
+                           let non_empty ps = ps <> [] in
+                           let rows =
+                             map_filter
+                               (unwrap_at name)
+                               non_empty
+                               pats
+                           in
+                           transpose rows
+                         in
+                         (* Annotate each pattern with its inferred type *)
+                         let annot_pmat =
+                           try
+                             let annotate ps t = (ps, t) in
+                             let types = TypeUtils.arg_types t in
+                             List.map2 annotate pmat types
+                           with
+                             Invalid_argument _ -> failwith "Inconsistent pattern type"
+                         in
+                         (* Recursively close each subpattern. This
+                            yields the domain type for the operation. *)
+                         let domain : Types.datatype list =
+                           List.map
+                             (fun (ps, t) -> cpt ps t)
+                             annot_pmat
+                         in
+                       (* Reconstruct the type for the whole pattern *)
+                         Types.make_function_type domain effs codomain
                        in
+                       (* Bind name |-> Pre(t) *)
                        StringMap.add name (`Present t) env
                     | _ ->
                        StringMap.add name (`Present t) env

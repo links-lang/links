@@ -261,6 +261,21 @@ ignore(fun(m) { handle(m()) { case Op1((_,y),k) -> k(y) case Op2((x,y,z),k) -> k
 stdout : () : ()
 flags : --enable-handlers -e
 
+Operation parameter pattern-matching (7)
+fun(m) { handle(m()) { case Move(Alice, _) -> 'A' case Move(Bob, _) -> 'B' case Move(_,_) -> 'U' case Return(x) -> x } }
+stdout : fun : (() {Move:([|Alice|Bob|_|]) {}-> _|c}~> Char) {Move{_}|c}~> Char
+flags : --enable-handlers -e
+
+Operation parameter pattern-matching (8)
+handle(do Move(Alice)) { case Move(Alice, _) -> 'A' case Move(Bob, _) -> 'B' case Move(_,_) -> 'U' case Return(x) -> x }
+stdout : 'A' : Char
+flags : --enable-handlers -e
+
+Operation parameter pattern-matching (9)
+handle(do Move(John)) { case Move(Alice, _) -> 'A' case Move(Bob, _) -> 'B' case Move(_,_) -> 'U' case Return(x) -> x }
+stdout : 'U' : Char
+flags : --enable-handlers -e
+
 Pattern-matching on continuation parameter (1)
 ignore(fun(m) { handle(m()) { case Op(_) -> 0 case Return(x) -> x } })
 stdout : () : ()
