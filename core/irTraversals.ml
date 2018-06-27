@@ -746,43 +746,43 @@ struct
 end
 
 (** Applies a type visitor to all types occuring in an IR program**)
-let irTypeModVisitor tyenv typeVisitor =
+let ir_type_mod_visitor tyenv type_visitor =
   object
     inherit Transform.visitor(tyenv) as super
           method! value = function
             | `Inject (name, value, datatype) ->
-               let (datatype, _) = typeVisitor#typ datatype in
+               let (datatype, _) = type_visitor#typ datatype in
                super#value (`Inject (name, value, datatype))
             | `TAbs (tyvars, value) ->
-               let tyvars = List.map (fun arg -> fst (typeVisitor#quantifier arg)) tyvars in
+               let tyvars = List.map (fun arg -> fst (type_visitor#quantifier arg)) tyvars in
                super#value (`TAbs (tyvars, value))
             | `TApp (value, tyargs) ->
-               let tyargs = List.map (fun arg -> fst (typeVisitor#type_arg arg)) tyargs in
+               let tyargs = List.map (fun arg -> fst (type_visitor#type_arg arg)) tyargs in
                super#value (`TApp (value, tyargs))
             | `Coerce (var, datatype) ->
-               let (datatype, _) = typeVisitor#typ datatype in
+               let (datatype, _) = type_visitor#typ datatype in
                super#value (`Coerce (var, datatype))
             | other -> super#value other
 
           method! special = function
             | `Wrong datatype ->
-               let (datatype, _) = typeVisitor#typ datatype in
+               let (datatype, _) = type_visitor#typ datatype in
                super#special (`Wrong datatype)
             | `Table (v1, v2, v3, (t1, t2, t3)) ->
-               let (t1, _) = typeVisitor#typ t1 in
-               let (t2, _) = typeVisitor#typ t2 in
-               let (t3, _) = typeVisitor#typ t3 in
+               let (t1, _) = type_visitor#typ t1 in
+               let (t2, _) = type_visitor#typ t2 in
+               let (t3, _) = type_visitor#typ t3 in
                super#special (`Table (v1, v2, v3, (t1, t2, t3)))
             | `Query (opt, computation, datatype) ->
-               let (datatype, _) = typeVisitor#typ datatype in
+               let (datatype, _) = type_visitor#typ datatype in
                super#special (`Query (opt, computation, datatype))
             | `DoOperation (name, vallist, datatype) ->
-               let (datatype, _) = typeVisitor#typ datatype in
+               let (datatype, _) = type_visitor#typ datatype in
                super#special (`DoOperation (name, vallist, datatype))
             | other -> super#special other
 
           method! binder b =
-            let (newtype, _) = typeVisitor#typ (Var.type_of_binder b) in
+            let (newtype, _) = type_visitor#typ (Var.type_of_binder b) in
             let b = Var.update_type newtype b in
             super#binder b
 
@@ -795,7 +795,7 @@ let irTypeModVisitor tyenv typeVisitor =
 module CheckForCycles =
   struct
 
-    let checkCycles =
+    let check_cycles =
       object (o: 'self_type)
          inherit Types.Transform.visitor as super
          val mu_vars = Utility.IntSet.empty (* Int Utility.IntSet*)
@@ -828,7 +828,7 @@ module CheckForCycles =
 
 
     let program tyenv p =
-      let p, _, _ = (irTypeModVisitor tyenv checkCycles)#program p in
+      let p, _, _ = (ir_type_mod_visitor tyenv check_cycles)#program p in
       p
 
   end
@@ -838,7 +838,7 @@ module CheckForCycles =
 module ElimTypeAliases =
   struct
 
-    let elimTypeAliases =
+    let elim_type_aliases =
       object (o)
         inherit Types.Transform.visitor as super
 
@@ -850,7 +850,7 @@ module ElimTypeAliases =
 
 
     let program tyenv p =
-      let p, _, _ = (irTypeModVisitor tyenv elimTypeAliases)#program p in
+      let p, _, _ = (ir_type_mod_visitor tyenv elim_type_aliases)#program p in
       p
 
   end
