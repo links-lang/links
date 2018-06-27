@@ -163,6 +163,201 @@ let is_present =
 
 type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
 
+let unbox_quantifiers = (!)
+let box_quantifiers = ref
+
+(* Generation of fresh type variables *)
+let type_variable_counter = ref 0
+let fresh_raw_variable : unit -> int =
+  function () ->
+    incr type_variable_counter; !type_variable_counter
+
+module type TRANSFORM =
+sig
+  class visitor :
+  object ('self_type)
+    method primitive : primitive -> (primitive * 'self_type)
+    method typ : typ -> (typ * 'self_type)
+    method row : row -> (row * 'self_type)
+    method row_var : row_var -> (row_var * 'self_type)
+    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
+    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
+    method meta_var : meta_var -> (meta_var * 'self_type)
+    method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
+    method field_spec : field_spec -> (field_spec * 'self_type)
+    method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
+    method quantifier : quantifier -> (quantifier * 'self_type)
+    method type_arg : type_arg -> (type_arg * 'self_type)
+  end
+end
+
+
+
+module Transform : TRANSFORM =
+struct
+  class visitor  =
+  object ((o : 'self_type))
+
+    val var_subst = IntMap.empty
+
+    method primitive p = (p,o)
+    method row :  row -> (row * 'self_type) = fun (fsp, rv, d) ->
+      let (fsp', o) = o#field_spec_map fsp in
+      let (rv', o) = o#row_var rv in
+        ((fsp', rv', d), o)
+
+
+    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) = fun point ->
+      let (newContent, o) =
+        begin match Unionfind.find point with
+        | `Recursive (id, t) ->
+           let fresh_id = fresh_raw_variable () in
+           let o = {< var_subst = IntMap.add id fresh_id var_subst >} in
+           let (t', o) = o#typ t in
+           `Recursive (fresh_id, t'), o
+        | `Body t ->
+           let (t', o) = o#typ t in `Body t', o
+        | `Var (id, sk, fd) as original ->
+           match IntMap.find_opt id var_subst with
+           | Some id' -> `Var (id', sk, fd), o
+           | None -> original, o
+        end in
+      (Unionfind.fresh newContent, o)
+
+    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type) = fun point ->
+      let (newContent, o) =
+        begin match Unionfind.find point with
+        | `Closed -> `Closed, o
+        | `Recursive (id, r) ->
+           let fresh_id = fresh_raw_variable () in
+           let o = {< var_subst = IntMap.add id fresh_id var_subst >} in
+           let (r', o) = o#row r in
+           `Recursive (fresh_id, r'), o
+        | `Body r ->
+           let (r', o) = o#row r in `Body r', o
+        | `Var (id, sk, fd) as original ->
+           match IntMap.find_opt id var_subst with
+           | Some id' -> `Var (id', sk, fd), o
+           | None -> original, o
+        end in
+      Unionfind.fresh newContent, o
+
+    method row_var : row_var -> (row_var * 'self_type) = o#meta_row_var
+
+    method meta_var : meta_var -> (meta_var * 'self_type) = function
+      | `Type  mtv -> let (mtv', o) = o#meta_type_var mtv in (`Type mtv', o)
+      | `Row mrv -> let (mrv', o) =  o#meta_row_var mrv in (`Row mrv', o)
+      | `Presence mpv -> let (mpv', o) = o#meta_presence_var mpv in (`Presence mpv', o)
+
+    method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) = fun point ->
+      let (newVar, o) = begin match Unionfind.find point with
+                                  | `Body fs ->
+                                     let (fs',o) = o#field_spec fs in (`Body fs', o)
+                                  | `Var (id,sk,fd) -> (`Var (id,sk,fd), o) end in
+                                (Unionfind.fresh newVar, o)
+    method field_spec :  field_spec -> (field_spec * 'self_type) = function
+      | `Present t ->
+         let (t',o) = o#typ t in
+           (`Present t', o)
+      | `Absent -> (`Absent, o)
+      | `Var mpv ->
+         let (mpv', o) = o#meta_presence_var mpv in
+           (`Var mpv', o)
+
+    method field_spec_map :  field_spec_map -> (field_spec_map * 'self_type) = fun map ->
+      Utility.StringMap.fold (fun k v (new_map, o) ->
+        let (fs, o) = o#field_spec v in
+          (StringMap.add k fs new_map, o)
+       ) map (StringMap.empty, o)
+
+   method quantifier (i, sk, mv) =
+     let (mv', o) = o#meta_var mv in
+       ((i, sk, mv'),o)
+
+   method type_arg = function
+     | `Type t ->
+        let (t', o) = o#typ t in (`Type t', o)
+     | `Row r ->
+        let (r', o) = o#row r in (`Row r', o)
+     | `Presence p ->
+        let (p', o) = o#field_spec p in (`Presence p', o)
+
+   method typ = function
+     | `Not_typed ->
+        (`Not_typed, o)
+     | `Primitive p ->
+        let (p', o) = o#primitive p in (`Primitive p', o)
+     | `Function (at, r, rt) ->
+        let (at', o) = o#typ at in
+        let (r', o) = o#row r in
+        let (rt', o) = o#typ rt in
+          (`Function (at', r', rt'), o)
+     | `Lolli (at, r, rt) ->
+        let (at', o) = o#typ at in
+        let (r', o) = o#row r in
+        let (rt', o) = o#typ rt in
+          (`Lolli (at', r', rt'), o)
+     | `Record r ->
+        let (r', o) = o#row r in
+          (`Record r', o)
+     | `Variant r ->
+        let (r', o) = o#row r in
+          (`Variant r', o)
+     | `Effect r ->
+        let (r', o) = o#row r in
+          (`Effect r', o)
+     | `Table (t1, t2, t3) ->
+        let (t1', o) = o#typ t1 in
+        let (t2', o) = o#typ t2 in
+        let (t3', o) = o#typ t3 in
+          (`Table (t1', t2', t3'), o)
+     | `Alias ((name, args), t) ->
+        let (args', o) = List.fold_right (fun arg (acc_args, o) ->
+            let (arg', o) = o#type_arg arg in
+            (arg' :: acc_args, o)
+          ) args ([],o) in
+        let (t',o) = o#typ t in
+          (`Alias ((name, args'), t'), o)
+     | `Application (abst, args) ->
+        let (args', o) = List.fold_right (fun arg (acc_args, o) ->
+            let (arg', o) = o#type_arg arg in
+            (arg' :: acc_args, o)
+          ) args ([], o) in
+          (`Application (abst, args'), o)
+     | `MetaTypeVar mtv ->
+        let (mtv', o) = o#meta_type_var mtv in
+          (`MetaTypeVar mtv', o)
+     | `ForAll (rqs,t) ->
+         let (qs', o) = List.fold_right (fun q (acc_qs, o) ->
+            let (q',o) = o#quantifier q in
+            (q' :: acc_qs,o)
+          ) (unbox_quantifiers rqs) ([],o) in
+         let (t', o) = o#typ t in
+         (`ForAll (box_quantifiers qs', t'), o)
+     | `Input (t1, t2) ->
+         let (t1', o) = o#typ t1 in
+         let (t2', o) = o#typ t2 in
+         (`Input (t1', t2'), o)
+     | `Output (t1, t2) ->
+         let (t1', o) = o#typ t1 in
+         let (t2', o) = o#typ t2 in
+         (`Output (t1', t2'), o)
+     | `Dual t ->
+        let (t', o) = o#typ t in
+        (`Dual t', o)
+     | `Select r ->
+         let (r', o) = o#row r in
+        (`Select r', o)
+     | `Choice r ->
+         let (r', o) = o#row r in
+        (`Select r', o)
+     | `End -> (`End, o)
+
+
+  end
+end
+
+
 (* TODO: consider abstracting some of this subkind manipulation code *)
 
 (* base type stuff *)
@@ -587,11 +782,7 @@ let type_var_number = var_of_quantifier
 
 module Env = Env.String
 
-(* Generation of fresh type variables *)
-let type_variable_counter = ref 0
-let fresh_raw_variable : unit -> int =
-  function () ->
-    incr type_variable_counter; !type_variable_counter
+
 
 (* type ops stuff *)
   let empty_field_env = FieldEnv.empty
@@ -718,8 +909,7 @@ let row_with (label, f : string * field_spec) (field_env, row_var, dual : row) =
 
 (*** end of type_basis ***)
 
-let unbox_quantifiers = (!)
-let box_quantifiers = ref
+
 
 (** Remove any redundant top-level `MetaTypeVars from a type.
     Additionally, collapse adjacent quantifiers. *)
@@ -2356,160 +2546,3 @@ let make_pure_function_type : datatype list -> datatype -> datatype
 let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->
   make_function_type [] effs rtype
-
-
-module type TRANSFORM =
-sig
-  class visitor :
-  object ('self_type)
-    method primitive : primitive -> (primitive * 'self_type)
-    method typ : typ -> (typ * 'self_type)
-    method row : row -> (row * 'self_type)
-    method row_var : row_var -> (row_var * 'self_type)
-    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
-    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
-    method meta_var : meta_var -> (meta_var * 'self_type)
-    method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
-    method field_spec : field_spec -> (field_spec * 'self_type)
-    method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
-    method quantifier : quantifier -> (quantifier * 'self_type)
-    method type_arg : type_arg -> (type_arg * 'self_type)
-  end
-end
-
-
-
-module Transform : TRANSFORM =
-struct
-  class visitor  =
-  object ((o : 'self_type))
-    method primitive p = (p,o)
-    method row :  row -> (row * 'self_type) = fun (fsp, rv, d) ->
-      let (fsp', o) = o#field_spec_map fsp in
-      let (rv', o) = o#row_var rv in
-        ((fsp', rv', d), o)
-    method row_var : row_var -> (row_var * 'self_type) = fun  point   -> (point, o)
-    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) = fun point ->
-      let (newVar, o) = begin match Unionfind.find point with
-                                  | `Recursive (id, t) ->
-                                     let (r',o) = o#typ t in (`Recursive (id, r'), o)
-                                  | `Body t ->
-                                     let (r',o) = o#typ t in (`Body r', o)
-                                  | `Var (id,sk,fd) -> (`Var (id,sk,fd), o) end in
-                                (Unionfind.fresh newVar, o)
-    method meta_row_var point = let (newVar, o) = begin match Unionfind.find point with
-                                  | `Recursive (id, r) ->
-                                     let (r',o) = o#row r in (`Recursive (id, r'), o)
-                                  | `Body r ->
-                                     let (r',o) = o#row r in (`Body r', o)
-                                  | `Closed -> (`Closed, o)
-                                  | `Var (id,sk,fd) -> (`Var (id,sk,fd), o) end in
-                                (Unionfind.fresh newVar, o)
-    method meta_var : meta_var -> (meta_var * 'self_type) = function
-      | `Type  mtv -> let (mtv', o) = o#meta_type_var mtv in (`Type mtv', o)
-      | `Row mrv -> let (mrv', o) =  o#meta_row_var mrv in (`Row mrv', o)
-      | `Presence mpv -> let (mpv', o) = o#meta_presence_var mpv in (`Presence mpv', o)
-    method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) = fun point ->
-      let (newVar, o) = begin match Unionfind.find point with
-                                  | `Body fs ->
-                                     let (fs',o) = o#field_spec fs in (`Body fs', o)
-                                  | `Var (id,sk,fd) -> (`Var (id,sk,fd), o) end in
-                                (Unionfind.fresh newVar, o)
-    method field_spec :  field_spec -> (field_spec * 'self_type) = function
-      | `Present t ->
-         let (t',o) = o#typ t in
-           (`Present t', o)
-      | `Absent -> (`Absent, o)
-      | `Var mpv ->
-         let (mpv', o) = o#meta_presence_var mpv in
-           (`Var mpv', o)
-    method field_spec_map :  field_spec_map -> (field_spec_map * 'self_type) = fun map ->
-      Utility.StringMap.fold (fun k v (new_map, o) ->
-        let (fs, o) = o#field_spec v in
-          (StringMap.add k fs new_map, o)
-       ) map (StringMap.empty, o)
-   method quantifier (i, sk, mv) =
-     let (mv', o) = o#meta_var mv in
-       ((i, sk, mv'),o)
-   method type_arg = function
-     | `Type t ->
-        let (t', o) = o#typ t in (`Type t', o)
-     | `Row r ->
-        let (r', o) = o#row r in (`Row r', o)
-     | `Presence p ->
-        let (p', o) = o#field_spec p in (`Presence p', o)
-
-   method typ = function
-     | `Not_typed ->
-        (`Not_typed, o)
-     | `Primitive p ->
-        let (p', o) = o#primitive p in (`Primitive p', o)
-     | `Function (at, r, rt) ->
-        let (at', o) = o#typ at in
-        let (r', o) = o#row r in
-        let (rt', o) = o#typ rt in
-          (`Function (at', r', rt'), o)
-     | `Lolli (at, r, rt) ->
-        let (at', o) = o#typ at in
-        let (r', o) = o#row r in
-        let (rt', o) = o#typ rt in
-          (`Lolli (at', r', rt'), o)
-     | `Record r ->
-        let (r', o) = o#row r in
-          (`Record r', o)
-     | `Variant r ->
-        let (r', o) = o#row r in
-          (`Variant r', o)
-     | `Effect r ->
-        let (r', o) = o#row r in
-          (`Effect r', o)
-     | `Table (t1, t2, t3) ->
-        let (t1', o) = o#typ t1 in
-        let (t2', o) = o#typ t2 in
-        let (t3', o) = o#typ t3 in
-          (`Table (t1', t2', t3'), o)
-     | `Alias ((name, args), t) ->
-        let (args', o) = List.fold_right (fun arg (acc_args, o) ->
-            let (arg', o) = o#type_arg arg in
-            (arg' :: acc_args, o)
-          ) args ([],o) in
-        let (t',o) = o#typ t in
-          (`Alias ((name, args'), t'), o)
-     | `Application (abst, args) ->
-        let (args', o) = List.fold_right (fun arg (acc_args, o) ->
-            let (arg', o) = o#type_arg arg in
-            (arg' :: acc_args, o)
-          ) args ([], o) in
-          (`Application (abst, args'), o)
-     | `MetaTypeVar mtv ->
-        let (mtv', o) = o#meta_type_var mtv in
-          (`MetaTypeVar mtv', o)
-     | `ForAll (rqs,t) ->
-         let (qs', o) = List.fold_right (fun q (acc_qs, o) ->
-            let (q',o) = o#quantifier q in
-            (q' :: acc_qs,o)
-          ) (unbox_quantifiers rqs) ([],o) in
-         let (t', o) = o#typ t in
-         (`ForAll (box_quantifiers qs', t'), o)
-     | `Input (t1, t2) ->
-         let (t1', o) = o#typ t1 in
-         let (t2', o) = o#typ t2 in
-         (`Input (t1', t2'), o)
-     | `Output (t1, t2) ->
-         let (t1', o) = o#typ t1 in
-         let (t2', o) = o#typ t2 in
-         (`Output (t1', t2'), o)
-     | `Dual t ->
-        let (t', o) = o#typ t in
-        (`Dual t', o)
-     | `Select r ->
-         let (r', o) = o#row r in
-        (`Select r', o)
-     | `Choice r ->
-         let (r', o) = o#row r in
-        (`Select r', o)
-     | `End -> (`End, o)
-
-
-  end
-end
