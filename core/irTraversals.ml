@@ -744,10 +744,10 @@ struct
     let p, _, _ = (eliminator tyenv envs)#computation p in
       p
 end
-(*
+
 (** Applies a type visitor to all types occuring in an IR program**)
 let irTypeModVisitor tyenv typeVisitor =
-  object (o)
+  object
     inherit Transform.visitor(tyenv) as super
           method! value = function
             | `Inject (name, value, datatype) ->
@@ -791,7 +791,7 @@ let irTypeModVisitor tyenv typeVisitor =
 
 
 
-
+(* Debugging traversal that checks if we have eliminated all cyclic recursive types *)
 module CheckForCycles =
   struct
 
@@ -834,71 +834,6 @@ module CheckForCycles =
   end
 
 
-(** Removes `Dual and `MetaVar `Body, collapses adjacent quantifiers **)
-module NormaliseTypes =
-  struct
-
-    let elimBodyFromTypes =
-      object (o)
-        inherit Types.Transform.visitor as super
-
-        method! typ t = (TypeUtils.concrete_type t, o)
-      end
-
-
-    let program tyenv p =
-      let p, _, _ = (irTypeModVisitor tyenv elimBodyFromTypes)#program p in
-      p
-
-  end
-
-module ElimRecursiveTypeCycles =
-  struct
-
-    class elimCyclesFromTypes mu =
-      object (o)
-        inherit Types.Transform.visitor as super
-
-
-        val mu_vars = mu (* Int Utility.IntSet*)
-
-        method! meta_type_var point = match Unionfind.find point with
-          | `Recursive (id, t) ->
-             if Utility.IntSet.mem id mu_vars then
-               let newvar = `Var (id, (`Any, `Any), `Rigid) in
-               (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
-               (Unionfind.fresh newvar, o)
-             else
-               let new_mu_vars = Utility.IntSet.add id mu_vars in
-               let o' =  {< mu_vars=new_mu_vars >} in
-               (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
-               let (t', _) = o'#typ t in (Unionfind.fresh (`Recursive (id, t')), o)
-          | other -> super#meta_type_var point
-
-        method! meta_row_var point = match Unionfind.find point with
-          | `Recursive (id, t) ->
-             if Utility.IntSet.mem id mu_vars then
-               let newvar = `Var (id, (`Any, `Any), `Rigid) in
-               (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
-               (Unionfind.fresh newvar, o)
-             else
-               let new_mu_vars = Utility.IntSet.add id mu_vars in
-               let o' =  {< mu_vars=new_mu_vars >} in
-               (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
-               let (t', _) = o'#row t in (Unionfind.fresh (`Recursive (id, t')), o)
-          | other -> super#meta_row_var point
-
-
-      end
-
-
-    let program tyenv p =
-      let elimRecursiveTypeCyclesVisitor = new elimCyclesFromTypes Utility.IntSet.empty in
-      let p, _, _ = (irTypeModVisitor tyenv elimRecursiveTypeCyclesVisitor)#program p in
-      p
-
-
-  end
 
 module ElimTypeAliases =
   struct
@@ -908,7 +843,7 @@ module ElimTypeAliases =
         inherit Types.Transform.visitor as super
 
         method! typ = function
-          | `Alias ((name, args), typ) ->
+          | `Alias ((_, _), typ) ->
              o#typ typ
           | other -> super#typ other
       end
@@ -919,4 +854,3 @@ module ElimTypeAliases =
       p
 
   end
-*)

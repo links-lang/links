@@ -26,7 +26,7 @@ let only_if_set setting =
 let is_interactive  = Settings.get_value Basicsettings.interacting
 let perform_optimisations = not is_interactive && Settings.get_value Basicsettings.optimise
 
-(*let print_program _ p = (Debug.print (Ir.program_to_string p));p*)
+(*let print_program _ p = (Debug.print (Ir.string_of_program p));p*)
 
 let perform_pipeline pipeline tyenv p =
   List.fold_left (fun p transformer -> transformer tyenv p) p pipeline

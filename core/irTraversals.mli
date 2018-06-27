@@ -58,7 +58,6 @@ module Transform : TRANSFORM
 
 module Inline : PROGTRANSFORM
 module ElimDeadDefs : PROGTRANSFORM
-(*module ElimRecursiveTypeCycles : PROGTRANSFORM
+
 module CheckForCycles : PROGTRANSFORM
-module NormaliseTypes : PROGTRANSFORM
-module ElimTypeAliases : PROGTRANSFORM*)
+module ElimTypeAliases : PROGTRANSFORM
