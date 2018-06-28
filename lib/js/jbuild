@@ -2,6 +2,5 @@
 
 (install
   ((section lib)
-   (files ((jslib.js as js/jslib.js)
-           (regex.js as js/regex.js)))
+   (files ((jslib.js as js/jslib.js)))
    (package links)))
