@@ -816,7 +816,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "domSetPropertyFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> String",
+  (`Client, datatype "(DomNode, String, String) ~> ()",
   IMPURE);
 
   "domHasAttribute",
@@ -832,7 +832,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "domSetAttributeFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> String",
+  (`Client, datatype "(DomNode, String, String) ~> ()",
   IMPURE);
 
   "domGetStyleAttrFromRef",
@@ -844,7 +844,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "domSetStyleAttrFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> String",
+  (`Client, datatype "(DomNode, String, String) ~> ()",
   IMPURE);
 
   (* Section:  Navigation for DomNodes *)
