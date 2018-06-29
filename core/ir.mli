@@ -30,8 +30,6 @@ type 'a var_map = 'a Utility.intmap
 
 type language = string
 
-val var_of_binder : binder -> var
-
 type constant = Constant.constant
   [@@deriving show]
 

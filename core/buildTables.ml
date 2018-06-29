@@ -258,12 +258,9 @@ let bindings : IrTraversals.Transform.environment -> intset -> Ir.binding list -
     ScopesAndContDefs.bindings tyenv Tables.scopes Tables.cont_defs bs;
     ClosureTable.bindings tyenv bound_vars Tables.cont_vars bs
 
-(*  Even though this function acts via side effects only, the original program
-    is returned unmodified to be an IR transformer *)
-let program : intset -> IrTraversals.Transform.environment -> Ir.program -> Ir.program =
+let program : intset -> IrTraversals.Transform.environment -> Ir.program -> unit =
   fun bound_vars tyenv program ->
     FunDefs.program Tables.fun_defs program;
     ScopesAndContDefs.primitives Tables.scopes;
     ScopesAndContDefs.program tyenv Tables.scopes Tables.cont_defs program;
-    ClosureTable.program tyenv bound_vars Tables.cont_vars program;
-    program
+    ClosureTable.program tyenv bound_vars Tables.cont_vars program

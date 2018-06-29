@@ -34,7 +34,7 @@ type 'a var_map = 'a Utility.intmap
 type language = string
   [@@deriving show]
 
-let var_of_binder (x, _) = x
+let var_of_binder = Var.var_of_binder
 
 type constant = Constant.constant
   [@@deriving show]

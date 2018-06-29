@@ -783,7 +783,6 @@ let type_var_number = var_of_quantifier
 module Env = Env.String
 
 
-
 (* type ops stuff *)
   let empty_field_env = FieldEnv.empty
   let closed_row_var = Unionfind.fresh `Closed
@@ -908,7 +907,6 @@ let row_with (label, f : string * field_spec) (field_env, row_var, dual : row) =
   FieldEnv.add label f field_env, row_var, dual
 
 (*** end of type_basis ***)
-
 
 
 (** Remove any redundant top-level `MetaTypeVars from a type.

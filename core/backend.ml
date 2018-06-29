@@ -28,10 +28,13 @@ let perform_optimisations = not is_interactive && Settings.get_value Basicsettin
 
 (*let print_program _ p = (Debug.print (Ir.string_of_program p));p*)
 
-let perform_pipeline pipeline tyenv p =
+let run pipeline tyenv p =
   List.fold_left (fun p transformer -> transformer tyenv p) p pipeline
 
 let measure name func tyenv p = Performance.measure name (uncurry func) (tyenv, p)
+
+let perform_for_side_effects side_effecting_transformer tyenv p =
+  side_effecting_transformer tyenv p;p
 
 module Pipelines =
 struct
@@ -50,9 +53,9 @@ struct
 
 
     let main_pipeline = [
-        only_if perform_optimisations (measure "optimise" (perform_pipeline optimisation_pipeline));
+        only_if perform_optimisations (measure "optimise" (run optimisation_pipeline));
         Closures.program Lib.primitive_vars;
-        BuildTables.program Lib.primitive_vars;
+        perform_for_side_effects (BuildTables.program Lib.primitive_vars);
         (*only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_program;
         only_if_set Basicsettings.Ir.typecheck_ir (perform_pipeline typechecking_pipeline);*)
       ]
@@ -61,4 +64,4 @@ end
 
 
 let transform_program tyenv p =
-  perform_pipeline Pipelines.main_pipeline tyenv p
+  run Pipelines.main_pipeline tyenv p

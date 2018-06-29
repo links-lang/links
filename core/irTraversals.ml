@@ -641,7 +641,7 @@ struct
               List.fold_right
                 (fun (f, _, _, _) (fs, o) ->
                    let f, o = o#binder f in
-                     (IntSet.add (var_of_binder f) fs, o#initrec f))
+                     (IntSet.add (Var.var_of_binder f) fs, o#initrec f))
                 defs
                 (IntSet.empty, o) in
 
@@ -656,9 +656,9 @@ struct
                             (x::xs, o))
                        xs
                        ([], o) in
-                   let o = o#set_rec (var_of_binder f) in
+                   let o = o#set_rec (Var.var_of_binder f) in
                    let body, _, o = o#computation body in
-                   let o = o#set_mutrec (var_of_binder f) in
+                   let o = o#set_mutrec (Var.var_of_binder f) in
                      (f, (tyvars, xs, body), z, location)::defs, o)
                 ([], o)
                 defs in
