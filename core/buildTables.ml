@@ -32,7 +32,7 @@ module ScopesAndContDefs =
 struct
   class visitor tyenv scopes cont_defs =
   object (_)
-    inherit Ir.Transform.visitor(tyenv) as super
+    inherit IrTraversals.Transform.visitor(tyenv) as super
 
     method bind_scope xb =
       Hashtbl.add scopes (Var.var_of_binder xb) (Var.scope_of_binder xb)
@@ -75,7 +75,7 @@ module FreeVars =
 struct
   class visitor tenv bound_vars =
   object (o)
-    inherit Ir.Transform.visitor(tenv) as super
+    inherit IrTraversals.Transform.visitor(tenv) as super
 
     val free_vars = IntSet.empty
     val bound_vars = bound_vars
@@ -154,7 +154,7 @@ module ClosureTable =
 struct
   class visitor tyenv bound_vars cont_vars =
   object (o)
-    inherit Ir.Transform.visitor(tyenv) as super
+    inherit IrTraversals.Transform.visitor(tyenv) as super
 
     val globals = bound_vars
     val cont_vars = cont_vars
@@ -251,15 +251,15 @@ struct
     let _ = (new visitor tyenv bound_vars cont_vars)#computation e in ()
 end
 
-let bindings : Ir.Transform.environment -> intset -> Ir.binding list -> unit =
+let bindings : IrTraversals.Transform.environment -> intset -> Ir.binding list -> unit =
   fun tyenv bound_vars bs ->
     FunDefs.bindings Tables.fun_defs bs;
     ScopesAndContDefs.primitives Tables.scopes;
     ScopesAndContDefs.bindings tyenv Tables.scopes Tables.cont_defs bs;
     ClosureTable.bindings tyenv bound_vars Tables.cont_vars bs
 
-let program : Ir.Transform.environment -> intset -> Ir.program -> unit =
-  fun tyenv bound_vars program ->
+let program : intset -> IrTraversals.Transform.environment -> Ir.program -> unit =
+  fun bound_vars tyenv program ->
     FunDefs.program Tables.fun_defs program;
     ScopesAndContDefs.primitives Tables.scopes;
     ScopesAndContDefs.program tyenv Tables.scopes Tables.cont_defs program;
