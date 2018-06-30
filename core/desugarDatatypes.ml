@@ -117,7 +117,6 @@ struct
       match t with
         | `TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
                                 with NotFound _ -> raise (UnexpectedFreeVar s))
-        | `QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | `Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
                        effect_row var_env alias_env e,

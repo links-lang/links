@@ -37,14 +37,6 @@ object(self)
     {< shadow_table = shadow_table >}
 
   method! bindingnode = function
-    | `QualifiedImport ns ->
-        (* Try to resolve the import; if not, add to ICs list *)
-        let lookup_ref = List.hd ns in
-        (try
-           let _ = StringMap.find lookup_ref shadow_table in
-           self
-         with
-           _ -> self#add_import_candidate lookup_ref)
     | `Module (n, bs) ->
         let new_path = path @ [n] in
         let fqn = lst_to_path new_path in

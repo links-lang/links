@@ -487,4 +487,4 @@ flags : --enable-handlers -e
 Examples
 ./examples/handlers/tests.links
 stdout : () : ()
-flags : --enable-handlers -m --path=examples/handlers
+ignore : Depends on modules (flags : --enable-handlers -m --path=examples/handlers)

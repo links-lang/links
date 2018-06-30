@@ -158,8 +158,6 @@ class map =
       function
       | `Constant _x -> let _x = o#constant _x in `Constant _x
       | `Var _x -> let _x = o#name _x in `Var _x
-      | `QualifiedVar _xs ->
-          let _xs = o#list (fun o -> o#name) _xs in `QualifiedVar _xs
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                            let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
       | `HandlerLit hnlit ->
@@ -462,6 +460,10 @@ class map =
 
     method name : name -> name = o#string
 
+    method qualified_name : QualifiedName.t -> QualifiedName.t = function
+    | `Ident name -> `Ident (o#string name)
+    | `Dot (path, name) -> `Dot (o#qualified_name path, o#string name)
+
     method logical_binop : logical_binop -> logical_binop =
       function | `And -> `And | `Or -> `Or
 
@@ -530,10 +532,6 @@ class map =
       function
       | `TypeVar _x ->
           let _x = o#known_type_variable _x in `TypeVar _x
-      | `QualifiedTypeApplication (ns, args) ->
-          let ns = o#list (fun o -> o#name) ns in
-          let args = o#list (fun o -> o#type_arg) args in
-          `QualifiedTypeApplication (ns, args)
       | `Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
@@ -647,9 +645,6 @@ class map =
           let _x_i3 = o#name _x_i3 in
           let _x_i4 = o#datatype' _x_i4 in
           `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
-      | `QualifiedImport _xs ->
-          let _xs = o#list (fun o -> o#name) _xs in
-          `QualifiedImport _xs
       | `Type ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 =
@@ -826,8 +821,6 @@ class fold =
       function
       | `Constant _x -> let o = o#constant _x in o
       | `Var _x -> let o = o#name _x in o
-      | `QualifiedVar _xs ->
-          let o = o#list (fun o -> o#name) _xs in o
       | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
       | `HandlerLit hnlit ->
 	 let o = o#handlerlit hnlit in o
@@ -1092,6 +1085,12 @@ class fold =
 
     method name : name -> 'self_type = o#string
 
+    method qualified_name : QualifiedName.t -> 'self_type = function
+    | `Ident name -> o#string name
+    | `Dot (path, name) ->
+       let o = o#qualified_name path in
+       o#string name
+
     method logical_binop : logical_binop -> 'self_type =
       function | `And -> o | `Or -> o
 
@@ -1155,10 +1154,6 @@ class fold =
       function
       | `TypeVar _x ->
           let o = o#known_type_variable _x in o
-      | `QualifiedTypeApplication (ns, args) ->
-          let o = o#list (fun o -> o#name) ns in
-          let o = o#list (fun o -> o#type_arg) args in
-          o
       | `Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
@@ -1262,9 +1257,6 @@ class fold =
           let o = o#name _x_i2 in
           let o = o#name _x_i3 in
           let o = o#datatype' _x_i4 in o
-      | `QualifiedImport _xs ->
-          let o = o#list (fun o -> o#name) _xs in
-          o
       | `Type ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o =
@@ -1462,9 +1454,6 @@ class fold_map =
       function
       | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
       | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
-      | `QualifiedVar _xs ->
-          let (o, _xs) = o#list (fun o n -> o#name n) _xs in
-          (o, (`QualifiedVar _xs))
       | `FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
@@ -1809,6 +1798,15 @@ class fold_map =
 
     method name : name -> ('self_type * name) = o#string
 
+    method qualified_name : QualifiedName.t -> ('self_type * QualifiedName.t) = function
+    | `Ident name ->
+       let (o, name) = o#string name in
+       o, `Ident name
+    | `Dot (path, name) ->
+       let (o, path) = o#qualified_name path in
+       let (o, name) = o#string name in
+       o, `Dot (path, name)
+
     method logical_binop : logical_binop -> ('self_type * logical_binop) =
       function | `And -> (o, `And) | `Or -> (o, `Or)
 
@@ -1884,10 +1882,6 @@ class fold_map =
       function
       | `TypeVar _x ->
           let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
-      | `QualifiedTypeApplication (ns, args) ->
-          let (o, ns) = o#list (fun o -> o#name) ns in
-          let (o, args) = o#list (fun o -> o#type_arg) args in
-          (o, `QualifiedTypeApplication (ns, args))
       | `Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
@@ -2008,9 +2002,6 @@ class fold_map =
           let (o, _x_i3) = o#name _x_i3 in
           let (o, _x_i4) = o#datatype' _x_i4
           in (o, (`Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
-      | `QualifiedImport _xs ->
-          let (o, _xs) = o#list (fun o n -> o#name n) _xs in
-          (o, `QualifiedImport _xs)
       | `Type ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =

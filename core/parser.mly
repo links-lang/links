@@ -306,9 +306,6 @@ nofun_declaration:
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
-| links_module                                                 { $1 }
-| links_open                                                   { $1 }
-
 alien_datatype:
 | var COLON datatype SEMICOLON                                 { let (name, name_pos) = $1 in
                                                                  ((name, None, name_pos), datatype $3) }
@@ -317,18 +314,10 @@ alien_datatypes:
 | alien_datatype                                               { [$1] }
 | alien_datatype alien_datatypes                               { $1 :: $2 }
 
-links_module:
-| MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
-                                                                 `Module (mod_name, $3), name_pos }
-
 alien_block:
 | ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let language = $2 in
                                                                  let library_name = $3 in
                                                                  `AlienBlock (language, library_name, $5), pos () }
-
-module_name:
-| CONSTRUCTOR                                                  { $1 , pos () }
-
 fun_declarations:
 | fun_declarations fun_declaration                             { $1 @ [$2] }
 | fun_declaration                                              { [$1] }
@@ -419,24 +408,8 @@ constant:
 | FALSE                                                        { `Bool false, pos() }
 | CHAR                                                         { `Char $1   , pos() }
 
-qualified_name:
-| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
-
-qualified_name_inner:
-| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
-| VARIABLE                                                     { [$1] }
-
-qualified_type_name:
-| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
-
-qualified_type_name_inner:
-| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
-| CONSTRUCTOR                                                  { [$1] }
-
-
 
 atomic_expression:
-| qualified_name                                               { `QualifiedVar $1, pos() }
 | VARIABLE                                                     { `Var $1, pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
@@ -903,10 +876,6 @@ record_labels:
 | record_label COMMA record_labels                             { $1 :: $3 }
 | record_label                                                 { [$1] }
 
-links_open:
-| OPEN qualified_type_name                                     { `QualifiedImport $2, pos () }
-| OPEN CONSTRUCTOR                                             { `QualifiedImport [$2], pos () }
-
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
 | exp SEMICOLON                                                { `Exp $1, pos () }
@@ -917,16 +886,11 @@ binding:
 | typedecl SEMICOLON                                           { $1 }
 | typed_handler_binding                                        { let (b, hnlit, pos) = $1 in
                                                                  `Handler (b, hnlit, None), pos }
-| links_module                                                 { $1 }
 | alien_block                                                  { $1 }
-| links_open                                                   { $1 }
 
 bindings:
 | binding                                                      { [$1] }
 | bindings binding                                             { $1 @ [$2] }
-
-moduleblock:
-| LBRACE declarations RBRACE                                   { $2 }
 
 block:
 | LBRACE block_contents RBRACE                                 { $2 }
@@ -1054,7 +1018,6 @@ session_datatype:
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
-| LPAREN qualified_type_name RPAREN                            { [`QualifiedTypeApplication ($2, [])] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
 primary_datatype:

@@ -45,6 +45,13 @@ let dummy_position = SourceCode.dummy_pos
 
 let pp_position : Format.formatter -> position -> unit = fun fmt _ -> Utility.format_omission fmt
 
+(* Identifiers *)
+module QualifiedName = struct
+  type t =
+    [ `Ident of name          (* identifier name *)
+    | `Dot of t * string ] (* access to a module component *)
+end
+
 type binder = name * Types.datatype option * position
     [@@deriving show]
 
@@ -106,7 +113,6 @@ type fieldconstraint = [ `Readonly | `Default ]
 
 type datatype =
   [ `TypeVar         of known_type_variable
-  | `QualifiedTypeApplication of (name list * type_arg list)
   | `Function        of datatype list * row * datatype
   | `Lolli           of datatype list * row * datatype
   | `Mu              of name * datatype
@@ -220,8 +226,7 @@ and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
 and declared_linearity = [ `Lin | `Unl ]
 and phrasenode = [
 | `Constant         of constant
-| `Var              of name
-| `QualifiedVar     of name list
+| `Var              of name (* QualifiedName.t *)
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 | `HandlerLit       of handlerlit
 (* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
@@ -289,7 +294,6 @@ and bindingnode = [
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Handler of binder * handlerlit * datatype' option
 | `Foreign of binder * name * name * name * datatype' (* Binder, raw function name, language, external file, type *)
-| `QualifiedImport of name list
 | `Type    of name * (quantifier * tyvar option) list * datatype'
 | `Infix
 | `Exp     of phrase
@@ -487,7 +491,6 @@ struct
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | `DoOperation (_, ps, _) -> union_map phrase ps
-    | `QualifiedVar _ -> empty
     | `TryInOtherwise (p1, pat, p2, p3, _ty) -> union (union_map phrase [p1; p2; p3]) (pattern pat)
     | `Raise -> empty
   and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
@@ -505,7 +508,6 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | `Foreign ((name, _, _), _, _, _, _) -> singleton name, empty
-    | `QualifiedImport _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
