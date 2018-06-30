@@ -386,7 +386,7 @@ nofun_declaration:
                                                                  set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
-| typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
+| typedecl SEMICOLON                                           { $1 }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -394,15 +394,8 @@ alien_datatype:
 alien_datatypes:
 | alien_datatype+                                              { $1 }
 
-links_module:
-| MODULE module_name moduleblock                               { with_pos $loc($2) (Module ($2, $3)) }
-
 alien_block:
 | ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (AlienBlock ($2, $3, $5)) }
-
-module_name:
-| CONSTRUCTOR                                                  { $1 }
-
 fun_declarations:
 | fun_declaration+                                             { $1 }
 
@@ -484,18 +477,7 @@ constant:
 | FALSE                                                        { Constant.Bool false }
 | CHAR                                                         { Constant.Char $1    }
 
-qualified_name:
-| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
-
-qualified_name_inner:
-| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
-| VARIABLE                                                     { [$1]     }
-
-qualified_type_name:
-| CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
-
 atomic_expression:
-| qualified_name                                               { with_pos $loc (QualifiedVar $1) }
 | VARIABLE                                                     { with_pos $loc (Var          $1) }
 | constant                                                     { with_pos $loc (Constant     $1) }
 | parenthesized_thing                                          { $1 }
@@ -914,16 +896,13 @@ lens_expression:
 record_labels:
 | separated_list(COMMA, record_label)                          { $1 }
 
-links_open:
-| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (QualifiedImport $2) }
-
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
-| typedecl SEMICOLON | links_module | alien_block
+| typedecl SEMICOLON | alien_block
 | links_open SEMICOLON                                         { $1 }
 
 mutual_binding_block:
@@ -938,9 +917,6 @@ bindings:
 | mutual_binding_block                                         { $1        }
 | bindings mutual_binding_block                                { $1 @ $2   }
 | bindings binding                                             { $1 @ [$2] }
-
-moduleblock:
-| LBRACE declarations RBRACE                                   { $2 }
 
 block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
@@ -1032,8 +1008,6 @@ session_datatype:
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
 | END                                                          { Datatype.End             }
 | primary_datatype                                             { $1                       }
-| qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
-| qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }

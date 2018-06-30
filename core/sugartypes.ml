@@ -35,6 +35,14 @@ module Binder = struct
       )
 end
 
+(* Identifiers *)
+module QualifiedName = struct
+  type t =
+    [ `Ident of name          (* identifier name *)
+    | `Dot of t * string ] (* access to a module component *)
+end
+
+
 (* type variables *)
 type tyvar = Types.quantifier
   [@@deriving show]
@@ -71,7 +79,6 @@ type fieldconstraint = Readonly | Default
 module Datatype = struct
   type t =
     | TypeVar         of known_type_variable
-    | QualifiedTypeApplication of name list * type_arg list
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
     | Mu              of name * with_pos
@@ -187,8 +194,7 @@ and iterpatt =
   | Table of Pattern.with_pos * phrase
 and phrasenode =
   | Constant         of Constant.t
-  | Var              of name
-  | QualifiedVar     of name list
+  | Var              of name (* QualifiedName.t *)
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
   | HandlerLit       of handlerlit
@@ -272,7 +278,6 @@ and bindingnode =
   | Handler of Binder.with_pos * handlerlit * datatype' option
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
-  | QualifiedImport of name list
   | Typenames of typename list
   | Infix
   | Exp     of phrase
@@ -473,7 +478,6 @@ struct
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | DoOperation (_, ps, _) -> union_map phrase ps
-    | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
     | Raise -> empty
@@ -497,7 +501,6 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Foreign (bndr, _, _, _, _) -> singleton (Binder.to_name bndr), empty
-    | QualifiedImport _
     | Typenames _
     | Infix -> empty, empty
     | Exp p -> empty, phrase p

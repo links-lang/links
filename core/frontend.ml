@@ -42,15 +42,8 @@ struct
       let program = DesugarAlienBlocks.transform_alien_blocks program in
       (* Module-y things *)
       let (program, ffi_files) =
-        if ModuleUtils.contains_modules program then
-          if Settings.get_value Basicsettings.modules then
-            let prog_with_deps = Chaser.add_dependencies program in
-            let ffi_files = ModuleUtils.get_ffi_files prog_with_deps in
-            (DesugarModules.desugarModules prog_with_deps, ffi_files)
-          else
-            failwith ("File contains modules, but modules not enabled. Please set " ^
-              "modules flag to true, or run with -m.")
-      else (program, ModuleUtils.get_ffi_files program) in
+        (program, ModuleUtils.get_ffi_files program)
+      in
       let _program = CheckXmlQuasiquotes.checker#program program in
       let () = DesugarSessionExceptions.settings_check program in
       ((( ExperimentalExtensions.check#program
