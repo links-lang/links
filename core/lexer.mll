@@ -304,6 +304,7 @@ rule lex ctxt nl = parse
   | ".."                                { DOTDOT }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
+  | '\\'                                { BACKSLASH }
   | '!'                                 { BANG }
   | '?'                                 { QUESTION }
   | "%" def_id as var                   { PERCENTVAR var }

@@ -2134,15 +2134,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
     let e, t, usages =
       match (expr : phrasenode) with
-        | `Var v            ->
-            (
+        | `Var q            ->
+           (
+             let v = QualifiedName.unqualify q in
               try
                 let (tyargs, t) = Utils.instantiate context.var_env v in
                   if Settings.get_value Instantiate.quantified_instantiation then
                     let tyvars = Types.quantifiers_of_type_args tyargs in
-                      tabstr(tyvars, tappl (`Var v, tyargs)), t, StringMap.singleton v 1
+                      tabstr(tyvars, tappl (`Var q, tyargs)), t, StringMap.singleton v 1
                   else
-                    tappl (`Var v, tyargs), t, StringMap.singleton v 1
+                    tappl (`Var q, tyargs), t, StringMap.singleton v 1
               with
                   Errors.UndefinedVariable _msg ->
                     Gripers.die pos ("Unknown variable " ^ v ^ ".")
@@ -3842,13 +3843,15 @@ and type_cp (context : context) = fun (p, pos) ->
            unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
          `Unquote (bindings, e), t, usage_builder u
     | `Grab ((c, _), None, p) ->
-       let (_, t, _) = type_check context (`Var c, pos) in
+       let q = QualifiedName.of_name c in
+       let (_, t, _) = type_check context (`Var q, pos) in
        let ctype = `Alias (("EndQuery", []), `Input (Types.unit_type, `End)) in
        unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
        `Grab ((c, Some (ctype, [])), None, p), pt, use c u
     | `Grab ((c, _), Some (x, _, binder_pos), p) ->
-       let (_, t, _) = type_check context (`Var c, pos) in
+       let q = QualifiedName.of_name c in
+       let (_, t, _) = type_check context (`Var q, pos) in
        let a = Types.fresh_type_variable (`Any, `Any) in
        let s = Types.fresh_session_variable `Any in
        let ctype = `Input (a, s) in
@@ -3861,7 +3864,8 @@ and type_cp (context : context) = fun (p, pos) ->
            Types.make_type_unl a
          else
            Gripers.non_linearity pos uses x a;
-       let (_, grab_ty, _) = type_check context (`Var "receive", pos) in
+       let q' = QualifiedName.of_name "receive" in
+       let (_, grab_ty, _) = type_check context (`Var q', pos) in
        let tyargs =
          match Types.concrete_type grab_ty with
          | `ForAll (qs, _t) ->
@@ -3877,13 +3881,15 @@ and type_cp (context : context) = fun (p, pos) ->
          | _ -> assert false in
        `Grab ((c, Some (ctype, tyargs)), Some (x, Some a, binder_pos), p), pt, use c (StringMap.remove x u)
     | `Give ((c, _), None, p) ->
-       let (_, t, _) = type_check context (`Var c, pos) in
+       let q = QualifiedName.of_name c in
+       let (_, t, _) = type_check context (`Var q, pos) in
        let ctype = `Output (Types.unit_type, `End) in
        unify ~pos:pos ~handle:(Gripers.cp_give c) (t, ctype);
        let (p, t, u) = type_cp (unbind_var context c) p in
        `Give ((c, Some (ctype, [])), None, p), t, use c u
     | `Give ((c, _), Some e, p) ->
-       let (_, t, _) = type_check context (`Var c, pos) in
+       let q = QualifiedName.of_name c in
+       let (_, t, _) = type_check context (`Var q, pos) in
        let (e, t', u) = type_check context e in
        let s = Types.fresh_session_variable `Any in
        let ctype = `Output (t', s) in
@@ -3891,7 +3897,8 @@ and type_cp (context : context) = fun (p, pos) ->
              (t, ctype);
        let (p, t, u') = with_channel c s (type_cp (bind_var context (c, s)) p) in
 
-       let (_, give_ty, _) = type_check context (`Var "send", pos) in
+       let q' = QualifiedName.of_name "send" in
+       let (_, give_ty, _) = type_check context (`Var q', pos) in
        let tyargs =
          match Types.concrete_type give_ty with
          | `ForAll (qs, _t) ->
@@ -3907,11 +3914,13 @@ and type_cp (context : context) = fun (p, pos) ->
          | _ -> assert false in
        `Give ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
     | `GiveNothing (c, _, binder_pos) ->
-       let _, t, _ = type_check context (`Var c, binder_pos) in
+       let q = QualifiedName.of_name c in
+       let _, t, _ = type_check context (`Var q, binder_pos) in
        unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
        `GiveNothing (c, Some t, binder_pos), t, StringMap.singleton c 1
     | `Select ((c, _, binder_pos), label, p) ->
-       let (_, t, _) = type_check context (`Var c, pos) in
+       let q = QualifiedName.of_name c in
+       let (_, t, _) = type_check context (`Var q, pos) in
        let s = Types.fresh_session_variable `Any in
        let r = Types.make_singleton_open_row (label, `Present s) (`Any, `Session) in
        let ctype = `Select r in
@@ -3920,7 +3929,8 @@ and type_cp (context : context) = fun (p, pos) ->
        let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) p) in
        `Select ((c, Some ctype, binder_pos), label, p), t, use c u
     | `Offer ((c, _, binder_pos), branches) ->
-       let (_, t, _) = type_check context (`Var c, pos) in
+       let q = QualifiedName.of_name c in
+       let (_, t, _) = type_check context (`Var q, pos) in
        (*
        let crow = Types.make_empty_open_row (`Any, `Session) in
        let ctype = `Choice crow in
@@ -3939,14 +3949,15 @@ and type_cp (context : context) = fun (p, pos) ->
        let u = usage_compat (List.map (fun (_, _, u) -> u) branches) in
        `Offer ((c, Some t, binder_pos), List.map (fun (x, _, _) -> x) branches), t', use c u
     | `Link ((c, _, cpos), (d, _, dpos)) ->
-      let (_, tc, uc) = type_check context (`Var c, pos) in
-      let (_, td, ud) = type_check context (`Var d, pos) in
-        unify ~pos:pos ~handle:Gripers.cp_link_session
-          (tc, Types.fresh_type_variable (`Any, `Session));
-        unify ~pos:pos ~handle:Gripers.cp_link_session
-          (td, Types.fresh_type_variable (`Any, `Session));
-        unify ~pos:pos ~handle:Gripers.cp_link_dual (Types.dual_type tc, td);
-        `Link ((c, Some tc, cpos), (d, Some td, dpos)), Types.make_endbang_type, merge_usages [uc; ud]
+       let (q, q') = QualifiedName.(of_name c, of_name d) in
+       let (_, tc, uc) = type_check context (`Var q, pos) in
+       let (_, td, ud) = type_check context (`Var q', pos) in
+       unify ~pos:pos ~handle:Gripers.cp_link_session
+         (tc, Types.fresh_type_variable (`Any, `Session));
+       unify ~pos:pos ~handle:Gripers.cp_link_session
+         (td, Types.fresh_type_variable (`Any, `Session));
+       unify ~pos:pos ~handle:Gripers.cp_link_dual (Types.dual_type tc, td);
+       `Link ((c, Some tc, cpos), (d, Some td, dpos)), Types.make_endbang_type, merge_usages [uc; ud]
     | `Comp ((c, _, binder_pos), left, right) ->
        let s = Types.fresh_session_variable `Any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in

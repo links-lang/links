@@ -48,8 +48,30 @@ let pp_position : Format.formatter -> position -> unit = fun fmt _ -> Utility.fo
 (* Identifiers *)
 module QualifiedName = struct
   type t =
-    [ `Ident of name          (* identifier name *)
-    | `Dot of t * string ] (* access to a module component *)
+    [ `Ident of string     (* identifier name x *)
+    | `Dot of string * t ] (* access to a module component A.B.C.x *)
+    [@@deriving show]
+
+  type path = string list
+
+  (* A.B.C.D == (A.(B.(C.D))) *)
+  let rec of_path = function
+    | []  -> assert false
+    | [x] -> `Ident x
+    | x :: xs -> `Dot (x, of_path xs)
+
+  let of_name x = `Ident x
+
+  let rec unqualify = function
+    | `Ident name -> name
+    | `Dot (_, path) -> unqualify path
+
+  let rec split = function
+    | `Ident x -> [x]
+    | `Dot (x, q) -> x :: split q
+
+  let canonical_name q =
+    String.concat "\\" (split q)
 end
 
 type binder = name * Types.datatype option * position
@@ -226,7 +248,7 @@ and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
 and declared_linearity = [ `Lin | `Unl ]
 and phrasenode = [
 | `Constant         of constant
-| `Var              of name (* QualifiedName.t *)
+| `Var              of QualifiedName.t
 | `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
 | `HandlerLit       of handlerlit
 (* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
@@ -393,7 +415,7 @@ struct
     | _ -> empty
 
   let rec phrase (p, _ : phrase) : StringSet.t = match p with
-    | `Var v -> singleton v
+    | `Var q -> singleton (QualifiedName.unqualify q)
     | `Section (`Name n) -> singleton n
 
     | `Constant _

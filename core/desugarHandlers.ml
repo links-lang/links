@@ -139,8 +139,7 @@ let rec phrase_of_pattern : pattern -> phrase
       | `Record (name_pats, pat_opt) -> `RecordLit (List.map (fun (n,p) -> (n, phrase_of_pattern p)) name_pats, opt_map phrase_of_pattern pat_opt)
       | `Tuple ps                    -> `TupleLit (List.map phrase_of_pattern ps)
       | `Constant c                  -> `Constant c
-      | `Variable b                  -> `Var (fst3 b)
-      | `As (b,_)                    -> `Var (fst3 b)
+      | `Variable b | `As (b,_)      ->  let q = QualifiedName.of_name (fst3 b) in `Var q
       | `HasType (p,t)               -> `TypeAnnotation (phrase_of_pattern p, t)
     end, pos)
 
@@ -164,7 +163,8 @@ let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (
     | [] ->
        let x = "x" in
        let xb = (x, None, dp) in
-       let id = ((`Variable xb, dp), (`Var x, dp)) in
+       let q = QualifiedName.of_name x in
+       let id = ((`Variable xb, dp), (`Var q, dp)) in
        ([id], List.rev ops)
     | _ ->
        (List.rev ret, List.rev ops)

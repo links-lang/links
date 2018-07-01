@@ -34,8 +34,8 @@ object (o : 'self_type)
     {< extra_env = StringMap.remove f extra_env >}
 
   method! phrasenode = function
-    | `TAppl (((`Var name), pos), tyargs) when StringMap.mem name extra_env ->
-        let extras = StringMap.find name extra_env in
+    | `TAppl (((`Var name), pos), tyargs) when StringMap.mem (QualifiedName.unqualify name) extra_env ->
+        let extras = StringMap.find (QualifiedName.unqualify name) extra_env in
         let tyargs = add_extras (extras, tyargs) in
           super#phrasenode (`TAppl (((`Var name), pos), tyargs))
     | `InfixAppl ((tyargs, `Name name), e1, e2) when StringMap.mem name extra_env ->

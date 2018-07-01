@@ -24,36 +24,41 @@ let rec is_raw (phrase, pos) =
 let rec desugar_page (o, page_type) =
   let desugar_nodes pos : phrase list -> phrase =
     fun children ->
-      (`FnAppl ((`TAppl ((`Var "joinManyP", pos), [`Row (o#lookup_effects)]), pos),
+    let q = QualifiedName.of_name "joinManyP" in
+      (`FnAppl ((`TAppl ((`Var q, pos), [`Row (o#lookup_effects)]), pos),
                 [`ListLit (List.map (desugar_page (o, page_type)) children, Some page_type), pos]), pos)
   in
     fun (e, pos) ->
       match e with
-        | _ when is_raw (e, pos) ->
+      | _ when is_raw (e, pos) ->
+         let q = QualifiedName.of_name "bodyP" in
           (* TODO: check that e doesn't contain any formletplacements or page placements *)
-            (`FnAppl ((`TAppl ((`Var "bodyP", pos), [`Row (o#lookup_effects)]), pos),
+            (`FnAppl ((`TAppl ((`Var q, pos), [`Row (o#lookup_effects)]), pos),
                       [e, pos]), pos)
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
             let formlet_type = Types.concrete_type formlet_type in
             let a = Types.fresh_type_variable (`Any, `Any) in
             let b = Types.fresh_type_variable (`Any, `Any) in
+            let q = QualifiedName.of_name "formP" in
             let _template = `Alias (("Formlet", [`Type a]), b) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
-              (`FnAppl ((`TAppl ((`Var "formP", pos), [`Type a; `Row (o#lookup_effects)]), pos),
+              (`FnAppl ((`TAppl ((`Var q, pos), [`Type a; `Row (o#lookup_effects)]), pos),
                         [formlet; handler; attributes]), pos)
         | `PagePlacement (page) -> page
         | `Xml ("#", [], _, children) ->
             desugar_nodes pos children
         | `Xml (name, attrs, dynattrs, children) ->
-            let x = Utility.gensym ~prefix:"xml" () in
-              (`FnAppl ((`TAppl ((`Var "plugP", pos), [`Row (o#lookup_effects)]), pos),
+           let q = QualifiedName.of_name "plugP" in
+           let x = Utility.gensym ~prefix:"xml" () in
+           let q' = QualifiedName.of_name x in
+              (`FnAppl ((`TAppl ((`Var q, pos), [`Row (o#lookup_effects)]), pos),
                         [(`FunLit
                             (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_effects]),
                              `Unl,
                              ([[`Variable (x, Some (Types.xml_type), pos), pos]],
                               (`Xml (name, attrs, dynattrs,
-                                     [`Block ([], (`Var x, pos)), pos]), pos)), `Unknown), pos);
+                                     [`Block ([], (`Var q', pos)), pos]), pos)), `Unknown), pos);
                          desugar_nodes pos children]), pos)
         | _ ->
           raise (Errors.SugarError (pos, "Invalid element in page literal"))

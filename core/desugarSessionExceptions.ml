@@ -40,7 +40,7 @@ object (o: 'self_type)
         let o = o#with_effects inner_effects in
         let (o, body, _) = o#phrasenode body in
         let body =
-          `TryInOtherwise ((body, body_loc), as_pat, (`Var as_var, dp), unit_phr, (Some (Types.unit_type))) in
+          `TryInOtherwise ((body, body_loc), as_pat, (`Var (QualifiedName.of_name as_var), dp), unit_phr, (Some (Types.unit_type))) in
         let o = o#restore_envs envs in
         (o, (`Spawn (k, spawn_loc, (body, body_loc), Some inner_effects)), process_type)
     | e -> super#phrasenode e

@@ -39,7 +39,8 @@ object (o : 'self_type)
               Unify.datatypes
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
             let var = Utility.gensym ~prefix:"_formlet_" () in
-            let (xb, x) = (var, Some t, dp), ((`Var var), dp) in
+            let q = QualifiedName.of_name var in
+            let (xb, x) = (var, Some t, dp), ((`Var q), dp) in
               [(`As (xb, p)), dp], [x], [t]
         | `Xml (_, _, _, [node]) ->
             o#formlet_patterns node
@@ -63,22 +64,25 @@ object (o : 'self_type)
     fun e ->
       let dp = Sugartypes.dummy_position in
         match e with
-          | `TextNode s ->
+        | `TextNode s ->
+           let q = QualifiedName.of_name "xml" in
+           let q' = QualifiedName.of_name "stringToXml" in
               let e =
                 `FnAppl
-                  ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp),
+                  ((`TAppl ((`Var q, dp), [`Row (o#lookup_effects)]), dp),
                    [`FnAppl
-                      ((`TAppl ((`Var "stringToXml", dp), [`Row (o#lookup_effects)]), dp),
+                      ((`TAppl ((`Var q', dp), [`Row (o#lookup_effects)]), dp),
                        [`Constant (`String s), dp]), dp])
               in
                 (o, e, Types.xml_type)
-          | `Block (bs, e) ->
+        | `Block (bs, e) ->
+           let q = QualifiedName.of_name "xml" in
               let (o, e, _) =
                 o#phrasenode
                   (`Block
                      (bs,
                       (`FnAppl
-                         ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp),
+                         ((`TAppl ((`Var q, dp), [`Row (o#lookup_effects)]), dp),
                           [e]), dp)))
               in
                 (o, e, Types.xml_type)
@@ -116,25 +120,28 @@ object (o : 'self_type)
                         let (o, e, _) =
                           super#phrasenode (`Xml ("#", [], None, contents))
                         in
+                        let q = QualifiedName.of_name "xml" in
                           (o,
                            (`FnAppl
-                              ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp), [e, dp])),
+                              ((`TAppl ((`Var q, dp), [`Row (o#lookup_effects)]), dp), [e, dp])),
                            Types.xml_type)
                     | _ ->
                         let (o, es, _) = TransformSugar.list o (fun o -> o#formlet_body) contents in
                         let mb = `Row (o#lookup_effects) in
+                        let q = QualifiedName.of_name "pure" in
                         let base : phrase =
                           (`FnAppl
-                             ((`TAppl ((`Var "pure", dp), [`Type ft; mb]), dp),
+                             ((`TAppl ((`Var q, dp), [`Type ft; mb]), dp),
                               [`FunLit (Some (List.rev args), `Unl, (List.rev pss, (`TupleLit vs, dp)), `Unknown), dp]), dp) in
                         let (e, _), et =
                           List.fold_right
                             (fun arg (base, ft) ->
                                let arg_type = List.hd (TypeUtils.arg_types ft) in
                                let ft = TypeUtils.return_type ft in
+                               let q = QualifiedName.of_name "@@@" in
                                let base : phrase =
                                  (`FnAppl
-                                    (((`TAppl (((`Var "@@@"), dp), [`Type arg_type; `Type ft; mb]), dp) : phrase),
+                                    (((`TAppl (((`Var q), dp), [`Type arg_type; `Type ft; mb]), dp) : phrase),
                                      [arg; base]), dp)
                                in
                                  base, ft)
@@ -148,15 +155,17 @@ object (o : 'self_type)
               let eff = o#lookup_effects in
               let context : phrase =
                 let var = Utility.gensym ~prefix:"_formlet_" () in
-                let (xb, x) = (var, Some (Types.xml_type), dp), ((`Var var), dp) in
+                let q = QualifiedName.of_name var in
+                let (xb, x) = (var, Some (Types.xml_type), dp), ((`Var q), dp) in
                   (`FunLit (Some [Types.make_tuple_type [Types.xml_type], eff],
                             `Unl,
                             ([[`Variable xb, dp]],
                              (`Xml (tag, attrs, attrexp, [`Block ([], x), dp]), dp)), `Unknown), dp) in
               let (o, e, t) = o#formlet_body (`Xml ("#", [], None, contents), dp) in
+              let q = QualifiedName.of_name "plug" in
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "plug", dp), [`Type t; `Row eff]), dp),
+                   ((`TAppl ((`Var q, dp), [`Type t; `Row eff]), dp),
                     [context; e]),
                  t)
           | _ -> assert false
@@ -185,11 +194,13 @@ object (o : 'self_type)
         let mb = `Row (o#lookup_effects) in
 
         let e =
+          let q = QualifiedName.of_name "@@@" in
+          let q' = QualifiedName.of_name "pure" in
           `FnAppl
-            ((`TAppl ((`Var "@@@", dp), [`Type arg_type; `Type yields_type; mb]), dp),
+            ((`TAppl ((`Var q, dp), [`Type arg_type; `Type yields_type; mb]), dp),
              [body;
               `FnAppl
-                ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]), dp),
+                ((`TAppl ((`Var q', dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]), dp),
                  [`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], `Unl, (pss, yields), `Unknown), dp]), dp])
         in
           (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)

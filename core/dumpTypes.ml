@@ -10,6 +10,7 @@
 *)
 let program =
   fun ({Types.var_env=env; Types.tycon_env=_; effect_row=_} as tyenv) code ->
+    let module QualifiedName = Sugartypes.QualifiedName in
     let dumper = object (o)
       inherit SugarTraversals.fold as super
 
@@ -37,7 +38,8 @@ let program =
 
       method! phrase =
         function
-          | `Var x, pos when o#bound x ->
+        | `Var x, pos when o#bound (QualifiedName.unqualify x) ->
+           let x = QualifiedName.unqualify x in
               o#use (x, o#lookup x, pos)
           | e -> super#phrase e
     end in

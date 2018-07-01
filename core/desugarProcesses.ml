@@ -30,8 +30,9 @@ object (o : 'self_type)
         let o = o#with_effects outer_eff in
 
         let e : phrasenode =
+          let q = QualifiedName.of_name "spawnWait" in
           `FnAppl
-            ((`TAppl ((`Var "spawnWait", dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
+            ((`TAppl ((`Var q, dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp)])
         in
           (o, e, body_type)
@@ -47,10 +48,11 @@ object (o : 'self_type)
         let o = o#with_effects outer_eff in
 
         let spawn_loc_phr =
+          let (q, q') = QualifiedName.(of_name "there", of_name "here") in
           match spawn_loc with
             | `ExplicitSpawnLocation phr -> phr
-            | `SpawnClient -> (`FnAppl ((`Var "there", dp), [(`TupleLit [], dp)]), dp)
-            | `NoSpawnLocation -> (`FnAppl ((`Var "here", dp), [(`TupleLit [], dp)]), dp) in
+            | `SpawnClient -> (`FnAppl ((`Var q, dp), [(`TupleLit [], dp)]), dp)
+            | `NoSpawnLocation -> (`FnAppl ((`Var q', dp), [(`TupleLit [], dp)]), dp) in
 
         let spawn_fun =
           match k with
@@ -63,8 +65,9 @@ object (o : 'self_type)
          * corresponded to the spawn type. *)
 
         let e : phrasenode =
+          let q = QualifiedName.of_name spawn_fun in
           `FnAppl
-            ((`TAppl ((`Var spawn_fun, dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
+            ((`TAppl ((`Var q, dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
              [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp);
               spawn_loc_phr])
         in
@@ -74,11 +77,12 @@ object (o : 'self_type)
         let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var, false in
           begin
             match StringMap.find "hear" fields with
-              | (`Present mbt) ->
+            | (`Present mbt) ->
+               let q = QualifiedName.of_name "recv" in
                   o#phrasenode
                     (`Switch
                        ((`FnAppl
-                           ((`TAppl ((`Var "recv", dp), [`Type mbt; `Row other_effects]), dp),
+                           ((`TAppl ((`Var q, dp), [`Type mbt; `Row other_effects]), dp),
                             []), dp),
                         cases,
                         Some t))

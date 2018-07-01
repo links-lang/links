@@ -42,16 +42,17 @@ let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
       function
         | ([_ps], _body) as lam -> lam
         | (ps::pss, body) ->
-            let g = gensym ~prefix:"_fun_" () in
-            let rt = TypeUtils.return_type t in
-              ([ps],
-               (`Block
-                  ([`Fun ((g, Some t, dp),
-                          lin,
-                          ([], make_lam rt (pss, body)),
-                          location,
-                          None), dp],
-                   ((`Var g), dp)), dp))
+           let g = gensym ~prefix:"_fun_" () in
+           let q = QualifiedName.of_name g in
+           let rt = TypeUtils.return_type t in
+           ([ps],
+            (`Block
+               ([`Fun ((g, Some t, dp),
+                       lin,
+                       ([], make_lam rt (pss, body)),
+                       location,
+                       None), dp],
+                ((`Var q), dp)), dp))
         | _, _ -> assert false
     in
     make_lam rt lam
@@ -82,11 +83,12 @@ object (o : 'self_type)
             argss
             rt in
         let f = gensym ~prefix:"_fun_" () in
+        let q = QualifiedName.of_name f in
         let e =
           `Block
             ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), location, None)),
               dp],
-             ((`Var f), dp))
+             ((`Var q), dp))
         in
           (o, e, ft)
     | `Section (`Project name) ->
@@ -97,16 +99,18 @@ object (o : 'self_type)
         let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
 
         let f = gensym ~prefix:"_fun_" () in
+        let q = QualifiedName.of_name f in
         let x = gensym ~prefix:"_fun_" () in
+        let q' = QualifiedName.of_name x in
         let ft : Types.datatype = `ForAll (Types.box_quantifiers [ab; rhob;  effb],
                                            `Function (Types.make_tuple_type [r], eff, a)) in
 
         let pss = [[`Variable (x, Some r, dp), dp]] in
-        let body = `Projection ((`Var x, dp), name), dp in
+        let body = `Projection ((`Var q', dp), name), dp in
         let e : phrasenode =
           `Block
             ([`Fun ((f, Some ft, dp), `Unl, ([ab; rhob; effb], (pss, body)), `Unknown, None), dp],
-             ((`Var f), dp))
+             ((`Var q), dp))
         in
           (o, e, ft)
     | e -> super#phrasenode e

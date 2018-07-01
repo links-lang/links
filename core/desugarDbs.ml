@@ -35,7 +35,7 @@ move insert into the IR
 
 *)
 
-
+module QualifiedName = Sugartypes.QualifiedName
 let dp = Sugartypes.dummy_position
 
 class desugar_dbs env =
@@ -148,17 +148,19 @@ object (o : 'self_type)
         let o, rows, _ = o#phrase rows in
         let o, (e : Sugartypes.phrasenode) =
           match returning with
-            | None ->
-                (o,
-                 `FnAppl
-                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
-                    [table; rows]))
-            | Some field ->
-                let o, field, _ = o#phrase field in
-                  (o,
-                   `FnAppl
-                     ((`TAppl ((`Var "InsertReturning", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
-                      [table; rows; field]))
+          | None ->
+             let q = QualifiedName.of_name "InsertRows" in
+             (o,
+              `FnAppl
+                ((`TAppl ((`Var q, dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
+                 [table; rows]))
+          | Some field ->
+             let q = QualifiedName.of_name "InsertReturning" in
+             let o, field, _ = o#phrase field in
+             (o,
+              `FnAppl
+                ((`TAppl ((`Var q, dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
+                 [table; rows; field]))
         in
           o, e, Types.unit_type
     | e -> super#phrasenode e

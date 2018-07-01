@@ -65,8 +65,11 @@ let results :  Types.row ->
             let ((qsb, qs) : Sugartypes.pattern list * Sugartypes.phrase list) =
               List.split
                 (List.map2 (fun x t ->
-                              (`Variable (x, Some t, dp), dp), ((`Var x), dp)) xs ts) in
-            let qb, q = (`Variable (x, Some t, dp), dp), ((`Var x), dp) in
+                     let q = QualifiedName.of_name x in
+                              (`Variable (x, Some t, dp), dp), ((`Var q), dp)) xs ts) in
+            let qb, q =
+              let q = QualifiedName.of_name x in
+              (`Variable (x, Some t, dp), dp), ((`Var q), dp) in
 
             let inner : Sugartypes.phrase =
               let ps =
@@ -84,17 +87,19 @@ let results :  Types.row ->
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
+              let q = QualifiedName.of_name "map" in
                 `FunLit
                   (Some [Types.make_tuple_type [t], eff],
                    `Unl,
                    ([[qb]],
                     (`FnAppl
-                       ((`TAppl ((`Var "map", dp), [a; `Row eff; b]), dp),
+                       ((`TAppl ((`Var q, dp), [a; `Row eff; b]), dp),
                         [inner; r]), dp)), `Unknown), dp in
             let a = `Type qt in
             let b = `Type (Types.make_tuple_type (t :: ts)) in
+            let q = QualifiedName.of_name "concatMap" in
               `FnAppl
-                ((`TAppl ((`Var "concatMap", dp), [a; `Row eff; b]), dp),
+                ((`TAppl ((`Var q, dp), [a; `Row eff; b]), dp),
                  [outer; e]), dp
         | _, _, _ -> assert false
     in
@@ -138,7 +143,9 @@ object (o : 'self_type)
                    let n = `Type (TypeUtils.table_needed_type t) in
                    let eff = `Row (o#lookup_effects) in
 
-                   let e = `FnAppl ((`TAppl ((`Var ("AsList"), dp),
+                   let e =
+                     let q = QualifiedName.of_name "AsList" in
+                     `FnAppl ((`TAppl ((`Var q, dp),
                                              [r; w; n; eff]), dp), [e]), dp in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let (xb, x) = (var, Some t, dp), var in
@@ -188,7 +195,7 @@ object (o : 'self_type)
             | None, None -> results
             | Some sort, Some sort_type ->
                 let sort_by, sort_type_arg =
-                  "sortByBase", `Row (TypeUtils.extract_row sort_type) in
+                  QualifiedName.of_name "sortByBase", `Row (TypeUtils.extract_row sort_type) in
 
                 let g : phrase =
                   `FunLit
@@ -203,8 +210,9 @@ object (o : 'self_type)
             | _, _ -> assert false in
 
         let e : phrasenode =
+          let q = QualifiedName.of_name "concatMap" in
           `FnAppl
-            ((`TAppl ((`Var "concatMap", dp), [`Type arg_type; `Row eff; `Type elem_type]), dp),
+            ((`TAppl ((`Var q, dp), [`Type arg_type; `Row eff; `Type elem_type]), dp),
              [f; results]) in
         (o, e, body_type)
     | e -> super#phrasenode e

@@ -207,7 +207,7 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token MU FORALL ALIEN SIG OPEN
 %token MODULE
 %token BANG QUESTION
-%token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
+%token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH BACKSLASH CARET DOLLAR
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
@@ -282,6 +282,14 @@ arg:
 
 var:
 | VARIABLE                                                     { $1, pos() }
+
+qualified_variable:
+| CONSTRUCTOR BACKSLASH qualified_variable { $1 :: $3 }
+| VARIABLE { [$1] }
+
+qualified_constructor:
+| CONSTRUCTOR BACKSLASH qualified_constructor { $1 :: $3 }
+| CONSTRUCTOR { [$1] }
 
 preamble:
 | /* empty */                                                  { [] }
@@ -408,14 +416,13 @@ constant:
 | FALSE                                                        { `Bool false, pos() }
 | CHAR                                                         { `Char $1   , pos() }
 
-
 atomic_expression:
-| VARIABLE                                                     { `Var $1, pos() }
+| qualified_variable                                           { `Var (QualifiedName.of_path $1), pos() }
 | constant                                                     { let c, p = $1 in `Constant c, p }
 | parenthesized_thing                                          { $1 }
 /* HACK: allows us to support both mailbox receive syntax
 and receive for session types. */
-| RECEIVE                                                      { `Var "receive", pos() }
+| RECEIVE                                                      { `Var (QualifiedName.of_path ["receive"]), pos() }
 
 cp_name:
 | VARIABLE                                                     { $1, None, pos () }
@@ -452,7 +459,7 @@ cp_expression:
 | NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { `Comp ($2, $5, $7), pos () }
 
 primary_expression:
-| atomic_expression                                            { $1 }
+| atomic_expression                                         { $1 }
 | LBRACKET RBRACKET                                            { `ListLit ([], None), pos() }
 | LBRACKET exps RBRACKET                                       { `ListLit ($2, None), pos() }
 | LBRACKET exp DOTDOT exp RBRACKET                             { `RangeLit($2, $4), pos() }
@@ -475,8 +482,8 @@ handler_body:
 | LBRACE cases RBRACE    	                               { $2 }
 
 constructor_expression:
-| CONSTRUCTOR                                                  { `ConstructorLit($1, None, None), pos() }
-| CONSTRUCTOR parenthesized_thing                              { `ConstructorLit($1, Some $2, None), pos() }
+| CONSTRUCTOR                                     { `ConstructorLit($1, None, None), pos() }
+| CONSTRUCTOR parenthesized_thing                 { `ConstructorLit($1, Some $2, None), pos() }
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { `Section $2, pos() }
@@ -835,11 +842,11 @@ field_constraint:
 | DEFAULT                                                      { `Default }
 
 perhaps_db_args:
-| atomic_expression                                            { Some $1 }
+| atomic_expression                                         { Some $1 }
 | /* empty */                                                  { None }
 
 perhaps_db_driver:
-| atomic_expression perhaps_db_args                            { Some $1, $2 }
+| atomic_expression perhaps_db_args                         { Some $1, $2 }
 | /* empty */                                                  { None, None }
 
 database_expression:
@@ -1026,15 +1033,12 @@ primary_datatype:
                                                                    | [t] -> t
                                                                    | ts  -> `Tuple ts }
 | LPAREN rfields RPAREN                                        { `Record $2 }
-| TABLEHANDLE
-     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
-/* | TABLEHANDLE datatype perhaps_table_constraints               { `Table ($2, $3) } */
-
+| TABLEHANDLE LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
 | LBRACKETBAR vrow BARRBRACKET                                 { `Variant $2 }
 | LBRACKET datatype RBRACKET                                   { `List $2 }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
-| CONSTRUCTOR                                                  { match $1 with
+| qualified_constructor                                        { match QualifiedName.(unqualify (of_path $1)) with
                                                                    | "Bool"    -> `Primitive `Bool
                                                                    | "Int"     -> `Primitive `Int
                                                                    | "Char"    -> `Primitive `Char
@@ -1044,7 +1048,7 @@ primary_datatype:
                                                                    | "Database"-> `DB
                                                                    | t         -> `TypeApplication (t, [])
                                                                }
-| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
+| qualified_constructor LPAREN type_arg_list RPAREN            { `TypeApplication (QualifiedName.(unqualify (of_path $1)), $3) }
 
 type_var:
 | VARIABLE                                                     { `TypeVar ($1, None, `Rigid) }

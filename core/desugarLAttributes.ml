@@ -15,7 +15,9 @@ let has_lattrs : phrasenode -> bool = function
 
 let dummy_pos = Lexing.dummy_pos, Lexing.dummy_pos, None
 
-let apply pos name args : phrase = `FnAppl ((`Var name,pos), args), pos
+let apply pos name args : phrase =
+  let q = QualifiedName.of_name name in
+  `FnAppl ((`Var q,pos), args), pos
 
 let server_use name pos =
   apply pos "assoc" [(`Constant (`String name), pos);
