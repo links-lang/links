@@ -31,31 +31,35 @@ let rec is_raw phrase =
 let rec desugar_page (o, page_type) =
   let desugar_nodes : phrase list -> phrase =
     fun children ->
-     fn_appl "joinManyP" [`Row (o#lookup_effects)]
-       [list ~ty:page_type (List.map (desugar_page (o, page_type)) children)]
+    let join_many_p = QualifiedName.of_name "join_many_p" in
+    fn_appl join_many_p [`Row (o#lookup_effects)]
+      [list ~ty:page_type (List.map (desugar_page (o, page_type)) children)]
   in
     fun ({node=e; pos} as phrase) ->
       match e with
         | _ when is_raw phrase ->
           (* TODO: check that e doesn't contain any formletplacements or page placements *)
-           fn_appl "bodyP" [`Row (o#lookup_effects)] [phrase]
+           let body_p = QualifiedName.of_name "bodyP" in
+           fn_appl body_p [`Row (o#lookup_effects)] [phrase]
         | FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
             let formlet_type = Types.concrete_type formlet_type in
             let a = Types.fresh_type_variable (lin_any, res_any) in
             let b = Types.fresh_type_variable (lin_any, res_any) in
+            let form_p = QualifiedName.of_name "formP" in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
-              fn_appl "formP" [`Type a; `Row (o#lookup_effects)]
+              fn_appl form_p [`Type a; `Row (o#lookup_effects)]
                       [formlet; handler; attributes]
         | PagePlacement (page) -> page
         | Xml ("#", [], _, children) ->
             desugar_nodes children
         | Xml (name, attrs, dynattrs, children) ->
             let x = Utility.gensym ~prefix:"xml" () in
-            fn_appl "plugP" [`Row (o#lookup_effects)]
+            let plug_p = QualifiedName.of_name "plugP" in
+            fn_appl plug_p [`Row (o#lookup_effects)]
                [fun_lit ~args:[Types.make_tuple_type [Types.xml_type], o#lookup_effects]
                         dl_unl [[variable_pat ~ty:Types.xml_type x]]
-                        (xml name attrs dynattrs [block ([], var x)]);
+                        (xml name attrs dynattrs [block ([], var (QualifiedName.of_name x))]);
                 desugar_nodes children]
         | _ -> raise_invalid_element pos
 

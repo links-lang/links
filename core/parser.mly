@@ -276,7 +276,7 @@ end
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG OPEN
-%token MODULE MUTUAL
+%token MUTUAL
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
@@ -477,13 +477,25 @@ constant:
 | FALSE                                                        { Constant.Bool false }
 | CHAR                                                         { Constant.Char $1    }
 
+qualified_name:
+| CONSTRUCTOR DOT qualified_name                               { $1 :: $3 }
+| VARIABLE                                                     { [$1] }
+
+/* qualified_name_inner: */
+/* | CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 } */
+/* | VARIABLE                                                     { [$1]     } */
+
+qualified_type_name:
+| CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
+
 atomic_expression:
-| VARIABLE                                                     { with_pos $loc (Var          $1) }
-| constant                                                     { with_pos $loc (Constant     $1) }
-| parenthesized_thing                                          { $1 }
+| qualified_name                                               { with_pos $loc         (Var (QualifiedName.of_path $1)) }
+/* | VARIABLE                                                  { with_pos $loc         (Var (QualifiedName.of_name $1)) } */
+| constant                                                     { with_pos $loc         (Constant                    $1) }
+| parenthesized_thing                                          {                                                    $1  }
 /* HACK: allows us to support both mailbox receive syntax
 and receive for session types. */
-| RECEIVE                                                      { with_pos $loc (Var "receive") }
+| RECEIVE                                                      { with_pos $loc  (Var (QualifiedName.of_name "receive")) }
 
 cp_name:
 | VARIABLE                                                     { binder ~ppos:$loc($1) $1 }
@@ -1008,6 +1020,7 @@ session_datatype:
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
 | END                                                          { Datatype.End             }
 | primary_datatype                                             { $1                       }
+| qualified_type_name                                          { Datatype.TypeApplication (QualifiedName.(unqualify (of_path $1)) (* TODO FIXME. *), []) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }

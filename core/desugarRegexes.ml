@@ -35,7 +35,7 @@ let desugar_regex phrase regex_type regex : phrase =
     let v = Utility.gensym ~prefix:"_regex_" () in
       begin
         exprs := (v, e, t) :: !exprs;
-        var v
+        var (QualifiedName.of_name v)
       end in
   let rec aux : regex -> phrase =
     function
@@ -74,9 +74,11 @@ object(self)
   method! phrase ({node=p; pos} as ph) = match p with
     | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex((Replace(_,_) as r)); _}) ->
         let libfn =
-          if List.exists ((=)RegexNative) flags
-          then "sntilde"
-          else "stilde" in
+          QualifiedName.of_name
+            (if List.exists ((=)RegexNative) flags
+             then "sntilde"
+             else "stilde")
+        in
           self#phrase (fn_appl libfn tyargs
                             [e1; desugar_regex self#phrase regex_type r])
     | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex r; _}) ->
@@ -86,7 +88,9 @@ object(self)
           | true, true   -> "lntilde"
           | true, false  -> "ltilde"
           | false, false -> "tilde"
-          | false, true  -> "ntilde" in
+          | false, true  -> "ntilde"
+        in
+        let libfn = QualifiedName.of_name libfn in
           self#phrase (fn_appl libfn tyargs
                             [e1; desugar_regex self#phrase regex_type r])
     | InfixAppl ((_tyargs, BinaryOp.RegexMatch _), _, _) ->

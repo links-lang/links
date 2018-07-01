@@ -37,6 +37,7 @@ object (o: 'self_type)
         let process_type = `Application (Types.process, [`Row inner_effects]) in
         let o = o#with_effects inner_effects in
         let (o, body, _) = o#phrasenode body in
+        let as_var = QualifiedName.of_name as_var in
         let body =
           TryInOtherwise (with_dummy_pos body, as_pat,
                           var as_var, unit_phr, Some (Types.unit_type)) in
@@ -170,7 +171,7 @@ let wrap_linear_handlers prog =
                (TryInOtherwise
                 (super#phrase l,
                  fresh_pat,
-                 constructor ~body:(var fresh_var) "Just",
+                 constructor ~body:(var (QualifiedName.of_name fresh_var)) "Just",
                  constructor "Nothing", dtopt)),
               [
                 (with_dummy_pos (Pattern.Variant ("Just", (Some x))), super#phrase m);

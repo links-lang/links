@@ -22,7 +22,9 @@ let has_lattrs : phrase -> bool = function
       exists (fst ->- start_of ~is:"l:") attrs
   | _ -> false
 
-let apply name args : phrase = fn_appl name [] args
+let apply name args : phrase =
+  let name = QualifiedName.of_name name in
+  fn_appl name [] args
 
 let server_use name =
   apply "assoc" [constant_str name; apply "environment" []]

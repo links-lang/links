@@ -192,7 +192,6 @@ let keywords = [
  "yields"   , YIELDS;
  "insert"   , INSERT;
  "linfun"   , LINFUN;
- "module"   , MODULE;
  "mu"       , MU;
  "mutual"   , MUTUAL;
  "native"   , NATIVE;
@@ -201,7 +200,6 @@ let keywords = [
  "on"       , ON;
  "orderby"  , ORDERBY;
  "op"       , OP;
- "open"     , OPEN;
  "otherwise", OTHERWISE;
  "page"     , PAGE;
  "query"    , QUERY;

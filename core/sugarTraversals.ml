@@ -159,7 +159,7 @@ class map =
     method phrasenode : phrasenode -> phrasenode =
       function
       | Constant _x -> let _x = o#constant _x in Constant _x
-      | Var _x -> let _x = o#name _x in Var _x
+      | Var _x -> let _x = o#qualified_name _x in Var _x
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                           let _x_i2 = o#location _x_i2 in FunLit (_x, _x1, _x_i1, _x_i2)
       | HandlerLit hnlit ->
@@ -499,7 +499,7 @@ class map =
 
     method qualified_name : QualifiedName.t -> QualifiedName.t = function
     | `Ident name -> `Ident (o#string name)
-    | `Dot (path, name) -> `Dot (o#qualified_name path, o#string name)
+    | `Dot (name, path) -> `Dot (o#string name, o#qualified_name path)
 
     method location : Location.t -> Location.t = o#unknown
 
@@ -854,7 +854,7 @@ class fold =
     method phrasenode : phrasenode -> 'self_type =
       function
       | Constant _x -> let o = o#constant _x in o
-      | Var _x -> let o = o#name _x in o
+      | Var _x -> let o = o#qualified_name _x in o
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
       | HandlerLit hnlit ->
         let o = o#handlerlit hnlit in o
@@ -1164,7 +1164,7 @@ class fold =
 
     method qualified_name : QualifiedName.t -> 'self_type = function
     | `Ident name -> o#string name
-    | `Dot (path, name) ->
+    | `Dot (name, path) ->
        let o = o#qualified_name path in
        o#string name
 
@@ -1530,7 +1530,7 @@ class fold_map =
     method phrasenode : phrasenode -> ('self_type * phrasenode) =
       function
       | Constant _x -> let (o, _x) = o#constant _x in (o, (Constant _x))
-      | Var _x -> let (o, _x) = o#name _x in (o, (Var _x))
+      | Var _x -> let (o, _x) = o#qualified_name _x in (o, (Var _x))
       | FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (FunLit (_x, _x1, _x_i1, _x_i2)))
@@ -1917,10 +1917,10 @@ class fold_map =
     | `Ident name ->
        let (o, name) = o#string name in
        o, `Ident name
-    | `Dot (path, name) ->
+    | `Dot (component, path) ->
        let (o, path) = o#qualified_name path in
-       let (o, name) = o#string name in
-       o, `Dot (path, name)
+       let (o, component) = o#string component in
+       o, `Dot (component, path)
 
 
     method location : Location.t -> ('self_type * Location.t) = o#unknown

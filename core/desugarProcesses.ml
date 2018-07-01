@@ -30,7 +30,8 @@ object (o : 'self_type)
         let o = o#with_effects outer_eff in
 
         let e : phrasenode =
-          fn_appl_node "spawnWait" [`Row inner_eff; `Type body_type; `Row outer_eff]
+          let spawn_wait = QualifiedName.of_name "spawnWait" in
+          fn_appl_node spawn_wait [`Row inner_eff; `Type body_type; `Row outer_eff]
             [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_unl [[]] body]
         in
           (o, e, body_type)
@@ -46,10 +47,11 @@ object (o : 'self_type)
         let o = o#with_effects outer_eff in
 
         let spawn_loc_phr =
+          let (there, here) = QualifiedName.(of_name "there", of_name "here") in
           match spawn_loc with
             | ExplicitSpawnLocation phr -> phr
-            | SpawnClient -> fn_appl "there" [] [tuple []]
-            | NoSpawnLocation -> fn_appl "here" [] [tuple []] in
+            | SpawnClient -> fn_appl there [] [tuple []]
+            | NoSpawnLocation -> fn_appl here [] [tuple []] in
 
         let spawn_fun =
           match k with
@@ -62,6 +64,7 @@ object (o : 'self_type)
          * corresponded to the spawn type. *)
 
         let e : phrasenode =
+          let spawn_fun = QualifiedName.of_name spawn_fun in
           fn_appl_node spawn_fun [`Row inner_eff; `Type body_type; `Row outer_eff]
              [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_unl [[]] body;
               spawn_loc_phr]
@@ -72,9 +75,10 @@ object (o : 'self_type)
         let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var, false in
           begin
             match StringMap.find "hear" fields with
-              | (`Present mbt) ->
+            | (`Present mbt) ->
+               let recv = QualifiedName.of_name "recv" in
                   o#phrasenode
-                    (Switch (fn_appl "recv" [`Type mbt; `Row other_effects] [],
+                    (Switch (fn_appl recv [`Type mbt; `Row other_effects] [],
                              cases,
                              Some t))
               | _ -> assert false

@@ -64,9 +64,10 @@ let results :  Types.row ->
 
             let ((qsb, qs) : Sugartypes.Pattern.with_pos list * Sugartypes.phrase list) =
               List.split
-                (List.map2 (fun x t -> (variable_pat ~ty:t x, var x)) xs ts) in
-            let qb, q = (variable_pat ~ty:t x, var x) in
-
+                (List.map2 (fun x t ->
+                     (variable_pat ~ty:t x, var (QualifiedName.of_name x))) xs ts)
+            in
+            let qb, q = (variable_pat ~ty:t x, var (QualifiedName.of_name x)) in
             let inner : Sugartypes.phrase =
               let ps =
                 match qsb with
@@ -81,12 +82,14 @@ let results :  Types.row ->
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
+              let map = QualifiedName.of_name "map" in
                 fun_lit ~args:[Types.make_tuple_type [t], eff]
                         dl_unl [[qb]]
-                        (fn_appl "map" [a; `Row eff; b] [inner; r]) in
+                        (fn_appl map [a; `Row eff; b] [inner; r]) in
             let a = `Type qt in
             let b = `Type (Types.make_tuple_type (t :: ts)) in
-            fn_appl "concatMap" [a; `Row eff; b] [outer; e]
+            let concat_map = QualifiedName.of_name "concatMap" in
+            fn_appl concat_map [a; `Row eff; b] [outer; e]
         | _, _, _ -> assert false
     in
       results (es, xs, ts)
@@ -130,7 +133,8 @@ object (o : 'self_type)
                    let n = `Type (TypeUtils.table_needed_type t) in
                    let eff = `Row (o#lookup_effects) in
 
-                   let e = fn_appl "AsList" [r; w; n; eff] [e] in
+                   let as_list = QualifiedName.of_name "AsList" in
+                   let e = fn_appl as_list [r; w; n; eff] [e] in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let xb = binder ~ty:t var in
                      o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
@@ -176,7 +180,7 @@ object (o : 'self_type)
             | None, None -> results
             | Some sort, Some sort_type ->
                 let sort_by, sort_type_arg =
-                  "sortByBase", `Row (TypeUtils.extract_row sort_type) in
+                  QualifiedName.of_name "sortByBase", `Row (TypeUtils.extract_row sort_type) in
 
                 let g : phrase =
                   fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
@@ -187,8 +191,9 @@ object (o : 'self_type)
             | _, _ -> assert false in
 
         let e : phrasenode =
-          fn_appl_node "concatMap" [`Type arg_type; `Row eff; `Type elem_type]
-                       [f; results] in
+          let concat_map = QualifiedName.of_name "concatMap" in
+          fn_appl_node concat_map [`Type arg_type; `Row eff; `Type elem_type] [f; results]
+        in
         (o, e, body_type)
     | e -> super#phrasenode e
 end

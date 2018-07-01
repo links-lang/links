@@ -143,8 +143,7 @@ let rec phrase_of_pattern : Pattern.with_pos -> phrase
                                                ?exp:(opt_map phrase_of_pattern pat_opt)
       | Tuple ps                    -> tuple (List.map phrase_of_pattern ps)
       | Constant c                  -> constant c
-      | Variable b                  -> var (Binder.to_name b)
-      | As (b,_)                    -> var (Binder.to_name b)
+      | Variable b   | As (b,_)     -> var (QualifiedName.of_name (Binder.to_name b))
       | HasType (p,t)               -> with_dummy_pos (TypeAnnotation (phrase_of_pattern p, t))
      end
 
@@ -170,7 +169,7 @@ let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos 
     match ret with
     | [] ->
        let x = "x" in
-       let id = (variable_pat x, var x) in
+       let id = (variable_pat x, var (QualifiedName.of_name x)) in
        ([id], List.rev ops)
     | _ ->
        (List.rev ret, List.rev ops)

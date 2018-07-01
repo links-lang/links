@@ -49,7 +49,7 @@ let unwrap_def ({node=f, ft; _}, linearity, (tyvars, lam), location, t) =
               ([ps], block
                   ([fun_binding' ~linearity ~location (binder ~ty:t g)
                                  (make_lam rt (pss, body))],
-                   var g))
+                   var (QualifiedName.of_name g)))
         | _, _ -> assert false
     in make_lam rt lam
   in (binder ~ty:ft f, linearity, (tyvars, lam), location, t)
@@ -78,7 +78,7 @@ object (o : 'self_type)
         let (bndr, lin, tvs, loc, ty) =
           unwrap_def (binder ~ty:ft f, lin, ([], lam), location, None) in
         let e = block_node ([with_dummy_pos (Fun (bndr, lin, tvs, loc, ty))],
-                            var f)
+                            var (QualifiedName.of_name f))
         in (o, e, ft)
     | Section (Section.Project name) ->
         let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
@@ -91,13 +91,12 @@ object (o : 'self_type)
         let x = gensym ~prefix:"_fun_" () in
         let ft : Types.datatype = `ForAll (Types.box_quantifiers [ab; rhob;  effb],
                                            `Function (Types.make_tuple_type [r], eff, a)) in
-
         let pss = [[variable_pat ~ty:r x]] in
-        let body = with_dummy_pos (Projection (var x, name)) in
+        let body = with_dummy_pos (Projection (var (QualifiedName.of_name x), name)) in
         let e : phrasenode =
           block_node
             ([fun_binding' ~tyvars:[ab; rhob; effb] (binder ~ty:ft f) (pss, body)],
-             var f)
+             var (QualifiedName.of_name f))
         in (o, e, ft)
     | e -> super#phrasenode e
 

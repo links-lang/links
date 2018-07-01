@@ -58,7 +58,7 @@ module type SugarConstructorsSig = sig
   val sig_of_opt : (name WithPos.t * datatype') WithPos.t option -> signature
 
   (* Common stuff *)
-  val var         : ?ppos:t -> name -> phrase
+  val var         : ?ppos:t -> QualifiedName.t -> phrase
   val block       : ?ppos:t -> block_body -> phrase
   val block_node  :            block_body -> phrasenode
   val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
@@ -108,11 +108,11 @@ module type SugarConstructorsSig = sig
      -> ?row:Types.row -> spawn_kind -> given_spawn_location -> phrase
      -> phrase
   val fn_appl_node
-      : ?ppos:t -> name -> tyarg list -> phrase list -> phrasenode
+      : ?ppos:t -> QualifiedName.t -> tyarg list -> phrase list -> phrasenode
   val fn_appl
-      : ?ppos:t -> name -> tyarg list -> phrase list -> phrase
+      : ?ppos:t -> QualifiedName.t -> tyarg list -> phrase list -> phrase
   val fn_appl_var
-      : ?ppos:t -> name -> name -> phrase
+      : ?ppos:t -> QualifiedName.t -> QualifiedName.t -> phrase
 
   (* Bindings *)
   val fun_binding

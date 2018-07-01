@@ -31,8 +31,10 @@ object (o : 'self_type)
             o, block_node (bs, e), t
          | CPGrab ((c, _), None, p) ->
             let (o, e, t) = desugar_cp o p in
+            let wait = QualifiedName.of_name wait_str in
+            let chan = QualifiedName.of_name c in
             o, block_node
-                ([val_binding (any_pat dp) (fn_appl_var wait_str c)],
+                ([val_binding (any_pat dp) (fn_appl_var wait chan)],
                  with_dummy_pos e), t
          | CPGrab ((c, Some (`Input (_a, s), grab_tyargs)), Some {node=x, Some u; _}, p) -> (* FYI: a = u *)
             let envs = o#backup_envs in
@@ -41,16 +43,20 @@ object (o : 'self_type)
             let o = {< var_env = venv >} in
             let (o, e, t) = desugar_cp o p in
             let o = o#restore_envs envs in
+            let receive = QualifiedName.of_name receive_str in
+            let chan = QualifiedName.of_name c in
             o, block_node
                  ([val_binding (with_dummy_pos (
                                     Pattern.Record ([("1", variable_pat ~ty:u x);
                                                      ("2", variable_pat ~ty:s c)], None)))
-                               (fn_appl receive_str grab_tyargs [var c])],
+                               (fn_appl receive grab_tyargs [var chan])],
                  with_dummy_pos e), t
          | CPGive ((c, _), None, p) ->
             let (o, e, t) = desugar_cp o p in
+            let close = QualifiedName.of_name close_str in
+            let chan = QualifiedName.of_name c in
             o, block_node
-                ([val_binding (any_pat dp) (fn_appl_var close_str c)],
+                ([val_binding (any_pat dp) (fn_appl_var close chan)],
                  with_dummy_pos e), t
          | CPGive ((c, Some (`Output (_t, s), give_tyargs)), Some e, p) ->
             let envs = o#backup_envs in
@@ -58,20 +64,24 @@ object (o : 'self_type)
             let (o, e, _typ) = o#phrase e in
             let (o, p, t) = desugar_cp o p in
             let o = o#restore_envs envs in
+            let send = QualifiedName.of_name send_str in
+            let chan = QualifiedName.of_name c in
             o, block_node
                 ([val_binding (variable_pat ~ty:s c)
-                              (fn_appl send_str give_tyargs [e; var c])],
+                              (fn_appl send give_tyargs [e; var chan])],
                  with_dummy_pos p), t
          | CPGiveNothing ({node=c, Some t; _}) ->
-            o, Var c, t
+            let q = QualifiedName.of_name c in
+            o, Var q, t
          | CPSelect ({node=c, Some s; _}, label, p) ->
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
             let (o, p, t) = desugar_cp o p in
             let o = o#restore_envs envs in
+            let chan = QualifiedName.of_name c in
             o, block_node
                 ([val_binding (variable_pat ~ty:(TypeUtils.select_type label s) c)
-                               (with_dummy_pos (Select (label, var c)))],
+                               (with_dummy_pos (Select (label, var chan)))],
                  with_dummy_pos p), t
          | CPOffer ({node=c, Some s; _}, cases) ->
             let desugar_branch (label, p) (o, cases) =
@@ -85,10 +95,12 @@ object (o : 'self_type)
             (match List.split cases with
                 | (_, []) -> assert false (* Case list cannot be empty *)
                 | (cases, t :: _ts) ->
-                    o, Offer (var c, cases, Some t), t)
+                   let chan = QualifiedName.of_name c in
+                   o, Offer (var chan, cases, Some t), t)
          | CPLink ({node=c, Some ct; _}, {node=d, Some _; _}) ->
-            o, fn_appl_node link_sync_str [`Type ct; `Row o#lookup_effects]
-                            [var c; var d],
+            let (linksync, chan, chan') = QualifiedName.(of_name link_sync_str, of_name c, of_name d) in
+            o, fn_appl_node linksync [`Type ct; `Row o#lookup_effects]
+                            [var chan; var chan'],
             Types.make_endbang_type
          | CPComp ({node=c, Some s; _}, left, right) ->
             let envs = o#backup_envs in
@@ -96,19 +108,21 @@ object (o : 'self_type)
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in
             let o = o#restore_envs envs in
             let left_block =
+               let (accept, close, chan) = QualifiedName.(of_name accept_str, of_name close_str, of_name c) in
                 spawn Angel NoSpawnLocation (block (
-                    [ val_binding (variable_pat ~ty:s c) (fn_appl_var accept_str c);
+                    [ val_binding (variable_pat ~ty:s c) (fn_appl_var accept chan);
                       val_binding (variable_pat ~ty:Types.make_endbang_type c)
                                   (with_dummy_pos left)],
-                    fn_appl_var close_str c))
+                    fn_appl_var close chan))
                       ~row:(Types.make_singleton_closed_row (wild_str, `Present Types.unit_type)) in
+            let (new', request, chan) = QualifiedName.(of_name new_str, of_name request_str, of_name c) in
             let o = o#restore_envs envs in
             o, block_node
                   ([val_binding (variable_pat ~ty:(`Application (Types.access_point, [`Type s])) c)
-                                (fn_appl new_str [] []);
+                                (fn_appl new' [] []);
                     val_binding (any_pat dp) left_block;
                     val_binding (variable_pat ~ty:(Types.dual_type s) c)
-                                (fn_appl_var request_str c)],
+                                (fn_appl_var request chan)],
                    with_dummy_pos right), t
          | _ -> assert false in
        desugar_cp o p

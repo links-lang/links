@@ -52,7 +52,7 @@ object (o : 'self_type)
               Unify.datatypes
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
             let name = Utility.gensym ~prefix:"_formlet_" () in
-            let (xb, x) = (binder name ~ty:t, var name) in
+            let (xb, x) = (binder name ~ty:t, var (QualifiedName.of_name name)) in
               [with_dummy_pos (Pattern.As (xb, p))], [x], [t]
         | Xml (_, _, _, [node]) ->
             o#formlet_patterns node
@@ -74,17 +74,20 @@ object (o : 'self_type)
   method private formlet_body_node : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) =
     fun e ->
         match e with
-          | TextNode s ->
+        | TextNode s ->
+           let xml = QualifiedName.of_name xml_str in
+           let string_to_xml = QualifiedName.of_name string_to_xml_str in
               let e =
-                fn_appl_node xml_str [`Row (o#lookup_effects)]
-                  [fn_appl string_to_xml_str [`Row (o#lookup_effects)]
+                fn_appl_node xml [`Row (o#lookup_effects)]
+                  [fn_appl string_to_xml [`Row (o#lookup_effects)]
                      [constant_str s]]
               in (o, e, Types.xml_type)
           | Block (bs, e) ->
+              let xml = QualifiedName.of_name xml_str in
               let (o, e, _) =
                 o#phrasenode
                   (block_node
-                     (bs, (fn_appl xml_str [`Row (o#lookup_effects)] [e])))
+                     (bs, (fn_appl xml [`Row (o#lookup_effects)] [e])))
               in (o, e, Types.xml_type)
           | FormBinding (f, _) ->
               let (o, {node=f; _}, ft) = o#phrase f
@@ -95,17 +98,17 @@ object (o : 'self_type)
                 let pss, vs, ts =
                   List.fold_left
                     (fun (pss, vs, ts) node ->
-                         match o#formlet_patterns node with
-                           | [p], [v], [t] ->
-                               (* grrr... n-ary arguments are messy!
-                                  this type has to be a 1-tuple!
-                               *)
-                               [p]::pss, v::vs, t::ts
+                      match o#formlet_patterns node with
+                      | [p], [v], [t] ->
+                         (* grrr... n-ary arguments are messy!
+                            this type has to be a 1-tuple!
+                          *)
+                         [p]::pss, v::vs, t::ts
                            | ps', vs', ts' ->
-                               [tuple_pat ps']::pss, tuple vs'::vs, (Types.make_tuple_type ts')::ts)
+                              [tuple_pat ps']::pss, tuple vs'::vs, (Types.make_tuple_type ts')::ts)
                     ([], [], []) contents
                 in
-                  List.rev pss, List.rev vs, List.rev ts in
+                List.rev pss, List.rev vs, List.rev ts in
               let empty_eff = Types.make_empty_closed_row () in
               let ft =
                 List.fold_right
@@ -118,14 +121,17 @@ object (o : 'self_type)
                     | [] ->
                         let (o, e, _) =
                           super#phrasenode (Xml ("#", [], None, contents))
-                        in (o, fn_appl_node xml_str [`Row (o#lookup_effects)]
-                                            [with_dummy_pos e],
-                            Types.xml_type)
+                        in
+                        let xml = QualifiedName.of_name xml_str in
+                        (o, fn_appl_node xml [`Row (o#lookup_effects)]
+                              [with_dummy_pos e],
+                         Types.xml_type)
                     | _ ->
                         let (o, es, _) = TransformSugar.list o (fun o -> o#formlet_body) contents in
                         let mb = `Row (o#lookup_effects) in
+                        let pure = QualifiedName.of_name pure_str in
                         let base : phrase =
-                          fn_appl pure_str [`Type ft; mb]
+                          fn_appl pure [`Type ft; mb]
                             [fun_lit ~args:(List.rev args) dl_unl (List.rev pss)
                                      (tuple vs)] in
                         let p, et =
@@ -133,13 +139,14 @@ object (o : 'self_type)
                             (fun arg (base, ft) ->
                                let arg_type = List.hd (TypeUtils.arg_types ft) in
                                let ft = TypeUtils.return_type ft in
+                               let atatat = QualifiedName.of_name atatat_str in
                                let base : phrase =
-                                 fn_appl atatat_str [`Type arg_type; `Type ft; mb]
+                                 fn_appl atatat [`Type arg_type; `Type ft; mb]
                                          [arg; base]
                                in base, ft)
                             es (base, ft)
                         in
-                          (o, p.node, et)
+                        (o, p.node, et)
                 end
           | Xml(tag, attrs, attrexp, contents) ->
               (* plug (fun x -> (<tag attrs>{x}</tag>)) (<#>contents</#>)^o*)
@@ -150,10 +157,12 @@ object (o : 'self_type)
                 fun_lit ~args:[Types.make_tuple_type [Types.xml_type], eff]
                         dl_unl
                         [[variable_pat ~ty:(Types.xml_type) name]]
-                        (xml tag attrs attrexp [block ([], var name)]) in
+                        (xml tag attrs attrexp [block ([], var (QualifiedName.of_name name))])
+              in
+              let plug = QualifiedName.of_name plug_str in
               let (o, e, t) = o#formlet_body (xml "#" [] None contents) in
-                (o, fn_appl_node plug_str [`Type t; `Row eff]
-                      [context; e], t)
+              (o, fn_appl_node plug [`Type t; `Row eff]
+                    [context; e], t)
           | _ -> assert false
 
   method formlet_body : Sugartypes.phrase -> ('self_type * Sugartypes.phrase * Types.datatype) =
@@ -179,9 +188,11 @@ object (o : 'self_type)
         let mb = `Row (o#lookup_effects) in
 
         let e =
-          fn_appl_node atatat_str
+          let atatat = QualifiedName.of_name atatat_str in
+          let pure = QualifiedName.of_name pure_str in
+          fn_appl_node atatat
              [`Type arg_type; `Type yields_type; mb]
-             [body; fn_appl pure_str
+             [body; fn_appl pure
                     [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]
                     [fun_lit ~args:[Types.make_tuple_type [arg_type], empty_eff] dl_unl pss yields]]
         in
