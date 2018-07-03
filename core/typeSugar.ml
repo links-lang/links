@@ -1438,10 +1438,13 @@ let type_binary_op ctxt =
    If there are no _ or variable patterns at a variant type, then that
    variant will be closed.
 *)
-let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun pats t ->
-  let cpt : pattern list -> Types.datatype -> Types.datatype = close_pattern_type in
+let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun pats t ->
+  (* We use a table to keep track of encountered recursive variables
+     in order to avert non-termination. *)
+  let rec_vars_seen = Hashtbl.create 32 in
+  let rec cpt : pattern list -> Types.datatype -> Types.datatype = fun pats t ->
     match t with
-      | `Alias (alias, t) -> `Alias (alias, close_pattern_type pats t)
+      | `Alias (alias, t) -> `Alias (alias, cpt pats t)
       | `Record row when Types.is_tuple row->
           let fields, row_var, dual = fst (Types.unwrap_row row) in
           let rec unwrap_at i p =
@@ -1635,7 +1638,10 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
             match Unionfind.find point with
               | `Body t -> cpt pats t
               | `Var _ -> t
-              | `Recursive _ -> assert false
+              | `Recursive (i, t') when not (Hashtbl.mem rec_vars_seen i) ->
+                 Hashtbl.add rec_vars_seen i ();
+                 cpt pats t'
+              | `Recursive (_,_) -> t
           end
       | `Not_typed
       | `Primitive _
@@ -1646,6 +1652,8 @@ let rec close_pattern_type : pattern list -> Types.datatype -> Types.datatype = 
       | #Types.session_type
        (* TODO: expand applications? *)
       | `Application _ -> t
+  in
+  cpt pats t
 
 type unify_result = UnifySuccess | UnifyFailure of (Unify.error * SourceCode.pos)
 

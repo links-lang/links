@@ -32,3 +32,7 @@ Kind mismatch [2]
 fun (x : a :: Any) {x : a :: Base}
 stderr : @.+
 exit : 1
+
+Close recursive patterns (issue #360)
+switch (Var(0)) { case (_ : (mu a . [|Lam:(Int, a)|Var:Int|])) -> 42 }
+stdout : 42 : Int
