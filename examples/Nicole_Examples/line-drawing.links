@@ -1,0 +1,277 @@
+typename Canvas = ();
+alien javascript "/js/canvas.js" {
+    drawUnit: (Int, Int, String, Canvas) ~> ();
+    drawCustomUnit: (Int, Int, Int, Int, String, Canvas) ~> ();
+    delayExecution: (() ~%~> %, Int) ~> ();
+}
+
+typename Point = (x:Int, y:Int);
+#typename Line = (start: Point, end: Point, color: String);
+typename Queue(a) = (rear: [a], front: [a]);
+typename Option(a) = [|Some:a|None|];
+typename Co(e::Eff) = () {Fork: (Co({ |e})) -> (), Yield |e}~> ();
+
+
+var colors = ["green", "red", "blue", "yellow"];
+
+#Threading 
+
+sig enqueue: (a, Queue(a)) -> Queue(a)
+fun enqueue(x, q){
+    (q with rear=x::q.rear)
+}
+
+sig dequeue: (Queue(a)) ~> (Option(a),Queue(a))
+fun dequeue(q){
+    switch(q) {
+        case (rear=[], front=[]) -> (None, q)
+        case (rear=xs, front=[]) ->
+          var q0 = (rear=[], front=reverse(xs));
+          dequeue(q0)
+        case (rear=ys, front=(x :: xs)) ->
+          var q0 = (rear=ys, front=xs);
+          (Some(x), q0)
+    }
+}
+
+fun emptyQueue(){
+    (rear=[], front=[])
+}
+
+
+sig queueLength: (Queue(a)) -> Int
+fun queueLength(q){
+    length(q.rear) + length(q.front)
+}
+
+sig fork : (Co({ |e})) {Fork: (Co({ |e})) -> (), Yield |e}~> ()
+fun fork(f){
+    do Fork(f)
+}
+
+sig yield: () {Yield |e}~> ()
+fun yield(){
+    do Yield
+}
+
+sig runNext : (Queue(%)) {Fork-, Yield- |e}~> ()
+fun runNext(q){
+    switch(dequeue(q)){
+        case (None, _) -> ()
+        case (Some(resume), q) -> resume((), q)
+    }
+}
+
+sig withThreads : (Co({ |e}), Queue(%)) {Fork-, Yield- |e}~> ()
+fun withThreads(c, q0){
+    handle(c())(q0 -> q){
+        case Return(x) -> 
+            runNext(q)
+        case Fork(f, resume) ->
+            var q = enqueue(resume, q);
+            withThreads(f, q)
+        case Yield(resume) -> 
+            var q = enqueue(resume, q); 
+            runNext(q)
+    }
+}
+
+# Page Functionality
+
+sig difference: (Point, Point) -> Point
+fun difference(a, b){
+    (x = a.x - b.x, y= a.y - b.y)
+}
+
+sig absolute: (Int) -> Int
+fun absolute(n){
+    if(n < 0){
+        n * -1
+    } else{
+        n
+    }
+}
+
+sig drawLine: (Point, Point, String) ~> ()
+fun drawLine(start, end, color){
+    var div = getNodeById("box");
+    var context = jsGetContext2D(div);
+    jsBeginPath(context);
+    jsMoveTo(context, intToFloat(start.x), intToFloat(start.y));
+    jsLineWidth(context, 8.0);
+    jsLineTo(context, intToFloat(end.x), intToFloat(end.y));
+    jsStrokeStyle(context, color);
+    jsStroke(context)
+}
+
+sig drawHorizontalLine: (Point, Point, String) {Yield |e}~> ()
+fun drawHorizontalLine(start, end, color){
+    var div = getNodeById("box");
+    var context = jsGetContext2D(div);
+    var diff = difference(end, start);
+    fun aux(n, start){
+        #println("draw "^^ color);
+        #drawUnit(start.x, start.y, color, context);
+        drawCustomUnit(start.x, start.y, 1, 5, color, context);
+        yield();
+        delayExecution(fun(){()}, 100);
+        if (n > 0) aux(n -1, (x = start.x + (diff.x / absolute(diff.x)), y = start.y))
+        else ()
+    }
+    aux(absolute(diff.x), start);
+}
+
+sig drawLineByPart: (Int, Point, Point, String)  {Yield |e}~> ()
+fun drawLineByPart(n, start, end, color){
+    var diff = difference(end, start);
+    var step = (x = diff.x / n, y= diff.y / n);
+    fun aux(n, start, end){
+        #println("draw " ^^ color);
+        drawLine(start, (x = start.x + step.x, y = start.y + step.y), color);
+        yield();
+        if (n > 1) aux(n - 1, (x = start.x + step.x, y = start.y + step.y), end)
+        else ()
+    }
+    aux(n, start, end)
+}
+
+sig drawBlue: () {Yield |e}~> ()
+fun drawBlue(){
+    println("start drawing blue, yield.");
+    yield();
+    drawHorizontalLine((x=10, y=10), (x=390, y=10), "blue");
+    #drawLineByPart(2000, (x=10, y=10), (x=10, y=390), "blue");
+    #drawLine((x=10, y=10), (x=10, y=390), "blue");
+    yield();
+    println("finish drawing blue.")
+}
+
+sig drawRed: () {Yield |e}~> ()
+fun drawRed(){
+    println("start drawing red, yield.");
+    yield();
+    drawHorizontalLine((x=10, y=30), (x=390, y=30), "red");
+    #drawLineByPart(2000, (x=10, y=10), (x=390, y=10), "red");
+    #drawLine((x=10, y=10), (x=350, y=10), "red");
+    yield();
+    println("finish drawing red.")
+}
+
+sig drawGreen: () {Yield |e}~> ()
+fun drawGreen(){
+    println("start drawing green, yield.");
+    yield();
+    drawHorizontalLine((x=10, y=50), (x=390, y=50), "green");
+    #drawLineByPart(2000, (x=390, y=10), (x=390, y=390), "green");
+    yield();
+    println("finish drawing green.")
+}
+
+sig drawYellow: () {Yield |e}~> ()
+fun drawYellow(){
+    println("start drawing yellow, yield.");
+    yield();
+    drawHorizontalLine((x=10, y=70), (x=390, y=70), "#ffcc00");
+    #drawLineByPart(2000, (x=10, y=390), (x=390, y=390), "#ffcc00");
+    yield();
+    println("finish drawing yellow.")
+}
+
+sig triggerLine: (String) {Fork:(Co ({ |a })) {}-> (),Yield |a}~> ()
+fun triggerLine(color){
+    switch(color){
+        case "blue" -> fork(drawBlue)
+        case "red" -> fork(drawRed)
+        case "green" -> fork(drawGreen)
+        case "yellow" -> fork(drawYellow)
+        case _ -> fork(drawBlue)
+    }
+}
+
+fun start(){
+    fun aux(colors){
+        switch(colors){
+            case [] -> ()
+            case x::xs -> triggerLine(x); aux(xs)
+        }
+    }
+    aux(colors)
+}
+
+# Web interface
+
+sig main_page : (_) ~> Page
+fun main_page(_){
+
+    var pId = spawnClient{ignore(recv()); withThreads(start, emptyQueue())};
+    page
+    <html>
+    <head>
+        <style>
+        .center{{
+            margin: 0 auto;
+        }}
+        .block{{
+            display: block;
+        }}
+        .box{{
+            width: 400px;
+            height: 400px;
+            border: solid 1px #aaa;
+        }}
+        .buttons{{
+            display:flex;
+            justify-content: center;
+            width: 80%;
+        }}
+        .button{{
+            width: 19%;
+            min-width: 90px;
+            height: 2.6em;
+        }}
+        .margin-all-4{{
+            margin:4px;
+        }}
+        .margin-10{{
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }}
+        .red{{
+            background-color: red;
+            color: white;
+        }}
+        .blue{{
+            background-color: blue;
+            color: white;
+        }}
+        .green{{
+            background-color: green;
+            color: white;
+        }}
+        .yellow{{
+            background-color: yellow;
+            color: black;
+        }}
+        </style>
+    </head>
+    <body>
+        <canvas id="box" width="400" height="400" class="box center block"></canvas>
+        <div class="buttons center margin-10">
+            {   
+                <#>
+                    <button class="button margin-all-4" l:onclick="{pId ! ()}">Draw Line</button>
+                </#>
+            }
+        </div>
+    </body>
+    </html>
+}
+
+sig main: () ~> ()
+fun main() {
+    addRoute("/", main_page);
+    addStaticRoute("/js", "js", [("js", "text/javascript")]);
+    servePages()
+}
+
+main()
