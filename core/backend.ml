@@ -54,12 +54,12 @@ struct
         IrTraversals.Inline.program;
       ]
 
-    (*let typechecking_pipeline = [
-        IrTraversals.NormaliseTypes.program;
+    let typechecking_pipeline = [
+        (*IrTraversals.NormaliseTypes.program;
         IrTraversals.ElimRecursiveTypeCycles.program;
-        IrTraversals.ElimTypeAliases.program;
+        IrTraversals.ElimTypeAliases.program;*)
         IrCheck.Typecheck.program
-      ]*)
+      ]
 
 
     let main_pipeline = [
@@ -67,7 +67,7 @@ struct
         Closures.program Lib.primitive_vars;
         perform_for_side_effects (BuildTables.program Lib.primitive_vars);
         only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_program;
-        (*only_if_set Basicsettings.Ir.typecheck_ir (perform_pipeline typechecking_pipeline);*)
+        only_if_set Basicsettings.Ir.typecheck_ir (run typechecking_pipeline);
       ]
 
 end
