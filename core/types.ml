@@ -206,10 +206,14 @@ let fresh_raw_variable : unit -> int =
   function () ->
     incr type_variable_counter; !type_variable_counter
 
-module type TRANSFORM =
+module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
+
+    method remove_rec_row_binding : int -> 'self_type
+    method remove_rec_type_binding : int ->'self_type
+
     method primitive : primitive -> (primitive * 'self_type)
     method lens_col : lens_col -> (lens_col * 'self_type)
     method lens_sort : lens_sort -> (lens_sort * 'self_type)
@@ -229,12 +233,21 @@ end
 
 
 
-module Transform : TRANSFORM =
+module Transform : TYPE_VISITOR =
 struct
   class visitor  =
   object ((o : 'self_type))
 
-    val var_subst = IntMap.empty
+    val rec_vars : (meta_type_var) IntMap.t * (meta_row_var) IntMap.t = (IntMap.empty, IntMap.empty)
+    method remove_rec_type_binding id =
+      let (rec_types, rec_rows) = rec_vars in
+      {< rec_vars = (IntMap.remove id rec_types, rec_rows) >}
+
+    method remove_rec_row_binding id =
+      let (rec_types, rec_rows) = rec_vars in
+      {< rec_vars = (rec_types, IntMap.remove id rec_rows) >}
+
+
 
     method primitive p = (p,o)
     method row :  row -> (row * 'self_type) = fun (fsp, rv, d) ->
@@ -244,39 +257,43 @@ struct
 
 
     method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) = fun point ->
-      let (newContent, o) =
-        begin match Unionfind.find point with
-        | `Recursive (id, t) ->
-           let fresh_id = fresh_raw_variable () in
-           let o = {< var_subst = IntMap.add id fresh_id var_subst >} in
-           let (t', o) = o#typ t in
-           `Recursive (fresh_id, t'), o
+      match Unionfind.find point with
+        | `Recursive (var, t) ->
+          let (rec_types, rec_rows) = rec_vars in
+          if IntMap.mem var rec_types then
+            (IntMap.find var rec_types), o
+          else
+            let var' = fresh_raw_variable () in
+            let point' : meta_type_var = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
+            let rec_types' : (meta_type_var) IntMap.t = IntMap.add var point' rec_types in
+            let o_extended_rec_env = {< rec_vars = (rec_types', rec_rows) >} in
+            let (t', o') = o_extended_rec_env#typ t in
+            let o'_reduced_rec_env = o'#remove_rec_type_binding var in
+            Unionfind.change point' (`Recursive (var', t'));
+            (point', o'_reduced_rec_env)
         | `Body t ->
-           let (t', o) = o#typ t in `Body t', o
-        | `Var (id, sk, fd) as original ->
-           match IntMap.find_opt id var_subst with
-           | Some id' -> `Var (id', sk, fd), o
-           | None -> original, o
-        end in
-      (Unionfind.fresh newContent, o)
+            let (t', o) = o#typ t in Unionfind.fresh (`Body t'), o
+        | `Var _  -> point, o
 
     method meta_row_var : meta_row_var -> (meta_row_var * 'self_type) = fun point ->
-      let (newContent, o) =
-        begin match Unionfind.find point with
-        | `Closed -> `Closed, o
-        | `Recursive (id, r) ->
-           let fresh_id = fresh_raw_variable () in
-           let o = {< var_subst = IntMap.add id fresh_id var_subst >} in
-           let (r', o) = o#row r in
-           `Recursive (fresh_id, r'), o
+      match Unionfind.find point with
+        | `Closed -> point, o
+        | `Recursive (var, r) ->
+          let (rec_types, rec_rows) = rec_vars in
+          if IntMap.mem var rec_rows then
+            (IntMap.find var rec_rows), o
+          else
+            let var' = fresh_raw_variable () in
+            let point' = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
+            let rec_rows' = IntMap.add var point' rec_rows in
+            let o_extended_rec_env = {< rec_vars = (rec_types, rec_rows') >} in
+            let (r', o') = o_extended_rec_env#row r in
+            let o'_reduced_rec_env = o'#remove_rec_row_binding var in
+            Unionfind.change point' (`Recursive (var', r'));
+            (point', o'_reduced_rec_env)
         | `Body r ->
-           let (r', o) = o#row r in `Body r', o
-        | `Var (id, sk, fd) as original ->
-           match IntMap.find_opt id var_subst with
-           | Some id' -> `Var (id', sk, fd), o
-           | None -> original, o
-        end in
-      Unionfind.fresh newContent, o
+            let (t', o) = o#row r in Unionfind.fresh (`Body t'), o
+        | `Var _  -> point, o
 
     method row_var : row_var -> (row_var * 'self_type) = o#meta_row_var
 

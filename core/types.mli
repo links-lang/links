@@ -397,10 +397,13 @@ val make_function_type      : datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
 
-module type TRANSFORM =
+module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
+    method remove_rec_row_binding : int -> 'self_type
+    method remove_rec_type_binding : int ->'self_type
+
     method primitive : primitive -> (primitive * 'self_type)
     method lens_col : lens_col -> (lens_col * 'self_type)
     method lens_sort : lens_sort -> (lens_sort * 'self_type)
@@ -418,4 +421,4 @@ sig
   end
 end
 
-module Transform : TRANSFORM
+module Transform : TYPE_VISITOR
