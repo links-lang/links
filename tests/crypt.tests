@@ -1,8 +1,0 @@
-Crypt accepts correct passwords
-verify("correcthorsebatterystaple", crypt("correcthorsebatterystaple"))
-stdout : true : Bool
-
-Crypt rejects incorrect passwords
-verify("password", crypt("correcthorsebatterystaple"))
-stdout : false : Bool
-

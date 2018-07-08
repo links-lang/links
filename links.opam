@@ -63,6 +63,5 @@ depends: [
   "lwt" {>= "3.1.0"}
   "cohttp"
   "websocket-lwt"
-  "safepass"
   "ocamlfind"
 ]
