@@ -2662,12 +2662,21 @@ let make_tuple_type (ts : datatype list) : datatype =
 let make_list_type t = `Application (list, [`Type t])
 let make_process_type r = `Application (process, [`Row r])
 
-let extend_row fields (fields', row_var, dual) =
-  (FieldEnv.fold
-     (fun name t fields -> FieldEnv.add name (`Present t) fields)
-     fields
-     fields',
-   row_var, dual)
+let extend_row_check_duplicates fields (fields', row_var, dual) =
+  let (unified_fields, has_duplicates) =
+    FieldEnv.fold
+      (fun name t (fields, has_duplicates) ->
+        (FieldEnv.add name (`Present t) fields), has_duplicates && FieldEnv.mem name fields)
+      fields
+      (fields', false) in
+  (unified_fields,row_var, dual), has_duplicates
+
+let extend_row_safe fields row =
+  match extend_row_check_duplicates fields row with
+  | (_, true) -> None
+  | (row', false) -> Some row'
+let extend_row fields row =
+  fst (extend_row_check_duplicates fields row)
 
 let make_closed_row : datatype field_env -> row = fun fields ->
   (FieldEnv.map (fun t -> `Present t) fields), closed_row_var, false

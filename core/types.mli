@@ -292,6 +292,7 @@ val get_row_var : row -> int option
 val make_closed_row : datatype field_env -> row
 val row_with : (string * field_spec) -> row -> row
 val extend_row : datatype field_env -> row -> row
+val extend_row_safe : datatype field_env -> row -> row option
 
 (** constants *)
 val empty_field_env : field_spec_map
