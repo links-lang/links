@@ -126,5 +126,19 @@ let union point1 point2 =
 	| _, _ ->
 	    assert false (* [repr] guarantees that [link] matches [Info _]. *)
 
-let pp_point polyfmt formatter p = polyfmt formatter (find p)
+(* Prints the address of the representative point in order to debug sharing effects *)
+let pp_point pf formatter p =
+  let address_of (x:'a) : nativeint =
+  if Obj.is_block (Obj.repr x) then
+    Nativeint.shift_left (Nativeint.of_int (Obj.magic x)) 1
+  else
+    invalid_arg "Can only find address of boxed values." in
+  let repr_elt = repr p in
+  let descriptor = match repr_elt.link with
+    | Info i -> i.descriptor
+    | _ -> assert false (* guaranteed not to happend by repr *) in
+  let addr_of_repr  = address_of repr_elt in
+  Format.pp_print_string formatter  (Printf.sprintf "Point @ 0x%nx " addr_of_repr);
+  pf formatter descriptor
+
 let show_point f v = Format.asprintf "%a" (pp_point f) v
