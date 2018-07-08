@@ -41,8 +41,7 @@ and 'a info = {
   mutable descriptor: 'a
 }
 
-let pp_point _ formatter _ = Utility.format_omission formatter (** Suppress output **)
-let show_point f v = Format.asprintf "%a" (pp_point f) v
+
 
 (** fresh desc creates a fresh point and returns it. It forms an equivalence class of its own, whose descriptor is desc. *)
 let fresh desc = {
@@ -126,3 +125,6 @@ let union point1 point2 =
 	      end
 	| _, _ ->
 	    assert false (* [repr] guarantees that [link] matches [Info _]. *)
+
+let pp_point polyfmt formatter p = polyfmt formatter (find p)
+let show_point f v = Format.asprintf "%a" (pp_point f) v

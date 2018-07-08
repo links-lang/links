@@ -195,7 +195,7 @@ let is_present =
   | `Present _           -> true
   | (`Absent | `Var _) -> false
 
-type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
+type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t] [@@deriving show]
 
 let unbox_quantifiers = (!)
 let box_quantifiers = ref
@@ -424,6 +424,69 @@ struct
 
   end
 end
+
+
+module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR =
+struct
+  class visitor =
+      object (o)
+        inherit Transform.visitor as super
+
+
+        val mu_vars =  Utility.IntSet.empty
+
+        method! meta_type_var point = match Unionfind.find point with
+          | `Recursive (id, t) ->
+             if Utility.IntSet.mem id mu_vars then
+               let newvar = `Var (id, (`Any, `Any), `Rigid) in
+               (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
+               (Unionfind.fresh newvar, o)
+             else
+               let new_mu_vars = Utility.IntSet.add id mu_vars in
+               let o' =  {< mu_vars=new_mu_vars >} in
+               (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
+               let (t', _) = o'#typ t in (Unionfind.fresh (`Recursive (id, t')), o)
+          | _ -> super#meta_type_var point
+
+        method! meta_row_var point = match Unionfind.find point with
+          | `Recursive (id, t) ->
+             if Utility.IntSet.mem id mu_vars then
+               let newvar = `Var (id, (`Any, `Any), `Rigid) in
+               (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
+               (Unionfind.fresh newvar, o)
+             else
+               let new_mu_vars = Utility.IntSet.add id mu_vars in
+               let o' =  {< mu_vars=new_mu_vars >} in
+               (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
+               let (t', _) = o'#row t in (Unionfind.fresh (`Recursive (id, t')), o)
+          | _ -> super#meta_row_var point
+
+
+      end
+end
+
+
+
+module type TYPE_TRANSFORMER =
+sig
+    val datatype : typ -> typ
+    val row : row -> row
+    val type_arg : type_arg -> type_arg
+    val field_spec : field_spec -> field_spec
+end
+
+module DecycleTypes =
+struct
+  let elim_recursive_type_cycles_visitor = new ElimRecursiveTypeCyclesTransform.visitor
+
+  let datatype t = fst (elim_recursive_type_cycles_visitor#typ t)
+  let row r = fst (elim_recursive_type_cycles_visitor#row r)
+  let field_spec p = fst (elim_recursive_type_cycles_visitor#field_spec p)
+  let type_arg ta = fst (elim_recursive_type_cycles_visitor#type_arg ta)
+  let row_var rv = fst (elim_recursive_type_cycles_visitor#row_var rv)
+
+end
+
 
 
 (* TODO: consider abstracting some of this subkind manipulation code *)
@@ -840,13 +903,13 @@ type datatype = typ [@@deriving show]
 (* useful for debugging: types tend to be too big to read *)
 (*
 *)
-let pp_datatype = fun f _ -> Utility.format_omission f
+(*let pp_datatype = fun f _ -> Utility.format_omission f
 let pp_field_spec = fun f _ -> Utility.format_omission f
 let pp_field_spec_map = fun f _ -> Utility.format_omission f
 let pp_row_var = fun f _ -> Utility.format_omission f
 let pp_row = fun f _ -> Utility.format_omission f
 let pp_meta_type_var = fun f _ -> Utility.format_omission f
-let pp_meta_row_var = fun f _ -> Utility.format_omission f
+let pp_meta_row_var = fun f _ -> Utility.format_omission f*)
 
 let type_var_number = var_of_quantifier
 
@@ -2295,11 +2358,14 @@ See Note [Variable names in error messages].
 (* string conversions *)
 let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (t : datatype) =
-  let policy = policy () in
-  let t = if policy.Print.quantifiers then t
-          else Print.strip_quantifiers t in
-  if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
-  Print.datatype TypeVarSet.empty (policy, Vars.tyvar_name_map) t
+  if Settings.get_value Basicsettings.print_types_pretty then
+    let policy = policy () in
+    let t = if policy.Print.quantifiers then t
+            else Print.strip_quantifiers t in
+    if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
+    Print.datatype TypeVarSet.empty (policy, Vars.tyvar_name_map) t
+  else
+    show_datatype (DecycleTypes.datatype t)
 
 let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
   if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
@@ -2332,9 +2398,6 @@ let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
 let string_of_primary_kind primary_kind =
   Print.primary_kind primary_kind
 
-let pp_datatype fmt a = Format.pp_print_string fmt (string_of_datatype a)
-
-let pp_tycon_spec fmt a = Format.pp_print_string fmt (string_of_tycon_spec a)
 
 type environment       = datatype Env.t
 and tycon_environment  = tycon_spec Env.t
@@ -2625,3 +2688,36 @@ let make_pure_function_type : datatype list -> datatype -> datatype
 let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->
   make_function_type [] effs rtype
+
+
+
+(* We replace some of the generated printing functions here such that
+   they may use our own printing functions instead. They are here because they are needed
+   by the generated code for printing IR types, do not call them yourself.
+   Use string_of_* instead *)
+let pp_datatype : Format.formatter -> datatype -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_datatype t)
+  else
+    pp_datatype fmt t
+let pp_quantifier : Format.formatter -> quantifier -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt ("cannot pretty-print quantifiers")
+  else
+    pp_quantifier fmt t
+let show_quantifier : quantifier -> string = (fun x -> Format.asprintf "%a" pp_quantifier x)
+let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_type_arg t)
+  else
+    pp_type_arg fmt t
+let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_tycon_spec t)
+  else
+    pp_tycon_spec fmt t
+let pp_row : Format.formatter -> row -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_row t)
+  else
+    pp_row fmt t

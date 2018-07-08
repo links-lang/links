@@ -27,6 +27,16 @@ let is_interactive  = Settings.get_value Basicsettings.interacting
 let perform_optimisations = not is_interactive && Settings.get_value Basicsettings.optimise
 
 (*let print_program _ p = (Debug.print (Ir.string_of_program p));p*)
+let print_program tyenv p =
+  let print_types_pretty = Settings.get_value Basicsettings.print_types_pretty in
+  let string_repr_of_p =
+    if print_types_pretty then
+      Ir.string_of_program p
+    else
+      Ir.show_program (IrTraversals.ElimRecursiveTypeCyclesFromProgram.program tyenv p) in
+  Debug.print (string_repr_of_p);p
+
+
 
 let run pipeline tyenv p =
   List.fold_left (fun p transformer -> transformer tyenv p) p pipeline
@@ -56,8 +66,8 @@ struct
         only_if perform_optimisations (measure "optimise" (run optimisation_pipeline));
         Closures.program Lib.primitive_vars;
         perform_for_side_effects (BuildTables.program Lib.primitive_vars);
-        (*only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_program;
-        only_if_set Basicsettings.Ir.typecheck_ir (perform_pipeline typechecking_pipeline);*)
+        only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_program;
+        (*only_if_set Basicsettings.Ir.typecheck_ir (perform_pipeline typechecking_pipeline);*)
       ]
 
 end

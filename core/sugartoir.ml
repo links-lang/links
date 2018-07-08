@@ -1186,6 +1186,14 @@ struct
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in
       globals, (locals, main), nenv
 
+
+  let string_of_program tyenv p =
+    let print_types_pretty = Settings.get_value Basicsettings.print_types_pretty in
+      if print_types_pretty then
+        Ir.string_of_program p
+      else
+        Ir.show_program (IrTraversals.ElimRecursiveTypeCyclesFromProgram.program tyenv p)
+
   let compile env (bindings, body) =
     Debug.print ("compiling to IR");
 (*     Debug.print (Sugartypes.show_program (bindings, body)); *)
@@ -1194,9 +1202,10 @@ struct
         | None -> (`RecordLit ([], None), dp)
         | Some body -> body in
       let s = eval_bindings `Global env bindings body in
+      let _, tyenv, _ = env in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-          Debug.if_set show_compiled_ir (fun () -> Ir.show_program r);
+          Debug.if_set show_compiled_ir (fun () -> string_of_program tyenv r);
           r, I.sem_type s
 end
 

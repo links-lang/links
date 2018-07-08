@@ -174,6 +174,10 @@ let links_file_paths = Settings.add_string("links_file_paths", "", `User)
 
 (* Pretty print values (outside web mode) *)
 let print_pretty = Settings.add_bool ("print_pretty", false, `User)
+
+(* Pretty print types or use generated printer? *)
+let print_types_pretty = Settings.add_bool ("print_types_pretty", true, `User)
+
 let print_colors = Settings.add_bool ("print_colors", false, `User)
 
 (* Base URL for websocket connections *)
@@ -228,6 +232,9 @@ end
 (* Ir stuff *)
 module Ir = struct
   let show_rec_uses = Settings.add_bool("show_rec_uses", false, `User)
+  let show_compiled_ir_after_backend_transformations =
+    Settings.add_bool("show_compiled_ir_after_backend_transformations", false, `User)
+  let typecheck_ir = Settings.add_bool("typecheck_ir", false, `User)
 end
 
 (* Generalise stuff *)

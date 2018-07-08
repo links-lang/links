@@ -318,7 +318,7 @@ let instantiation_maps_of_type_arguments :
          let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.show_quantifier t) vars in
          Debug.print tyvars;
          Debug.print (Printf.sprintf "\n# Type arguments (total %d)" (List.length tyargs));
-         let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ Types.show_type_arg arg) tyargs in
+         let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ Types.string_of_type_arg arg) tyargs in
          Debug.print tyargs';
          raise ArityMismatch);
 

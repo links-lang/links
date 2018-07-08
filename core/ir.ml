@@ -150,7 +150,13 @@ let string_of_tail_computation _ = "[TAIL_COMPUTATION]"
 let string_of_binding _ = "[BINDING]"
 let string_of_special _ = "[SPECIAL]"
 let string_of_computation _ = "[COMPUTATION]"
-let string_of_program _ = "[PROGRAM]"
+let string_of_program p =
+  if Settings.get_value Basicsettings.print_types_pretty then
+    show_program p
+  else
+    failwith "Cannot print program when pretty printing of types is disabled."
+
+
 
 type eval_fun_def = var_info * (var list * computation) * Var.var option * location
   [@@deriving show]

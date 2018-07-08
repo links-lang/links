@@ -820,6 +820,25 @@ let ir_type_mod_visitor tyenv type_visitor =
 
   end
 
+module ElimRecursiveTypeCycles = struct
+
+
+end
+
+module ElimRecursiveTypeCyclesFromProgram =
+  struct
+    let type_visitor = new  Types.ElimRecursiveTypeCyclesTransform.visitor
+
+    (*let value tyenv v =
+      let v, _, _ = (ir_type_mod_visitor tyenv type_visitor)#value v in
+      v*)
+
+    let program tyenv p =
+      let p, _, _ = (ir_type_mod_visitor tyenv type_visitor)#program p in
+      p
+
+
+  end
 
 
 (* Debugging traversal that checks if we have eliminated all cyclic recursive types *)

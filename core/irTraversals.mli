@@ -59,7 +59,7 @@ module Transform : TRANSFORM
 
 module Inline : PROGTRANSFORM
 module ElimDeadDefs : PROGTRANSFORM
-
+module ElimRecursiveTypeCyclesFromProgram : PROGTRANSFORM
 module CheckForCycles : PROGTRANSFORM
 module ElimTypeAliases : PROGTRANSFORM
 module InstantiateTypes :
