@@ -1,8 +1,6 @@
 (** Monadic IR *)
 
-
-
-[@@@ocaml.warning "-39-32"] (** disable warnings about unused rec flags & functions in this module**)
+[@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
 
 type scope = Var.scope
   [@@deriving show]
@@ -33,8 +31,6 @@ type 'a var_map = 'a Utility.intmap
 
 type language = string
   [@@deriving show]
-
-let var_of_binder = Var.var_of_binder
 
 type constant = Constant.constant
   [@@deriving show]

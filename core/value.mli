@@ -48,7 +48,7 @@ type xmlitem =   Text of string
                | NsAttr of (string * string * string)
                | NsNode of (string * string * xml)
 and xml = xmlitem list
-  [@@deriving show]
+  [@@deriving show,yojson]
 
 type table = (database * string) * string * string list list * Types.row
   [@@deriving show]
@@ -62,7 +62,7 @@ type primitive_value = [
 | `Int of int
 | `XML of xmlitem
 | `String of string ]
-
+[@@deriving show]
 
 type spawn_location = [
   | `ClientSpawnLoc of client_id
