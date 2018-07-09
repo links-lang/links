@@ -29,6 +29,7 @@ type 'a var_map = 'a Utility.intmap
   [@@deriving show]
 
 type language = string
+  [@@deriving show]
 
 type constant = Constant.constant
   [@@deriving show]
