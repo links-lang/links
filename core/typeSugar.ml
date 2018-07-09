@@ -1441,7 +1441,7 @@ let type_binary_op ctxt =
 let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun pats t ->
   (* We use a table to keep track of encountered recursive variables
      in order to avert non-termination. *)
-  let rec_vars_seen = Hashtbl.create 32 in
+  let rec_vars_seen = Hashtbl.create 8 in
   let rec cpt : pattern list -> Types.datatype -> Types.datatype = fun pats t ->
     match t with
       | `Alias (alias, t) -> `Alias (alias, cpt pats t)
@@ -1641,7 +1641,7 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
               | `Recursive (i, t') when not (Hashtbl.mem rec_vars_seen i) ->
                  Hashtbl.add rec_vars_seen i ();
                  cpt pats t'
-              | `Recursive (_,_) -> t
+              | `Recursive _ -> t
           end
       | `Not_typed
       | `Primitive _
