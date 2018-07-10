@@ -175,6 +175,7 @@ val concrete_field_spec : field_spec -> field_spec
 val normalise_datatype : datatype -> datatype
 val normalise_row : row -> row
 val normalise_typing_environment : typing_environment -> typing_environment
+val make_effect_row_flexible : typing_environment -> typing_environment
 
 val hoist_quantifiers : datatype -> unit
 
