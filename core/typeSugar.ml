@@ -1722,7 +1722,6 @@ let check_toplevel_effects_expr tyenv expr =
   check_toplevel_effects tyenv pos griper
 
 
-
 (** check for duplicate names in a list of pattern *)
 let check_for_duplicate_names : Sugartypes.position -> pattern list -> string list = fun pos ps ->
   let add name binder binderss =
@@ -2101,8 +2100,6 @@ let usage_compat =
 
 let usages_cases bs =
   usage_compat (List.map (fun (_, (_, _, m)) -> m) bs)
-
-
 
 let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
   fun context (expr, pos) ->
@@ -4002,9 +3999,6 @@ let binding_purity_check bindings =
                if not (Utils.is_pure_binding b) then
                  Gripers.toplevel_purity_restriction pos b)
     bindings
-
-
-
 
 module Check =
 struct
