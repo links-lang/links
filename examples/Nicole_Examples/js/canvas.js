@@ -12,7 +12,7 @@ function drawCustomUnit(x, y, xheight, yheight, color, ctx, kappa) {
 
 }
 
-function getColorFromSelection(id, kappa){
+function getValueFromSelection(id, kappa){
     var e = document.getElementById(id);
     return _yieldCont(kappa, e.value);
 

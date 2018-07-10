@@ -1,0 +1,689 @@
+typename Player = [|Alice|Bob|You|];
+typename Level = [|Easy|Medium|Hard|];
+typename Cmd = [| StartGame | YourMove: Int| Restart|];
+typename GameState = (player:(Player, Player), level: Level, cheat:Bool, heap:Int);
+typename ViewState = [|Game: GameState|SetUp|Winner: Player| Cheat: (Player, Int)|];
+typename Option(a) = [|None|Some:a|];
+
+
+sig playerToString: (Player) -> String
+fun playerToString(pl){
+    switch(pl){
+        case Bob -> "Bob"
+        case Alice -> "Alice"
+        case You -> "You"
+    }
+}
+
+sig levelToString: (Level) -> String
+fun levelToString(lev){
+    switch(lev){
+        case Easy -> "Easy"
+        case Medium -> "Medium"
+        case Hard -> "Hard"
+    }
+}
+
+sig boolToString: (Bool) -> String
+fun boolToString(b){
+    if(b) "true"
+    else "false"
+}
+
+sig stringToPlayer: (String) -> Player
+fun stringToPlayer(st){
+    switch(st){
+        case "Alice" -> Alice
+        case "Bob" -> Bob
+        case "You" -> You
+        case _ -> Alice
+    }
+}
+
+sig stringToLevel: (String) -> Level
+fun stringToLevel(st){
+    switch(st){
+        case "Easy" -> Easy
+        case "Medium" -> Medium
+        case "Hard" -> Hard
+        case _ -> Easy
+    }
+}
+
+sig stringToBool: (String) -> Bool
+fun stringToBool(st){
+    switch(st){
+        case "true" -> true
+        case "false" -> false
+        case _ -> false
+    }
+}
+
+sig setField: (a, String, (a) ~> String) ~%~> ()
+fun setField(newVal, id, toString){
+    ignore(domSetAttributeFromRef(getNodeById(id), "value", toString(newVal)))
+}
+
+fun getField(id){
+    domGetAttributeFromRef(getNodeById(id), "value")
+}
+
+sig move: (Player, Int) {Move:(Player, Int) -> Int|e}~> Int
+fun move(pl, n){
+    do Move(pl, n)
+}
+
+sig game: () -%-> Player
+fun game(){
+    var st = do Get;
+    renderView(Game(st), self());
+    turn(st.player.1, st.player.2, st.heap)
+}
+
+sig turn: (Player, Player, Int) {Move: (Player, Int) -> Int|e}~> Player
+fun turn(current, opp, n){
+    if(n <= 0){
+        current
+    } else{
+        var rest = move(current, n);
+        updateView(n, rest, current);
+        turn(opp, current, rest)
+    }
+}
+
+sig hard: (Player, Int) -> Int
+fun hard(pl, n){
+    maximum(1, (n-1) `mod` 4)
+}
+
+sig medium: (Player, Int) ~> Int
+fun medium(pl, n){
+    chooseRandom(validMoves(n))
+}
+
+sig easy: (Player, Int) -> Int
+fun easy(pl, n){
+    1
+}
+
+#sig gameProcess : () {Get:GameState, Set:(GameState) -> (), Move:(Player, Int) -> Int, hear:Cmd |e}~> a
+fun gameProcess(){
+    var cmd = recv();
+    var (winner, st) = switch(cmd){
+        case YourMove(_) -> error("Unexpected input")
+        case StartGame -> {
+                var pl1 = stringToPlayer(getField("pl1"));
+                var pl2 = stringToPlayer(getField("pl2")); 
+                var check = stringToBool(getField("check")); 
+                var level = stringToLevel(getField("level")); 
+                var heap = stringToInt(getField("heap")); 
+                var state = (player=(pl1, pl2), level=level, cheat=check, heap=heap);
+                var moveHandler = switch(state.level){
+                    case Easy -> fun(game){moveHandler(game, easy)}
+                    case Medium -> fun(game){moveHandler(game, medium)}
+                    case Hard -> fun(game){moveHandler(game, hard)}
+                };
+                if(state.cheat) restartHandler(runState(cheatReporter(moveHandler(cheatChecker(game))), state))
+                else restartHandler(runState(moveHandler(game), state))
+                #restartHandler(runState(moveHandler(game), state))
+        }
+        case Restart -> error("Restart not possible from SetUpPage")
+    };
+    finishGame(winner, self());
+    gameProcess()
+}
+
+sig validMoves : (Int) -> [Int]
+fun validMoves(n)
+ { filter(fun(m) {m <= n}, [1,2,3]) }
+
+
+sig chooseRandom: ([Int]) ~> Int
+fun chooseRandom(numbers){
+    switch(numbers){
+        case [] -> 0
+        case [x] -> x
+        case x::xs -> fun loop(xs, n, ret){
+                        switch(xs){
+                            case [] -> ret
+                            case x::xs -> {
+                                var rand = random();
+                                if(rand <= intToFloat(1) /. intToFloat(n+1)){
+                                    loop(xs, n+1, x)
+                                } else{
+                                    loop(xs, n+1, ret)
+                                }
+                            }
+                        }
+                    }
+                    loop(xs, 1, 1)
+    }
+}
+
+#handler
+
+fun cheatChecker(f)(){
+    handle(f()){
+        case Move(pl, n, resume) -> 
+        var rest = do Move(pl, n);
+        if((n-rest) `elem` validMoves(n)) resume(rest)
+        else switch(do Cheat(pl, n-rest)){}
+    }
+}
+
+sig cheatReporter: (() {Get: GameState, Cheat: (Player, Int) -> Player, hear:Cmd |e}~> Player) -> () {Get: GameState, Cheat-, hear:Cmd|e}~> Player
+fun cheatReporter(f)(){
+    handle(f()){
+        case Cheat(pl, n, _) -> {
+            var st = do Get; 
+            renderView(Cheat(pl, n), self());
+            if(st.player.1 == pl){
+                st.player.2
+            } else{
+                st.player.1
+            }
+            
+        }
+    }
+}
+
+sig runState : (() {Get:s, Set:(s) -> () |e}~> a, s) -> () {Get-, Set- |e}~> (a, s)
+fun runState(f, st0)(){
+    handle(f())(st0 -> st){
+        case Return(x) -> (x, st)
+        case Set(st1, resume) -> resume((), st1)
+        case Get(resume) -> resume(st, st)
+        
+    }
+}
+
+# () for the suspended computation -> moveHandler returns a value so we need to thunk it. same as
+# var pId = spawnClient{runState(fun(){moveHandler(gameProcess)}, (player=(Alice,Bob), level=Easy, cheat=false))};
+sig moveHandler: (() {Move: (Player, Int) -> Int, Restart: Zero, hear:Cmd|e}~> a, (Player, Int) ~%~> Int) -> () {Move-, hear:Cmd, Restart: Zero|e}~> a
+fun moveHandler(f, s)(){
+    handle(f()){
+        case Move(pl, n, resume) -> {
+            switch (pl) {
+                case You ->
+                    switch(recv()){
+                        case YourMove(x) -> {
+                            if(x > n) resume(0)
+                            else resume(n-x)
+                        }
+                        case Restart -> switch(do Restart){}
+                        case StartGame -> error("Startgame not possible from GamePage")
+                    }
+                case _ -> resume(n-s(pl, n))
+            }
+        }
+    }
+}
+
+sig restartHandler: (() {Restart: Zero, hear:Cmd |e}~> a) {Cheat-, Restart-, hear:Cmd |e}~> a
+fun restartHandler(f){
+    handle(f()){
+        case Restart -> restart(self());
+        restartHandler(f)
+    }
+}
+
+sig setPlayer : (Player, Player) {Get:GameState, Set: (GameState) -> () |e}~> ()
+fun setPlayer(pl1, pl2){
+    var st = do Get;
+    do Set((st with player=(pl1, pl2)))
+}
+
+sig setLevel : (Level) {Get:GameState, Set: (GameState) -> () |e}~> ()
+fun setLevel(lev){
+    var st = do Get;
+    do Set((st with level=lev))
+}
+
+sig setChecker : (Bool) {Get:GameState, Set: (GameState) -> () |e}~> ()
+fun setChecker(check){
+    var st = do Get;
+    do Set((st with cheat=check))
+}
+
+
+sig parseNat: (String) ~> Option(Int)
+fun parseNat(n){ 
+    if (n =~ /^[0-9]+$/) {
+        var m = stringToInt(n);
+        if(m < 0){
+            None
+        } else{
+            Some(m)
+        }
+    } else{
+        None
+    }
+}
+
+fun sendInput(pId){
+    var n = getInputValue("your-move");
+    switch(parseNat(n)){
+        case None -> displayErrorMessage("game-error-message", "Please enter numbers into the field.")
+        case Some(m) -> pId ! YourMove(m)
+    }
+}
+
+fun validInput(id){
+    var num = parseNat(getInputValue(id));
+    switch(num){
+        case None -> false
+        case Some(n) -> true
+    }
+}
+
+fun start(pId){
+    var num = parseNat(getInputValue("start-number"));
+    switch(num){
+        case None -> displayErrorMessage("start-error-message", "Please enter numbers into the field.")
+        case Some(n) -> {
+            setField(n, "heap", intToString);
+            pId ! StartGame
+        }
+    }
+}
+
+fun displayErrorMessage(id, msg){
+    var messageNode = getNodeById(id);
+    domReplaceChildren(stringToXml(msg), messageNode)
+}
+
+fun resetField(pl1, pl2, lev, check, n){
+    setField(pl1, "pl1", playerToString);
+    setField(pl2, "pl2", playerToString);
+    setField(lev, "level", levelToString);
+    setField(check, "check", boolToString);
+    setField(n, "heap", intToString)
+}
+
+sig restart: (Process({hear:Cmd |e})) ~> ()
+fun restart(pId){
+    resetField(Alice,Bob,Easy,false, 8);
+    renderView(SetUp, pId);
+}
+
+sig finishGame: (Player, Process({hear:Cmd|e})) ~> ()
+fun finishGame(winner, pId){
+    addWinnerGif();
+    renderView(Winner(winner), pId);
+    renderView(SetUp, pId)
+}
+
+fun addWinnerGif(){
+    var background = getNodeById("background");
+    var body = getNodeById("body");
+    domSetStyleAttrFromRef(body, "background-image", "url('https://media.giphy.com/media/IjmMzurYulKEw/giphy.gif')");
+    domSetStyleAttrFromRef(body, "background-size", "cover");
+    domSetStyleAttrFromRef(background, "background-color", "transparent")
+}
+
+fun removeWinnerGif(){
+    var background = getNodeById("background");
+    var body = getNodeById("body");
+    domRemoveAttributeFromRef(body, "style");
+    domSetStyleAttrFromRef(background, "background-color", "#f4f4f4")
+}
+
+sig renderView: (ViewState, Process ({hear:Cmd | e})) ~%~> ()
+fun renderView(view, pId){
+    var node = getNodeById("game");
+    var winner = getNodeById("winner");
+    var cheater = getNodeById("cheater");
+    switch(view){
+        case Game(state) ->  domReplaceChildren(<#></#>, winner); domReplaceChildren(<#></#>, cheater); removeWinnerGif(); domReplaceChildren(getGameXml(pId, state), node)
+        case SetUp -> domReplaceChildren(getSetUpXml(pId), node)
+        case Winner(pl) -> domReplaceChildren(getWinnerXml(pId, pl), winner)
+        case Cheat(pl, n) -> domReplaceChildren(getCheatXml(pl, n), cheater)
+    }
+}
+
+sig updateView: (Int, Int, Player) ~> ()
+fun updateView(n, rest, current){
+    #update sticks on the stack
+    domReplaceChildren(intToXml(rest), getNodeById("left-sticks"));
+    
+    #update game steps
+    var step= switch(current){
+        case You -> {
+        <#>
+            <div> 
+                <p class="steps"> {stringToXml("You take "^^ intToString(n-rest)^^".")}</p>
+            </div>
+            <hr class="thin-grey center"/>
+        </#>}
+        case _ -> {
+        <#>
+            <div> 
+                <p class="steps"> {stringToXml(playerToString(current) ^^" takes "^^ intToString(n-rest)^^".")}</p>
+            </div>
+            <hr class="thin-grey center"/>
+        </#>}
+    };
+    appendChildren(step, getNodeById("game-steps"))
+}
+
+sig getGameXml: (Process ({hear:Cmd |e}) , GameState) ~%~> Xml
+fun getGameXml(pId, gameState){
+            <#>
+            <div class="field rounded-corners width-list center margin-10">
+                <div class="game-head center block">
+                    <span>Enter your Move </span>
+                    <input class="input-field rounded-corners margin-all-4" placeholder="Enter your move" id="your-move" type="text" />
+                    <button class="move-button rounded-corners margin-10 color-sec" l:onclick="{sendInput(pId)}">Move</button>
+                    <p class="error-message centered-text center margin-10" id="game-error-message"></p>
+                </div>
+                <div class="game-view">
+                    <div class="game-left game-boxes"> 
+                        <div class="view-heading centered-text game-head-height"> Game Stats </div>
+                        <p class="steps"> Players: {stringToXml(playerToString(gameState.player.1))} and {stringToXml(playerToString(gameState.player.2))}.</p>
+                                                <hr class="thin-grey center"/>
+
+                        <p class="steps"> Level: {stringToXml(levelToString(gameState.level))}</p>
+                                                <hr class="thin-grey center"/>
+
+                        <p class="steps"> Size of Heap: {intToXml(gameState.heap)}</p>
+                    </div>
+                    <div class="game-right game-boxes">
+                        <div id="left-sticks" class="left-sticks centered-text game-head-height">{intToXml(gameState.heap)}</div>
+
+                        <div id="game-steps" class="block"></div>
+                    </div>
+                    
+                
+                </div>
+
+                
+            </div>
+            
+            <button class="rounded-corners block row-button center color-accent" l:onclick="{pId ! Restart}"> Restart </button>
+        </#>
+}
+
+fun getSetUpXml(pId){
+            <#>
+            <div class="choose-strategy width-list center ">
+            <div class="field rounded-corners width-list center margin-10">
+                <p> Choose your Opponent: </p>
+                <div class="buttons center">
+                    <button class="row-button rounded-corners margin-10 color-sec margin-all-4" l:onclick="{setField(Alice, "pl1", playerToString); setField(You, "pl2", playerToString)}">Alice</button>
+                    <button class="row-button rounded-corners margin-10 color-sec margin-all-4" l:onclick="{setField(Bob, "pl1", playerToString); setField(You, "pl2", playerToString)}">Bob</button>
+                    <button class="row-button rounded-corners margin-10 color-sec margin-all-4" l:onclick="{setField(Alice, "pl1", playerToString); setField(Bob, "pl2", playerToString)}">Or Alice vs Bob</button>
+                </div>
+            </div>
+            <div class="field rounded-corners width-list center margin-10">
+                <p> Choose your Difficulty: </p>
+                <div class="buttons center">
+                    <button class="row-button rounded-corners margin-10 color-sec margin-all-4" l:onclick="{setField(Easy, "level", levelToString)}">Easy</button>
+                    <button class="row-button rounded-corners margin-10 color-sec margin-all-4" l:onclick="{setField(Medium, "level", levelToString)}">Medium</button>
+                    <button class="row-button rounded-corners margin-10 color-sec margin-all-4" l:onclick="{setField(Hard, "level", levelToString)}">Hard</button>
+                </div>
+            </div>
+            <div class="field rounded-corner width-list center margin-10">
+                <p> Toggle cheat detection? </p>
+                <div class="buttons center">
+                    <button class="row-button rounded-corners margin-10 color-sec margin-all-4" l:onclick="{setField(false, "check", boolToString)}">No</button>
+                    <button class="row-button rounded-corners margin-10 color-sec margin-all-4" l:onclick="{setField(true, "check", boolToString)}">Yes</button>
+                </div>
+            </div>
+            <div class="field rounded-corners width-list center margin-10">
+                <p>How many sticks should be on the heap?</p>
+                <input class="input-field rounded-corners margin-all-4" id="start-number" type="text" />
+            </div>
+                            
+            <p class="error-message centered-text center margin-10" id="start-error-message"></p>
+
+            <button class="rounded-corners block row-button center color-accent" l:onclick="{start(pId)}"> Start Game </button>
+            </div>
+            
+        </#>
+}
+
+fun getWinnerXml(pId, pl){
+    <#>
+        <div class="width-list center margin-10">
+
+            <p class="winner-heading">
+            {
+                switch(pl){
+                    case You -> stringToXml("You have won!")
+                    case _ -> stringToXml(playerToString(pl)^^ " has won!")
+                }
+            }
+            </p>
+        </div>
+    </#>
+}
+
+fun getCheatXml(pl, n){
+    <#>
+    <p class="winner-heading block">
+        {
+            switch(pl){
+                case You -> stringToXml("You have cheated! " ^^ {intToString(n)} ^^ " is not a valid move!")
+                case _ -> stringToXml(playerToString(pl)^^ " has cheated!"  ^^ {intToString(n)} ^^ " is not a valid move!")
+            }
+        }
+    </p>
+    </#>
+}
+
+
+sig main_page : (_) ~> Page
+fun main_page(_) {
+    var pId = spawnClient{gameProcess()};
+
+
+
+    page
+    <html>
+    <head>
+        <style>
+        body{{
+            font-size: 20px;
+            font-family: Bookman, sans-serif;
+            color: #3e0068;
+        }}
+        .background{{
+            width: 80%;
+            max-width: 1200px;
+            min-width: 300px;
+            background-color: #f4f4f4;
+            min-height: 100%;
+        }}
+        .top-heading{{
+            padding-top: 1em;
+            width: 75%;
+            font-size: 3em;
+            line-height: 0;
+            color: #c4005e;
+            font-weight: bold;
+            text-align: center;
+        }}
+        .centered-text{{
+            text-align: center;
+        }}
+        .center{{
+            margin: 0 auto;
+        }}
+        .font-size-large{{
+            font-size: 1.5em;
+        }}
+        .text-align-right{{
+            text-align: right;
+        }}
+        .center-vertical{{
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+        }}
+        .width-list{{
+            width: 85%;
+        }}
+        .margin-10{{
+            margin-top:10px;
+            margin-bottom: 10px;
+        }}
+        .margin-all-4{{
+            margin:4px;
+        }}
+        .font-10{{
+            font-size: 15px;
+        }}
+        .block{{
+            display: block;
+        }}
+        .buttons{{
+            display:flex;
+            justify-content: center;
+        }}
+        .button{{
+            height: 30px;
+            width: 55px;
+        }}
+        .row-button{{
+            width: 19%;
+            min-width: 90px;
+            height: 2.6em;
+        }}
+        .row-button:visited .row-button:focus{{
+            background-color: #63b29e;
+        }}
+        .move-button{{
+            width: 10%;
+            height: 1.5em;
+        }}
+        .move-button:hover .row-button:hover{{
+            background-color:#63b29e;
+        }}
+        .color-accent{{
+            background-color: #c4005e;
+            color: #FFFFFF;
+            font-size: 20px;
+        }}
+        .color-sec{{
+            background-color: #a6d8cc;
+            font-size: 20px;
+        }}
+        .input-field{{
+            margin-bottom: 10px;
+            margin-top: 8px;
+            background-color: #f2f2f2;
+            color: #010b19;
+            padding: .1em 2%;
+            border: 1px solid #ccc;
+            font-size: 15px;
+            width: 30%;
+            min-width: 55px;
+            height: 1.5em;
+        }}
+        .rounded-corners{{
+            border-radius: 5px;
+        }}
+        .thin-grey{{
+            height: 1px;
+            border: 0;
+            width: 90%;
+            border-top: 1px solid #b8b8b8;
+            margin-top: 0;
+            margin-bottom: 0;
+            padding: 0;
+        }}
+        .thin-grey-start{{
+            margin-top: 1em;
+            margin-bottom: 2em;
+        }}
+        .field{{
+            min-height: 2em;
+            background-color: #ffffff;
+            border: 1px solid #d4d4d4;
+            padding: .2em 1.1em;
+            clear: both;
+            overflow: hidden;
+        }}
+        .game-view{{
+            display: flex;
+            justify-content: center;
+        }}
+        .game-left{{
+            width: 39%;
+            min-width 200px;
+        }}
+        .game-right{{
+            width: 59%;
+            min-width 300px;
+        }}
+        .game-boxes{{
+            margin:2px;
+        }}
+        .error-message{{
+            font-size: 20px;
+            font-weight: bold;
+            color: #cc0606;
+        }}
+        .game-head{{
+
+        }}
+        .game-head span{{
+            align-self: flex-end;
+        }}
+        .left-sticks{{
+            font-weight: bold;
+            color: #c4005e;
+        }}
+        .game-head-height{{
+            height: 45px;
+            background-color: #a6d8cc;
+            padding-top: 20px;
+            font-size: 25px;
+        }}
+        .steps{{
+            margin: 10px 10%;
+        }}
+        .winner-heading{{
+            text-align: center;
+            font-size: 60px;
+            color: #ffcc00;
+            font-weight: bold;
+            line-height: 0;
+            padding: 10px;
+        }}
+        </style>
+    </head>
+    <body>
+    <div id="body">
+        <div id="background" class="background center">
+            <div class="top-heading center">
+                <p> The Game of Nim </p>
+            </div>
+            <hr class="thin-grey thin-grey-start"/>
+            <div id="cheater"></div>
+            <div id="winner"></div>
+            <div id="game">
+                {getSetUpXml(pId)}
+            </div>
+
+        <div id="game-state" style="display: none;">
+            <span id="pl1" value="Alice"></span>
+            <span id="pl2" value="Bob"></span>
+            <span id="level" value="Easy"></span>
+            <span id="check" value="false"></span>
+            <span id="heap" value="8"></span>
+        </div>
+        </div>
+    </div>
+    </body>
+    </html>
+}
+
+
+sig main: () ~> ()
+fun main() {
+    addRoute("/", main_page);
+    servePages()
+}
+
+main()
