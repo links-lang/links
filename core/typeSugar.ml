@@ -897,11 +897,19 @@ end
                "and the currently allowed effects are"        ^ nli () ^
                 code ppr_eff)
 
-    let illegal_toplevel_effects_in_binding ~pos ~t1:_ ~t2:_ ~error:_ =
-      die pos ("This toplevel binding has unhandled effects.")
+    let illegal_toplevel_effects_in_binding ~pos ~t1:_ ~t2:(_, ft2) ~error:_ =
+      let eff = TypeUtils.effect_row ft2 in
+      let ppr_eff  = show_row eff in
+      die pos ("This toplevel binding has effect row "             ^ nli () ^
+                code ppr_eff                                       ^ nl  () ^
+               "but only the wild effect is allowed at toplevel")
 
-    let illegal_toplevel_effects_in_expr ~pos ~t1:_ ~t2:_ ~error:_  =
-      die pos ("This toplevel expression has unhandled effects.")
+    let illegal_toplevel_effects_in_expr ~pos ~t1:_ ~t2:(_, ft2) ~error:_  =
+      let eff = TypeUtils.effect_row ft2 in
+      let ppr_eff  = show_row eff in
+      die pos ("This toplevel expression has effect row "          ^ nli () ^
+                code ppr_eff                                       ^ nl  () ^
+               "but only the wild effect is allowed at toplevel")
 
     let xml_attribute ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
@@ -1704,12 +1712,15 @@ let check_toplevel_effects tyenv pos griper =
   let wild_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type) in
   let actual_effect_row = tyenv.effect_row in
   let dummy_string = "" in
-  (* Unify rows by unifying Records containing them *)
+  let empty_effect_funtype = `Function (Types.unit_type, empty_row, Types.unit_type) in
+  let wild_effect_funtype = `Function (Types.unit_type, wild_row, Types.unit_type) in
+  let actual_effects_funtype = `Function (Types.unit_type, actual_effect_row, Types.unit_type) in
+  (* Unify rows by unifying functions using them as effect rows *)
     unify_or
     ~handle:griper
     ~pos:pos
-    ((dummy_string,`Record empty_row), (dummy_string, `Record actual_effect_row))
-    ((dummy_string,`Record wild_row), (dummy_string, `Record actual_effect_row))
+    ((dummy_string, empty_effect_funtype), (dummy_string, actual_effects_funtype))
+    ((dummy_string, wild_effect_funtype), (dummy_string, actual_effects_funtype))
 
 let check_toplevel_effects_binding tyenv binding =
   let griper = Gripers.illegal_toplevel_effects_in_binding in
