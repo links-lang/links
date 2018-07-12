@@ -397,9 +397,7 @@ let load_prelude () =
 
   let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
 
-  let globals = Closures.bindings tenv Lib.primitive_vars globals in
-  (* Debug.print ("Prelude after closure conversion: " ^ Ir.Show_program.show (globals, `Return (`Extend (StringMap.empty, None)))); *)
-  BuildTables.bindings tenv Lib.primitive_vars globals;
+  let globals = Backend.transform_prelude tenv globals in
 
   let valenv = Eval.run_defs Value.Env.empty globals in
   let envs =

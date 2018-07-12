@@ -58,7 +58,16 @@ struct
         (*IrTraversals.NormaliseTypes.program;
         IrTraversals.ElimRecursiveTypeCycles.program;
         IrTraversals.ElimTypeAliases.program;*)
-        IrCheck.Typecheck.program
+        (only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_program);
+        IrCheck.Typecheck.program;
+      ]
+    let prelude_typechecking_pipeline = [
+        (*IrTraversals.NormaliseTypes.program;
+        (only_if_set
+          Basicsettings.Ir.show_compiled_ir_after_backend_transformations
+          (fun tenv bs -> (print_program tenv (bindings_to_dummy_program bs));bs)
+        );
+        IrCheck.Typecheck.bindings;
       ]
 
 
@@ -66,8 +75,15 @@ struct
         only_if perform_optimisations (measure "optimise" (run optimisation_pipeline));
         Closures.program Lib.primitive_vars;
         perform_for_side_effects (BuildTables.program Lib.primitive_vars);
-        only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_program;
+
         only_if_set Basicsettings.Ir.typecheck_ir (run typechecking_pipeline);
+      ]
+
+    let prelude_pipeline = [
+        (* May perform some optimisations here that are safe to do on the prelude *)
+        (fun tenv globals -> Closures.bindings tenv Lib.primitive_vars globals);
+        (fun tenv globals -> BuildTables.bindings tenv Lib.primitive_vars globals; globals);
+        only_if_set Basicsettings.Ir.typecheck_ir (run prelude_typechecking_pipeline);
       ]
 
 end
@@ -75,3 +91,6 @@ end
 
 let transform_program tyenv p =
   run Pipelines.main_pipeline tyenv p
+
+let transform_prelude tyenv bindings =
+  run Pipelines.prelude_pipeline tyenv bindings
