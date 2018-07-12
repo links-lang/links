@@ -1,0 +1,5 @@
+(env
+ (development
+  (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread)))
+ (release
+  (flags (:standard -safe-string -dtypes -warn-error Ae-44-45-60 -cclib -lunix -thread))))
