@@ -61,6 +61,12 @@ sig
    val program : Types.datatype Env.Int.t -> program -> program
 end
 
+module type PROGTRANSFORM2 =
+sig
+   val program : Types.datatype Env.Int.t -> program -> program
+   val bindings : Types.datatype Env.Int.t -> binding list -> binding list
+end
+
 module Transform : TRANSFORM =
 struct
   open Types
@@ -884,6 +890,34 @@ module CheckForCycles =
   end
 
 
+module ElimBodiesFromMetaTypeVars =
+  struct
+
+    let elim_bodies =
+      object (o)
+        inherit Types.Transform.visitor as super
+
+        method! typ = function
+          | `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `Body t ->
+                  o#typ t
+              | _ -> `MetaTypeVar point, o
+          end
+          | other -> super#typ other
+      end
+
+
+    let program tyenv p =
+      let p, _, _ = (ir_type_mod_visitor tyenv elim_bodies)#program p in
+      p
+
+    let bindings tyenv bs =
+      let bs, _ = (ir_type_mod_visitor tyenv elim_bodies)#bindings bs in
+      bs
+
+  end
 
 module ElimTypeAliases =
   struct
@@ -902,6 +936,10 @@ module ElimTypeAliases =
     let program tyenv p =
       let p, _, _ = (ir_type_mod_visitor tyenv elim_type_aliases)#program p in
       p
+
+    let bindings tyenv bs =
+      let bs, _ = (ir_type_mod_visitor tyenv elim_type_aliases)#bindings bs in
+      bs
 
   end
 

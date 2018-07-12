@@ -14,6 +14,11 @@ let eq_types : (Types.datatype * Types.datatype) -> bool =
 
     (* sbust maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
     let rec eqt ((subst, t1, t2) : (Var.var IntMap.t * Types.datatype * Types.datatype)) =
+
+      (* TODO: This also unwraps one level of `Recursive, without changing its body *)
+      let t1 = Types.concrete_type t1 in
+      let t2 = Types.concrete_type t2 in
+
       Debug.print ("Checking type equality\n " ^
                      (Types.string_of_datatype t1) ^ "\n vs \n" ^ (Types.string_of_datatype t2) (*^ IntMap.show Var.pp_var subst*));
       match t1 with
@@ -109,7 +114,6 @@ let eq_types : (Types.datatype * Types.datatype) -> bool =
             (subst, r1 && r2 && r3)
          | _ -> (subst, false)
          end
-      | _ -> assert false
     and eq_sessions (subst, l, r)  = (* checked again *)
       match (l,r) with
       | `Input (lt, _), `Input (rt, _)
@@ -149,7 +153,7 @@ let eq_types : (Types.datatype * Types.datatype) -> bool =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | `Closed, `Closed ->  (subst, true)
       | `Var lv, `Var rv ->   handle_variable lv rv subst
-      | `Recursive (var, _), `Recursive (var', _) -> assert false (* FIXME *)
+      | `Recursive (_var, _), `Recursive (_var', _) -> assert false (* FIXME *)
       | _ ->  (subst, false)
     and eq_type_args  (subst, l, r)  =
       match l,r with
@@ -160,11 +164,23 @@ let eq_types : (Types.datatype * Types.datatype) -> bool =
     in
       snd (eqt  (IntMap.empty, t1, t2))
 
-(* let typecheck_ir =  true (\* Settings.get_value Basicsettings.Ir.typecheck_ir*\) *)
-(* let fail_on_ir_type_error = true *)
 
-let raise_ir_type_error msg occurence =
-  failwith(msg)
+let fail_on_ir_type_error = false
+exception IRTypeError of string
+
+let raise_ir_type_error msg _occurence =
+  raise (IRTypeError msg)
+
+let handle_ir_type_error error alternative =
+  match error with
+    | IRTypeError msg
+    | TypeUtils.TypeDestructionError msg ->
+      if fail_on_ir_type_error then
+        failwith msg
+      else
+        Debug.print ("Continuing after IR Type Error:\n" ^ msg ); alternative
+    |  _ -> failwith "Unknown exception"
+
 
 
 
@@ -244,24 +260,24 @@ struct
                     end
             in
               `Extend (fields, base), t, o
-        | `Project (name, v) ->  (* checked 19.06. *)
+        | `Project (name, v) ->
             let (v, vt, o) = o#value v in
             `Project (name, v), deconstruct (project_type ~overstep_quantifiers:false name) vt, o
 
-        | `Erase (names, v) -> (* checked 19.06. *)
+        | `Erase (names, v) ->
             let (v, vt, o) = o#value v in
             let t = deconstruct (erase_type ~overstep_quantifiers:false names) vt in
               `Erase (names, v), t, o
 
-        | `Inject (name, v, t) -> (* checked 19.06. *)
-            let v, _vt, o = o#value v in
+        | `Inject (name, v, t) ->
+            let v, vt, o = o#value v in
             let _ = match t with
-              | `Variant row ->
-                 check_eq_types (project_type ~overstep_quantifiers:false name t) _vt
+              | `Variant _ ->
+                 check_eq_types (project_type ~overstep_quantifiers:false name t) vt
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (`Value orig) in
             `Inject (name, v, t), t, o
 
-        | `TAbs (tyvars, v) ->  (* checked 19.06. *)
+        | `TAbs (tyvars, v) ->
             let v, t, o = o#value v in
             let t = Types.for_all (tyvars, t) in
               `TAbs (tyvars, v), t, o
@@ -282,7 +298,7 @@ struct
                     ^ ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts)) in
                     raise_ir_type_error msg (`Value orig)
               end
-        | `XmlNode (tag, attributes, children) -> (* checked 19.06. *)
+        | `XmlNode (tag, attributes, children) ->
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
 
@@ -291,7 +307,7 @@ struct
             (* FIXME xml_type denotes a list of xml items. should we just return xmlitem here? *)
               `XmlNode (tag, attributes, children), xml_type, o
 
-        | `ApplyPure (f, args) -> (* checked 19.06. *)
+        | `ApplyPure (f, args) ->
             let (f, ft, o) = o#value f in
             let (args, argument_types, o) = o#list (fun o -> o#value) args in
 
@@ -327,6 +343,7 @@ struct
 
         | `Apply (f, args) -> (* checked 19.06. *)
             let f, ft, o = o#value f in
+            Debug.print ("Function type in appl:" ^ string_of_datatype ft);
             let args, argtypes, o = o#list (fun o -> o#value) args in
             let exp_argstype = arg_types ~overstep_quantifiers:false ft in
             check_eq_type_lists exp_argstype argtypes;
@@ -371,14 +388,14 @@ struct
                      check_eq_types type_binder type_variant;
                      let b, o = o#binder binder in
                      let c, t, o = o#computation comp in
-                     let o = o#unbind_var binder in
+                     let o = o#remove_binder binder in
                      StringMap.add name (b,c) cases, t :: types, o)
                    cases (StringMap.empty, [], o) in
                let default, default_type, o =
                  o#option (fun o (b, c) ->
                      let b, o = o#binder b in
                      let c, t, o = o#computation c in
-                     let o = o#unbind_var b in
+                     let o = o#remove_binder b in
                      (b, c), t, o) default in
                let types = OptionUtils.opt_app (fun dt -> dt :: types) types default_type in
                let t = List.hd types in
@@ -401,11 +418,15 @@ struct
             let v, _, o = o#value v in
               `Database v, `Primitive `DB, o
         | `Table (db, table_name, keys, tt) ->
-            let db, _, o = o#value db in
-            let keys, _, o = o#value keys in
-            let table_name, _, o = o#value table_name in
+            let db, db_type, o = o#value db in
+            check_eq_types db_type Types.database_type;
+            let table_name, table_name_type, o = o#value table_name in
+            check_eq_types table_name_type Types.string_type;
+            let keys, keys_type, o = o#value keys in
+            check_eq_types keys_type Types.keys_type;
+            (* TODO: tt is a tuple of three records. Check it to contain base types only and all rows should be closed. *)
               `Table (db, table_name, keys, tt), `Table tt, o
-        | `Query (range, e, _) ->
+        | `Query (range, e, _) -> (* TODO perform checks specific to this constructor *)
             let range, o =
               o#optionu
                 (fun o (limit, offset) ->
@@ -415,20 +436,21 @@ struct
                 range in
             let e, t, o = o#computation e in
               `Query (range, e, t), t, o
-        | `Update ((x, source), where, body) ->
+        | `Update ((x, source), where, body) -> (* TODO perform checks specific to this constructor *)
             let source, _, o = o#value source in
             let x, o = o#binder x in
             let where, _, o = o#option (fun o -> o#computation) where in
             let body, _, o = o#computation body in
               `Update ((x, source), where, body), Types.unit_type, o
-        | `Delete ((x, source), where) ->
+        | `Delete ((x, source), where) -> (* TODO perform checks specific to this constructor *)
             let source, _, o = o#value source in
             let x, o = o#binder x in
             let where, _, o = o#option (fun o -> o#computation) where in
               `Delete ((x, source), where), Types.unit_type, o
         | `CallCC v ->
             let v, t, o = o#value v in
-              `CallCC v, deconstruct return_type t, o
+            (* TODO: What is the correct argument type for v, since it expects a continuation? *)
+              `CallCC v, return_type ~overstep_quantifiers:false t, o
         | `Select (l, v) ->
            let v, t, o = o#value v in
            `Select (l, v), t, o
@@ -441,7 +463,7 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
-	| `Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
+	| `Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) -> (* TODO perform checks specific to this constructor *)
 	   let (comp, _, o) = o#computation ih_comp in
            (* TODO FIXME traverse parameters *)
            let (depth, o) =
@@ -473,7 +495,7 @@ struct
              (b, comp), t, o
            in
 	   `Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t, o
-	| `DoOperation (name, vs, t) ->
+	| `DoOperation (name, vs, t) -> (* TODO perform checks specific to this constructor *)
 	   let (vs, _, o) = o#list (fun o -> o#value) vs in
 	   (`DoOperation (name, vs, t), t, o)
 
@@ -493,34 +515,41 @@ struct
       fun (bs, tc) ->
         let bs, o = o#bindings bs in
         let tc, t, o = o#tail_computation tc in
+        let o = o#remove_bindings bs in
           (bs, tc), t, o
 
     method! binding : binding -> (binding * 'self_type) =
       function
         | `Let (x, (tyvars, tc)) ->
+            let tc, o =
+            try
+              let tc, act, o = o#tail_computation tc in
+              let exp = Var.type_of_binder x in
+              check_eq_types exp act;
+              tc, o
+            with e -> handle_ir_type_error e (tc, o) in
             let x, o = o#binder x in
-            let tc, act, o = o#tail_computation tc in
-            let exp = Var.type_of_binder x in
-            let o = o#unbind_var x in
-            check_eq_types exp act;
             `Let (x, (tyvars, tc)), o
 
         | `Fun (f, (tyvars, xs, body), z, location) ->
-              let (z, o) = o#optionu (fun o -> o#binder) z in
-              let (xs, o) =
-                List.fold_right
-                  (fun x (xs, o) ->
-                     let x, o = o#binder x in
-                       (x::xs, o))
-                  xs
-                  ([], o) in
-              let body, body_actual, o = o#computation body in (* FIXME we probably have to handle the type vars here *)
-              let body_expected = Var.type_of_binder f in
-              check_eq_types body_expected body_actual;
-              let o = OptionUtils.opt_app o#unbind_var o z in
-              let o = List.fold_right (fun b o -> o#unbind_var b) xs o in
+              let f, tyvars, xs, body, z, location, o =
+              try
+                let (z, o) = o#optionu (fun o -> o#binder) z in
+                let (xs, o) =
+                  List.fold_right
+                    (fun x (xs, o) ->
+                      let x, o = o#binder x in
+                        (x::xs, o))
+                    xs
+                    ([], o) in
+                let body, body_actual, o = o#computation body in (* FIXME we probably have to handle the type vars here *)
+                let body_expected = Var.type_of_binder f in
+                check_eq_types body_expected body_actual;
+                let o = OptionUtils.opt_app o#remove_binder o z in
+                let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
+                f, tyvars, xs, body, z, location, o
+              with e -> handle_ir_type_error e (f, tyvars, xs, body, z, location, o) in
               let f, o = o#binder f in
-              let o = o#unbind_var f in
               `Fun (f, (tyvars, xs, body), z, location), o
 
         | `Rec defs ->
@@ -536,6 +565,8 @@ struct
                 ([], o) in
 
             let defs, o =
+            try
+              let defs, o =
               List.fold_left
                 (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location) ->
                    let (z, o) = o#optionu (fun o -> o#binder) z in
@@ -549,19 +580,19 @@ struct
                   let body, body_actual, o = o#computation body in (* FIXME we probably have to handle the type vars here *)
                   let body_expected = Var.type_of_binder f in
                   check_eq_types body_expected body_actual;
-                  let o = OptionUtils.opt_app o#unbind_var o z in
-                  let o = List.fold_right (fun b o -> o#unbind_var b) xs o in
+                  let o = OptionUtils.opt_app o#remove_binder o z in
+                  let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
                     (f, (tyvars, xs, body), z, location)::defs, o)
                 ([], o)
                 defs in
-            let defs = List.rev defs in
-            let o = List.fold_right (fun fundef o -> o#unbind_var (binder_of_fun_def fundef)) defs o in
+              let defs = List.rev defs in
+              defs, o
+            with e -> handle_ir_type_error e (defs, o) in
               `Rec defs, o
 
 
         | `Alien (x, name, language) ->
             let x, o = o#binder x in
-            let o = o#unbind_var x in
               `Alien (x, name, language), o
 
         | `Module (name, defs) ->
@@ -577,12 +608,30 @@ struct
 
     method! binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
+        Debug.print ("binding" ^ string_of_int var);
         let tyenv = Env.bind tyenv (var, info_type info) in
           (var, info), {< tyenv=tyenv >}
 
-    method unbind_var : binder -> 'self_type = fun binder ->
+    method remove_binder : binder -> 'self_type = fun binder ->
+      Debug.print ("unbinding" ^ string_of_int (Var.var_of_binder binder));
       let tyenv = Env.unbind tyenv (Var.var_of_binder binder) in
       {< tyenv=tyenv >}
+
+    method remove_binding : binding -> 'self_type = function
+      | `Let (x, _) -> o#remove_binder x
+      | `Fun  fundef -> o#remove_binder (Ir.binder_of_fun_def fundef)
+      | `Rec fundefs ->
+        List.fold_left
+                (fun o fundef  ->
+                   o#remove_binder (Ir.binder_of_fun_def fundef))
+                o
+                fundefs
+      | `Alien (binder, _, _) -> o#remove_binder binder
+      | `Module _ -> o
+
+    method remove_bindings : binding list -> 'self_type =
+      List.fold_left (fun o b -> o#remove_binding b) o
+
 
     method! program : program -> (program * datatype * 'self_type) = o#computation
 
@@ -592,4 +641,8 @@ struct
   let program tyenv p =
     let p, _, _ = (checker tyenv)#computation p in
       p
+
+  let bindings tyenv b =
+    let b, _ = (checker tyenv)#bindings b in
+      b
 end

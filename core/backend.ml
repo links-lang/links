@@ -19,7 +19,7 @@ open Utility
 
 
 let only_if predicate transformer =
-              if predicate then transformer else (fun _ -> identity)
+              if predicate then transformer else (fun _ x -> x)
 let only_if_set setting =
              only_if (Settings.get_value setting)
 
@@ -36,6 +36,7 @@ let print_program tyenv p =
       Ir.show_program (IrTraversals.ElimRecursiveTypeCyclesFromProgram.program tyenv p) in
   Debug.print (string_repr_of_p);p
 
+let bindings_to_dummy_program (bs : Ir.binding list)  : Ir.program = bs, `Return (`Constant (`String "dummy_string"))
 
 
 let run pipeline tyenv p =
@@ -56,13 +57,18 @@ struct
 
     let typechecking_pipeline = [
         (*IrTraversals.NormaliseTypes.program;
-        IrTraversals.ElimRecursiveTypeCycles.program;
-        IrTraversals.ElimTypeAliases.program;*)
+        IrTraversals.ElimRecursiveTypeCycles.program;*)
+        IrTraversals.ElimTypeAliases.program;
+        IrTraversals.ElimBodiesFromMetaTypeVars.program;
         (only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_program);
         IrCheck.Typecheck.program;
       ]
+
     let prelude_typechecking_pipeline = [
         (*IrTraversals.NormaliseTypes.program;
+        IrTraversals.ElimRecursiveTypeCycles.program;*)
+        IrTraversals.ElimTypeAliases.bindings;
+        IrTraversals.ElimBodiesFromMetaTypeVars.bindings;
         (only_if_set
           Basicsettings.Ir.show_compiled_ir_after_backend_transformations
           (fun tenv bs -> (print_program tenv (bindings_to_dummy_program bs));bs)
