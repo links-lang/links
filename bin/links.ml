@@ -52,7 +52,7 @@ let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) ex
 
   let (globals, _) = Backend.transform_program tenv program in
 
-  if Settings.get_value BS.typecheck_only then exit 0
+  (if Settings.get_value BS.typecheck_only then exit 0);
 
   Webserver.init (valenv, nenv, tyenv) globals external_files;
 
