@@ -171,6 +171,10 @@ let print_colors = Settings.add_bool ("print_colors", false, `User)
 (* Base URL for websocket connections *)
 let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)
 
+(* For testing only. If this is set, programs are not executed, but
+   Links terminates after type-checking and compiling to the IR. *)
+let typecheck_only = Settings.add_bool ("typecheck_only", false, `User)
+
 (* Handlers stuff *)
 module Handlers = struct
   let enabled = Settings.add_bool("enable_handlers", false, `System)
