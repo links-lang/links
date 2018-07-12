@@ -9,6 +9,7 @@ FLAGS=--build-dir=$(BUILD_DIR) --profile=development
 .DEFAULT_GOAL: nc
 
 nc: build-dev-all create-startup-script
+nc-release: build-release-all create-startup-script
 
 native: nc
 all: nc
@@ -26,6 +27,9 @@ build-dev-all: dune dune-project
 
 build-dev-nodb: dune dune-project
 	$(BUILD) --only-packages links $(FLAGS) @install
+
+build-release-all:
+	$(BUILD) -p links,links-postgresql @install
 
 install:
 	dune install
