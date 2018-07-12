@@ -10,6 +10,11 @@ function delayExecution(delay, kappa){
     return CONSTANTS.UNIT;
 }
 
+function setIntervalForF(interval, f, kappa){
+    var id = setInterval(f, interval);
+    return _yieldCont(kappa, id);
+}
+
 const SystemQueue = (function(){
 
     let queue = LINKEDLIST.Nil;

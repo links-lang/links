@@ -320,8 +320,6 @@ fun setUpLineDrawing(color){
     }
 }
 
-
-
 fun start(){
     fork(makeFiber(Low, forever));
     fun aux(colors, prios){
