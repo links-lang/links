@@ -15,6 +15,6 @@ before_install:
 script:
   - opam pin add links . -y
   - opam pin add links-postgresql . -y
-  - make nc
+  - make nc-release
   - make tests
   - ./run-tests db-only shredding
