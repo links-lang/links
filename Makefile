@@ -18,7 +18,7 @@ no-db:	build-dev-nodb create-startup-script
 
 create-startup-script:
 	@echo "#!/bin/sh" > links
-	@echo "LINKS_LIB=\"$(shell pwd)/$(BUILD_DIR)/default/lib\" $(shell pwd)/$(BUILD_DIR)/default/bin/links.exe \"\$$@\"" >> links
+	@echo "LINKS_LIB=\"$(BUILD_DIR)/default/lib\" $(BUILD_DIR)/default/bin/links.exe \"\$$@\"" >> links
 	@chmod +x links
 	ln -fs links linx
 
