@@ -1,0 +1,7 @@
+(executable
+  (name links)
+  (public_name linx)
+  (package links)
+  (modes native)
+  (link_flags -linkall)
+  (libraries threads dynlink links))

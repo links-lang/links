@@ -1518,7 +1518,6 @@ end = functor (K : CONTINUATION) -> struct
     let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
       string_of_bool onoff ^ ";</script>"
     in
-    let extLibs = ext_script_tag "regex.js" in
     let db_config_script =
       if Settings.get_value js_hide_database_info then
         script_tag("    function _getDatabaseConfig() {
@@ -1536,8 +1535,7 @@ end = functor (K : CONTINUATION) -> struct
                     mapstrcat "," (fun (name, value) -> "'" ^ name ^ "':'" ^ value ^ "'") cgi_env ^
                     "};\n  _makeCgiEnvironment();\n") in
     in_tag "html" (in_tag "head"
-                     (  extLibs
-                        ^ debug_flag (Settings.get_value Debug.debugging_enabled)
+                     (  debug_flag (Settings.get_value Debug.debugging_enabled)
                         ^ ext_script_tag "jslib.js" ^ "\n"
                         ^ ffiLibs ^ "\n"
                         ^ db_config_script

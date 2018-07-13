@@ -50,39 +50,7 @@ let print_value rtype value =
 let process_program ?(printer=print_value) (valenv, nenv, tyenv) (program, t) external_files =
   let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
 
-  (* TODO: optimisation *)
-
-  (* We need to be careful here as, for instance, running ElimDeadDefs
-     on the prelude would lead to lots of functions being deleted that
-     might actually be used in the program itself.
-
-     Actually, this code isn't currently called on the
-     prelude. However, it does cause problems in the interactive loop
-     as if you define a function it immediately gets optimised away as
-     it isn't yet used!
-
-     In order to resolve the problem we could either simply disable
-     optimisation for the interactive loop, or we could more usefully
-     disable optimisation of the top level definitions by returning a
-     tuple containing all of them. That way we could also optimise the
-     prelude.
-  *)
-
-  let optimise_program program =
-    let program = Ir.ElimDeadDefs.program tenv program in
-    let program = Ir.Inline.program tenv program in
-    program
-  in
-
-  let program =
-    if Settings.get_value BS.optimise
-    then measure "optimise" optimise_program program
-    else program
-  in
-
-  let program = Closures.program tenv Lib.primitive_vars program in
-  BuildTables.program tenv Lib.primitive_vars program;
-  let (globals, _) = program in
+  let (globals, _) = Backend.transform_program tenv program in
   Webserver.init (valenv, nenv, tyenv) globals external_files;
 
   let valenv, v = lazy (Eval.run_program valenv program) |>measure_as<| "run_program" in

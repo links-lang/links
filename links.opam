@@ -11,8 +11,8 @@ available: [
 ]
 
 build: [
-  [ "jbuilder" "subst" "-n" name ] {pinned}
-  [ "jbuilder" "build" "-p" name "-j" jobs ]
+  [ "dune" "subst" ] {pinned}
+  [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
 install: [
@@ -54,7 +54,7 @@ remove: [
 ]
 
 depends: [
-  "jbuilder" {build}
+  "dune" {build}
   "ppx_deriving"
   "ppx_deriving_yojson"
   "base64"

@@ -368,3 +368,25 @@ val add_tyvar_names : ('a -> Vars.vars_list)
 val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
+
+
+module type TRANSFORM =
+sig
+  class visitor :
+  object ('self_type)
+    method primitive : primitive -> (primitive * 'self_type)
+    method typ : typ -> (typ * 'self_type)
+    method row : row -> (row * 'self_type)
+    method row_var : row_var -> (row_var * 'self_type)
+    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
+    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
+    method meta_var : meta_var -> (meta_var * 'self_type)
+    method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
+    method field_spec : field_spec -> (field_spec * 'self_type)
+    method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
+    method quantifier : quantifier -> (quantifier * 'self_type)
+    method type_arg : type_arg -> (type_arg * 'self_type)
+  end
+end
+
+module Transform : TRANSFORM

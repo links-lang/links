@@ -2,7 +2,7 @@
 
 open Utility
 
-[@@@ocaml.warning "-39"] (** disable warnings about unused rec flags  in this module**)
+[@@@ocaml.warning "-39"] (** disables warnings about unused rec flags in this module **)
 
 type scope = [ `Local | `Global ]
   [@@deriving show]
@@ -46,6 +46,8 @@ let info_of_type t = (t, "", `Local)
 
 let make_local_info (t, name) = (t, name, `Local)
 let make_global_info (t, name) = (t, name, `Global)
+
+let update_type newtype (var, (_, name, scope)) = (var, (newtype, name, scope))
 
 let fresh_binder_of_type = info_of_type ->- fresh_binder
 let fresh_var_of_type = info_of_type ->- fresh_var

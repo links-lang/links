@@ -816,7 +816,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "domSetPropertyFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> String",
+  (`Client, datatype "(DomNode, String, String) ~> ()",
   IMPURE);
 
   "domHasAttribute",
@@ -832,7 +832,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "domSetAttributeFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> String",
+  (`Client, datatype "(DomNode, String, String) ~> ()",
   IMPURE);
 
   "domGetStyleAttrFromRef",
@@ -844,7 +844,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "domSetStyleAttrFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> String",
+  (`Client, datatype "(DomNode, String, String) ~> ()",
   IMPURE);
 
   (* Section:  Navigation for DomNodes *)
@@ -1607,7 +1607,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (* Crypt API *)
 
     "crypt",
-    (`Server (p1 (Value.box_string -<- Bcrypt.string_of_hash -<-  (Bcrypt.hash ?count:None ?seed:None) -<- Value.unbox_string)),
+    (`Server (p1 (Value.box_string -<- Bcrypt.string_of_hash -<- (fun s -> Bcrypt.hash ?count:None ?seed:None s) -<- Value.unbox_string)),
     datatype "(String) ~> String",
     PURE);
 

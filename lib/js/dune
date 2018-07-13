@@ -1,0 +1,4 @@
+(install
+  (section lib)
+  (files (jslib.js as js/jslib.js))
+  (package links))
