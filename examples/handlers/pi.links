@@ -1,114 +1,17 @@
 # Pi estimation
 
-# Queue interface
-typename Queue(a) = (front:[a], back:[a]);
-typename Option(a) = [|Some:a|None|];
-
-sig emptyQueue : () -> Queue(a)
-fun emptyQueue() { (front=[], back=[]) }
-
-sig enqueue : (a, Queue(a)) -> Queue(a)
-fun enqueue(e, q) {
-  (q with front = e :: q.front)
-}
-
-sig dequeue : (Queue(a)) ~> (Option(a), Queue(a))
-fun dequeue(q) {
-  switch (q.back) {
-    case [] ->
-      switch (q.front) {
-        case [] -> (None, q)
-        case _ -> dequeue((front=[],back=reverse(q.front)))
-      }
-    case e :: es -> (Some(e), (q with back = es))
-  }
-}
-
-# Reference interface
-typename Ref(a) = Int;
-
-sig ref : (a) {Ref:(a) -> Ref(a) |_}-> Ref(a)
-fun ref(x) { do Ref(x) }
-
-sig get : (Ref(a)) {Get:(Ref(a)) -> a |_}-> a
-fun get(r) { do Get(r) }
-
-sig put : (Ref(a), a) {Put:(Ref(a), a) -> () |_}-> ()
-fun put(r, x) { do Put(r, x) }
-
-sig cells : (Comp({Ref:(a) -> Ref(a),Get: (Ref(a)) -> a,Put: (Ref(a), a) -> () |e}, b)) -> Comp({Ref{_},Get{_},Put{_} |e}, b)
-fun cells(m)() {
-  handle(m())([] -> store, 0 -> n) {
-    case Return(x) -> x
-    case Ref(x, resume) ->
-       resume(n, (n, x) :: store, n+1)
-    case Put(r, x, resume) ->
-       var store = removeAssoc(r, store);
-       resume((), (r, x) :: store, n)
-    case Get(r, resume) ->
-       var e =
-         switch (lookup(r, store)) {
-           case Just(x) -> x
-           case _       -> error("Assert false")
-         };
-       resume(e, store, n)
-  }
-}
-
-# Promise interface
-typename Promise(e::Eff, a) = [|Done:a|Waiting:[(a) ~e~> ()]|];
-
-# typename Async(e::Eff) = [|Async: (Co({ |e})) -> Promise({ |e}, ())
-#                           , Await: (Promise({ |e}, ())) -> ()
-
-# Concurrency interface
-typename Co(e::Eff) = Comp({Fork: (Co({ |e})) -> (), Suspend: () |e}, ());
-
-sig fork : (Co({ |e})) {Fork: (Co({ |e})) -> () |_}-> ()
-fun fork(f) { do Fork(f) }
-
-sig suspend : () {Suspend: () |_}-> ()
-fun suspend() { do Suspend }
-
-typename Scheduler(e::Eff) =
-   forall p0::Presence, p1::Presence . (Co({ |e})) {Fork{p0},Suspend{p1} |e}~> ();
-
-sig schedule : Scheduler({ |e})
-fun schedule(main) {
-  fun runNext(threads) {
-    switch (dequeue(threads)) {
-      case (None, _) -> ()
-      case (Some(resume), threads) -> resume((), threads)
-    }
-  }
-
-  fun withThreads(threads, f) {
-    handle(f())(threads -> threads) {
-      case Return(()) ->
-         runNext(threads)
-      case Suspend(resume) ->
-         runNext(enqueue(resume, threads))
-      case Fork(f, resume) ->
-         var threads = enqueue(resume, threads);
-         withThreads(threads, f)
-    }
-  }
-
-  withThreads(emptyQueue(), main)
-}
-
-fun test() {
-  println("M0");
-  fork(fun() { println("M1"); suspend(); println("M1 again") });
-  println("M0 again");
-  fork(fun() { println("M2"); suspend(); println("M2 again") });
-  suspend();
-  println("End of M0")
-}
-
 # Operations
 sig yield : (a) {Yield: (a) -> () |_}-> ()
 fun yield(x) { do Yield(x) }
+
+sig await : () {Await:a |_}-> a
+fun await() { do Await }
+
+sig abort : () {Abort:Zero |e}-> a
+fun abort() {
+  switch (do Abort) { }
+}
+
 
 # Point type
 typename Point = (x:Float, y:Float);
@@ -164,4 +67,111 @@ fun computePi(n)() {
      loop(total, count)
   }
   loop(0, 0)
+}
+
+# Display pi estimation
+fun renderEstimations(n)() {
+  fun eraser(n)() {
+    fun loop(n) {
+      if (n <= 0) ()
+      else { print("\b"); loop(n-1) }
+    }
+    loop(n)
+  }
+
+  fun display(pi, i, n) {
+    var s = "Pi estimation (" ^^ intToString(i) ^^ "/" ^^ intToString(n) ^^ "): " ^^ pi;
+    print(s);
+    strlen(s)
+  }
+
+  fun loop(i, n, erase) {
+    if (i >= n) { print("\n") }
+    else {
+      var pi = await();
+      erase();
+      var len = display(floatToString(pi), i+1, n);
+      loop(i+1, n, eraser(len))
+    }
+  }
+  var len = display("0.0", 0, n);
+  loop(0, n, eraser(len))
+}
+
+fun collectEstimations(n)() {
+  fun loop(n, acc) {
+    if (n <= 0) acc
+    else loop(n-1, await() :: acc)
+  }
+  loop(n, [])
+}
+
+# Multi-handler
+typename Resumption(a,e::Eff,r) = (a) ~e~> r;
+typename Step(a,e::Eff, r) =
+                (mu b . [|Done:r
+                         |Yielded:(a, Resumption((), { |e}, b))
+                         |Awaits:Resumption(a, { |e}, b)
+                         |]);
+
+sig step : (Comp({Await:a, Yield: (a) -> () |e}, b)) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
+fun step(f) {
+  handle(f()) {
+    case Return(x)        -> Done(x)
+    case Yield(x, resume) -> Yielded(x, resume)
+    case Await(resume)    -> Awaits(resume)
+  }
+}
+
+sig exchange : (Comp({Await:a, Yield: (a) -> () |e}, b), Comp({Await:a, Yield: (a) -> () |e}, b)) { Await{_}, Yield{_} |e}~> b
+fun exchange(f, g) {
+  fun exchange_aux(f, g) {
+    switch( (f, g) ) {
+      case (Awaits(resume0), Yielded(x, resume1)) ->
+        exchange_aux(resume0(x), resume1(()))
+      case (Done(x), _) -> x
+      case _ -> error("Improper synchronisation")
+    }
+  }
+  exchange_aux(step(f), step(g))
+}
+
+# Shallow handler
+typename Consumer(a, e::Eff, b) = (a) {Abort:Zero, Await:a |e}~> b;
+typename Producer(a, e::Eff, b) = () {Abort:Zero, Yield:(a) -> () |e}~> b;
+
+sig pipe : (Producer(a, { Await{p} |e}, _), Comp({Abort:Zero, Await:a, Yield{q} |e}, b)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+fun pipe(sender, receiver) {
+  shallowhandle(receiver()) {
+    case Return(x) -> x
+    case Await(resume) -> copipe(resume, sender)
+  }
+}
+
+sig copipe : (Consumer(a, { Yield{q} |e}, b), Producer(a, { Await{p} |e}, _)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+fun copipe(receiver, sender) {
+  shallowhandle(sender()) {
+    case Return(_) -> abort()
+    case Yield(x, resume) -> pipe(fun() { resume(()) }, fun() { receiver(x) })
+  }
+}
+
+fun catch(m) {
+  handle(m()) {
+    case Return(x) -> x
+    case Abort     -> error("Caught abort")
+  }
+}
+
+
+fun example(n) {
+  catch(fun() {
+    pipe(computePi(30000), renderEstimations(n))
+  })
+}
+
+fun unitTest() {
+  catch(fun() {
+    pipe(computePi(30000), collectEstimations(5))
+  })
 }

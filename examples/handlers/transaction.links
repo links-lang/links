@@ -1,41 +1,138 @@
 # Transaction example
 # links> runState(1, transBool(transaction(comp)));
 
-# Closed state handler
-handler state(m) {
-     case Get(_,k)  -> fun(s) { k(s)(s)  }
-     case Put(p,k)  -> fun(s) { k(())(p) }
-     case Return(x) -> fun(s) { x }
+# Queue API
+typename Queue(a) = ([a], [a]);
+var emptyQueue = ([], []);
+
+sig enqueue : (a, Queue(a)) -> Queue(a)
+fun enqueue(x, (rear, front)) {
+  (x :: rear, front)
 }
 
-# State runner
-fun runState(s0, m) {
-    state(m)(s0)
+sig dequeue : (Queue(a)) ~> (Maybe(a), Queue(a))
+fun dequeue(q) {
+  switch (q) {
+    case ([], []) -> (Nothing, q)
+    case (rear, x :: front) -> (Just(x), (rear, front))
+    case (rear, [])         -> dequeue( ([], reverse(rear)) )
+  }
 }
 
-# The transaction handler utilitises state API to maintain the transaction-state.
-open handler transaction(m) {
-     case Commit(p,k) -> { do Put(p); k(p) }
-     case Abort(p,k)  -> (do Get(), "Aborted: " ^^ p)
-     case Return(x)   -> (do Get(), "Committed")
-}
+# Concurrency API
+typename Co(e::Eff) = () {Fork:(Co({ |e})) -> (), Yield |e}~> ();
 
-# Perharps we only want to know whether the transaction was successful.
-# 
-open handler transBool(m) {
-     case Return((_,"Committed")) -> true
-     case Return(_)               -> false
-}
+sig yield : () { Yield |e}~> ()
+fun yield() { do Yield }
 
-# Some computation
-# Fails to commit when the initial state s = 0
-fun comp() {
-    var s = do Get();
-    # Some critical work
-    # Check computation state
-    if (s == 0) {
-       do Abort("Unexpected state.")
-    } else {
-       do Commit(s+2)
+sig fork : (Co({ |e})) {Fork: (Co({ |e})) -> () |_}~> ()
+fun fork(f) { do Fork(f) }
+
+sig schedule : (Co({ |e})) {Fork{_}, Yield{_} |e}~> ()
+fun schedule(main) {
+  fun runNext(q) {
+    switch (dequeue(q)) {
+      case (Nothing, q) -> ()
+      case (Just(resume), q) -> resume((), q)
     }
+  }
+
+  fun withThreads(f, q) {
+    handle(f())(q -> runQ) {
+      case Return(()) -> runNext(runQ)
+      case Yield(resume) ->
+         runNext(enqueue(resume, runQ))
+      case Fork(f, resume) ->
+         withThreads(f, enqueue(resume, runQ))
+    }
+  }
+
+  withThreads(main, emptyQueue)
+}
+
+# State API
+fun get() { do Get }
+fun put(st) { do Put(st) }
+
+sig runState : (Comp({Get:s, Put: (s) -> () |e}, a), s) {Get{_}, Put{_} |e}~> (a, s)
+fun runState(m, st) {
+  handle(m())(st -> st) {
+    case Return(x)      -> (x, st)
+    case Get(resume)    -> resume(st, st)
+    case Put(p, resume) -> resume((), p)
+  }
+}
+
+# Transaction handler
+sig abort : () {Abort: Zero |_}-> a
+fun abort() {
+  switch (do Abort) { }
+}
+
+fun beginTransaction(m) {
+  handle(m())(get() -> [alice, bob] as st) {
+    case Return(()) -> put(st); (st, "Done")
+    case Abort -> (get(), "Aborted")
+    case Put([acc], resume) ->
+       if (acc.1 == "Alice")
+          resume((), [acc, bob])
+       else
+          resume((), [alice, acc])
+  }
+}
+
+# Bank model
+typename Account = (String, Int);
+typename Bank = [Account];
+
+var accounts = [("Alice", 100), ("Bob", 25)];
+
+# Transfer
+sig transfer : (Bool, Int, String, String) {Abort:Zero, Yield, Get:Bank, Put: (Bank) -> () |_}~> ()
+fun transfer(delay, amount, src, dest) {
+  fun upd(account) {
+    var accounts = filter(fun(a) { a.1 <> account.1 }, get());
+    put([account])
+  }
+  fun add(amount, acc) {
+     switch (lookup(acc, get())) {
+       case Nothing -> error("Unknown account")
+       case Just(n) -> upd((acc, n + amount))
+     }
+  }
+  fun deduct(amount, acc) {
+     switch (lookup(acc, get())) {
+       case Nothing -> error("Unknown account")
+       case Just(n) ->
+         if (n - amount >= 0) upd((acc, n - amount))
+         else abort()
+     }
+  }
+  add(amount, dest);
+  ignore(if (delay) yield() else ());
+  deduct(amount, src)
+}
+
+fun example() {
+  fun main() {
+     fork(fun() {
+       var (_, result) = beginTransaction(fun() {
+          transfer(true, 100, "Alice", "Bob")
+       });
+       println("Transaction [100, Alice -> Bob]: " ^^ result)
+     });
+     fork(fun() {
+       var (_,result) = beginTransaction(fun() {
+          transfer(false, 25, "Alice", "Bob")
+       });
+       println("Transaction [25, Alice -> Bob]: " ^^ result)
+     });
+     fork(fun() {
+       var (_,result) = beginTransaction(fun() {
+          transfer(true, 50, "Bob", "Alice")
+       });
+       println("Transaction [50, Bob -> Alice]: " ^^ result)
+     });
+  }
+  runState(fun() { schedule(main) }, accounts)
 }
