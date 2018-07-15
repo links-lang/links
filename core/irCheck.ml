@@ -1,19 +1,25 @@
 open Utility
 open Ir
 
+type subst_type = Var.var IntMap.t
+type effects_type = Types.datatype StringMap.t
+let print_substmap subst =
+  Debug.print ("Substmap\n:" ^ IntMap.show (fun fmt num -> Format.pp_print_int fmt num) subst)
 
-let eq_types : (Types.datatype * Types.datatype) -> bool =
-  fun  (t1, t2) ->
+let eq_types_with_subst : subst_type -> (Types.datatype * Types.datatype) -> bool =
+  fun  subst (t1, t2) ->
     let lookupVar lvar map  =
       match IntMap.find_opt lvar map with
       | Some rvar' -> (map, rvar')
       | None -> (map, lvar)  (* (IntMap.add lvar rvar map, rvar)*) in
     let handle_variable (lid, lsk, lfd)  (rid, rsk, rfd) map =
       let (map, rvar') = lookupVar lid map  in
-      (map, rid = rvar' && lsk = rsk && lfd = rfd) in
+      let is_equal = rid = rvar' && lsk = rsk && lfd = rfd in
+      (if not is_equal then print_substmap map);
+      (map, is_equal) in
 
     (* sbust maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
-    let rec eqt ((subst, t1, t2) : (Var.var IntMap.t * Types.datatype * Types.datatype)) =
+    let rec eqt ((subst, t1, t2) : (subst_type* Types.datatype * Types.datatype)) =
 
       (* TODO: This also unwraps one level of `Recursive, without changing its body *)
       let t1 = Types.concrete_type t1 in
@@ -162,8 +168,9 @@ let eq_types : (Types.datatype * Types.datatype) -> bool =
       | `Presence lf, `Presence rf -> eq_presence (subst, lf, rf)
       | _, _ -> (subst, false)
     in
-      snd (eqt  (IntMap.empty, t1, t2))
+      snd (eqt  (subst, t1, t2))
 
+let eq_types = eq_types_with_subst IntMap.empty
 
 let fail_on_ir_type_error = false
 exception IRTypeError of string
@@ -179,7 +186,7 @@ let handle_ir_type_error error alternative =
         failwith msg
       else
         Debug.print ("Continuing after IR Type Error:\n" ^ msg ); alternative
-    |  _ -> failwith "Unknown exception"
+    |  e-> failwith ("Unknown exception" ^ Printexc.to_string e)
 
 
 
@@ -191,16 +198,21 @@ let check_eq_types :  Types.datatype -> Types.datatype -> unit = fun et at ->
       ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
       `None
 
+let check_eq_types_inital_substmap : subst_type -> Types.datatype -> Types.datatype -> unit = fun subst et at ->
+  if not (eq_types_with_subst subst (et, at)) then
+    raise_ir_type_error
+      ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
+      `None
+
 let check_eq_type_lists = fun exptl actl ->
   (* if typecheck_ir then
    *   begin *)
     if List.length exptl <> List.length actl then
       raise_ir_type_error "Arity missmatch" `None
     else
-      List.fold_left2 (fun _ et at ->
-          if not (eq_types (et, at)) then
-            check_eq_types et at
-       ) () exptl actl
+      List.iter2 (fun  et at ->
+          check_eq_types et at
+       )  exptl actl
     (* end *)
 
 let ensure pred msg occurence =
@@ -518,6 +530,33 @@ struct
         let o = o#remove_bindings bs in
           (bs, tc), t, o
 
+    method handle_funbinding : tyvar list -> datatype -> datatype -> effects_type -> binding -> unit =
+      fun tyvars expected_overall_funtype body_actual _acutal_effects fundef ->
+        let missmatch () = raise_ir_type_error "Quantifier missmatch in function def" (`Binding fundef) in
+        let check_types subst expected_returntype _expected_effects  =
+          check_eq_types_inital_substmap subst expected_returntype body_actual;
+          (* TODO check expected effect row vs acutal effects *) in
+        let rec handle_foralls subst funtype tyvars = match funtype with
+          | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst (unbox_quantifiers qs_boxed) t tyvars
+          | `Function (at, eff, rt)
+          | `Lolli (at, eff, rt) ->
+            if tyvars = [] then
+              check_types subst rt eff
+            else
+              missmatch ()
+          | _ -> missmatch ()
+        and handle_unboxed_foralls subst quantifier_list rest_expected_type tyvars = match quantifier_list, tyvars with
+          | [], _ -> handle_foralls subst rest_expected_type tyvars
+          | (lid, lsubkind, _lmtv) :: lqs, (rid, rsubkind, _rmtv) :: rqs ->
+              (* TODO check mtv here *)
+              if lid = rid && lsubkind = rsubkind then
+                let subst' = IntMap.add lid rid subst in
+                handle_unboxed_foralls subst' lqs rest_expected_type rqs
+              else
+                missmatch ()
+          | _ -> missmatch () in
+        handle_foralls IntMap.empty expected_overall_funtype tyvars
+
     method! binding : binding -> (binding * 'self_type) =
       function
         | `Let (x, (tyvars, tc)) ->
@@ -531,7 +570,7 @@ struct
             let x, o = o#binder x in
             `Let (x, (tyvars, tc)), o
 
-        | `Fun (f, (tyvars, xs, body), z, location) ->
+        | `Fun (f, (tyvars, xs, body), z, location) as binding ->
               let f, tyvars, xs, body, z, location, o =
               try
                 let (z, o) = o#optionu (fun o -> o#binder) z in
@@ -542,9 +581,15 @@ struct
                         (x::xs, o))
                     xs
                     ([], o) in
+
                 let body, body_actual, o = o#computation body in (* FIXME we probably have to handle the type vars here *)
-                let body_expected = Var.type_of_binder f in
-                check_eq_types body_expected body_actual;
+                let whole_function_expected = Var.type_of_binder f in
+
+                o#handle_funbinding tyvars whole_function_expected body_actual StringMap.empty binding;
+
+                (* (match body_expected, body_actual with
+                  | (`ForAll _, `Function _) -> failwith "forall-func"  | (`Function _, `ForAll _) -> failwith "func-forall" | _(`Function _, `Function _) -> () ); *)
+                (* check_eq_types body_expected body_actual; *)
                 let o = OptionUtils.opt_app o#remove_binder o z in
                 let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
                 f, tyvars, xs, body, z, location, o
@@ -552,7 +597,7 @@ struct
               let f, o = o#binder f in
               `Fun (f, (tyvars, xs, body), z, location), o
 
-        | `Rec defs ->
+        | `Rec defs  as binding ->
             (* it's important to traverse the function binders first in
                order to make sure they're in scope for all of the
                function bodies *)
@@ -568,7 +613,7 @@ struct
             try
               let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location) ->
+                (fun (defs, (o : 'self_type)) ((f, (tyvars, xs, body), z, location)) ->
                    let (z, o) = o#optionu (fun o -> o#binder) z in
                    let xs, o =
                      List.fold_right
@@ -578,8 +623,13 @@ struct
                        xs
                        ([], o) in
                   let body, body_actual, o = o#computation body in (* FIXME we probably have to handle the type vars here *)
-                  let body_expected = Var.type_of_binder f in
-                  check_eq_types body_expected body_actual;
+                  let whole_function_expected = Var.type_of_binder f in
+
+                  o#handle_funbinding tyvars whole_function_expected body_actual StringMap.empty binding;
+
+                  (* check_eq_types body_expected body_actual; *)
+                  (* (match body_expected, body_actual  with
+                    | (`ForAll _, `Function _) -> failwith "forall-func"  | (`Function _, `ForAll _) -> failwith "func-forall" | _(`Function _, `Function _) -> () ); *)
                   let o = OptionUtils.opt_app o#remove_binder o z in
                   let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
                     (f, (tyvars, xs, body), z, location)::defs, o)
