@@ -322,7 +322,10 @@ struct
           let parents', parent_env', cvars' = parents, parent_env, cvars in
           let zs = IntMap.find f fenv in
           let cvars = List.fold_left (fun cvars (z, _) -> IntSet.add z cvars) IntSet.empty zs in
-          let zb, o =
+
+          (* The following type annotation is necessary as of OCaml
+             4.07.0. Is this a bug in OCaml? *)
+          let zb, (o : 'self) =
             match zs with
             | [] -> None, o
             | _ ->
