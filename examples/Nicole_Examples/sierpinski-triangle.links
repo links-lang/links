@@ -9,6 +9,7 @@ alien javascript "/js/canvas.js" {
 
 alien javascript "js/runtime.js" {
     delayExecution: (Int) ~> ();
+    setIntervalForF: (Int, () ~> ()) ~> Int;
     sysEnqueue: (a) ~> ();
     sysDequeue: () ~> [a];
     sysQueueLength: () -> Int;
@@ -245,8 +246,8 @@ fun makeSTriangle(p, s, text, children){
     (point = p, targetSize = s, text=text, children=children)
 }
 
-sig getCircleStyleAttributeString: (Dot) -> String
-fun getCircleStyleAttributeString(dot){
+sig getCircleStyleAttributeString: (Dot, (Float, Float, Float)) -> String
+fun getCircleStyleAttributeString(dot, scale){
     var s = dotSize;
     var color ={ if(dot.hover) "#ff0" 
                 else "#61dafb"
@@ -257,70 +258,87 @@ fun getCircleStyleAttributeString(dot){
     " left: " ^^ intToString(dot.point.x) ^^ "px;" ^^
     " top: " ^^ intToString(dot.point.y) ^^ "px;" ^^ 
     " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
+    " transform: scaleX(" ^^ floatToString(scale.1) ^^") scaleY(" ^^ floatToString(scale.2) ^^ ") translateZ(" ^^ floatToString(scale.3) ^^ ")" ^^
     " background-color: " ^^ color ^^";")     
 }
 
-sig dotToXml: (Dot) ~%~> Xml
-fun dotToXml(dot){
-    var style = getCircleStyleAttributeString(dot);
+sig dotToXml: (Dot, (Float, Float, Float)) ~%~> Xml
+fun dotToXml(dot, scale){
+    var style = getCircleStyleAttributeString(dot, scale);
     <#><div class="containerStyle"><div class="circle" style="{style}"><span>{stringToXml(dot.text)}</span></div></div></#>
     #addAttributes(div, [("style", style)])
 }
 
-sig drawDot: (Dot, DomNode) ~> ()
-fun drawDot(dot, node){
-    var xml = dotToXml(dot);
+sig drawDot: (Dot, DomNode, (Float, Float, Float)) ~> ()
+fun drawDot(dot, node, scale){
+    var xml = dotToXml(dot, scale);
     appendChildren(xml, node)
+}
+
+fun drawScaledTriangle(triangle, node, scale){
+    switch(triangle.children){
+        case [] -> drawDot(singleSTriangleToDot(triangle), node, scale)
+        case x::y::z::xs -> drawScaledTriangle(x, node, scale); drawScaledTriangle(y, node, scale); drawScaledTriangle(z, node, scale)
+    } 
 }
 
 sig drawTriangle: (STriangle({ |e}), DomNode) ~> ()
 fun drawTriangle(triangle, node){    
-    switch(triangle.children){
-        case [] -> drawDot(singleSTriangleToDot(triangle), node)
-        case x::y::z::xs -> drawTriangle(x, node); drawTriangle(y, node); drawTriangle(z, node)
-    }    
+    #println("draw Triangle");
+    drawScaledTriangle(triangle, node, (1.0, 1.0, 1.0))
 }
 
-sig setUpTriangle: (Int, String) ~%~> STriangle({ |e})
-fun setUpTriangle(s, text){ 
-    fun getChildren(point, size){
-        var x = point.x;
-        var y = point.y;
-        var newS = size/2;
-        if (size >= dotSize) {
-            [
-                makeSTriangle( (x = x, y = y - newS/2), newS, text, getChildren((x = x, y = y - newS/2), newS)), 
-                makeSTriangle( (x = x - newS, y = y + newS/2), newS, text, getChildren((x = x - newS, y = y + newS/2), newS)), 
-                makeSTriangle( (x = x + newS, y = y + newS/2), newS, text, getChildren((x = x + newS, y = y + newS/2), newS))
-            ]
+sig setUpTriangle: (Int, String) ~%~> Option(STriangle({ |e}))
+fun setUpTriangle(s, text){
+    if (s >= dotSize){
+        fun getChildren(point, size){
+            var x = point.x;
+            var y = point.y;
+            var newS = size/2;
+            if (size >= dotSize) {
+                [
+                    makeSTriangle( (x = x, y = y - newS/2), newS, text, getChildren((x = x, y = y - newS/2), newS)), 
+                    makeSTriangle( (x = x - newS, y = y + newS/2), newS, text, getChildren((x = x - newS, y = y + newS/2), newS)), 
+                    makeSTriangle( (x = x + newS, y = y + newS/2), newS, text, getChildren((x = x + newS, y = y + newS/2), newS))
+                ]
+            }
+            else []
         }
-        else []
-    }
-    makeSTriangle((x = 0, y = 0), s, "", getChildren((x = 0, y = 0), s))
-   
+        Some(makeSTriangle((x = 0, y = 0), s, "", getChildren((x = 0, y = 0), s)))
+    } 
+    else None
     
 }
 
 sig calculateScale: (Int) ~> %
 fun calculateScale(startTime){
-    var elapsed = startTime - clientTime();
-    var t = (elapsed/1000) `mod` 10;
+    var elapsed = clientTime() - startTime;
+    #println("elapsed: " ^^ intToString(elapsed));
+    var t = elapsed `mod` 10;
     var w = {
-        if(t > 5) 10-t
+        if(t > 5) 10 - t
         else t
-    }
-    var scale = (1.0 + intToFloat(w)) /. 10.0
-    (intToFloat(1) +. intToFloat(scale /. 2.1), 0.7, 0.1)
+    };
+    var scale = (1.0 +. intToFloat(w)) /. 10.0;
+    #println("w: "^^ intToString(w) ^^ " t: " ^^ intToString(t) ^^ " scale: " ^^ floatToString(scale));
+    (1.0 +. scale /. 2.1, 0.7, 0.1)
 }   
 
-fun scaleDiv(node, scale){
-
+fun scaleDiv(node, startTime){
+    #println("Scale Div");
+    #println("startTime " ^^ intToString(startTime));
+    var (x, y, z) = calculateScale(startTime);
+    #var (x,y,z) = (3.0, 0.7, 0.1);
+    var style = "scaleX(" ^^ floatToString(x); #^^"); scaleY(" ^^ floatToString(y)^^ ")"; #translateZ(" ^^ floatToString(z) ^^")
+    #println(style);
+    domSetStyleAttrFromRef(node, "transform", style)
+    #domSetStyleAttrFromRef(node, "border", "solid 3px red")
 }
 
 
 fun giveBorderToChildren(id){
     var children = domGetChildrenFromRef(getNodeById(id));
-    println("number of children in ctnr: " ^^ intToString(length(children)));
+    #println("number of children in ctnr: " ^^ intToString(length(children)));
     fun aux(xs){
         switch(xs){
             case [] -> ()
@@ -330,11 +348,32 @@ fun giveBorderToChildren(id){
     aux(children)
 }
 
+fun updateTriangle(triangle, startTime){
+    #println("Update Triangle");
+    scaleDiv(getNodeById("container"), startTime);
+    domReplaceChildren( <#></#>, getNodeById("container"));
+    drawTriangle(triangle, getNodeById("container"))
+}
+
+fun prepareUpdateFunction(triangle, startTime){
+    fun (){
+        updateTriangle(triangle, startTime)
+    }
+}
 
 fun start(){
-    var triangle = setUpTriangle(100, "1");
-    drawTriangle(triangle, getNodeById("container"))
-    
+    fork(makeFiber(Low, forever));
+    var tri = setUpTriangle(100, "1");
+    var startTime = clientTime();
+    switch(tri){
+        case None -> ()
+        case Some(triangle) -> 
+            drawTriangle(triangle, getNodeById("container"));
+            #delayExecution(2000);
+            ignore(setIntervalForF(1000, fun() { 
+                sysEnqueue(makeFiber(High, prepareUpdateFunction(triangle, startTime)))
+            }))
+    }
     
 }
 
@@ -359,7 +398,7 @@ fun main_page(_){
             width: 1400px;
             height: 800px;
             position: relative;
-            border: 2px solid  #c4c4c4;
+            /*border: 2px solid  #c4c4c4;*/
         }}
         .circle{{
             position: absolute;

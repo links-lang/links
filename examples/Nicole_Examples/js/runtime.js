@@ -11,7 +11,9 @@ function delayExecution(delay, kappa){
 }
 
 function setIntervalForF(interval, f, kappa){
-    var id = setInterval(f, interval);
+    var id = setInterval(function() {
+        return f(_idy);
+    }, interval);
     return _yieldCont(kappa, id);
 }
 
