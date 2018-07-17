@@ -1,7 +1,7 @@
 typename Zero = [||];
 
-typename Comp(e::Row,a) = (() ~e~> a);
-typename CF(e::Row, a) = Comp({Choice: (()) {}-> Bool,
+typename Comp(e::Eff,a) = (() ~e~> a);
+typename CF(e::Eff, a) = Comp({Choice: (()) {}-> Bool,
                                Failure:(()) {}-> Zero|e},
                               a);
 
@@ -16,7 +16,7 @@ fun fail() {switch (do Failure(())) { }}
 
 sig allResults : (CF({}, a)) {}~> [a]
 fun allResults(m) {
-  handle(m) {
+  handle(m()) {
     case Return(x)     -> [x]
     case Choice((),k)  -> k(true) ++ k(false)
     case Failure((),k) -> []
@@ -46,7 +46,7 @@ sig randomResult :
   (Comp({Choice:(()) {}-> Bool, Rand:(()) {}-> Float|e}, a)) ->
    Comp({Choice{_},             Rand:(()) {}-> Float|e}, a)
 fun randomResult(m)() {
-  open handle(m) {
+  handle(m()) {
     case Return(x)    -> x
     case Choice((),k) -> k (rand() < 0.5)
   }
@@ -55,7 +55,7 @@ fun randomResult(m)() {
 sig persevere : (Comp({Failure:(()) {}-> Zero|e}, a)) ->
                  Comp({Failure{_}            |e}, a)
 fun persevere(m)() {
-  open handle(m) {
+  handle(m()) {
     case Return(x)     -> x
     case Failure((),k) -> persevere(m)()
   }
@@ -64,7 +64,7 @@ fun persevere(m)() {
 sig maybeResult : (Comp({Failure:(()) {}-> Zero|e}, a)) ->
                    Comp({Failure{_}            |e}, Maybe(a))
 fun maybeResult(m)() {
-  open handle(m) {
+  handle(m()) {
     case Return(x)     -> Just(x)
     case Failure((),k) -> Nothing
   }
@@ -72,7 +72,7 @@ fun maybeResult(m)() {
 
 sig handleRandom : (Comp({Rand:(()) {}-> Float}, a)) {}~> a
 fun handleRandom(m) {
-  handle(m) {
+  handle(m()) {
     case Return(x)  -> x
     case Rand((),k) -> k (random())
   }
