@@ -10,6 +10,16 @@ function delayExecution(delay, kappa){
     return CONSTANTS.UNIT;
 }
 
+function delayExecutionOfF(delay, f, kappa){
+    window.setTimeout(function(){f()}, delay);
+    return _yieldCont(kappa, CONSTANTS.UNIT);
+}
+
+function requestAnimationFrame(f, delay, kappa){
+    window.requestAnimationFrame(f);
+    return _yieldCont(kappa, CONSTANTS.UNIT);
+}
+
 function setIntervalForF(interval, f, kappa){
     var id = setInterval(function() {
         return f(_idy);

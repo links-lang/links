@@ -1,6 +1,5 @@
 typename Canvas = ();
 typename Point = (x:Int, y:Int);
-typename Dot = (point: Point, size: Int, text: String, hover: Bool);
 
 alien javascript "/js/canvas.js" {
     getValueFromSelection: (String) ~> String;
@@ -9,10 +8,12 @@ alien javascript "/js/canvas.js" {
 
 alien javascript "js/runtime.js" {
     delayExecution: (Int) ~> ();
+    requestAnimationFrame: (() -> (), Int) ~> ();
     setIntervalForF: (Int, () ~> ()) ~> Int;
     sysEnqueue: (a) ~> ();
     sysDequeue: () ~> [a];
     sysQueueLength: () -> Int;
+    delayExecutionOfF: (Int, () ~> ()) ~> ();
 }
 
 typename Queue(a) = (rear: [a], front: [a]);
@@ -29,7 +30,9 @@ typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
 typename Update = [|TextUpdate: String | LocationUpdate: Float|];
 typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: [STriangle({ |e})]);
 
-var dotSize = 20;
+var dotSize = 40;
+var hoverColor = "#ff0";
+var nonHoverColor = "#61dafb";
 
 #Threading 
 
@@ -51,7 +54,6 @@ fun dequeue(q){
     }
 }
 
-#priorityEnqueue : ( (priority:Priority |r), PriorityQueue({ priority:Priority |r}) ) -> PriorityQueue({ priority:Priority |r})
 sig priorityEnqueue: (a, Priority, PrioQueue(a)) ~> PrioQueue(a)
 fun priorityEnqueue(x, prio, pq){
     switch(prio){
@@ -194,32 +196,13 @@ fun schedule(main){
     runFiber(main, emptyPrioQueue())
 
 }
-
+fun gensymHandler(f){
+    handle(f())(0 -> counter) {
+        case Gensym(resume) -> resume(counter, counter+1)
+    }
+}
 
 # Page Functionality
-
-sig difference: (Point, Point) -> Point
-fun difference(a, b){
-    (x = a.x - b.x, y= a.y - b.y)
-}
-
-sig absolute: (Int) -> Int
-fun absolute(n){
-    if(n < 0){
-        n * -1
-    } else{
-        n
-    }
-}
-
-sig parseInt: (String) ~> Option(Int)
-fun parseInt(n){ 
-    if (n =~ /^[0-9]+$/) {
-        Some(stringToInt(n))
-    } else{
-        None
-    }
-}
 
 sig setValue: (a, String, (a) ~> String) ~%~> ()
 fun setValue(newVal, id, toString){
@@ -231,27 +214,21 @@ fun getValue(id){
     domGetAttributeFromRef(getNodeById(id), "value")
 }
 
-sig singleSTriangleToDot: (STriangle({ |e})) -> Dot
-fun singleSTriangleToDot(triangle){
-    (point = triangle.point, size = dotSize, text = triangle.text, hover = false )
-}
-
 sig makeSTriangle: (Point, Int, String, [STriangle({ |e})]) -> STriangle({ |e})
 fun makeSTriangle(p, s, text, children){
     (point = p, targetSize = s, text=text, children=children)
 }
 
-sig getCircleStyleAttributeString: (Dot) -> String
-fun getCircleStyleAttributeString(dot){
+sig getCircleStyleAttributeString: (Int, Int, Bool) -> String
+fun getCircleStyleAttributeString(x, y, hover){
     var s = dotSize;
-    var color ={ if(dot.hover) "#ff0" 
-                else "#61dafb"
-    };
+    var color ={ if(hover) hoverColor
+                else nonHoverColor};
 
     (" width: " ^^ intToString(s) ^^ "px; " ^^
     " height: " ^^ intToString(s) ^^ "px; " ^^
-    " left: " ^^ intToString(dot.point.x) ^^ "px;" ^^
-    " top: " ^^ intToString(dot.point.y) ^^ "px;" ^^ 
+    " left: " ^^ intToString(x) ^^ "px;" ^^
+    " top: " ^^ intToString(y) ^^ "px;" ^^ 
     " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
     " background-color: " ^^ color ^^";")     
 }
@@ -262,31 +239,12 @@ fun getScaleTransformAttributeString(scale){
     #scaleY(" ^^ floatToString(scale.2) ^^ ") translateZ(" ^^ floatToString(scale.3) ^^ ");";
 }
 
-sig dotToXml: (Dot, (Float, Float, Float)) ~%~> Xml
-fun dotToXml(dot, scale){
-    var style = getCircleStyleAttributeString(dot);
-    var st =  getScaleTransformAttributeString(scale);
-    <#><div id="{"dot-" ^^ intToString(gensym())}" class="containerStyle" style="{st}"><div class="circle" style="{style}"><span>{stringToXml(dot.text)}</span></div></div></#>
-}
-
-#{"node-" ^^ intToString(id)}
-
-sig drawDot: (Dot, DomNode, (Float, Float, Float)) ~> ()
-fun drawDot(dot, node, scale){
-    var xml = dotToXml(dot, scale);
-    appendChildren(xml, node)
-}
-
-fun drawScaledTriangle(triangle, node, scale){
+sig drawTriangle: (STriangle({ |e}), Int) ~%~> ()
+fun drawTriangle(triangle, startTime){    
     switch(triangle.children){
-        case [] -> drawDot(singleSTriangleToDot(triangle), node, scale)
-        case x::y::z::xs -> drawScaledTriangle(x, node, scale); drawScaledTriangle(y, node, scale); drawScaledTriangle(z, node, scale)
+        case [] -> makeDot(triangle.point.x, triangle.point.y, startTime)
+        case x::y::z::xs -> drawTriangle(x, startTime); drawTriangle(y, startTime); drawTriangle(z, startTime)
     } 
-}
-
-sig drawTriangle: (STriangle({ |e}), DomNode) ~> ()
-fun drawTriangle(triangle, node){    
-    drawScaledTriangle(triangle, node, (1.0, 1.0, 1.0))
 }
 
 sig setUpTriangle: (Int, String) ~%~> Option(STriangle({ |e}))
@@ -325,42 +283,58 @@ fun calculateScale(startTime){
     (1.0 +. scale /. 2.1, 0.7, 0.1)
 }   
 
-fun scaleDiv(node, startTime){
-    var (x, y, z) = calculateScale(startTime);
-    var style = "scaleX(" ^^ floatToString(x); #^^"); scaleY(" ^^ floatToString(y)^^ ")" translateZ(" ^^ floatToString(z) ^^")
-    domSetStyleAttrFromRef(node, "transform", style)
-}
-
-fun updateTriangle(triangle, startTime){
-    #println("Update Triangle");
-    scaleDiv(getNodeById("container"), startTime);
-    domReplaceChildren( <#></#>, getNodeById("container"));
-    drawTriangle(triangle, getNodeById("container"))
-}
-
-fun prepareUpdateFunction(triangle, startTime){
-    fun (){
-        #updateTriangle(triangle, startTime)
-        domReplaceChildren( <#></#>, getNodeById("container"));
-        var scale = calculateScale(startTime);
-        drawScaledTriangle(triangle, getNodeById("container"), scale)
+fun prepareReplaceDot(startTime){
+    fun(x, y, nodeId){
+        replaceDot(x, y, nodeId, startTime)
     }
 }
 
+sig getDotXml: (Int, Int, (Float, Float, Float), String, String) ~%~> Xml
+fun getDotXml(x, y, scale, id, text){
+    var style = getCircleStyleAttributeString(x, y, false);
+    var st =  getScaleTransformAttributeString(scale);
+    <#><div value="{text}" id="{id}" class="containerStyle" style="{st}"><div class="circle" style="{style}"><span>{stringToXml(text)}</span></div></div></#>
+}
+
+sig drawDot: (Int, Int, String) ~> ()
+fun drawDot(x, y, nodeId){
+    var xml = getDotXml(x, y, (1.0, 1.0, 1.0), nodeId, "1");
+    appendChildren(xml, getNodeById("container"))
+}
+
+sig replaceDot: (Int, Int, String, Int) ~> ()
+fun replaceDot(x, y, nodeId, startTime){
+    var xml = getDotXml(x, y, calculateScale(startTime), nodeId, getValue(nodeId));
+    domReplaceChildren(xml, getNodeById(nodeId))
+}
+
+#fun makeDot(x, y, startTime) {
+#    var nodeId = "dot-" ^^ intToString(do Gensym);
+#    fun f(draw)() {
+#        draw(x, y, nodeId);
+#        sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))
+#    }
+#    sysEnqueue(makeFiber(High, f(drawDot)))
+#}
+
+fun makeDot(x, y, startTime) {
+    var nodeId = "dot-" ^^ intToString(do Gensym);
+    fun f(draw)() {
+        draw(x, y, nodeId);
+        delayExecutionOfF(1000, fun() {println("enqueue"); sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})
+    }
+    sysEnqueue(makeFiber(High, f(drawDot)))
+}
+
 fun start(){
-    fork(makeFiber(Low, forever));
-    var tri = setUpTriangle(100, "1");
+    var tri = setUpTriangle(50, "1");
     var startTime = clientTime();
     switch(tri){
         case None -> ()
         case Some(triangle) -> 
-            drawTriangle(triangle, getNodeById("container"));
-            #delayExecution(2000);
-            ignore(setIntervalForF(1000, fun() { 
-                sysEnqueue(makeFiber(High, prepareUpdateFunction(triangle, startTime)))
-            }))
+            fork(makeFiber(Low, forever));
+            gensymHandler(fun(){drawTriangle(triangle, startTime)});
     }
-    
 }
 
 # Web interface
@@ -381,8 +355,8 @@ fun main_page(_){
             display: block;
         }}
         .box{{
-            width: 1400px;
-            height: 800px;
+            width: 50%;
+            height: 50%;
             position: relative;
             /*border: 2px solid  #c4c4c4;*/
         }}
