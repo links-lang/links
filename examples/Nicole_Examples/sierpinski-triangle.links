@@ -110,11 +110,6 @@ fun fiberQueueLength(q){
     length(q.low.rear) + length(q.high.front) + length(q.high.rear) + length(q.low.front)
 }
 
-sig addIntervalToList: (Int) ~> ()
-fun addIntervalToList(id){
-    
-}
-
 sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ()
 fun fork(f){
     do Fork(f)
@@ -246,8 +241,8 @@ fun makeSTriangle(p, s, text, children){
     (point = p, targetSize = s, text=text, children=children)
 }
 
-sig getCircleStyleAttributeString: (Dot, (Float, Float, Float)) -> String
-fun getCircleStyleAttributeString(dot, scale){
+sig getCircleStyleAttributeString: (Dot) -> String
+fun getCircleStyleAttributeString(dot){
     var s = dotSize;
     var color ={ if(dot.hover) "#ff0" 
                 else "#61dafb"
@@ -258,16 +253,23 @@ fun getCircleStyleAttributeString(dot, scale){
     " left: " ^^ intToString(dot.point.x) ^^ "px;" ^^
     " top: " ^^ intToString(dot.point.y) ^^ "px;" ^^ 
     " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
-    " transform: scaleX(" ^^ floatToString(scale.1) ^^") scaleY(" ^^ floatToString(scale.2) ^^ ") translateZ(" ^^ floatToString(scale.3) ^^ ")" ^^
     " background-color: " ^^ color ^^";")     
+}
+
+sig getScaleTransformAttributeString: ((Float, Float, Float)) -> String
+fun getScaleTransformAttributeString(scale){
+    ("transform: scaleX(" ^^ floatToString(scale.1) ^^ ");")
+    #scaleY(" ^^ floatToString(scale.2) ^^ ") translateZ(" ^^ floatToString(scale.3) ^^ ");";
 }
 
 sig dotToXml: (Dot, (Float, Float, Float)) ~%~> Xml
 fun dotToXml(dot, scale){
-    var style = getCircleStyleAttributeString(dot, scale);
-    <#><div class="containerStyle"><div class="circle" style="{style}"><span>{stringToXml(dot.text)}</span></div></div></#>
-    #addAttributes(div, [("style", style)])
+    var style = getCircleStyleAttributeString(dot);
+    var st =  getScaleTransformAttributeString(scale);
+    <#><div id="{"dot-" ^^ intToString(gensym())}" class="containerStyle" style="{st}"><div class="circle" style="{style}"><span>{stringToXml(dot.text)}</span></div></div></#>
 }
+
+#{"node-" ^^ intToString(id)}
 
 sig drawDot: (Dot, DomNode, (Float, Float, Float)) ~> ()
 fun drawDot(dot, node, scale){
@@ -284,7 +286,6 @@ fun drawScaledTriangle(triangle, node, scale){
 
 sig drawTriangle: (STriangle({ |e}), DomNode) ~> ()
 fun drawTriangle(triangle, node){    
-    #println("draw Triangle");
     drawScaledTriangle(triangle, node, (1.0, 1.0, 1.0))
 }
 
@@ -325,27 +326,9 @@ fun calculateScale(startTime){
 }   
 
 fun scaleDiv(node, startTime){
-    #println("Scale Div");
-    #println("startTime " ^^ intToString(startTime));
     var (x, y, z) = calculateScale(startTime);
-    #var (x,y,z) = (3.0, 0.7, 0.1);
-    var style = "scaleX(" ^^ floatToString(x); #^^"); scaleY(" ^^ floatToString(y)^^ ")"; #translateZ(" ^^ floatToString(z) ^^")
-    #println(style);
+    var style = "scaleX(" ^^ floatToString(x); #^^"); scaleY(" ^^ floatToString(y)^^ ")" translateZ(" ^^ floatToString(z) ^^")
     domSetStyleAttrFromRef(node, "transform", style)
-    #domSetStyleAttrFromRef(node, "border", "solid 3px red")
-}
-
-
-fun giveBorderToChildren(id){
-    var children = domGetChildrenFromRef(getNodeById(id));
-    #println("number of children in ctnr: " ^^ intToString(length(children)));
-    fun aux(xs){
-        switch(xs){
-            case [] -> ()
-            case x::xs -> dump(setBorderOfRef(x, "solid 1px red;")); aux(xs)
-        }
-    }
-    aux(children)
 }
 
 fun updateTriangle(triangle, startTime){
@@ -357,7 +340,10 @@ fun updateTriangle(triangle, startTime){
 
 fun prepareUpdateFunction(triangle, startTime){
     fun (){
-        updateTriangle(triangle, startTime)
+        #updateTriangle(triangle, startTime)
+        domReplaceChildren( <#></#>, getNodeById("container"));
+        var scale = calculateScale(startTime);
+        drawScaledTriangle(triangle, getNodeById("container"), scale)
     }
 }
 
