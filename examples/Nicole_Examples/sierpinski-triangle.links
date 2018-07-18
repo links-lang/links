@@ -1,6 +1,3 @@
-typename Canvas = ();
-typename Point = (x:Int, y:Int);
-
 alien javascript "/js/canvas.js" {
     getValueFromSelection: (String) ~> String;
     setBorderOfRef: (DomNode, String) ~> (DomNode);
@@ -16,6 +13,7 @@ alien javascript "js/runtime.js" {
     delayExecutionOfF: (Int, () ~> ()) ~> ();
 }
 
+typename Point = (x:Int, y:Int);
 typename Queue(a) = (rear: [a], front: [a]);
 typename Option(a) = [|Some:a|None|];
 typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
@@ -266,7 +264,6 @@ fun setUpTriangle(s, text){
         Some(makeSTriangle((x = 0, y = 0), s, "", getChildren((x = 0, y = 0), s)))
     } 
     else None
-    
 }
 
 sig calculateScale: (Int) ~> %
@@ -280,7 +277,7 @@ fun calculateScale(startTime){
     };
     var scale = (1.0 +. intToFloat(w)) /. 10.0;
     #println("w: "^^ intToString(w) ^^ " t: " ^^ intToString(t) ^^ " scale: " ^^ floatToString(scale));
-    (1.0 +. scale /. 2.1, 0.7, 0.1)
+    (1.0 +. scale /. 4.1, 0.7, 0.1)
 }   
 
 fun prepareReplaceDot(startTime){
@@ -308,26 +305,20 @@ fun replaceDot(x, y, nodeId, startTime){
     domReplaceChildren(xml, getNodeById(nodeId))
 }
 
-#fun makeDot(x, y, startTime) {
-#    var nodeId = "dot-" ^^ intToString(do Gensym);
-#    fun f(draw)() {
-#        draw(x, y, nodeId);
-#        sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))
-#    }
-#    sysEnqueue(makeFiber(High, f(drawDot)))
-#}
-
 fun makeDot(x, y, startTime) {
     var nodeId = "dot-" ^^ intToString(do Gensym);
-    fun f(draw)() {
-        draw(x, y, nodeId);
-        delayExecutionOfF(1000, fun() {println("enqueue"); sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})
+    fun g(draw)() {
+        fun f(draw)(){
+            draw(x, y, nodeId):()
+        }
+        f(draw)();
+        ignore(setIntervalForF(100, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))}))
     }
-    sysEnqueue(makeFiber(High, f(drawDot)))
+    sysEnqueue(makeFiber(High, g(drawDot)))
 }
 
 fun start(){
-    var tri = setUpTriangle(50, "1");
+    var tri = setUpTriangle(200, "1");
     var startTime = clientTime();
     switch(tri){
         case None -> ()
