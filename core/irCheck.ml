@@ -215,8 +215,22 @@ let check_eq_type_lists = fun exptl actl ->
        )  exptl actl
     (* end *)
 
-let ensure pred msg occurence =
-  if pred then () else raise_ir_type_error msg occurence
+let ensure condition msg occurence =
+  if condition then () else raise_ir_type_error msg occurence
+
+
+let ensure_effect_present_in_row allowed_effects required_effect_name required_effect_type occurence =
+  let (map, _, _) = fst (Types.unwrap_row allowed_effects) in
+  match StringMap.find_opt required_effect_name map with
+    | Some (`Present et) -> check_eq_types et required_effect_type
+    | _ -> raise_ir_type_error ("Required effect" ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) `None
+
+
+
+let ensure_effect_rows_compatible allowed_effects imposed_effects_row occurence =
+  (* TODO: Shall we flatten the row first? *)
+  (* FIXEM: need to flatten here and remove absent fields if closed row *)
+  ensure (eq_types (`Record allowed_effects, `Record imposed_effects_row)) "Incompatible effects" occurence
 
 module Typecheck =
 struct
@@ -238,8 +252,15 @@ struct
 
     (*val env = env*)
     val closure_def_env = Env.empty
+    (* initialize to the default row of allowed toplevel effects*)
+    val allowed_effects = Lib.typing_env.effect_row
 
     method lookup_closure_def_for_fun fid = Env.lookup closure_def_env fid
+
+    method set_allowed_effects eff_row = {< allowed_effects = eff_row >}
+
+    method impose_presence_of_effect effect_name effect_typ =
+      ensure_effect_present_in_row allowed_effects effect_name effect_typ
 
     method! var : var -> (var * datatype * 'self_type) =
       fun var -> (var, o#lookup_type var, o)
@@ -358,6 +379,8 @@ struct
             Debug.print ("Function type in appl:" ^ string_of_datatype ft);
             let args, argtypes, o = o#list (fun o -> o#value) args in
             let exp_argstype = arg_types ~overstep_quantifiers:false ft in
+            let effects = effect_row ~overstep_quantifiers:false ft in
+            ensure_effect_rows_compatible allowed_effects effects (`TC orig);
             check_eq_type_lists exp_argstype argtypes;
             `Apply (f, args), return_type ~overstep_quantifiers:false ft, o
 
@@ -439,6 +462,7 @@ struct
             (* TODO: tt is a tuple of three records. Check it to contain base types only and all rows should be closed. *)
               `Table (db, table_name, keys, tt), `Table tt, o
         | `Query (range, e, _) -> (* TODO perform checks specific to this constructor *)
+            o#impose_presence_of_effect "wild" Types.unit_type;
             let range, o =
               o#optionu
                 (fun o (limit, offset) ->
@@ -449,6 +473,7 @@ struct
             let e, t, o = o#computation e in
               `Query (range, e, t), t, o
         | `Update ((x, source), where, body) -> (* TODO perform checks specific to this constructor *)
+            o#impose_presence_of_effect "wild" Types.unit_type;
             let source, _, o = o#value source in
             let x, o = o#binder x in
             let where, _, o = o#option (fun o -> o#computation) where in
@@ -464,9 +489,11 @@ struct
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               `CallCC v, return_type ~overstep_quantifiers:false t, o
         | `Select (l, v) ->
+           o#impose_presence_of_effect "wild" Types.unit_type;
            let v, t, o = o#value v in
            `Select (l, v), t, o
         | `Choice (v, bs) ->
+           o#impose_presence_of_effect "wild" Types.unit_type;
            let v, _, o = o#value v in
            let bs, branch_types, o =
              o#name_map (fun o (b, c) ->
@@ -582,8 +609,14 @@ struct
                     xs
                     ([], o) in
 
-                let body, body_actual, o = o#computation body in (* FIXME we probably have to handle the type vars here *)
                 let whole_function_expected = Var.type_of_binder f in
+                let quantifiers_as_type_args = List.map type_arg_of_quantifier tyvars in
+                let fully_applied_function_expected = Instantiate.apply_type whole_function_expected quantifiers_as_type_args in
+                let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
+                let previously_allowed_effects = allowed_effects in
+                let o = o#set_allowed_effects expected_function_effects in
+                let body, body_actual, o = o#computation body in
+                let o = o#set_allowed_effects previously_allowed_effects in
 
                 o#handle_funbinding tyvars whole_function_expected body_actual StringMap.empty binding;
 
@@ -622,8 +655,16 @@ struct
                             (x::xs, o))
                        xs
                        ([], o) in
-                  let body, body_actual, o = o#computation body in (* FIXME we probably have to handle the type vars here *)
+
                   let whole_function_expected = Var.type_of_binder f in
+                  let quantifiers_as_type_args = List.map type_arg_of_quantifier tyvars in
+                  let fully_applied_function_expected = Instantiate.apply_type whole_function_expected quantifiers_as_type_args in
+                  let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
+                  let previously_allowed_effects = allowed_effects in
+                  let o = o#set_allowed_effects expected_function_effects in
+                  o#impose_presence_of_effect "wild" Types.unit_type;
+                  let body, body_actual, o = o#computation body in
+                  let o = o#set_allowed_effects previously_allowed_effects in
 
                   o#handle_funbinding tyvars whole_function_expected body_actual StringMap.empty binding;
 
