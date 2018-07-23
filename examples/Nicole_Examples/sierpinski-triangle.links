@@ -1,12 +1,11 @@
 alien javascript "/js/canvas.js" {
     getValueFromSelection: (String) ~> String;
-    setBorderOfRef: (DomNode, String) ~> (DomNode);
 }
 
 alien javascript "js/runtime.js" {
     delayExecution: (Int) ~> ();
     requestAnimationFrame: (() -> (), Int) ~> ();
-    setIntervalForF: (Int, () ~> ()) ~> Int;
+    setIntervalForF: (Int, () ~> ()) ~> ();
     sysEnqueue: (a) ~> ();
     sysDequeue: () ~> [a];
     sysQueueLength: () -> Int;
@@ -19,16 +18,14 @@ typename Option(a) = [|Some:a|None|];
 typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
 typename Priority = [|High|Low|];
 typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield |e}~> ();
-typename Time = Int;
-typename Inteval = ();
 typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ());
-typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Time);
+typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Int);
 typename Fiber(e::Eff) = (prio:Priority, f: (SchedulerState(Fiber({ |e}))) ~e~> ());
 typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
 typename Update = [|TextUpdate: String | LocationUpdate: Float|];
 typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: [STriangle({ |e})]);
 
-var dotSize = 40;
+var dotSize = 30;
 var hoverColor = "#ff0";
 var nonHoverColor = "#61dafb";
 
@@ -139,7 +136,6 @@ fun schedule(main){
     }
 
     fun runFiber(fiber, runQ){
-        #println("runQ: " ^^ intToString(fiberQueueLength(runQ)));
         #dump(self());
         handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTime()) -> state){
             case Return(x) -> 
@@ -160,8 +156,8 @@ fun schedule(main){
             case Yield(resume) -> 
                 var currentTime = clientTime();
                 var buffer = switch(state.prio){
-                    case High -> 2000
-                    case Low -> 300 
+                    case High -> 100
+                    case Low -> 10 
                 };
                 if (currentTime - state.startTime <= buffer) resume((), state)
                 else{
@@ -192,8 +188,8 @@ fun schedule(main){
     }
 
     runFiber(main, emptyPrioQueue())
-
 }
+
 fun gensymHandler(f){
     handle(f())(0 -> counter) {
         case Gensym(resume) -> resume(counter, counter+1)
@@ -202,9 +198,9 @@ fun gensymHandler(f){
 
 # Page Functionality
 
-sig setValue: (a, String, (a) ~> String) ~%~> ()
-fun setValue(newVal, id, toString){
-    ignore(domSetAttributeFromRef(getNodeById(id), "value", toString(newVal)))
+sig setValue: (String, String) ~%~> ()
+fun setValue(newVal, id){
+    domSetAttributeFromRef(getNodeById(id), "value", newVal)
 }
 
 sig getValue: (String) ~> String
@@ -217,26 +213,6 @@ fun makeSTriangle(p, s, text, children){
     (point = p, targetSize = s, text=text, children=children)
 }
 
-sig getCircleStyleAttributeString: (Int, Int, Bool) -> String
-fun getCircleStyleAttributeString(x, y, hover){
-    var s = dotSize;
-    var color ={ if(hover) hoverColor
-                else nonHoverColor};
-
-    (" width: " ^^ intToString(s) ^^ "px; " ^^
-    " height: " ^^ intToString(s) ^^ "px; " ^^
-    " left: " ^^ intToString(x) ^^ "px;" ^^
-    " top: " ^^ intToString(y) ^^ "px;" ^^ 
-    " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
-    " background-color: " ^^ color ^^";")     
-}
-
-sig getScaleTransformAttributeString: ((Float, Float, Float)) -> String
-fun getScaleTransformAttributeString(scale){
-    ("transform: scaleX(" ^^ floatToString(scale.1) ^^ ");")
-    #scaleY(" ^^ floatToString(scale.2) ^^ ") translateZ(" ^^ floatToString(scale.3) ^^ ");";
-}
-
 sig drawTriangle: (STriangle({ |e}), Int) ~%~> ()
 fun drawTriangle(triangle, startTime){    
     switch(triangle.children){
@@ -245,7 +221,7 @@ fun drawTriangle(triangle, startTime){
     } 
 }
 
-sig setUpTriangle: (Int, String) ~%~> Option(STriangle({ |e}))
+sig setUpTriangle: (Int, String) ~> Option(STriangle({ |e}))
 fun setUpTriangle(s, text){
     if (s >= dotSize){
         fun getChildren(point, size){
@@ -266,31 +242,58 @@ fun setUpTriangle(s, text){
     else None
 }
 
-sig calculateScale: (Int) ~> %
+sig calculateScale: (Int) ~> (Float, Float,Float)
 fun calculateScale(startTime){
     var elapsed = clientTime() - startTime;
     #println("elapsed: " ^^ intToString(elapsed));
-    var t = elapsed `mod` 10;
+    var n = 20;
+    var t = (elapsed/100) `mod` (2*n);
     var w = {
-        if(t > 5) 10 - t
+        if(t > n) (2*n) - t
         else t
     };
-    var scale = (1.0 +. intToFloat(w)) /. 10.0;
-    #println("w: "^^ intToString(w) ^^ " t: " ^^ intToString(t) ^^ " scale: " ^^ floatToString(scale));
-    (1.0 +. scale /. 4.1, 0.7, 0.1)
+    var scale = (1.0 +. intToFloat(w)) /. intToFloat(n);
+    (1.0 +. scale /. 10.1, 0.7, 0.1)
 }   
 
-fun prepareReplaceDot(startTime){
-    fun(x, y, nodeId){
-        replaceDot(x, y, nodeId, startTime)
-    }
+sig getCircleStyleAttributeString: (Int, Int, Bool) -> String
+fun getCircleStyleAttributeString(x, y, hover){
+    var s = dotSize;
+    var color = {if(hover) hoverColor
+                else nonHoverColor};
+
+    (" width: " ^^ intToString(s) ^^ "px; " ^^
+    " height: " ^^ intToString(s) ^^ "px; " ^^
+    " left: " ^^ intToString(x) ^^ "px;" ^^
+    " top: " ^^ intToString(y) ^^ "px;" ^^ 
+    " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
+    " background-color: " ^^ color ^^";")     
 }
 
-sig getDotXml: (Int, Int, (Float, Float, Float), String, String) ~%~> Xml
+sig getScaleTransformAttributeString: ((Float, Float, Float)) -> String
+fun getScaleTransformAttributeString(scale){
+    ("transform: scaleX(" ^^ floatToString(scale.1) ^^ ");")
+}
+
+sig getDotXml: (Int, Int, (Float, Float, Float), String, String) ~> Xml
 fun getDotXml(x, y, scale, id, text){
     var style = getCircleStyleAttributeString(x, y, false);
     var st =  getScaleTransformAttributeString(scale);
-    <#><div value="{text}" id="{id}" class="containerStyle" style="{st}"><div class="circle" style="{style}"><span>{stringToXml(text)}</span></div></div></#>
+    {<#>
+        <div value="{text}" id="{id}" class="containerStyle" style="{st}">
+            <div class="circle" style="{style}">
+                <span id="{id ^^ "-text"}">{stringToXml(text)}</span>
+            </div>
+        </div>
+    </#>}
+}
+
+sig tick: (String) ~> ()
+fun tick(nodeId){
+    var sec = intToString((clientTime()/1000) `mod` 10);
+    var id = nodeId ^^ "-text";
+    domReplaceChildren(stringToXml(sec), getNodeById(id));
+    setValue(sec, nodeId)
 }
 
 sig drawDot: (Int, Int, String) ~> ()
@@ -305,20 +308,36 @@ fun replaceDot(x, y, nodeId, startTime){
     domReplaceChildren(xml, getNodeById(nodeId))
 }
 
+sig prepareReplaceDot: (Int) -> (Int, Int, String) ~> ()
+fun prepareReplaceDot(startTime){
+    fun(x, y, nodeId){
+        replaceDot(x, y, nodeId, startTime)
+    }
+}
+
+sig prepareTick: (String) ~> () ~> ()
+fun prepareTick(nodeId){
+    fun(){
+        tick(nodeId)
+    }
+}
+
+sig makeDot: (Int, Int, Int) {Gensym: Int|e}~> ()  
 fun makeDot(x, y, startTime) {
     var nodeId = "dot-" ^^ intToString(do Gensym);
     fun g(draw)() {
         fun f(draw)(){
             draw(x, y, nodeId):()
         }
-        f(draw)();
-        ignore(setIntervalForF(100, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))}))
+        setIntervalForF(500, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
+        f(draw)();                      # Draw the initial triangle
+        setIntervalForF(55, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
     }
     sysEnqueue(makeFiber(High, g(drawDot)))
 }
 
 fun start(){
-    var tri = setUpTriangle(200, "1");
+    var tri = setUpTriangle(300, "1");
     var startTime = clientTime();
     switch(tri){
         case None -> ()
@@ -349,14 +368,18 @@ fun main_page(_){
             width: 50%;
             height: 50%;
             position: relative;
-            /*border: 2px solid  #c4c4c4;*/
         }}
         .circle{{
             position: absolute;
-            background-color: #61dafb;
             font: normal 15px sans-serif;
             text-align: center;
             display: block;
+        }}
+        .circle span{{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }}
         .containerStyle {{
             position: absolute;
@@ -364,8 +387,6 @@ fun main_page(_){
             left: 50%;
             top: 50%;
             display: block;
-            /*width: 50px;
-            height: 50px;*/
         }}
         </style>
     </head>

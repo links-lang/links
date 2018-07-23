@@ -166,8 +166,8 @@ fun schedule(main){
             case Yield(resume) -> 
                 var currentTime = clientTime();
                 var buffer = switch(state.prio){
-                    case High -> 2000
-                    case Low -> 300 
+                    case High -> 400
+                    case Low -> 200 
                 };
                 if (currentTime - state.startTime <= buffer) resume((), state)
                 else{
@@ -361,7 +361,7 @@ fun main_page(_){
         }}
         .box{{
             width: 400px;
-            height: 400px;
+            height: 600px;
             border: solid 1px #aaa;
         }}
         .buttons{{
@@ -397,16 +397,21 @@ fun main_page(_){
             background-color: yellow;
             color: black;
         }}
+        .selection{{
+            width: 300px;
+            display: flex;
+            justify-content: center;
+        }}
         </style>
     </head>
     <body>
-        <canvas id="box" width="400" height="400" class="box center block"></canvas>
+        <canvas id="box" width="400" height="600" class="box center block"></canvas>
         <div class="selection margin-10 center">
             <select id="line-color">
-                <option value="#C25B56">Red</option>
-                <option value="#4F772D">Green</option>
-                <option value="#314570">Blue</option>
-                <option value="#FDB632">Yellow</option>
+                <option value="red">Red</option>
+                <option value="green">Green</option>
+                <option value="blue">Blue</option>
+                <option value="yellow">Yellow</option>
                 <option value="#801638">Berry </option>
                 <option value="#027878">Teal</option>
             </select>
@@ -414,9 +419,8 @@ fun main_page(_){
                 <option value="Low">Low</option>
                 <option value="High">High</option>
             </select>
-            <button class="block button center" l:onclick="{buttonPressed()}">Draw Line</button>
         </div>
-        <div id="hello"></div>
+        <button class="block button center" l:onclick="{buttonPressed()}">Draw Line</button>
         <div id="data" display="none">
             <div id="start-x" value="10"></div>
             <div id="start-y" value="10"></div>

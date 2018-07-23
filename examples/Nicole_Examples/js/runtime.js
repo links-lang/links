@@ -24,7 +24,7 @@ function setIntervalForF(interval, f, kappa){
     var id = setInterval(function() {
         return f(_idy);
     }, interval);
-    return _yieldCont(kappa, id);
+    return _yieldCont(kappa, CONSTANTS.UNIT);
 }
 
 const SystemQueue = (function(){
