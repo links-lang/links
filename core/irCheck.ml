@@ -257,7 +257,7 @@ struct
 
     method lookup_closure_def_for_fun fid = Env.lookup closure_def_env fid
 
-    method set_allowed_effects eff_row = {< allowed_effects = eff_row >}
+    method set_allowed_effects eff_row = {< allowed_effects = eff_row >}, allowed_effects
 
     method impose_presence_of_effect effect_name effect_typ =
       ensure_effect_present_in_row allowed_effects effect_name effect_typ
@@ -461,38 +461,50 @@ struct
             check_eq_types keys_type Types.keys_type;
             (* TODO: tt is a tuple of three records. Check it to contain base types only and all rows should be closed. *)
               `Table (db, table_name, keys, tt), `Table tt, o
-        | `Query (range, e, _) -> (* TODO perform checks specific to this constructor *)
+        | `Query (range, e, _) -> (* TODO: Check that body has right type: Only (nested?) records of base types *)
             o#impose_presence_of_effect "wild" Types.unit_type;
             let range, o =
               o#optionu
                 (fun o (limit, offset) ->
-                   let limit, _, o = o#value limit in
-                   let offset, _, o = o#value offset in
+                   let limit, ltype, o = o#value limit in
+                   let offset, otype, o = o#value offset in
+                      check_eq_types ltype Types.int_type;
+                      check_eq_types otype Types.int_type;
                      (limit, offset), o)
                 range in
+            (* query body must not have effects *)
+            let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
             let e, t, o = o#computation e in
+            let o, _ = o#set_allowed_effects outer_effects in
               `Query (range, e, t), t, o
         | `Update ((x, source), where, body) -> (* TODO perform checks specific to this constructor *)
             o#impose_presence_of_effect "wild" Types.unit_type;
             let source, _, o = o#value source in
             let x, o = o#binder x in
+            (* where part must not have effects *)
+            let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
             let where, _, o = o#option (fun o -> o#computation) where in
+            let o, _ = o#set_allowed_effects outer_effects in
             let body, _, o = o#computation body in
               `Update ((x, source), where, body), Types.unit_type, o
         | `Delete ((x, source), where) -> (* TODO perform checks specific to this constructor *)
+            o#impose_presence_of_effect "wild" Types.unit_type;
             let source, _, o = o#value source in
             let x, o = o#binder x in
+            (* where part must not have effects *)
+            let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
             let where, _, o = o#option (fun o -> o#computation) where in
+            let o, _ = o#set_allowed_effects outer_effects in
               `Delete ((x, source), where), Types.unit_type, o
         | `CallCC v ->
             let v, t, o = o#value v in
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               `CallCC v, return_type ~overstep_quantifiers:false t, o
-        | `Select (l, v) ->
+        | `Select (l, v) -> (* TODO perform checks specific to this constructor *)
            o#impose_presence_of_effect "wild" Types.unit_type;
            let v, t, o = o#value v in
            `Select (l, v), t, o
-        | `Choice (v, bs) ->
+        | `Choice (v, bs) -> (* TODO perform checks specific to this constructor *)
            o#impose_presence_of_effect "wild" Types.unit_type;
            let v, _, o = o#value v in
            let bs, branch_types, o =
@@ -613,10 +625,9 @@ struct
                 let quantifiers_as_type_args = List.map type_arg_of_quantifier tyvars in
                 let fully_applied_function_expected = Instantiate.apply_type whole_function_expected quantifiers_as_type_args in
                 let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
-                let previously_allowed_effects = allowed_effects in
-                let o = o#set_allowed_effects expected_function_effects in
+                let o, previously_allowed_effects = o#set_allowed_effects expected_function_effects in
                 let body, body_actual, o = o#computation body in
-                let o = o#set_allowed_effects previously_allowed_effects in
+                let o, _ = o#set_allowed_effects previously_allowed_effects in
 
                 o#handle_funbinding tyvars whole_function_expected body_actual StringMap.empty binding;
 
@@ -660,11 +671,10 @@ struct
                   let quantifiers_as_type_args = List.map type_arg_of_quantifier tyvars in
                   let fully_applied_function_expected = Instantiate.apply_type whole_function_expected quantifiers_as_type_args in
                   let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
-                  let previously_allowed_effects = allowed_effects in
-                  let o = o#set_allowed_effects expected_function_effects in
+                  let o, previously_allowed_effects = o#set_allowed_effects expected_function_effects in
                   o#impose_presence_of_effect "wild" Types.unit_type;
                   let body, body_actual, o = o#computation body in
-                  let o = o#set_allowed_effects previously_allowed_effects in
+                  let o, _ = o#set_allowed_effects previously_allowed_effects in
 
                   o#handle_funbinding tyvars whole_function_expected body_actual StringMap.empty binding;
 
