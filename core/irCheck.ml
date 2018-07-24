@@ -1,25 +1,64 @@
 open Utility
 open Ir
 
-type subst_type = Var.var IntMap.t
-type effects_type = Types.datatype StringMap.t
+(* ERROR HANDLING*)
+
+let fail_on_ir_type_error = false
+exception IRTypeError of string
+
+let raise_ir_type_error msg _occurence =
+  raise (IRTypeError msg)
+
+let handle_ir_type_error error alternative =
+  match error with
+    | IRTypeError msg
+    | TypeUtils.TypeDestructionError msg ->
+      if fail_on_ir_type_error then
+        failwith msg
+      else
+        Debug.print ("Continuing after IR Type Error:\n" ^ msg ); alternative
+    |  e-> failwith ("Unknown exception" ^ Printexc.to_string e)
+
+
+let ensure condition msg occurence =
+  if condition then () else raise_ir_type_error msg occurence
+
 let print_substmap subst =
   Debug.print ("Substmap\n:" ^ IntMap.show (fun fmt num -> Format.pp_print_int fmt num) subst)
 
-let eq_types_with_subst : subst_type -> (Types.datatype * Types.datatype) -> bool =
+(* TYPE EQUALITY *)
+
+module Env = Env.Int
+
+type type_eq_context = {
+  typevar_subst : Var.var IntMap.t; (* equivalences of typevars *)
+  tyenv: Types.kind Env.t (* track kinds of bound typevars *)
+}
+
+let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
   fun  subst (t1, t2) ->
     let lookupVar lvar map  =
       match IntMap.find_opt lvar map with
       | Some rvar' -> (map, rvar')
-      | None -> (map, lvar)  (* (IntMap.add lvar rvar map, rvar)*) in
-    let handle_variable (lid, lsk, lfd)  (rid, rsk, rfd) map =
-      let (map, rvar') = lookupVar lid map  in
+      | None -> (map, lvar)  in
+    let handle_variable primary_kind (lid, lsk, lfd)  (rid, rsk, rfd) ctx =
+      let subst_map, kind_env = ctx.typevar_subst, ctx.tyenv  in
+      let (map, rvar') = lookupVar lid subst_map  in
       let is_equal = rid = rvar' && lsk = rsk && lfd = rfd in
-      (if not is_equal then print_substmap map);
-      (map, is_equal) in
+      begin
+        if is_equal then
+         match Env.find kind_env rid with
+          | Some (primary_kind_env, subkind_env) ->
+            ensure
+              (primary_kind = primary_kind_env &&  rsk = subkind_env)
+              "Mismatch between (sub) kind information in variable vs stored in kind environment"
+              `None
+          | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") `None
+        end;
+      (ctx, is_equal) in
 
-    (* sbust maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
-    let rec eqt ((subst, t1, t2) : (subst_type* Types.datatype * Types.datatype)) =
+    (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
+    let rec eqt ((subst, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
 
       (* TODO: This also unwraps one level of `Recursive, without changing its body *)
       let t1 = Types.concrete_type t1 in
@@ -42,7 +81,7 @@ let eq_types_with_subst : subst_type -> (Types.datatype * Types.datatype) -> boo
           begin match t2 with
             `MetaTypeVar rpoint ->
              begin match Unionfind.find lpoint, Unionfind.find rpoint with
-             | `Var lv, `Var rv ->  handle_variable lv rv subst
+             | `Var lv, `Var rv ->  handle_variable `Type lv rv subst
              | `Recursive _, `Recursive _  -> failwith "FIXME" (* FIXME support recursion*)
              | `Body _, `Body _ -> failwith "Should have  removed `Body by now"
              | _ -> (subst, false)
@@ -94,11 +133,17 @@ let eq_types_with_subst : subst_type -> (Types.datatype * Types.datatype) -> boo
       | `ForAll (qs, t) -> (* checked again *)
          begin match t2 with
          | `ForAll (qs', t') ->
-            let (subst', quantifiers_match) = List.fold_left2 (fun (subst, prev_eq) lqvar rqvar ->
-                                                  let lid, lsk, lfd = lqvar in
-                                                  let rid, rsk, rfd = rqvar in
-                                                  (IntMap.add lid rid subst, prev_eq && lsk = rsk && lfd = rfd)
-                                                ) (subst,true) (Types.unbox_quantifiers qs) (Types.unbox_quantifiers qs') in
+            let (subst', quantifiers_match) =
+              List.fold_left2 (fun (subst, prev_eq) lqvar rqvar ->
+                  let lid, _ , _ = lqvar in
+                  let rid, _, _ = rqvar in
+                  let l_kind = Types.kind_of_quantifier lqvar in
+                  let r_kind = Types.kind_of_quantifier rqvar in
+                  let ctx' = { typevar_subst = IntMap.add lid rid subst.typevar_subst;
+                               tyenv = Env.bind subst.tyenv (rid, r_kind)
+                             } in
+                  (ctx', prev_eq && l_kind = r_kind)
+                ) (subst,true) (Types.unbox_quantifiers qs) (Types.unbox_quantifiers qs') in
             if quantifiers_match then
               (subst, snd (eqt (subst', t, t'))) (* TODO if we are to unify flexible variables, those should survive here *)
             else (subst, false)
@@ -132,7 +177,8 @@ let eq_types_with_subst : subst_type -> (Types.datatype * Types.datatype) -> boo
          eqt (subst, l, r)
       | `End, `End -> (subst, true)
       | _, _ -> (subst, false)
-    and eq_rows  (subst, (lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual))  = (* checked again *)
+    and eq_rows  (subst, (lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual))  =
+      (* TODO: Shall we do some kind of normalization here, e.g. flattenting, removal of absent fields in closed rows? *)
       let  (subst, r1) = eq_field_envs (subst, lfield_env, rfield_env) in
       let  (subst, r2) = eq_row_vars (subst, lrow_var, rrow_var) in
         (subst, r1 && r2 && ldual=rdual)
@@ -143,7 +189,7 @@ let eq_types_with_subst : subst_type -> (Types.datatype * Types.datatype) -> boo
       | `Var lpoint, `Var rpoint -> begin match Unionfind.find lpoint, Unionfind.find rpoint with
                                     | `Body _,  _
                                       | _, `Body _ -> failwith "should have removed all `Body variants by now"
-                                    |  `Var lv, `Var rv -> handle_variable lv rv subst
+                                    |  `Var lv, `Var rv -> handle_variable `Presence lv rv subst
                                     | _ , _ -> (subst, false)
                                     end
       | _, _ -> assert false
@@ -158,7 +204,7 @@ let eq_types_with_subst : subst_type -> (Types.datatype * Types.datatype) -> boo
     and eq_row_vars (subst, lpoint, rpoint) = (* checked again *)
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | `Closed, `Closed ->  (subst, true)
-      | `Var lv, `Var rv ->   handle_variable lv rv subst
+      | `Var lv, `Var rv ->   handle_variable `Row lv rv subst
       | `Recursive (_var, _), `Recursive (_var', _) -> assert false (* FIXME *)
       | _ ->  (subst, false)
     and eq_type_args  (subst, l, r)  =
@@ -170,81 +216,61 @@ let eq_types_with_subst : subst_type -> (Types.datatype * Types.datatype) -> boo
     in
       snd (eqt  (subst, t1, t2))
 
-let eq_types = eq_types_with_subst IntMap.empty
-
-let fail_on_ir_type_error = false
-exception IRTypeError of string
-
-let raise_ir_type_error msg _occurence =
-  raise (IRTypeError msg)
-
-let handle_ir_type_error error alternative =
-  match error with
-    | IRTypeError msg
-    | TypeUtils.TypeDestructionError msg ->
-      if fail_on_ir_type_error then
-        failwith msg
-      else
-        Debug.print ("Continuing after IR Type Error:\n" ^ msg ); alternative
-    |  e-> failwith ("Unknown exception" ^ Printexc.to_string e)
 
 
 
 
-
-let check_eq_types :  Types.datatype -> Types.datatype -> unit = fun et at ->
-  if not (eq_types (et, at)) then
+let check_eq_types: type_eq_context -> Types.datatype -> Types.datatype -> unit = fun ctx et at ->
+  if not (eq_types ctx (et, at)) then
     raise_ir_type_error
       ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
       `None
 
-let check_eq_types_inital_substmap : subst_type -> Types.datatype -> Types.datatype -> unit = fun subst et at ->
-  if not (eq_types_with_subst subst (et, at)) then
-    raise_ir_type_error
-      ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
-      `None
-
-let check_eq_type_lists = fun exptl actl ->
+let check_eq_type_lists = fun ctx exptl actl ->
   (* if typecheck_ir then
    *   begin *)
     if List.length exptl <> List.length actl then
       raise_ir_type_error "Arity missmatch" `None
     else
       List.iter2 (fun  et at ->
-          check_eq_types et at
+          check_eq_types ctx et at
        )  exptl actl
     (* end *)
 
-let ensure condition msg occurence =
-  if condition then () else raise_ir_type_error msg occurence
 
 
-let ensure_effect_present_in_row allowed_effects required_effect_name required_effect_type occurence =
+let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurence =
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) in
   match StringMap.find_opt required_effect_name map with
-    | Some (`Present et) -> check_eq_types et required_effect_type
+    | Some (`Present et) -> check_eq_types ctx et required_effect_type
     | _ -> raise_ir_type_error ("Required effect" ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) `None
 
 
 
-let ensure_effect_rows_compatible allowed_effects imposed_effects_row occurence =
+let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurence =
   (* TODO: Shall we flatten the row first? *)
   (* FIXEM: need to flatten here and remove absent fields if closed row *)
-  ensure (eq_types (`Record allowed_effects, `Record imposed_effects_row)) "Incompatible effects" occurence
+  ensure (eq_types ctx (`Record allowed_effects, `Record imposed_effects_row)) "Incompatible effects" occurence
+
+
+
+(* TYPE CHECKING *)
+
+
 
 module Typecheck =
 struct
   open Types
   open TypeUtils
 
-  type environment = datatype Env.Int.t
+  type environment = datatype Env.t
 
   let info_type (t, _, _) = t
 
   (* FIXME remove this? *)
   let deconstruct f t = f t
 
-  module Env = Env.Int
+
 
   let checker tyenv =
   object (o)
@@ -252,22 +278,30 @@ struct
 
     (*val env = env*)
     val closure_def_env = Env.empty
+    val type_var_env = Env.empty
+
     (* initialize to the default row of allowed toplevel effects*)
     val allowed_effects = Lib.typing_env.effect_row
 
     method lookup_closure_def_for_fun fid = Env.lookup closure_def_env fid
 
+    (* Creates a context for type equality checking *)
+    method extract_type_equality_context () = { typevar_subst = IntMap.empty; tyenv = type_var_env }
+
     method set_allowed_effects eff_row = {< allowed_effects = eff_row >}, allowed_effects
 
-    method impose_presence_of_effect effect_name effect_typ =
-      ensure_effect_present_in_row allowed_effects effect_name effect_typ
+    method impose_presence_of_effect effect_name effect_typ occurence : unit =
+      ensure_effect_present_in_row (o#extract_type_equality_context ()) allowed_effects effect_name effect_typ occurence
+
+    method add_typevar_to_context id kind = {< type_var_env = Env.bind type_var_env (id, kind)  >}
+    method remove_typevar_to_context id  = {< type_var_env = Env.unbind type_var_env id >}
+
+    method check_eq_types t1 t2 = check_eq_types (o#extract_type_equality_context ()) t1 t2
 
     method! var : var -> (var * datatype * 'self_type) =
       fun var -> (var, o#lookup_type var, o)
 
 
-    (* method closure_var : var -> (var * datatype * 'self_type) = *)
-    (*   fun var -> (var, o#lookup_closure_type var, o) *)
 
     method! value : value -> (value * datatype * 'self_type) = fun orig ->
       match orig with
@@ -306,12 +340,21 @@ struct
             let v, vt, o = o#value v in
             let _ = match t with
               | `Variant _ ->
-                 check_eq_types (project_type ~overstep_quantifiers:false name t) vt
+                 o#check_eq_types  (project_type ~overstep_quantifiers:false name t) vt
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (`Value orig) in
             `Inject (name, v, t), t, o
 
         | `TAbs (tyvars, v) ->
+            let o = List.fold_left
+              (fun o quant ->
+                let var = var_of_quantifier quant in
+                let kind = kind_of_quantifier quant in
+                o#add_typevar_to_context var kind) o tyvars in
             let v, t, o = o#value v in
+            let o = List.fold_left
+              (fun o quant ->
+                let var = var_of_quantifier quant in
+                o#remove_typevar_to_context var) o tyvars in
             let t = Types.for_all (tyvars, t) in
               `TAbs (tyvars, v), t, o
 
@@ -335,8 +378,8 @@ struct
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
 
-            let _ = StringMap.iter (fun _ t -> check_eq_types (`Primitive `String) t ) attribute_types in
-            let _ = List.iter (fun t -> check_eq_types (`Primitive `XmlItem) t ) children_types in
+            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive `String) t ) attribute_types in
+            let _ = List.iter (fun t -> o#check_eq_types  (`Primitive `XmlItem) t ) children_types in
             (* FIXME xml_type denotes a list of xml items. should we just return xmlitem here? *)
               `XmlNode (tag, attributes, children), xml_type, o
 
@@ -345,7 +388,7 @@ struct
             let (args, argument_types, o) = o#list (fun o -> o#value) args in
 
             let parameter_types = arg_types ~overstep_quantifiers:false ft in
-            check_eq_type_lists parameter_types argument_types;
+            check_eq_type_lists (o#extract_type_equality_context ()) parameter_types argument_types;
             let effects = effect_row ~overstep_quantifiers:false ft in
             ensure (is_empty_row effects) "ApplyPure used for function with effects" (`Value orig);
             `ApplyPure (f, args),  return_type ~overstep_quantifiers:false ft, o
@@ -356,7 +399,7 @@ struct
 
             ensure (is_function_type ft) "Passing closure to non-funcion" (`Value orig);
             begin match o#lookup_closure_def_for_fun f with
-            | Some binder -> check_eq_types (Var.type_of_binder binder) zt
+            | Some binder -> o#check_eq_types (Var.type_of_binder binder) zt
             | None -> raise_ir_type_error "Providing closure to a function that doesn't expect one" (`Value orig)
             end;
             `Closure (f, z), ft, o
@@ -380,8 +423,8 @@ struct
             let args, argtypes, o = o#list (fun o -> o#value) args in
             let exp_argstype = arg_types ~overstep_quantifiers:false ft in
             let effects = effect_row ~overstep_quantifiers:false ft in
-            ensure_effect_rows_compatible allowed_effects effects (`TC orig);
-            check_eq_type_lists exp_argstype argtypes;
+            ensure_effect_rows_compatible (o#extract_type_equality_context ()) allowed_effects effects (`TC orig);
+            check_eq_type_lists (o#extract_type_equality_context ()) exp_argstype argtypes;
             `Apply (f, args), return_type ~overstep_quantifiers:false ft, o
 
         | `Special special ->
@@ -420,7 +463,7 @@ struct
                    (fun name  (binder, comp) (cases, types, o) ->
                      let type_binder = Var.type_of_binder binder in
                      let type_variant = variant_at ~overstep_quantifiers:false name variant in
-                     check_eq_types type_binder type_variant;
+                     o#check_eq_types type_binder type_variant;
                      let b, o = o#binder binder in
                      let c, t, o = o#computation comp in
                      let o = o#remove_binder binder in
@@ -434,7 +477,7 @@ struct
                      (b, c), t, o) default in
                let types = OptionUtils.opt_app (fun dt -> dt :: types) types default_type in
                let t = List.hd types in
-               List.iter (fun ty -> check_eq_types t ty) (List.tl types);
+               List.iter (fun ty -> o#check_eq_types t ty) (List.tl types);
                `Case (v, cases, default), t, o
             | _ ->  raise_ir_type_error "Case over non-variant value" (`TC orig)
             end
@@ -442,34 +485,34 @@ struct
             let v, vt, o = o#value v in
             let left, lt, o = o#computation left in
             let right, rt, o = o#computation right in
-            check_eq_types vt (`Primitive `Bool);
-            check_eq_types lt rt;
+            o#check_eq_types vt (`Primitive `Bool);
+            o#check_eq_types lt rt;
             `If (v, left, right), lt, o
 
     method! special : special -> (special * datatype * 'self_type) = (* FIXME no typechecking yet*)
-      function
+      fun special -> match special with
         | `Wrong t -> `Wrong t, t, o
         | `Database v ->
             let v, _, o = o#value v in
               `Database v, `Primitive `DB, o
         | `Table (db, table_name, keys, tt) ->
             let db, db_type, o = o#value db in
-            check_eq_types db_type Types.database_type;
+            o#check_eq_types db_type Types.database_type;
             let table_name, table_name_type, o = o#value table_name in
-            check_eq_types table_name_type Types.string_type;
+            o#check_eq_types table_name_type Types.string_type;
             let keys, keys_type, o = o#value keys in
-            check_eq_types keys_type Types.keys_type;
+            o#check_eq_types keys_type Types.keys_type;
             (* TODO: tt is a tuple of three records. Check it to contain base types only and all rows should be closed. *)
               `Table (db, table_name, keys, tt), `Table tt, o
         | `Query (range, e, _) -> (* TODO: Check that body has right type: Only (nested?) records of base types *)
-            o#impose_presence_of_effect "wild" Types.unit_type;
+            o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
             let range, o =
               o#optionu
                 (fun o (limit, offset) ->
                    let limit, ltype, o = o#value limit in
                    let offset, otype, o = o#value offset in
-                      check_eq_types ltype Types.int_type;
-                      check_eq_types otype Types.int_type;
+                      o#check_eq_types ltype Types.int_type;
+                      o#check_eq_types otype Types.int_type;
                      (limit, offset), o)
                 range in
             (* query body must not have effects *)
@@ -478,7 +521,7 @@ struct
             let o, _ = o#set_allowed_effects outer_effects in
               `Query (range, e, t), t, o
         | `Update ((x, source), where, body) -> (* TODO perform checks specific to this constructor *)
-            o#impose_presence_of_effect "wild" Types.unit_type;
+            o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
             let source, _, o = o#value source in
             let x, o = o#binder x in
             (* where part must not have effects *)
@@ -488,7 +531,7 @@ struct
             let body, _, o = o#computation body in
               `Update ((x, source), where, body), Types.unit_type, o
         | `Delete ((x, source), where) -> (* TODO perform checks specific to this constructor *)
-            o#impose_presence_of_effect "wild" Types.unit_type;
+            o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
             let source, _, o = o#value source in
             let x, o = o#binder x in
             (* where part must not have effects *)
@@ -501,11 +544,11 @@ struct
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               `CallCC v, return_type ~overstep_quantifiers:false t, o
         | `Select (l, v) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect "wild" Types.unit_type;
+           o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
            let v, t, o = o#value v in
            `Select (l, v), t, o
         | `Choice (v, bs) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect "wild" Types.unit_type;
+           o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
            let v, _, o = o#value v in
            let bs, branch_types, o =
              o#name_map (fun o (b, c) ->
@@ -569,32 +612,51 @@ struct
         let o = o#remove_bindings bs in
           (bs, tc), t, o
 
-    method handle_funbinding : tyvar list -> datatype -> datatype -> effects_type -> binding -> unit =
-      fun tyvars expected_overall_funtype body_actual _acutal_effects fundef ->
+    method handle_funbinding : tyvar list -> datatype -> computation  -> binding -> (computation * 'self_type) =
+      fun tyvars expected_overall_funtype body fundef ->
+        let is_recursive = match fundef with
+          | `Fun _ -> false
+          | `Rec _ -> true in
         let missmatch () = raise_ir_type_error "Quantifier missmatch in function def" (`Binding fundef) in
-        let check_types subst expected_returntype _expected_effects  =
-          check_eq_types_inital_substmap subst expected_returntype body_actual;
-          (* TODO check expected effect row vs acutal effects *) in
-        let rec handle_foralls subst funtype tyvars = match funtype with
-          | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst (unbox_quantifiers qs_boxed) t tyvars
+        let check_types subst expected_returntype body_actual_type  =
+          check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type in
+        let rec handle_foralls subst funtype tyvars body_actual_type = match funtype with
+          | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst (unbox_quantifiers qs_boxed) t tyvars body_actual_type
           | `Function (at, eff, rt)
           | `Lolli (at, eff, rt) ->
             if tyvars = [] then
-              check_types subst rt eff
+              check_types subst rt body_actual_type
             else
               missmatch ()
           | _ -> missmatch ()
-        and handle_unboxed_foralls subst quantifier_list rest_expected_type tyvars = match quantifier_list, tyvars with
-          | [], _ -> handle_foralls subst rest_expected_type tyvars
+        and handle_unboxed_foralls subst quantifier_list rest_expected_type tyvars body_actual_type = match quantifier_list, tyvars with
+          | [], _ -> handle_foralls subst rest_expected_type tyvars body_actual_type
           | (lid, lsubkind, _lmtv) :: lqs, (rid, rsubkind, _rmtv) :: rqs ->
               (* TODO check mtv here *)
               if lid = rid && lsubkind = rsubkind then
                 let subst' = IntMap.add lid rid subst in
-                handle_unboxed_foralls subst' lqs rest_expected_type rqs
+                handle_unboxed_foralls subst' lqs rest_expected_type rqs body_actual_type
               else
                 missmatch ()
           | _ -> missmatch () in
-        handle_foralls IntMap.empty expected_overall_funtype tyvars
+        let quantifiers_as_type_args = List.map Types.type_arg_of_quantifier tyvars in
+        let fully_applied_function_expected = Instantiate.apply_type expected_overall_funtype quantifiers_as_type_args in
+        let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
+        let o, previously_allowed_effects = o#set_allowed_effects expected_function_effects in
+        (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type (`Binding fundef));
+        let o = List.fold_left
+              (fun o quant ->
+                let var = var_of_quantifier quant in
+                let kind = kind_of_quantifier quant in
+                o#add_typevar_to_context var kind) o tyvars in
+        let body, body_actual_type, o = o#computation body in
+        let o = List.fold_left
+              (fun o quant ->
+                let var = var_of_quantifier quant in
+                o#remove_typevar_to_context var) o tyvars in
+        handle_foralls IntMap.empty expected_overall_funtype tyvars body_actual_type;
+        let o, _ = o#set_allowed_effects previously_allowed_effects in
+        body, o
 
     method! binding : binding -> (binding * 'self_type) =
       function
@@ -603,7 +665,7 @@ struct
             try
               let tc, act, o = o#tail_computation tc in
               let exp = Var.type_of_binder x in
-              check_eq_types exp act;
+              o#check_eq_types exp act;
               tc, o
             with e -> handle_ir_type_error e (tc, o) in
             let x, o = o#binder x in
@@ -622,18 +684,8 @@ struct
                     ([], o) in
 
                 let whole_function_expected = Var.type_of_binder f in
-                let quantifiers_as_type_args = List.map type_arg_of_quantifier tyvars in
-                let fully_applied_function_expected = Instantiate.apply_type whole_function_expected quantifiers_as_type_args in
-                let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
-                let o, previously_allowed_effects = o#set_allowed_effects expected_function_effects in
-                let body, body_actual, o = o#computation body in
-                let o, _ = o#set_allowed_effects previously_allowed_effects in
+                let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
 
-                o#handle_funbinding tyvars whole_function_expected body_actual StringMap.empty binding;
-
-                (* (match body_expected, body_actual with
-                  | (`ForAll _, `Function _) -> failwith "forall-func"  | (`Function _, `ForAll _) -> failwith "func-forall" | _(`Function _, `Function _) -> () ); *)
-                (* check_eq_types body_expected body_actual; *)
                 let o = OptionUtils.opt_app o#remove_binder o z in
                 let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
                 f, tyvars, xs, body, z, location, o
@@ -668,19 +720,8 @@ struct
                        ([], o) in
 
                   let whole_function_expected = Var.type_of_binder f in
-                  let quantifiers_as_type_args = List.map type_arg_of_quantifier tyvars in
-                  let fully_applied_function_expected = Instantiate.apply_type whole_function_expected quantifiers_as_type_args in
-                  let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
-                  let o, previously_allowed_effects = o#set_allowed_effects expected_function_effects in
-                  o#impose_presence_of_effect "wild" Types.unit_type;
-                  let body, body_actual, o = o#computation body in
-                  let o, _ = o#set_allowed_effects previously_allowed_effects in
+                  let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
 
-                  o#handle_funbinding tyvars whole_function_expected body_actual StringMap.empty binding;
-
-                  (* check_eq_types body_expected body_actual; *)
-                  (* (match body_expected, body_actual  with
-                    | (`ForAll _, `Function _) -> failwith "forall-func"  | (`Function _, `ForAll _) -> failwith "func-forall" | _(`Function _, `Function _) -> () ); *)
                   let o = OptionUtils.opt_app o#remove_binder o z in
                   let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
                     (f, (tyvars, xs, body), z, location)::defs, o)
