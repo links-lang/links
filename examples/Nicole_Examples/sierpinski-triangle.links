@@ -25,7 +25,7 @@ typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
 typename Update = [|TextUpdate: String | LocationUpdate: Float|];
 typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: [STriangle({ |e})]);
 
-var dotSize = 30;
+var dotSize = 25;
 var hoverColor = "#ff0";
 var nonHoverColor = "#61dafb";
 
@@ -156,8 +156,8 @@ fun schedule(main){
             case Yield(resume) -> 
                 var currentTime = clientTime();
                 var buffer = switch(state.prio){
-                    case High -> 100
-                    case Low -> 10 
+                    case High -> 120
+                    case Low -> 30
                 };
                 if (currentTime - state.startTime <= buffer) resume((), state)
                 else{
@@ -228,11 +228,12 @@ fun setUpTriangle(s, text){
             var x = point.x;
             var y = point.y;
             var newS = size/2;
-            if (size >= dotSize) {
+            var yf = floatToInt(1.73 *. intToFloat(newS)) / 4;
+            if (newS >= (dotSize - (dotSize/4))) {
                 [
-                    makeSTriangle( (x = x, y = y - newS/2), newS, text, getChildren((x = x, y = y - newS/2), newS)), 
-                    makeSTriangle( (x = x - newS, y = y + newS/2), newS, text, getChildren((x = x - newS, y = y + newS/2), newS)), 
-                    makeSTriangle( (x = x + newS, y = y + newS/2), newS, text, getChildren((x = x + newS, y = y + newS/2), newS))
+                    makeSTriangle( (x = x, y = y - yf), newS, text, getChildren((x = x, y = y - yf), newS)), 
+                    makeSTriangle( (x = x - (newS/2), y = y + yf), newS, text, getChildren((x = x - (newS/2), y = y + yf), newS)), 
+                    makeSTriangle( (x = x + (newS/2), y = y + yf), newS, text, getChildren((x = x + (newS/2), y = y + yf), newS))
                 ]
             }
             else []
@@ -245,16 +246,17 @@ fun setUpTriangle(s, text){
 sig calculateScale: (Int) ~> (Float, Float,Float)
 fun calculateScale(startTime){
     var elapsed = clientTime() - startTime;
-    #println("elapsed: " ^^ intToString(elapsed));
-    var n = 20;
+    var n = 70;
     var t = (elapsed/100) `mod` (2*n);
     var w = {
         if(t > n) (2*n) - t
         else t
     };
-    var scale = (1.0 +. intToFloat(w)) /. intToFloat(n);
-    (1.0 +. scale /. 10.1, 0.7, 0.1)
+    var scale = 1.0 +.  (intToFloat(w) /. intToFloat(2*n));
+    #println("scale: " ^^ floatToString(scale/. 2.1));
+    (scale /. 1.2, 1.0, 1.0)
 }   
+ 
 
 sig getCircleStyleAttributeString: (Int, Int, Bool) -> String
 fun getCircleStyleAttributeString(x, y, hover){
@@ -272,7 +274,8 @@ fun getCircleStyleAttributeString(x, y, hover){
 
 sig getScaleTransformAttributeString: ((Float, Float, Float)) -> String
 fun getScaleTransformAttributeString(scale){
-    ("transform: scaleX(" ^^ floatToString(scale.1) ^^ ");")
+    #("transform: scaleX(" ^^ floatToString(scale.1) ^^ ");")
+    ("transform: scaleX(" ^^ floatToString(scale.1) ^^ ") scaleY(" ^^ floatToString(scale.2) ^^");")
 }
 
 sig getDotXml: (Int, Int, (Float, Float, Float), String, String) ~> Xml
@@ -298,7 +301,7 @@ fun tick(nodeId){
 
 sig drawDot: (Int, Int, String) ~> ()
 fun drawDot(x, y, nodeId){
-    var xml = getDotXml(x, y, (1.0, 1.0, 1.0), nodeId, "1");
+    var xml = getDotXml(x, y, (1.0, 1.0, 0.1), nodeId, "1");
     appendChildren(xml, getNodeById("container"))
 }
 
@@ -329,15 +332,15 @@ fun makeDot(x, y, startTime) {
         fun f(draw)(){
             draw(x, y, nodeId):()
         }
-        setIntervalForF(500, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
+        setIntervalForF(1000, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
         f(draw)();                      # Draw the initial triangle
-        setIntervalForF(55, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
+        setIntervalForF(445, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
     }
     sysEnqueue(makeFiber(High, g(drawDot)))
 }
 
 fun start(){
-    var tri = setUpTriangle(300, "1");
+    var tri = setUpTriangle(780, "1");
     var startTime = clientTime();
     switch(tri){
         case None -> ()
@@ -368,6 +371,7 @@ fun main_page(_){
             width: 50%;
             height: 50%;
             position: relative;
+            margin-top: 200px;
         }}
         .circle{{
             position: absolute;
