@@ -36,7 +36,7 @@ type type_eq_context = {
 }
 
 let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
-  fun  subst (t1, t2) ->
+  fun  context (t1, t2) ->
     let lookupVar lvar map  =
       match IntMap.find_opt lvar map with
       | Some rvar' -> (map, rvar')
@@ -58,7 +58,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       (ctx, is_equal) in
 
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
-    let rec eqt ((subst, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
+    let rec eqt ((context, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
 
       (* TODO: This also unwraps one level of `Recursive, without changing its body *)
       let t1 = Types.concrete_type t1 in
@@ -69,152 +69,152 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       match t1 with
       | `Not_typed -> (* checked again *)
           begin match t2 with
-              `Not_typed -> (subst,  true)
-            | _          -> (subst, false)
+              `Not_typed -> (context,  true)
+            | _          -> (context, false)
           end
       | `Primitive x ->  (* checked again *)
           begin match t2 with
-              `Primitive y -> (subst, x = y)
-            | _            -> (subst, false)
+              `Primitive y -> (context, x = y)
+            | _            -> (context, false)
           end
       | `MetaTypeVar lpoint ->  (* checked again *)
           begin match t2 with
             `MetaTypeVar rpoint ->
              begin match Unionfind.find lpoint, Unionfind.find rpoint with
-             | `Var lv, `Var rv ->  handle_variable `Type lv rv subst
+             | `Var lv, `Var rv ->  handle_variable `Type lv rv context
              | `Recursive _, `Recursive _  -> failwith "FIXME" (* FIXME support recursion*)
              | `Body _, `Body _ -> failwith "Should have  removed `Body by now"
-             | _ -> (subst, false)
+             | _ -> (context, false)
              end
-            | _                   -> (subst, false)
+            | _                   -> (context, false)
           end
       | `Function (lfrom, lm, lto) ->  (* checked again *)
           begin match t2 with
             `Function (rfrom, rm, rto) ->
-             let (subst, r1) = eqt (subst, lfrom, rfrom) in
-             let (subst, r2) =  eqt (subst, lto,   rto) in
-             let (subst, r3) = eq_rows  (subst, lm, rm) in
-             (subst, r1 && r2 && r3)
-            | _                          -> (subst, false)
+             let (context, r1) = eqt (context, lfrom, rfrom) in
+             let (context, r2) =  eqt (context, lto,   rto) in
+             let (context, r3) = eq_rows  (context, lm, rm) in
+             (context, r1 && r2 && r3)
+            | _                          -> (context, false)
           end
       | `Lolli (lfrom, lm, lto) ->  (* checked again *)
           begin match t2 with
             `Function (rfrom, rm, rto) ->
-             let (subst, r1) = eqt (subst, lfrom, rfrom) in
-             let (subst, r2) = eqt (subst, lto,   rto) in
-             let (subst, r3) = eq_rows  (subst, lm, rm) in
-             (subst, r1 && r2 && r3)
-            | _                          -> (subst, false)
+             let (context, r1) = eqt (context, lfrom, rfrom) in
+             let (context, r2) = eqt (context, lto,   rto) in
+             let (context, r3) = eq_rows  (context, lm, rm) in
+             (context, r1 && r2 && r3)
+            | _                          -> (context, false)
           end
       | `Record l ->  (* checked again *)
          begin match t2 with
-         | `Record r -> eq_rows (subst, l, r)
-         | _         -> (subst, false)
+         | `Record r -> eq_rows (context, l, r)
+         | _         -> (context, false)
          end
       | `Variant l ->  (* checked again *)
          begin match  t2 with
-           `Variant r -> eq_rows (subst, l, r)
-         | _          -> (subst, false)
+           `Variant r -> eq_rows (context, l, r)
+         | _          -> (context, false)
          end
       | `Effect l ->  (* checked again *)
          begin match t2 with
-         | `Effect r -> eq_rows (subst, l, r)
-         | _         -> (subst, false)
+         | `Effect r -> eq_rows (context, l, r)
+         | _         -> (context, false)
          end
       | `Application (s, ts) ->  (* checked again *)
          begin match t2 with
          | `Application (s', ts') ->
-            List.fold_left2 (fun (subst, prev_equal) larg rarg  ->
-                let subst, eq = eq_type_args (subst, larg, rarg) in
-                subst, prev_equal && eq)
-              (subst, Types.Abstype.equal s  s') ts ts'
-         | _ -> (subst, false)
+            List.fold_left2 (fun (context, prev_equal) larg rarg  ->
+                let context, eq = eq_type_args (context, larg, rarg) in
+                context, prev_equal && eq)
+              (context, Types.Abstype.equal s  s') ts ts'
+         | _ -> (context, false)
          end
       | `ForAll (qs, t) -> (* checked again *)
          begin match t2 with
          | `ForAll (qs', t') ->
-            let (subst', quantifiers_match) =
-              List.fold_left2 (fun (subst, prev_eq) lqvar rqvar ->
+            let (context', quantifiers_match) =
+              List.fold_left2 (fun (context, prev_eq) lqvar rqvar ->
                   let lid, _ , _ = lqvar in
                   let rid, _, _ = rqvar in
                   let l_kind = Types.kind_of_quantifier lqvar in
                   let r_kind = Types.kind_of_quantifier rqvar in
-                  let ctx' = { typevar_subst = IntMap.add lid rid subst.typevar_subst;
-                               tyenv = Env.bind subst.tyenv (rid, r_kind)
+                  let ctx' = { typevar_subst = IntMap.add lid rid context.typevar_subst;
+                               tyenv = Env.bind context.tyenv (rid, r_kind)
                              } in
                   (ctx', prev_eq && l_kind = r_kind)
-                ) (subst,true) (Types.unbox_quantifiers qs) (Types.unbox_quantifiers qs') in
+                ) (context,true) (Types.unbox_quantifiers qs) (Types.unbox_quantifiers qs') in
             if quantifiers_match then
-              (subst, snd (eqt (subst', t, t'))) (* TODO if we are to unify flexible variables, those should survive here *)
-            else (subst, false)
-         | _ -> (subst, false)
+              (context, snd (eqt (context', t, t'))) (* TODO if we are to unify flexible variables, those should survive here *)
+            else (context, false)
+         | _ -> (context, false)
          end
       | #Types.session_type as l ->
          begin match  t2 with
-         | #Types.session_type as r -> eq_sessions (subst, l, r)
-         | _          -> (subst, false)
+         | #Types.session_type as r -> eq_sessions (context, l, r)
+         | _          -> (context, false)
          end
 
       | `Alias  _ -> failwith "should have removed `Alias by now"
       | `Table (lt1, lt2, lt3)  -> (* checked again *)
          begin match t2 with
          | `Table (rt1, rt2, rt3) ->
-            let (subst, r1) = eqt (subst, lt1, rt1) in
-            let (subst, r2) = eqt (subst, lt2, rt2) in
-            let (subst, r3) = eqt (subst, lt3, rt3) in
-            (subst, r1 && r2 && r3)
-         | _ -> (subst, false)
+            let (context, r1) = eqt (context, lt1, rt1) in
+            let (context, r2) = eqt (context, lt2, rt2) in
+            let (context, r3) = eqt (context, lt3, rt3) in
+            (context, r1 && r2 && r3)
+         | _ -> (context, false)
          end
-    and eq_sessions (subst, l, r)  = (* checked again *)
+    and eq_sessions (context, l, r)  = (* checked again *)
       match (l,r) with
       | `Input (lt, _), `Input (rt, _)
         | `Output (lt, _), `Output (rt, _) ->
-         eqt (subst, lt, rt)
+         eqt (context, lt, rt)
       | `Select l, `Select r
         | `Choice l, `Choice r ->
-         eq_rows (subst, l, r)
+         eq_rows (context, l, r)
       | `Dual l, `Dual r ->
-         eqt (subst, l, r)
-      | `End, `End -> (subst, true)
-      | _, _ -> (subst, false)
-    and eq_rows  (subst, (lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual))  =
+         eqt (context, l, r)
+      | `End, `End -> (context, true)
+      | _, _ -> (context, false)
+    and eq_rows  (context, (lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual))  =
       (* TODO: Shall we do some kind of normalization here, e.g. flattenting, removal of absent fields in closed rows? *)
-      let  (subst, r1) = eq_field_envs (subst, lfield_env, rfield_env) in
-      let  (subst, r2) = eq_row_vars (subst, lrow_var, rrow_var) in
-        (subst, r1 && r2 && ldual=rdual)
-    and eq_presence (subst, l, r) = (* checked again *)
+      let  (context, r1) = eq_field_envs (context, lfield_env, rfield_env) in
+      let  (context, r2) = eq_row_vars (context, lrow_var, rrow_var) in
+        (context, r1 && r2 && ldual=rdual)
+    and eq_presence (context, l, r) = (* checked again *)
       match l, r with
-      | `Absent, `Absent ->  (subst, true)
-      | `Present lt, `Present rt -> eqt (subst, lt, rt)
+      | `Absent, `Absent ->  (context, true)
+      | `Present lt, `Present rt -> eqt (context, lt, rt)
       | `Var lpoint, `Var rpoint -> begin match Unionfind.find lpoint, Unionfind.find rpoint with
                                     | `Body _,  _
                                       | _, `Body _ -> failwith "should have removed all `Body variants by now"
-                                    |  `Var lv, `Var rv -> handle_variable `Presence lv rv subst
-                                    | _ , _ -> (subst, false)
+                                    |  `Var lv, `Var rv -> handle_variable `Presence lv rv context
+                                    | _ , _ -> (context, false)
                                     end
       | _, _ -> assert false
-    and eq_field_envs  (subst, lfield_env, rfield_env) = (* checked again *)
-      StringMap.fold (fun field lp (subst, prev_eq)  ->
+    and eq_field_envs  (context, lfield_env, rfield_env) = (* checked again *)
+      StringMap.fold (fun field lp (context, prev_eq)  ->
                            match StringMap.find_opt field rfield_env with
-                           | Some rp -> let (subst, eq) =
-                                          eq_presence (subst, lp, rp) in
-                                            (subst, eq && prev_eq)
-                           | None -> (subst, false)
-                          ) lfield_env  (subst, StringMap.cardinal lfield_env = StringMap.cardinal rfield_env)
-    and eq_row_vars (subst, lpoint, rpoint) = (* checked again *)
+                           | Some rp -> let (context, eq) =
+                                          eq_presence (context, lp, rp) in
+                                            (context, eq && prev_eq)
+                           | None -> (context, false)
+                          ) lfield_env  (context, StringMap.cardinal lfield_env = StringMap.cardinal rfield_env)
+    and eq_row_vars (context, lpoint, rpoint) = (* checked again *)
       match Unionfind.find lpoint, Unionfind.find rpoint with
-      | `Closed, `Closed ->  (subst, true)
-      | `Var lv, `Var rv ->   handle_variable `Row lv rv subst
+      | `Closed, `Closed ->  (context, true)
+      | `Var lv, `Var rv ->   handle_variable `Row lv rv context
       | `Recursive (_var, _), `Recursive (_var', _) -> assert false (* FIXME *)
-      | _ ->  (subst, false)
-    and eq_type_args  (subst, l, r)  =
+      | _ ->  (context, false)
+    and eq_type_args  (context, l, r)  =
       match l,r with
-      | `Type lt, `Type rt -> eqt (subst, lt, rt)
-      | `Row lr, `Row rr -> eq_rows (subst, lr, rr)
-      | `Presence lf, `Presence rf -> eq_presence (subst, lf, rf)
-      | _, _ -> (subst, false)
+      | `Type lt, `Type rt -> eqt (context, lt, rt)
+      | `Row lr, `Row rr -> eq_rows (context, lr, rr)
+      | `Presence lf, `Presence rf -> eq_presence (context, lf, rf)
+      | _, _ -> (context, false)
     in
-      snd (eqt  (subst, t1, t2))
+      snd (eqt  (context, t1, t2))
 
 
 
