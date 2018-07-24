@@ -254,7 +254,7 @@ fun calculateScale(startTime){
     };
     var scale = 1.0 +.  (intToFloat(w) /. intToFloat(2*n));
     #println("scale: " ^^ floatToString(scale/. 2.1));
-    (scale /. 1.2, 1.0, 1.0)
+    (scale, 1.0, 1.0)
 }   
  
 
@@ -301,7 +301,7 @@ fun tick(nodeId){
 
 sig drawDot: (Int, Int, String) ~> ()
 fun drawDot(x, y, nodeId){
-    var xml = getDotXml(x, y, (1.0, 1.0, 0.1), nodeId, "1");
+    var xml = getDotXml(x, y, calculateScale(clientTime()), nodeId, "1");
     appendChildren(xml, getNodeById("container"))
 }
 
@@ -334,13 +334,13 @@ fun makeDot(x, y, startTime) {
         }
         setIntervalForF(1000, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
         f(draw)();                      # Draw the initial triangle
-        setIntervalForF(445, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
+        setIntervalForF(95, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
     }
     sysEnqueue(makeFiber(High, g(drawDot)))
 }
 
 fun start(){
-    var tri = setUpTriangle(780, "1");
+    var tri = setUpTriangle(400, "1");
     var startTime = clientTime();
     switch(tri){
         case None -> ()
