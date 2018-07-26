@@ -43,7 +43,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       | None -> (map, lvar)  in
     let handle_variable primary_kind (lid, lsk, lfd)  (rid, rsk, rfd) ctx =
       let subst_map, kind_env = ctx.typevar_subst, ctx.tyenv  in
-      let (map, rvar') = lookupVar lid subst_map  in
+      let (_, rvar') = lookupVar lid subst_map  in
       let is_equal = rid = rvar' && lsk = rsk && lfd = rfd in
       begin
         if is_equal then
@@ -243,7 +243,7 @@ let ensure_effect_present_in_row ctx allowed_effects required_effect_name requir
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) in
   match StringMap.find_opt required_effect_name map with
     | Some (`Present et) -> check_eq_types ctx et required_effect_type
-    | _ -> raise_ir_type_error ("Required effect" ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) `None
+    | _ -> raise_ir_type_error ("Required effect" ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurence
 
 
 
@@ -267,14 +267,10 @@ struct
 
   let info_type (t, _, _) = t
 
-  (* FIXME remove this? *)
-  let deconstruct f t = f t
-
-
 
   let checker tyenv =
   object (o)
-    inherit IrTraversals.Transform.visitor(tyenv) as super
+    inherit IrTraversals.Transform.visitor(tyenv) as _super
 
     (*val env = env*)
     val closure_def_env = Env.empty
@@ -329,11 +325,11 @@ struct
               `Extend (fields, base), t, o
         | `Project (name, v) ->
             let (v, vt, o) = o#value v in
-            `Project (name, v), deconstruct (project_type ~overstep_quantifiers:false name) vt, o
+            `Project (name, v), project_type ~overstep_quantifiers:false name vt, o
 
         | `Erase (names, v) ->
             let (v, vt, o) = o#value v in
-            let t = deconstruct (erase_type ~overstep_quantifiers:false names) vt in
+            let t = erase_type ~overstep_quantifiers:false names vt in
               `Erase (names, v), t, o
 
         | `Inject (name, v, t) ->
@@ -615,15 +611,15 @@ struct
     method handle_funbinding : tyvar list -> datatype -> computation  -> binding -> (computation * 'self_type) =
       fun tyvars expected_overall_funtype body fundef ->
         let is_recursive = match fundef with
-          | `Fun _ -> false
-          | `Rec _ -> true in
+          | `Rec _ -> true
+          | _ -> false in
         let missmatch () = raise_ir_type_error "Quantifier missmatch in function def" (`Binding fundef) in
         let check_types subst expected_returntype body_actual_type  =
           check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type in
         let rec handle_foralls subst funtype tyvars body_actual_type = match funtype with
           | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst (unbox_quantifiers qs_boxed) t tyvars body_actual_type
-          | `Function (at, eff, rt)
-          | `Lolli (at, eff, rt) ->
+          | `Function (_, _, rt)
+          | `Lolli (_, _, rt) ->
             if tyvars = [] then
               check_types subst rt body_actual_type
             else
