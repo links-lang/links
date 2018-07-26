@@ -56,13 +56,55 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
           | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") `None
         end;
       (ctx, is_equal) in
+    let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
+      | `ForAll (qs, t) ->
+        match collapse_toplevel_forall t with
+          | `ForAll (qs', t') ->
+              `ForAll (Types.box_quantifiers (Types.unbox_quantifiers qs @ Types.unbox_quantifiers qs'), t')
+          | t ->
+              begin
+                match Types.unbox_quantifiers qs with
+                  | [] -> t
+                  | _ -> `ForAll (qs, t)
+              end
+      | t -> t in
+    let remove_absent_fields_if_closed row =
+      (* assumes that row is flattened already and ignores recursive rows *)
+      let (field_env, row_var, dual) = row in
+      if Types.is_closed_row row then
+        let field_env' =
+          Utility.StringMap.filter
+            ( fun _ v -> match v with
+              | `Absent -> false
+              | _ -> true )
+            field_env
+        in (field_env', row_var, dual)
+      else row in
+
 
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
     let rec eqt ((context, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
 
-      (* TODO: This also unwraps one level of `Recursive, without changing its body *)
-      let t1 = Types.concrete_type t1 in
-      let t2 = Types.concrete_type t2 in
+      let t1 = collapse_toplevel_forall t1 in
+      let t2 = collapse_toplevel_forall t2 in
+
+      (* If t2 is recursive at the top, we give up. t1 is checked for recursion later on *)
+      if match t2 with
+        | `MetaTypeVar mtv ->
+          begin match Unionfind.find mtv with
+            | `Recursive _ -> true
+            | _ -> false
+          end
+        | _ -> false
+      then
+        begin
+        Debug.print "IR typechecker encountered recursive type";
+        (context, true)
+        end
+      else
+      begin
+
+
 
       Debug.print ("Checking type equality\n " ^
                      (Types.string_of_datatype t1) ^ "\n vs \n" ^ (Types.string_of_datatype t2) (*^ IntMap.show Var.pp_var subst*));
@@ -78,15 +120,18 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
             | _            -> (context, false)
           end
       | `MetaTypeVar lpoint ->  (* checked again *)
-          begin match t2 with
-            `MetaTypeVar rpoint ->
-             begin match Unionfind.find lpoint, Unionfind.find rpoint with
-             | `Var lv, `Var rv ->  handle_variable `Type lv rv context
-             | `Recursive _, `Recursive _  -> failwith "FIXME" (* FIXME support recursion*)
-             | `Body _, `Body _ -> failwith "Should have  removed `Body by now"
-             | _ -> (context, false)
-             end
-            | _                   -> (context, false)
+          begin match Unionfind.find lpoint with
+            | `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; (context, true)
+            | lpoint_cont ->
+              begin match t2 with
+                `MetaTypeVar rpoint ->
+                begin match lpoint_cont, Unionfind.find rpoint with
+                | `Var lv, `Var rv ->  handle_variable `Type lv rv context
+                | `Body _, `Body _ -> failwith "Should have  removed `Body by now"
+                | _ -> (context, false)
+                end
+                | _                   -> (context, false)
+              end
           end
       | `Function (lfrom, lm, lto) ->  (* checked again *)
           begin match t2 with
@@ -165,6 +210,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
             (context, r1 && r2 && r3)
          | _ -> (context, false)
          end
+      end
     and eq_sessions (context, l, r)  = (* checked again *)
       match (l,r) with
       | `Input (lt, _), `Input (rt, _)
@@ -177,8 +223,9 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
          eqt (context, l, r)
       | `End, `End -> (context, true)
       | _, _ -> (context, false)
-    and eq_rows  (context, (lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual))  =
-      (* TODO: Shall we do some kind of normalization here, e.g. flattenting, removal of absent fields in closed rows? *)
+    and eq_rows  (context, r1, r2)  =
+      let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
+      let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
       let  (context, r1) = eq_field_envs (context, lfield_env, rfield_env) in
       let  (context, r2) = eq_row_vars (context, lrow_var, rrow_var) in
         (context, r1 && r2 && ldual=rdual)
@@ -205,7 +252,8 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | `Closed, `Closed ->  (context, true)
       | `Var lv, `Var rv ->   handle_variable `Row lv rv context
-      | `Recursive (_var, _), `Recursive (_var', _) -> assert false (* FIXME *)
+      | `Recursive _, _
+      | _, `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; (context, true)
       | _ ->  (context, false)
     and eq_type_args  (context, l, r)  =
       match l,r with
