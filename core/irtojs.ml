@@ -4,7 +4,6 @@ open Utility
 
 let _ = ParseSettings.config_file
 
-let js_lib_url = Basicsettings.Js.lib_url
 let js_hide_database_info = Basicsettings.Js.hide_database_info
 let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exceptions_enabled)
 
