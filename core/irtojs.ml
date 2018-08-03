@@ -44,54 +44,54 @@ module VEnv = Env.Int
 type venv = string VEnv.t
 
 module VariableInspection = struct
-  let inspect_code_variables code =
-    let open Pervasives in
-    let vars = ref (StringSet.empty) in
-    let add_var s = vars := (StringSet.add s (!vars)) in
+  (* let inspect_code_variables code =
+   *   let open Pervasives in
+   *   let vars = ref (StringSet.empty) in
+   *   let add_var s = vars := (StringSet.add s (!vars)) in
+   *   
+   *   let binders = ref (StringSet.empty) in
+   *   let add_binder s = binders := (StringSet.add s (!binders)) in
+   *   let add_binders = List.iter (add_binder) in
+   *   
+   *   let get_vars () =
+   *     let res = StringSet.diff (!vars) (!binders) |> StringSet.elements in
+   *     Debug.print "affected client vars: \n";
+   *     List.iter (Debug.print) res;
+   *     res in
+   *   
+   *   let rec go cmd =
+   *     match cmd with
+   *       | Var s -> add_var s
+   *       | Fn (bnds, cmd) ->
+   *           add_binders bnds;
+   *           go cmd
+   *       | LetFun ((bnd1, bnds, cmd1, _), cmd2) ->
+   *           add_binder bnd1; add_binders bnds;
+   *           go cmd1; go cmd2
+   *       | LetRec (xs, cmd) ->
+   *           List.iter (fun (bnd1, bnds, cmd, _) ->
+   *             add_binder bnd1; add_binders bnds; go cmd) xs;
+   *           go cmd
+   *       | Call (c, cs) -> go c; List.iter (go) cs
+   *       | Unop (_, c) -> go c
+   *       | Binop (c1, _, c2) -> go c1; go c2
+   *       | If (i, t, e) -> List.iter (go) [i;t;e]
+   *       | Dict xs -> List.iter (go -<- snd) xs
+   *       | Arr xs -> List.iter (go) xs
+   *       | Bind (bnd, c1, c2) -> add_binder bnd; go c1; go c2
+   *       | Return c -> go c
+   *       | Case (bnd, sm, sc_opt) ->
+   *           add_var bnd;
+   *           StringMap.iter (fun _ (s, code) -> add_binder s; go code) sm;
+   *           OptionUtils.opt_iter (fun (bnd, c) -> add_binder bnd; go c) sc_opt
+   *       | Lit _ | Die _ | Nothing -> () in
+   *   go code;
+   *   get_vars () *)
 
-    let binders = ref (StringSet.empty) in
-    let add_binder s = binders := (StringSet.add s (!binders)) in
-    let add_binders = List.iter (add_binder) in
-
-    let get_vars () =
-      let res = StringSet.diff (!vars) (!binders) |> StringSet.elements in
-      Debug.print "affected client vars: \n";
-      List.iter (Debug.print) res;
-      res in
-
-    let rec go cmd =
-      match cmd with
-        | Var s -> add_var s
-        | Fn (bnds, cmd) ->
-            add_binders bnds;
-            go cmd
-        | LetFun ((bnd1, bnds, cmd1, _), cmd2) ->
-            add_binder bnd1; add_binders bnds;
-            go cmd1; go cmd2
-        | LetRec (xs, cmd) ->
-            List.iter (fun (bnd1, bnds, cmd, _) ->
-              add_binder bnd1; add_binders bnds; go cmd) xs;
-            go cmd
-        | Call (c, cs) -> go c; List.iter (go) cs
-        | Unop (_, c) -> go c
-        | Binop (c1, _, c2) -> go c1; go c2
-        | If (i, t, e) -> List.iter (go) [i;t;e]
-        | Dict xs -> List.iter (go -<- snd) xs
-        | Arr xs -> List.iter (go) xs
-        | Bind (bnd, c1, c2) -> add_binder bnd; go c1; go c2
-        | Return c -> go c
-        | Case (bnd, sm, sc_opt) ->
-            add_var bnd;
-            StringMap.iter (fun _ (s, code) -> add_binder s; go code) sm;
-            OptionUtils.opt_iter (fun (bnd, c) -> add_binder bnd; go c) sc_opt
-        | Lit _ | Die _ | Nothing -> () in
-    go code;
-    get_vars ()
-
-  let get_affected_variables code =
-    let open Pervasives in
-    inspect_code_variables code
-    |> List.map (fun v -> Var(v))
+  let get_affected_variables _code = assert false
+    (* let open Pervasives in
+     * inspect_code_variables code
+     * |> List.map (fun v -> Var(v)) *)
 end
 
 
