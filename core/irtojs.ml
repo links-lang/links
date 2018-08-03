@@ -124,6 +124,24 @@ let __kappa = "__kappa"
   Also, any `builtin' functions from Lib.value_env.
  *)
 
+(* module type JS_COMPILER = sig
+ *   type source = [
+ *     | `Bindings of Ir.binding list
+ *     | `Program of Ir.program ]
+ * 
+ *   val compile : source -> Value.env -> Js.program
+ * end
+ * 
+ * module type JS_PAGE_COMPILER = sig
+ *   include JS_COMPILER
+ * 
+ *   val generate_stubs : Value.env -> Ir.bindings -> Js.program
+ *   val generate_toplevel_bindings : Value.env -> Json.json_state -> Ir.bindings -> Js.program * Json.json_state
+ * end
+ * 
+ * module type JS_CODEGEN = sig
+ *   val emit : Js.program -> out_channel -> unit
+ * end *)
 
 
 module type JS_CODEGEN = sig
