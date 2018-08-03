@@ -4,20 +4,8 @@ open Utility
 
 let _ = ParseSettings.config_file
 
-let js_lib_url = Basicsettings.Js.lib_url
-let js_pretty_print = Basicsettings.Js.pp
 let js_hide_database_info = Basicsettings.Js.hide_database_info
 let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exceptions_enabled)
-
-let get_js_lib_url () =
-  let open Pervasives in
-  let base_url = Settings.get_value Basicsettings.Appserver.external_base_url |> strip_slashes in
-  let base_url = Utility.strip_slashes base_url in
-  let js_url = Settings.get_value js_lib_url |> strip_slashes in
-  if base_url = "" then
-    "/" ^ js_url ^ "/"
-  else
-    "/" ^ base_url ^ "/" ^ js_url ^ "/"
 
 (* strip any top level polymorphism from an expression *)
 let rec strip_poly =
@@ -136,173 +124,111 @@ let __kappa = "__kappa"
   Also, any `builtin' functions from Lib.value_env.
  *)
 
-(** Ugly printer for JavaScript code *)
-module UP :
-sig
-  val show : code -> string
-end =
-struct
-  let rec show code =
-    let show_func name fn =
-      match fn with
-      | Fn (vars, body) ->
-         "function "^ name ^"("^ String.concat ", " vars ^")"^"{ " ^" "^show body^"; }"
-      | _ -> assert false
-    and arglist args = String.concat ", " (List.map show args)
-    and paren = function
-      | Var _
-      | Lit _
-      | Call _
-      | Dict _
-      | Arr _
-      | Bind _
-      | Die _
-      | Nothing as c -> show c
-      | c -> "(" ^ show c ^ ")" in
-    let show_case v (l:string) ((x:string), (e:code)) =
-      "case " ^ l ^ ":{var " ^ x ^ "=" ^ v ^"._value;" ^ show e ^ "break;}\n" in
-    let show_cases v : (string * code) stringmap -> string =
-      fun cases ->
-        StringMap.fold (fun l c s ->
-                          s ^ show_case v l c)
-          cases "" in
 
-    let show_default v = opt_app
-      (fun (x, e) ->
-         "default:{var " ^ x ^ "=" ^ v ^ ";" ^ show e ^ ";" ^ "break;}") "" in
-      match code with
-        | Var s -> s
-        | Lit s -> s
-        | Fn _ as f -> show_func "" f
 
-        | LetFun ((name, vars, body, _location), rest) ->
-            (show_func name (Fn (vars, body))) ^ show rest
-        | LetRec (defs, rest) ->
-            String.concat ";\n" (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs) ^ show rest
-        | Call (Var "LINKS.project", [record; label]) -> (paren record) ^ "[" ^ show label ^ "]"
-        | Call (Var "hd", [list;kappa]) -> Printf.sprintf "%s(hd(%s))" (paren kappa) (paren list)
-        | Call (Var "tl", [list;kappa]) -> Printf.sprintf "%s(tl(%s)" (paren kappa) (paren list)
-        | Call (Var "_yield", fn :: args) -> Printf.sprintf "_yield(function() { %s(%s) })" (paren fn) (arglist args)
-        | Call (fn, args) -> paren fn ^ "(" ^ arglist args  ^ ")"
-        | Unop (op, body) -> op ^ paren body
-        | Binop (l, op, r) -> paren l ^ " " ^ op ^ " " ^ paren r
-        | If (cond, e1, e2) ->
-            "if (" ^ show cond ^ ") {" ^ show e1 ^ "} else {" ^ show e2 ^ "}"
-        | Case (v, cases, default) ->
-            "switch (" ^ v ^ "._label) {" ^ show_cases v cases ^ show_default v default ^ "}"
-        | Dict (elems) -> "{" ^ String.concat ", " (List.map (fun (name, value) -> "'" ^  name ^ "':" ^ show value) elems) ^ "}"
-        | Arr elems ->
-          let rec show_list = function
-            | [] ->  Json.nil_literal
-            | x :: xs -> "{\"_head\":" ^ (show x) ^ ",\"_tail\":" ^ (show_list xs) ^ "}" in
-          show_list elems
-        | Bind (name, value, body) ->  name ^" = "^ show value ^"; "^ show body
-        | Return expr -> "return " ^ (show expr) ^ ";"
-        | Nothing -> ""
-        | Die msg -> "error('" ^ msg ^ "', __kappa)"
+module type JS_CODEGEN = sig
+  val string_of_js : code -> string
 end
 
-(** Pretty printer for JavaScript code *)
-module PP :
-sig
-  val show : code -> string
-end =
-struct
-  open PP
+module Js_CodeGen : JS_CODEGEN = struct
+  (** Pretty printer for JavaScript code *)
+  module PP :
+  sig
+    val show : code -> string
+  end =
+    struct
+      open PP
 
-  (** Pretty-print a Code value as a JavaScript string. *)
-  let rec show c : PP.doc =
-    let show_func name fn =
-      match fn with
-      | (Fn (vars, body)) ->
-         PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
-                   ^+^  (braces
-                           (break ^^ group(nest 2 (show body)) ^^ break)))
-      | _ -> assert false in
-    let show_case v l (x, e) =
-      PP.text "case" ^+^ PP.text("'"^l^"'") ^^
-        PP.text ":" ^+^ braces (PP.text"var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
-                                  show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break in
-    let show_cases v =
-      fun cases ->
-        StringMap.fold (fun l c s ->
-                          s ^+^ show_case v l c)
-          cases DocNil in
-    let show_default v = opt_app
-      (fun (x, e) ->
-         PP.text "default:" ^+^ braces (PP.text "var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^";") ^+^
-                                          show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break) PP.DocNil in
-    let maybe_parenise = function
-      | Var _
-      | Lit _
-      | Call _
-      | Dict _
-      | Arr _
-      | Bind _
-      | Die _
-      | Return _
-      | Nothing as c -> show c
-      | c -> parens (show c)
-    in
-      match c with
+      (** Pretty-print a Code value as a JavaScript string. *)
+      let rec show c : PP.doc =
+        let show_func name fn =
+          match fn with
+          | (Fn (vars, body)) ->
+             PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
+                       ^+^  (braces
+                               (break ^^ group(nest 2 (show body)) ^^ break)))
+          | _ -> assert false in
+        let show_case v l (x, e) =
+          PP.text "case" ^+^ PP.text("'"^l^"'") ^^
+            PP.text ":" ^+^ braces (PP.text"var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
+                                      show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break in
+        let show_cases v =
+          fun cases ->
+          StringMap.fold (fun l c s ->
+              s ^+^ show_case v l c)
+            cases DocNil in
+        let show_default v = opt_app
+                               (fun (x, e) ->
+                                 PP.text "default:" ^+^ braces (PP.text "var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^";") ^+^
+                                                                  show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break) PP.DocNil in
+        let maybe_parenise = function
+          | Var _
+            | Lit _
+            | Call _
+            | Dict _
+            | Arr _
+            | Bind _
+            | Die _
+            | Return _
+            | Nothing as c -> show c
+          | c -> parens (show c)
+        in
+        match c with
         | Var x -> PP.text x
         | Nothing -> PP.text ""
         | Die msg -> PP.text("error('" ^ msg ^ "', __kappa)")
         | Lit literal -> PP.text literal
         | LetFun ((name, vars, body, _location), rest) ->
-            (show_func name (Fn (vars, body))) ^^ break ^^ show rest
+           (show_func name (Fn (vars, body))) ^^ break ^^ show rest
         | LetRec (defs, rest) ->
-            PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs)) ^^
-              break ^^ show rest
+           PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs)) ^^
+             break ^^ show rest
         | Fn _ as f -> show_func "" f
         | Call (Var "LINKS.project", [record; label]) ->
-            maybe_parenise record ^^ (brackets (show label))
+           maybe_parenise record ^^ (brackets (show label))
         | Call (Var "hd", [list;kappa]) ->
-            (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
+           (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
         | Call (Var "tl", [list;kappa]) ->
-            (maybe_parenise kappa) ^^ PP.text "tl" ^^ (parens (  maybe_parenise list))
+           (maybe_parenise kappa) ^^ PP.text "tl" ^^ (parens (  maybe_parenise list))
         | Call (Var "_yield", (fn :: args)) ->
-            PP.text "_yield" ^^ (parens (PP.text "function () { " ^^ maybe_parenise fn ^^
-                                    parens (hsep(punctuate "," (List.map show args))) ^^ PP.text " }"))
+           PP.text "_yield" ^^ (parens (PP.text "function () { " ^^ maybe_parenise fn ^^
+                                          parens (hsep(punctuate "," (List.map show args))) ^^ PP.text " }"))
         | Call (fn, args) -> maybe_parenise fn ^^
-            (PP.arglist (List.map show args))
+                               (PP.arglist (List.map show args))
         | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
         | Binop (l, op, r) -> (maybe_parenise l) ^+^ PP.text op ^+^ (maybe_parenise r)
         | If (cond, c1, c2) ->
-            PP.group (PP.text "if (" ^+^ show cond ^+^ PP.text ")"
-                      ^+^  (braces
-                              (break ^^ group(nest 2 (show c1)) ^^ break))
-                      ^+^ PP.text "else"
-                      ^+^  (braces
-                              (break ^^ group(nest 2 (show c2)) ^^ break)))
+           PP.group (PP.text "if (" ^+^ show cond ^+^ PP.text ")"
+                     ^+^  (braces
+                             (break ^^ group(nest 2 (show c1)) ^^ break))
+                     ^+^ PP.text "else"
+                     ^+^  (braces
+                             (break ^^ group(nest 2 (show c2)) ^^ break)))
         | Case (v, cases, default) ->
-            PP.group (PP.text "switch" ^+^ (parens (PP.text (v^"._label"))) ^+^
-                        (braces ((show_cases v cases) ^+^ (show_default v default))))
+           PP.group (PP.text "switch" ^+^ (parens (PP.text (v^"._label"))) ^+^
+                       (braces ((show_cases v cases) ^+^ (show_default v default))))
         | Dict (elems) ->
-            PP.braces (hsep (punctuate ","
-                               (List.map (fun (name, value) ->
-                                       group (PP.text "'" ^^ PP.text name ^^
-                                                PP.text "':" ^^ show value))
-                                  elems)))
+           PP.braces (hsep (punctuate ","
+                              (List.map (fun (name, value) ->
+                                   group (PP.text "'" ^^ PP.text name ^^
+                                            PP.text "':" ^^ show value))
+                                 elems)))
         | Arr elems ->
-            let rec show_list = function
-              | [] -> PP.text Json.nil_literal
-              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
-            show_list elems
+           let rec show_list = function
+             | [] -> PP.text Json.nil_literal
+             | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
+           show_list elems
         | Bind (name, value, body) ->
-            PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
-              break ^^ show body
+           PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
+             break ^^ show body
         | Return expr ->
            PP.text "return " ^^ (show expr) ^^ PP.text ";"
 
-  let show = show ->- PP.pretty 144
-end
+      let show = show ->- PP.pretty 144
+    end
 
-let show x =
-  if Settings.get_value(js_pretty_print) then
-    PP.show x
-  else
-    UP.show x
+  let string_of_js x = PP.show x
+end
 
 (** Create a JS string literal, quoting special characters *)
 let string_js_quote s =
@@ -328,9 +254,6 @@ let chrlistlit = strlit
      Some of the other functions are equivalents to Links builtins
      (e.g. int_of_string, xml)
  *)
-
-let ext_script_tag ?(base=get_js_lib_url()) file =
-    "  <script type='text/javascript' src=\""^base^file^"\"></script>"
 
 module Arithmetic :
 sig
@@ -651,20 +574,21 @@ module Higher_Order_Continuation : CONTINUATION = struct
 end
 
 (** Compiler interface *)
-module type WEB_COMPILER = sig
+(* module type JS_COMPILER = sig
+ *   type source = [
+ *     | `Bindings of Ir.binding list
+ *     | `Program of Ir.program ]
+ * 
+ *   val compile : source -> Value.env -> Js.program
+ * end *)
 
-  val generate_real_client_page : ?cgi_env:(string * string) list ->
-    (Var.var Env.String.t * Types.typing_environment) ->
-    Ir.binding list -> (Value.env * Value.t) ->
-    Webserver_types.websocket_url option -> Loader.ext_dep list -> string
-
-  val make_boiler_page :
-    ?cgi_env:(string * string) list ->
-    ?onload:string ->
-    ?body:string ->
-    ?html:string ->
-    ?head:string ->
-    ?external_files:string list -> string list -> string
+module type JS_PAGE_COMPILER = sig
+  (* include JS_COMPILER *)
+  val generate_program : venv -> Ir.computation -> venv * code
+  val generate_stubs : Value.env -> Ir.binding list -> code -> code
+  val generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code)
+  val wrap_with_server_lib_stubs : code -> code
+  val primitive_bindings : string
 end
 
 (** [generate]
@@ -673,7 +597,7 @@ end
     With CPS transform, result of generate is always of type : (a -> w) -> b
 *)
 module CPS_Compiler: functor (K : CONTINUATION) -> sig
-  include WEB_COMPILER
+  include JS_PAGE_COMPILER
 end = functor (K : CONTINUATION) -> struct
   type continuation = K.t
 
@@ -1178,196 +1102,6 @@ end = functor (K : CONTINUATION) -> struct
             let kappa = K.(value_case <> eff_cases <> kappa) in
             snd (generate_computation comp_env (initial_parameterise comp) kappa)
          end
-         (* let generate_forward y h kappas = *)
-         (*   K.bind kappas *)
-         (*     (fun ks -> *)
-         (*       let bind_k', k', ks' = K.pop ks in *)
-         (*       let bind_h', h', ks' = K.pop ks' in *)
-         (*       let bind code = bind_k' (bind_h' code) in *)
-         (*       let resumption = *)
-         (*         Fn (["s"], Return (cons (K.reify k') *)
-         (*                              (cons h (Var "s")))) *)
-         (*       in *)
-         (*       bind (apply_yielding (K.reify h') [vmap resumption y] ks')) *)
-         (* in *)
-         (* begin match depth with *)
-         (* | `Shallow -> *)
-         (*    let handle_name = *)
-         (*      gensym ~prefix:"_shallowhandle" () *)
-         (*    in *)
-         (*    let forwarder_name = *)
-         (*      handle_name ^ "_forwarder" *)
-         (*    in *)
-         (*    let forwarder handler = *)
-         (*      LetFun ((forwarder_name, ["_y"; "ks"], generate_forward (Var "_y") (Var forwarder_name) (K.reflect (Var "ks")), `Client), handler) *)
-         (*    in *)
-         (*    let value_case = *)
-         (*      let (xb, body) = return in *)
-         (*      let xb = name_binder xb in *)
-         (*      K.reflect ( *)
-         (*        Fn ([snd xb; "_kappa"], *)
-         (*            let reflect_and_pop = K.(reflect ->- pop) in *)
-         (*            let bind, _, kappa' = reflect_and_pop (Var "_kappa") in *)
-         (*            bind (generate_body env xb body kappa'))) *)
-         (*    in *)
-         (*    let eff_cases = *)
-         (*      let translate_eff_case env (xb, resume, body) kappas = *)
-         (*        let xb = name_binder xb in *)
-         (*        let resume = name_binder resume in *)
-         (*        let p = project (Var (snd xb)) (strlit "p") in *)
-         (*        let r = *)
-         (*          let s = project (Var (snd xb)) (strlit "s") in *)
-         (*          Call (Var "_makeFun", [Var forwarder_name; s]) *)
-         (*        in *)
-         (*        let env' = VEnv.bind env resume in *)
-         (*        let body = generate_body env' xb body kappas in *)
-         (*        snd xb, Bind (snd resume, r, *)
-         (*                      Bind (snd xb, p, body)) *)
-         (*      in *)
-         (*      let eff_cases kappas = *)
-         (*        StringMap.fold *)
-         (*          (fun operation_name clause cases -> *)
-         (*            StringMap.add operation_name (translate_eff_case env clause kappas) cases) *)
-         (*          eff_cases StringMap.empty *)
-         (*      in *)
-         (*      let body = *)
-         (*        let ks = K.reflect (Var "ks") in *)
-         (*        Case ("_z", *)
-         (*              eff_cases ks, *)
-         (*              Some ("_y", generate_forward (Var "_y") (Var handle_name) ks)) *)
-         (*      in *)
-         (*      K.reflect (LetFun ((handle_name, ["_z"; "ks"], body, `Client), Nothing)) *)
-         (*    in *)
-         (*    let kappa = K.(value_case <> eff_cases <> kappa) in *)
-         (*    forwarder (snd (generate_computation comp_env comp kappa)) *)
-         (* | `Deep params -> *)
-         (*    let handle_name = *)
-         (*      gensym ~prefix:"_handle" () *)
-         (*    in *)
-         (*    let fresh_binder ?(prefix="") () = *)
-         (*      let generate = *)
-         (*        Var.make_local_info ->- Var.fresh_binder ->- name_binder *)
-         (*      in *)
-         (*      generate (`Not_typed, gensym ~prefix ()) *)
-         (*    in *)
-         (*    (\** I use a slight hack to implement parameterised *)
-         (*        handlers. An efficient way to implement parameterised *)
-         (*        handlers is as locally mutable closures. By local, I *)
-         (*        mean that only the handler itself can modify its own *)
-         (*        environment. Ideally, I would compile parameterised *)
-         (*        handlers as classes such that handler installation *)
-         (*        corresponds to object instantiation. However, our *)
-         (*        current compilation scheme does not support this *)
-         (*        approach (it would require a major *)
-         (*        rewrite). Therefore, I resort to the dark magic of *)
-         (*        reference cells. *)
-
-         (*        The idea is box the parameters inside a mutable *)
-         (*        container and maintain a pointer to it. For each body *)
-         (*        clause (effect and value cases) we generate some *)
-         (*        administrative code which projects and binds the *)
-         (*        parameters using the pointer. *)
-
-         (*        The values of the parameters are updated whenever a *)
-         (*        resumption is invoked. I use a bit of runtime magic to *)
-         (*        grab hold of these values via the primitive *)
-         (*        "_makeParamFun" which essentially exploits the fact *)
-         (*        that JavaScript has no notion of arity. Finally, I *)
-         (*        exploit default function parameter values to *)
-         (*        initialise the parameter pointer. *\) *)
-         (*    let is_parameterised = List.length params > 0 in *)
-         (*    let translate_parameters env params = *)
-         (*      (\* Local pointer to the parameter box *\) *)
-         (*      let param_pointer = *)
-         (*        fresh_binder ~prefix:(handle_name ^ "_box") () *)
-         (*      in *)
-         (*      let params = *)
-         (*        List.mapi (fun i (binder, value) -> (i, name_binder binder, gv value)) params *)
-         (*      in *)
-         (*      (\* Bind parameters in the environment, generate parameter bindings *\) *)
-         (*      let env, projections = *)
-         (*        List.fold_left *)
-         (*          (fun (env, projections) (i, binder, _) -> *)
-         (*            let env = VEnv.bind env binder in *)
-         (*            (env, (fun body -> Bind (snd binder, project (Var (snd param_pointer)) (intlit i), projections body)))) *)
-         (*          (env, (fun code -> code)) params *)
-         (*      in *)
-         (*      (\* Box the initial parameter values *\) *)
-         (*      let initial_values_container = *)
-         (*        Dict (List.map (fun (i, _, value) -> (string_of_int i, value)) params) *)
-         (*      in *)
-         (*      (\* Pointer to the initial parameter values box *\) *)
-         (*      let initial_values_pointer = *)
-         (*        fresh_binder ~prefix:(handle_name ^ "_params_initial") () *)
-         (*      in *)
-         (*      let bind_initial_values = *)
-         (*        if is_parameterised *)
-         (*        then (fun code -> Bind (snd initial_values_pointer, initial_values_container, code)) *)
-         (*        else (fun code -> code) *)
-         (*      in *)
-         (*      let env = VEnv.bind env initial_values_pointer in *)
-         (*      env, (snd param_pointer, projections), (snd initial_values_pointer, bind_initial_values) *)
-         (*    in *)
-         (*    let env, (param_pointer_name, bind_parameters), (initial_values_pointer_name, bind_initial_values) = *)
-         (*      translate_parameters env params *)
-         (*    in *)
-         (*    let parameterise = function *)
-         (*      | Fn (params, body) when is_parameterised -> *)
-         (*         (\* Initialises the parameter pointer *\) *)
-         (*         Fn (params @ [param_pointer_name ^ " = " ^ initial_values_pointer_name], bind_parameters body) *)
-         (*      | LetFun ((name, params, body, loc), cont) when is_parameterised -> *)
-         (*         LetFun ((name, params @ [param_pointer_name ^ " = " ^ initial_values_pointer_name], body, loc), cont) *)
-         (*      | x -> x *)
-         (*    in *)
-         (*    let value_case = *)
-         (*      let (xb, body) = return in *)
-         (*      let xb = name_binder xb in *)
-         (*      let f = *)
-         (*        Fn ([snd xb; "_kappa"], *)
-         (*            let reflect_and_pop = K.(reflect ->- pop) in *)
-         (*            let bind, _, kappa' = reflect_and_pop (Var "_kappa") in *)
-         (*            bind (generate_body env xb body kappa')) *)
-         (*      in *)
-         (*      K.reflect (parameterise f) *)
-         (*    in *)
-         (*    let eff_cases = *)
-         (*      let translate_eff_case env (xb, resume, body) kappas = *)
-         (*        let xb = name_binder xb in *)
-         (*        let resume = name_binder resume in *)
-         (*        let p = project (Var (snd xb)) (strlit "p") in *)
-         (*        let r = *)
-         (*          let s = project (Var (snd xb)) (strlit "s") in *)
-         (*          if is_parameterised *)
-         (*          then Call (Var "_makeParamFun", [Var param_pointer_name; Var handle_name; s]) *)
-         (*          else Call (Var "_makeFun", [Var handle_name; s]) *)
-         (*        in *)
-         (*        let env' = VEnv.bind env resume in *)
-         (*        let body = *)
-         (*          bind_parameters (generate_body env' xb body kappas) *)
-         (*        in *)
-         (*        snd xb, Bind (snd resume, r, *)
-         (*                      Bind (snd xb, p, body)) *)
-         (*      in *)
-         (*      let eff_cases kappas = *)
-         (*        StringMap.fold *)
-         (*          (fun operation_name clause cases -> *)
-         (*            StringMap.add operation_name (translate_eff_case env clause kappas) cases) *)
-         (*          eff_cases StringMap.empty *)
-         (*      in *)
-         (*      let body = *)
-         (*        let ks = K.reflect (Var "ks") in *)
-         (*        Case ("_z", *)
-         (*              eff_cases ks, *)
-         (*              Some ("_y", generate_forward (Var "_y") (Var handle_name) ks)) *)
-         (*      in *)
-         (*      let h = *)
-         (*        LetFun ((handle_name, ["_z"; "ks"], body, `Client), Nothing) *)
-         (*      in *)
-         (*      K.reflect (parameterise h) *)
-         (*    in *)
-         (*    let kappa = K.(value_case <> eff_cases <> kappa) in *)
-         (*    bind_initial_values (snd (generate_computation comp_env comp kappa)) *)
-         (* end *)
 
   and generate_computation env : Ir.computation -> continuation -> (venv * code) =
     fun (bs, tc) kappa ->
@@ -1508,133 +1242,13 @@ end = functor (K : CONTINUATION) -> struct
            | Some x -> x :: xs in
          state, venv, xs, f -<- g
 
-  let script_tag body =
-    "<script type='text/javascript'><!--\n'use strict';\n" ^ body ^ "\n--> </script>\n"
+  let generate_stubs _venv bs = GenStubs.bindings bs
+  let wrap_with_server_lib_stubs code = GenStubs.wrap_with_server_lib_stubs code
 
-  let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
-    let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
-    let custom_ext_script_tag str = "<script type='text/javascript' src='" ^ str ^ "'></script>" in
-    let ffiLibs = String.concat "\n" (List.map custom_ext_script_tag external_files) in
-    let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
-      string_of_bool onoff ^ ";</script>"
-    in
-    let db_config_script =
-      if Settings.get_value js_hide_database_info then
-        script_tag("    function _getDatabaseConfig() {
-     return {}
-    }
-    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n")
-      else
-        script_tag("    function _getDatabaseConfig() {
-      return {driver:'" ^ Settings.get_value Basicsettings.database_driver ^
-                      "', args:'" ^ Settings.get_value Basicsettings.database_args ^"'}
-    }
-    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n") in
-    let env =
-      script_tag("  var cgiEnv = {" ^
-                    mapstrcat "," (fun (name, value) -> "'" ^ name ^ "':'" ^ value ^ "'") cgi_env ^
-                    "};\n  _makeCgiEnvironment();\n") in
-    in_tag "html" (in_tag "head"
-                     (  debug_flag (Settings.get_value Debug.debugging_enabled)
-                        ^ ext_script_tag "jslib.js" ^ "\n"
-                        ^ ffiLibs ^ "\n"
-                        ^ db_config_script
-                        ^ env
-                        ^ head
-                        ^ script_tag (String.concat "\n" defs)
-                     )
-                   ^ "<body onload=\'" ^ onload ^ "\'>
-  <script type='text/javascript'>
-  'use strict';
-  _debug(\"Continuation: \" + _cont_kind);
-  _startTimer();" ^ body ^ ";
-  </script>" ^ html ^ "</body>")
+  let generate_program venv comp =
+    generate_computation venv comp K.toplevel
 
-  let initialise_envs (nenv, tyenv) =
-    let dt = DesugarDatatypes.read ~aliases:tyenv.Types.tycon_env in
-
-  (* TODO:
-
-     - add stringifyB64 to lib.ml as a built-in function?
-     - get rid of ConcatMap here?
-  *)
-    let tyenv =
-      {Types.var_env =
-          Env.String.bind
-            (Env.String.bind tyenv.Types.var_env
-               ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
-            ("stringifyB64", dt "(a) -> String");
-       Types.tycon_env = tyenv.Types.tycon_env;
-       Types.effect_row = tyenv.Types.effect_row } in
-    let nenv =
-      Env.String.bind
-        (Env.String.bind nenv
-           ("ConcatMap", Var.fresh_raw_var ()))
-        ("stringifyB64", Var.fresh_raw_var ()) in
-
-    let venv =
-      Env.String.fold
-        (fun name v venv -> VEnv.bind venv (v, name))
-        nenv
-        VEnv.empty in
-    let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-    (nenv, venv, tenv)
-
-
-(* generate code to resolve JSONized toplevel let-bound values *)
-  let resolve_toplevel_values : string list -> string =
-    fun names ->
-      String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
-
-  let generate_real_client_page ?(cgi_env=[]) (nenv, tyenv) defs (valenv, v) ws_conn_url external_files =
-    let open Json in
-    let req_data = Value.Env.request_data valenv in
-    let client_id = RequestData.get_client_id req_data in
-    let json_state = JsonState.empty client_id ws_conn_url in
-
-    (* Add the event handlers for the final value to be sent *)
-    let json_state = ResolveJsonState.add_value_information v json_state in
-    (* Json.jsonize_state req_data v in *)
-
-    (* divide HTML into head and body secitions (as we need to augment the head) *)
-    let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
-    let _nenv, venv, _tenv = initialise_envs (nenv, tyenv) in
-
-    let json_state, venv, let_names, f = generate_toplevel_bindings valenv json_state venv defs in
-    let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
-
-    (* Add AP information; mark APs as delivered *)
-    let json_state = ResolveJsonState.add_ap_information client_id json_state in
-
-    (* Add process information to the JSON state; mark all processes as active *)
-    let json_state = ResolveJsonState.add_process_information client_id json_state in
-
-    (* Add channel information to the JSON state; mark all as residing on client *)
-    let json_state = ResolveJsonState.add_channel_information client_id json_state in
-
-    let state_string = JsonState.to_string json_state in
-
-    let printed_code =
-      let _venv, code = generate_computation venv ([], `Return (`Extend (StringMap.empty, None))) (K.toplevel) in
-      let code = f code in
-      let code =
-        let open Pervasives in
-        code |> (GenStubs.bindings defs) |> GenStubs.wrap_with_server_lib_stubs
-      in
-      show code
-    in
-    let welcome_msg =
-      "_debug(\"Links version " ^ Basicsettings.version ^ "\");"
-    in
-    make_boiler_page
-      ~cgi_env:cgi_env
-      ~body:printed_code
-      ~html:(Value.string_of_xml ~close_tags:true bs)
-      ~head:(script_tag welcome_msg ^ "\n" ^ script_tag (K.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
-             ^ Value.string_of_xml ~close_tags:true hs)
-      ~onload:"_startRealPage()"
-      ~external_files:external_files
-      []
+  let primitive_bindings = K.primitive_bindings
 end
 
 module Continuation =
@@ -1648,6 +1262,3 @@ module Continuation =
       | _ -> failwith "Unrecognised JS backend.") : CONTINUATION)
 
 module Compiler = CPS_Compiler(Continuation)
-
-let generate_real_client_page = Compiler.generate_real_client_page
-let make_boiler_page = Compiler.make_boiler_page
