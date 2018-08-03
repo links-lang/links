@@ -172,18 +172,19 @@ struct
       (* Precondition: valenv has been initialised with the correct request data *)
       let run_page (valenv, v) (error_valenv, error_v) () =
         let cid = RequestData.get_client_id (Value.Env.request_data valenv) in
-        let ws_conn_url =
-          if !accepting_websocket_requests then Some (ws_url) else None in
         let applier env vp =
           Eval.apply (render_cont ()) env vp >>= fun (valenv, v) ->
-          let page = Irtojs.generate_real_client_page
-                       (Lib.nenv, Lib.typing_env)
-                       (* hypothesis: local definitions shouldn't matter,
-                        * they should all end up in valenv... *)
-                       (!prelude @ !globals)
-                       (valenv, v)
-                       ws_conn_url
-                       !external_files in
+          let open Page in
+          let page =
+            RealPage.page
+              ~wsconn_url:(if !accepting_websocket_requests then Some ws_url else None)
+              (Lib.nenv, Lib.typing_env)
+              (* hypothesis: local definitions shouldn't matter,
+               * they should all end up in valenv... *)
+              (!prelude @ !globals)
+              (valenv, v)
+              !external_files
+          in
           Lwt.return ("text/html", page) in
         try
           applier valenv (v, [`String path; `SpawnLocation (`ClientSpawnLoc cid)])
@@ -194,13 +195,12 @@ struct
            applier error_valenv (error_v, [`String path; `String s; `SpawnLocation (`ClientSpawnLoc cid)]) in
 
       let render_servercont_cont valenv v =
-        let ws_conn_url =
-          if !accepting_websocket_requests then Some (ws_url) else None in
-        Irtojs.generate_real_client_page
+        let open Page in
+        RealPage.page
+          ~wsconn_url:(if !accepting_websocket_requests then Some (ws_url) else None)
           (Lib.nenv, Lib.typing_env)
           (!prelude @ !globals)
           (valenv, v)
-          ws_conn_url
           !external_files in
 
       let serve_static base uri_path mime_types =

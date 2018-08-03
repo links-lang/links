@@ -119,7 +119,6 @@ struct
   let elim_dead_defs = Settings.add_bool("elim_dead_defs", false, `User)
   let lib_url = Settings.add_string("jsliburl", "lib/", `User)
   let lib_dir = Settings.add_string("jslibdir", "", `User)
-  let pp = Settings.add_bool("js_pretty_print", true, `User)
 
   let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
   let backend = Settings.add_string("js_compiler", "cps", `System)
