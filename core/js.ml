@@ -89,12 +89,50 @@ module Lang = struct
   type label = string
   type fun_kind =
     [ `Regular
+    | `Star
+    | `Async ]
+  and yield_kind =
+    [ `Regular
     | `Star ]
-  and yield_kind = fun_kind
   type let_kind =
     [ `Const
     | `Let
     | `Var ]
+  type unary_op =
+    [ `Plus
+    | `Minus
+    | `Increment of fixity
+    | `Decrement of fixity
+    | `LogicalNot
+    | `BitwiseNot
+    | `Typeof
+    | `Delete
+    | `Void ]
+  and fixity =
+    [ `Prefix
+    | `Postfix ]
+  type binary_op =
+    [ `Plus
+    | `Minus
+    | `Times
+    | `Division
+    | `Mod
+    | `Pow
+    | `WeakEq
+    | `StrictEq
+    | `WeakNeq
+    | `StrictNeq
+    | `Lt
+    | `Gt
+    | `Ge
+    | `Le
+    | `BitwiseAnd
+    | `BitwiseOr
+    | `BitwiseXor
+    | `LeftShift
+    | `RightShift
+    | `ZerofillRightShift
+    | `Comma ]
 
   type literal =
     | Int of int
@@ -105,19 +143,23 @@ module Lang = struct
     | Lit of literal
     | Var of Ir.var
     | Func of fun_def
-    | Arrow of expr list * code
+    | Arrow of Ir.binder list * js
     | Apply of expr * expr list
-    | Array of expr list
+    | Unary of unary_op * expr
+    | Binary of binary_op * expr * expr
+    | Array of expr array
     | Obj of (label * expr) list
     | Project of [`Dot | `Subscript] * expr * string
     | Yield of { kind: yield_kind; expr: expr }
+    | Await of expr
   and stmt =
     | Expr of expr
     | Return of expr
-    | If of expr * code * code option
-    | Switch of expr * (label * code) list * code option
-    | Try of code * catch_def
+    | If of expr * js * js option
+    | Switch of expr * (label * js) list * js option
+    | Try of js * catch_def
     | Assign of Ir.var * expr
+    | Seq of stmt list
     | Skip
     | Break
     | Continue
@@ -128,15 +170,15 @@ module Lang = struct
       kind: fun_kind;
       fun_binder: [`Anonymous | `Binder of Ir.binder];
       params: Ir.binder list;
-      fun_body: code
+      fun_body: js
     }
   and catch_def = {
       exn_binder: Ir.binder;
-      try_body: code
+      catch_body: js
     }
   and decls = decl list
-  and code = (decls * stmt)
-  and program = code
+  and js = (decls * stmt)
+  and program = js
 
   module LispJs = struct
     let lit : literal -> expr
@@ -159,14 +201,14 @@ module Lang = struct
     let fun_decl : fun_def -> decl
       = fun fd -> Fun fd
 
-    let arrow : expr list -> code -> expr
+    let arrow : Ir.binder list -> js -> expr
       = fun params body -> Arrow (params, body)
 
     let apply : expr -> expr list -> expr
       = fun f args -> Apply (f, args)
 
     let array : expr list -> expr
-      = fun elems -> Array elems
+      = fun elems -> Array (Array.of_list elems)
 
     let obj : (label * expr) list -> expr
       = fun dict -> Obj dict
@@ -176,8 +218,7 @@ module Lang = struct
       apply (lit (String name)) args
 
     let project : expr -> label -> expr
-      = (* let is_well_formed_numeric_index = Str.regexp "^\\(0\\|\\([1-9][0-9]*\\\)\\)$" in *)
-        let is_dottable = Str.regexp "^[_A-Za-z][A-Za-z0-9_]*$" in
+      = let is_dottable = Str.regexp "^[_A-Za-z][A-Za-z0-9_]*$" in
         let is_keyword s = List.mem s Symbols.js_keywords in
         fun structure label ->
         let kind =
@@ -187,22 +228,28 @@ module Lang = struct
         in
         Project (kind, structure, label)
 
+    let yield : ?kind:yield_kind -> expr -> expr
+      = fun ?(kind=`Regular) expr -> Yield { kind; expr }
+
+    let await : expr -> expr
+      = fun expr -> Await expr
+
     let return : expr -> stmt
       = fun expr -> Return expr
 
-    let ifthenelse : expr -> code -> code -> stmt
+    let ifthenelse : expr -> js -> js -> stmt
       = fun cond tt ff -> If (cond, tt, Some ff)
 
-    let ifthen : expr -> code -> stmt
+    let ifthen : expr -> js -> stmt
       = fun cond tt -> If (cond, tt, None)
 
-    let catch : Ir.binder -> code -> catch_def
-      = fun exn_binder try_body -> { exn_binder; try_body }
+    let catch : Ir.binder -> js -> catch_def
+      = fun exn_binder catch_body -> { exn_binder; catch_body }
 
-    let try_ : code -> catch_def -> stmt
+    let try_ : js -> catch_def -> stmt
       = fun body catch -> Try (body, catch)
 
-    let switch : ?default:code -> expr -> (label * code) list -> stmt
+    let switch : ?default:js -> expr -> (label * js) list -> stmt
       = fun ?default scrutinee cases -> Switch (scrutinee, cases, default)
 
     let expr : expr -> stmt
@@ -215,6 +262,14 @@ module Lang = struct
     let assign : Ir.var -> expr -> stmt
       = fun var expr -> Assign (var, expr)
 
+    let seq : stmt -> stmt -> stmt
+      = fun s0 s1 ->
+      match s0, s1 with
+      | Seq ss0, Seq ss1 -> Seq (ss0 @ ss1)
+      | Seq ss0, s1      -> Seq (ss0 @ [s1])
+      | s0, Seq ss1      -> Seq (s0 :: ss1)
+      | s0, s1           -> Seq [s0; s1]
+
     let const : Ir.binder -> expr -> decl
       = fun binder expr -> Let { kind = `Const; binder; expr }
 
@@ -223,8 +278,36 @@ module Lang = struct
 
     let var : Ir.binder -> expr -> decl
       = fun binder expr -> Let { kind = `Var; binder; expr }
-  end
 
+    let lift_stmt : stmt -> js
+      = fun stmt -> ([], stmt)
+
+    let lift_expr : expr -> js
+      = fun e -> lift_stmt (expr e)
+
+    let thunk : js -> expr
+      = fun body -> fun_expr (fun_def [] body)
+
+    let thunk_and_apply : stmt -> expr
+      = fun stmt ->
+      apply (thunk (lift_stmt stmt)) []
+
+    let unary : unary_op -> expr -> expr
+      = fun op expr -> Unary (op, expr)
+
+    let undefined : expr = unary `Void (lit (Int 0))
+
+    let incr : ?fixity:fixity -> expr -> expr
+      = fun ?(fixity=`Postfix) expr ->
+      unary (`Increment fixity) expr
+
+    let decr : ?fixity:fixity -> expr -> expr
+      = fun ?(fixity=`Postfix) expr ->
+      unary (`Decrement fixity) expr
+
+    let binary : binary_op -> expr -> expr -> expr
+      = fun op lhs rhs -> Binary (op, lhs, rhs)
+  end
 
   let merge_programs : (program * program) -> program = function
     | (decls, Skip), (decls', stmt)  -> (decls @ decls', stmt)
@@ -232,9 +315,8 @@ module Lang = struct
        let decl =
          let open LispJs in
          let b = Var.fresh_binder (Var.info_of_type Types.unit_type) in
-         const b (apply
-                    (arrow [] ([], stmt))
-                    [])
+         const b (thunk_and_apply stmt)
        in
        (decls @ [decl] @ decls', stmt')
 end
+include Lang

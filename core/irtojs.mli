@@ -38,8 +38,3 @@ module type JS_PAGE_COMPILER = sig
 end
 
 module Compiler : JS_PAGE_COMPILER
-
-module type JS_CODEGEN = sig
-  val string_of_js : code -> string
-end
-module Js_CodeGen : JS_CODEGEN

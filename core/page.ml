@@ -1,6 +1,7 @@
 (* Page generation *)
 
 open Irtojs
+open Jsgen
 module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   open Utility
 
@@ -154,4 +155,4 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       []
 end
 
-module RealPage = Make_RealPage(Compiler)(Js_CodeGen)
+module RealPage = Make_RealPage(Compiler)(Jsgen.Js_CodeGen)
