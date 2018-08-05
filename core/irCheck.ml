@@ -23,7 +23,7 @@ let handle_ir_type_error error alternative =
 let ensure condition msg occurence =
   if condition then () else raise_ir_type_error msg occurence
 
-let print_substmap subst =
+let _print_substmap subst =
   Debug.print ("Substmap\n:" ^ IntMap.show (fun fmt num -> Format.pp_print_int fmt num) subst)
 
 (* TYPE EQUALITY *)
@@ -58,7 +58,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       (ctx, is_equal) in
     let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
       | `ForAll (qs, t) ->
-        match collapse_toplevel_forall t with
+        begin match collapse_toplevel_forall t with
           | `ForAll (qs', t') ->
               `ForAll (Types.box_quantifiers (Types.unbox_quantifiers qs @ Types.unbox_quantifiers qs'), t')
           | t ->
@@ -67,6 +67,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
                   | [] -> t
                   | _ -> `ForAll (qs, t)
               end
+        end
       | t -> t in
     let remove_absent_fields_if_closed row =
       (* assumes that row is flattened already and ignores recursive rows *)
@@ -235,9 +236,8 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       | `Present lt, `Present rt -> eqt (context, lt, rt)
       | `Var lpoint, `Var rpoint -> begin match Unionfind.find lpoint, Unionfind.find rpoint with
                                     | `Body _,  _
-                                      | _, `Body _ -> failwith "should have removed all `Body variants by now"
+                                    | _, `Body _ -> failwith "should have removed all `Body variants by now"
                                     |  `Var lv, `Var rv -> handle_variable `Presence lv rv context
-                                    | _ , _ -> (context, false)
                                     end
       | _, _ -> assert false
     and eq_field_envs  (context, lfield_env, rfield_env) = (* checked again *)

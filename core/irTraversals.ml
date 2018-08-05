@@ -260,7 +260,7 @@ struct
             let f, ft, o = o#value f in
             let args, _, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `Apply (f, args), deconstruct return_type ft, o
+              `Apply (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
         (* | `ApplyClosure (f, args) -> *)
         (*     let f, ft, o = o#value f in *)
         (*     let args, arg_types, o = o#list (fun o -> o#value) args in *)
@@ -352,7 +352,7 @@ struct
               `Delete ((x, source), where), Types.unit_type, o
         | `CallCC v ->
             let v, t, o = o#value v in
-              `CallCC v, deconstruct return_type t, o
+              `CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t, o
         | `Select (l, v) ->
            let v, t, o = o#value v in
            `Select (l, v), t, o
