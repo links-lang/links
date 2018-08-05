@@ -2,110 +2,110 @@ open Irtojs
 open Utility
 
 module type JS_CODEGEN = sig
-  val string_of_js : code -> string
+  val string_of_js : js -> string
   val emit : Js.program -> out_channel -> unit
 end
 
-module Js_CodeGen : JS_CODEGEN = struct
-  (** Pretty printer for JavaScript code *)
-  module PP :
-  sig
-    val show : code -> string
-  end =
-    struct
-      open PP
-
-      (** Pretty-print a Code value as a JavaScript string. *)
-      let rec show (c : code) : PP.doc =
-        let show_func name fn =
-          match fn with
-          | (Fn (vars, body)) ->
-             PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
-                       ^+^  (braces
-                               (break ^^ group(nest 2 (show body)) ^^ break)))
-          | _ -> assert false in
-        let show_case v l (x, e) =
-          PP.text "case" ^+^ PP.text("'"^l^"'") ^^
-            PP.text ":" ^+^ braces (PP.text"var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
-                                      show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break in
-        let show_cases v =
-          fun cases ->
-          StringMap.fold (fun l c s ->
-              s ^+^ show_case v l c)
-            cases DocNil in
-        let show_default v = opt_app
-                               (fun (x, e) ->
-                                 PP.text "default:" ^+^ braces (PP.text "var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^";") ^+^
-                                                                  show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break) PP.DocNil in
-        let maybe_parenise = function
-          | Var _
-            | Lit _
-            | Call _
-            | Dict _
-            | Arr _
-            | Bind _
-            | Die _
-            | Return _
-            | Nothing as c -> show c
-          | c -> parens (show c)
-        in
-        match c with
-        | Var x -> PP.text x
-        | Nothing -> PP.text ""
-        | Die msg -> PP.text("error('" ^ msg ^ "', __kappa)")
-        | Lit literal -> PP.text literal
-        | LetFun ((name, vars, body, _location), rest) ->
-           (show_func name (Fn (vars, body))) ^^ break ^^ show rest
-        | LetRec (defs, rest) ->
-           PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs)) ^^
-             break ^^ show rest
-        | Fn _ as f -> show_func "" f
-        | Call (Var "LINKS.project", [record; label]) ->
-           maybe_parenise record ^^ (brackets (show label))
-        | Call (Var "hd", [list;kappa]) ->
-           (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
-        | Call (Var "tl", [list;kappa]) ->
-           (maybe_parenise kappa) ^^ PP.text "tl" ^^ (parens (  maybe_parenise list))
-        | Call (Var "_yield", (fn :: args)) ->
-           PP.text "_yield" ^^ (parens (PP.text "function () { " ^^ maybe_parenise fn ^^
-                                          parens (hsep(punctuate "," (List.map show args))) ^^ PP.text " }"))
-        | Call (fn, args) -> maybe_parenise fn ^^
-                               (PP.arglist (List.map show args))
-        | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
-        | Binop (l, op, r) -> (maybe_parenise l) ^+^ PP.text op ^+^ (maybe_parenise r)
-        | If (cond, c1, c2) ->
-           PP.group (PP.text "if (" ^+^ show cond ^+^ PP.text ")"
-                     ^+^  (braces
-                             (break ^^ group(nest 2 (show c1)) ^^ break))
-                     ^+^ PP.text "else"
-                     ^+^  (braces
-                             (break ^^ group(nest 2 (show c2)) ^^ break)))
-        | Case (v, cases, default) ->
-           PP.group (PP.text "switch" ^+^ (parens (PP.text (v^"._label"))) ^+^
-                       (braces ((show_cases v cases) ^+^ (show_default v default))))
-        | Dict (elems) ->
-           PP.braces (hsep (punctuate ","
-                              (List.map (fun (name, value) ->
-                                   group (PP.text "'" ^^ PP.text name ^^
-                                            PP.text "':" ^^ show value))
-                                 elems)))
-        | Arr elems ->
-           let rec show_list = function
-             | [] -> PP.text Json.nil_literal
-             | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
-           show_list elems
-        | Bind (name, value, body) ->
-           PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
-             break ^^ show body
-        | Return expr ->
-           PP.text "return " ^^ (show expr) ^^ PP.text ";"
-
-      let show = show ->- PP.pretty 144
-    end
-
-  let string_of_js x = PP.show x
-  let emit _src _chan = assert false
-end
+(* module Js_CodeGen : JS_CODEGEN = struct
+ *   (\** Pretty printer for JavaScript code *\)
+ *   module PP :
+ *   sig
+ *     val show : code -> string
+ *   end =
+ *     struct
+ *       open PP
+ * 
+ *       (\** Pretty-print a Code value as a JavaScript string. *\)
+ *       let rec show (c : code) : PP.doc =
+ *         let show_func name fn =
+ *           match fn with
+ *           | (Fn (vars, body)) ->
+ *              PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
+ *                        ^+^  (braces
+ *                                (break ^^ group(nest 2 (show body)) ^^ break)))
+ *           | _ -> assert false in
+ *         let show_case v l (x, e) =
+ *           PP.text "case" ^+^ PP.text("'"^l^"'") ^^
+ *             PP.text ":" ^+^ braces (PP.text"var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
+ *                                       show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break in
+ *         let show_cases v =
+ *           fun cases ->
+ *           StringMap.fold (fun l c s ->
+ *               s ^+^ show_case v l c)
+ *             cases DocNil in
+ *         let show_default v = opt_app
+ *                                (fun (x, e) ->
+ *                                  PP.text "default:" ^+^ braces (PP.text "var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^";") ^+^
+ *                                                                   show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break) PP.DocNil in
+ *         let maybe_parenise = function
+ *           | Var _
+ *             | Lit _
+ *             | Call _
+ *             | Dict _
+ *             | Arr _
+ *             | Bind _
+ *             | Die _
+ *             | Return _
+ *             | Nothing as c -> show c
+ *           | c -> parens (show c)
+ *         in
+ *         match c with
+ *         | Var x -> PP.text x
+ *         | Nothing -> PP.text ""
+ *         | Die msg -> PP.text("error('" ^ msg ^ "', __kappa)")
+ *         | Lit literal -> PP.text literal
+ *         | LetFun ((name, vars, body, _location), rest) ->
+ *            (show_func name (Fn (vars, body))) ^^ break ^^ show rest
+ *         | LetRec (defs, rest) ->
+ *            PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs)) ^^
+ *              break ^^ show rest
+ *         | Fn _ as f -> show_func "" f
+ *         | Call (Var "LINKS.project", [record; label]) ->
+ *            maybe_parenise record ^^ (brackets (show label))
+ *         | Call (Var "hd", [list;kappa]) ->
+ *            (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
+ *         | Call (Var "tl", [list;kappa]) ->
+ *            (maybe_parenise kappa) ^^ PP.text "tl" ^^ (parens (  maybe_parenise list))
+ *         | Call (Var "_yield", (fn :: args)) ->
+ *            PP.text "_yield" ^^ (parens (PP.text "function () { " ^^ maybe_parenise fn ^^
+ *                                           parens (hsep(punctuate "," (List.map show args))) ^^ PP.text " }"))
+ *         | Call (fn, args) -> maybe_parenise fn ^^
+ *                                (PP.arglist (List.map show args))
+ *         | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
+ *         | Binop (l, op, r) -> (maybe_parenise l) ^+^ PP.text op ^+^ (maybe_parenise r)
+ *         | If (cond, c1, c2) ->
+ *            PP.group (PP.text "if (" ^+^ show cond ^+^ PP.text ")"
+ *                      ^+^  (braces
+ *                              (break ^^ group(nest 2 (show c1)) ^^ break))
+ *                      ^+^ PP.text "else"
+ *                      ^+^  (braces
+ *                              (break ^^ group(nest 2 (show c2)) ^^ break)))
+ *         | Case (v, cases, default) ->
+ *            PP.group (PP.text "switch" ^+^ (parens (PP.text (v^"._label"))) ^+^
+ *                        (braces ((show_cases v cases) ^+^ (show_default v default))))
+ *         | Dict (elems) ->
+ *            PP.braces (hsep (punctuate ","
+ *                               (List.map (fun (name, value) ->
+ *                                    group (PP.text "'" ^^ PP.text name ^^
+ *                                             PP.text "':" ^^ show value))
+ *                                  elems)))
+ *         | Arr elems ->
+ *            let rec show_list = function
+ *              | [] -> PP.text Json.nil_literal
+ *              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
+ *            show_list elems
+ *         | Bind (name, value, body) ->
+ *            PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
+ *              break ^^ show body
+ *         | Return expr ->
+ *            PP.text "return " ^^ (show expr) ^^ PP.text ";"
+ * 
+ *       let show = show ->- PP.pretty 144
+ *     end
+ * 
+ *   let string_of_js x = PP.show x
+ *   let emit _src _chan = assert false
+ * end *)
 
 type env = string IntMap.t
 
@@ -328,6 +328,7 @@ module NewCodeGen : JS_CODEGEN = struct
       | Await expr ->
          let expr = transl env expr in
          hgrp (text "await" $/ expr)
+      | Prim name -> text name
       end
 
   module Make_Stmt (Js : JS) (Expr : EXPR) = struct
@@ -433,10 +434,11 @@ module NewCodeGen : JS_CODEGEN = struct
   and          Js : JS   = Make_Js(Decl)(Stmt)
   and        Misc : MISC = Make_Misc(Js)
 
-  let string_of_js _js =
-    let js = ([], Skip) in
+  let string_of_js js =
     let _, js' = Js.transl IntMap.empty js (* TODO fix whole program assumption *) in
     to_string ~width:default_width js'
 
-  let emit _src _chan = assert false
+  let emit js chan =
+    let _, js' = Js.transl IntMap.empty js in
+    to_file ~width:default_width chan js'
 end

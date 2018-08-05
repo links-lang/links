@@ -1,6 +1,7 @@
 
 (** JavaScript generation *)
 open Utility
+open Js
 
 let _ = ParseSettings.config_file
 
@@ -14,34 +15,8 @@ let rec strip_poly =
     | `TApp (e, _) -> strip_poly e
     | e -> e
 
-(** Intermediate language *)
-type code = | Var    of string
-            | Lit    of string
-            | Fn     of (string list * code)
-
-            | LetFun of ((string * string list * code * Ir.location) * code)
-            | LetRec of ((string * string list * code * Ir.location) list * code)
-            | Call   of (code * code list)
-            | Unop   of (string * code)
-            | Binop  of (code * string * code)
-            | If     of (code * code * code)
-            | Case   of (string * (string * code) stringmap * (string * code) option)
-            | Dict   of ((string * code) list)
-            | Arr    of (code list)
-
-            | Bind   of (string * code * code)
-            | Return of code
-
-            | Die    of (string)
-            | Nothing
-  [@@deriving show]
-
-
 (** IR variable environment *)
 module VEnv = Env.Int
-
-(** Type of environments mapping IR variables to source variables *)
-type venv = string VEnv.t
 
 module VariableInspection = struct
   (* let inspect_code_variables code =
@@ -124,21 +99,20 @@ let __kappa = "__kappa"
   Also, any `builtin' functions from Lib.value_env.
  *)
 
-(* module type JS_COMPILER = sig
- *   type source = [
- *     | `Bindings of Ir.binding list
- *     | `Program of Ir.program ]
- * 
- *   val compile : source -> Value.env -> Js.program
- * end
- * 
- * module type JS_PAGE_COMPILER = sig
- *   include JS_COMPILER
- * 
- *   val generate_stubs : Value.env -> Ir.bindings -> Js.program
- *   val generate_toplevel_bindings : Value.env -> Json.json_state -> Ir.bindings -> Js.program * Json.json_state
- * end
- *) 
+module type JS_COMPILER = sig
+  type source = [
+    | `Bindings of Ir.binding list
+    | `Program of Ir.program ]
+
+  val compile : source -> Value.env -> Js.program
+end
+
+module type JS_PAGE_COMPILER = sig
+  include JS_COMPILER
+
+  val generate_stubs : Value.env -> Ir.bindings -> Js.program
+  val generate_toplevel_bindings : Value.env -> Json.json_state -> Ir.bindings -> Js.program * Json.json_state
+end
 
 (** Create a JS string literal, quoting special characters *)
 let string_js_quote s =
@@ -146,122 +120,218 @@ let string_js_quote s =
     "'" ^ sub "'" "\\'" (sub "\n" "\\n" (sub "\\" "\\\\\\\\" s)) ^ "'"
 
 (** Return a JS literal string from an OCaml int. *)
-let intlit i = Lit (string_of_int i)
+let intlit i = lit (String (string_of_int i))
 (** Return a JS literal string from an OCaml string. *)
-let strlit s = Lit (string_js_quote s)
+let strlit s = lit (String (string_js_quote s))
 (** Return a JS literal string from an OCaml character. *)
-let chrlit ch = Dict ["_c", Lit(string_js_quote(string_of_char ch))]
+let chrlit ch = Obj ["_c", Lit(string_js_quote(string_of_char ch))] (* TODO unbox characters *)
 (** Return a literal for the JS representation of a Links string. *)
 let chrlistlit = strlit
 
-(* Specialness:
+(* Primitives *)
+module Primitive_Compilers = struct
 
-   * Top-level boilerplate code to replace the root element and reset the focus
+  module type PRIMITIVE_COMPILER = sig
+    val recognise : string -> bool
+    val arity : string -> int
+    val compile : string -> expr list -> expr
+    val abstract : string -> expr
+  end
 
-     The special function _start takes an html page as a string and
-     replaces the currently displayed page with that one.
+  module type PRIMITIVE_AUX = sig
+    val builtins : ('a, int) StringMap.t
+    val compile : string -> expr list -> expr
+    val standalone : string -> expr
+    val can_stand_alone : bool
+  end
 
-     Some of the other functions are equivalents to Links builtins
-     (e.g. int_of_string, xml)
- *)
+  module Make (P: PRIMITVE_AUX): sig
+    include PRIMITIVE_COMPILER
+  end = struct
+    open LispJs
 
-module Arithmetic :
-sig
-  val is : string -> bool
-  val gen : (code * string * code) -> code
-end =
-struct
-  let builtin_ops =
-    StringMap.from_alist
-      [ "+",   Some "+"  ;
-        "+.",  Some "+"  ;
-        "-",   Some "-"  ;
-        "-.",  Some "-"  ;
-        "*",   Some "*"  ;
-        "*.",  Some "*"  ;
-        "/",   None      ;
-        "^",   None      ;
-        "^.",  None      ;
-        "/.",  Some "/"  ;
-        "mod", Some "%"  ]
+    let recognise op = StringMap.mem op builtins
+    let arity op = snd (StringMap.find op builtins)
+    let compile op args = P.compile op args
 
-  let is x = StringMap.mem x builtin_ops
-  let js_name op = val_of (StringMap.find op builtin_ops)
-  let gen (l, op, r) =
-    match op with
-      | "/" -> Call (Var "Math.floor", [Binop (l, "/", r)])
-      | "^" -> Call (Var "Math.floor", [Call (Var "Math.pow", [l; r])])
-      | "^." -> Call (Var "Math.pow", [l; r])
-      | _ -> Binop(l, js_name op, r)
+    let abstract op =
+      if P.can_stand_alone then
+        P.standalone op
+      else
+        let (_, arity) = StringMap.find op P.builtins in
+        let fresh_binder () =
+          Var.fresh_binder (Var.info_of_type `Not_typed)
+        in
+        let gen_args n =
+          if n = 0 then []
+          else fresh_binder () :: gen_args (n - 1)
+        in
+        let params = gen_args arity in
+        let vars = List.map (fun b -> variable (Var.var_of_binder b)) params in
+        let body = lift_stmt (return @@ P.compile op vars) in
+        arrow params body
+  end
+
+  module Arithmetic = Make(struct
+                          let can_stand_alone = false
+                          let standalone _ = failwith "Unsupported"
+                          let builtins =
+                            StringMap.from_alist
+                              [ "+"  , (`Plus, 2) ;
+                                "+." , (`Plus, 2) ;
+                                "-"  , (`Minus, 2) ;
+                                "-." , (`Minus, 2) ;
+                                "*"  , (`Times, 2) ;
+                                "*." , (`Times, 2) ;
+                                "/"  , (`Division, 2) ;
+                                "/." , (`Division, 2) ;
+                                "^"  , (`Pow, 2) ;
+                                "^." , (`Pow, 2) ;
+                                "mod", (`Mod, 2) ;
+                                "negate" , (`Minus, 1) ;
+                                "negatef", (`Minus, 1) ;
+                                "^^", (`Plus, 2) (* it's bit of a stretch to label
+                                                    string concatenation as "arithmetic" *)
+                              ]
+
+                          let compile op args =
+                            let (symbol, arity) = StringMap.find op ops in
+                            if arity > 1 then
+                              match symbol with
+                              | `Division -> apply (prim "_Arith.divide") args
+                              | _ -> binary symbol args
+                            else
+                              unary symbol (List.hd args)
+                        end)
+
+  module Logical = Make(struct
+                       let can_stand_alone = false
+                       let standalone _ = failwith "Unsupported"
+                       let builtins =
+                         StringMap.from_alist
+                           [ "==" , (`StrictEq , 2) ;
+                             "<>" , (`StrictNeq, 2) ;
+                             "<"  , (`Lt       , 2) ;
+                             ">"  , (`Gt       , 2) ;
+                             "<=" , (`Le       , 2) ;
+                             ">=" , (`Ge       , 2) ;
+                             "intEq", (`StrictEq, 2) ;
+                             "stringEq", (`StrictEq, 2) ;
+                             "floatEq", (`StrictEq, 2) ;
+                             "floatNotEq", (`StrictNeq, 2) ;
+                             "objectEq", (`StrictEq, 2) ;
+                           ]
+
+                       let compile op args =
+                         let (symbol, _) = StringMap.find op ops in
+                         match symbol with
+                         | `StrictEq when op = "==" || op = "objectEq" -> apply (prim "LINKS.eq") args
+                         | `StrictNeq when op = "<>" -> unary `Not (apply (prim "LINKS.eq") args)
+                         | _ -> binary symbol args
+                     end)
+
+  let compilers : (module PRIMITIVE_COMPILER) list
+    = [ (module Arithmetic : PRIMITIVE_COMPILER);
+        (module Logical    : PRIMITIVE_COMPILER) ]
 end
 
-module StringOp :
-sig
-  val is : string -> bool
-  val gen : (code * string * code) -> code
-end =
-struct
-  let builtin_ops =
-    StringMap.from_alist
-      [ "^^",  Some "+"  ]
-
-  let is x = StringMap.mem x builtin_ops
-  let js_name op = val_of (StringMap.find op builtin_ops)
-  let gen (l, op, r) =
-    Binop(l, js_name op, r)
-end
-
-module Comparison :
-sig
-  val is : string -> bool
-  val js_name : string -> string
-  val gen : (code * string * code) -> code
-end =
-struct
-  (* these names should be used for non-primitive types *)
-  let funs =
-    StringMap.from_alist
-      [ "==", "LINKS.eq"  ;
-        "<>", "LINKS.neq" ;
-        "<",  "LINKS.lt"  ;
-        ">",  "LINKS.gt"  ;
-        "<=", "LINKS.lte" ;
-        ">=", "LINKS.gte" ]
-
-  let is x = StringMap.mem x funs
-  let js_name op = StringMap.find op funs
-  let gen (l, op, r) =
-    match op with
-      | "<>" -> Unop("!", Call (Var "LINKS.eq", [l; r]))
-          (* HACK
-
-             This is technically wrong, but as we haven't implemented
-             LINKS.lt, etc., it is enough to get the demos working.
-
-             Ideally we want to compile to the builtin operators
-             whenever we know that the argument types are primitive
-             and the general functions otherwise. This would
-             necessitate making the JS compiler type-aware.
-          *)
-      | "<" | ">" | "<=" | ">=" ->
-          Binop(l, op, r)
-      | _ ->  Call(Var (js_name op), [l; r])
-end
+(* module Arithmetic :
+ * sig
+ *   val is : string -> bool
+ *   val gen : (code * string * code) -> code
+ * end =
+ * struct
+ *   let builtin_ops =
+ *     StringMap.from_alist
+ *       [ "+",   Some "+"  ;
+ *         "+.",  Some "+"  ;
+ *         "-",   Some "-"  ;
+ *         "-.",  Some "-"  ;
+ *         "*",   Some "*"  ;
+ *         "*.",  Some "*"  ;
+ *         "/",   None      ;
+ *         "^",   None      ;
+ *         "^.",  None      ;
+ *         "/.",  Some "/"  ;
+ *         "mod", Some "%"  ]
+ * 
+ *   let is x = StringMap.mem x builtin_ops
+ *   let js_name op = val_of (StringMap.find op builtin_ops)
+ *   let gen (l, op, r) =
+ *     match op with
+ *       | "/" -> Call (Var "Math.floor", [Binop (l, "/", r)])
+ *       | "^" -> Call (Var "Math.floor", [Call (Var "Math.pow", [l; r])])
+ *       | "^." -> Call (Var "Math.pow", [l; r])
+ *       | _ -> Binop(l, js_name op, r)
+ * end
+ * 
+ * module StringOp :
+ * sig
+ *   val is : string -> bool
+ *   val gen : (code * string * code) -> code
+ * end =
+ * struct
+ *   let builtin_ops =
+ *     StringMap.from_alist
+ *       [ "^^",  Some "+"  ]
+ * 
+ *   let is x = StringMap.mem x builtin_ops
+ *   let js_name op = val_of (StringMap.find op builtin_ops)
+ *   let gen (l, op, r) =
+ *     Binop(l, js_name op, r)
+ * end
+ * 
+ * module Comparison :
+ * sig
+ *   val is : string -> bool
+ *   val js_name : string -> string
+ *   val gen : (code * string * code) -> code
+ * end =
+ * struct
+ *   (\* these names should be used for non-primitive types *\)
+ *   let funs =
+ *     StringMap.from_alist
+ *       [ "==", "LINKS.eq"  ;
+ *         "<>", "LINKS.neq" ;
+ *         "<",  "LINKS.lt"  ;
+ *         ">",  "LINKS.gt"  ;
+ *         "<=", "LINKS.lte" ;
+ *         ">=", "LINKS.gte" ]
+ * 
+ *   let is x = StringMap.mem x funs
+ *   let js_name op = StringMap.find op funs
+ *   let gen (l, op, r) =
+ *     match op with
+ *       | "<>" -> Unop("!", Call (Var "LINKS.eq", [l; r]))
+ *           (\* HACK
+ * 
+ *              This is technically wrong, but as we haven't implemented
+ *              LINKS.lt, etc., it is enough to get the demos working.
+ * 
+ *              Ideally we want to compile to the builtin operators
+ *              whenever we know that the argument types are primitive
+ *              and the general functions otherwise. This would
+ *              necessitate making the JS compiler type-aware.
+ *           *\)
+ *       | "<" | ">" | "<=" | ">=" ->
+ *           Binop(l, op, r)
+ *       | _ ->  Call(Var (js_name op), [l; r])
+ * end *)
 
 (** [cps_prims]: a list of primitive functions that need to see the
     current continuation. Calls to these are translated in CPS rather than
     direct-style.  A bit hackish, this list. *)
 let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
 
-(** Generate a JavaScript name from a binder, wordifying symbolic names *)
-let name_binder (x, info) =
-  let name = Js.name_binder (x, info) in
-  if (name = "") then
-    prerr_endline (Ir.show_binder (x, info))
-  else
-    ();
-  assert (name <> "");
-  (x, Js.name_binder (x,info))
+(* (\** Generate a JavaScript name from a binder, wordifying symbolic names *\)
+ * let name_binder (x, info) =
+ *   let name = Js.name_binder (x, info) in
+ *   if (name = "") then
+ *     prerr_endline (Ir.show_binder (x, info))
+ *   else
+ *     ();
+ *   assert (name <> "");
+ *   (x, Js.name_binder (x,info)) *)
 
 (** Continuation structures *)
 module type CONTINUATION = sig
@@ -274,34 +344,35 @@ module type CONTINUATION = sig
   (* A continuation is a monoid. *)
   val identity : t
   val (<>) : t -> t -> t
+  (* Pure continuation augmentation *)
+  val (&>) : Js.expr -> t -> t * Js.decl list
 
-  (* Returns a scope in which the head and tail of the continuation
-     are accessible. *)
-  val pop : t -> (code -> code) * t * t
+  (* Installs a trap *)
+  val install_trap : Js.expr * Js.expr -> t -> t
 
   (* Turns code into a continuation. *)
-  val reflect : code -> t
+  val reflect : Js.expr -> t
   (* Turns a continuation into code. *)
-  val reify   : t -> code
+  val reify   : t -> Js.expr
 
   (* Continuation name binding. *)
-  val bind : t -> (t -> code) -> code
+  val bind : t -> (t -> js) -> js
 
   (* Continuation application generation. The optional strategy
      parameter decides whether the application should be yielding or
      direct. *)
-  val apply : ?strategy:[`Yield | `Direct] -> t -> code -> code
+  val apply : t -> Js.expr -> Js.expr
+
+  val trap : t -> Js.expr -> Js.expr
+
+  (* Bypasses the current trap *)
+  val forward : t -> Js.expr -> Js.expr
+
 
   (* Augments a function [Fn] with a continuation parameter and
      reflects the result as a continuation. The continuation parameter
      in the callback provides access to the current continuation. *)
-  val contify_with_env : (t -> venv * code) -> venv * t
-
-  (* Generates appropriate bindings for primitives *)
-  val primitive_bindings : string
-
-  (* Generates a string dump of the continuation, for debugging purposes. *)
-  val to_string : t -> string
+  val contify_with_env : (t -> venv * Js.expr) -> venv * t
 end
 
 (* (\* The standard Links continuation (no extensions) *\) *)
@@ -309,10 +380,19 @@ module Default_Continuation : CONTINUATION = struct
   (* We can think of this particular continuation structure as
      singleton list. *)
   type t = Identity
-         | Code of code
+         | Code of expr
+
+  let fresh_binder ?(prefix="") () =
+    Var.fresh_binder (Var.make_local_info (prefix, `Not_typed))
 
   let identity = Identity
-  let toplevel = Code (Fn (["x"], Nothing))
+  let toplevel =
+    let x, = fresh_binder ~prefix:"_x" (), fresh_binder ~prefix:"_kappa" () in
+    Code (fun_expr
+            (fun_def
+               [x; kappa]
+               (lift_stmt (return (variable (Var.var_of_binder x))))
+
   (* This continuation is a degenerate monoid. The multiplicative
      operator is "forgetful" in the sense that it ignores its second
      argument b whenever a != Identity. Meaning that a <> b == a when
@@ -325,7 +405,7 @@ module Default_Continuation : CONTINUATION = struct
 
   let reflect x = Code x
   let reify = function
-    | Identity -> Fn (["_x"], Var "_x")
+    | Identity -> toplevel
     | Code code -> code
 
   let bind k body =
@@ -342,32 +422,21 @@ module Default_Continuation : CONTINUATION = struct
            might expect in a saner language. (In other words var f =
            function(args) {body} is just syntactic sugar for function
            f(args) {body}.)
-        *)
-       let kb = "_kappa" ^ (string_of_int (Var.fresh_raw_var ())) in
-       Bind (kb, reify k, body (reflect (Var kb)))
+         *)
+       let kappa = fresh_binder ~prefix:"_kappa" () in
+       let (decls, stmt) = body (reflect (variable (Var.var_of_binder kappa))) in
+       const kappa (reify k) :: decls, stmt
 
-  let apply ?(strategy=`Yield) k arg =
-    match strategy with
-    | `Direct -> Call (Var "_applyCont", [reify k; arg])
-    | _       -> Call (Var "_yieldCont", [reify k; arg])
+  let apply k arg = apply k [arg]
 
-  let primitive_bindings =
-    "function _makeCont(k) { return k; }\n" ^
-      "var _idy = function(x) { return; };\n" ^
-      "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
-      "var _cont_kind = \"Default_Continuation\";\n" ^
-        "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }\n" ^
-      "var receive = _default_receive;"
+  let forward _ _ = assert false
+  let trap _ _ = assert false
+  let install_trap _ _ = assert false
 
-  let contify_with_env fn =
-    match fn Identity with
-    | env, (Fn _ as k) -> env, reflect k
-    | _ -> failwith "error: contify: non-function argument."
-
-  (* Pop returns the code in "the singleton list" as the second
-     component, and returns a fresh singleton list containing the
-     identity element in the third component. *)
-  let pop k = (fun code -> code), k, Identity
+  let contify_with_env fn = assert false
+    (* match fn Identity with
+     * | env, (Fn _ as k) -> env, reflect k
+     * | _ -> failwith "error: contify: non-function argument." *)
 
   let to_string = function
     | Identity -> "IDENTITY"
@@ -379,119 +448,126 @@ end
 module Higher_Order_Continuation : CONTINUATION = struct
   (* We can think of this particular continuation structure as a
      nonempty stack with an even number of elements. *)
-  type t = Cons of code * t
-         | Reflect of code
+  type f = Dynamic of Js.expr
+         | Static of Js.expr * Js.expr * Js.expr
+  type t = Cons of f * t
+         | Reflect of Js.expr
          | Identity
 
+  open LispJs
   (* Auxiliary functions for manipulating the continuation stack *)
-  let nil = Var "Nil"
-  let cons x xs = Call (Var "_Cons", [x; xs])
-  let head xs = Call (Var "_hd", [xs])
-  let tail xs = Call (Var "_tl", [xs])
-  let toplevel = Cons (Var "_idk", Cons (Var "_efferr", Reflect nil))
+  let nil = prim "LINKEDLIST.Nil"
+  let cons x xs = apply (prim "LINKEDLIST.Cons") [x; xs]
+  let head xs = apply (prim "LINKEDLIST.head") [xs]
+  let tail xs = apply (prim "LINKEDLIST.tail") [xs]
+  let augment f kappa = apply (prim "_K.augment") [f; kappa]
+
+  let fresh_binder ?(prefix="") () =
+    Var.fresh_binder (Var.make_local_info (`Not_typed, prefix))
+
+  let toplevel =
+    let x, ks = fresh_binder ~prefix:"x" (), fresh_binder ~prefix:"ks" () in
+    Cons (Static
+            (nil,
+             fun_expr
+               (fun_def
+                  [x; ks]
+                  (lift_stmt
+                     (return (variable (Var.var_of_binder x))))),
+             prim "_K.absurd"),
+          Reflect nil)
+
+  let make_frame pureFrames ret eff =
+    apply (prim "_K.makeFrame") [pureFrames; ret; eff]
 
   let reflect x = Reflect x
-  let rec reify = function
-  | Cons (v, vs) ->
-    cons v (reify vs)
-  | Reflect v -> v
-  | Identity -> reify toplevel
+  let rec reify kappa =
+    match kappa with
+    | Cons (Static (ks, ret, eff), vs) ->
+       cons (make_frame ks ret eff) (reify vs)
+    | Cons (Dynamic ks, vs) ->
+       cons ks (reify vs)
+    | Reflect v -> v
+    | Identity -> reify toplevel
 
   let identity = Identity
   let (<>) a b =
     match a,b with
     | Identity, b -> b
     | a, Identity -> a
-    | Reflect ks, b -> Cons (ks, b)
+    | Reflect ks, b -> Cons (Dynamic ks, b)
     | Cons _ as a,b ->
        let rec append xs ys =
          match xs with
          | Cons (x, xs) -> Cons (x, append xs ys)
-         | Reflect ks   -> Cons (ks, ys)
+         | Reflect ks   -> Cons (Dynamic ks, ys)
          | Identity     -> ys
        in
        append a b
 
-  let bind kappas body =
-    (* Binds a continuation *)
-    let rec bind bs ks =
-      fun kappas ->
-        match kappas with
-        | Identity ->
-           (* Generate a new continuation name *)
-           let k = gensym ~prefix:"_kappa" () in
-             (fun code -> bs (Bind (k, reify Identity, code))), ks, Var k
-        | Reflect ((Var _) as v) ->
-           bs, ks, v
-        | Reflect v ->
-           let k = gensym ~prefix:"_kappa" () in
-           (fun code -> bs (Bind (k, v, code))), ks, Var k
-        | Cons ((Var _) as v, kappas) ->
-           bind bs (fun kappas -> Cons (v, kappas)) kappas
-        | Cons (v, kappas) ->
-           let k = gensym ~prefix:"_kappa" () in
-           bind
-             (fun code -> bs (Bind (k, v, code)))
-             (fun kappas -> Cons (Var k, kappas)) kappas
-  in
-  let bs, ks, seed = bind (fun code -> code) (fun kappas -> kappas) kappas in
-  bs (body (ks (reflect seed)))
+  let rec (&>) f = function
+    | Cons (Static (ks, ret, eff), tail) ->
+       let ks' = fresh_binder ~prefix:"_kappa" () in
+       let decl = const ks' (cons f ks) in
+       Cons (Static (variable (Var.var_of_binder ks'), ret, eff), tail), [decl]
+    | Cons (Dynamic ks, tail) as v -> assert false (* TODO *)
+    | Reflect v ->
+       let kappa = fresh_binder ~prefix:"_kappa" () in
+       let decl = const kappa (augment f v) in
+       Reflect (variable (Var.var_of_binder kappa)), [decl]
+    | Identity -> f &> toplevel
 
-  let apply ?(strategy=`Yield) k arg =
-    match strategy with
-    | `Direct -> Call (Var "_applyCont", [reify k; arg])
-    | _       -> Call (Var "_yieldCont", [reify k; arg])
+  let bind kappas (body : t -> js) =
+    let rec bind : Js.decl list -> (t -> js) -> t -> js
+      = fun bs body ->
+      function
+      | Identity ->
+         let k = fresh_binder ~prefix:"_kappa" () in
+         let (rest, stmt) = body (reflect (variable (Var.var_of_binder k))) in
+         let bs = (const k (reify Identity)) :: bs in
+         bs @ rest, stmt
+      | Reflect (EVar _) as k ->
+         let (rest, stmt) = body k in
+         bs @ rest, stmt
+      | Reflect v ->
+         let k = fresh_binder ~prefix:"_kappa" () in
+         let bs = (const k v) :: bs in
+         let (rest, stmt) = body (reflect @@ (variable (Var.var_of_binder k))) in
+         bs @ rest, stmt
+      | Cons (Dynamic (EVar _) as v, kappas) ->
+         assert false (* TODO *)
+      | Cons (Dynamic v, kappas) ->
+         assert false (* TODO *)
+      | Cons (Static (ks, ret, eff), kappas) ->
+         let k = fresh_binder ~prefix:"_kappa" () in
+         let bs = (const k (make_frame ks ret eff) :: bs) in
+         bind bs (fun kappas -> body (Cons (Dynamic (variable (Var.var_of_binder k)), kappas))) kappas
+    in
+    bind [] body kappas
 
-  let primitive_bindings =
-    "function _makeCont(k) {\n" ^
-      "  return _Cons(k, _singleton(_efferr));\n" ^
-      "}\n" ^
-      "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
-      "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
-      "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
-      "function is_continuation(kappa) {\n" ^
-        "return kappa !== null && typeof kappa === 'object' && _hd(kappa) !== undefined && _tl(kappa) !== undefined;\n" ^
-      "}\n" ^
-      if session_exceptions_enabled then
-        "var receive = _exn_receive;"
-      else
-        "var receive = _default_receive;"
+  let rec install_trap (ret, eff) = function
+    | (Reflect _ as vs)
+      | (Cons (_, _) as vs) ->
+       Cons (Static (nil, ret, eff), vs)
+    | Identity -> install_trap (ret, eff) toplevel
+
+  let forward k z =
+    apply (prim "_K.forward") [reify k; z]
+
+  let apply k arg =
+    apply (prim "_K.apply") [reify k; arg]
+
+  let trap k arg =
+    LispJs.apply (prim "_K.trap") [reify k; arg]
 
   let contify_with_env fn =
-    let name = __kappa in
-    match fn (reflect (Var name)) with
-    | env, Fn (args, body) -> env, reflect (Fn (args @ [name], body))
+    let kappa = fresh_binder ~prefix:"_kappa" () in
+    match fn (reflect (variable (Var.var_of_binder kappa))) with
+    | env, Func def -> env, reflect (Func { def with params = def.params @ [kappa] })
     | _ -> failwith "error: contify: none function argument."
-
-  let rec pop = function
-    | Cons (kappa, kappas) ->
-       (fun code -> code), (reflect kappa), kappas
-    | Reflect ks ->
-       let __k = gensym ~prefix:"__k" () in
-       let __ks = gensym ~prefix:"__ks" () in
-       (fun code ->
-         Bind (__k, head ks,
-               Bind (__ks, tail ks, code))),
-       (reflect (Var __k)), reflect (Var __ks)
-    | Identity -> pop toplevel
-
-  let rec to_string = function
-    | Identity -> "IDENTITY"
-    | Reflect code -> "REFLECT: " ^ (show_code code)
-    | Cons (code, k) ->
-        "CONS: " ^ (show_code code) ^ ", \n" ^ (to_string k)
-
 end
 
 (** Compiler interface *)
-(* module type JS_COMPILER = sig
- *   type source = [
- *     | `Bindings of Ir.binding list
- *     | `Program of Ir.program ]
- *
- *   val compile : source -> Value.env -> Js.program
- * end *)
-
 module type JS_PAGE_COMPILER = sig
   (* include JS_COMPILER *)
   val generate_program : venv -> Ir.computation -> venv * code
@@ -511,49 +587,54 @@ module CPS_Compiler: functor (K : CONTINUATION) -> sig
 end = functor (K : CONTINUATION) -> struct
   type continuation = K.t
 
-  let apply_yielding f args k =
-    Call (Var "_yield", f :: (args @ [K.reify k]))
+  let __kappa = prim "__kappa"
+
+  let rec apply : ?strategy:[`Direct | `Yield] -> ?kappa:continuation -> expr -> expr list -> expr
+    = fun ?(strategy=`Yield) ?kappa f args ->
+    match strategy, kappa with
+    | `Direct, Some kappa ->
+       LispJs.apply f (args @ [K.reify kappa])
+    | `Direct, None       ->
+       LispJs.apply f args
+    | `Yield, kappa ->
+       let g =
+         thunk
+           (lift_stmt
+              (return (apply ~strategy:`Direct ~kappa f args)))
+       in
+       LispJs.apply (prim "_yield") [g]
 
   let contify fn =
     snd @@ K.contify_with_env (fun k -> VEnv.empty, fn k)
 
-  let rec generate_value env : Ir.value -> code =
+  let rec generate_value env : Ir.value -> expr =
     let gv v = generate_value env v in
     function
     | `Constant c ->
        begin
          match c with
-         | `Int v  -> Lit (string_of_int v)
+         | `Int v  -> lit (Int (string_of_int v))
          | `Float v    ->
             let s = string_of_float' v in
             let n = String.length s in
                     (* strip any trailing '.' *)
             if n > 1 && (s.[n-1] = '.') then
-              Lit (String.sub s 0 (n-1))
+              lit (Float (String.sub s 0 (n-1)))
             else
-              Lit s
-         | `Bool v  -> Lit (string_of_bool v)
+              lit (Float s)
+         | `Bool v  -> lit (Bool (string_of_bool v))
          | `Char v     -> chrlit v
          | `String v   -> chrlistlit v
        end
     | `Variable var ->
-          (* HACK *)
        let name = VEnv.lookup env var in
-       if Arithmetic.is name then
-         Fn (["x"; "y"; __kappa],
-             K.apply (K.reflect (Var __kappa))
-               (Arithmetic.gen (Var "x", name, Var "y")))
-       else if StringOp.is name then
-         Fn (["x"; "y"; __kappa],
-             K.apply (K.reflect (Var __kappa))
-               (StringOp.gen (Var "x", name, Var "y")))
-       else if Comparison.is name then
-         Var (Comparison.js_name name)
-       else
-         Var name
+       begin match Primitive_Compiler.compile ~standalone:true name with
+       | Some impl -> impl
+       | None -> variable var
+       end
     | `Extend (field_map, rest) ->
        let dict =
-         Dict
+         obj
            (StringMap.fold
               (fun name v dict ->
                 (name, gv v) :: dict)
@@ -563,17 +644,14 @@ end = functor (K : CONTINUATION) -> struct
          match rest with
          | None -> dict
          | Some v ->
-            Call (Var "LINKS.union", [gv v; dict])
+            apply ~strategy:`Direct (prim "LINKS.union") [gv v; dict]
        end
     | `Project (name, v) ->
-       Call (Var "LINKS.project", [gv v; strlit name])
+       apply ~strategy:`Direct (prim "LINKS.project") [gv v; strlit name]
     | `Erase (names, v) ->
-       Call (Var "LINKS.erase",
-             [gv v; Arr (List.map strlit (StringSet.elements names))])
+       apply ~strategy:`Direct (prim "LINKS.erase") [gv v; array (Array.of_list (List.map strlit (StringSet.elements names)))]
     | `Inject (name, v, _t) ->
-       Dict [("_label", strlit name);
-             ("_value", gv v)]
-
+       Obj [("_label", strlit name); ("_value", gv v)]
       (* erase polymorphism *)
     | `TAbs (_, v)
     | `TApp (v, _) -> gv v
@@ -587,53 +665,50 @@ end = functor (K : CONTINUATION) -> struct
          match f with
          | `Variable f ->
             let f_name = VEnv.lookup env f in
-            begin
-              match vs with
-              | [l; r] when Arithmetic.is f_name ->
-                 Arithmetic.gen (gv l, f_name, gv r)
-              | [l; r] when StringOp.is f_name ->
-                 StringOp.gen (gv l, f_name, gv r)
-              | [l; r] when Comparison.is f_name ->
-                 Comparison.gen (gv l, f_name, gv r)
-              | [v] when f_name = "negate" || f_name = "negatef" ->
-                 Unop ("-", gv v)
-              | _ ->
-                 if Lib.is_primitive f_name
-                   && not (List.mem f_name cps_prims)
-                   && Lib.primitive_location f_name <> `Server
-                 then
-                   Call (Var ("_" ^ f_name), List.map gv vs)
-                 else
-                   Call (gv (`Variable f), List.map gv vs)
+            begin match Primitive_Compiler.compile f_name with
+            | Some impl -> impl
+            | None ->
+               if Lib.is_primitive f_name
+                  && not (List.mem f_name cps_prims)
+                  && Lib.primitive_location f_name <> `Server
+               then
+                 apply ~strategy:`Direct (prim ("_" ^ f_name)) (List.map gv vs)
+               else
+                 apply ~strategy:`Direct (gv (`Variable f)) (List.map gv vs)
             end
          | _ ->
-            Call (gv f, List.map gv vs)
+            apply (gv f) (List.map gv vs)
        end
-    | `Closure (f, _, v) ->
-       if session_exceptions_enabled
-       then Call (Var "partialApplySE", [gv (`Variable f); gv v])
-       else Call (Var "partialApply", [gv (`Variable f); gv v])
-    | `Coerce (v, _) ->
-       gv v
+    | `Closure (f, v) ->
+       let prim_name =
+         if session_exceptions_enabled
+         then "partialApplySE"
+         else "partialApply"
+       in
+       apply ~strategy:`Direct (prim prim_name) [gv (`Variable f); gv v]
+    | `Coerce (v, _) -> gv v
 
   and generate_xml env tag attrs children =
-    Call(Var "LINKS.XML",
-         [strlit tag;
-          Dict (StringMap.fold (fun name v bs ->
-            (name, generate_value env v) :: bs) attrs []);
-          Arr (List.map (generate_value env) children)])
+    apply ~strategy:`Direct
+      (prim "LINKS.XML")
+      [ strlit tag;
+        obj (StringMap.fold (fun name v bs ->
+                 (name, generate_value env v) :: bs) attrs []);
+        array (Array.of_list (List.map (generate_value env) children)) ]
 
   let generate_remote_call f_var xs_names env =
-    Call(Call (Var "LINKS.remoteCall", [Var __kappa]),
-         [intlit f_var;
-          env;
-          Dict (
-            List.map2
-              (fun n v -> string_of_int n, Var v)
-              (Utility.fromTo 1 (1 + List.length xs_names))
-              xs_names
-          )])
-
+    apply ~strategy:`Direct
+      (apply ~strategy:`Direct
+         (prim "LINKS.remoteCall")
+         [__kappa])
+      [intlit f_var;
+       env;
+       obj (
+           List.map2
+             (fun n v -> string_of_int n, Var v)
+             (Utility.fromTo 1 (1 + List.length xs_names))
+             xs_names
+         )]
 
 (** Generate stubs for processing functions serialised in remote calls *)
   module GenStubs =

@@ -103,7 +103,7 @@ module Lang = struct
     | `Minus
     | `Increment of fixity
     | `Decrement of fixity
-    | `LogicalNot
+    | `Not
     | `BitwiseNot
     | `Typeof
     | `Delete
@@ -135,6 +135,7 @@ module Lang = struct
     | `Comma ]
 
   type literal =
+    | Bool of bool
     | Int of int
     | Float of float
     | Char of char
@@ -152,6 +153,7 @@ module Lang = struct
     | Project of [`Dot | `Subscript] * expr * string
     | Yield of { kind: yield_kind; expr: expr }
     | Await of expr
+    | Prim of string
   and stmt =
     | Expr of expr
     | Return of expr
@@ -233,6 +235,9 @@ module Lang = struct
 
     let await : expr -> expr
       = fun expr -> Await expr
+
+    let prim : string -> expr
+      = fun name -> Prim name
 
     let return : expr -> stmt
       = fun expr -> Return expr
