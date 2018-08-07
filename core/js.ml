@@ -86,6 +86,37 @@ let var_name_var x = "_" ^ string_of_int x
 let var_name_binder (x, _) = var_name_var x
 
 module Lang = struct
+
+  module Ident = struct
+    type binder =
+      [ `Binder of Ir.binder
+      | `Primitive of string ]
+    type var =
+      [ `Var of Ir.var
+      | `Primitive of string ]
+
+    let of_binder : Ir.binder -> Ident.binder
+      = fun b -> `Binder b
+
+    let of_var : Ir.var -> Ident.var
+      = fun v -> `Var v
+
+    let to_var : Ident.binder -> Ident.var = function
+      | `Binder b -> `Var (Ir.var_of_binder b)
+      | `Primitive name -> `Primitive name
+
+    let name_binder : Ident.binder -> string = function
+      | `Binder b -> name_binder b
+      | `Primitive name -> name
+
+    let fresh_binder : ?prefix:string -> unit -> Ident.binder
+      = fun ?(prefix="") () ->
+      `Binder (Var.fresh_binder (Var.make_local_info (prefix, `Not_typed)))
+
+    let make : string -> Ident.binder
+      = fun name -> `Primitive name
+  end
+
   type label = string
   type fun_kind =
     [ `Regular
@@ -142,9 +173,9 @@ module Lang = struct
     | String of string
   type expr =
     | Lit of literal
-    | Var of Ir.var
+    | Var of Ident.var
     | Func of fun_def
-    | Arrow of Ir.binder list * js
+    | Arrow of Ident.binder list * js
     | Apply of expr * expr list
     | Unary of unary_op * expr
     | Binary of binary_op * expr * expr
@@ -153,7 +184,6 @@ module Lang = struct
     | Project of [`Dot | `Subscript] * expr * string
     | Yield of { kind: yield_kind; expr: expr }
     | Await of expr
-    | Prim of string
   and stmt =
     | Expr of expr
     | Return of expr
@@ -166,16 +196,16 @@ module Lang = struct
     | Break
     | Continue
   and decl =
-    | Let of { kind: let_kind; binder: Ir.binder; expr: expr }
+    | Let of { kind: let_kind; binder: Ident.binder; expr: expr }
     | Fun of fun_def
   and fun_def = {
       kind: fun_kind;
-      fun_binder: [`Anonymous | `Binder of Ir.binder];
-      params: Ir.binder list;
+      fun_binder: [`Anonymous | `Binder of Ident.binder];
+      params: Ident.binder list;
       fun_body: js
     }
   and catch_def = {
-      exn_binder: Ir.binder;
+      exn_binder: Ident.binder;
       catch_body: js
     }
   and decls = decl list
@@ -189,7 +219,7 @@ module Lang = struct
     let variable : Ir.var -> expr
       = fun v -> Var v
 
-    let fun_def : ?name:Ir.binder -> ?kind:fun_kind -> Ir.binder list -> program -> fun_def
+    let fun_def : ?name:Ident.binder -> ?kind:fun_kind -> Ident.binder list -> program -> fun_def
       = fun ?name ?(kind = `Regular) params fun_body ->
       let fun_binder = match name with
         | None -> `Anonymous
@@ -203,7 +233,7 @@ module Lang = struct
     let fun_decl : fun_def -> decl
       = fun fd -> Fun fd
 
-    let arrow : Ir.binder list -> js -> expr
+    let arrow : Ident.binder list -> js -> expr
       = fun params body -> Arrow (params, body)
 
     let apply : expr -> expr list -> expr
@@ -236,9 +266,6 @@ module Lang = struct
     let await : expr -> expr
       = fun expr -> Await expr
 
-    let prim : string -> expr
-      = fun name -> Prim name
-
     let return : expr -> stmt
       = fun expr -> Return expr
 
@@ -248,7 +275,7 @@ module Lang = struct
     let ifthen : expr -> js -> stmt
       = fun cond tt -> If (cond, tt, None)
 
-    let catch : Ir.binder -> js -> catch_def
+    let catch : Ident.binder -> js -> catch_def
       = fun exn_binder catch_body -> { exn_binder; catch_body }
 
     let try_ : js -> catch_def -> stmt
@@ -275,13 +302,13 @@ module Lang = struct
       | s0, Seq ss1      -> Seq (s0 :: ss1)
       | s0, s1           -> Seq [s0; s1]
 
-    let const : Ir.binder -> expr -> decl
+    let const : Ident.binder -> expr -> decl
       = fun binder expr -> Let { kind = `Const; binder; expr }
 
-    let let_ : Ir.binder -> expr -> decl
+    let let_ : Ident.binder -> expr -> decl
       = fun binder expr -> Let { kind = `Let; binder; expr }
 
-    let var : Ir.binder -> expr -> decl
+    let var : Ident.binder -> expr -> decl
       = fun binder expr -> Let { kind = `Var; binder; expr }
 
     let lift_stmt : stmt -> js

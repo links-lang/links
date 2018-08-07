@@ -112,14 +112,7 @@ type env = string IntMap.t
 module NewCodeGen : JS_CODEGEN = struct
   open Js
 
-  let name_binder (x, info) =
-    let name = Js.name_binder (x, info) in
-    (if (name = "") then
-       prerr_endline (Ir.show_binder (x, info)));
-    assert (name <> "");
-    name
-
-  let extend : (Ir.var * string) -> env -> env
+  let extend : (Ident.var * string) -> env -> env
     = fun (k, v) env -> IntMap.add k v env
 
   open Prettier
@@ -212,15 +205,15 @@ module NewCodeGen : JS_CODEGEN = struct
         match fun_binder with
         | `Anonymous -> env, None
         | `Binder fb ->
-           let name = name_binder fb in
-           extend (Var.var_of_binder fb, name) env, Some name
+           let name = Ident.name_binder fb in
+           extend (Ident.to_var fb, name) env, Some name
       in
       let env'', params =
         let env, params =
           List.fold_left
             (fun (env, params) binder ->
-              let name = name_binder binder in
-              (extend (Var.var_of_binder binder, name) env, name :: params))
+              let name = Ident.name_binder binder in
+              (extend (Ident.to_var binder, name) env, name :: params))
             (env', []) params
         in
         env, List.rev params
@@ -328,7 +321,6 @@ module NewCodeGen : JS_CODEGEN = struct
       | Await expr ->
          let expr = transl env expr in
          hgrp (text "await" $/ expr)
-      | Prim name -> text name
       end
 
   module Make_Stmt (Js : JS) (Expr : EXPR) = struct
@@ -361,8 +353,8 @@ module NewCodeGen : JS_CODEGEN = struct
       | Try (try_body, { exn_binder; catch_body }) ->
          let _, try_body = Js.transl env try_body in
          let env', exn_name =
-           let name = name_binder exn_binder in
-           extend (Var.var_of_binder exn_binder, name) env, name
+           let name = Ident.name_binder exn_binder in
+           extend (Ident.to_var exn_binder, name) env, name
          in
          let _, catch_body = Js.transl env' catch_body in
          hgrp
@@ -390,8 +382,8 @@ module NewCodeGen : JS_CODEGEN = struct
   module Make_Decl (Misc : MISC) (Expr : EXPR) = struct
     let transl env : decl -> env * t = function
       | Let { kind; binder; expr } ->
-         let name = name_binder binder in
-         let env' = extend (Var.var_of_binder binder, name) env in
+         let name = Ident.name_binder binder in
+         let env' = extend (Ident.to_var binder, name) env in
          let modifier =
            text (match kind with
                  | `Const -> "const"

@@ -158,13 +158,24 @@ module Primitive_Compilers = struct
       if P.can_stand_alone then
         P.standalone op
       else
-        let (_, arity) = StringMap.find op P.builtins in
-        let fresh_binder () =
-          Var.fresh_binder (Var.info_of_type `Not_typed)
+        let arg_name n = (* generates names like a,b,c,...,aa,ab,ac,...,aaa,... *)
+          let acode = Char.code 'a' in
+          let ubound = Char.code 'z' - acode in
+          let loop n : char list =
+            let m = n mod ubound in
+            let r = n - m in
+            let letter = Char.chr (acode + m) in
+            letter :: (if r > 0 then loop r else [])
+          in
+          StringUtils.implode (loop n)
         in
+        let (_, arity) = StringMap.find op P.builtins in
         let gen_args n =
-          if n = 0 then []
-          else fresh_binder () :: gen_args (n - 1)
+          let loop n =
+            if n = 0 then []
+            else Ident.fresh_binder ~prefix:(arg_name n) () :: loop (n - 1)
+          in
+          List.rev (loop n)
         in
         let params = gen_args arity in
         let vars = List.map (fun b -> variable (Var.var_of_binder b)) params in
@@ -382,16 +393,13 @@ module Default_Continuation : CONTINUATION = struct
   type t = Identity
          | Code of expr
 
-  let fresh_binder ?(prefix="") () =
-    Var.fresh_binder (Var.make_local_info (prefix, `Not_typed))
-
   let identity = Identity
   let toplevel =
-    let x, = fresh_binder ~prefix:"_x" (), fresh_binder ~prefix:"_kappa" () in
+    let x, kappa = Ident.fresh_binder ~prefix:"_x" (), Ident.fresh_binder ~prefix:"_kappa" () in
     Code (fun_expr
             (fun_def
                [x; kappa]
-               (lift_stmt (return (variable (Var.var_of_binder x))))
+               (lift_stmt (return (variable (Ident.to_var x))))
 
   (* This continuation is a degenerate monoid. The multiplicative
      operator is "forgetful" in the sense that it ignores its second
@@ -423,8 +431,8 @@ module Default_Continuation : CONTINUATION = struct
            function(args) {body} is just syntactic sugar for function
            f(args) {body}.)
          *)
-       let kappa = fresh_binder ~prefix:"_kappa" () in
-       let (decls, stmt) = body (reflect (variable (Var.var_of_binder kappa))) in
+       let kappa = Ident.fresh_binder ~prefix:"_kappa" () in
+       let (decls, stmt) = body (reflect (variable (Ident.to_var kappa))) in
        const kappa (reify k) :: decls, stmt
 
   let apply k arg = apply k [arg]
@@ -462,23 +470,20 @@ module Higher_Order_Continuation : CONTINUATION = struct
   let tail xs = apply (prim "LINKEDLIST.tail") [xs]
   let augment f kappa = apply (prim "_K.augment") [f; kappa]
 
-  let fresh_binder ?(prefix="") () =
-    Var.fresh_binder (Var.make_local_info (`Not_typed, prefix))
-
   let toplevel =
-    let x, ks = fresh_binder ~prefix:"x" (), fresh_binder ~prefix:"ks" () in
+    let x, ks = Ident.fresh_binder ~prefix:"x" (), Ident.fresh_binder ~prefix:"ks" () in
     Cons (Static
             (nil,
              fun_expr
                (fun_def
                   [x; ks]
                   (lift_stmt
-                     (return (variable (Var.var_of_binder x))))),
+                     (return (variable (Ident.to_var x))))),
              prim "_K.absurd"),
           Reflect nil)
 
   let make_frame pureFrames ret eff =
-    apply (prim "_K.makeFrame") [pureFrames; ret; eff]
+    apply (variable (Ident.make "_K.makeFrame")) [pureFrames; ret; eff]
 
   let reflect x = Reflect x
   let rec reify kappa =
@@ -507,14 +512,14 @@ module Higher_Order_Continuation : CONTINUATION = struct
 
   let rec (&>) f = function
     | Cons (Static (ks, ret, eff), tail) ->
-       let ks' = fresh_binder ~prefix:"_kappa" () in
+       let ks' = Ident.fresh_binder ~prefix:"_kappa" () in
        let decl = const ks' (cons f ks) in
-       Cons (Static (variable (Var.var_of_binder ks'), ret, eff), tail), [decl]
+       Cons (Static (variable (Ident.to_var ks'), ret, eff), tail), [decl]
     | Cons (Dynamic ks, tail) as v -> assert false (* TODO *)
     | Reflect v ->
-       let kappa = fresh_binder ~prefix:"_kappa" () in
+       let kappa = Ident.fresh_binder ~prefix:"_kappa" () in
        let decl = const kappa (augment f v) in
-       Reflect (variable (Var.var_of_binder kappa)), [decl]
+       Reflect (variable (Ident.to_var kappa)), [decl]
     | Identity -> f &> toplevel
 
   let bind kappas (body : t -> js) =
@@ -522,26 +527,26 @@ module Higher_Order_Continuation : CONTINUATION = struct
       = fun bs body ->
       function
       | Identity ->
-         let k = fresh_binder ~prefix:"_kappa" () in
-         let (rest, stmt) = body (reflect (variable (Var.var_of_binder k))) in
+         let k = Ident.fresh_binder ~prefix:"_kappa" () in
+         let (rest, stmt) = body (reflect (variable (Ident.to_var k))) in
          let bs = (const k (reify Identity)) :: bs in
          bs @ rest, stmt
       | Reflect (EVar _) as k ->
          let (rest, stmt) = body k in
          bs @ rest, stmt
       | Reflect v ->
-         let k = fresh_binder ~prefix:"_kappa" () in
+         let k = Ident.fresh_binder ~prefix:"_kappa" () in
          let bs = (const k v) :: bs in
-         let (rest, stmt) = body (reflect @@ (variable (Var.var_of_binder k))) in
+         let (rest, stmt) = body (reflect @@ (variable (Ident.to_var k))) in
          bs @ rest, stmt
       | Cons (Dynamic (EVar _) as v, kappas) ->
          assert false (* TODO *)
       | Cons (Dynamic v, kappas) ->
          assert false (* TODO *)
       | Cons (Static (ks, ret, eff), kappas) ->
-         let k = fresh_binder ~prefix:"_kappa" () in
+         let k = Ident.fresh_binder ~prefix:"_kappa" () in
          let bs = (const k (make_frame ks ret eff) :: bs) in
-         bind bs (fun kappas -> body (Cons (Dynamic (variable (Var.var_of_binder k)), kappas))) kappas
+         bind bs (fun kappas -> body (Cons (Dynamic (variable (Ident.to_var k)), kappas))) kappas
     in
     bind [] body kappas
 
@@ -552,17 +557,17 @@ module Higher_Order_Continuation : CONTINUATION = struct
     | Identity -> install_trap (ret, eff) toplevel
 
   let forward k z =
-    apply (prim "_K.forward") [reify k; z]
+    apply (variable (Ident.make "_K.forward")) [reify k; z]
 
   let apply k arg =
-    apply (prim "_K.apply") [reify k; arg]
+    apply (variable (Ident.make "_K.apply")) [reify k; arg]
 
   let trap k arg =
-    LispJs.apply (prim "_K.trap") [reify k; arg]
+    LispJs.apply (variable (Ident.make "_K.trap")) [reify k; arg]
 
   let contify_with_env fn =
-    let kappa = fresh_binder ~prefix:"_kappa" () in
-    match fn (reflect (variable (Var.var_of_binder kappa))) with
+    let kappa = Ident.fresh_binder ~prefix:"_kappa" () in
+    match fn (reflect (variable (Ident.to_var kappa))) with
     | env, Func def -> env, reflect (Func { def with params = def.params @ [kappa] })
     | _ -> failwith "error: contify: none function argument."
 end
@@ -713,44 +718,45 @@ end = functor (K : CONTINUATION) -> struct
 (** Generate stubs for processing functions serialised in remote calls *)
   module GenStubs =
   struct
-    let rec fun_def : Ir.fun_def -> code -> code =
-      fun ((fb, (_, xsb, _), zb, location) : Ir.fun_def) code ->
-        let f_var, _ = fb in
-        let bs = List.map name_binder xsb in
-        let _, xs_names = List.split bs in
-
-        let xs_names', env =
-          match zb with
-          | None -> xs_names, Dict []
-          | Some _ ->  "_env" :: xs_names, Var "_env" in
-
+    let rec fun_def : Ir.fun_def -> js =
+      fun ((fb, (_, bs, _), zb, _location) : Ir.fun_def) ->
+      let fb = Ident.of_binder fb in
+      let bs = List.map Ident.of_binder bs in
+      let bs', env =
+        match zb with
+        | None -> bs, obj []
+        | Some _ ->
+           let envb = Ident.fresh_binder ~prefix:"_env" () in
+           bs @ [envb], variable (Ident.to_var envb)
+      in
       (* this code relies on eta-expanding functions in order to take
          advantage of dynamic scoping *)
-
         match location with
         | `Client | `Native | `Unknown ->
-           let xs_names'' = xs_names'@[__kappa] in
-           LetFun ((Js.var_name_binder fb,
-                    xs_names'',
-                    Call (Var (snd (name_binder fb)),
-                          List.map (fun x -> Var x) xs_names''),
-                    location),
-                   code)
+           fun_decl
+             (LispJs.fun_def
+                ~name:(`Binder fb)
+                (bs' @ [__kappab])
+                (lift_stmt
+                   (return
+                      (apply
+                         ~strategy:`Direct
+                         (variable (Ident.to_var fb))
+                         (List.map (fun b -> variable (Ident.to_var b)) bs))))) (* TODO: there's something dubious about this code (~name:fb and apply fb) *)
         | `Server ->
-           LetFun ((Js.var_name_binder fb,
-                    xs_names'@[__kappa],
-                    generate_remote_call f_var xs_names env,
-                    location),
-                   code)
-    and binding : Ir.binding -> code -> code =
-      function
+           fun_decl
+             (LispJs.fun_decl
+                ~name:(`Binder fb)
+                (bs' @ [__kappab])
+                (generate_remote_call (Ident.to_var fb) bs env))
+    and binding : Ir.binding -> js = function
       | `Fun def ->
          fun_def def
       | `Rec defs ->
          List.fold_right (-<-)
            (List.map (fun_def) defs)
-           identity
-      | _ -> identity
+           (assert false) (* TODO join js *)
+      | _ -> lift_stmt Skip
     and bindings : Ir.binding list -> code -> code =
       fun bindings code ->
         (List.fold_right
