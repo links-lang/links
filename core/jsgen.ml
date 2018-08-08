@@ -374,13 +374,9 @@ module NewCodeGen : JS_CODEGEN = struct
            (fun doc stmt ->
              (vgrp (nest 0 (doc $/ (transl env stmt)))))
            empty stmts
-      | Skip -> empty
+      (* | Skip -> empty *)
       | (Break : stmt) -> hgrp (semi (text "break"))
       | Continue -> hgrp (semi (text "continue"))
-  end
-
-  module Make_Decl (Misc : MISC) (Expr : EXPR) = struct
-    let transl env : decl -> env * t = function
       | Let { kind; binder; expr } ->
          let name = Ident.name_binder binder in
          let env' = extend (Ident.to_var binder, name) env in
@@ -399,31 +395,58 @@ module NewCodeGen : JS_CODEGEN = struct
          in
          env', pretty_b
       | Fun fun_def -> Misc.fun_def env fun_def
-
-    let transl_many env : decls -> env * t
-      = fun decls ->
-      List.fold_left
-        (fun (env, doc) decl ->
-          let env', doc' = transl env decl in
-          (env', (vgrp (nest 0 (doc $/ doc')))))
-        (env, empty) decls
   end
 
-  module Make_Js (Decl : DECL) (Stmt : STMT) = struct
+  (* module Make_Decl (Misc : MISC) (Expr : EXPR) = struct
+   *   let transl env : decl -> env * t = function
+   *     | Let { kind; binder; expr } ->
+   *        let name = Ident.name_binder binder in
+   *        let env' = extend (Ident.to_var binder, name) env in
+   *        let modifier =
+   *          text (match kind with
+   *                | `Const -> "const"
+   *                | `Let   -> "let"
+   *                | `Var   -> "var")
+   *        in
+   *        let pretty_b =
+   *          hgrp
+   *            (   modifier
+   *            $/ (text name)
+   *            $/ (text "=")
+   *            $/ (Expr.transl env' expr))
+   *        in
+   *        env', pretty_b
+   *     | Fun fun_def -> Misc.fun_def env fun_def
+   * 
+   *   let transl_many env : decls -> env * t
+   *     = fun decls ->
+   *     List.fold_left
+   *       (fun (env, doc) decl ->
+   *         let env', doc' = transl env decl in
+   *         (env', (vgrp (nest 0 (doc $/ doc')))))
+   *       (env, empty) decls
+   * end *)
+
+  module Make_Js (Stmt : STMT) = struct
     let transl env : js -> env * t
-      = fun (decls, stmt) ->
-      let env', decls = Decl.transl_many env decls in
-      let stmt = Stmt.transl env' stmt in
+      = fun stmts ->
+      let env', stmts =
+        List.fold_left
+          (fun (env, stmts) stmt ->
+            let env, stmt = Stmt.transl env stmt in
+            (env, stmt :: stmts))
+          (env, []) stmts
+      in
       env',
       (vgrp
          (nest 0
-            (decls $/ stmt)))
+            (list ~sep:break_null ~f:(fun x -> x) stmts)))
   end
 
   module rec Expr : EXPR = Make_Expr(Js)(Misc)
-  and        Decl : DECL = Make_Decl(Misc)(Expr)
+  (* and        Decl : DECL = Make_Decl(Misc)(Expr) *)
   and        Stmt : STMT = Make_Stmt(Js)(Expr)
-  and          Js : JS   = Make_Js(Decl)(Stmt)
+  and          Js : JS   = Make_Js(Stmt)
   and        Misc : MISC = Make_Misc(Js)
 
   let string_of_js js =

@@ -191,11 +191,10 @@ module Lang = struct
     | Switch of expr * (label * js) list * js option
     | Try of js * catch_def
     | Assign of Ir.var * expr
-    | Seq of stmt list
-    | Skip
+    (* | Skip *)
     | Break
     | Continue
-  and decl =
+  (* and decl = *)
     | Let of { kind: let_kind; binder: Ident.binder; expr: expr }
     | Fun of fun_def
   and fun_def = {
@@ -208,8 +207,8 @@ module Lang = struct
       exn_binder: Ident.binder;
       catch_body: js
     }
-  and decls = decl list
-  and js = (decls * stmt)
+  (* and decls = decl list *)
+  and js = stmt list
   and program = js
 
   module LispJs = struct
@@ -230,7 +229,7 @@ module Lang = struct
     let fun_expr : fun_def -> expr
       = fun fd -> Func fd
 
-    let fun_decl : fun_def -> decl
+    let fun_decl : fun_def -> stmt
       = fun fd -> Fun fd
 
     let arrow : Ident.binder list -> js -> expr
@@ -289,30 +288,30 @@ module Lang = struct
 
     let break : stmt = Break
     let continue : stmt = Continue
-    let skip : stmt = Skip
+    let skip : js = []
 
     let assign : Ir.var -> expr -> stmt
       = fun var expr -> Assign (var, expr)
 
-    let seq : stmt -> stmt -> stmt
-      = fun s0 s1 ->
-      match s0, s1 with
-      | Seq ss0, Seq ss1 -> Seq (ss0 @ ss1)
-      | Seq ss0, s1      -> Seq (ss0 @ [s1])
-      | s0, Seq ss1      -> Seq (s0 :: ss1)
-      | s0, s1           -> Seq [s0; s1]
+    (* let seq : stmt -> stmt -> stmt
+     *   = fun s0 s1 ->
+     *   match s0, s1 with
+     *   | Seq ss0, Seq ss1 -> Seq (ss0 @ ss1)
+     *   | Seq ss0, s1      -> Seq (ss0 @ [s1])
+     *   | s0, Seq ss1      -> Seq (s0 :: ss1)
+     *   | s0, s1           -> Seq [s0; s1] *)
 
-    let const : Ident.binder -> expr -> decl
+    let const : Ident.binder -> expr -> stmt
       = fun binder expr -> Let { kind = `Const; binder; expr }
 
-    let let_ : Ident.binder -> expr -> decl
+    let let_ : Ident.binder -> expr -> stmt
       = fun binder expr -> Let { kind = `Let; binder; expr }
 
-    let var : Ident.binder -> expr -> decl
+    let var : Ident.binder -> expr -> stmt
       = fun binder expr -> Let { kind = `Var; binder; expr }
 
     let lift_stmt : stmt -> js
-      = fun stmt -> ([], stmt)
+      = fun stmt -> [stmt]
 
     let lift_expr : expr -> js
       = fun e -> lift_stmt (expr e)
@@ -341,14 +340,17 @@ module Lang = struct
       = fun op lhs rhs -> Binary (op, lhs, rhs)
   end
 
-  let merge_programs : (program * program) -> program = function
-    | (decls, Skip), (decls', stmt)  -> (decls @ decls', stmt)
-    | (decls, stmt), (decls', stmt') ->
-       let decl =
-         let open LispJs in
-         let b = Var.fresh_binder (Var.info_of_type Types.unit_type) in
-         const b (thunk_and_apply stmt)
-       in
-       (decls @ [decl] @ decls', stmt')
+  (* let merge_programs : (program * program) -> program = function
+   *   | (decls, Skip), (decls', stmt)  -> (decls @ decls', stmt)
+   *   | (decls, stmt), (decls', stmt') ->
+   *      let decl =
+   *        let open LispJs in
+   *        let b = Var.fresh_binder (Var.info_of_type Types.unit_type) in
+   *        const b (thunk_and_apply stmt)
+   *      in
+   *      (decls @ [decl] @ decls', stmt') *)
+
+  let sequence : js -> js -> js
+    = fun js js' -> js @ js'
 end
 include Lang
