@@ -35,6 +35,36 @@ type type_eq_context = {
   tyenv: Types.kind Env.t (* track kinds of bound typevars *)
 }
 
+module RecursionDetector =
+struct
+  class visitor =
+      object
+        inherit Types.Transform.visitor as super
+
+        val found_recursion = false
+        method get_result () = found_recursion
+
+
+        method! meta_type_var point = match Unionfind.find point with
+          | `Recursive _ -> (point, {< found_recursion = true >})
+          | _ -> super#meta_type_var point
+
+        method! meta_row_var point = match Unionfind.find point with
+          | `Recursive _ -> (point, {< found_recursion = true >})
+          | _ -> super#meta_row_var point
+
+
+      end
+
+  let is_recursive t =
+    let o = new visitor in
+    let o' =  snd (o#typ t) in
+    o'#get_result ()
+
+end
+
+
+
 let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
   fun  context (t1, t2) ->
     let lookupVar lvar map  =
@@ -201,7 +231,12 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
          | _          -> (context, false)
          end
 
-      | `Alias  _ -> failwith "should have removed `Alias by now"
+      | `Alias  (_, t1_inner) ->
+        begin match t2 with
+          | `Alias  (_, t2_inner) -> eqt (context, t1_inner, t2_inner)
+          | t2 -> eqt (context, t1_inner, t2)
+        end
+
       | `Table (lt1, lt2, lt3)  -> (* checked again *)
          begin match t2 with
          | `Table (rt1, rt2, rt3) ->
@@ -327,7 +362,8 @@ struct
     (* initialize to the default row of allowed toplevel effects*)
     val allowed_effects = Lib.typing_env.effect_row
 
-    method lookup_closure_def_for_fun fid = Env.lookup closure_def_env fid
+    (* TODO: closure handling needs to be reworked properly *)
+    method lookup_closure_def_for_fun fid = Env.find closure_def_env fid
 
     (* Creates a context for type equality checking *)
     method extract_type_equality_context () = { typevar_subst = IntMap.empty; tyenv = type_var_env }
@@ -443,16 +479,29 @@ struct
 
             ensure (is_function_type ft) "Passing closure to non-funcion" (`Value orig);
             begin match o#lookup_closure_def_for_fun f with
-            | Some binder -> o#check_eq_types (Var.type_of_binder binder) zt
-            | None -> raise_ir_type_error "Providing closure to a function that doesn't expect one" (`Value orig)
+            | Some optbinder ->
+              begin match optbinder with
+                | Some binder -> o#check_eq_types (Var.type_of_binder binder) zt
+                | None -> raise_ir_type_error "Providing closure to a function that does not need one" (`Value orig)
+              end
+            | None -> raise_ir_type_error "Providing closure to untracked function" (`Value orig)
             end;
             `Closure (f, z), ft, o
 
         | `Coerce (v, t) -> (* checked 19.06. *)
             let v, vt, o = o#value v in
-            ensure (is_sub_type (vt, t)) (Printf.sprintf "coercion error: %s is not a subtype of %s"
+            if RecursionDetector.is_recursive vt || RecursionDetector.is_recursive t then
+              begin
+              (* TODO: We may want to implement simple subtyping for recursive types *)
+              Debug.print "IR Typechecker gave up on coercion involving recursive types";
+              `Coerce (v, t), t, o
+              end
+            else
+              begin
+              ensure (eq_types (o#extract_type_equality_context ()) (vt, t) || is_sub_type (vt, t)) (Printf.sprintf "coercion error: %s is not a subtype of %s"
                                          (string_of_datatype vt) (string_of_datatype t)) (`Value orig);
-            `Coerce (v, t), t, o
+              `Coerce (v, t), t, o
+              end
 
     method! tail_computation :
       tail_computation -> (tail_computation * datatype * 'self_type) = fun orig ->
