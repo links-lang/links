@@ -431,6 +431,7 @@ sig
     val row : row -> row
     val type_arg : type_arg -> type_arg
     val field_spec : field_spec -> field_spec
+    val quantifier : quantifier -> quantifier
 end
 
 module DecycleTypes : TYPE_TRANSFORMER

@@ -26,17 +26,13 @@ let only_if_set setting =
 let is_interactive  = Settings.get_value Basicsettings.interacting
 let perform_optimisations = not is_interactive && Settings.get_value Basicsettings.optimise
 
-(*let print_program _ p = (Debug.print (Ir.string_of_program p));p*)
-let print_program tyenv p =
-  let print_types_pretty = Settings.get_value Basicsettings.print_types_pretty in
-  let string_repr_of_p =
-    if print_types_pretty then
-      Ir.string_of_program p
-    else
-      Ir.show_program (IrTraversals.ElimRecursiveTypeCyclesFromProgram.program tyenv p) in
-  Debug.print (string_repr_of_p);p
 
-let bindings_to_dummy_program (bs : Ir.binding list)  : Ir.program = bs, `Return (`Constant (`String "dummy_string"))
+let print_program _ p =
+  Debug.print (Ir.string_of_program p);p
+
+let print_bindings _ bs =
+  List.iter (Debug.print -<- Ir.string_of_binding) bs;bs
+
 
 
 let run pipeline tyenv p =
@@ -71,7 +67,7 @@ struct
         IrTraversals.ElimBodiesFromMetaTypeVars.bindings;
         (only_if_set
           Basicsettings.Ir.show_compiled_ir_after_backend_transformations
-          (fun tenv bs -> (print_program tenv (bindings_to_dummy_program bs));bs)
+          print_bindings
         );
         IrCheck.Typecheck.bindings;
       ]

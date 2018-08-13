@@ -473,9 +473,10 @@ sig
     val row : row -> row
     val type_arg : type_arg -> type_arg
     val field_spec : field_spec -> field_spec
+    val quantifier : quantifier -> quantifier
 end
 
-module DecycleTypes =
+module DecycleTypes : TYPE_TRANSFORMER =
 struct
   let elim_recursive_type_cycles_visitor = new ElimRecursiveTypeCyclesTransform.visitor
 
@@ -484,6 +485,7 @@ struct
   let field_spec p = fst (elim_recursive_type_cycles_visitor#field_spec p)
   let type_arg ta = fst (elim_recursive_type_cycles_visitor#type_arg ta)
   let row_var rv = fst (elim_recursive_type_cycles_visitor#row_var rv)
+  let quantifier q = fst (elim_recursive_type_cycles_visitor#quantifier q)
 
 end
 
@@ -1786,6 +1788,10 @@ struct
       | `Row row -> free_bound_row_type_vars ~include_aliases bound_vars row
       | `Presence f -> free_bound_field_spec_type_vars ~include_aliases bound_vars f
 
+  let free_bound_quantifier_vars quant =
+    let var, spec = varspec_of_tyvar quant in
+    [(var, spec)]
+
   let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =
     match tycon_spec with
       | `Alias (tyvars, body) ->
@@ -2317,7 +2323,7 @@ let free_bound_row_type_vars ?(include_aliases=true) = Vars.free_bound_row_type_
 let free_bound_field_spec_type_vars ?(include_aliases=true) = Vars.free_bound_field_spec_type_vars ~include_aliases TypeVarSet.empty
 let free_bound_type_arg_type_vars ?(include_aliases=true) = Vars.free_bound_tyarg_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_var_vars ?(include_aliases=true) = Vars.free_bound_row_var_vars ~include_aliases TypeVarSet.empty
-
+let free_bound_quantifier_vars = Vars.free_bound_quantifier_vars
 let free_bound_tycon_type_vars ?(include_aliases=true) = Vars.free_bound_tycon_vars ~include_aliases TypeVarSet.empty
 
 (** Generates new variable names for things in the list, adding them to already
@@ -2397,6 +2403,11 @@ let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
 
 let string_of_primary_kind primary_kind =
   Print.primary_kind primary_kind
+
+let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
+  if refresh_tyvar_names then
+    build_tyvar_names (fun x -> free_bound_quantifier_vars x) [quant];
+  Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
 
 type environment       = datatype Env.t
@@ -2701,32 +2712,38 @@ let make_thunk_type : row -> datatype -> datatype
 
 
 (* We replace some of the generated printing functions here such that
-   they may use our own printing functions instead. They are here because they are needed
-   by the generated code for printing IR types, do not call them yourself.
+   they may use our own printing functions instead. If the generated functions are
+   to be used, we remove potential cycles arising from recursive types/rows first.
+   They are here because they are needed
+   by the generated code for printing the IR, do not call them yourself.
    Use string_of_* instead *)
 let pp_datatype : Format.formatter -> datatype -> unit = fun fmt t ->
   if Settings.get_value Basicsettings.print_types_pretty then
     Format.pp_print_string fmt (string_of_datatype t)
   else
-    pp_datatype fmt t
+    pp_datatype fmt (DecycleTypes.datatype t)
 let pp_quantifier : Format.formatter -> quantifier -> unit = fun fmt t ->
   if Settings.get_value Basicsettings.print_types_pretty then
-    Format.pp_print_string fmt ("cannot pretty-print quantifiers")
+    Format.pp_print_string fmt (string_of_quantifier t)
   else
-    pp_quantifier fmt t
+    pp_quantifier fmt (DecycleTypes.quantifier t)
 let show_quantifier : quantifier -> string = (fun x -> Format.asprintf "%a" pp_quantifier x)
 let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
   if Settings.get_value Basicsettings.print_types_pretty then
     Format.pp_print_string fmt (string_of_type_arg t)
   else
-    pp_type_arg fmt t
+    pp_type_arg fmt (DecycleTypes.type_arg t)
 let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
+  let decycle_tycon_spec = function
+    | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
+    | other -> other in
+
   if Settings.get_value Basicsettings.print_types_pretty then
     Format.pp_print_string fmt (string_of_tycon_spec t)
   else
-    pp_tycon_spec fmt t
+    pp_tycon_spec fmt (decycle_tycon_spec t)
 let pp_row : Format.formatter -> row -> unit = fun fmt t ->
   if Settings.get_value Basicsettings.print_types_pretty then
     Format.pp_print_string fmt (string_of_row t)
   else
-    pp_row fmt t
+    pp_row fmt (DecycleTypes.row t)
