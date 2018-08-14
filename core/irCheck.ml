@@ -477,13 +477,18 @@ struct
               `XmlNode (tag, attributes, children), xml_type, o
 
         | `ApplyPure (f, args) ->
+            let rec is_pure_function = function
+              | `TApp (v, _)
+              | `TAbs (_, v) -> is_pure_function v
+              | `Variable var when Lib.is_primitive_var var -> Lib.is_pure_primitive (Lib.primitive_name var)
+              | _ -> false in
+
             let (f, ft, o) = o#value f in
             let (args, argument_types, o) = o#list (fun o -> o#value) args in
 
             let parameter_types = arg_types ~overstep_quantifiers:false ft in
             check_eq_type_lists (o#extract_type_equality_context ()) parameter_types argument_types;
-            let effects = effect_row ~overstep_quantifiers:false ft in
-            ensure (is_empty_row effects) "ApplyPure used for function with effects" (`Value orig);
+            ensure (is_pure_function f) "ApplyPure used for non-pure function" (`Value orig);
             `ApplyPure (f, args),  return_type ~overstep_quantifiers:false ft, o
 
         | `Closure (f, z) -> (* checked 19.06. *)
