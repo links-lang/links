@@ -6,18 +6,28 @@ open Ir
 let fail_on_ir_type_error = false
 exception IRTypeError of string
 
-let raise_ir_type_error msg _occurence =
-  raise (IRTypeError msg)
+let raise_ir_type_error msg occurence =
+  let occurence_string = match occurence with
+    | `TC tc -> "\noccuring in tail computation: " ^  Ir.string_of_tail_computation tc
+    | `Value v -> "\noccuring in value: " ^ Ir.string_of_value v
+    | `Special s -> "\noccuring in special tail computation: " ^ Ir.string_of_special s
+    | `Binding b -> "\noccuring in binding: " ^ Ir.string_of_binding b
+    | `None -> "" in
+  raise (IRTypeError (msg ^ occurence_string))
 
 let handle_ir_type_error error alternative =
   match error with
     | IRTypeError msg
     | TypeUtils.TypeDestructionError msg ->
       if fail_on_ir_type_error then
-        failwith msg
+        failwith ("IR Type Error: " ^ msg)
       else
-        Debug.print ("Continuing after IR Type Error:\n" ^ msg ); alternative
-    |  e-> failwith ("Unknown exception" ^ Printexc.to_string e)
+        Debug.print
+          ("\n--------------------------------------------------------------------\n" ^
+            "Continuing after IR Type Error: " ^
+            msg ^
+            "\n-------------------------------------------------------------------\n" ); alternative
+    |  e-> failwith ("Unknown exception during IR type-checking: " ^ Printexc.to_string e)
 
 
 let ensure condition msg occurence =
@@ -333,7 +343,10 @@ let ensure_effect_present_in_row ctx allowed_effects required_effect_name requir
 let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurence =
   (* TODO: Shall we flatten the row first? *)
   (* FIXEM: need to flatten here and remove absent fields if closed row *)
-  ensure (eq_types ctx (`Record allowed_effects, `Record imposed_effects_row)) "Incompatible effects" occurence
+  ensure
+    (eq_types ctx (`Record allowed_effects, `Record imposed_effects_row))
+    ("Incompatible effects; Allowed:\n" ^ (Types.string_of_row allowed_effects) ^ "\nactual effects:\n" ^  (Types.string_of_row imposed_effects_row))
+    occurence
 
 
 
@@ -843,12 +856,10 @@ struct
 
     method! binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
-        Debug.print ("binding" ^ string_of_int var);
         let tyenv = Env.bind tyenv (var, info_type info) in
           (var, info), {< tyenv=tyenv >}
 
     method remove_binder : binder -> 'self_type = fun binder ->
-      Debug.print ("unbinding" ^ string_of_int (Var.var_of_binder binder));
       let tyenv = Env.unbind tyenv (Var.var_of_binder binder) in
       {< tyenv=tyenv >}
 

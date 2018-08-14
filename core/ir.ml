@@ -145,11 +145,11 @@ type program = computation
 
 let string_of_var = string_of_int
 
-let string_of_value _ = "[VALUE]"
-let string_of_tail_computation _ = "[TAIL_COMPUTATION]"
-let string_of_binding  = show_binding
-let string_of_special _ = "[SPECIAL]"
-let string_of_computation _ = "[COMPUTATION]"
+let string_of_value = show_value
+let string_of_tail_computation = show_tail_computation
+let string_of_binding = show_binding
+let string_of_special  = show_special
+let string_of_computation = show_computation
 let string_of_program = show_program
 
 
