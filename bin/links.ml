@@ -382,6 +382,11 @@ let evaluate_string_in envs v =
      ignore (evaluate parse_and_desugar envs v))
 
 let load_prelude () =
+  (if Settings.get_value Basicsettings.Ir.show_lib_function_env then
+    (Debug.print "lib.ml mappings:";
+    Env.String.iter (fun name var -> Debug.print (string_of_int var ^ " -> " ^ name ^ " :: " ^
+      Types.string_of_datatype (Env.String.lookup Lib.typing_env.Types.var_env name ) )) Lib.nenv));
+
   let open Loader in
   let source =
     (Errors.display_fatal

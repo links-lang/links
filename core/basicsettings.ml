@@ -234,6 +234,9 @@ module Ir = struct
   let show_rec_uses = Settings.add_bool("show_rec_uses", false, `User)
   let show_compiled_ir_after_backend_transformations =
     Settings.add_bool("show_compiled_ir_after_backend_transformations", false, `User)
+
+  (* Print the lib.ml functions and their types. In particular, map their integer identifiers to their original names *)
+  let show_lib_function_env = Settings.add_bool("show_lib_function_env", false, `User)
   let typecheck_ir = Settings.add_bool("typecheck_ir", false, `User)
 end
 
