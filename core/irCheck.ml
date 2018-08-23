@@ -150,17 +150,17 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       Debug.print ("Checking type equality\n " ^
                      (Types.string_of_datatype t1) ^ "\n vs \n" ^ (Types.string_of_datatype t2) (*^ IntMap.show Var.pp_var subst*));
       match t1 with
-      | `Not_typed -> (* checked again *)
+      | `Not_typed ->
           begin match t2 with
               `Not_typed -> (context,  true)
             | _          -> (context, false)
           end
-      | `Primitive x ->  (* checked again *)
+      | `Primitive x ->
           begin match t2 with
               `Primitive y -> (context, x = y)
             | _            -> (context, false)
           end
-      | `MetaTypeVar lpoint ->  (* checked again *)
+      | `MetaTypeVar lpoint ->
           begin match Unionfind.find lpoint with
             | `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; (context, true)
             | lpoint_cont ->
@@ -174,7 +174,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
                 | _                   -> (context, false)
               end
           end
-      | `Function (lfrom, lm, lto) ->  (* checked again *)
+      | `Function (lfrom, lm, lto) ->
           begin match t2 with
             `Function (rfrom, rm, rto) ->
              let (context, r1) = eqt (context, lfrom, rfrom) in
@@ -183,7 +183,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
              (context, r1 && r2 && r3)
             | _                          -> (context, false)
           end
-      | `Lolli (lfrom, lm, lto) ->  (* checked again *)
+      | `Lolli (lfrom, lm, lto) ->
           begin match t2 with
             `Function (rfrom, rm, rto) ->
              let (context, r1) = eqt (context, lfrom, rfrom) in
@@ -192,22 +192,22 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
              (context, r1 && r2 && r3)
             | _                          -> (context, false)
           end
-      | `Record l ->  (* checked again *)
+      | `Record l ->
          begin match t2 with
          | `Record r -> eq_rows (context, l, r)
          | _         -> (context, false)
          end
-      | `Variant l ->  (* checked again *)
+      | `Variant l ->
          begin match  t2 with
            `Variant r -> eq_rows (context, l, r)
          | _          -> (context, false)
          end
-      | `Effect l ->  (* checked again *)
+      | `Effect l ->
          begin match t2 with
          | `Effect r -> eq_rows (context, l, r)
          | _         -> (context, false)
          end
-      | `Application (s, ts) ->  (* checked again *)
+      | `Application (s, ts) ->
          begin match t2 with
          | `Application (s', ts') ->
             List.fold_left2 (fun (context, prev_equal) larg rarg  ->
@@ -216,7 +216,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
               (context, Types.Abstype.equal s  s') ts ts'
          | _ -> (context, false)
          end
-      | `ForAll (qs, t) -> (* checked again *)
+      | `ForAll (qs, t) ->
          begin match t2 with
          | `ForAll (qs', t') ->
             let (context', quantifiers_match) =
@@ -247,7 +247,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
           | t2 -> eqt (context, t1_inner, t2)
         end
 
-      | `Table (lt1, lt2, lt3)  -> (* checked again *)
+      | `Table (lt1, lt2, lt3)  ->
          begin match t2 with
          | `Table (rt1, rt2, rt3) ->
             let (context, r1) = eqt (context, lt1, rt1) in
@@ -257,7 +257,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
          | _ -> (context, false)
          end
       end
-    and eq_sessions (context, l, r)  = (* checked again *)
+    and eq_sessions (context, l, r)  =
       match (l,r) with
       | `Input (lt, _), `Input (rt, _)
         | `Output (lt, _), `Output (rt, _) ->
@@ -275,7 +275,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       let  (context, r1) = eq_field_envs (context, lfield_env, rfield_env) in
       let  (context, r2) = eq_row_vars (context, lrow_var, rrow_var) in
         (context, r1 && r2 && ldual=rdual)
-    and eq_presence (context, l, r) = (* checked again *)
+    and eq_presence (context, l, r) =
       match l, r with
       | `Absent, `Absent ->  (context, true)
       | `Present lt, `Present rt -> eqt (context, lt, rt)
@@ -285,7 +285,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
                                     |  `Var lv, `Var rv -> handle_variable `Presence lv rv context
                                     end
       | _, _ -> assert false
-    and eq_field_envs  (context, lfield_env, rfield_env) = (* checked again *)
+    and eq_field_envs  (context, lfield_env, rfield_env) =
       StringMap.fold (fun field lp (context, prev_eq)  ->
                            match StringMap.find_opt field rfield_env with
                            | Some rp -> let (context, eq) =
@@ -293,7 +293,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
                                             (context, eq && prev_eq)
                            | None -> (context, false)
                           ) lfield_env  (context, StringMap.cardinal lfield_env = StringMap.cardinal rfield_env)
-    and eq_row_vars (context, lpoint, rpoint) = (* checked again *)
+    and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | `Closed, `Closed ->  (context, true)
       | `Var lv, `Var rv ->   handle_variable `Row lv rv context
@@ -401,9 +401,9 @@ struct
 
     method! value : value -> (value * datatype * 'self_type) = fun orig ->
       match orig with
-        | `Constant c -> let (c, t, o) = o#constant c in `Constant c, t, o (* checked 19.06. *)
-        | `Variable x -> let (x, t, o) = o#var x in `Variable x, t, o (* checked 19.06. *)
-        | `Extend (fields, base) as orig -> (* checked 19.06. *)
+        | `Constant c -> let (c, t, o) = o#constant c in `Constant c, t, o
+        | `Variable x -> let (x, t, o) = o#var x in `Variable x, t, o
+        | `Extend (fields, base) as orig ->
             let (fields, field_types, o) = o#name_map (fun o -> o#value) fields in
             let (base, base_type, o) = o#option (fun o -> o#value) base in
 
@@ -457,9 +457,6 @@ struct
         | `TApp (v, ts)  ->
             let v, t, o = o#value v in
               begin try
-                  (* FIXME this expects recursive types to be cyclic
-                     (and breaks our convention about them not being so in the backend)
-                   we cannot just run the de-cycling afterwards*)
                 let t = Instantiate.apply_type t ts in
                   `TApp (v, ts), t, o
               with
@@ -494,7 +491,7 @@ struct
             ensure (is_pure_function f) "ApplyPure used for non-pure function" (`Value orig);
             `ApplyPure (f, args),  return_type ~overstep_quantifiers:false ft, o
 
-        | `Closure (f, z) -> (* checked 19.06. *)
+        | `Closure (f, z) ->
             let (f, ft, o) = o#var f in
             let (z, zt, o) = o#value z in
 
@@ -509,7 +506,7 @@ struct
             end;
             `Closure (f, z), ft, o
 
-        | `Coerce (v, t) -> (* checked 19.06. *)
+        | `Coerce (v, t) ->
             let v, vt, o = o#value v in
             if RecursionDetector.is_recursive vt || RecursionDetector.is_recursive t then
               begin
@@ -527,11 +524,11 @@ struct
     method! tail_computation :
       tail_computation -> (tail_computation * datatype * 'self_type) = fun orig ->
       match orig with
-        | `Return v -> (* checked 19.06. *)
+        | `Return v ->
             let v, t, o = o#value v in
               `Return v, t, o
 
-        | `Apply (f, args) -> (* checked 19.06. *)
+        | `Apply (f, args) ->
             let f, ft, o = o#value f in
             Debug.print ("Function type in appl:" ^ string_of_datatype ft);
             let args, argtypes, o = o#list (fun o -> o#value) args in
