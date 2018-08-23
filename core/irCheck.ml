@@ -728,7 +728,7 @@ struct
         let is_recursive = match fundef with
           | `Rec _ -> true
           | _ -> false in
-        let missmatch () = raise_ir_type_error "Quantifier missmatch in function def" (`Binding fundef) in
+        let mismatch () = raise_ir_type_error "Quantifier mismatch in function def" (`Binding fundef) in
         let check_types subst expected_returntype body_actual_type  =
           check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type in
         let rec handle_foralls subst funtype tyvars body_actual_type = match funtype with
@@ -738,18 +738,17 @@ struct
             if tyvars = [] then
               check_types subst rt body_actual_type
             else
-              missmatch ()
-          | _ -> missmatch ()
+              mismatch ()
+          | _ -> mismatch ()
         and handle_unboxed_foralls subst quantifier_list rest_expected_type tyvars body_actual_type = match quantifier_list, tyvars with
           | [], _ -> handle_foralls subst rest_expected_type tyvars body_actual_type
-          | (lid, lsubkind, _lmtv) :: lqs, (rid, rsubkind, _rmtv) :: rqs ->
-              (* TODO check mtv here *)
-              if lid = rid && lsubkind = rsubkind then
-                let subst' = IntMap.add lid rid subst in
+          | lq :: lqs, rq :: rqs ->
+              if Types.kind_of_quantifier lq = Types.kind_of_quantifier rq then
+                let subst' = IntMap.add (Types.var_of_quantifier lq) (Types.var_of_quantifier rq) subst in
                 handle_unboxed_foralls subst' lqs rest_expected_type rqs body_actual_type
               else
-                missmatch ()
-          | _ -> missmatch () in
+                mismatch ()
+          | _ -> mismatch () in
         let quantifiers_as_type_args = List.map Types.type_arg_of_quantifier tyvars in
         let fully_applied_function_expected = Instantiate.apply_type expected_overall_funtype quantifiers_as_type_args in
         let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
