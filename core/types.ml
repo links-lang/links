@@ -2374,8 +2374,13 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
     show_datatype (DecycleTypes.datatype t)
 
 let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
-  if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
-  Print.row "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row
+  if Settings.get_value Basicsettings.print_types_pretty then
+    begin
+    if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
+    Print.row "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row
+    end
+  else
+    show_row (DecycleTypes.row row)
 
 let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
