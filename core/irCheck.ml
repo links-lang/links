@@ -323,7 +323,7 @@ let check_eq_type_lists = fun ctx exptl actl ->
   (* if typecheck_ir then
    *   begin *)
     if List.length exptl <> List.length actl then
-      raise_ir_type_error "Arity missmatch" `None
+      raise_ir_type_error "Arity mismatch" `None
     else
       List.iter2 (fun  et at ->
           check_eq_types ctx et at
@@ -388,6 +388,9 @@ struct
 
     method add_typevar_to_context id kind = {< type_var_env = Env.bind type_var_env (id, kind)  >}
     method remove_typevar_to_context id  = {< type_var_env = Env.unbind type_var_env id >}
+
+    method add_function_closure_binder f binder = {< closure_def_env = Env.bind closure_def_env (f, binder) >}
+    method remove_function_closure_binder f = {< closure_def_env = Env.unbind closure_def_env f  >}
 
     method check_eq_types t1 t2 = check_eq_types (o#extract_type_equality_context ()) t1 t2
 
@@ -795,6 +798,8 @@ struct
 
                 let whole_function_expected = Var.type_of_binder f in
                 let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
+                let o = o#add_function_closure_binder (Var.var_of_binder f) z in
+                (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                 let o = OptionUtils.opt_app o#remove_binder o z in
                 let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
@@ -831,6 +836,8 @@ struct
 
                   let whole_function_expected = Var.type_of_binder f in
                   let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
+                  let o = o#add_function_closure_binder (Var.var_of_binder f) z in
+                  (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                   let o = OptionUtils.opt_app o#remove_binder o z in
                   let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
@@ -869,11 +876,18 @@ struct
 
     method remove_binding : binding -> 'self_type = function
       | `Let (x, _) -> o#remove_binder x
-      | `Fun  fundef -> o#remove_binder (Ir.binder_of_fun_def fundef)
+      | `Fun  fundef ->
+        let f = Var.var_of_binder (Ir.binder_of_fun_def fundef) in
+        let o = o#remove_function_closure_binder f in
+        o#remove_binder (Ir.binder_of_fun_def fundef)
       | `Rec fundefs ->
         List.fold_left
                 (fun o fundef  ->
-                   o#remove_binder (Ir.binder_of_fun_def fundef))
+                  let binder = Ir.binder_of_fun_def fundef in
+                  let f = Var.var_of_binder binder in
+                  let o = o#remove_binder binder in
+                  o#remove_function_closure_binder f
+                   )
                 o
                 fundefs
       | `Alien (binder, _, _) -> o#remove_binder binder
