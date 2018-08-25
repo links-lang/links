@@ -1,5 +1,9 @@
 open Utility
+open Types
 open Sugartypes
+open LensHelpers
+open LensFDHelpers
+open LensRecordHelpers
 
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 
@@ -12,7 +16,7 @@ let dodgey_type_isomorphism = Basicsettings.TypeSugar.dodgey_type_isomorphism
 module Env = Env.String
 
 module Utils : sig
-  val dummy_source_name : unit -> name
+  val dummy_source_name : unit -> Operators.name
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string ->
                     (Types.type_arg list * Types.datatype)
@@ -89,6 +93,14 @@ struct
     | `Offer _
     | `CP _
     (* | `Fork _ *)
+    | `LensLit _
+    | `LensKeysLit _
+    | `LensFunDepsLit _
+    | `LensDropLit _
+    | `LensSelectLit _
+    | `LensJoinLit _
+    | `LensGetLit _
+    | `LensPutLit _
     | `DoOperation _
     | `DBDelete _
     | `DBInsert _
@@ -1455,7 +1467,8 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
                   List.nth ps i
               | `Nil | `Cons _ | `List _ | `Record _ | `Variant _ | `Negative _ | `Effect _ -> assert false in
           let fields =
-            StringMap.fold
+            StringMap.fold(* true if the row variable is dualised *)
+
               (fun name ->
                  function
                  | `Present t ->
@@ -1648,6 +1661,7 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
       | `Function _
       | `Lolli _
       | `Table _
+      | `Lens _
       (* TODO: do we need to do something special for session types? *)
       | #Types.session_type
        (* TODO: expand applications? *)
@@ -2338,6 +2352,58 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               `Table (read_row, write_row, needed_row),
               merge_usages [usages tname; usages db]
         | `TableLit _ -> assert false
+        | `LensLit (table, _) ->
+           let table = tc table in
+           let cols = LensTypes.sort_cols_of_table "" (typ table) in
+           let lens_sort = (FunDepSet.empty, None, cols) in
+           `LensLit(erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
+        | `LensKeysLit (table, keys, _) ->
+           let table = tc table in
+           let cols = LensTypes.sort_cols_of_table "" (typ table) in 
+           let keys = LensTypes.cols_of_phrase keys in 
+           let fds = FunDepSet.key_fds keys (LensColList.present_aliases cols) in
+           let lens_sort = (fds, None, cols) in
+           `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
+        | `LensFunDepsLit (table, fds, _) ->
+           let table = tc table in
+           let cols = LensTypes.sort_cols_of_table "" (typ table) in 
+           let fds = LensHelpersCorrect.get_fds fds cols in
+           let lens_sort = (fds, None, cols) in
+           `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
+        | `LensDropLit (lens, drop, key, default, _) ->
+           let _ = LensHelpers.ensure_lenses_enabled () in
+           let lens = tc lens
+           and default = tc default in
+           let sort = LensTypes.drop_lens_sort (LensType.sort (typ lens)) (ColSet.singleton drop) (ColSet.singleton key) in
+             `LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens (sort), merge_usages [usages lens; usages default]
+        | `LensSelectLit (lens, predicate, _) ->
+           let _ = LensHelpers.ensure_lenses_enabled () in
+           let lens = tc lens
+           (* and predicate = tc predicate *) in
+           (* let _ = LensQueryHelpers.calculate_predicate predicate lens in *)
+           let lens_sort = LensType.sort (typ lens) in
+               `LensSelectLit(erase lens, predicate, Some (lens_sort)), `Lens(lens_sort), merge_usages [usages lens]
+        | `LensJoinLit (lens1, lens2, on, left, right, _) ->
+           let _ = LensHelpers.ensure_lenses_enabled () in
+           let lens1 = tc lens1 
+           and lens2 = tc lens2 in
+           let sort1 = LensType.sort (typ lens1)
+           and sort2 = LensType.sort (typ lens2) in
+           let sort, _ = LensHelpers.join_lens_sort sort1 sort2 (LensTypes.cols_of_phrase on) in
+               `LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens(sort), merge_usages [usages lens1; usages lens2]
+        | `LensGetLit (lens, _) ->
+           let _ = LensHelpers.ensure_lenses_enabled () in
+           let lens = tc lens in
+           let sort = LensType.sort (typ lens) in
+           let trowtype = LensRecordHelpers.get_lens_sort_row_type sort in
+           `LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
+        | `LensPutLit (lens, data, _) ->
+           let _ = LensHelpers.ensure_lenses_enabled () in
+           let lens = tc lens in 
+           let sort = LensType.sort (typ lens) in
+           let trowtype = LensRecordHelpers.get_lens_sort_row_type sort in
+           let data = tc data in
+           `LensPutLit (erase lens, erase data, Some trowtype), Types.make_tuple_type [], merge_usages [usages lens; usages data]
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in
@@ -2619,7 +2685,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and p = tc p
             and rettyp = Types.fresh_type_variable (`Any, `Any) in
               unify ~handle:Gripers.unary_apply
-                ((Sugartypes.string_of_unary_op op, opt),
+                ((Operators.string_of_unary_op op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ p], context.effect_row, rettyp)));
               `UnaryAppl ((tyargs, op), erase p), rettyp, merge_usages [usages p; op_usage]
         | `InfixAppl ((_, op), l, r) ->
@@ -2628,7 +2694,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and r = tc r
             and rettyp = Types.fresh_type_variable (`Any, `Any) in
               unify ~handle:Gripers.infix_apply
-                ((Sugartypes.string_of_binop op, opt),
+                ((Operators.string_of_binop op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ l; typ r],
                                     context.effect_row, rettyp)));
               `InfixAppl ((tyargs, op), erase l, erase r), rettyp, merge_usages [usages l; usages r; op_usages]

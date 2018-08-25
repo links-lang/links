@@ -161,11 +161,13 @@ let count_newlines = StringUtils.count '\n'
 let keywords = [
  "alien"    , ALIEN;
  "as"       , AS;
+ "by"       , BY;
  "case"     , CASE;
  "client"   , CLIENT;
  "database" , DATABASE;
  "default"  , DEFAULT;
  "delete"   , DELETE;
+ "determined", DETERMINED;
  "do"       , DOOP;
  "else"     , ELSE;
  "escape"   , ESCAPE;
@@ -179,6 +181,13 @@ let keywords = [
  "handler"  , HANDLER;
  "if"       , IF;
  "in"       , IN;
+ "left"     , LEFT;
+ "lens"     , LENS;
+ "lensdrop" , LENSDROP;
+ "lensget"  , LENSGET;
+ "lensput"  , LENSPUT;
+ "lensselect", LENSSELECT;
+ "lensjoin" , LENSJOIN;
  "open"     , OPEN;
  "yields"   , YIELDS;
  "insert"   , INSERT;
@@ -188,6 +197,7 @@ let keywords = [
  "native"   , NATIVE;
  "nu"       , NU;
  "offer"    , OFFER;
+ "on"       , ON;
  "orderby"  , ORDERBY;
  "op"       , OP;
  "open"     , OPEN;
@@ -198,6 +208,7 @@ let keywords = [
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "returning", RETURNING;
+ "right"    , RIGHT;
  "select"   , SELECT;
  "server"   , SERVER;
  "set"      , SET;

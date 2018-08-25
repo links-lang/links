@@ -1,5 +1,6 @@
 open Utility
 open Types
+open LensRecordHelpers
 
 module FieldEnv = Utility.StringMap
 
@@ -66,6 +67,7 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
         | `Effect row
         | `Variant row -> isgv row
         | `Table (f, d, r) -> isg f && isg d && isg r
+        | `Lens _sort -> true (* does not contain type variables *)
         | `Alias (_, t) -> is_guarded bound_vars var t
         | `Application (_, ts) ->
             (* don't treat abstract type constructors as guards *)
@@ -132,6 +134,7 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
         | `Effect row
         | `Variant row -> isnr row
         | `Table (f, d, r) -> isn f || isn d || isn r
+        | `Lens sort -> is_negative_lens_sort bound_vars var sort
         | `Alias (_, t) -> isn t
         | `Application (_, ts) ->
             List.exists (is_negative_type_arg bound_vars var) ts
@@ -169,6 +172,10 @@ and is_negative_type_arg : TypeVarSet.t -> int -> type_arg -> bool =
       | `Type t -> is_negative bound_vars var t
       | `Row r -> is_negative_row bound_vars var r
       | `Presence _ -> false
+and is_negative_lens_sort : TypeVarSet.t -> int -> lens_sort -> bool = 
+  fun bound_vars var sort ->
+    let cols = LensSort.cols sort in
+    List.exists (LensCol.typ ->- is_positive bound_vars var) cols
 
 and is_positive : TypeVarSet.t -> int -> datatype -> bool =
   fun bound_vars var t ->
@@ -196,6 +203,7 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `Effect row
         | `Variant row -> ispr row
         | `Table (f, d, r) -> isp f || isp d || isp r
+        | `Lens sort -> is_positive_lens_sort bound_vars var sort
         | `Alias (_, t) -> isp t
         | `Application (_, ts) ->
             List.exists (is_positive_type_arg bound_vars var) ts
@@ -241,6 +249,10 @@ and is_positive_type_arg : TypeVarSet.t -> int -> type_arg -> bool =
       | `Type t -> is_positive bound_vars var t
       | `Row r -> is_positive_row bound_vars var r
       | `Presence f -> is_positive_presence bound_vars var f
+and is_positive_lens_sort : TypeVarSet.t -> int -> lens_sort -> bool =
+  fun bound_vars var sort -> 
+    let cols = LensSort.cols sort in
+    List.exists (LensCol.typ ->- is_positive bound_vars var) cols
 
 let is_guarded = is_guarded TypeVarSet.empty
 let is_guarded_row = is_guarded_row false TypeVarSet.empty

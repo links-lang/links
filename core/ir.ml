@@ -75,7 +75,13 @@ and binding =
   | `Module of (string * binding list option) ]
 and special =
   [ `Wrong of Types.datatype
-  | `Database of value
+  | `Database of value 
+  | `Lens of value * Types.lens_sort
+  | `LensDrop of value * string * string * value * Types.lens_sort
+  | `LensSelect of value * Sugartypes.phrase * Types.lens_sort
+  | `LensJoin of value * value * string list * Sugartypes.phrase * Sugartypes.phrase * Types.lens_sort
+  | `LensGet of value * Types.datatype
+  | `LensPut of value * value * Types.datatype
   | `Table of (value * value * value * (Types.datatype * Types.datatype * Types.datatype))
   | `Query of (value * value) option * computation * Types.datatype
   | `Update of (binder * value) * computation option * computation
@@ -123,7 +129,7 @@ let rec is_atom =
     | `Constant (`Char _)
     | `Constant (`Float _)
     | `Variable _ -> true
-(*
+        (*
   This can only be an atom if
   Erase is just an upcast, and our language
   is properly parametric.

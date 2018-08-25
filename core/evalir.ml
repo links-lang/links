@@ -4,6 +4,8 @@ open Lwt
 open Utility
 open Proc
 open Pervasives
+open Types
+open LensHelpers
 
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
@@ -590,6 +592,55 @@ struct
     function
     | `Wrong _                    -> raise Exceptions.Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
+    | `Lens (table, sort) -> 
+      begin
+          let typ = LensRecordHelpers.get_lens_sort_row_type sort in
+          match value env table, (TypeUtils.concrete_type typ) with 
+            | `Table ((_, tableName, _, _) as tinfo), `Record _row ->
+                 apply_cont cont env (`Lens (tinfo, LensRecordHelpers.set_lens_sort_table_name sort tableName))
+            | `List records, `Record _row -> apply_cont cont env (`LensMem (`List records, sort))
+            | _ -> failwith ("Unsupported underlying lens value.")
+      end
+    | `LensDrop (lens, drop, key, def, _sort) -> 
+        let _ = LensHelpers.ensure_lenses_enabled () in
+        let lens = value env lens in 
+        let def = value env def in
+        let sort = LensTypes.drop_lens_sort (Lens.sort lens) (ColSet.singleton drop) (ColSet.singleton key) in
+          apply_cont cont env (`LensDrop (lens, drop, key, def, sort))
+    | `LensSelect (lens, pred, _sort) ->
+        let _ = LensHelpers.ensure_lenses_enabled () in
+        let lens = value env lens in
+        let pred = LensQueryHelpers.lens_phrase_of_phrase pred in
+        let sort = LensTypes.select_lens_sort (Lens.sort lens) pred in
+          apply_cont cont env (`LensSelect (lens, pred, sort))
+    | `LensJoin (lens1, lens2, on, left, right, _sort) ->
+        let _ = LensHelpers.ensure_lenses_enabled () in
+        let lens1 = value env lens1 in
+        let lens2 = value env lens2 in
+        let left = LensQueryHelpers.lens_phrase_of_phrase left in
+        let right = LensQueryHelpers.lens_phrase_of_phrase right in
+        let lens1, lens2 = if LensHelpers.join_lens_should_swap (Lens.sort lens1) (Lens.sort lens2) on then
+          lens2, lens1
+        else
+          lens1, lens2 in
+        let sort, on = LensHelpers.join_lens_sort (Lens.sort lens1) (Lens.sort lens2) on in
+         apply_cont cont env (`LensJoin (lens1, lens2, on, left, right, sort))
+    | `LensGet (lens, _rtype) ->
+        let _ = LensHelpers.ensure_lenses_enabled () in
+        let lens = value env lens in
+        (* let callfn = fun fnptr -> fnptr in *)
+        let res = LensHelpers.lens_get lens () in
+          apply_cont cont env res
+    | `LensPut (lens, data, _rtype) ->
+        let _ = LensHelpers.ensure_lenses_enabled () in
+        let lens = value env lens in
+        let data = value env data in
+        let classic = Settings.get_value Basicsettings.RelationalLenses.classic_lenses in
+        if classic then
+            LensHelpersClassic.lens_put lens data 
+        else
+            LensHelpersCorrect.lens_put lens data;
+        apply_cont cont env (Value.box_unit ()) 
     | `Table (db, name, keys, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have

@@ -1,44 +1,7 @@
+(*pp deriving *)
+open Operators
+
 (** The syntax tree created by the parser. *)
-
-type name = string [@@deriving show]
-
-(* The operators named here are the ones that it is difficult or
-   impossible to define as "user" infix operators:
-
-      - -.  are both infix and prefix
-     && ||  have special evaluation
-     ::     is also used in patterns
-     ~      triggers a lexer state switch
-*)
-type unary_op = [
-| `Minus
-| `FloatMinus
-| `Name of name
-]
-and regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
-    [@@deriving show]
-type logical_binop = [`And | `Or ]
-    [@@deriving show]
-type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name ]
-    [@@deriving show]
-type operator = [ unary_op | binop | `Project of name ]
-    [@@deriving show]
-
-let string_of_unary_op =
-  function
-    | `Minus -> "-"
-    | `FloatMinus -> ".-"
-    | `Name name -> name
-
-let string_of_binop =
-  function
-    | `Minus -> "-"
-    | `FloatMinus -> ".-"
-    | `RegexMatch _ -> "<some regex nonsense>"
-    | `And -> "&&"
-    | `Or -> "||"
-    | `Cons -> "::"
-    | `Name name -> name
 
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
@@ -218,6 +181,7 @@ and iterpatt = [
 ]
 and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
 and declared_linearity = [ `Lin | `Unl ]
+and fn_dep = string * string
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
@@ -259,6 +223,16 @@ and phrasenode = [
 | `DBDelete         of pattern * phrase * phrase option
 | `DBInsert         of phrase * name list * phrase * phrase option
 | `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
+| `LensLit          of phrase * Types.lens_sort option
+(* the lens keys lit is a literal that takes an expression and is converted into a LensLit
+   with the corresponding table keys marked in the lens_sort *)
+| `LensKeysLit      of phrase * phrase * Types.lens_sort option
+| `LensFunDepsLit   of phrase * (string list * string list) list * Types.lens_sort option
+| `LensDropLit      of phrase * string * string * phrase * Types.lens_sort option
+| `LensSelectLit    of phrase * phrase * Types.lens_sort option 
+| `LensJoinLit      of phrase * phrase * phrase * phrase * phrase * Types.lens_sort option
+| `LensGetLit       of phrase * Types.datatype option
+| `LensPutLit       of phrase * phrase * Types.datatype option
 | `Xml              of name * (name * (phrase list)) list * phrase option * phrase list
 | `TextNode         of string
 | `Formlet          of phrase * phrase
@@ -409,6 +383,17 @@ struct
 
     | `ListLit (ps, _)
     | `TupleLit ps -> union_map phrase ps
+
+    | `LensLit (l, _) -> phrase l
+    (* this should be converted to `LensLit during typeSugar *)
+    | `LensFunDepsLit _ -> assert false 
+    | `LensKeysLit (l, _, _) -> phrase l
+    | `LensSelectLit (l, _, _) -> phrase l
+    | `LensDropLit (l, _, _, _, _) -> phrase l
+    | `LensJoinLit (l1, l2, _, _, _, _) -> union_all [phrase l1; phrase l2]
+
+    | `LensGetLit (l, _) -> phrase l
+    | `LensPutLit (l, data, _) -> union_all [phrase l; phrase data]
 
     | `Query (None, p, _) -> phrase p
     | `Query (Some (limit, offset), p, _) -> union_all [phrase limit; phrase offset; phrase p]

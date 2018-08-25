@@ -5,7 +5,7 @@ BUILD_DIR:=$(ROOT)/_build
 BUILD=dune build
 FLAGS=--build-dir=$(BUILD_DIR) --profile=development
 
-.PHONY: build-dev-nodb build-dev nc native clean tests install uninstall clean
+.PHONY: build-dev-nodb build-dev nc native clean tests unit install uninstall clean
 .DEFAULT_GOAL: nc
 
 nc: build-dev-all create-startup-script
@@ -39,6 +39,9 @@ uninstall:
 
 tests: links
 	@OCAMLRUNPARAM="" ./run-tests
+
+unit: 
+	dune build -p links-postgresql,links-unit @install
 
 clean:
 	dune clean

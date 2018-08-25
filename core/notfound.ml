@@ -53,6 +53,15 @@ end
 module List =
 struct
   include List
+
+  let find2 p l =
+    find p l
+
+  (* add for old OCaml < 4.0.5 *)
+  let find_opt p l =
+      try Some (find p l)
+      with Not_found -> None
+
   let find p l =
     try find p l
     with Not_found -> not_found "List.find" "<matching predicate>"
