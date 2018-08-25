@@ -1,4 +1,5 @@
 open Sugartypes
+open Operators 
 
 (*
   These functions are contravariant in the object type so if
@@ -74,6 +75,7 @@ object ('self)
   method sugar_datatype   : datatype -> 'self * datatype
   method datatype         : Types.datatype -> 'self * Types.datatype
   method datatype'        : datatype' -> 'self * datatype'
+  method lens_sort        : Types.lens_sort -> 'self * Types.lens_sort
   method row              : Types.row -> 'self * Types.row
 
   method patternnode     : patternnode -> 'self * patternnode

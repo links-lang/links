@@ -1,0 +1,13 @@
+#!/bin/bash
+
+make unit
+
+if [ $? -eq 0 ]; then
+	clear
+	echo "Compilation was successful, running tests."
+	./_build/default/unit/unitTests.exe -runner sequential $@
+else
+	echo "Build failed, not running tests."
+	exit -1
+fi
+

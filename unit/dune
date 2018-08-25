@@ -1,0 +1,14 @@
+(executable
+  (name unitTests)
+  (package links-unit)
+  (public_name links-unit)
+  (modes native)
+  (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread)
+  (link_flags -linkall)
+  (libraries oUnit threads dynlink links links-postgresql))
+
+
+(alias
+  (name runtest)
+  (deps unitTests.exe)
+  (action (bash ${<})))

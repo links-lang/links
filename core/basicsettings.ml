@@ -129,6 +129,12 @@ module Shredding = struct
   let shredding = Settings.add_bool("shredding", false, `User)
 end
 
+module RelationalLenses = 
+struct
+    let relational_lenses = Settings.add_bool("relational_lenses", false, `User)
+    let classic_lenses = Settings.add_bool("relational_lenses_classic", false, `User)
+end
+
 
 (** App server stuff *)
 module Appserver = struct

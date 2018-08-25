@@ -8,6 +8,9 @@ module BS = Basicsettings
 module Eval = Evalir.Eval(Webserver)
 module Webif = Webif.WebIf(Webserver)
 
+(** Ensure the settings were parsed correctly *)
+let _ = ParseSettings.validate_settings ()
+
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
 

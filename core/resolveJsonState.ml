@@ -28,6 +28,11 @@ let rec extract_json_values : Value.t -> (handler_id_set * (Value.chan list)) =
         | None     -> empty_state
         | Some fvs -> extract_json_values fvs
     end
+    
+  (* Handle lenses similar to primitive values *)
+  | `Lens _ | `LensMem _ | `LensSelect _ 
+  | `LensDrop _ | `LensJoin _ -> empty_state
+    
   | #Value.primitive_value as p -> (extract_from_primitive p, [])
   | `Variant (_label, value) -> extract_json_values value
   | `Record fields ->

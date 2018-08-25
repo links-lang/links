@@ -70,6 +70,7 @@ let instantiate_datatype : (datatype IntMap.t * row IntMap.t * field_spec IntMap
           | `Select fields -> `Select (inst_row rec_env fields)
           | `Choice fields -> `Choice (inst_row rec_env fields)
           | `Dual s -> Types.dual_type (inst rec_env s)
+          | `Lens s -> `Lens s
           | `End -> `End
 
     and inst_presence : inst_env -> field_spec -> field_spec = fun rec_env ->

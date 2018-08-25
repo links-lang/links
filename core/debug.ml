@@ -3,12 +3,16 @@ let debugging_enabled = Basicsettings.debugging_enabled
 
 (** print a debug message if debugging is enabled *)
 let print message =
-  (if Settings.get_value(debugging_enabled) then prerr_endline message; flush stderr)
+  (if Settings.get_value(debugging_enabled) then prerr_endline message)
+
+(** print a debug message if debugging is enabled *)
+let print_no_lf message =
+  (if Settings.get_value(debugging_enabled) then prerr_string message)
 
 (** print a debug message if debugging is enabled; [message] is a lazy expr. *)
 let print_l message =
   (if Settings.get_value(debugging_enabled) then
-     prerr_endline(Lazy.force message); flush stderr)
+     prerr_endline(Lazy.force message))
 
 (** Print a formatted debugging message if debugging is enabled *)
 let f fmt = Printf.kprintf print fmt
@@ -34,3 +38,11 @@ let debug_time msg f =
     print (msg ^" time: " ^ string_of_int (Utility.time_milliseconds() - start_time));
     raw_result
   else f ();;
+
+let debug_time_out f (withtime : int -> unit) = 
+  let start_time = Utility.time_milliseconds() in
+  let raw_result = f () in
+  let time = Utility.time_milliseconds() - start_time in
+  let _ = withtime time in
+  raw_result
+  
