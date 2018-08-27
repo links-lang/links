@@ -5,6 +5,16 @@ make unit
 if [ $? -eq 0 ]; then
 	clear
 	echo "Compilation was successful, running tests."
+	DBCONF="tests/database"
+    if [[ ! -e "$DBCONF/config" ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default database test configuration $DBCONF/config"
+      echo -e  "from $DBCONF/config.sample"
+      echo -e  "Please customize to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp "$DBCONF/config.sample" "$DBCONF/config"
+    fi
+	export LINKS_CONFIG="$DBCONF"
 	./_build/default/unit/unitTests.exe -runner sequential $@
 else
 	echo "Build failed, not running tests."
