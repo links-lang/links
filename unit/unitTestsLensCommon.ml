@@ -7,16 +7,17 @@ open LensFDHelpers
 open LensHelpers
 open LensSetOperations
 
+(* ensure links configuration is loaded *)
+let _ = OptionUtils.opt_iter (Settings.load_file false) Basicsettings.config_file_path
 
 let display_table_query_opt = Conf.make_bool "display_table_query" false "Show queries to take and manipulate tables."
 let leave_tables_opt = Conf.make_bool "leave_tables" false "Do not delete tables after run." 
-let database_args_opt = Conf.make_string "database_args_host" "links:localhost:5432::links" "Database connection args." 
+let database_args_opt = Conf.make_string "database_args" ("links:" ^ Settings.get_value Basicsettings.database_args) "Database connection args." 
 let verbose_opt = Conf.make_bool "v" false "Print verbose information."
 let classic_opt = Conf.make_bool "classic_lenses" false "Use non incremental relational lenses."
 let benchmark_opt = Conf.make_bool "benchmark" false "Benchmark operations."
 let set_n_opt = Conf.make_int "set_n" 0 "Override n." 
 let set_upto_opt = Conf.make_int "set_upto" 10 "Override upto."
-
 
 module LensTestHelpers = struct
 
