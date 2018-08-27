@@ -10,7 +10,7 @@ open LensSetOperations
 
 let display_table_query_opt = Conf.make_bool "display_table_query" false "Show queries to take and manipulate tables."
 let leave_tables_opt = Conf.make_bool "leave_tables" false "Do not delete tables after run." 
-let db_host_opt = Conf.make_string "db_host" "localhost" "Database server hostname." 
+let database_args_opt = Conf.make_string "database_args_host" "links:localhost:5432::links" "Database connection args." 
 let verbose_opt = Conf.make_bool "v" false "Print verbose information."
 let classic_opt = Conf.make_bool "classic_lenses" false "Use non incremental relational lenses."
 let benchmark_opt = Conf.make_bool "benchmark" false "Benchmark operations."
@@ -22,7 +22,8 @@ module LensTestHelpers = struct
 
     let get_db test_ctx = 
         (* host port dbname user pw *) 
-        new pg_database (db_host_opt test_ctx) "5432" "links" "links" "links"
+        let (conn,_) = get_pg_database_by_string (database_args_opt test_ctx) in
+        conn
 
     (** Only print when **)
     let fmt_std_v test_ctx (fn : Format.formatter -> unit) =
