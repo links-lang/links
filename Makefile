@@ -41,7 +41,7 @@ tests: links
 	@OCAMLRUNPARAM="" ./run-tests
 
 unit: 
-	dune build -p links-postgresql,links-unit @install
+	dune build -p links-postgresql,links,links-unit @install
 
 clean:
 	dune clean
