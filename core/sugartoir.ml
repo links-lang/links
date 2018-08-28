@@ -157,9 +157,9 @@ sig
 
   val lens_drop_handle : value sem * string * string * value sem * Types.lens_sort -> tail_computation sem
 
-  val lens_select_handle : value sem * Sugartypes.phrase * Types.lens_sort -> tail_computation sem
+  val lens_select_handle : value sem * Types.lens_phrase * Types.lens_sort -> tail_computation sem
 
-  val lens_join_handle : value sem * value sem * string list * Sugartypes.phrase * Sugartypes.phrase * Types.lens_sort -> tail_computation sem
+  val lens_join_handle : value sem * value sem * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort -> tail_computation sem
 
   val lens_get : value sem * datatype -> tail_computation sem
 
@@ -923,12 +923,15 @@ struct
           | `LensSelectLit (lens, pred, Some t) ->
               let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
+              let pred = LensQueryHelpers.lens_phrase_of_phrase pred in 
                 I.lens_select_handle (lens, pred, t)
           | `LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let _ = LensHelpers.ensure_lenses_enabled () in
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
               let on = LensTypes.cols_of_phrase on in
+              let left = LensQueryHelpers.lens_phrase_of_phrase left in
+              let right = LensQueryHelpers.lens_phrase_of_phrase right in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
           | `LensGetLit (lens, Some t) ->
               let _ = LensHelpers.ensure_lenses_enabled () in

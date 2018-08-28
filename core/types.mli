@@ -101,28 +101,6 @@ type lens_phrase =
   ]
     [@@deriving show]
         
-module ColSet : sig
-    include Utility.Set with type elt = string
-
-    val pp_pretty : Format.formatter -> t -> unit
-end
-
-type colset = ColSet.t
-    [@@deriving show]
-
-module FunDep : sig 
-    type t = colset * colset 
-    val compare : t -> t -> int
-end
-type fundep = FunDep.t
-    [@@deriving show]
-
-module FunDepSet : sig 
-    include Utility.Set with type elt = fundep
-end
-
-type fundepset = FunDepSet.t
-    [@@deriving show]
 (* End Lenses *)
 
 type typ =
@@ -140,7 +118,7 @@ type typ =
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
-and lens_sort      = fundepset * lens_phrase option * (lens_col list)
+and lens_sort      = LensUtility.fundepset * lens_phrase option * (lens_col list)
 and lens_col       = {
   table : string;
   name : string; 

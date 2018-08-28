@@ -2,9 +2,9 @@ open Webserver_types
 open Ir
 open Lwt
 open Utility
+open LensUtility
 open Proc
 open Pervasives
-open Types
 open LensHelpers
 
 let lookup_fun = Tables.lookup Tables.fun_defs
@@ -610,15 +610,12 @@ struct
     | `LensSelect (lens, pred, _sort) ->
         let _ = LensHelpers.ensure_lenses_enabled () in
         let lens = value env lens in
-        let pred = LensQueryHelpers.lens_phrase_of_phrase pred in
         let sort = LensTypes.select_lens_sort (Lens.sort lens) pred in
           apply_cont cont env (`LensSelect (lens, pred, sort))
     | `LensJoin (lens1, lens2, on, left, right, _sort) ->
         let _ = LensHelpers.ensure_lenses_enabled () in
         let lens1 = value env lens1 in
         let lens2 = value env lens2 in
-        let left = LensQueryHelpers.lens_phrase_of_phrase left in
-        let right = LensQueryHelpers.lens_phrase_of_phrase right in
         let lens1, lens2 = if LensHelpers.join_lens_should_swap (Lens.sort lens1) (Lens.sort lens2) on then
           lens2, lens1
         else

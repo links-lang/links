@@ -50,7 +50,7 @@ let dp = Sugartypes.dummy_position
   It roughly corresponds to [[qs]].
 *)
 let results :  Types.row ->
-  (Sugartypes.phrase list * Operators.name list * Types.datatype list) -> Sugartypes.phrase =
+  (Sugartypes.phrase list * Sugartypes.name list * Types.datatype list) -> Sugartypes.phrase =
   fun eff (es, xs, ts) ->
     (* let results_type = Types.make_tuple_type ts in *)
     let rec results =
@@ -111,7 +111,7 @@ object (o : 'self_type)
   *)
   method qualifiers : Sugartypes.iterpatt list ->
     'self_type *
-      (Sugartypes.phrase list * Sugartypes.pattern list * Operators.name list *
+      (Sugartypes.phrase list * Sugartypes.pattern list * Sugartypes.name list *
          Types.datatype list) =
     fun qs ->
       let o, (es, ps, xs, ts) =

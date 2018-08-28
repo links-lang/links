@@ -1,9 +1,8 @@
-open Types
 open Value
 open Utility
+open LensUtility
 open LensQueryHelpers
 open LensHelpers
-open LensFDHelpers
 open LensSetOperations
 open LensRecordHelpers
 open LensSetOperations.SortedRecords
@@ -42,7 +41,7 @@ let matches_change changes =
     Phrase.fold_or <| List.map is_changed changes
 
 
-let relational_update (fds : Types.fundepset) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
+let relational_update (fds : fundepset) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
     let fds = fds in
     let changelist = calculate_fd_changelist fds changedata in
     let changes = List.map (fun ((cols_l,_cols_r),_l) -> 
@@ -273,7 +272,7 @@ let apply_delta (t : Value.table) (data : SortedRecords.recs) =
         end;
     ()
 
-let get_fds (fds : (string list * string list) list) (cols : Types.lens_col list) : Types.fundepset =
+let get_fds (fds : (string list * string list) list) (cols : Types.lens_col list) : fundepset =
     let check_col xs = List.iter (fun x -> if not (LensCol.exists cols x) then failwith ("The column " ^ x ^ " does not exist.")) xs in
     List.iter (fun (left, right) -> check_col left; check_col right) fds;
     let fd_of (left, right) = ColSet.of_list left, ColSet.of_list right in
