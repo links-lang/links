@@ -3,7 +3,7 @@ open Pg_database
 open Types
 open Value
 open Utility
-open LensFDHelpers
+open LensUtility
 open LensHelpers
 open LensSetOperations
 
@@ -100,7 +100,7 @@ module LensTestHelpers = struct
     let drop_lens l drop key default = 
         let sort = Lens.sort l in
         let (fds, cond, r) = sort in
-        let fds = LensFDHelpers.FunDepSet.remove_defines fds (ColSet.singleton drop) in
+        let fds = FunDepSet.remove_defines fds (ColSet.singleton drop) in
         let r = LensRecordHelpers.remove_record_type_column drop r in
         `LensDrop (l, drop, key, default, (fds, cond, r))
 

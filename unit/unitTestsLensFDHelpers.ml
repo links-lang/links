@@ -5,6 +5,7 @@ open OUnit2
 open Types
 open Value
 open Utility
+open LensUtility
 open LensFDHelpers
 open LensHelpers
 
