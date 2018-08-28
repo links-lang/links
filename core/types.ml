@@ -2282,6 +2282,10 @@ let string_of_environment = show_environment
 let string_of_typing_environment { var_env = env; _ }
   = string_of_environment env
 
+let make_effect_row_flexible : typing_environment -> typing_environment = fun env ->
+  let flexible_effect_row = make_empty_open_row (`Any, `Any) in
+   { env with effect_row = flexible_effect_row; }
+
 let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec IntMap.t =
   let module S = IntSet in
   let module M = IntMap in

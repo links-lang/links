@@ -287,6 +287,8 @@ sig
   val value_restriction : SourceCode.pos -> Types.datatype -> 'a
 
   val toplevel_purity_restriction : SourceCode.pos -> Sugartypes.binding -> 'a
+  val illegal_toplevel_effects_in_binding : griper
+  val illegal_toplevel_effects_in_expr: griper
 
   val duplicate_names_in_pattern : SourceCode.pos -> 'a
 
@@ -894,6 +896,20 @@ end
                 String.concat (nl() ^ "and" ^ nl()) ppr_types ^ nl  () ^
                "and the currently allowed effects are"        ^ nli () ^
                 code ppr_eff)
+
+    let illegal_toplevel_effects_in_binding ~pos ~t1:_ ~t2:(_, ft2) ~error:_ =
+      let eff = TypeUtils.effect_row ft2 in
+      let ppr_eff  = show_row eff in
+      die pos ("This toplevel binding has effect row "             ^ nli () ^
+                code ppr_eff                                       ^ nl  () ^
+               "but only the wild effect is allowed at toplevel")
+
+    let illegal_toplevel_effects_in_expr ~pos ~t1:_ ~t2:(_, ft2) ~error:_  =
+      let eff = TypeUtils.effect_row ft2 in
+      let ppr_eff  = show_row eff in
+      die pos ("This toplevel expression has effect row "          ^ nli () ^
+                code ppr_eff                                       ^ nl  () ^
+               "but only the wild effect is allowed at toplevel")
 
     let xml_attribute ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
@@ -1689,6 +1705,32 @@ let unify_or ~(handle:Gripers.griper) ~pos ((_, ltype1), (_, rtype1))
        | UnifyFailure (err, pos) -> raise_unify ~handle ~pos err lt2 rt2
      end
   end
+
+
+let check_toplevel_effects tyenv pos griper =
+  let empty_row = Types.make_empty_closed_row () in
+  let wild_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type) in
+  let actual_effect_row = tyenv.effect_row in
+  let dummy_string = "" in
+  let empty_effect_funtype = `Function (Types.unit_type, empty_row, Types.unit_type) in
+  let wild_effect_funtype = `Function (Types.unit_type, wild_row, Types.unit_type) in
+  let actual_effects_funtype = `Function (Types.unit_type, actual_effect_row, Types.unit_type) in
+  (* Unify rows by unifying functions using them as effect rows *)
+    unify_or
+    ~handle:griper
+    ~pos:pos
+    ((dummy_string, empty_effect_funtype), (dummy_string, actual_effects_funtype))
+    ((dummy_string, wild_effect_funtype), (dummy_string, actual_effects_funtype))
+
+let check_toplevel_effects_binding tyenv binding =
+  let griper = Gripers.illegal_toplevel_effects_in_binding in
+  let pos = snd binding in
+  check_toplevel_effects tyenv pos griper
+
+let check_toplevel_effects_expr tyenv expr =
+  let griper = Gripers.illegal_toplevel_effects_in_expr in
+  let pos = snd expr in
+  check_toplevel_effects tyenv pos griper
 
 
 (** check for duplicate names in a list of pattern *)
@@ -3801,11 +3843,13 @@ and type_regex typing_env : regex -> regex =
               `Splice (erase e)
         | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
         | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
-and type_bindings (globals : context)  bindings =
+and type_bindings ?toplevel:(tl=false) (globals : context)  bindings =
   let tyenv, (bindings, uinf) =
     List.fold_left
       (fun (ctxt, (bindings, uinf)) (binding : binding) ->
-         let binding, ctxt', usage = type_binding (Types.extend_typing_environment globals ctxt) binding in
+         let tyenv = (if tl then Types.make_effect_row_flexible else identity) (Types.extend_typing_environment globals ctxt) in
+         let binding, ctxt', usage = type_binding tyenv binding in
+         (if tl then check_toplevel_effects_binding ctxt' binding);
          let result_ctxt = Types.extend_typing_environment ctxt ctxt' in
          result_ctxt, (binding::bindings, (snd binding,ctxt'.var_env,usage)::uinf))
       (empty_context globals.Types.effect_row, ([], [])) bindings in
@@ -3974,14 +4018,16 @@ struct
       Debug.if_set show_pre_sugar_typing
         (fun () ->
            "before type checking: \n"^ show_program (bindings, body));
-      let tyenv', bindings, _ = type_bindings tyenv bindings in
+      let tyenv', bindings, _ = type_bindings ~toplevel:true tyenv bindings in
       let tyenv' = Types.normalise_typing_environment tyenv' in
         if Settings.get_value check_top_level_purity then
           binding_purity_check bindings; (* TBD: do this only in web mode? *)
         match body with
           | None -> (bindings, None), Types.unit_type, tyenv'
-          | Some (_, _pos as body) ->
-              let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
+          | Some body ->
+              let tyenv_open_effect_row = Types.make_effect_row_flexible (Types.extend_typing_environment tyenv tyenv') in
+              let body, typ, _ = type_check tyenv_open_effect_row body in
+              check_toplevel_effects_expr tyenv_open_effect_row body;
               let typ = Types.normalise_datatype typ in
                 (bindings, Some body), typ, tyenv'
     with
@@ -3993,11 +4039,13 @@ struct
          "before type checking: \n"^ show_sentence sentence);
     match sentence with
       | `Definitions bindings ->
-          let tyenv', bindings, _ = type_bindings tyenv bindings in
+          let tyenv', bindings, _ = type_bindings ~toplevel:true tyenv bindings in
           let tyenv' = Types.normalise_typing_environment tyenv' in
             `Definitions bindings, Types.unit_type, tyenv'
-      | `Expression body ->
-          let body, t, _ = (type_check tyenv body) in
+      | `Expression  body ->
+          let tyenv_open_effect_row = Types.make_effect_row_flexible tyenv in
+          let body, t, _ = (type_check tyenv_open_effect_row body) in
+          check_toplevel_effects_expr tyenv_open_effect_row body;
           let t = Types.normalise_datatype t in
             `Expression body, t, tyenv
       | `Directive d -> `Directive d, Types.unit_type, tyenv
