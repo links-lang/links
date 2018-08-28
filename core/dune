@@ -1,7 +1,14 @@
 (ocamllex
   (modules jsonlex lexer xmlLexer))
 (ocamlyacc
-  (modules parser jsonparse xmlParser))
+  (modules jsonparse xmlParser))
+
+(rule
+  (targets parser.ml parser.mli)
+  (deps parser.mly)
+  (action
+     (chdir %{workspace_root}
+       (run %{bin:ocamlyacc} --strict %{deps}))))
 
 (library
   (name links)
