@@ -1,15 +1,15 @@
 open Value
 open Utility
+open LensUtility
 open LensHelpers
 open LensHelpersCorrect
-open LensFDHelpers
 open LensSetOperations
 open LensRecordHelpers
 open LensSetOperations.SortedRecords
 
 
 
-let relational_update (fds : Types.fundepset) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
+let relational_update (fds : fundepset) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
     let fds = fds in
     let changelist = calculate_fd_changelist fds changedata in
     let changes = List.map (fun ((cols_l,_cols_r),_l) -> 

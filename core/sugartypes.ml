@@ -3,6 +3,8 @@ open Operators
 
 (** The syntax tree created by the parser. *)
 
+type name = string [@@deriving show]
+
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
 

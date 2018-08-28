@@ -2,6 +2,7 @@ open Types
 open Sugartypes
 open Operators
 open Utility
+open LensUtility
 open Value
 open LensRecordHelpers
 
