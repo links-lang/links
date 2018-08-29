@@ -2367,7 +2367,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `LensFunDepsLit (table, fds, _) ->
            let table = tc table in
            let cols = LensTypes.sort_cols_of_table "" (typ table) in 
-           let fds = LensHelpersCorrect.get_fds fds cols in
+           let fds = LensHelpersIncremental.get_fds fds cols in
            let lens_sort = (fds, None, cols) in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensDropLit (lens, drop, key, default, _) ->

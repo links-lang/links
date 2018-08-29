@@ -1,6 +1,6 @@
 
 
-var db = database "links" "postgresql" "localhost:5432:links:links";
+var db = database "links";
 
 var albumsTable =
 	table "albums"
@@ -14,14 +14,14 @@ var tracksTable =
 	tablekeys [["track", "album"]]
 	from db;
 
-var albumsLens = lens albumsTable with album -> quantity;
-var tracksLens = lens tracksTable with track -> date rating;
+var albumsLens = lens albumsTable with { album -> quantity };
+var tracksLens = lens tracksTable with { track -> date rating };
 
-var joinedLens = lensjoin albumsLens with tracksLens on album;
+var joinedLens = lensjoin albumsLens with tracksLens on album delete left;
 var droppedLens = lensdrop date determined by track default 2018 from joinedLens;
-var filteredLens = lensselect from droppedLens where quantity > 2;
+var filteredLens = lensselect from droppedLens by quantity > 2;
 
-var tracks = get filteredLens;
+var tracks = lensget filteredLens;
 
 # filter out all tracks named "Trust" and change Lullaby's rating to 4.
 var newTracks = 
@@ -32,6 +32,6 @@ var newTracks =
 	for (t <- newTracks)
 		if (t.track == "Lovesong") [(t with album = "Disintegration", quantity = 7)] else [t];
 
-var r = put filteredLens with newTracks;
+var r = lensput filteredLens with newTracks;
 newTracks
 

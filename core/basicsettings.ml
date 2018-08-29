@@ -132,6 +132,8 @@ end
 module RelationalLenses = 
 struct
     let relational_lenses = Settings.add_bool("relational_lenses", false, `User)
+
+    (* Use naive/non-incremental relational lenses instead of incremental ones *)
     let classic_lenses = Settings.add_bool("relational_lenses_classic", false, `User)
 end
 
