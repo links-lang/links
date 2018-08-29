@@ -636,7 +636,7 @@ struct
         if classic then
             LensHelpersClassic.lens_put lens data 
         else
-            LensHelpersCorrect.lens_put lens data;
+            LensHelpersIncremental.lens_put lens data;
         apply_cont cont env (Value.box_unit ()) 
     | `Table (db, name, keys, (readtype, _, _)) ->
       begin
