@@ -284,11 +284,6 @@ examples/handlers/deep_state.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
-Typecheck example file examples/handlers/delimitedcontinuations.links
-examples/handlers/delimitedcontinuations.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
-
 Typecheck example file examples/handlers/exceptions.links
 examples/handlers/exceptions.links
 filemode : args
