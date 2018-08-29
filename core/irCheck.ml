@@ -472,9 +472,9 @@ struct
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
 
             let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive `String) t ) attribute_types in
-            let _ = List.iter (fun t -> o#check_eq_types  (`Primitive `XmlItem) t ) children_types in
+            let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t ) children_types in
             (* FIXME xml_type denotes a list of xml items. should we just return xmlitem here? *)
-              `XmlNode (tag, attributes, children), xml_type, o
+              `XmlNode (tag, attributes, children), Types.xml_type, o
 
         | `ApplyPure (f, args) ->
             let rec is_pure_function = function
