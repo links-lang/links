@@ -138,9 +138,6 @@ class dummy_database = object(_self)
     failwith "Dummy database make_insert_returning_query not supported"
 end
   
-let comma_seperated a b =
-    if a = "" then b else a ^ ", " ^ b
-
 let rec construct_query_db (expr : lens_phrase) (db : Value.database) (mapCol : string -> string) =
     let construct_query expr = construct_query_db expr db mapCol in
     match expr with
