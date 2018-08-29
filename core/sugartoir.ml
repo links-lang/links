@@ -831,7 +831,8 @@ struct
                 end
           | `TupleLit [e] ->
               (* It isn't entirely clear whether there should be any 1-tuples at this stage,
-                 but if there are we should get rid of the
+                 but if there are we should get rid of them.
+
                  The parser certainly doesn't disallow them.
               *)
               ec e

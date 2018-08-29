@@ -242,7 +242,7 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.pattern> pattern
-%type <(Operators.name * Sugartypes.position) * Sugartypes.declared_linearity * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
+%type <(Sugartypes.name * Sugartypes.position) * Sugartypes.declared_linearity * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
@@ -914,16 +914,16 @@ fn_deps:
 
 lens_expression:
 | database_expression                                          { $1 }
-| LENS exp                                                     { `LensLit ($2, None), pos()}
+| LENS exp DEFAULT                                             { `LensLit ($2, None), pos()}
 | LENS exp TABLEKEYS exp                                       { `LensKeysLit ($2, $4, None), pos()}
-| LENS exp WITH fn_deps                                        { `LensFunDepsLit ($2, $4, None), pos()}
+| LENS exp WITH LBRACE fn_deps RBRACE                          { `LensFunDepsLit ($2, $5, None), pos()}
 | LENSDROP VARIABLE DETERMINED BY VARIABLE
     DEFAULT exp FROM exp                                       { `LensDropLit ($9, $2, $5, $7, None), pos() } 
-| LENSSELECT FROM exp WHERE exp                                { `LensSelectLit ($3, $5, None), pos() } 
+| LENSSELECT FROM exp BY exp                                { `LensSelectLit ($3, $5, None), pos() } 
 | LENSJOIN exp WITH exp ON exp LEFT exp RIGHT exp              { `LensJoinLit ($2, $4, $6, $8, $10, None), pos() }
-| LENSJOIN exp WITH exp ON exp                                 { `LensJoinLit ($2, $4, $6, (`Constant (`Bool true), pos()), (`Constant (`Bool false), pos()), None), pos() }
-| LENSGET exp                                                      { `LensGetLit ($2, None), pos() }
-| LENSPUT exp WITH exp                                             { `LensPutLit ($2, $4, None), pos() }
+| LENSJOIN exp WITH exp ON exp DELETE LEFT                     { `LensJoinLit ($2, $4, $6, (`Constant (`Bool true), pos()), (`Constant (`Bool false), pos()), None), pos() }
+| LENSGET exp                                                  { `LensGetLit ($2, None), pos() }
+| LENSPUT exp WITH exp                                         { `LensPutLit ($2, $4, None), pos() }
 
 
 record_labels:
