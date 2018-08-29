@@ -2,10 +2,10 @@ open Webserver_types
 open Ir
 open Lwt
 open Utility
-open LensUtility
 open Proc
 open Pervasives
 open LensHelpers
+open LensUtility
 
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
