@@ -248,16 +248,11 @@ examples/handlers/aop2.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
-Typecheck example file examples/handlers/async.links
-examples/handlers/async.links
+Typecheck example file examples/handlers/coins_web.links
+examples/handlers/coins_web.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 ignore : broken example
-
-Typecheck example file examples/handlers/choice.links
-examples/handlers/choice.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
 
 Typecheck example file examples/handlers/choose.links
 examples/handlers/choose.links
@@ -278,15 +273,11 @@ args : --config=tests/typecheck_examples.tests.config
 ignore : broken example
 
 Typecheck example file examples/handlers/count.links
-examples/handlers/count.links
+examples/handlers/count_web.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 ignore : broken example
 
-Typecheck example file examples/handlers/countEff.links
-examples/handlers/countEff.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
 
 Typecheck example file examples/handlers/deep_pipes.links
 examples/handlers/deep_pipes.links
@@ -315,22 +306,14 @@ examples/handlers/fringe.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
-Typecheck example file examples/handlers/hello_world.links
-examples/handlers/hello_world.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
+
 
 Typecheck example file examples/handlers/identity.links
 examples/handlers/identity.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
-Typecheck example file examples/handlers/kannotation.links
-examples/handlers/kannotation.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
+
 
 Typecheck example file examples/handlers/light_switch.links
 examples/handlers/light_switch.links
@@ -341,12 +324,6 @@ Typecheck example file examples/handlers/monadic_reflection.links
 examples/handlers/monadic_reflection.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-
-Typecheck example file examples/handlers/nim-problem.links
-examples/handlers/nim-problem.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/handlers/nim.links
 examples/handlers/nim.links
@@ -375,6 +352,11 @@ examples/handlers/sat.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
+Typecheck example file examples/handlers/shiftreset.links
+examples/handlers/shiftreset.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
 Typecheck example file examples/handlers/shallow_pipes.links
 examples/handlers/shallow_pipes.links
 filemode : args
@@ -383,11 +365,6 @@ ignore : broken example
 
 Typecheck example file examples/handlers/shallow_state.links
 examples/handlers/shallow_state.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
-
-Typecheck example file examples/handlers/state_web.links
-examples/handlers/state_web.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
