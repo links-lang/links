@@ -56,8 +56,7 @@ Non-empty continuation environments
 ./tests/session-exceptions/cancel10.links
 filemode : args
 args : --session-exceptions --enable-handlers
-stderr : @.*
-exit : 1
+stdout : 5 : Int
 
 Offering where peer endpoint is cancelled
 ./tests/session-exceptions/cancel11.links

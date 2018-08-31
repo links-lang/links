@@ -56,7 +56,6 @@ object (o : 'self_type)
         (o, `DoOperation (failure_op_name, [], Some `Not_typed), `Not_typed)
     | `TryInOtherwise (_, _, _, _, None) -> assert false
     | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
-        let open Pervasives in (* Let me have those sweet, sweet pipes *)
         let (o, try_phr, try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
@@ -130,6 +129,56 @@ let contains_session_exceptions prog =
   (o#program prog)#satisfied
 
 
+(*
+ * The "naive" typing rule for try-in-otherwise is unsound
+ * as it allows possibly-linear variables to be used twice:
+ *
+ *
+ *   G1 |- L : A   G2, x : A |- M : B    G2 |- N : B
+ *   -------------------------------------------------
+ *      G1, G2 |- try L as x in M otherwise N : B
+ *
+ * Instead, the typechecker implements a more restrictive typing
+ * rule which only allows a single variable in the typing of the
+ * success continuation:
+ *
+ *   G |- L : A   x : A |- M : B     |- N : B
+ *   ------------------------------------------
+ *     G |- try L as x in M otherwise N : B
+ *
+ * Thankfully, the full power of the first rule can be restored
+ * through the use of a simple macro-translation, performed by the
+ * wrap_linear_handlers function:
+ *
+ * try L as x in M otherwise N
+ *   -->
+ * switch (try L as x in Just(x) otherwise Nothing) {
+ *   case Just(x) -> M
+ *   case Nothing -> N
+ * }
+ *)
+let wrap_linear_handlers prog =
+  let o =
+    object
+      inherit SugarTraversals.map as super
+      method! phrase = function
+        | (`TryInOtherwise (l, x, m, n, dtopt), pos) ->
+            let fresh_var = Utility.gensym ?prefix:(Some "try_x") () in
+            let fresh_pat = `Variable (fresh_var, None, pos), pos in
+            (`Switch (
+              (`TryInOtherwise
+                (super#phrase l,
+                 fresh_pat,
+                 (`ConstructorLit ("Just", Some (`Var fresh_var, pos), None), pos),
+                 (`ConstructorLit ("Nothing", None, None), pos), dtopt),
+                 pos),
+              [
+                ((`Variant ("Just", (Some x)), pos), super#phrase m);
+                ((`Variant ("Nothing", None), pos), super#phrase n)
+              ], None)), pos
+        | p -> super#phrase p
+    end
+  in o#program prog
 
 let settings_check prog =
   if not (contains_session_exceptions prog) then () else
