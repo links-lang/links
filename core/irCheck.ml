@@ -436,7 +436,7 @@ struct
             let v, vt, o = o#value v in
             let _ = match t with
               | `Variant _ ->
-                 o#check_eq_types  (project_type ~overstep_quantifiers:false name t) vt
+                 o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt 
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (`Value orig) in
             `Inject (name, v, t), t, o
 
