@@ -108,21 +108,6 @@ examples/dictionary/dictSuggestUpdate.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
-Typecheck example file examples/distribution/chatserver/chatClient.links
-examples/distribution/chatserver/chatClient.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config --path=examples/distribution/chatserver:examples/distribution/
-
-Typecheck example file examples/distribution/chatserver/chatServer.links
-examples/distribution/chatserver/chatServer.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config --path=examples/distribution/chatserver:examples/distribution/
-
-Typecheck example file examples/distribution/chatserver/chatSessions.links
-examples/distribution/chatserver/chatSessions.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
-
 Typecheck example file examples/distribution/clientProcessOnServer.links
 examples/distribution/clientProcessOnServer.links
 filemode : args
