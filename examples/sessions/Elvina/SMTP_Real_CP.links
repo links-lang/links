@@ -32,7 +32,7 @@ fun mailServer(s) {
   #var welcomeMessage = readFromSocket(realServer);
   var welcomeMessage = readServer(realServer);
   println("S: " ^^ welcomeMessage);
-  start(s, realServer) 
+  start(s, realServer)
 }
 
 fun start(s, realServer) {
@@ -69,12 +69,12 @@ fun outer(s, realServer) {
 						<| ACCEPT s.{rcptLoop(s, realServer)} |>
 					}
 	}
-	case QUIT -> { 
+	case QUIT -> {
 	     println("C: QUIT");
        writeToSocket("QUIT\n", realServer);
        var smtpAnswer = readServer(realServer);
        println("S: " ^^ smtpAnswer);
-       closeSocket(realServer); <| s[] |> } 
+       closeSocket(realServer); <| s[] |> }
 
   } |>
 }
@@ -116,7 +116,7 @@ fun inner(s, realServer) {
 	  writeToSocket("DATA\n", realServer);
       #var smtpAnswer = readFromSocket(realServer);
       var smtpAnswer = readServer(realServer);
-      println("S: " ^^ smtpAnswer);   
+      println("S: " ^^ smtpAnswer);
       writeToSocket("SUBJECT: " ^^ subject ^^ "\n", realServer);
       println("C: SUBJECT: " ^^ subject);
       writeToSocket(message ^^ "\n", realServer);
@@ -126,10 +126,10 @@ fun inner(s, realServer) {
       #var smtpAnswer = readFromSocket(realServer);
       var smtpAnswer = readServer(realServer);
       println("S: " ^^ smtpAnswer);
-      outer(s, realServer) } 
+      outer(s, realServer) }
 
-  } |> 
-} 
+  } |>
+}
 
 
 sig parseServerAnswer : (String) ~> Int
@@ -214,7 +214,7 @@ fun addOtherRecipients(c, mail_form, return) {
 
 fun rcptLoopClient(c, mail_form, return) {
   switch(mail_form.2) {
-    case x::xs -> 
+    case x::xs ->
     	<| RCPT c.c[x].{ println("C: RCPT TO:<" ^^ x ^^ ">");
             <| offer c {
                 case REJECT -> {var mail_form = (mail_form.1, xs, mail_form.3, mail_form.4);
@@ -230,8 +230,8 @@ fun rcptLoopClient(c, mail_form, return) {
 sig startCommunication : (String, [String], String, String) ~> ()
 fun startCommunication(sender, recipients, subject, message) {
     var mail_form = (sender, recipients, subject, message);
-    run (fun(return){<| nu s.({mailServer(s)}|{mailClient(s, mail_form, return)}) |>})
+    runSync (fun(return){<| nu s.({mailServer(s)}|{mailClient(s, mail_form, return)}) |>})
 }
 
-startCommunication("smtp@links.co.uk", ["starlight@dust", "something@someOther.com"], 
+startCommunication("smtp@links.co.uk", ["starlight@dust", "something@someOther.com"],
                    "Links SMTP Client Test", "Hello\nHow are you?")

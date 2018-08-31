@@ -69,7 +69,7 @@ fun user2(c) {
 sig user3 : (~ATM) ~> Maybe(Int)
 fun user3(c) {
   offer (send(1024, send(16777216, c))) {
-    case Accept(c) ->      
+    case Accept(c) ->
       var (balance, c) = receive(select Balance c);
       var (card, c) = receive(c); Just(balance)
     case Reject(c) ->
@@ -78,6 +78,6 @@ fun user3(c) {
 }
 
 
-(user1(knife(fun (c) {atm(128, c)})),
- user2(knife(fun (c) {atm(128, c)})),
- user3(knife(fun (c) {atm(128, c)})))
+(user1(fork(fun (c) {atm(128, c)})),
+ user2(fork(fun (c) {atm(128, c)})),
+ user3(fork(fun (c) {atm(128, c)})))

@@ -29,4 +29,4 @@ fun user(s) {
   v
 }
 
-user(fork(calc))
+user(forkSync(calc))

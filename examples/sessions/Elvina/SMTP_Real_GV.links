@@ -32,19 +32,19 @@ fun mailServer(s) {
   #var welcomeMessage = readFromSocket(realServer);
   var welcomeMessage = readServer(realServer);
   print("S: " ^^ welcomeMessage);
-  start(s, realServer) 
+  start(s, realServer)
 }
 
 fun start(s, realServer) {
 offer(s) {
-  case HELO(s) ->             
+  case HELO(s) ->
          var (domain, s) = receive(s);
          writeToSocket("HELO " ^^ domain ^^ "\n", realServer);
          #var smtpAnswer = readFromSocket(realServer);
          var smtpAnswer = readServer(realServer);
          print("S: " ^^ smtpAnswer);
          var status = parseServerAnswer(smtpAnswer);
-           if (status <> 250) 
+           if (status <> 250)
               { var s = select REJECT s;
                 print("S: " ^^ smtpAnswer);
                 mailServer(s)
@@ -65,7 +65,7 @@ offer(s) {
     var smtpAnswer = readServer(realServer);
     print("S: " ^^ smtpAnswer);
     var status = parseServerAnswer(smtpAnswer);
-    if (status <> 250) 
+    if (status <> 250)
        { var s = select REJECT s;
        print("S: " ^^ smtpAnswer);
        outer(s, realServer)
@@ -94,12 +94,12 @@ fun rcptLoop(s, realServer) {
         var smtpAnswer = readServer(realServer);
         print("S: " ^^ smtpAnswer);
         var status = parseServerAnswer(smtpAnswer);
-        if (status <> 250) 
+        if (status <> 250)
            { var s = select REJECT s;
            print("S: " ^^ smtpAnswer);
            rcptLoop(s, realServer)
            }
-        else {    
+        else {
            var s = select ACCEPT s;
            inner(s, realServer)
     }
@@ -115,12 +115,12 @@ fun inner(s, realServer) {
         var smtpAnswer = readServer(realServer);
         print("S: " ^^ smtpAnswer);
         var status = parseServerAnswer(smtpAnswer);
-        if (status <> 250) 
+        if (status <> 250)
            { var s = select REJECT s;
            print("S: " ^^ smtpAnswer);
            inner(s, realServer)
             }
-        else {    
+        else {
            var s = select ACCEPT s;
           inner(s, realServer)
   }
@@ -131,7 +131,7 @@ fun inner(s, realServer) {
       writeToSocket("DATA\n", realServer);
       #var smtpAnswer = readFromSocket(realServer);
       var smtpAnswer = readServer(realServer);
-      print("S: " ^^ smtpAnswer);   
+      print("S: " ^^ smtpAnswer);
       writeToSocket("SUBJECT: " ^^ subject ^^ "\n", realServer);
       print("C: SUBJECT: " ^^ subject);
       writeToSocket(message ^^ "\n", realServer);
@@ -142,8 +142,8 @@ fun inner(s, realServer) {
       var smtpAnswer = readServer(realServer);
       print("S: " ^^ smtpAnswer);
       outer(s, realServer)
-   } 
-} 
+   }
+}
 
 fun readServer(realServer) {
   #var smtpAnswer = readFromSocket(realServer);
@@ -253,8 +253,8 @@ fun rcptLoopClient(c, mail_form) {
 sig startCommunication : (String, [String], String, String) ~> ()
 fun startCommunication(sender, recipients, subject, message) {
     var mail_form = (sender, recipients, subject, message);
-    mailClient(fork(mailServer), mail_form)
+    mailClient(forkSync(mailServer), mail_form)
 }
 
-startCommunication("smtp@links.co.uk", ["starlight@dust", "something@someOther.com"], 
+startCommunication("smtp@links.co.uk", ["starlight@dust", "something@someOther.com"],
                    "Links SMTP Client Test", "Hello\nHow are you?")

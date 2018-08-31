@@ -258,6 +258,6 @@ fun readServerAccumulate(rs, time, timeout, answer) {
 }
 
 fun startCommunication() {
-	ircClient(fork(ircServer))
+	ircClient(forkSync(ircServer))
 }
 startCommunication()

@@ -33,24 +33,24 @@ typename SonOffer  = [+|Choice:?Product.End|+];
 sig waitForClient : (ShopOffer, [Product], String) ~> ()
 fun waitForClient(s, orderedProducts, removedProducts) client
 {
-	
+
 offer(s) {
-case Add(s) -> 
+case Add(s) ->
 	var (item, s) = receive(s);					# Accepts order for an item.
 	waitForClient(s, item::orderedProducts, removedProducts)
 
 case Remove(s) ->
 	var (item, s) = receive(s);
 	var updatedList = removeProduct(item, orderedProducts);
-	
+
 	# See if the list is smaller (= an item to be removed was actually in a list).
 	if (length(updatedList) < length(orderedProducts))
 	   waitForClient(s, updatedList, removedProducts ^^ turnProductToString(item) ^^ ". ")
 	else
 	   waitForClient(s, orderedProducts, removedProducts)
-		
 
-case Checkout(s) -> 
+
+case Checkout(s) ->
 	var (card, s)    = receive(s);		# Take credit card information.
 	var (addressFull, s) = shipper(s);	# Contact shipper, send it the channel to receive address.
 
@@ -133,13 +133,13 @@ sig orderBooks : (ShopSelect) ~> ([String])
 fun orderBooks(c) client
 {
 	var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
-	
+
 	# "Mom's choice".
 	var c = send(Book("Alice in Wonderland"), select Add c);
 	var c = send(Audio_Visual("The Hitchhiker's Guide to the Galaxy"), select Add c);
 
 	# "Son's choice".
-	var choice = getSonBook(knife(waitForSon));
+	var choice = getSonBook(fork(waitForSon));
 
 	# Add son's choice.
 	var c = send(choice, select Add c);
@@ -157,7 +157,7 @@ fun orderBooks(c) client
 sig main : () ~> ()
 fun main() client
 {
-	var order = orderBooks(knife(fun(s){waitForClient(s, [], "")}));
+	var order = orderBooks(fork(fun(s){waitForClient(s, [], "")}));
 	appendChildren(stringToXml(order!!0), getNodeById("items"));
 	appendChildren(stringToXml(order!!1), getNodeById("removed"));
 	appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
@@ -170,7 +170,7 @@ page
 	<body>
 	<form l:onsubmit="{main()}">
 	<h3>Finished example from "Linear type theory for asynchronous session types":</h3>
-	<button type="submit">Start communication</button>	
+	<button type="submit">Start communication</button>
 	</form>
 	<p><b>Products ordered:</b></p>
 	<p id="items"></p>

@@ -2,67 +2,60 @@ Typecheck example file examples/AIPL14/LectureExamples/calc.links
 examples/AIPL14/LectureExamples/calc.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/AIPL14/LectureExamples/reccalc.links
 examples/AIPL14/LectureExamples/reccalc.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/AIPL14/LectureExamples/two-factor.links
 examples/AIPL14/LectureExamples/two-factor.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/AIPL14/SMTP/Problem1.links
 examples/AIPL14/SMTP/Problem1.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
+ignore : purposely incomplete
 
 Typecheck example file examples/AIPL14/SMTP/Problem2.links
 examples/AIPL14/SMTP/Problem2.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
+ignore : purposely incomplete
 
 Typecheck example file examples/AIPL14/SMTP/Problem3.links
 examples/AIPL14/SMTP/Problem3.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
+ignore : purposely incomplete
 
 Typecheck example file examples/AIPL14/SMTP/Problem4.links
 examples/AIPL14/SMTP/Problem4.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
+ignore : purposely incomplete
 
 Typecheck example file examples/AIPL14/Solutions/Problem1.links
 examples/AIPL14/Solutions/Problem1.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/AIPL14/Solutions/Problem2.links
 examples/AIPL14/Solutions/Problem2.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/AIPL14/Solutions/Problem3.links
 examples/AIPL14/Solutions/Problem3.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/AIPL14/Solutions/Problem4.links
 examples/AIPL14/Solutions/Problem4.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/buttons.links
 examples/buttons.links
@@ -89,7 +82,6 @@ Typecheck example file examples/client-server-prims.links
 examples/client-server-prims.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/crop.links
 examples/crop.links
@@ -175,7 +167,6 @@ Typecheck example file examples/distribution/simpleServerAP.links
 examples/distribution/simpleServerAP.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/document-replace.links
 examples/document-replace.links
@@ -236,7 +227,6 @@ Typecheck example file examples/games/tetris.links
 examples/games/tetris.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/games/twentyfortyeight.links
 examples/games/twentyfortyeight.links
@@ -444,7 +434,6 @@ Typecheck example file examples/initialise-list.links
 examples/initialise-list.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/insert-factorials.links
 examples/insert-factorials.links
@@ -515,7 +504,6 @@ Typecheck example file examples/sessions/atm.links
 examples/sessions/atm.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/bookshop-cp.links
 examples/sessions/bookshop-cp.links
@@ -565,14 +553,12 @@ args : --config=tests/typecheck_examples.tests.config
 Typecheck example file examples/sessions/chatserver/chatClient.links
 examples/sessions/chatserver/chatClient.links
 filemode : args
-args : --config=tests/typecheck_examples.tests.config --path=examples/distribution/chatserver
-ignore : broken example
+args : --config=tests/typecheck_examples.tests.config --path=examples/sessions/chatserver
 
 Typecheck example file examples/sessions/chatserver/chatServer.links
 examples/sessions/chatserver/chatServer.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config --path=/examples/sessions/chatserver/
-ignore : broken example
 
 Typecheck example file examples/sessions/chatserver/chatSessions.links
 examples/sessions/chatserver/chatSessions.links

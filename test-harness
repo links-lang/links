@@ -80,7 +80,7 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
                 if ignore <> None:
                     global ignored
                     ignored += 1
-                    print '?IGNORED: %s' % ignore
+                    print '?IGNORED: %s (%s)' % (name, ignore)
                 else:
                     global failures
                     failures += 1

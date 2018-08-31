@@ -72,7 +72,7 @@ fun mailClient(c) {
 }
 
 fun main() {
-  mailClient(fork(mailServer))
+  mailClient(forkSync(mailServer))
 }
 
 main()
