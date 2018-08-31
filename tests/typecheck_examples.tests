@@ -544,19 +544,16 @@ Typecheck example file examples/sessions/Elvina/Bookshop_1.links
 examples/sessions/Elvina/Bookshop_1.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/Elvina/Bookshop_2.links
 examples/sessions/Elvina/Bookshop_2.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/Elvina/Bookshop_3.links
 examples/sessions/Elvina/Bookshop_3.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/Elvina/Bookshop_CP.links
 examples/sessions/Elvina/Bookshop_CP.links
@@ -577,13 +574,11 @@ Typecheck example file examples/sessions/Elvina/Extended_Calculator.links
 examples/sessions/Elvina/Extended_Calculator.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/Elvina/IRC.links
 examples/sessions/Elvina/IRC.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/Elvina/IRC_Test.links
 examples/sessions/Elvina/IRC_Test.links
@@ -594,25 +589,21 @@ Typecheck example file examples/sessions/Elvina/SMTP_Real_CP.links
 examples/sessions/Elvina/SMTP_Real_CP.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/Elvina/SMTP_Real_GV.links
 examples/sessions/Elvina/SMTP_Real_GV.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/Elvina/SMTP_Web_Model_CP.links
 examples/sessions/Elvina/SMTP_Web_Model_CP.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/Elvina/SMTP_Web_Model_GV.links
 examples/sessions/Elvina/SMTP_Web_Model_GV.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/sessions/end.links
 examples/sessions/end.links
@@ -757,7 +748,6 @@ Typecheck example file examples/test-prims.links
 examples/test-prims.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
-ignore : broken example
 
 Typecheck example file examples/todo.links
 examples/todo.links

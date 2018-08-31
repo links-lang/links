@@ -17,7 +17,7 @@ sig mailServer : (SMTPServer) ~> EndBang
 fun mailServer(s) client {
 
 offer (s) {
-	case EHLO(s) -> 
+	case EHLO(s) ->
 
 				var (domain, s) = receive(s);
 				var s = select ACCEPT s;
@@ -39,16 +39,16 @@ offer (s) {
 								}
 				}
 
- } 
- 
+ }
+
 }
 
 sig mailClient : (~SMTPServer, (1:String, 2:String, 3:String)) ~> String
 fun mailClient(c, mail_form) client {
-	 
+
 var c = send("inf.ed.ac.uk", select EHLO c);
 offer (c) {
-	case REJECT(c) -> 
+	case REJECT(c) ->
 	 				var (error, c) = receive(c);
 	 				wait(c);
 	 				error
@@ -86,14 +86,14 @@ offer (c) {
 sig startCommunication : (String, String, String) ~> String
 fun startCommunication(sender, recipient, message) client {
 	var mail_form = (sender, recipient, message);
-	mailClient(fork(mailServer), mail_form)
+	mailClient(forkSync(mailServer), mail_form)
 }
 
 page
 	<html>
 	<head><title>SMTP Client</title></head>
 	<body bgcolor="#e3e2dd">
-	
+
 	<form l:onsubmit="{domReplaceChildren(stringToXml(startCommunication(sender, recipient, message)), getNodeById("result"))}">
 	From:<br />
 	<input type="text" size="30" value="someone@staffmail.inf.ed.ac.uk" l:name="sender" /><br />
@@ -102,7 +102,7 @@ page
 	Message:<br />
 	<textarea l:name="message" rows="6" cols="34">Hi! How are you?</textarea><br />
 	<button type="submit">Send</button>
-    </form>		  
+    </form>
 
     <p id="result"></p>
 
