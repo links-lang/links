@@ -341,8 +341,6 @@ let ensure_effect_present_in_row ctx allowed_effects required_effect_name requir
 
 
 let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurence =
-  (* TODO: Shall we flatten the row first? *)
-  (* FIXEM: need to flatten here and remove absent fields if closed row *)
   ensure
     (eq_types ctx (`Record allowed_effects, `Record imposed_effects_row))
     ("Incompatible effects; Allowed:\n" ^ (Types.string_of_row allowed_effects) ^ "\nactual effects:\n" ^  (Types.string_of_row imposed_effects_row))
@@ -473,7 +471,6 @@ struct
 
             let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive `String) t ) attribute_types in
             let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t ) children_types in
-            (* FIXME xml_type denotes a list of xml items. should we just return xmlitem here? *)
               `XmlNode (tag, attributes, children), Types.xml_type, o
 
         | `ApplyPure (f, args) ->
@@ -600,7 +597,7 @@ struct
             o#check_eq_types lt rt;
             `If (v, left, right), lt, o
 
-    method! special : special -> (special * datatype * 'self_type) = (* FIXME no typechecking yet*)
+    method! special : special -> (special * datatype * 'self_type) =
       fun special -> match special with
         | `Wrong t -> `Wrong t, t, o
         | `Database v ->

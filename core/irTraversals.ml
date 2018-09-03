@@ -7,7 +7,7 @@ open Ir
     that also constructs the type as it goes along (using type
     annotations on binders).
 *)
-module type TRANSFORM =
+module type IR_VISITOR =
 sig
   type environment = Types.datatype Env.Int.t
 
@@ -62,7 +62,7 @@ sig
    val bindings : Types.datatype Env.Int.t -> binding list -> binding list
 end
 
-module Transform : TRANSFORM =
+module Transform : IR_VISITOR =
 struct
   open Types
   open TypeUtils
@@ -824,24 +824,6 @@ let ir_type_mod_visitor tyenv type_visitor =
             let b = Var.update_type newtype b in
             super#binder b
 
-
-  end
-
-
-
-module ElimRecursiveTypeCyclesFromProgram =
-  struct
-    let type_visitor = new  Types.ElimRecursiveTypeCyclesTransform.visitor
-
-
-
-    let program tyenv p =
-      let p, _, _ = (ir_type_mod_visitor tyenv type_visitor)#program p in
-      p
-
-    let bindings tyenv bs =
-      let bs, _ = (ir_type_mod_visitor tyenv type_visitor)#bindings bs in
-      bs
 
   end
 
