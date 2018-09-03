@@ -46,7 +46,7 @@ fun product(xs) {
 }
 ### end of library functions ###
 
-#fun select(xs, i) {
+#fun sel(xs, i) {
 #  var n = length(xs);
 #  if (i < 0 || n <= i) {
 #    error("list index " ^^ intToString(i) ^^ " out of range [0.."
@@ -63,7 +63,7 @@ fun product(xs) {
 #  }
 #}
 
-fun select(xs, i) {
+fun sel(xs, i) {
   hd(drop(i, xs))
 }
 
@@ -82,7 +82,7 @@ fun insertItems(itemsTable, itemsList) {
   var indexes = for (itemEntry <- asList(itemsTable)) [itemEntry.i];
   insert itemsTable values (i, name)
     for (i <- upto(0,n-1) `diff` indexes)
-      [(i=i, name=select(itemsList, i))];
+      [(i=i, name=sel(itemsList, i))];
 }
 
 # `diff` is list difference

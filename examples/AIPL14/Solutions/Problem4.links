@@ -158,7 +158,7 @@ fun rcptLoopClient(c) {
 }
 
 fun main() {
-  mailClient(fork(mailServer))
+  mailClient(forkSync(mailServer))
 }
 
 main()

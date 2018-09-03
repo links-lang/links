@@ -166,7 +166,7 @@ fun badMe(c) {
 
 sig serveData : ((~TwoFactor) ~e~> Int) ~e~> Int
 fun serveData(user) {
-  user(fork(fun (s) {serve(s)}))
+  user(forkSync(fun (s) {serve(s)}))
 }
 
 serveData(goodMe)

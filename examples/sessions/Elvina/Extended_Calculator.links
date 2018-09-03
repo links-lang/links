@@ -36,19 +36,19 @@ fun user(s, op1, op2, operation) client {
 		case "mult" -> { var s = select Mul s; receive(send(op1,send(op2,s))).1 }
 		case "sub" -> { var s = select Sub s; receive(send(op1,send(op2,s))).1 }
 		case "div" -> { var s = select Div s; receive(send(op1,send(op2,s))).1 }
-	}	 		
+	}
 }
 
 sig main : (String, String, String) ~> Int
 fun main(op1, op2, operation) client {
-  user(knife(calc), stringToInt(op1), stringToInt(op2), operation)
+  user(fork(calc), stringToInt(op1), stringToInt(op2), operation)
 }
 
 page
   <html>
   <head><title>[10] Cool Calculator </title></head>
   <body>
-  <h3>Cool Integer Calculator</h3> 
+  <h3>Cool Integer Calculator</h3>
 
    <form l:onsubmit="{domReplaceChildren(stringToXml(intToString(main(op1, op2, operation))), getNodeById("result"))}">
     <input type="text" size="5" l:name="op1"/>
@@ -57,10 +57,10 @@ page
   	<option value="mult">*</option>
 	<option value="sub">-</option>
   	<option value="div">/</option>
-   </select> 
+   </select>
     <input type="text" size="5" l:name="op2"/>
     <button type="submit">Get Result!</button>
-   </form>		  
+   </form>
 
    <p>The result is:</p>
    <p id="result"></p>

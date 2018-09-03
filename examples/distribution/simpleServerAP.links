@@ -98,7 +98,7 @@ module Setup {
 
 fun main() {
   var srvAP = new();
-  addLocateRouteHandler("/", fun(_, clientLoc) { Setup.mainPage(clientLoc, srvAP) });
+  addLocatedRouteHandler("/", fun(_, clientLoc) { Setup.mainPage(clientLoc, srvAP) });
   serveWebsockets();
   servePages();
 }

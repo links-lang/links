@@ -1,10 +1,10 @@
 # A test of client stubs / server stubs called from the other side.
 fun f() client {
-  alertDialog(intToString(serverTime()))
+  print(intToString(serverTime()))
 }
 
 fun g() server {
-  alertDialog("this is the server talking.")
+  print("this is the server talking.")
 }
 
 page

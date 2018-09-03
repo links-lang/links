@@ -34,4 +34,4 @@ fun main() {
   for (i <- [1..10]) [recv()]
 }
 
-main()
+spawnWait { main() }

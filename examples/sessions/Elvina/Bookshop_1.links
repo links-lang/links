@@ -6,14 +6,14 @@ sig waitForClient : (ShopOffer) ~> ()
 fun waitForClient(s) client
 {
 	offer(s) {
-		case Add(s)      -> 
+		case Add(s)      ->
 			var (item, s) = receive(s);
 			appendChildren(stringToXml("Book name received: " ^^ item), getNodeById("items"));
 			waitForClient(s)
 
-		case Checkout(s) -> 
+		case Checkout(s) ->
 			var (card, s)    = receive(s);
-			appendChildren(stringToXml(", card number received: " ^^ intToString(card)), getNodeById("items")); 
+			appendChildren(stringToXml(", card number received: " ^^ intToString(card)), getNodeById("items"));
 			var (address, s) = receive(s);
 			appendChildren(stringToXml(", address received: " ^^ address), getNodeById("items"));
 			()
@@ -31,7 +31,7 @@ fun orderBooks(c) client
 sig main : () ~> ()
 fun main() client
 {
-	orderBooks(knife(waitForClient))
+	orderBooks(fork(waitForClient))
 }
 
 
@@ -41,7 +41,7 @@ page
 	<body>
 	<form l:onsubmit="{main()}">
 	<h3>Example 1 from "Linear type theory for asynchronous session types":</h3>
-	<button type="submit">Start communication</button>	
+	<button type="submit">Start communication</button>
 	</form>
 	<p id="items"></p>
 	</body>

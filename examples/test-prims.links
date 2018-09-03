@@ -68,7 +68,7 @@ ignore(intToXml(77));
 # recv             : () -{a}-> a
 
 var pid = spawn { ignore(recv()); };
-ignore(send(pid, 1));
+ignore(pid ! 1);
 
 # self             : () -{a}-> Mailbox (a)
 
@@ -115,10 +115,6 @@ ignore(objectType(<br />));
 # attribute        : (Xml, String) -> [|None:()|Some:String|]
 
 ignore(attribute(xml, "class"));
-
-# alertDialog      : (String) -> ()
-
-ignore(alertDialog("Testing alertDialog"));
 
 # debug            : (String) -> ()
 
