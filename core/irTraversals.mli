@@ -53,11 +53,6 @@ end
 module type PROGTRANSFORM =
 sig
    val program : Types.datatype Env.Int.t -> program -> program
-end
-
-module type PROGTRANSFORM2 =
-sig
-   val program : Types.datatype Env.Int.t -> program -> program
    val bindings : Types.datatype Env.Int.t -> binding list -> binding list
 end
 
@@ -67,7 +62,7 @@ module Transform : TRANSFORM
 module Inline : PROGTRANSFORM
 module ElimDeadDefs : PROGTRANSFORM
 module ElimRecursiveTypeCyclesFromProgram : PROGTRANSFORM
-module ElimBodiesFromMetaTypeVars : PROGTRANSFORM2
+module ElimBodiesFromMetaTypeVars : PROGTRANSFORM
 
 
 module CheckForCycles : PROGTRANSFORM

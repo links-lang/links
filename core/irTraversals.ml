@@ -59,11 +59,6 @@ end
 module type PROGTRANSFORM =
 sig
    val program : Types.datatype Env.Int.t -> program -> program
-end
-
-module type PROGTRANSFORM2 =
-sig
-   val program : Types.datatype Env.Int.t -> program -> program
    val bindings : Types.datatype Env.Int.t -> binding list -> binding list
 end
 
@@ -545,6 +540,9 @@ struct
 
   let program typing_env p =
     fst3 ((inliner typing_env IntMap.empty)#computation p)
+
+  let bindings typing_env p =
+    fst ((inliner typing_env IntMap.empty)#bindings p)
 end
 
 (*
@@ -769,14 +767,17 @@ struct
         | [] -> [], o
   end
 
-  let count tyenv p =
-    let _, _, o = (counter tyenv)#computation p in
-      o#get_envs()
-
   let program tyenv p =
-    let envs = count tyenv p in
+    let _, _, o = (counter tyenv)#computation p in
+    let envs = o#get_envs () in
     let p, _, _ = (eliminator tyenv envs)#computation p in
       p
+
+  let bindings tyenv bs =
+    let _, o = (counter tyenv)#bindings bs in
+    let envs = o#get_envs () in
+    let bs, _ = (eliminator tyenv envs)#bindings bs in
+      bs
 end
 
 (** Applies a type visitor to all types occuring in an IR program**)
@@ -826,23 +827,21 @@ let ir_type_mod_visitor tyenv type_visitor =
 
   end
 
-module ElimRecursiveTypeCycles = struct
 
-
-end
 
 module ElimRecursiveTypeCyclesFromProgram =
   struct
     let type_visitor = new  Types.ElimRecursiveTypeCyclesTransform.visitor
 
-    (*let value tyenv v =
-      let v, _, _ = (ir_type_mod_visitor tyenv type_visitor)#value v in
-      v*)
+
 
     let program tyenv p =
       let p, _, _ = (ir_type_mod_visitor tyenv type_visitor)#program p in
       p
 
+    let bindings tyenv bs =
+      let bs, _ = (ir_type_mod_visitor tyenv type_visitor)#bindings bs in
+      bs
 
   end
 
@@ -886,6 +885,10 @@ module CheckForCycles =
     let program tyenv p =
       let p, _, _ = (ir_type_mod_visitor tyenv check_cycles)#program p in
       p
+
+    let bindings tyenv bs =
+      let bs, _ = (ir_type_mod_visitor tyenv check_cycles)#bindings bs in
+      bs
 
   end
 
