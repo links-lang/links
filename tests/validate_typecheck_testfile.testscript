@@ -1,0 +1,13 @@
+#!/bin/bash
+
+typecheck_tests_file="tests/typecheck_examples.tests"
+example_folder="examples"
+
+while read file; do
+    if ! grep  -q -E "^$file$" "$typecheck_tests_file"; then
+        echo "FAILURE: Links example file $file is not mentioned in $typecheck_tests_file"
+        exit 1
+    fi
+done <<< "$(find "$example_folder" -iname "*.links")"
+
+echo "SUCCESS: All examples are mentioned in $typecheck_tests_file"

@@ -104,4 +104,17 @@ if [ "$1" == "shredding" -o "$2" == "shredding" ]; then
     run_database_testsuite $SHREDDING_TEST_DIR
 fi
 
+#look for custom test scripts in the tests folder and execute them
+#they must be called  *.testscript
+for s in tests/*.testscript; do
+        echo "executing custom test script $s"
+        eval "$s"
+        ret_code=$?
+        if [ $ret_code != 0 ]; then
+            echo "script $s failed"
+            ret=1
+        fi
+    done
+
+
 exit $ret
