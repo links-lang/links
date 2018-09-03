@@ -12,7 +12,7 @@ val effect_row   : ?overstep_quantifiers:bool -> Types.datatype -> Types.row
 val is_function_type : Types.datatype -> bool
 val is_thunk_type : Types.datatype -> bool
 val is_builtin_effect : string -> bool
-val element_type : Types.datatype -> Types.datatype
+val element_type : ?overstep_quantifiers:bool -> Types.datatype -> Types.datatype
 
 val table_read_type : Types.datatype -> Types.datatype
 val table_write_type : Types.datatype -> Types.datatype
@@ -22,6 +22,7 @@ val abs_type     : Types.datatype -> Types.datatype
 val app_type     : Types.datatype -> Types.datatype -> Types.datatype
 
 val extract_row : Types.datatype -> Types.row
+val iter_row : (string -> Types.field_spec -> unit) -> Types.row -> unit
 val split_row : string -> Types.row -> (Types.datatype * Types.row)
 val split_variant_type : string -> Types.datatype -> (Types.datatype * Types.datatype)
 val variant_at : ?overstep_quantifiers:bool -> string -> Types.datatype -> Types.datatype

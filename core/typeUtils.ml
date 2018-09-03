@@ -165,12 +165,16 @@ let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overs
      error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 
 let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers)  with
-  | (`ForAll (_, t), _) -> effect_row t
+  | (`ForAll (_, t), true) -> effect_row t
   | (`Function (_, effects, _), _) -> effects
   | (`Lolli (_, effects, _), _) -> effects
   | (t, _) ->
       error ("Attempt to take effects of non-function: " ^ string_of_datatype t)
 
+
+let iter_row (iter_func : string -> field_spec -> unit) row  =
+  let (field_spec_map, _, _) = fst (unwrap_row row) in
+  Utility.StringMap.iter iter_func field_spec_map
 
 let is_function_type t = match concrete_type t with
   | `Lolli (_, _, _)
@@ -184,11 +188,11 @@ let is_builtin_effect = function
   | "wild" | "hear" -> true
   | _ -> false
 
-let rec element_type t = match concrete_type t with
-  | `ForAll (_, t) -> element_type t
-  | `Application (l, [`Type t])
+let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers) with
+  | (`ForAll (_, t), true) -> element_type t
+  | `Application (l, [`Type t]), _
       when Types.Abstype.equal l Types.list -> t
-  | t ->
+  | (t, _) ->
       error ("Attempt to take element type of non-list: " ^ string_of_datatype t)
 
 let rec table_read_type t = match concrete_type t with

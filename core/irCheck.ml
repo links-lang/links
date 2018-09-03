@@ -604,8 +604,13 @@ struct
       fun special -> match special with
         | `Wrong t -> `Wrong t, t, o
         | `Database v ->
-            let v, _, o = o#value v in
-              `Database v, `Primitive `DB, o
+            let v, vt, o = o#value v in
+            (* v must be a record containing string fields  name, args, and driver*)
+            List.iter (fun field ->
+                o#check_eq_types (project_type field vt) Types.string_type
+              ) ["name"; "args"; "driver"];
+            `Database v, `Primitive `DB, o
+
         | `Table (db, table_name, keys, tt) ->
             let db, db_type, o = o#value db in
             o#check_eq_types db_type Types.database_type;
@@ -613,9 +618,11 @@ struct
             o#check_eq_types table_name_type Types.string_type;
             let keys, keys_type, o = o#value keys in
             o#check_eq_types keys_type Types.keys_type;
-            (* TODO: tt is a tuple of three records. Check it to contain base types only and all rows should be closed. *)
+            (* TODO: tt is a tuple of three records. Discussion pending about what kind of checks we should do here
+               From an implementation perspective, we should check the consistency of the read, write, needed info here *)
               `Table (db, table_name, keys, tt), `Table tt, o
-        | `Query (range, e, _) -> (* TODO: Check that body has right type: Only (nested?) records of base types *)
+
+        | `Query (range, e, original_t) ->
             o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
             let range, o =
               o#optionu
@@ -630,26 +637,71 @@ struct
             let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
             let e, t, o = o#computation e in
             let o, _ = o#set_allowed_effects outer_effects in
+
+            (* The type of the body must match the type the query is annotated with *)
+            o#check_eq_types original_t t;
+
+            (if Settings.get_value Basicsettings.Shredding.relax_query_type_constraint then
+              () (* Discussion pending about how to type-check here. Currently same as frontend *)
+            else
+              let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in
+              let row = TypeUtils.extract_row list_content_type in
+              ensure (Types.is_base_row row) "Only base types allowed in query result record" (`Special special));
+
               `Query (range, e, t), t, o
-        | `Update ((x, source), where, body) -> (* TODO perform checks specific to this constructor *)
+
+        | `Update ((x, source), where, body) ->
             o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
-            let source, _, o = o#value source in
+            let source, source_t, o = o#value source in
+            (* this implicitly checks that source is a table *)
+            let table_read = TypeUtils.table_read_type source_t in
+            let table_write = TypeUtils.table_write_type source_t in
             let x, o = o#binder x in
+            o#check_eq_types (Var.type_of_binder x) table_read;
             (* where part must not have effects *)
             let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
-            let where, _, o = o#option (fun o -> o#computation) where in
+            let where, o = o#optionu (fun o where ->
+                  let where, t, o = o#computation where in
+                  o#check_eq_types t Types.bool_type;
+                  where, o
+                )
+               where in
+            let body, body_t, o = o#computation body in
+            let body_element_type = TypeUtils.element_type ~overstep_quantifiers:false body_t in
+            let body_record_row = (TypeUtils.extract_row body_element_type) in
+            ensure (Types.is_closed_row body_record_row) "Open row as result of update" (`Special special);
+            TypeUtils.iter_row (fun field presence_spec ->
+                match presence_spec with
+                  | `Present actual_type_field ->
+                    (* Ensure that the field we update is in the write row and the types match *)
+                    let expected_type_field = TypeUtils.project_type field table_write in
+                    o#check_eq_types expected_type_field actual_type_field
+                  | `Absent -> () (* This is a closed row, ignore Absent *)
+                  | `Var _  -> raise_ir_type_error "Found presence polymorphism in the result of an update" (`Special special)
+              ) body_record_row;
+            let o = o#remove_binder x in
             let o, _ = o#set_allowed_effects outer_effects in
-            let body, _, o = o#computation body in
               `Update ((x, source), where, body), Types.unit_type, o
-        | `Delete ((x, source), where) -> (* TODO perform checks specific to this constructor *)
+
+        | `Delete ((x, source), where) ->
             o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
-            let source, _, o = o#value source in
+            let source, source_t, o = o#value source in
+            (* this implicitly checks that source is a table *)
+            let table_read = TypeUtils.table_read_type source_t in
             let x, o = o#binder x in
+            o#check_eq_types (Var.type_of_binder x) table_read;
             (* where part must not have effects *)
             let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
-            let where, _, o = o#option (fun o -> o#computation) where in
+            let where, o = o#optionu (fun o where ->
+                  let where, t, o = o#computation where in
+                  o#check_eq_types t Types.bool_type;
+                  where, o
+                )
+               where in
+            let o = o#remove_binder x in
             let o, _ = o#set_allowed_effects outer_effects in
               `Delete ((x, source), where), Types.unit_type, o
+
         | `CallCC v ->
             let v, t, o = o#value v in
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
