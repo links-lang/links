@@ -773,15 +773,26 @@ struct
         | `Let (x, (tyvars, tc)) ->
             let tc, o =
             try
+              let o = List.fold_left
+                (fun o quant ->
+                  let var = var_of_quantifier quant in
+                  let kind = kind_of_quantifier quant in
+                  o#add_typevar_to_context var kind) o tyvars in
               let tc, act, o = o#tail_computation tc in
+              let o = List.fold_left
+                (fun o quant ->
+                  let var = var_of_quantifier quant in
+                  o#remove_typevar_to_context var) o tyvars in
               let exp = Var.type_of_binder x in
-              o#check_eq_types exp act;
+              let act_foralled = `ForAll (ref tyvars, act) in
+              o#check_eq_types exp act_foralled;
               tc, o
             with e -> handle_ir_type_error e (tc, o) in
             let x, o = o#binder x in
             `Let (x, (tyvars, tc)), o
 
         | `Fun (f, (tyvars, xs, body), z, location) as binding ->
+              (* It is important that the type annotations of the parameters are expressed in terms of the type variables from tyvars (also for rec functions) *)
               let f, tyvars, xs, body, z, location, o =
               try
                 let (z, o) = o#optionu (fun o -> o#binder) z in
