@@ -287,6 +287,11 @@ examples/handlers/identity.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
+Typecheck example file examples/handlers/lambda.links
+examples/handlers/lambda.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
 Typecheck example file examples/handlers/light_switch.links
 examples/handlers/light_switch.links
 filemode : args
@@ -303,6 +308,11 @@ filemode : args
 args : --config=tests/typecheck_examples.tests.config
 ignore : broken example
 
+Typecheck example file examples/handlers/nim-webversion.links
+examples/handlers/nim-webversion.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
 Typecheck example file examples/handlers/number_games.links
 examples/handlers/number_games.links
 filemode : args
@@ -318,6 +328,11 @@ examples/handlers/pipes.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 ignore : broken example
+
+Typecheck example file examples/handlers/racing-lines.links
+examples/handlers/racing-lines.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
 
 Typecheck example file examples/handlers/sat.links
 examples/handlers/sat.links
@@ -337,6 +352,11 @@ ignore : broken example
 
 Typecheck example file examples/handlers/shallow_state.links
 examples/handlers/shallow_state.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
+Typecheck example file examples/handlers/sierpinski-triangle.links
+examples/handlers/sierpinski-triangle.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
@@ -715,6 +735,11 @@ examples/sessions/two-factor.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
+Typecheck example file  examples/Shopping-Cart.links
+examples/Shopping-Cart.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
 Typecheck example file examples/shredding.links
 examples/shredding.links
 filemode : args
@@ -756,6 +781,16 @@ args : --config=tests/typecheck_examples.tests.config
 
 Typecheck example file examples/todoDb.links
 examples/todoDb.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
+Typecheck example file examples/TicTacToe-Console.links
+examples/TicTacToe-Console.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
+Typecheck example file examples/ToDo-List-Styles.links
+examples/ToDo-List-Styles.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
