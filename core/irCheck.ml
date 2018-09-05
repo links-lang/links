@@ -717,41 +717,129 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            `Choice (v, bs), t, o
-	| `Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) -> (* TODO perform checks specific to this constructor *)
-	   let (comp, _, o) = o#computation ih_comp in
-           (* TODO FIXME traverse parameters *)
-           let (depth, o) =
-             match ih_depth with
-             | `Deep params ->
+        | `Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
+          (* outer effects is R_d in the IR formalization *)
+          let outer_effects = Types.flatten_row allowed_effects in
+
+          (* return_t is A_d in the IR formalization *)
+          let (return, return_t, return_binder_type, o) =
+            let return_binder, return_computation = ih_return in
+             (* return_binder_type is A_c in the IR formalization *)
+            let return_binder_type = Var.type_of_binder return_binder in
+            let (b, o) = o#binder return_binder in
+            let (comp, t, o) = o#computation return_computation in
+            let o = o#remove_binder return_binder in
+          (b, comp), t, return_binder_type, o in
+
+
+          (* The effects and return type of all resumptions must be the same.
+             instead of collecting them while processing the handler branches, we save the once we encounter first here.
+             The subsequent cases are then compared against what's stored here *)
+          let resumption_effects : Types.row option ref = ref None in
+          let resumption_return_type : Types.datatype option ref = ref None in
+
+          let (cases, branch_presence_spec_types, o) =
+            o#name_map
+              (fun o (x, resume, c) ->
+                  let (x, o) = o#binder x in
+                  let x_type = Var.type_of_binder x in
+                  let (resume, o) = o#binder resume in
+                  let resume_type = Var.type_of_binder resume in
+                  let (cur_resume_args, cur_resume_effects, cur_resume_ret) = match TypeUtils.concrete_type resume_type with
+                    | `Function (a, b, c) -> a, b, c
+                    | _ -> raise_ir_type_error "Resumptions has non-function type" (`Special special) in
+
+                  let presence_spec_funtype = `Function (x_type, Types.make_empty_closed_row (), cur_resume_args) in
+
+                  (match !resumption_effects, !resumption_return_type with
+                    | (None, None) ->
+                      resumption_effects := Some cur_resume_effects;
+                      resumption_return_type := Some  cur_resume_ret
+                    | (Some existing_resumption_effects, Some existing_resumption_rettype) ->
+                      o#check_eq_types (`Effect existing_resumption_effects) (`Effect cur_resume_effects);
+                      o#check_eq_types existing_resumption_rettype cur_resume_ret
+                    | _ -> assert false);
+
+
+                  (* ct is A_d in the IR formalization *)
+                  let (c, ct, o) = o#computation c in
+                  o#check_eq_types return_t ct;
+                  let o = o#remove_binder x in
+                  let o = o#remove_binder resume in
+                  (x, resume, c), presence_spec_funtype, o)
+              ih_cases in
+
+
+          (* We now construct the inner effects from the outer effects and branch_presence_spec_types *)
+          let (outer_effects_map, outer_effects_var, outer_effects_dualized) = outer_effects in
+          (* For each case branch, the corresponding entry goes directly into the field spec map of the inner effect row *)
+          let inner_effects_map_from_branches = StringMap.map (fun x -> `Present x) branch_presence_spec_types in
+          (* We now add all entries from the outer effects that were not touched by the handler to the inner effects *)
+          let inner_effects_map = StringMap.fold (fun effect outer_presence_spec map ->
+              if StringMap.mem effect inner_effects_map_from_branches then
+                map
+              else
+                StringMap.add effect outer_presence_spec map
+            )  inner_effects_map_from_branches outer_effects_map in
+          let inner_effects = (inner_effects_map, outer_effects_var, outer_effects_dualized) in
+
+        (if not (Types.is_closed_row outer_effects) then
+          let outer_effects_contain e = StringMap.mem e outer_effects_map in
+          ensure (StringMap.for_all (fun e _ -> outer_effects_contain e) cases) "Outer effects are open but do not mention an effect handled by handler" (`Special special));
+
+          (* comp_t  is A_c in the IR formalization *)
+          let o, _ = o#set_allowed_effects inner_effects in
+          let (comp, comp_t, o) = o#computation ih_comp in
+          let (depth, o) =
+            match ih_depth with
+            | `Deep params ->
+                (* TODO: Find out what these "params" are for *)
                 let (o, bindings) =
                   List.fold_left
                     (fun (o, bvs) (b,v) ->
                       let (b, o) = o#binder b in
                       let (v, _, o) = o#value v in
+                      let o = o#remove_binder b in
                       (o, (b,v) :: bvs))
                     (o, []) params
                 in
                 `Deep (List.rev bindings), o
-             | `Shallow -> `Shallow, o
-           in
-	   let (cases, _branch_types, o) =
-	     o#name_map
-               (fun o (x, resume, c) ->
-                 let (x, o) = o#binder x in
-		 let (resume, o) = o#binder resume in
-		 let (c, t, o) = o#computation c in
-		 (x, resume, c), t, o)
-	       ih_cases
-	   in
-           let (return, t, o) =
-             let (b, o) = o#binder (fst ih_return) in
-             let (comp, t, o) = o#computation (snd ih_return) in
-             (b, comp), t, o
-           in
-	   `Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t, o
-	| `DoOperation (name, vs, t) -> (* TODO perform checks specific to this constructor *)
-	   let (vs, _, o) = o#list (fun o -> o#value) vs in
-	   (`DoOperation (name, vs, t), t, o)
+            | `Shallow -> `Shallow, o in
+          let o, _ = o#set_allowed_effects outer_effects in
+
+          o#check_eq_types return_binder_type comp_t;
+
+        (match !resumption_effects, !resumption_return_type, depth with
+          | Some re, Some rrt, (`Deep _) ->
+            o#check_eq_types (`Effect re) (`Effect outer_effects);
+            o#check_eq_types return_t rrt
+          | Some re, Some rrt, `Shallow ->
+            o#check_eq_types (`Effect re) (`Effect inner_effects);
+            o#check_eq_types comp_t rrt
+          | _ -> ());
+
+
+          `Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, return_t, o
+
+        | `DoOperation (name, vs, t) -> (* TODO perform checks specific to this constructor *)
+          let (vs, vs_t, o) = o#list (fun o -> o#value) vs in
+          let arg_type_actual = match vs_t with
+            | [t] -> t
+            | _ -> make_tuple_type vs_t in
+
+          (* Checks that "name" is Present in the current effect row *)
+          let effect_type = fst (TypeUtils.split_row name allowed_effects) in
+           (* contrary to normal functions, the argument type is not tuple-ified if there is only a single argument.
+              Therefore, can't use return_type and arg_types from TypeUtils here, because these have those assumptions hard-coded *)
+          let (arg_type_expected, effects, ret_type_expected) = match TypeUtils.concrete_type effect_type with
+            | `Function (at, et, rt) -> (at, et, rt)
+            | _ -> raise_ir_type_error "Non-function type associated with effect" (`Special special) in
+
+          ensure (Types.is_empty_row effects) "Effect case's function type has non-empty effect row" (`Special special);
+          o#check_eq_types arg_type_expected arg_type_actual;
+          o#check_eq_types ret_type_expected t;
+
+          (`DoOperation (name, vs, t), t, o)
 
    method! bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
