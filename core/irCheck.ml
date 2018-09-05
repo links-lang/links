@@ -146,9 +146,6 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
       begin
 
 
-
-      Debug.print ("Checking type equality\n " ^
-                     (Types.string_of_datatype t1) ^ "\n vs \n" ^ (Types.string_of_datatype t2) (*^ IntMap.show Var.pp_var subst*));
       match t1 with
       | `Not_typed ->
           begin match t2 with
