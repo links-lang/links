@@ -284,7 +284,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
                                     | _, `Body _ -> failwith "should have removed all `Body variants by now"
                                     |  `Var lv, `Var rv -> handle_variable `Presence lv rv context
                                     end
-      | _, _ -> assert false
+      | _, _ -> (context, false)
     and eq_field_envs  (context, lfield_env, rfield_env) =
       StringMap.fold (fun field lp (context, prev_eq)  ->
                            match StringMap.find_opt field rfield_env with
@@ -334,7 +334,7 @@ let ensure_effect_present_in_row ctx allowed_effects required_effect_name requir
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) in
   match StringMap.find_opt required_effect_name map with
     | Some (`Present et) -> check_eq_types ctx et required_effect_type occurence
-    | _ -> raise_ir_type_error ("Required effect" ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurence
+    | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurence
 
 
 
@@ -821,9 +821,7 @@ struct
 
         | `DoOperation (name, vs, t) -> (* TODO perform checks specific to this constructor *)
           let (vs, vs_t, o) = o#list (fun o -> o#value) vs in
-          let arg_type_actual = match vs_t with
-            | [t] -> t
-            | _ -> make_tuple_type vs_t in
+          let arg_type_actual =  make_tuple_type vs_t in
 
           (* Checks that "name" is Present in the current effect row *)
           let effect_type = fst (TypeUtils.split_row name allowed_effects) in
