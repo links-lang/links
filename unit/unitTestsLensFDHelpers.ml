@@ -314,11 +314,7 @@ let test_join_1_add_left_neutral _test_ctx =
 let test_calculate_fd_changelist test_ctx =
     let data = UnitTestsLensSetOperations.test_data_3 in
     let fds = dat_fd_set_2 in
-<<<<<<< HEAD
     let changeset = LensHelpersIncremental.calculate_fd_changelist fds data in
-=======
-    let changeset = LensHelpersCorrect.calculate_fd_changelist fds data in
->>>>>>> ea077469468e5226ec638e3e0c60a84addcdd148
     let _ = List.map (fun ((cols_l, cols_r),changes) ->
         let _ = LensTestHelpers.print_verbose test_ctx (LensTestHelpers.col_list_to_string cols_l " " ^ " -> " ^ LensTestHelpers.col_list_to_string cols_r " ") in
         let strfn dat = if dat = [] then "" else  List.fold_left (fun a b -> a ^ ", " ^ string_of_value b) (string_of_value (List.hd dat)) (List.tl dat) in
@@ -327,11 +323,7 @@ let test_calculate_fd_changelist test_ctx =
         ) changes in
         ()
     ) changeset in
-<<<<<<< HEAD
     let phrase = LensHelpersIncremental.matches_change changeset in
-=======
-    let phrase = LensHelpersCorrect.matches_change changeset in
->>>>>>> ea077469468e5226ec638e3e0c60a84addcdd148
     let str = match phrase with None -> "None" | Some phrase -> LensQueryHelpers.construct_query phrase in
     LensTestHelpers.print_verbose test_ctx str;
     ()
