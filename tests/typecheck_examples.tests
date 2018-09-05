@@ -453,6 +453,11 @@ examples/progressiveQuery.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
+Typecheck example file examples/relational_lenses/cds.links
+examples/relational_lenses/cds.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
 Typecheck example file examples/serverClientProcess.links
 examples/serverClientProcess.links
 filemode : args
