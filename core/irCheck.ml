@@ -313,29 +313,27 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
 
 
 
-let check_eq_types: type_eq_context -> Types.datatype -> Types.datatype -> unit = fun ctx et at ->
+let check_eq_types (ctx : type_eq_context) et at occurence =
   if not (eq_types ctx (et, at)) then
     raise_ir_type_error
       ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
-      `None
+      occurence
 
-let check_eq_type_lists = fun ctx exptl actl ->
-  (* if typecheck_ir then
-   *   begin *)
+let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurence ->
     if List.length exptl <> List.length actl then
       raise_ir_type_error "Arity mismatch" `None
     else
       List.iter2 (fun  et at ->
-          check_eq_types ctx et at
+          check_eq_types ctx et at occurence
        )  exptl actl
-    (* end *)
+
 
 
 
 let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurence =
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) in
   match StringMap.find_opt required_effect_name map with
-    | Some (`Present et) -> check_eq_types ctx et required_effect_type
+    | Some (`Present et) -> check_eq_types ctx et required_effect_type occurence
     | _ -> raise_ir_type_error ("Required effect" ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurence
 
 
@@ -390,7 +388,7 @@ struct
     method add_function_closure_binder f binder = {< closure_def_env = Env.bind closure_def_env (f, binder) >}
     method remove_function_closure_binder f = {< closure_def_env = Env.unbind closure_def_env f  >}
 
-    method check_eq_types t1 t2 = check_eq_types (o#extract_type_equality_context ()) t1 t2
+    method check_eq_types t1 t2 occurence = check_eq_types (o#extract_type_equality_context ()) t1 t2 occurence
 
     method! var : var -> (var * datatype * 'self_type) =
       fun var -> (var, o#lookup_type var, o)
@@ -434,7 +432,7 @@ struct
             let v, vt, o = o#value v in
             let _ = match t with
               | `Variant _ ->
-                 o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt 
+                 o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (`Value orig)
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (`Value orig) in
             `Inject (name, v, t), t, o
 
@@ -469,8 +467,8 @@ struct
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
 
-            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive `String) t ) attribute_types in
-            let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t ) children_types in
+            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive `String) t (`Value orig)) attribute_types in
+            let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t (`Value orig)) children_types in
               `XmlNode (tag, attributes, children), Types.xml_type, o
 
         | `ApplyPure (f, args) ->
@@ -484,7 +482,7 @@ struct
             let (args, argument_types, o) = o#list (fun o -> o#value) args in
 
             let parameter_types = arg_types ~overstep_quantifiers:false ft in
-            check_eq_type_lists (o#extract_type_equality_context ()) parameter_types argument_types;
+            check_eq_type_lists (o#extract_type_equality_context ()) parameter_types argument_types (`Value orig);
             ensure (is_pure_function f) "ApplyPure used for non-pure function" (`Value orig);
             `ApplyPure (f, args),  return_type ~overstep_quantifiers:false ft, o
 
@@ -496,7 +494,7 @@ struct
             begin match o#lookup_closure_def_for_fun f with
             | Some optbinder ->
               begin match optbinder with
-                | Some binder -> o#check_eq_types (Var.type_of_binder binder) zt
+                | Some binder -> o#check_eq_types (Var.type_of_binder binder) zt (`Value orig)
                 | None -> raise_ir_type_error "Providing closure to a function that does not need one" (`Value orig)
               end
             | None -> raise_ir_type_error "Providing closure to untracked function" (`Value orig)
@@ -532,7 +530,7 @@ struct
             let exp_argstype = arg_types ~overstep_quantifiers:false ft in
             let effects = effect_row ~overstep_quantifiers:false ft in
             ensure_effect_rows_compatible (o#extract_type_equality_context ()) allowed_effects effects (`TC orig);
-            check_eq_type_lists (o#extract_type_equality_context ()) exp_argstype argtypes;
+            check_eq_type_lists (o#extract_type_equality_context ()) exp_argstype argtypes (`TC orig);
             `Apply (f, args), return_type ~overstep_quantifiers:false ft, o
 
         | `Special special ->
@@ -571,7 +569,7 @@ struct
                    (fun name  (binder, comp) (cases, types, o) ->
                      let type_binder = Var.type_of_binder binder in
                      let type_variant = variant_at ~overstep_quantifiers:false name variant in
-                     o#check_eq_types type_binder type_variant;
+                     o#check_eq_types type_binder type_variant (`TC orig);
                      let b, o = o#binder binder in
                      let c, t, o = o#computation comp in
                      let o = o#remove_binder binder in
@@ -585,7 +583,7 @@ struct
                      (b, c), t, o) default in
                let types = OptionUtils.opt_app (fun dt -> dt :: types) types default_type in
                let t = List.hd types in
-               List.iter (fun ty -> o#check_eq_types t ty) (List.tl types);
+               List.iter (fun ty -> o#check_eq_types t ty (`TC orig)) (List.tl types);
                `Case (v, cases, default), t, o
             | _ ->  raise_ir_type_error "Case over non-variant value" (`TC orig)
             end
@@ -593,8 +591,8 @@ struct
             let v, vt, o = o#value v in
             let left, lt, o = o#computation left in
             let right, rt, o = o#computation right in
-            o#check_eq_types vt (`Primitive `Bool);
-            o#check_eq_types lt rt;
+            o#check_eq_types vt (`Primitive `Bool) (`TC orig);
+            o#check_eq_types lt rt (`TC orig);
             `If (v, left, right), lt, o
 
     method! special : special -> (special * datatype * 'self_type) =
@@ -604,17 +602,17 @@ struct
             let v, vt, o = o#value v in
             (* v must be a record containing string fields  name, args, and driver*)
             List.iter (fun field ->
-                o#check_eq_types (project_type field vt) Types.string_type
+                o#check_eq_types (project_type field vt) Types.string_type (`Special special)
               ) ["name"; "args"; "driver"];
             `Database v, `Primitive `DB, o
 
         | `Table (db, table_name, keys, tt) ->
             let db, db_type, o = o#value db in
-            o#check_eq_types db_type Types.database_type;
+            o#check_eq_types db_type Types.database_type (`Special special);
             let table_name, table_name_type, o = o#value table_name in
-            o#check_eq_types table_name_type Types.string_type;
+            o#check_eq_types table_name_type Types.string_type (`Special special);
             let keys, keys_type, o = o#value keys in
-            o#check_eq_types keys_type Types.keys_type;
+            o#check_eq_types keys_type Types.keys_type (`Special special);
             (* TODO: tt is a tuple of three records. Discussion pending about what kind of checks we should do here
                From an implementation perspective, we should check the consistency of the read, write, needed info here *)
               `Table (db, table_name, keys, tt), `Table tt, o
@@ -626,8 +624,8 @@ struct
                 (fun o (limit, offset) ->
                    let limit, ltype, o = o#value limit in
                    let offset, otype, o = o#value offset in
-                      o#check_eq_types ltype Types.int_type;
-                      o#check_eq_types otype Types.int_type;
+                      o#check_eq_types ltype Types.int_type (`Special special);
+                      o#check_eq_types otype Types.int_type (`Special special);
                      (limit, offset), o)
                 range in
             (* query body must not have effects *)
@@ -636,7 +634,7 @@ struct
             let o, _ = o#set_allowed_effects outer_effects in
 
             (* The type of the body must match the type the query is annotated with *)
-            o#check_eq_types original_t t;
+            o#check_eq_types original_t t (`Special special);
 
             (if Settings.get_value Basicsettings.Shredding.relax_query_type_constraint then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
@@ -654,12 +652,12 @@ struct
             let table_read = TypeUtils.table_read_type source_t in
             let table_write = TypeUtils.table_write_type source_t in
             let x, o = o#binder x in
-            o#check_eq_types (Var.type_of_binder x) table_read;
+            o#check_eq_types (Var.type_of_binder x) table_read (`Special special);
             (* where part must not have effects *)
             let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
             let where, o = o#optionu (fun o where ->
                   let where, t, o = o#computation where in
-                  o#check_eq_types t Types.bool_type;
+                  o#check_eq_types t Types.bool_type (`Special special);
                   where, o
                 )
                where in
@@ -672,7 +670,7 @@ struct
                   | `Present actual_type_field ->
                     (* Ensure that the field we update is in the write row and the types match *)
                     let expected_type_field = TypeUtils.project_type field table_write in
-                    o#check_eq_types expected_type_field actual_type_field
+                    o#check_eq_types expected_type_field actual_type_field (`Special special)
                   | `Absent -> () (* This is a closed row, ignore Absent *)
                   | `Var _  -> raise_ir_type_error "Found presence polymorphism in the result of an update" (`Special special)
               ) body_record_row;
@@ -686,12 +684,12 @@ struct
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
             let x, o = o#binder x in
-            o#check_eq_types (Var.type_of_binder x) table_read;
+            o#check_eq_types (Var.type_of_binder x) table_read (`Special special);
             (* where part must not have effects *)
             let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
             let where, o = o#optionu (fun o where ->
                   let where, t, o = o#computation where in
-                  o#check_eq_types t Types.bool_type;
+                  o#check_eq_types t Types.bool_type (`Special special);
                   where, o
                 )
                where in
@@ -756,14 +754,14 @@ struct
                       resumption_effects := Some cur_resume_effects;
                       resumption_return_type := Some  cur_resume_ret
                     | (Some existing_resumption_effects, Some existing_resumption_rettype) ->
-                      o#check_eq_types (`Effect existing_resumption_effects) (`Effect cur_resume_effects);
-                      o#check_eq_types existing_resumption_rettype cur_resume_ret
+                      o#check_eq_types (`Effect existing_resumption_effects) (`Effect cur_resume_effects) (`Special special);
+                      o#check_eq_types existing_resumption_rettype cur_resume_ret (`Special special)
                     | _ -> assert false);
 
 
                   (* ct is A_d in the IR formalization *)
                   let (c, ct, o) = o#computation c in
-                  o#check_eq_types return_t ct;
+                  o#check_eq_types return_t ct (`Special special);
                   let o = o#remove_binder x in
                   let o = o#remove_binder resume in
                   (x, resume, c), presence_spec_funtype, o)
@@ -807,15 +805,15 @@ struct
             | `Shallow -> `Shallow, o in
           let o, _ = o#set_allowed_effects outer_effects in
 
-          o#check_eq_types return_binder_type comp_t;
+          o#check_eq_types return_binder_type comp_t (`Special special);
 
         (match !resumption_effects, !resumption_return_type, depth with
           | Some re, Some rrt, (`Deep _) ->
-            o#check_eq_types (`Effect re) (`Effect outer_effects);
-            o#check_eq_types return_t rrt
+            o#check_eq_types (`Effect re) (`Effect outer_effects) (`Special special);
+            o#check_eq_types return_t rrt (`Special special)
           | Some re, Some rrt, `Shallow ->
-            o#check_eq_types (`Effect re) (`Effect inner_effects);
-            o#check_eq_types comp_t rrt
+            o#check_eq_types (`Effect re) (`Effect inner_effects) (`Special special);
+            o#check_eq_types comp_t rrt (`Special special)
           | _ -> ());
 
 
@@ -836,8 +834,8 @@ struct
             | _ -> raise_ir_type_error "Non-function type associated with effect" (`Special special) in
 
           ensure (Types.is_empty_row effects) "Effect case's function type has non-empty effect row" (`Special special);
-          o#check_eq_types arg_type_expected arg_type_actual;
-          o#check_eq_types ret_type_expected t;
+          o#check_eq_types arg_type_expected arg_type_actual (`Special special);
+          o#check_eq_types ret_type_expected t (`Special special);
 
           (`DoOperation (name, vs, t), t, o)
 
@@ -867,7 +865,7 @@ struct
           | _ -> false in
         let mismatch () = raise_ir_type_error "Quantifier mismatch in function def" (`Binding fundef) in
         let check_types subst expected_returntype body_actual_type  =
-          check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type in
+          check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type (`Binding fundef) in
         let rec handle_foralls subst funtype tyvars body_actual_type = match funtype with
           | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst (unbox_quantifiers qs_boxed) t tyvars body_actual_type
           | `Function (_, _, rt)
@@ -907,7 +905,7 @@ struct
 
     method! binding : binding -> (binding * 'self_type) =
       function
-        | `Let (x, (tyvars, tc)) ->
+        | (`Let (x, (tyvars, tc))) as orig ->
             let tc, o =
             try
               let o = List.fold_left
@@ -922,7 +920,7 @@ struct
                   o#remove_typevar_to_context var) o tyvars in
               let exp = Var.type_of_binder x in
               let act_foralled = `ForAll (ref tyvars, act) in
-              o#check_eq_types exp act_foralled;
+              o#check_eq_types exp act_foralled (`Binding orig);
               tc, o
             with e -> handle_ir_type_error e (tc, o) in
             let x, o = o#binder x in
