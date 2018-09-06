@@ -522,7 +522,6 @@ struct
 
         | `Apply (f, args) ->
             let f, ft, o = o#value f in
-            Debug.print ("Function type in appl:" ^ string_of_datatype ft);
             let args, argtypes, o = o#list (fun o -> o#value) args in
             let exp_argstype = arg_types ~overstep_quantifiers:false ft in
             let effects = effect_row ~overstep_quantifiers:false ft in
