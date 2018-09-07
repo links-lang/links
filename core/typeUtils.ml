@@ -219,6 +219,10 @@ let quantifiers t = match concrete_type t with
   | `ForAll (qs, _) -> Types.unbox_quantifiers qs
   | _ -> []
 
+let type_without_quantifiers qt = match concrete_type qt with
+  | `ForAll (_, t) -> t
+  | t -> t
+
 let record_without t names =
   match concrete_type t with
     | `Record ((fields, row_var, dual) as row) ->

@@ -27,6 +27,7 @@ val split_variant_type : string -> Types.datatype -> (Types.datatype * Types.dat
 val variant_at : string -> Types.datatype -> Types.datatype
 
 val quantifiers : Types.datatype -> Types.quantifier list
+val type_without_quantifiers : Types.datatype -> Types.datatype
 
 val record_without : Types.datatype -> Utility.StringSet.t -> Types.datatype
 

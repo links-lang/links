@@ -875,3 +875,23 @@ module ElimTypeAliases =
       p
 
   end
+
+
+(* Call Instantiate.datatype on all types occuring in a program *)
+module InstantiateTypes =
+  struct
+
+    let instantiate instantiation_maps =
+      object (o)
+        inherit Types.Transform.visitor
+
+        method! typ t =
+          (Instantiate.datatype instantiation_maps t, o)
+
+      end
+
+    let computation tyenv instantiation_maps c  =
+      let p, _, _ = (ir_type_mod_visitor tyenv (instantiate instantiation_maps))#computation c in
+      p
+
+end

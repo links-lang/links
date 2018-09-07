@@ -12,6 +12,9 @@ val datatype :
   Types.datatype -> Types.datatype
 val alias : string -> Types.type_arg list -> Types.tycon_environment -> Types.datatype
 
+(* Given a quantified type and a list of type arguments, create the corresponding instantiation maps *)
+val type_arguments_to_instantiation_maps : bool -> Types.datatype -> Types.type_arg list -> (Types.datatype * (Types.datatype IntMap.t * Types.row IntMap.t * Types.field_spec IntMap.t))
+
 val apply_type : Types.datatype -> Types.type_arg list -> Types.datatype
 val freshen_quantifiers : Types.datatype -> Types.datatype
 val replace_quantifiers : Types.datatype -> Types.quantifier list -> Types.datatype

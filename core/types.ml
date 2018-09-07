@@ -1033,7 +1033,7 @@ let rec concrete_field_spec f =
         end
     | _ -> f
 
-let free_type_vars, free_row_type_vars =
+let free_type_vars, free_row_type_vars, free_tyarg_vars =
   let module S = TypeVarSet in
   let rec free_type_vars' : S.t -> datatype -> S.t = fun rec_vars ->
     function
@@ -1111,8 +1111,9 @@ let free_type_vars, free_row_type_vars =
         | `Row row -> free_row_type_vars' rec_vars row
         | `Presence f -> free_field_spec_type_vars' rec_vars f
   in
-    ((fun t -> free_type_vars' S.empty t),
-     (fun t -> free_row_type_vars' S.empty t))
+    ((free_type_vars' S.empty),
+     (free_row_type_vars' S.empty),
+     (free_tyarg_vars' S.empty))
 
 type inference_type_map =
     ((datatype Unionfind.point) IntMap.t ref *

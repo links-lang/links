@@ -227,6 +227,7 @@ val xml_type : datatype
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
+val free_tyarg_vars : type_arg -> TypeVarSet.t
 val free_bound_type_vars     : ?include_aliases:bool -> typ -> Vars.vars_list
 val free_bound_row_type_vars : ?include_aliases:bool -> row -> Vars.vars_list
 
@@ -394,6 +395,7 @@ val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
+val typevarset_to_intset : TypeVarSet.t -> Utility.IntSet.t
 
 module type TRANSFORM =
 sig

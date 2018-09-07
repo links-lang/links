@@ -1,8 +1,9 @@
 open Ir
+open Utility
 
 module type TRANSFORM =
 sig
-  type environment = Types.datatype Env.Int.t
+  type environment = Types.datatype Env.Int.t [@@deriving show]
 
   class visitor : environment ->
   object ('self_type)
@@ -61,3 +62,7 @@ module ElimDeadDefs : PROGTRANSFORM
 
 module CheckForCycles : PROGTRANSFORM
 module ElimTypeAliases : PROGTRANSFORM
+module InstantiateTypes :
+sig
+  val computation : Types.datatype Env.Int.t -> (Types.datatype IntMap.t * Types.row IntMap.t * Types.field_spec IntMap.t) -> computation -> computation
+end
