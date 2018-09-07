@@ -75,7 +75,7 @@ end
 
 
 
-let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
+let eq_types occurence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
   fun  context (t1, t2) ->
     let lookupVar lvar map  =
       match IntMap.find_opt lvar map with
@@ -93,7 +93,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
               (primary_kind = primary_kind_env &&  rsk = subkind_env)
               "Mismatch between (sub) kind information in variable vs stored in kind environment"
               `None
-          | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") `None
+          | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurence
         end;
       (ctx, is_equal) in
     let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
@@ -311,7 +311,7 @@ let eq_types : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
 
 
 let check_eq_types (ctx : type_eq_context) et at occurence =
-  if not (eq_types ctx (et, at)) then
+  if not (eq_types occurence ctx (et, at)) then
     raise_ir_type_error
       ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
       occurence
@@ -337,7 +337,7 @@ let ensure_effect_present_in_row ctx allowed_effects required_effect_name requir
 
 let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurence =
   ensure
-    (eq_types ctx (`Record allowed_effects, `Record imposed_effects_row))
+    (eq_types occurence ctx (`Record allowed_effects, `Record imposed_effects_row))
     ("Incompatible effects; Allowed:\n" ^ (Types.string_of_row allowed_effects) ^ "\nactual effects:\n" ^  (Types.string_of_row imposed_effects_row))
     occurence
 
@@ -381,6 +381,7 @@ struct
 
     method add_typevar_to_context id kind = {< type_var_env = Env.bind type_var_env (id, kind)  >}
     method remove_typevar_to_context id  = {< type_var_env = Env.unbind type_var_env id >}
+    method get_type_var_env = type_var_env
 
     method add_function_closure_binder f binder = {< closure_def_env = Env.bind closure_def_env (f, binder) >}
     method remove_function_closure_binder f = {< closure_def_env = Env.unbind closure_def_env f  >}
@@ -508,7 +509,7 @@ struct
               end
             else
               begin
-              ensure (eq_types (o#extract_type_equality_context ()) (vt, t) || is_sub_type (vt, t)) (Printf.sprintf "coercion error: %s is not a subtype of %s"
+              ensure (eq_types (`Value orig) (o#extract_type_equality_context ()) (vt, t) || is_sub_type (vt, t)) (Printf.sprintf "coercion error: %s is not a subtype of %s"
                                          (string_of_datatype vt) (string_of_datatype t)) (`Value orig);
               `Coerce (v, t), t, o
               end
@@ -858,23 +859,23 @@ struct
           | `Rec _ -> true
           | _ -> false in
         let mismatch () = raise_ir_type_error "Quantifier mismatch in function def" (`Binding fundef) in
-        let check_types subst expected_returntype body_actual_type  =
+        let check_types subst type_var_env expected_returntype body_actual_type  =
           check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type (`Binding fundef) in
-        let rec handle_foralls subst funtype tyvars body_actual_type = match funtype with
-          | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst (unbox_quantifiers qs_boxed) t tyvars body_actual_type
+        let rec handle_foralls subst type_var_env funtype tyvars body_actual_type = match funtype with
+          | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst type_var_env (unbox_quantifiers qs_boxed) t tyvars body_actual_type
           | `Function (_, _, rt)
           | `Lolli (_, _, rt) ->
             if tyvars = [] then
-              check_types subst rt body_actual_type
+              check_types subst type_var_env rt body_actual_type
             else
               mismatch ()
           | _ -> mismatch ()
-        and handle_unboxed_foralls subst quantifier_list rest_expected_type tyvars body_actual_type = match quantifier_list, tyvars with
-          | [], _ -> handle_foralls subst rest_expected_type tyvars body_actual_type
+        and handle_unboxed_foralls subst type_var_env quantifier_list rest_expected_type tyvars body_actual_type = match quantifier_list, tyvars with
+          | [], _ -> handle_foralls subst type_var_env rest_expected_type tyvars body_actual_type
           | lq :: lqs, rq :: rqs ->
               if Types.kind_of_quantifier lq = Types.kind_of_quantifier rq then
                 let subst' = IntMap.add (Types.var_of_quantifier lq) (Types.var_of_quantifier rq) subst in
-                handle_unboxed_foralls subst' lqs rest_expected_type rqs body_actual_type
+                handle_unboxed_foralls subst' type_var_env lqs rest_expected_type rqs body_actual_type
               else
                 mismatch ()
           | _ -> mismatch () in
@@ -889,11 +890,12 @@ struct
                 let kind = kind_of_quantifier quant in
                 o#add_typevar_to_context var kind) o tyvars in
         let body, body_actual_type, o = o#computation body in
+        let type_var_env = o#get_type_var_env in
+        handle_foralls IntMap.empty type_var_env expected_overall_funtype tyvars body_actual_type;
         let o = List.fold_left
               (fun o quant ->
                 let var = var_of_quantifier quant in
                 o#remove_typevar_to_context var) o tyvars in
-        handle_foralls IntMap.empty expected_overall_funtype tyvars body_actual_type;
         let o, _ = o#set_allowed_effects previously_allowed_effects in
         body, o
 
