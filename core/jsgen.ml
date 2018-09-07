@@ -1,3 +1,4 @@
+open Js
 open Irtojs
 open Utility
 
@@ -112,8 +113,21 @@ type env = string IntMap.t
 module NewCodeGen : JS_CODEGEN = struct
   open Js
 
+  let is_primitive_var : Ident.var -> bool = function
+    | `Primitive _ -> true
+    | _ -> false
+
+  let lookup : Ident.var -> env -> string option
+    = fun k env ->
+    match k with
+    | `Primitive name -> Some name
+    | `Var k -> IntMap.lookup k env
+
   let extend : (Ident.var * string) -> env -> env
-    = fun (k, v) env -> IntMap.add k v env
+    = fun (k, v) env ->
+    match k with
+    | `Primitive _ -> env
+    | `Var k -> IntMap.add k v env
 
   open Prettier
   type nonrec t = Prettier.t
@@ -141,7 +155,7 @@ module NewCodeGen : JS_CODEGEN = struct
       | `Minus -> "-", `Prefix
       | `Increment fix -> "++", fix
       | `Decrement fix -> "--", fix
-      | `LogicalNot    -> "!", `Prefix
+      | `Not           -> "!", `Prefix
       | `BitwiseNot    -> "~", `Prefix
       | `Typeof        -> "typeof", `Prefix
       | `Delete        -> "delete", `Prefix
@@ -189,10 +203,10 @@ module NewCodeGen : JS_CODEGEN = struct
     val transl : env -> stmt -> t
   end
 
-  module type DECL = sig
-    val transl : env -> decl -> env * t
-    val transl_many : env -> decls -> env * t
-  end
+  (* module type DECL = sig
+   *   val transl : env -> decl -> env * t
+   *   val transl_many : env -> decls -> env * t
+   * end *)
 
   module type MISC = sig
     val fun_def : env -> fun_def -> env * t
@@ -244,13 +258,21 @@ module NewCodeGen : JS_CODEGEN = struct
     let rec transl env : expr -> t = function
       | Lit c ->
          text (match c with
-               | Int i    -> string_of_int i
-               | Float f  -> string_of_float f
-               | Char c   -> Printf.sprintf "'%c'" c
-               | String s -> Printf.sprintf "\"%s\"" s)
+               | Bool true  -> "true"
+               | Bool false -> "false"
+               | Char c     -> Printf.sprintf "'%c'" c
+               | Float f    ->
+                  let s = string_of_float' f in
+                  let n = String.length s in
+                  (* strip any trailing '.' *)
+                  if n > 1 && (s.[n-1] = '.')
+                  then String.sub s 0 (n-1)
+                  else s
+               | Int i      -> string_of_int i
+               | String s   -> Printf.sprintf "\"%s\"" s)
       | Var v ->
-         text (match IntMap.lookup v env with
-               | None      -> failwith (Printf.sprintf "Unbound variable %d" v)
+         text (match lookup v env with
+               | None      -> failwith (Printf.sprintf "Unbound variable %s" (Ident.string_of_var v))
                | Some name -> name)
       | Func fun_def -> snd (Misc.fun_def env fun_def)
       | Arrow (params, body) ->
@@ -258,8 +280,8 @@ module NewCodeGen : JS_CODEGEN = struct
            let env, params =
              List.fold_left
                (fun (env, params) binder ->
-                 let name = name_binder binder in
-                 (extend (Var.var_of_binder binder, name) env, name :: params))
+                 let name = Ident.name_binder binder in
+                 (extend (Ident.to_var binder, name) env, name :: params))
                (env, []) params
            in
            env, List.rev params
@@ -324,31 +346,34 @@ module NewCodeGen : JS_CODEGEN = struct
       end
 
   module Make_Stmt (Js : JS) (Expr : EXPR) = struct
-    let rec transl env : stmt -> t = function
-      | Expr expr -> semi (Expr.transl env expr)
+    let rec transl env : stmt -> env * t =
+      let lift stmt = env, stmt in
+      function
+      | Expr expr -> lift ( semi (Expr.transl env expr) (
       | Return expr ->
-         hgrp ( semi ((text "return") $/ (Expr.transl env expr)) )
+         lift ( hgrp ( semi ((text "return") $/ (Expr.transl env expr)) ) )
       | If (cond, tt, ff) ->
          let cond = Expr.transl env cond in
          let tt   = snd (Js.transl env tt) in
          let ff   = opt_map (fun ff -> snd (Js.transl env ff)) ff in
-         hgrp
-           (    (text "if")
-             $/ (parens cond)
-             $/ (braces
-                   (vgrp
-                      (nest 0
-                         (vgrp
-                            (nest 2 (break_null $ tt))))))
-             $ (match ff with
-                | None -> empty
-                | Some ff ->
-                   break $ (text "else")
-                   $/ (braces
-                         (vgrp
-                            (nest 0
-                               (vgrp
-                                  (nest 2 (break_null $ ff))))))))
+         lift
+           ( hgrp
+               (    (text "if")
+                    $/ (parens cond)
+                    $/ (braces
+                          (vgrp
+                             (nest 0
+                                (vgrp
+                                   (nest 2 (break_null $ tt))))))
+                    $ (match ff with
+                       | None -> empty
+                       | Some ff ->
+                          break $ (text "else")
+                          $/ (braces
+                                (vgrp
+                                   (nest 0
+                                      (vgrp
+                                         (nest 2 (break_null $ ff)))))))) )
       | Switch _ -> assert false
       | Try (try_body, { exn_binder; catch_body }) ->
          let _, try_body = Js.transl env try_body in
@@ -357,26 +382,27 @@ module NewCodeGen : JS_CODEGEN = struct
            extend (Ident.to_var exn_binder, name) env, name
          in
          let _, catch_body = Js.transl env' catch_body in
-         hgrp
-           ( (text "try"
-              $/ (braces (vgrp (nest 0 try_body)))
-              $/ (text "catch") $/ (parens (text exn_name))
-              $/ (braces (vgrp (nest 0 catch_body)))))
+         lift
+           ( hgrp
+               ( (text "try"
+                  $/ (braces (vgrp (nest 0 try_body)))
+                  $/ (text "catch") $/ (parens (text exn_name))
+                  $/ (braces (vgrp (nest 0 catch_body))))) )
       | Assign (var, expr) ->
          let name =
-           text (match IntMap.lookup var env with
-                 | None      -> failwith (Printf.sprintf "Unbound variable %d" var)
+           text (match lookup var env with
+                 | None      -> failwith (Printf.sprintf "Unbound variable %s" (Ident.string_of_var var))
                  | Some name -> name)
          in
-         hgrp (semi (name $/ (text "=") $/ (Expr.transl env expr)))
-      | Seq stmts ->
-         List.fold_left
-           (fun doc stmt ->
-             (vgrp (nest 0 (doc $/ (transl env stmt)))))
-           empty stmts
+         lift ( hgrp (semi (name $/ (text "=") $/ (Expr.transl env expr))) )
+      (* | Seq stmts ->
+       *    List.fold_left
+       *      (fun doc stmt ->
+       *        (vgrp (nest 0 (doc $/ (transl env stmt)))))
+       *      empty stmts *)
       (* | Skip -> empty *)
-      | (Break : stmt) -> hgrp (semi (text "break"))
-      | Continue -> hgrp (semi (text "continue"))
+      | (Break : stmt) -> lift ( hgrp (semi (text "break")) )
+      | Continue -> lift ( hgrp (semi (text "continue")) )
       | Let { kind; binder; expr } ->
          let name = Ident.name_binder binder in
          let env' = extend (Ident.to_var binder, name) env in

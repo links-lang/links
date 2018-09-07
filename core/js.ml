@@ -91,30 +91,40 @@ module Lang = struct
     type binder =
       [ `Binder of Ir.binder
       | `Primitive of string ]
+        [@@deriving show]
     type var =
       [ `Var of Ir.var
       | `Primitive of string ]
+        [@@deriving show]
 
-    let of_binder : Ir.binder -> Ident.binder
+    let of_binder : Ir.binder -> binder
       = fun b -> `Binder b
 
-    let of_var : Ir.var -> Ident.var
+    let of_var : Ir.var -> var
       = fun v -> `Var v
 
-    let to_var : Ident.binder -> Ident.var = function
-      | `Binder b -> `Var (Ir.var_of_binder b)
+    let to_var : binder -> var = function
+      | `Binder b -> `Var (Var.var_of_binder b)
       | `Primitive name -> `Primitive name
 
-    let name_binder : Ident.binder -> string = function
+    let to_raw_var : var -> Ir.var = function
+      | `Var v -> v
+      | _ -> assert false
+
+    let name_binder : binder -> string = function
       | `Binder b -> name_binder b
       | `Primitive name -> name
 
-    let fresh_binder : ?prefix:string -> unit -> Ident.binder
+    let fresh_binder : ?prefix:string -> unit -> binder
       = fun ?(prefix="") () ->
-      `Binder (Var.fresh_binder (Var.make_local_info (prefix, `Not_typed)))
+      `Binder (Var.fresh_binder (Var.make_local_info (`Not_typed, prefix)))
 
-    let make : string -> Ident.binder
+    let of_string : string -> binder
       = fun name -> `Primitive name
+
+    let string_of_var : var -> string = function
+      | `Primitive name -> name
+      | `Var n -> string_of_int n
   end
 
   type label = string
@@ -190,7 +200,7 @@ module Lang = struct
     | If of expr * js * js option
     | Switch of expr * (label * js) list * js option
     | Try of js * catch_def
-    | Assign of Ir.var * expr
+    | Assign of Ident.var * expr
     (* | Skip *)
     | Break
     | Continue
@@ -215,7 +225,7 @@ module Lang = struct
     let lit : literal -> expr
       = fun c -> Lit c
 
-    let variable : Ir.var -> expr
+    let variable : Ident.var -> expr
       = fun v -> Var v
 
     let fun_def : ?name:Ident.binder -> ?kind:fun_kind -> Ident.binder list -> program -> fun_def
@@ -290,7 +300,7 @@ module Lang = struct
     let continue : stmt = Continue
     let skip : js = []
 
-    let assign : Ir.var -> expr -> stmt
+    let assign : Ident.var -> expr -> stmt
       = fun var expr -> Assign (var, expr)
 
     (* let seq : stmt -> stmt -> stmt
@@ -338,6 +348,10 @@ module Lang = struct
 
     let binary : binary_op -> expr -> expr -> expr
       = fun op lhs rhs -> Binary (op, lhs, rhs)
+
+    let prim : string -> expr
+      = fun name ->
+      variable (Ident.(to_var -<- of_string) name)
   end
 
   (* let merge_programs : (program * program) -> program = function

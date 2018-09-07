@@ -1,7 +1,7 @@
-
 (** JavaScript generation *)
 open Utility
 open Js
+open LispJs
 
 let _ = ParseSettings.config_file
 
@@ -17,6 +17,7 @@ let rec strip_poly =
 
 (** IR variable environment *)
 module VEnv = Env.Int
+type venv = string VEnv.t
 
 module VariableInspection = struct
   (* let inspect_code_variables code =
@@ -110,8 +111,10 @@ end
 module type JS_PAGE_COMPILER = sig
   include JS_COMPILER
 
-  val generate_stubs : Value.env -> Ir.bindings -> Js.program
-  val generate_toplevel_bindings : Value.env -> Json.json_state -> Ir.bindings -> Js.program * Json.json_state
+  val generate_stubs : Value.env -> Ir.bindings -> js
+  val generate_toplevel_bindings : Value.env -> Json.json_state -> Ir.bindings -> js * Json.json_state
+  val wrap_with_server_lib_stubs : js -> js (* TODO remove *)
+  val primitive_bindings : string (* TODO remove *)
 end
 
 (** Create a JS string literal, quoting special characters *)
@@ -124,9 +127,16 @@ let intlit i = lit (String (string_of_int i))
 (** Return a JS literal string from an OCaml string. *)
 let strlit s = lit (String (string_js_quote s))
 (** Return a JS literal string from an OCaml character. *)
-let chrlit ch = Obj ["_c", Lit(string_js_quote(string_of_char ch))] (* TODO unbox characters *)
+let chrlit ch = obj ["_c", lit (String (string_js_quote(string_of_char ch)))] (* TODO unbox characters *)
 (** Return a literal for the JS representation of a Links string. *)
 let chrlistlit = strlit
+
+let generate_formal_params n =
+  let rec loop acc n =
+    if n = 0 then acc
+    else loop (Ident.fresh_binder ~prefix:"_x" () :: acc) (n-1)
+  in
+  loop [] n
 
 (* Primitives *)
 module Primitive_Compiler = struct
@@ -139,19 +149,20 @@ module Primitive_Compiler = struct
   end
 
   module type PRIMITIVE_AUX = sig
-    val builtins : ('a, int) StringMap.t
+    type u
+    val builtins : (u * int) StringMap.t
     val compile : string -> expr list -> expr
     val standalone : string -> expr
     val js_primitive : bool
   end
 
-  module Make (P: PRIMITVE_AUX): sig
+  module Make (P: PRIMITIVE_AUX): sig
     include PRIMITIVE_COMPILER
   end = struct
     open LispJs
 
-    let recognise op = StringMap.mem op builtins
-    let arity op = snd (StringMap.find op builtins)
+    let recognise op = StringMap.mem op P.builtins
+    let arity op = snd (StringMap.find op P.builtins)
     let compile op args = P.compile op args
 
     let maybe_eta op =
@@ -164,63 +175,76 @@ module Primitive_Compiler = struct
         arrow params body
   end
 
-  module Arithmetic = Make(struct
-                          let js_primitive = true
-                          let standalone _ = failwith "Unsupported"
-                          let builtins =
-                            StringMap.from_alist
-                              [ "+"  , (`Plus, 2) ;
-                                "+." , (`Plus, 2) ;
-                                "-"  , (`Minus, 2) ;
-                                "-." , (`Minus, 2) ;
-                                "*"  , (`Times, 2) ;
-                                "*." , (`Times, 2) ;
-                                "/"  , (`Division, 2) ;
-                                "/." , (`Division, 2) ;
-                                "^"  , (`Pow, 2) ;
-                                "^." , (`Pow, 2) ;
-                                "mod", (`Mod, 2) ;
-                                "negate" , (`Minus, 1) ;
-                                "negatef", (`Minus, 1) ;
-                                "^^", (`Plus, 2) (* it's bit of a stretch to label
+  module Arithmetic
+    = Make(struct
+          type u = binary_op
+          let js_primitive = true
+          let standalone _ = failwith "Unsupported"
+          let builtins =
+            StringMap.from_alist
+              [ "+"  , (`Plus, 2) ;
+                "+." , (`Plus, 2) ;
+                "-"  , (`Minus, 2) ;
+                "-." , (`Minus, 2) ;
+                "*"  , (`Times, 2) ;
+                "*." , (`Times, 2) ;
+                "/"  , (`Division, 2) ;
+                "/." , (`Division, 2) ;
+                "^"  , (`Pow, 2) ;
+                "^." , (`Pow, 2) ;
+                "mod", (`Mod, 2) ;
+                "negate" , (`Minus, 1) ;
+                "negatef", (`Minus, 1) ;
+                "^^", (`Plus, 2) (* it's bit of a stretch to label
                                                     string concatenation as "arithmetic" *)
-                              ]
+              ]
 
-                          let compile op args =
-                            let (symbol, arity) = StringMap.find op ops in
-                            if arity > 1 then
-                              match symbol with
-                              | `Division -> apply (prim "_Arith.divide") args
-                              | _ -> binary symbol args
-                            else
-                              unary symbol (List.hd args)
-                        end)
+          let compile op args =
+            let (symbol, arity) = StringMap.find op builtins in
+            if arity > 1 then
+              match symbol with
+              | `Division -> apply (prim "_Arith.divide") args
+              | _ ->
+                 let (x, y) = List.(hd args, hd (tl args)) in
+                 binary symbol x y
+            else
+              match symbol with (* TODO rather than having arithmetic / logical distinction between operators, split them into binary and unary *)
+              | `Minus ->
+                 unary `Minus (List.hd args)
+              | _ -> assert false
+        end)
 
-  module Logical = Make(struct
-                       let js_primitive = true
-                       let standalone _ = failwith "Unsupported"
-                       let builtins =
-                         StringMap.from_alist
-                           [ "==" , (`StrictEq , 2) ;
-                             "<>" , (`StrictNeq, 2) ;
-                             "<"  , (`Lt       , 2) ;
-                             ">"  , (`Gt       , 2) ;
-                             "<=" , (`Le       , 2) ;
-                             ">=" , (`Ge       , 2) ;
-                             "intEq", (`StrictEq, 2) ;
-                             "stringEq", (`StrictEq, 2) ;
-                             "floatEq", (`StrictEq, 2) ;
-                             "floatNotEq", (`StrictNeq, 2) ;
-                             "objectEq", (`StrictEq, 2) ;
-                           ]
+  module Logical
+    = Make(struct
+          type u = binary_op
+          let js_primitive = true
+          let standalone _ = failwith "Unsupported"
+          let builtins =
+            StringMap.from_alist
+              [ "==" , (`StrictEq , 2) ;
+                "<>" , (`StrictNeq, 2) ;
+                "<"  , (`Lt       , 2) ;
+                ">"  , (`Gt       , 2) ;
+                "<=" , (`Le       , 2) ;
+                ">=" , (`Ge       , 2) ;
+                "intEq", (`StrictEq, 2) ;
+                "stringEq", (`StrictEq, 2) ;
+                "floatEq", (`StrictEq, 2) ;
+                "floatNotEq", (`StrictNeq, 2) ;
+                "objectEq", (`StrictEq, 2) ;
+              ]
 
-                       let compile op args =
-                         let (symbol, _) = StringMap.find op ops in
-                         match symbol with
-                         | `StrictEq when op = "==" || op = "objectEq" -> apply (prim "LINKS.eq") args
-                         | `StrictNeq when op = "<>" -> unary `Not (apply (prim "LINKS.eq") args)
-                         | _ -> binary symbol args
-                     end)
+          let compile op args =
+            let (symbol, _) = StringMap.find op builtins in
+            match symbol with
+            | `StrictEq when op = "==" || op = "objectEq" ->
+               apply (prim "LINKS.eq")) args
+            | `StrictNeq when op = "<>" ->
+               unary `Not (apply (prim "LINKS.eq")) args
+            | _ ->
+               let (x, y) = List.(hd args, hd (tl args)) in
+               binary symbol x y
+        end)
 
   let compilers : (module PRIMITIVE_COMPILER) list
     = [ (module Arithmetic : PRIMITIVE_COMPILER);
@@ -231,9 +255,9 @@ module Primitive_Compiler = struct
     let exception Impl of expr in
     try
       List.fold_left
-        (fun () compiler ->
-          if compiler.recognise name then
-            raise (Impl (compiler.compile name args))
+        (fun () (module Compiler : PRIMITIVE_COMPILER) ->
+          if Compiler.recognise name then
+            raise (Impl (Compiler.compile name args))
           else ())
         () compilers;
       None
@@ -245,9 +269,9 @@ module Primitive_Compiler = struct
     let exception Impl of expr in
     try
       List.fold_left
-        (fun () compiler ->
-          if compiler.recognise name then
-            raise (Impl (compiler.maybe_eta name))
+        (fun () (module Compiler : PRIMITIVE_COMPILER) ->
+          if Compiler.recognise name then
+            raise (Impl (Compiler.maybe_eta name))
           else ())
         () compilers;
       None
@@ -365,7 +389,7 @@ module type CONTINUATION = sig
   val identity : t
   val (<>) : t -> t -> t
   (* Pure continuation augmentation *)
-  val (&>) : Js.expr -> t -> t * Js.decl list
+  val (&>) : Js.expr -> t -> t * js (* maybe don't return js, instead use bind at the calling site *)
 
   (* Installs a trap *)
   val install_trap : Js.expr * Js.expr -> t -> t
@@ -386,7 +410,6 @@ module type CONTINUATION = sig
   (* Bypasses the current trap *)
   val forward : t -> Js.expr -> Js.expr
 
-
   (* Augments a function [Fn] with a continuation parameter and
      reflects the result as a continuation. The continuation parameter
      in the callback provides access to the current continuation. *)
@@ -406,7 +429,7 @@ module Default_Continuation : CONTINUATION = struct
     Code (fun_expr
             (fun_def
                [x; kappa]
-               (lift_stmt (return (variable (Ident.to_var x))))
+               (lift_stmt (return (variable (Ident.to_var x))))))
 
   (* This continuation is a degenerate monoid. The multiplicative
      operator is "forgetful" in the sense that it ignores its second
@@ -418,9 +441,13 @@ module Default_Continuation : CONTINUATION = struct
     | Identity -> b
     | Code _ -> a
 
+  let (&>) f = function
+    | Identity -> Code f, skip
+    | Code expr -> assert false (* TODO *)
+
   let reflect x = Code x
-  let reify = function
-    | Identity -> toplevel
+  let rec reify = function
+    | Identity -> reify toplevel
     | Code code -> code
 
   let bind k body =
@@ -442,7 +469,7 @@ module Default_Continuation : CONTINUATION = struct
        let stmts = body (reflect (variable (Ident.to_var kappa))) in
        const kappa (reify k) :: stmts
 
-  let apply k arg = apply k [arg]
+  let apply k arg = apply (reify k) [arg]
 
   let forward _ _ = assert false
   let trap _ _ = assert false
@@ -452,10 +479,6 @@ module Default_Continuation : CONTINUATION = struct
     (* match fn Identity with
      * | env, (Fn _ as k) -> env, reflect k
      * | _ -> failwith "error: contify: non-function argument." *)
-
-  let to_string = function
-    | Identity -> "IDENTITY"
-    | Code code -> "CODE: " ^ (show_code code)
 end
 
 (* The higher-order continuation structure for effect handlers
@@ -490,7 +513,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
           Reflect nil)
 
   let make_frame pureFrames ret eff =
-    apply (variable (Ident.make "_K.makeFrame")) [pureFrames; ret; eff]
+    apply (prim "_K.makeFrame") [pureFrames; ret; eff]
 
   let reflect x = Reflect x
   let rec reify kappa =
@@ -536,23 +559,24 @@ module Higher_Order_Continuation : CONTINUATION = struct
       | Identity ->
          let k = Ident.fresh_binder ~prefix:"_kappa" () in
          let stmts' = body (reflect (variable (Ident.to_var k))) in
-         let bs = (const k (reify Identity)) :: bs in
-         stmts @ stmts'
-      | Reflect (EVar _) as k ->
+         sequence stmts (const k (reify Identity) :: stmts')
+      | Reflect (Var _) as k ->
          let stmts' = body k in
-         stmts @ stmts'
+         sequence stmts stmts'
       | Reflect v ->
          let k = Ident.fresh_binder ~prefix:"_kappa" () in
          let stmts' = (const k v) :: body (reflect @@ (variable (Ident.to_var k))) in
-         stmts @ stmts'
-      | Cons (Dynamic (EVar _) as v, kappas) ->
-         assert false (* TODO *)
+         sequence stmts stmts'
+      | Cons (Dynamic (Var _ as v), kappas) ->
+         bind stmts (fun kappas -> body (Cons (Dynamic v, kappas))) kappas
       | Cons (Dynamic v, kappas) ->
-         assert false (* TODO *)
+         let k = Ident.fresh_binder ~prefix:"_kappa" () in
+         let stmts' = (const k v) :: stmts in
+         bind stmts' (fun kappas -> body (Cons (Dynamic (variable (Ident.to_var k)), kappas))) kappas
       | Cons (Static (ks, ret, eff), kappas) ->
          let k = Ident.fresh_binder ~prefix:"_kappa" () in
-         let bs = (const k (make_frame ks ret eff) :: bs) in
-         bind bs (fun kappas -> body (Cons (Dynamic (variable (Ident.to_var k)), kappas))) kappas
+         let stmts' = const k (make_frame ks ret eff) :: stmts in
+         bind stmts' (fun kappas -> body (Cons (Dynamic (variable (Ident.to_var k)), kappas))) kappas
     in
     bind [] body kappas
 
@@ -563,13 +587,13 @@ module Higher_Order_Continuation : CONTINUATION = struct
     | Identity -> install_trap (ret, eff) toplevel
 
   let forward k z =
-    apply (variable (Ident.make "_K.forward")) [reify k; z]
-
-  let apply k arg =
-    apply (variable (Ident.make "_K.apply")) [reify k; arg]
+    apply (prim "_K.forward") [reify k; z]
 
   let trap k arg =
-    LispJs.apply (variable (Ident.make "_K.trap")) [reify k; arg]
+    apply (prim "_K.trap") [reify k; arg]
+
+  let apply k arg =
+    apply (prim "_K.apply") [reify k; arg]
 
   let contify_with_env fn =
     let kappa = Ident.fresh_binder ~prefix:"_kappa" () in
@@ -579,14 +603,14 @@ module Higher_Order_Continuation : CONTINUATION = struct
 end
 
 (** Compiler interface *)
-module type JS_PAGE_COMPILER = sig
-  (* include JS_COMPILER *)
-  val generate_program : venv -> Ir.computation -> venv * code
-  val generate_stubs : Value.env -> Ir.binding list -> code -> code
-  val generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code)
-  val wrap_with_server_lib_stubs : code -> code
-  val primitive_bindings : string
-end
+(* module type JS_PAGE_COMPILER = sig
+ *   (\* include JS_COMPILER *\)
+ *   val generate_program : venv -> Ir.computation -> venv * js
+ *   val generate_stubs : Value.env -> Ir.binding list -> js -> js
+ *   val generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * js
+ *   val wrap_with_server_lib_stubs : js -> js
+ *   val primitive_bindings : string
+ * end *)
 
 (** [generate]
     Generates JavaScript code for a Links expression
@@ -598,10 +622,10 @@ module CPS_Compiler: functor (K : CONTINUATION) -> sig
 end = functor (K : CONTINUATION) -> struct
   type continuation = K.t
 
-  let __kappa = prim "__kappa"
+  let __kappa = Ident.of_string "__kappa"
 
-  let rec apply : ?strategy:[`Direct | `Yield] -> ?kappa:continuation -> expr -> expr list -> expr
-    = fun ?(strategy=`Yield) ?kappa f args ->
+  let rec apply : ?strategy:[`Direct | `Yield] -> ?kappa:continuation option -> expr -> expr list -> expr
+    = fun ?(strategy=`Yield) ?(kappa = None) f args ->
     match strategy, kappa with
     | `Direct, Some kappa ->
        LispJs.apply f (args @ [K.reify kappa])
@@ -615,15 +639,12 @@ end = functor (K : CONTINUATION) -> struct
        in
        LispJs.apply (prim "_yield") [g]
 
+  let apply_prim : string -> expr list -> expr
+    = fun prim_name args ->
+    apply ~strategy:`Direct (prim prim_name) args
+
   let contify fn =
     snd @@ K.contify_with_env (fun k -> VEnv.empty, fn k)
-
-  let generate_formal_params n =
-    let rec loop acc n =
-      if n = 0 then acc
-      else loop (Ident.fresh_binder ~prefix:"_x" () :: acc) (n-1)
-    in
-    loop [] n
 
   let rec generate_value env : Ir.value -> expr =
     let gv v = generate_value env v in
@@ -631,24 +652,17 @@ end = functor (K : CONTINUATION) -> struct
     | `Constant c ->
        begin
          match c with
-         | `Int v  -> lit (Int (string_of_int v))
-         | `Float v    ->
-            let s = string_of_float' v in
-            let n = String.length s in
-                    (* strip any trailing '.' *)
-            if n > 1 && (s.[n-1] = '.') then
-              lit (Float (String.sub s 0 (n-1)))
-            else
-              lit (Float s)
-         | `Bool v  -> lit (Bool (string_of_bool v))
+         | `Int v  -> lit (Int v)
+         | `Float v    -> lit (Float v)
+         | `Bool v  -> lit (Bool v)
          | `Char v     -> chrlit v
          | `String v   -> chrlistlit v
        end
     | `Variable var ->
        let name = VEnv.lookup env var in
        begin match Primitive_Compiler.standalone name with
-       | Some impl -> impl
-       | None -> variable var (* TODO: kify *)
+       | Some impl -> impl (* TODO: kify *)
+       | None -> variable (Ident.of_var var)
        end
     | `Extend (field_map, rest) ->
        let dict =
@@ -662,14 +676,14 @@ end = functor (K : CONTINUATION) -> struct
          match rest with
          | None -> dict
          | Some v ->
-            apply ~strategy:`Direct (prim "LINKS.union") [gv v; dict]
+            apply_prim "LINKS.union" [gv v; dict]
        end
     | `Project (name, v) ->
-       apply ~strategy:`Direct (prim "LINKS.project") [gv v; strlit name]
+       apply_prim "LINKS.project" [gv v; strlit name]
     | `Erase (names, v) ->
-       apply ~strategy:`Direct (prim "LINKS.erase") [gv v; array (Array.of_list (List.map strlit (StringSet.elements names)))]
+       apply_prim "LINKS.erase" [gv v; array (List.map strlit (StringSet.elements names))]
     | `Inject (name, v, _t) ->
-       Obj [("_label", strlit name); ("_value", gv v)]
+       obj [("_label", strlit name); ("_value", gv v)]
       (* erase polymorphism *)
     | `TAbs (_, v)
     | `TApp (v, _) -> gv v
@@ -708,19 +722,19 @@ end = functor (K : CONTINUATION) -> struct
     | `Coerce (v, _) -> gv v
 
   and generate_xml env tag attrs children =
-    apply ~strategy:`Direct
-      (prim "LINKS.XML")
+    apply_prim
+      "LINKS.XML"
       [ strlit tag;
         obj (StringMap.fold (fun name v bs ->
                  (name, generate_value env v) :: bs) attrs []);
-        array (Array.of_list (List.map (generate_value env) children)) ]
+        array (List.map (generate_value env) children) ]
 
   let generate_remote_call f_var xs env =
     apply ~strategy:`Direct
-      (apply ~strategy:`Direct
-         (prim "LINKS.remoteCall")
-         [__kappa])
-      [intlit f_var;
+      (apply_prim
+         "LINKS.remoteCall"
+         [variable (Ident.to_var __kappa)])
+      [intlit (Ident.to_raw_var f_var);
        env;
        obj (
            List.map2
@@ -733,7 +747,7 @@ end = functor (K : CONTINUATION) -> struct
   module GenStubs =
   struct
     let rec fun_def : Ir.fun_def -> js =
-      fun ((fb, (_, bs, _), zb, _location) : Ir.fun_def) ->
+      fun ((fb, (_, bs, _), zb, location) : Ir.fun_def) ->
       let fb = Ident.of_binder fb in
       let bs = List.map Ident.of_binder bs in
       let bs', env =
@@ -750,24 +764,24 @@ end = functor (K : CONTINUATION) -> struct
            lift_stmt
              (fun_decl
                 (LispJs.fun_def
-                   ~name:(`Binder fb)
-                   (bs' @ [__kappab])
+                   ~name:fb
+                   (bs' @ [__kappa])
                    (lift_stmt
                       (return
                          (apply
                             ~strategy:`Direct
                             (variable (Ident.to_var fb))
-                            (List.map (fun b -> variable (Ident.to_var b)) bs))))) (* TODO: there's something dubious about this code (~name:fb and apply fb) *)
+                            (List.map (fun b -> variable (Ident.to_var b)) bs)))))) (* TODO: there's something dubious about this code (~name:fb and apply fb) *)
         | `Server ->
-              lift_stmt
-                (fun_decl
-                   (LispJs.fun_decl
-                      ~name:(`Binder fb)
-                      (bs' @ [__kappab])
-                      (generate_remote_call (Ident.to_var fb) bs env))
+           lift_stmt
+             (fun_decl
+                (LispJs.fun_def
+                   ~name:fb
+                   (bs' @ [__kappa])
+                   (lift_stmt @@ return (generate_remote_call (Ident.to_var fb) bs env))))
     and binding : Ir.binding -> js = function
       | `Fun def ->
-         lift_stmt (fun_def def)
+         fun_def def
       | `Rec defs ->
          List.fold_right
            sequence
@@ -793,27 +807,25 @@ end = functor (K : CONTINUATION) -> struct
           (Env.Int.fold
              (fun var _v funcs ->
                let prim_name = Lib.primitive_name var in
-               let name = `Binder (Ident.make prim_name) in
                if Lib.primitive_location prim_name = `Server then
-                 (name, var)::funcs
+                 (prim_name, var)::funcs
                else
                  funcs)
              (Lib.value_env) [])
       in
       let prim_server_calls =
-        concat_map (fun (name, var) ->
-          match Lib.primitive_arity name with
+        concat_map (fun (prim_name, var) ->
+          match Lib.primitive_arity prim_name with
           | None -> []
           | Some arity ->
              let params = generate_formal_params arity in
-             [(name, params, generate_remote_call var params (obj []))])
+             [(Ident.of_string prim_name, params, generate_remote_call (Ident.of_var var) params (obj []))])
           server_library_funcs
       in
       List.map
         (fun (name, args, body) ->
-          lift_stmt
-            (fun_decl
-               (fun_def ~name args body)))
+          fun_decl
+            (LispJs.fun_def ~name args (lift_stmt @@ return body)))
         prim_server_calls
   end
 
@@ -830,25 +842,25 @@ end = functor (K : CONTINUATION) -> struct
          begin
            match f with
            | `Variable f ->
-              let name = VEnv.lookup env var in
-              begin match Primitive_Compiler.compile name args with
+              let f_name = VEnv.lookup env f in
+              begin match Primitive_Compiler.compile f_name args with
               | Some impl ->
                  lift_stmt
-                   (return (K.apply [impl]))
+                   (return (K.apply kappa impl))
               | None ->
                  if Lib.is_primitive f_name
                     && not (List.mem f_name cps_prims)
                     && Lib.primitive_location f_name <> `Server
                  then
                    let arg =
-                     let fb = Ident.make (Printf.sprintf "_%s" f_name) in
+                     let f' = prim (Printf.sprintf "_%s" f_name) in
                      apply
                        ~strategy:`Direct
-                       fb
+                       f'
                        args
                    in
                    lift_stmt
-                     (return (K.apply kappa [arg]))
+                     (return (K.apply kappa arg))
                  (* else
                   *   if (f_name = "receive" && session_exceptions_enabled) then
                   *     let code_vs = List.map gv vs in
@@ -861,51 +873,64 @@ end = functor (K : CONTINUATION) -> struct
               end
            | _ ->
               lift_stmt
-                (return (apply (gv (`Variable f)) (List.map gv vs @ [K.reify kappa])))
+                (return (apply (gv f) (List.map gv vs @ [K.reify kappa])))
          end
       | `Special special ->
          generate_special env special kappa
-      | `Case (v, cases, default) ->
-         let v = gv v in
+      | `Case (scrutinee, cases, default) ->
+         let scrutinee = gv scrutinee in
          let k, x =
-           match v with
-           | Var x -> (fun e -> e), x
+           match scrutinee with
+           | Var x -> (fun s -> lift_stmt s), x
            | _ ->
-              let x = gensym ~prefix:"x" () in
-              (fun e -> Bind (x, v, e)), x
+              let xb = Ident.fresh_binder ~prefix:"x" () in
+              (fun (s : stmt) -> sequence (lift_stmt @@ const xb scrutinee) (lift_stmt s)), Ident.to_var xb
          in
          K.bind kappa
            (fun kappa ->
              let gen_cont (xb, c) =
-               let (x, x_name) = name_binder xb in
-               x_name, (snd (generate_computation (VEnv.bind env (x, x_name)) c kappa)) in
+               let xb' = Ident.of_binder xb in
+               let x_name = Ident.name_binder xb in
+               x_name, (snd (generate_computation (VEnv.bind env (Var.var_of_binder xb, x_name)) c kappa)) in
              let cases = StringMap.map gen_cont cases in
              let default = opt_map gen_cont default in
-             k (Case (x, cases, default)))
+             k (switch ~default (variable x) cases))
       | `If (v, c1, c2) ->
          K.bind kappa
            (fun kappa ->
-             If (gv v, gc c1 kappa, gc c2 kappa))
+             ifthenelse (gv v) (gc c1 kappa) (gc c2 kappa))
 
-  and generate_special env : Ir.special -> continuation -> code
+  and generate_special env : Ir.special -> continuation -> js
     = fun sp kappa ->
-      let gv v = generate_value env v in
+    let gv v = generate_value env v in
+    let die msg =
+      apply ~strategy:`Direct (prim "_error") [lit (String msg)]
+    in
+    let return e = lift_stmt (return e) in
       match sp with
-      | `Wrong _ -> Die "Internal Error: Pattern matching failed" (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
+      | `Wrong _ ->
+         return (die "Internal Error: Pattern matching failed") (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | `Database _ | `Table _
           when Settings.get_value js_hide_database_info ->
-         K.apply kappa (Dict [])
+         return (K.apply kappa (obj []))
       | `Database v ->
-         K.apply kappa (Dict [("_db", gv v)])
+         return (K.apply kappa (obj [("_db", gv v)]))
       | `Table (db, table_name, keys, (readtype, _writetype, _needtype)) ->
-         K.apply kappa
-           (Dict [("_table",
-                   Dict [("db", gv db);
-                         ("name", gv table_name);
-                         ("keys", gv keys);
-                         ("row",
-                          strlit (Types.string_of_datatype (readtype)))])])
-      | `LensSelect _ | `LensJoin _ | `LensDrop _ | `Lens _ ->
+         return
+           (K.apply kappa
+              (obj [("_table",
+                     obj [("db", gv db);
+                          ("name", gv table_name);
+                          ("keys", gv keys);
+                          ("row",
+                           strlit (Types.string_of_datatype (readtype)))])]))
+      | `Query _ ->
+         return (die "Attempt to run a query on the client")
+      | `Update _ ->
+         return (die "Attempt to run a database update on the client")
+      | `Delete _ ->
+         return (die "Attempt to run a database delete on the client")
+              | `LensSelect _ | `LensJoin _ | `LensDrop _ | `Lens _ ->
               (* Is there a reason to not use js_hide_database_info ? *)
               K.apply kappa (Dict [])
       | `LensGet _ | `LensPut _ -> Die "Attempt to run a relational lens operation on client"
@@ -914,289 +939,363 @@ end = functor (K : CONTINUATION) -> struct
       | `Delete _ -> Die "Attempt to run a database delete on the client"
       | `CallCC v ->
          K.bind kappa
-           (fun kappa -> apply_yielding (gv v) [K.reify kappa] kappa)
+           (fun kappa ->
+             return
+               (apply (gv v) [K.reify kappa; K.reify kappa]))
       | `Select (l, c) ->
-         let arg = Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c]) in
-         K.apply ~strategy:`Direct kappa arg
-      | `Choice (c, bs) ->
-         let result = gensym () in
-         let received = gensym () in
-         let bind, skappa, skappas = K.pop kappa in
-         let skappa' =
-           contify (fun kappa ->
-             let scrutinee = Call (Var "LINKS.project", [Var result; strlit "1"]) in
-             let channel = Call (Var "LINKS.project", [Var result; strlit "2"]) in
-             let generate_branch (cb, b) =
-               let (c, cname) = name_binder cb in
-               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b K.(skappa <> kappa))) in
-             let branches = StringMap.map generate_branch bs in
-             Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))) in
-
-         let cont = K.(skappa' <> skappas) in
-         if (session_exceptions_enabled) then
-           let action cancel_stub =
-             Call (Var "receive", [gv c; cancel_stub; K.reify cont]) in
-           bind (generate_cancel_stub env action cont)
-         else
-           bind (Call (Var "receive", [gv c; K.reify cont]))
-      | `DoOperation (name, args, _) ->
-         let maybe_box = function
+         let arg =
+           (apply
+              ~strategy:`Direct
+              (variable (Ident.of_string "_send"))
+              [obj ["_label", strlit l; "_value", obj []]; gv c])
+         in
+         return (K.apply kappa arg)
+      | `Choice (c, bs) -> assert false (* TODO *)
+         (* let result = Ident.fresh_binder ~prefix:"_result" () in
+          * let received = Ident.fresh_binder ~prefix:"_received" () in
+          * let bind, skappa, skappas = K.pop kappa in
+          * let skappa' =
+          *   contify (fun kappa ->
+          *     let scrutinee = apply_prim "LINKS.project" [Var result; strlit "1"] in
+          *     let channel = apply_prim "LINKS.project" [Var result; strlit "2"] in
+          *     let generate_branch (cb, b) =
+          *       let (c, cname) = name_binder cb in
+          *       cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b K.(skappa <> kappa))) in
+          *     let branches = StringMap.map generate_branch bs in
+          *     Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))) in
+          * 
+          * let cont = K.(skappa' <> skappas) in
+          * if (session_exceptions_enabled) then
+          *   let action cancel_stub =
+          *     Call (Var "receive", [gv c; cancel_stub; K.reify cont]) in
+          *   bind (generate_cancel_stub env action cont)
+          * else
+          *   bind (Call (Var "receive", [gv c; K.reify cont])) *)
+      | `DoOperation (name, args, _) -> (* TODO session exceptions *)
+         let box = function
            | [v] -> gv v
-           | vs -> Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
+           | vs -> obj (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
-         let cons k ks =
-           Call (Var "_Cons", [k;ks])
+         let op =
+           obj [ ("_label", strlit name)
+               ; ("_value", obj [("p", box args); ("s", Ident.of_string "LINKEDLIST.Nil")]) ]
          in
-         let nil = Var "Nil" in
-         K.bind kappa
-           (fun kappas ->
-             (* kappa -- pure continuation *)
-             let bind_skappa, skappa, kappas = K.pop kappas in
-             (* eta -- effect continuation *)
-             let bind_seta, seta, kappas   = K.pop kappas in
-             let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
-
-             (* Session exceptions arising as a result of "raise" (i.e. those without an
-              * environment passed as an argument already) need to be compiled specially *)
-             let op =
-               if (session_exceptions_enabled &&
-                     name = Value.session_exception_operation &&
-                   List.length args = 0) then
-                 let affected_variables =
-                   VariableInspection.get_affected_variables (K.reify kappa) in
-                 let affected_arr = Dict ([("1", Arr affected_variables)]) in
-                 Dict [ ("_label", strlit name)
-                      ; ("_value", Dict [("p", affected_arr); ("s", resumption)]) ]
-               else
-                 Dict [ ("_label", strlit name)
-                      ; ("_value", Dict [("p", maybe_box args); ("s", resumption)]) ]
-             in
-             bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
-         (* let singleton k = *)
-         (*   Call (Var "_singleton", [k]) *)
-         (* in *)
-         (* K.bind kappa *)
-         (*   (fun kappas -> *)
-         (*     let bind_skappa, skappa, kappas = K.pop kappas in *)
-         (*     let bind_seta, seta, kappas = K.pop kappas in *)
-         (*     let resumption = singleton (K.reify skappa) in *)
-         (*     let op = *)
-         (*       Dict [ ("_label", strlit name); *)
-         (*              ("_value", Dict [("p", maybe_box args); ("s", resumption)]) ] *)
-         (*     in *)
-         (*     bind_skappa *)
-         (*       (bind_seta *)
-         (*          (apply_yielding (K.reify seta) [op] kappas))) *)
-      | `Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth = depth } ->
-         let comp_env = env in
-         let cons v vs =
-           Call (Var "_Cons", [v; vs])
-         in
-         let project record label =
-           Call (Var "LINKS.project", [record; label])
-         in
-         let vmap r y =
-           Call (Var "_vmapOp", [r; y])
-         in
-         let generate_body env binder body kappas =
-           let env' = VEnv.bind env binder in
+         return (K.trap kappa op)
+         (* let maybe_box = function
+          *   | [v] -> gv v
+          *   | vs -> Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
+          * in
+          * let cons k ks =
+          *   Call (Var "_Cons", [k;ks])
+          * in
+          * let nil = Var "Nil" in
+          * K.bind kappa
+          *   (fun kappas ->
+          *     (\* kappa -- pure continuation *\)
+          *     let bind_skappa, skappa, kappas = K.pop kappas in
+          *     (\* eta -- effect continuation *\)
+          *     let bind_seta, seta, kappas   = K.pop kappas in
+          *     let resumption = K.(cons (reify seta) (cons (reify skappa) nil)) in
+          * 
+          *     (\* Session exceptions arising as a result of "raise" (i.e. those without an
+          *      * environment passed as an argument already) need to be compiled specially *\)
+          *     let op =
+          *       if (session_exceptions_enabled &&
+          *             name = Value.session_exception_operation &&
+          *           List.length args = 0) then
+          *         let affected_variables =
+          *           VariableInspection.get_affected_variables (K.reify kappa) in
+          *         let affected_arr = Dict ([("1", Arr affected_variables)]) in
+          *         Dict [ ("_label", strlit name)
+          *              ; ("_value", Dict [("p", affected_arr); ("s", resumption)]) ]
+          *       else
+          *         Dict [ ("_label", strlit name)
+          *              ; ("_value", Dict [("p", maybe_box args); ("s", resumption)]) ]
+          *     in
+          *     bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas))) *)
+      | `Handle { Ir.ih_comp = comp; Ir.ih_return = val_case; Ir.ih_cases = eff_cases; Ir.ih_depth = depth } ->
+         (* Generate body *)
+         let gb env binder body kappas =
+           let env' = VEnv.bind env (Var.var_of_binder binder, Ident.(name_binder -<- of_binder) binder) in
            snd (generate_computation env' body kappas)
          in
-         begin match depth with
-         | `Shallow -> failwith "CPS compilation of shallow handlers is currently not supported"
-         | `Deep params ->
-            let translate_parameters params =
-              let is_parameterised = List.length params > 0 in
-              let param_ptr_binder =
-                Var.fresh_binder (Var.make_local_info (`Not_typed, "_param_ptr"))
-              in
-              let env = VEnv.bind env (name_binder param_ptr_binder) in
-              let params =
-                List.mapi (fun i (binder,initial_value) -> (i, binder, initial_value)) params
-              in
-              let ptr = `Variable (Var.var_of_binder param_ptr_binder) in
-              let initial_parameterise (bs, tc) =
-                let name_map =
-                  List.fold_left
-                    (fun box (i, _, initial_value) ->
-                      StringMap.add (string_of_int i) initial_value box)
-                    StringMap.empty params
-                in
-                (`Let (param_ptr_binder, ([], `Return (`Extend (name_map, None)))) :: bs, tc)
-              in
-              let parameterise body =
-              (* The pointer points to the box containing the parameters *)
-                List.fold_right
-                  (fun (i, binder, _) (bs,tc) ->
-                    let b =
-                      `Let (binder, ([], `Return (`Project (string_of_int i, ptr))))
-                    in
-                    (b :: bs, tc))
-                  params body
-              in
-              let make_resumption s =
-                if is_parameterised
-                then Call (Var "_make_parameterised_resumption", [Var (snd @@ name_binder param_ptr_binder); s])
-                else Call (Var "_make_resumption", [s])
-              in
-              env, comp, make_resumption, initial_parameterise, parameterise
-            in
-            let env, comp, make_resumption, initial_parameterise, parameterise = translate_parameters params in
-            let value_case =
-              let (xb, body) = return in
-              let xb, x_name = name_binder xb, snd @@ name_binder xb in
-              K.reflect
-                (Fn ([x_name; "ks"],
-                     let bind, _, kappa = K.(reflect ->- pop) (Var "ks") in
-                     let body = parameterise body in
-                     bind @@ generate_body env xb body kappa))
-            in
-            let eff_cases =
-              let translate_eff_case env (xb, resume, body) kappas =
-                let xb = name_binder xb in
-                let resume = name_binder resume in
-                let p = project (Var (snd xb)) (strlit "p") in
-                let r =
-                  let s = project (Var (snd xb)) (strlit "s") in
-                  make_resumption s
-                in
-                let env' = VEnv.bind env resume in
-                let body = generate_body env' xb (parameterise body) kappas in
-                snd xb, Bind (snd resume, r,
-                              Bind (snd xb, p, body))
-              in
-              let translate_exn_case env (xb, body) kappas =
-                let xb = name_binder xb in
-                let dummy_var_name = gensym ~prefix:"dummy" () in
-                let x_name = snd xb in
-                let p = project (Var x_name) (strlit "p") in
-                snd xb, Bind (x_name, project p (strlit "1"),
-                        (* FIXME: the following call should
-                           probably be apply_yielding rather than a
-                           raw Call because _handleSessionException
-                           makes use of the call stack. *)
-                              Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name]),
-                                    generate_body env xb (parameterise body) kappas))
-              in
-              let eff_cases kappas =
-                StringMap.fold
-                  (fun operation_name clause cases ->
-                    StringMap.add operation_name
-                      (if session_exceptions_enabled && operation_name = Value.session_exception_operation
-                       then let (xb,_,body) = clause in translate_exn_case env (xb, body) kappas
-                       else translate_eff_case env clause kappas)
-                      cases)
-                  eff_cases StringMap.empty
-              in
-              let forward y ks =
-                K.bind ks
-                  (fun ks ->
-                    let bind_k'_ks', k', ks' = K.pop ks in
-                    let bind_h'_ks'', h', ks'' = K.pop ks' in
-                    let bind code = bind_k'_ks' (bind_h'_ks'' code) in
-                    let resumption =
-                      Fn (["s"], Return (cons (K.reify h')
-                                           (cons (K.reify k') (Var "s"))))
-                    in
-                    bind (apply_yielding (K.reify h') [vmap resumption y] ks''))
-              in
-              K.reflect
-                (Fn (["_z"; "ks"],
-                     let ks = K.reflect (Var "ks") in
-                     Case ("_z",
-                           eff_cases ks,
-                           Some ("_z", forward (Var "_z") ks))))
-            in
-            let kappa = K.(value_case <> eff_cases <> kappa) in
-            snd (generate_computation comp_env (initial_parameterise comp) kappa)
-         end
+         let val_case_decl, val_case =
+           let (xb, body) = val_case in
+           let xb = Ident.of_binder xb in
+           let _fs = Ident.of_string "_fs" in
+           let val_case_b = Ident.fresh_binder ~prefix:"_return" () in
+           let val_case_decl =
+             const
+               val_case_b
+               (fun_expr
+                  (fun_def
+                     [xb; _fs]
+                     (gb env xb body K.(reflect (variable (Ident.to_var _fs))))))
+           in
+           val_case_decl, variable (Ident.to_var val_case_b)
+         in
+         let eff_decl, eff =
+           (* Generate clause *)
+           let gc env (xb, rb, body) kappas _z =
+             let env' =
+               let env = VEnv.bind env (Ident.to_var xb, Ident.name_binder xb) in
+               VEnv.bind env (Ident.to_var rb, Ident.name_binder rb)
+             in
+             let vb, v = Ident.fresh_binder ~prefix:"_v" (), project _z "_value" in
+             let p = project (variable (Ident.to_var vb)) "p" in
+             let s = project (variable (Ident.to_var vb)) "s" in
+             (* TODO shallow / deep distinction *)
+             let r =
+               let e = match depth with
+                 | `Shallow -> Ident.of_string "_K.shallowResume" (* TODO make continuation operation? *)
+                 | `Deep [] -> Ident.of_string "_K.deepResume"
+                 | `Deep _ -> failwith "Parameterised handlers not yet supported."
+               in
+               apply (variable e) [s]
+             in
+             let stmts = gb env' xb body kappas in
+             (const vb v) :: (const rb r) :: (const xb p) :: stmts
+           in
+           let eff_b = Ident.fresh_binder ~prefix:"_eff" () in
+           let eff_decl =
+             const
+               eff_b
+               (let _z = Ident.of_string "_z" in
+                let _fs = Ident.of_string "_fs" in
+                fun_expr
+                  (fun_def
+                     [_z; _fs]
+                     (let _z = variable (Ident.to_var _z) in
+                      let _fs = K.reflect (variable (Ident.to_var _fs)) in
+                      let forward = return (K.forward _fs _z) in
+                      let cases = StringMap.map (fun clause -> gc env clause _fs _z)  eff_cases in
+                      switch ~default:forward (project _z "_label") cases)))
+           in
+           eff_decl, variable eff_b
+         in
+         let kappa = K.install_trap (val_case, eff) kappa in
+         let _, stmts = generate_computation env comp kappa in
+         return_decl :: eff_decl :: stmts
 
-  and generate_computation env : Ir.computation -> continuation -> (venv * code) =
+         (* let comp_env = env in
+          * let cons v vs =
+          *   Call (Var "_Cons", [v; vs])
+          * in
+          * let project record label =
+          *   Call (Var "LINKS.project", [record; label])
+          * in
+          * let vmap r y =
+          *   Call (Var "_vmapOp", [r; y])
+          * in
+          * let generate_body env binder body kappas =
+          *   let env' = VEnv.bind env binder in
+          *   snd (generate_computation env' body kappas)
+          * in
+          * begin match depth with
+          * | `Shallow -> failwith "CPS compilation of shallow handlers is currently not supported"
+          * | `Deep params ->
+          *    let translate_parameters params =
+          *      let is_parameterised = List.length params > 0 in
+          *      let param_ptr_binder =
+          *        Var.fresh_binder (Var.make_local_info (`Not_typed, "_param_ptr"))
+          *      in
+          *      let env = VEnv.bind env (name_binder param_ptr_binder) in
+          *      let params =
+          *        List.mapi (fun i (binder,initial_value) -> (i, binder, initial_value)) params
+          *      in
+          *      let ptr = `Variable (Var.var_of_binder param_ptr_binder) in
+          *      let initial_parameterise (bs, tc) =
+          *        let name_map =
+          *          List.fold_left
+          *            (fun box (i, _, initial_value) ->
+          *              StringMap.add (string_of_int i) initial_value box)
+          *            StringMap.empty params
+          *        in
+          *        (`Let (param_ptr_binder, ([], `Return (`Extend (name_map, None)))) :: bs, tc)
+          *      in
+          *      let parameterise body =
+          *      (\* The pointer points to the box containing the parameters *\)
+          *        List.fold_right
+          *          (fun (i, binder, _) (bs,tc) ->
+          *            let b =
+          *              `Let (binder, ([], `Return (`Project (string_of_int i, ptr))))
+          *            in
+          *            (b :: bs, tc))
+          *          params body
+          *      in
+          *      let make_resumption s =
+          *        if is_parameterised
+          *        then Call (Var "_make_parameterised_resumption", [Var (snd @@ name_binder param_ptr_binder); s])
+          *        else Call (Var "_make_resumption", [s])
+          *      in
+          *      env, comp, make_resumption, initial_parameterise, parameterise
+          *    in
+          *    let env, comp, make_resumption, initial_parameterise, parameterise = translate_parameters params in
+          *    let value_case =
+          *      let (xb, body) = return in
+          *      let xb, x_name = name_binder xb, snd @@ name_binder xb in
+          *      K.reflect
+          *        (Fn ([x_name; "ks"],
+          *             let bind, _, kappa = K.(reflect ->- pop) (Var "ks") in
+          *             let body = parameterise body in
+          *             bind @@ generate_body env xb body kappa))
+          *    in
+          *    let eff_cases =
+          *      let translate_eff_case env (xb, resume, body) kappas =
+          *        let xb = name_binder xb in
+          *        let resume = name_binder resume in
+          *        let p = project (Var (snd xb)) (strlit "p") in
+          *        let r =
+          *          let s = project (Var (snd xb)) (strlit "s") in
+          *          make_resumption s
+          *        in
+          *        let env' = VEnv.bind env resume in
+          *        let body = generate_body env' xb (parameterise body) kappas in
+          *        snd xb, Bind (snd resume, r,
+          *                      Bind (snd xb, p, body))
+          *      in
+          *      let translate_exn_case env (xb, body) kappas =
+          *        let xb = name_binder xb in
+          *        let dummy_var_name = gensym ~prefix:"dummy" () in
+          *        let x_name = snd xb in
+          *        let p = project (Var x_name) (strlit "p") in
+          *        snd xb, Bind (x_name, project p (strlit "1"),
+          *                (\* FIXME: the following call should
+          *                   probably be apply_yielding rather than a
+          *                   raw Call because _handleSessionException
+          *                   makes use of the call stack. *\)
+          *                      Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name]),
+          *                            generate_body env xb (parameterise body) kappas))
+          *      in
+          *      let eff_cases kappas =
+          *        StringMap.fold
+          *          (fun operation_name clause cases ->
+          *            StringMap.add operation_name
+          *              (if session_exceptions_enabled && operation_name = Value.session_exception_operation
+          *               then let (xb,_,body) = clause in translate_exn_case env (xb, body) kappas
+          *               else translate_eff_case env clause kappas)
+          *              cases)
+          *          eff_cases StringMap.empty
+          *      in
+          *      let forward y ks =
+          *        K.bind ks
+          *          (fun ks ->
+          *            let bind_k'_ks', k', ks' = K.pop ks in
+          *            let bind_h'_ks'', h', ks'' = K.pop ks' in
+          *            let bind code = bind_k'_ks' (bind_h'_ks'' code) in
+          *            let resumption =
+          *              Fn (["s"], Return (cons (K.reify h')
+          *                                   (cons (K.reify k') (Var "s"))))
+          *            in
+          *            bind (apply_yielding (K.reify h') [vmap resumption y] ks''))
+          *      in
+          *      K.reflect
+          *        (Fn (["_z"; "ks"],
+          *             let ks = K.reflect (Var "ks") in
+          *             Case ("_z",
+          *                   eff_cases ks,
+          *                   Some ("_z", forward (Var "_z") ks))))
+          *    in
+          *    let kappa = K.(value_case <> eff_cases <> kappa) in
+          *    snd (generate_computation comp_env (initial_parameterise comp) kappa)
+          * end *)
+
+  and generate_computation env : Ir.computation -> continuation -> (venv * js) =
     fun (bs, tc) kappa ->
-      let rec gbs : venv -> continuation -> Ir.binding list -> venv * code =
+      let rec gbs : venv -> continuation -> Ir.binding list -> venv * js =
         fun env kappa ->
           function
           | `Let (b, (_, `Return v)) :: bs ->
-             let (x, x_name) = name_binder b in
-             let env', rest = gbs (VEnv.bind env (x, x_name)) kappa bs in
-             (env', Bind (x_name, generate_value env v, rest))
+             let xb' = Ident.of_binder b in
+             let env', rest = gbs (VEnv.bind env (Var.var_of_binder xb', Ident.name_binder xb')) kappa bs in
+             (env', const xb' (generate_value env v, rest))
           | `Let (b, (_, tc)) :: bs ->
-             let (x, x_name) = name_binder b in
-             let bind, skappa, skappas = K.pop kappa in
-             let env',skappa' =
-               K.contify_with_env
-                 (fun kappas ->
-                   let env', body = gbs (VEnv.bind env (x, x_name)) K.(skappa <> kappas) bs in
-                   env', Fn ([x_name], body))
+             let xb' = Ident.of_binder b in
+             let _fs = Ident.fresh_binder ~prefix:"_fs" () in
+             let env', body =
+               gbs
+                 (VEnv.bind env (Var.var_of_binder xb, Ident.name_binder xb'))
+                 K.(reflect (variable (Ident.to_var _fs)))
+                 bs
              in
-             env', bind (generate_tail_computation env tc K.(skappa' <> skappas))
+             let f =
+               fun_expr (fun_def [xb'; _fs]) body
+             in
+             let kappa', stmts = K.(f &> kappa) in
+             let stmts' = generate_tail_computation env tc kappa' in
+             env', stmts @ stmts'
           | `Fun ((fb, _, _zs, _location) as def) :: bs ->
-             let (f, f_name) = name_binder fb in
-             let def_header = generate_function env [] def in
-             let env', rest = gbs (VEnv.bind env (f, f_name)) kappa bs in
-             (env', LetFun (def_header, rest))
+             let fb = Ident.of_binder fb in
+             let fun_def = generate_function env [] def in
+             let env', rest = gbs (VEnv.bind env (Ident.to_var fb, Ident.name_binder fb)) kappa bs in
+             (env', (fun_decl fun_def) :: rest)
           | `Rec defs :: bs ->
-             let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
-             let env', rest = gbs (List.fold_left VEnv.bind env fs) kappa bs in
-             (env', LetRec (List.map (generate_function env fs) defs, rest))
+             let fbs = List.map (fun (fb, _, _, _) -> Ident.of_binder fb) defs in
+             let env', rest =
+               gbs
+                 (List.fold_left (fun env fb -> VEnv.bind env (Ident.to_var fb, Ident.name_binder fb)) env fs)
+                 kappa
+                 bs
+             in
+             (env', (List.map (fun def -> fun_def (generate_function env fs def)) defs) @ rest)
           | `Module _ :: bs
           | `Alien _ :: bs -> gbs env kappa bs
           | [] -> (env, generate_tail_computation env tc kappa)
       in
       gbs env kappa bs
 
-  and generate_function env fs :
-      Ir.fun_def ->
-    (string * string list * code * Ir.location) =
+  and generate_function env fs : Ir.fun_def -> fun_def =
     fun (fb, (_, xsb, body), zb, location) ->
-      let (f, f_name) = name_binder fb in
-      assert (f_name <> "");
-      (* prerr_endline ("f_name: "^f_name); *)
-      (* optionally add an additional closure environment argument *)
-      let xsb =
-        match zb with
-        | None -> xsb
-        | Some zb -> zb :: xsb
-      in
-      let bs = List.map name_binder xsb in
-      let _xs, xs_names = List.split bs in
-      let body_env = List.fold_left VEnv.bind env (fs @ bs) in
-      let body =
-        match location with
-        | `Client | `Unknown ->
-           snd (generate_computation body_env body (K.reflect (Var __kappa)))
-        | `Server -> generate_remote_call f xs_names (Dict [])
-        | `Native -> failwith ("Not implemented native calls yet")
-      in
-      (f_name,
-       xs_names @ [__kappa],
-       body,
-       location)
-  and generate_cancel_stub env (action: code -> code) (kappa: K.t)  =
-    let open Pervasives in
-    (* Compile a thunk to be invoked if the operation fails *)
-    let cancellation_thunk_name =
-      gensym ~prefix:"cancellation_thunk" () in
-    let () = Debug.print ("Kappa in GCS: " ^ K.to_string kappa) in
-    (* Grab affected variables from the continuation *)
-    let affected_vars_name = gensym ~prefix:"affected_vars" () in
-    let fresh_var = Var.fresh_raw_var () in
-    let affected_variables =
-       VariableInspection.get_affected_variables (K.reify kappa) in
-    (* Bind affected variables array to a fresh variable *)
-    let env = VEnv.bind env (fresh_var, affected_vars_name) in
-    (* Compile raise operation WRT reflected, bound continuation *)
-    let raiseOp =
-      generate_special env (`DoOperation (
-        Value.session_exception_operation,
-        [`Variable fresh_var], `Not_typed)) in
-    let fresh_kappa = gensym ~prefix:"kappa" () in
-    let cancellation_thunk = Fn ([fresh_kappa], raiseOp (K.reflect (Var fresh_kappa))) in
-
-    (* Generate binding code *)
-    Bind (affected_vars_name, Arr affected_variables,
-      Bind (cancellation_thunk_name, cancellation_thunk,
-        action (Var cancellation_thunk_name)))
+    let fb = Ident.of_binder fb in
+    (* optionally add an additional closure environment argument *)
+    let xsb =
+      match zb with
+      | None -> xsb
+      | Some zb -> zb :: xsb
+    in
+    let bs = List.map Ident.of_binder xsb in
+    let body_env =
+      List.fold_left
+        (fun env b ->
+          VEnv.bind env (Ident.to_var b, Ident.name_binder b))
+        (fs @ bs)
+    in
+    let body =
+      match location with
+      | `Client | `Unknown ->
+         snd (generate_computation body_env body (K.reflect (variable (Ident.to_var __kappa))))
+      | `Server -> generate_remote_call f bs (obj [])
+      | `Native -> failwith ("Not implemented native calls yet")
+    in
+    fun_def
+    ~name:(`Binder fb)
+     (bs @ [__kappa])
+     body
+  (* and generate_cancel_stub env (action: code -> code) (kappa: K.t)  =
+   *   let open Pervasives in
+   *   (\* Compile a thunk to be invoked if the operation fails *\)
+   *   let cancellation_thunk_name =
+   *     gensym ~prefix:"cancellation_thunk" () in
+   *   let () = Debug.print ("Kappa in GCS: " ^ K.to_string kappa) in
+   *   (\* Grab affected variables from the continuation *\)
+   *   let affected_vars_name = gensym ~prefix:"affected_vars" () in
+   *   let fresh_var = Var.fresh_raw_var () in
+   *   let affected_variables =
+   *      VariableInspection.get_affected_variables (K.reify kappa) in
+   *   (\* Bind affected variables array to a fresh variable *\)
+   *   let env = VEnv.bind env (fresh_var, affected_vars_name) in
+   *   (\* Compile raise operation WRT reflected, bound continuation *\)
+   *   let raiseOp =
+   *     generate_special env (`DoOperation (
+   *       Value.session_exception_operation,
+   *       [`Variable fresh_var], `Not_typed)) in
+   *   let fresh_kappa = gensym ~prefix:"kappa" () in
+   *   let cancellation_thunk = Fn ([fresh_kappa], raiseOp (K.reflect (Var fresh_kappa))) in
+   * 
+   *   (\* Generate binding code *\)
+   *   Bind (affected_vars_name, Arr affected_variables,
+   *     Bind (cancellation_thunk_name, cancellation_thunk,
+   *       action (Var cancellation_thunk_name))) *)
 
 
   let generate_toplevel_binding :
@@ -1204,51 +1303,58 @@ end = functor (K : CONTINUATION) -> struct
     Json.json_state ->
     venv ->
     Ir.binding ->
-    Json.json_state * venv * string option * (code -> code) =
+    Json.json_state * venv * Ident.binder option * js =
 
     fun valenv state varenv ->
+    let json_parse e =
+      apply (Ident.of_string "JSON.parse") [e]
+    in
       function
       | `Let (b, _) ->
-         let (x, x_name) = name_binder b in
+         let b' = Ident.of_binder b in
       (* Debug.print ("let_binding: " ^ x_name); *)
-         let varenv = VEnv.bind varenv (x, x_name) in
-         let value = Value.Env.find x valenv in
+         let varenv = VEnv.bind varenv (Ident.to_var b', Ident.name_binder b') in
+         let value = Value.Env.find (Var.var_of_binder x) valenv in
          let jsonized_val = Json.jsonize_value value in
          let state = ResolveJsonState.add_value_information value state in
          (state,
           varenv,
-          Some x_name,
-          fun code -> Bind (x_name, Lit jsonized_val, code))
+          Some b',
+          lift_stmt
+            (const b' (json_parse (lit (String jsonized_val))))) (* TODO represent "json state" in the JS IR *)
       | `Fun ((fb, _, _zs, _location) as def) ->
-         let (f, f_name) = name_binder fb in
-         let varenv = VEnv.bind varenv (f, f_name) in
+         let fb' = Ident.of_binder fb in
+         let varenv = VEnv.bind varenv (Ident.to_var fb', Ident.name_binder fb') in
          let def_header = generate_function varenv [] def in
          (state,
           varenv,
           None,
-          fun code -> LetFun (def_header, code))
+          lift_stmt (fun_decl def_header))
       | `Rec defs ->
-         let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
-         let varenv = List.fold_left VEnv.bind varenv fs in
-         (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
+         let fbs = List.map (fun (fb, _, _, _) -> Ident.of_binder fb) defs in
+         let varenv = List.fold_left (fun env fb -> VEnv.bind env (Ident.to_var fb, Ident.name_binder fb)) fbs in
+         let fun_defs =
+           List.map (generate_function varenv fs) defs
+         in
+         (state, varenv, None, List.map fun_decl fun_defs) (* TODO possibly inline `fun_decl` into the map above. *)
       | `Alien (bnd, raw_name, _lang) ->
-        let (a, _a_name) = name_binder bnd in
-        let varenv = VEnv.bind varenv (a, raw_name) in
-        state, varenv, None, (fun code -> code)
-      | `Module _ -> state, varenv, None, (fun code -> code)
+         let b = Ident.of_binder bnd in
+         let varenv = VEnv.bind varenv (Ident.to_var b, raw_name) in
+         state, varenv, None, skip
+      | `Module _ -> state, varenv, None, skip
 
-  let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code) =
+  let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * js =
     fun valenv state venv ->
       function
-      | []      -> state, venv, [], identity
+      | []      -> state, venv, [], skip
       | b :: bs ->
-         let state, venv, x, f = generate_toplevel_binding valenv state venv b in
-         let state, venv, xs, g = generate_toplevel_bindings valenv state venv bs in
+         let state, venv, x, p = generate_toplevel_binding valenv state venv b in
+         let state, venv, xs, q = generate_toplevel_bindings valenv state venv bs in
          let xs =
            match x with
            | None -> xs
-           | Some x -> x :: xs in
-         state, venv, xs, f -<- g
+           | Some x -> (Ident.name_binder x) :: xs in
+         state, venv, xs, sequence p q
 
   let generate_stubs _venv bs = GenStubs.bindings bs
   let wrap_with_server_lib_stubs code = GenStubs.wrap_with_server_lib_stubs code

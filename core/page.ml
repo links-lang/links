@@ -118,7 +118,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
     let _nenv, venv, _tenv = initialise_envs (nenv, tyenv) in
 
-    let json_state, venv, let_names, f = C.generate_toplevel_bindings valenv json_state venv defs in
+    let json_state, venv, let_names, code = C.generate_toplevel_bindings valenv json_state venv defs in
     let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
 
     (* Add AP information; mark APs as delivered *)
@@ -133,11 +133,12 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     let state_string = JsonState.to_string json_state in
 
     let printed_code =
-      let _venv, code = C.generate_program venv ([], `Return (`Extend (StringMap.empty, None))) in
-      let code = f code in
+      let _venv, code' = C.generate_program venv ([], `Return (`Extend (StringMap.empty, None))) in
       let code =
-        let open Pervasives in
-        code |> (C.generate_stubs valenv defs) |> C.wrap_with_server_lib_stubs
+        let open Js in
+        let stubs =
+          C.(wrap_with_server_lib_stubs (generate_stubs valenv defs)) in
+        sequence stubs (sequence code code')
       in
       G.string_of_js code
     in
