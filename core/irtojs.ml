@@ -699,7 +699,7 @@ end = functor (K : CONTINUATION) -> struct
          | _ ->
             Call (gv f, List.map gv vs)
        end
-    | `Closure (f, v) ->
+    | `Closure (f, _, v) ->
        if session_exceptions_enabled
        then Call (Var "partialApplySE", [gv (`Variable f); gv v])
        else Call (Var "partialApply", [gv (`Variable f); gv v])

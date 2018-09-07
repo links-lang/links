@@ -54,7 +54,7 @@ type value =
                                       (* XML node construction: <tag attributes>body</tag> *)
   | `ApplyPure of value * value list  (* non-side-effecting application: v ws *)
 
-  | `Closure of var * value           (* closure creation: f env *)
+  | `Closure of var * tyarg list * value           (* closure creation: f env *)
 
   | `Coerce of value * Types.datatype (* type coercion: v:A *)
   ]

@@ -226,11 +226,21 @@ struct
             let (args, _, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               `ApplyPure (f, args), deconstruct return_type ft, o
-        | `Closure (f, z) ->
+
+        | `Closure (f, tyargs, z) ->
+
             let (f, t, o) = o#var f in
+            let t = if tyargs = []
+              then
+                t
+              else
+                begin
+                  let (remaining_type, instantiation_maps) = Instantiate.type_arguments_to_instantiation_maps false t tyargs in
+                  Instantiate.datatype instantiation_maps remaining_type
+                end in
             let (z, _, o) = o#value z in
               (* TODO: check that closure environment types match expectations for f *)
-              `Closure (f, z), t, o
+              `Closure (f, tyargs, z), t, o
         | `Coerce (v, t) ->
             let v, _, o = o#value v in
             (* TODO: check that vt <: t *)
@@ -783,6 +793,9 @@ let ir_type_mod_visitor tyenv type_visitor =
             | `Coerce (var, datatype) ->
                let (datatype, _) = type_visitor#typ datatype in
                super#value (`Coerce (var, datatype))
+            | `Closure (var, tyargs, env) ->
+              let tyargs = List.map (fun targ -> fst (type_visitor#type_arg targ)) tyargs in
+              super#value (`Closure (var, tyargs, env))
             | other -> super#value other
 
           method! special = function

@@ -1,3 +1,5 @@
+open Utility
+
 exception ArityMismatch
 
 val show_recursion : bool Settings.setting
