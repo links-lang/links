@@ -1,7 +1,7 @@
 open Utility
-open Ir
 
-type fenv = (Ir.binder list) IntMap.t
+type freevars = { termvars: (Ir.binder list) ; typevars: ((int * Types.kind) list)} [@@deriving show]
+type fenv = freevars IntMap.t
     [@@deriving show]
 
 module ClosureVars =
@@ -9,32 +9,40 @@ struct
   (* The object of this visitor is to compute the non-global free
      variables for each function so that we can subsequently perform
      closure conversion. These are accumulated in fenv, which maps
-     each non-global function f to a list of its non-global free
-     variables. *)
+     each non-global function f to a list of its non-global free type
+     and term variables. *)
   class visitor tenv globals =
     object (o : 'self) inherit IrTraversals.Transform.visitor(tenv) as super
       val globals = globals
-      val bound_vars = IntSet.empty
-      val free_vars = IntSet.empty
+      val bound_term_vars = IntSet.empty
 
-      val fenv : (Ir.binder list) IntMap.t = IntMap.empty
+      (* We need to track the kinds here. For term variables, the visitor has a dedicated environment. *)
+      val bound_type_vars = IntMap.empty
 
-      method register_fun f (zs : binder list) =
-        {< fenv = IntMap.add f zs fenv >}
+      val free_term_vars = IntSet.empty
+      val free_type_vars = IntSet.empty
+
+      val fenv : fenv = IntMap.empty
+
+      method register_fun f (fv : freevars) =
+        {< fenv = IntMap.add f fv fenv >}
 
       method global x =
         {< globals = IntSet.add x globals >}
 
-      method bound x =
-        {< bound_vars = IntSet.add x bound_vars >}
+      method bound_termvar x =
+        {< bound_term_vars = IntSet.add x bound_term_vars >}
+
+      method bound_typevar x kind =
+        {< bound_type_vars = IntMap.add x kind bound_type_vars >}
 
       (* recursively gather free variables required by inner closures *)
-      method close x =
-        if IntSet.mem x bound_vars then
+      method close_term x =
+        if IntSet.mem x bound_term_vars then
           if IntMap.mem x fenv then
-            let zs = IntMap.find x fenv in
+            let zs = (IntMap.find x fenv).termvars in
             List.fold_left
-              (fun o (z, _) -> o#close z)
+              (fun o (z, _) -> o#close_term z)
               o
               zs
           else
@@ -42,45 +50,145 @@ struct
         else
           begin
             (* Debug.print ("free var: "^string_of_int x); *)
-            {< free_vars = IntSet.add x free_vars >}
+            {< free_term_vars = IntSet.add x free_term_vars >}
           end
 
-      method register_var x =
+      method register_term_var x =
         if IntSet.mem x globals then
           o
         else
-          o#close x
+          o#close_term x
+
+      method register_type_var tv =
+        if IntMap.mem tv bound_type_vars then
+          o
+        else
+          (* (Debug.print ("registering typevar: " ^ string_of_int tv);*)
+          {< free_type_vars = IntSet.add tv free_type_vars >}
 
       method private reset =
-        {< bound_vars = IntSet.empty; free_vars = IntSet.empty >}
-      method set bound_vars free_vars =
-        {< bound_vars = bound_vars; free_vars = free_vars >}
+        {< bound_term_vars = IntSet.empty; free_term_vars = IntSet.empty;
+            bound_type_vars = IntMap.empty; free_type_vars = IntSet.empty >}
+      method set bound_term_vars free_term_vars bound_type_vars free_type_vars =
+        {< bound_term_vars = bound_term_vars; free_term_vars = free_term_vars;
+            bound_type_vars = bound_type_vars; free_type_vars = free_type_vars >}
 
-      method get_bound_vars = bound_vars
-      method get_free_vars = free_vars
+      method get_bound_term_vars = bound_term_vars
+      method get_free_term_vars = free_term_vars
+      method get_bound_type_vars = bound_type_vars
+      method get_free_type_vars = free_type_vars
 
       method get_fenv = fenv
 
       method! var =
         fun var ->
           let var, t, o = super#var var in
-          var, t, o#register_var var
+          let o = o#typ (`Type t) in
+          var, t, o#register_term_var var
+
+      method! value = fun v -> match v with
+        | `TApp (_, args) ->
+          let o = List.fold_left (fun o arg -> o#typ arg) o args in
+          o#super_value v
+        | `Closure (_, tyargs, _) ->
+          let o = List.fold_left (fun o arg -> o#typ arg) o tyargs in
+          o#super_value v
+        | `Inject (_, _, t) ->
+          let o = o#typ (`Type t) in
+          o#super_value v
+        | `TAbs (quantifiers, v) ->
+          let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
+          let (_, ti, o) = o#value v in
+          let t = `ForAll (ref quantifiers, ti) in
+          let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
+          (v, t, o)
+        | _ -> o#super_value v
+
+
+
+      method! special = fun s ->
+        let o = match s with
+          | `Table (_, _, _, (t1, t2, t3)) ->
+            let o1 = o#typ (`Type t1) in
+            let o2 = o1#typ (`Type t2) in
+            o2#typ (`Type t3)
+          | `Query (_, _, t)
+          | `DoOperation (_, _, t) ->
+            o#typ (`Type t)
+          | _ -> o in
+        o#super_special s
+
+
+      (* t is a type_arg, which ranges over ordinary types, rows and presence specs *)
+      method typ (t : Types.type_arg) =
+        let free_type_vars = Types.typevarset_to_intset (Types.free_tyarg_vars t) in
+        (*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*)
+        IntSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o
+
+
+      method quantifier q =
+        let var = Types.var_of_quantifier q in
+        let kind = Types.kind_of_quantifier q in
+        o#bound_typevar var kind
+
+      method quantifier_remove q =
+        let var = Types.var_of_quantifier q in
+        {< bound_type_vars = IntMap.remove  var bound_type_vars >}
+
+
 
       method! binder ((_, (_, _, scope)) as b) =
         let b, o = super#binder b in
+        let t = Var.type_of_binder b in
+        let o = o#typ (`Type t) in
         match scope with
         | `Global -> b, o#global (Var.var_of_binder b)
-        | `Local  -> b, o#bound (Var.var_of_binder b)
+        | `Local  -> b, o#bound_termvar (Var.var_of_binder b)
 
-      method private super_binding = super#binding
+      method super_binding = super#binding
 
       method super_binder = super#binder
 
+      method super_value = super#value
+
+      method super_special = super#special
+
+
+      (* The object called on must have visited the function, original_o has not *)
+      method create_fenv_entry original_o =
+        let free_binders =
+          List.rev
+            (IntSet.fold
+                (fun x zs ->
+                  (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
+                (o#get_free_term_vars)
+                []) in
+        let free_typevars =
+            IntSet.fold
+                (fun tvar zs -> match IntMap.find_opt tvar original_o#get_bound_type_vars with
+                  (* Those type variables that are free inside of the function but not bound in the outer scope
+                      should exactly correspond to the `Flexible type variables. We do not want to generalize them *)
+                  | Some kind -> (tvar, kind)::zs
+                  | None -> zs )
+                (o#get_free_type_vars)
+                [] in
+        {termvars = free_binders ; typevars = free_typevars}
+
+
       method! binding =
         function
+        | (`Let (_, (quantifiers, _))) as b->
+          let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
+          let (b, o) = o#super_binding b in
+          let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
+          (b, o)
         | (`Fun (f, (tyvars, xs, body), None, location)) as b when Ir.binding_scope b = `Local ->
+          let original_o = o in
           (* reset free and bound variables to be empty *)
           let o = o#reset in
+
+          let f, o = o#binder f in
+          let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
           let (xs, o) =
             List.fold_right
               (fun x (xs, o) ->
@@ -88,24 +196,34 @@ struct
                  (x::xs, o))
               xs
               ([], o) in
+
+
           (* Debug.print("Descending into: " ^ string_of_int (Var.var_of_binder f)); *)
           let body, _, o = o#computation body in
           (* Debug.print("Ascended from: " ^ string_of_int (Var.var_of_binder f)); *)
+          let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
 
-          let zs =
-            List.rev
-              (IntSet.fold
-                 (fun x zs ->
-                    (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
-                 (o#get_free_vars)
-                 []) in
+
+          (*Debug.print ("free type vars of " ^ (string_of_int (Var.var_of_binder f)) ^ " " ^ (IntSet.show o#get_free_type_vars));
+          Debug.print ("bound type vars at  " ^ (string_of_int (Var.var_of_binder f)) ^  " " ^ (IntMap.show (Types.pp_kind) o#get_bound_type_vars));*)
+          let fenv_entry = o#create_fenv_entry original_o in
+           (*Debug.print ("fventry of  " ^ (string_of_int (Var.var_of_binder f)) ^ " " ^ (show_freevars fenv_entry));*)
+
           (* restore free and bound variables *)
-          let o = o#set bound_vars free_vars in
+          let o = o#set bound_term_vars free_term_vars bound_type_vars free_type_vars in
 
-          let f, o = o#binder f in
-          let o = o#register_fun (Var.var_of_binder f) zs in
+          let o = o#register_fun (Var.var_of_binder f) fenv_entry in
+          (*Debug.print ("fenv: " ^ show_fenv o#get_fenv);*)
           `Fun (f, (tyvars, xs, body), None, location), o
+
+        | (`Fun (_, (tyvars, _, _),_,_)) as b ->
+          let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
+          let (b, o) = o#super_binding b in
+          let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
+          (b, o)
+
         | (`Rec defs) as b when Ir.binding_scope b = `Local ->
+          let original_o = o in
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -128,6 +246,7 @@ struct
             List.fold_left
               (fun (defs, (o : 'self)) (f, (tyvars, xs, body), none, location) ->
                  assert (none = None);
+                 let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
                  let xs, o =
                    List.fold_right
                      (fun x (xs, o) ->
@@ -136,20 +255,15 @@ struct
                      xs
                      ([], o) in
                  let body, _, o = o#computation body in
+                 let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
 
                  (f, (tyvars, xs, body), None, location)::defs, o)
               ([], o)
               defs in
 
-          let zs =
-            List.rev
-              (IntSet.fold
-                 (fun x zs ->
-                    (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
-                 (o#get_free_vars)
-                 []) in
+          let fenv_entry = o#create_fenv_entry original_o in
           (* restore free and bound variables *)
-          let o = o#set bound_vars free_vars in
+          let o = o#set bound_term_vars free_term_vars bound_type_vars free_type_vars in
 
           (* ensure functions are in scope for the continuation *)
           let _, o =
@@ -162,7 +276,7 @@ struct
 
           let o = List.fold_left
               (fun o (f, _, _, _) ->
-                 o#register_fun (Var.var_of_binder f) zs) o defs in
+                 o#register_fun (Var.var_of_binder f) fenv_entry) o defs in
           let defs = List.rev defs in
           `Rec defs, o
         | `Rec defs ->
@@ -185,6 +299,7 @@ struct
               List.fold_left
                 (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), none, location) ->
                    assert (none = None);
+                   let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
                    let xs, o =
                      List.fold_right
                        (fun x (xs, o) ->
@@ -193,6 +308,7 @@ struct
                        xs
                        ([], o) in
                    let body, _, o = o#computation body in
+                   let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
                    (f, (tyvars, xs, body), None, location)::defs, o)
                 ([], o)
                 defs
@@ -246,8 +362,27 @@ end
 
 module ClosureConvert =
 struct
-  let close f zs =
-    `Closure (f, `Extend (List.fold_right
+
+  let create_tyargs tyvars =
+    List.map (fun (tyvar, kind) ->
+      let (primary_kind, sub_kind) = kind in
+      match primary_kind with
+        | `Type ->
+            let new_type_variable = Unionfind.fresh (`Var (tyvar, sub_kind, `Rigid)) in
+            let t = `MetaTypeVar new_type_variable in
+            `Type t
+        | `Row ->
+            let new_type_variable = Unionfind.fresh (`Var (tyvar, sub_kind, `Rigid)) in
+            let r = (Types.empty_field_env, new_type_variable, false) in
+            `Row r
+        | `Presence ->
+            let new_type_variable = Unionfind.fresh (`Var (tyvar, sub_kind, `Rigid)) in
+            let p = `Var new_type_variable in
+            `Presence p
+      ) tyvars
+
+  let close f zs tyvars =
+    `Closure (f, create_tyargs tyvars,`Extend (List.fold_right
                             (fun (zname, zv) fields ->
                                StringMap.add zname zv fields)
                             zs
@@ -276,12 +411,13 @@ struct
             if IntSet.mem x cvars then
               `Project (string_of_int x, `Variable parent_env)
             else if IntMap.mem x fenv then
-              let zs = IntMap.find x fenv in
+              let zs = (IntMap.find x fenv).termvars in
+              let tyvars = (IntMap.find x fenv).typevars in
               match zs with
               | [] -> `Variable x
               | _ ->
                 if List.mem_assoc x parents then
-                  `Closure (x, `Variable parent_env)
+                  `Closure (x, create_tyargs tyvars,`Variable parent_env)
                 else
                   let zs =
                     List.map
@@ -290,7 +426,7 @@ struct
                          (string_of_int z, v))
                       zs
                   in
-                  close x zs
+                  close x zs tyvars
             else
               `Variable x
           in
@@ -300,12 +436,27 @@ struct
       method set_context parents parent_env cvars =
         {< parents = parents; parent_env = parent_env; cvars = cvars >}
 
+      method hoist_bindings =
+        let bs', o = o#pop_hoisted_bindings in
+        List.fold_left (fun (bs', o) -> function
+            | `Fun fundef ->
+              let fundef, o = o#generalize_function_for_hoisting fundef in
+              (`Fun fundef) :: bs', o
+            | `Rec fundefs ->
+                let recdefs, o = List.fold_right (fun fundef (recdefs, o) ->
+                    let fundef, o = o#generalize_function_for_hoisting fundef in
+                    (fundef :: recdefs), o
+                  ) fundefs ([], o) in
+                (`Rec recdefs) :: bs', o
+            | x -> (x::bs'), o
+          ) ([], o) (List.rev bs')
+
       method! bindings =
         function
         | [] -> [], o
         | b :: bs when Ir.binding_scope b = `Global ->
           let b, o = o#binding b in
-          let bs', o = o#pop_hoisted_bindings in
+          let bs', o = o#hoist_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
         | `Fun ((f, _) as fb, (tyvars, xs, body), None, location) :: bs ->
@@ -320,7 +471,7 @@ struct
               ([], o) in
           (* back up the previous context *)
           let parents', parent_env', cvars' = parents, parent_env, cvars in
-          let zs = IntMap.find f fenv in
+          let zs = (IntMap.find f fenv).termvars in
           let cvars = List.fold_left (fun cvars (z, _) -> IntSet.add z cvars) IntSet.empty zs in
 
           (* The following type annotation is necessary as of OCaml
@@ -375,7 +526,7 @@ struct
 
                    (* back up the previous context *)
                    let parents', parent_env', cvars' = parents, parent_env, cvars in
-                   let zs = IntMap.find f fenv in
+                   let zs = (IntMap.find f fenv).termvars in
                    let cvars = List.fold_left (fun cvars (z, _) -> IntSet.add z cvars) IntSet.empty zs in
                    let zb, o =
                      match zs with
@@ -407,11 +558,65 @@ struct
           let bs, o = o#bindings bs in
           b :: bs, o
 
+
+      method generalize_function_for_hoisting : Ir.fun_def ->  (Ir.fun_def * 'self_type) = fun fundef ->
+        let (f, (tyvars, xs, body), z, location) = fundef in
+        let f_var = Var.var_of_binder f in
+        let f_type = Var.type_of_binder f in
+        let free_type_vars = (IntMap.find f_var fenv).typevars in
+
+        let create_substitutions () = List.fold_right (fun (typevar, kind) (qs, (type_map, row_map, presence_map) ) ->
+            let  (primary_kind, subkind) = kind in
+            let newvar = Types.fresh_raw_variable () in
+            let new_meta_var, updated_maps = match primary_kind with
+              | `Type ->
+                let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+
+                let t = `MetaTypeVar new_type_variable in
+                (`Type new_type_variable, (IntMap.add typevar t type_map, row_map, presence_map))
+              | `Row ->
+                let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+                let r = (Types.empty_field_env, new_type_variable, false) in
+                (`Row new_type_variable, (type_map, IntMap.add typevar r row_map, presence_map))
+              | `Presence ->
+                let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+                let p = `Var new_type_variable in
+                (`Presence new_type_variable, (type_map, row_map, IntMap.add typevar p presence_map)) in
+            let new_quantifier = (newvar, subkind, new_meta_var) in
+            (new_quantifier :: qs, updated_maps)
+          ) free_type_vars ([], (IntMap.empty, IntMap.empty, IntMap.empty)) in
+
+        let outer_quantifiers, outer_maps = create_substitutions () in
+        let inner_quantifiers, inner_maps = create_substitutions () in
+
+        let f_type = match f_type with
+          | `ForAll (existing_qs_ref, t) ->
+              let existing_qs = !existing_qs_ref in
+              let t' = Instantiate.datatype outer_maps t in
+              `ForAll (ref (outer_quantifiers @ existing_qs), t' )
+          | t -> let t' = Instantiate.datatype outer_maps t in
+              `ForAll (ref outer_quantifiers, t' ) in
+        let f = Var.update_type f_type f in
+
+        let tyvars = inner_quantifiers @ tyvars in
+        let (z, o) = match z with
+          | Some zbinder ->
+            let zbinder = Var.update_type (Instantiate.datatype inner_maps (Var.type_of_binder zbinder)) zbinder in
+            (Some zbinder, snd (o#binder zbinder))
+          | None -> None, o in
+        let xs = List.fold_right (fun x xs ->
+            let newtype = Instantiate.datatype inner_maps (Var.type_of_binder x) in
+            (Var.update_type newtype x)::xs
+          ) xs [] in
+        let (_, o) = o#binder f in
+        let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps body in
+        (f, (tyvars, xs, body), z, location), o
+
       method! program =
         fun (bs, tc) ->
+          let bs', o = o#hoist_bindings in
           let bs, o = o#bindings bs in
           let tc, t, o = o#tail_computation tc in
-          let bs', o = o#pop_hoisted_bindings in
           (bs @ bs', tc), t, o
     end
 
@@ -436,6 +641,7 @@ let program globals tyenv program =
   program
 
 let bindings tyenv globals bs =
+  (* List.iter (fun b -> Debug.print (Ir.show_binding b)) bs; *)
   let bs = Globalise.bindings bs in
   let fenv = ClosureVars.bindings tyenv globals bs in
   let bs = ClosureConvert.bindings tyenv fenv bs in
