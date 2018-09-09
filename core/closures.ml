@@ -43,11 +43,19 @@ struct
       method close_term x =
         if IntSet.mem x bound_term_vars then
           if IntMap.mem x fenv then
-            let zs = (IntMap.find x fenv).termvars in
-            List.fold_left
+            let freevars = IntMap.find x fenv in
+            let zs = freevars.termvars in
+            let typevars = freevars.typevars in
+            let o = List.fold_left
               (fun o (z, _) -> o#close_term z)
               o
-              zs
+              zs in
+            List.fold_left
+              (fun o (tv,_) ->
+                o#register_type_var tv
+              )
+              o
+              typevars
           else
             o
         else
