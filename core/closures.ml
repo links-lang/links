@@ -399,8 +399,8 @@ struct
             `Presence p
       ) tyvars
 
-  let close f zs tyvars =
-    `Closure (f, create_tyargs tyvars,`Extend (List.fold_right
+  let close f zs tyargs =
+    `Closure (f, tyargs, `Extend (List.fold_right
                             (fun (zname, zv) fields ->
                                StringMap.add zname zv fields)
                             zs
@@ -425,30 +425,34 @@ struct
         | `Variable x ->
           let x, t, o = o#var x in
 
-          let rec var_val x =
+          let rec var_val x : (Ir.value * Types.datatype ) =
             if IntSet.mem x cvars then
-              `Project (string_of_int x, `Variable parent_env)
+              `Project (string_of_int x, `Variable parent_env), t
             else if IntMap.mem x fenv then
               let zs = (IntMap.find x fenv).termvars in
               let tyvars = (IntMap.find x fenv).typevars in
-              match zs with
-              | [] -> `Variable x
+              match zs, tyvars with
+              | [], [] -> `Variable x, t
               | _ ->
+                let tyargs = create_tyargs tyvars in
+                let (remaining_type, instantiation_maps) = Instantiate.type_arguments_to_instantiation_maps false t tyargs in
+                let overall_type = Instantiate.datatype instantiation_maps remaining_type in
                 if List.mem_assoc x parents then
-                  `Closure (x, create_tyargs tyvars,`Variable parent_env)
+                  `Closure (x, tyargs,`Variable parent_env), overall_type
                 else
                   let zs =
                     List.map
                       (fun (z, _) ->
-                         let v = var_val z in
+                         let v = fst (var_val z) in
                          (string_of_int z, v))
                       zs
                   in
-                  close x zs tyvars
+                  close x zs tyargs, overall_type
             else
-              `Variable x
+              `Variable x, t
           in
-          var_val x, t, o
+          let overall_val, overall_type = var_val x in
+          overall_val, overall_type, o
         | v -> super#value v
 
       method set_context parents parent_env cvars =
