@@ -22,6 +22,9 @@ struct
       val free_term_vars = IntSet.empty
       val free_type_vars = IntSet.empty
 
+      (* each call of reset puts the active bound type vars on top of this stack, each call of restore pops an entry *)
+      val bound_type_vars_stack = []
+
       val fenv : fenv = IntMap.empty
 
       method register_fun f (fv : freevars) =
@@ -68,15 +71,18 @@ struct
 
       method private reset =
         {< bound_term_vars = IntSet.empty; free_term_vars = IntSet.empty;
-            bound_type_vars = IntMap.empty; free_type_vars = IntSet.empty >}
-      method set bound_term_vars free_term_vars bound_type_vars free_type_vars =
+            bound_type_vars = IntMap.empty; free_type_vars = IntSet.empty;
+             bound_type_vars_stack = bound_type_vars::bound_type_vars_stack >}
+      method restore bound_term_vars free_term_vars bound_type_vars free_type_vars =
         {< bound_term_vars = bound_term_vars; free_term_vars = free_term_vars;
-            bound_type_vars = bound_type_vars; free_type_vars = free_type_vars >}
+            bound_type_vars = bound_type_vars; free_type_vars = free_type_vars;
+             bound_type_vars_stack = List.tl bound_type_vars_stack >}
 
       method get_bound_term_vars = bound_term_vars
       method get_free_term_vars = free_term_vars
       method get_bound_type_vars = bound_type_vars
       method get_free_type_vars = free_type_vars
+      method get_bound_type_vars_stack = bound_type_vars_stack
 
       method get_fenv = fenv
 
@@ -155,7 +161,15 @@ struct
 
 
       (* The object called on must have visited the function, original_o has not *)
-      method create_fenv_entry original_o =
+      method create_fenv_entry =
+        let rec query_boundvars_stack var remaining_stack =
+          match remaining_stack with
+            | m::ms ->
+              begin match IntMap.find_opt var m with
+                | Some kind -> Some (var, kind)
+                | None -> query_boundvars_stack var ms
+              end
+            | [] -> None in
         let free_binders =
           List.rev
             (IntSet.fold
@@ -165,10 +179,8 @@ struct
                 []) in
         let free_typevars =
             IntSet.fold
-                (fun tvar zs -> match IntMap.find_opt tvar original_o#get_bound_type_vars with
-                  (* Those type variables that are free inside of the function but not bound in the outer scope
-                      should exactly correspond to the `Flexible type variables. We do not want to generalize them *)
-                  | Some kind -> (tvar, kind)::zs
+                (fun tvar zs -> match query_boundvars_stack tvar o#get_bound_type_vars_stack with
+                  | Some info -> info::zs
                   | None -> zs )
                 (o#get_free_type_vars)
                 [] in
@@ -183,7 +195,6 @@ struct
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (b, o)
         | (`Fun (f, (tyvars, xs, body), None, location)) as b when Ir.binding_scope b = `Local ->
-          let original_o = o in
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -206,24 +217,23 @@ struct
 
           (*Debug.print ("free type vars of " ^ (string_of_int (Var.var_of_binder f)) ^ " " ^ (IntSet.show o#get_free_type_vars));
           Debug.print ("bound type vars at  " ^ (string_of_int (Var.var_of_binder f)) ^  " " ^ (IntMap.show (Types.pp_kind) o#get_bound_type_vars));*)
-          let fenv_entry = o#create_fenv_entry original_o in
+          let fenv_entry = o#create_fenv_entry in
            (*Debug.print ("fventry of  " ^ (string_of_int (Var.var_of_binder f)) ^ " " ^ (show_freevars fenv_entry));*)
 
           (* restore free and bound variables *)
-          let o = o#set bound_term_vars free_term_vars bound_type_vars free_type_vars in
-
+          let o = o#restore bound_term_vars free_term_vars bound_type_vars free_type_vars in
+          let f, o = o#binder f in
           let o = o#register_fun (Var.var_of_binder f) fenv_entry in
           (*Debug.print ("fenv: " ^ show_fenv o#get_fenv);*)
           `Fun (f, (tyvars, xs, body), None, location), o
 
-        | (`Fun (_, (tyvars, _, _),_,_)) as b ->
+        | (`Fun (_, (tyvars, _, _),_,_)) as b (* global *) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
           let (b, o) = o#super_binding b in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
           (b, o)
 
         | (`Rec defs) as b when Ir.binding_scope b = `Local ->
-          let original_o = o in
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -261,9 +271,9 @@ struct
               ([], o)
               defs in
 
-          let fenv_entry = o#create_fenv_entry original_o in
+          let fenv_entry = o#create_fenv_entry in
           (* restore free and bound variables *)
-          let o = o#set bound_term_vars free_term_vars bound_type_vars free_type_vars in
+          let o = o#restore bound_term_vars free_term_vars bound_type_vars free_type_vars in
 
           (* ensure functions are in scope for the continuation *)
           let _, o =
@@ -279,7 +289,7 @@ struct
                  o#register_fun (Var.var_of_binder f) fenv_entry) o defs in
           let defs = List.rev defs in
           `Rec defs, o
-        | `Rec defs ->
+        | `Rec defs (* global *) ->
           (* it's important to traverse the function binders first in
              order to make sure they're in scope for all of the
              function bodies *)
