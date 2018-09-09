@@ -206,7 +206,7 @@ struct
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
-          let f, o = o#binder f in
+
           let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
           let (xs, o) =
             List.fold_right
@@ -454,27 +454,14 @@ struct
       method set_context parents parent_env cvars =
         {< parents = parents; parent_env = parent_env; cvars = cvars >}
 
-      method hoist_bindings =
-        let bs', o = o#pop_hoisted_bindings in
-        List.fold_left (fun (bs', o) -> function
-            | `Fun fundef ->
-              let fundef, o = o#generalize_function_for_hoisting fundef in
-              (`Fun fundef) :: bs', o
-            | `Rec fundefs ->
-                let recdefs, o = List.fold_right (fun fundef (recdefs, o) ->
-                    let fundef, o = o#generalize_function_for_hoisting fundef in
-                    (fundef :: recdefs), o
-                  ) fundefs ([], o) in
-                (`Rec recdefs) :: bs', o
-            | x -> (x::bs'), o
-          ) ([], o) (List.rev bs')
 
       method! bindings =
         function
         | [] -> [], o
         | b :: bs when Ir.binding_scope b = `Global ->
           let b, o = o#binding b in
-          let bs', o = o#hoist_bindings in
+          (*o#print_bindings [b];*)
+          let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
         | `Fun ((f, _) as fb, (tyvars, xs, body), None, location) :: bs ->
@@ -513,21 +500,25 @@ struct
               Some zb, o in
           let body, _, o = o#computation body in
           let o = o#set_context parents' parent_env' cvars' in
-          let fb, o = o#binder fb in
-          let o = o#push_binding (`Fun (fb, (tyvars, xs, body), zb, location)) in
+          let fb, o = o#binder (o# generalize_function_type_for_hoisting fb) in
+          let fundef = o#generalize_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
+          let o = o#push_binding (`Fun  fundef) in
           let bs, o = o#bindings bs in
           bs, o
         | `Rec defs :: bs ->
             (* it's important to traverse the function binders first in
                order to make sure they're in scope for all of the
                function bodies *)
-            let fbs, o =
+            let fbs, defs, o =
               List.fold_right
-                (fun (f, _, _, _) (fs, o) ->
-                   let f, o = o#binder f in
-                     (f::fs, o))
+                (fun (f, (tyvars, xs, body), zb, location) (fs, defs,  o) ->
+                   (* We have generalize the function's type here, but its body will only be generalized later on *)
+                   let f, o = o#binder (o# generalize_function_type_for_hoisting f) in
+                   let def = (f, (tyvars, xs, body), zb, location) in
+                     (f::fs, def::defs, o))
                 defs
-                ([], o) in
+                ([], [], o) in
+
             let defs, o =
               List.fold_left
                 (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location) ->
@@ -564,7 +555,8 @@ struct
                        Some zb, o#set_context fbs z cvars in
                    let body, _, o = o#computation body in
                    let o = o#set_context parents' parent_env' cvars' in
-                    (fb, (tyvars, xs, body), zb, location)::defs, o)
+                   let fundef = o#generalize_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
+                   fundef::defs, o)
                 ([], o)
                 defs in
             let defs = List.rev defs in
@@ -577,44 +569,58 @@ struct
           b :: bs, o
 
 
-      method generalize_function_for_hoisting : Ir.fun_def ->  (Ir.fun_def * 'self_type) = fun fundef ->
-        let (f, (tyvars, xs, body), z, location) = fundef in
-        let f_var = Var.var_of_binder f in
-        let f_type = Var.type_of_binder f in
+      (** Given a list of free variables, return a tuple containing the following:
+        - a list of fresh quantifiers, each corresponding to one free variable
+        - Three maps mapping the old free variables to fresh ones (to be used with Instantiate)  **)
+      method create_substitutions_replacing_free_variables_with_fresh_ones (free_type_vars : (int * Types.kind) list)  =
+        List.fold_right (fun (typevar, kind) (qs, (type_map, row_map, presence_map) ) ->
+          let  (primary_kind, subkind) = kind in
+          let newvar = Types.fresh_raw_variable () in
+          let new_meta_var, updated_maps = match primary_kind with
+            | `Type ->
+              let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+
+              let t = `MetaTypeVar new_type_variable in
+              (`Type new_type_variable, (IntMap.add typevar t type_map, row_map, presence_map))
+            | `Row ->
+              let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+              let r = (Types.empty_field_env, new_type_variable, false) in
+              (`Row new_type_variable, (type_map, IntMap.add typevar r row_map, presence_map))
+            | `Presence ->
+              let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+              let p = `Var new_type_variable in
+              (`Presence new_type_variable, (type_map, row_map, IntMap.add typevar p presence_map)) in
+          let new_quantifier = (newvar, subkind, new_meta_var) in
+          (new_quantifier :: qs, updated_maps)
+        ) free_type_vars ([], (IntMap.empty, IntMap.empty, IntMap.empty))
+
+
+      method generalize_function_type_for_hoisting f_binder =
+        let f_var = Var.var_of_binder f_binder in
+        let f_type = Var.type_of_binder f_binder in
         let free_type_vars = (IntMap.find f_var fenv).typevars in
 
-        let create_substitutions () = List.fold_right (fun (typevar, kind) (qs, (type_map, row_map, presence_map) ) ->
-            let  (primary_kind, subkind) = kind in
-            let newvar = Types.fresh_raw_variable () in
-            let new_meta_var, updated_maps = match primary_kind with
-              | `Type ->
-                let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+        let outer_quantifiers, outer_maps = o#create_substitutions_replacing_free_variables_with_fresh_ones free_type_vars in
 
-                let t = `MetaTypeVar new_type_variable in
-                (`Type new_type_variable, (IntMap.add typevar t type_map, row_map, presence_map))
-              | `Row ->
-                let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
-                let r = (Types.empty_field_env, new_type_variable, false) in
-                (`Row new_type_variable, (type_map, IntMap.add typevar r row_map, presence_map))
-              | `Presence ->
-                let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
-                let p = `Var new_type_variable in
-                (`Presence new_type_variable, (type_map, row_map, IntMap.add typevar p presence_map)) in
-            let new_quantifier = (newvar, subkind, new_meta_var) in
-            (new_quantifier :: qs, updated_maps)
-          ) free_type_vars ([], (IntMap.empty, IntMap.empty, IntMap.empty)) in
-
-        let outer_quantifiers, outer_maps = create_substitutions () in
-        let inner_quantifiers, inner_maps = create_substitutions () in
-
-        let f_type = match f_type with
+        let f_type_generalized = match f_type with
           | `ForAll (existing_qs_ref, t) ->
               let existing_qs = !existing_qs_ref in
               let t' = Instantiate.datatype outer_maps t in
               `ForAll (ref (outer_quantifiers @ existing_qs), t' )
           | t -> let t' = Instantiate.datatype outer_maps t in
               `ForAll (ref outer_quantifiers, t' ) in
-        let f = Var.update_type f_type f in
+        Var.update_type f_type_generalized f_binder
+
+
+
+      method generalize_function_body_for_hoisting : Ir.fun_def ->  Ir.fun_def = fun fundef ->
+        let (f, (tyvars, xs, body), z, location) = fundef in
+        let f_var = Var.var_of_binder f in
+        let free_type_vars = (IntMap.find f_var fenv).typevars in
+
+        (* We must have used generalize_function_type_for_hoisting on this function before and generalized the type in f (i.e., the binder)  already *)
+
+        let inner_quantifiers, inner_maps = o#create_substitutions_replacing_free_variables_with_fresh_ones free_type_vars in
 
         let tyvars = inner_quantifiers @ tyvars in
         let (z, o) = match z with
@@ -626,15 +632,18 @@ struct
             let newtype = Instantiate.datatype inner_maps (Var.type_of_binder x) in
             (Var.update_type newtype x)::xs
           ) xs [] in
-        let (_, o) = o#binder f in
+        (*Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (`Fun (f, (tyvars, xs, body), z, location)));*)
         let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps body in
-        (f, (tyvars, xs, body), z, location), o
+        (*o#print_bindings [(`Fun (f, (tyvars, xs, body), z, location))];*)
+        (f, (tyvars, xs, body), z, location)
+
+
 
       method! program =
         fun (bs, tc) ->
-          let bs', o = o#hoist_bindings in
           let bs, o = o#bindings bs in
           let tc, t, o = o#tail_computation tc in
+          let bs', o = o#pop_hoisted_bindings in
           (bs @ bs', tc), t, o
     end
 
