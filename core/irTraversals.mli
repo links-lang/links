@@ -3,7 +3,7 @@ open Utility
 
 module type TRANSFORM =
 sig
-  type environment = Types.datatype Env.Int.t [@@deriving show]
+  type environment = Types.datatype Env.Int.t
 
   class visitor : environment ->
   object ('self_type)

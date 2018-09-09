@@ -899,7 +899,10 @@ module InstantiateTypes =
         inherit Types.Transform.visitor
 
         method! typ t =
-          (Instantiate.datatype instantiation_maps t, o)
+          match t with
+            | `Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
+            | _ -> (Instantiate.datatype instantiation_maps t, o)
+
 
       end
 
