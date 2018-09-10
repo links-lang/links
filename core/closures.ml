@@ -25,6 +25,7 @@ struct
       (* each call of reset puts the active bound type vars on top of this stack, each call of restore pops an entry *)
       val bound_type_vars_stack = []
 
+      (* Stores free type and term variables per local function. All types are _prior_ to any manipulations done by closure conversion *)
       val fenv : fenv = IntMap.empty
 
       method register_fun f (fv : freevars) =
@@ -184,6 +185,9 @@ struct
                   (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
                 (o#get_free_term_vars)
                 []) in
+        (* We are only interested in free variables of the function that actually have a binder "above".
+           This prevents breaking the value restriction. Since the currently bound type variables may be hidden
+           begind multiple calls of o#reset, we access the stack collecting bound variable environments shadowed by a call of o#reset *)
         let free_typevars =
             IntSet.fold
                 (fun tvar zs -> match query_boundvars_stack tvar o#get_bound_type_vars_stack with
@@ -419,20 +423,25 @@ struct
 
       method! value =
         function
-        | `Variable x ->
-          let x, t, o = o#var x in
+        | `Variable y ->
+          let y, t_y, o = o#var y in
 
           let rec var_val x : (Ir.value * Types.datatype ) =
+            let x_type = o#lookup_type x in
             if IntSet.mem x cvars then
-              `Project (string_of_int x, `Variable parent_env), t
+              (* We cannot return t as the type of the result here. If x refers to a hoisted function that was generalized, then
+                 t has additional quantifiers that are not present in the corresponding type of projecting x from parent_env *)
+              let projected_t = TypeUtils.project_type (string_of_int x) (snd3 (o#var parent_env)) in
+              `Project (string_of_int x, `Variable parent_env), projected_t
             else if IntMap.mem x fenv then
               let zs = (IntMap.find x fenv).termvars in
               let tyvars = (IntMap.find x fenv).typevars in
+
               match zs, tyvars with
-              | [], [] -> `Variable x, t
+              | [], [] -> `Variable x, x_type
               | _ ->
                 let tyargs = create_tyargs tyvars in
-                let (remaining_type, instantiation_maps) = Instantiate.type_arguments_to_instantiation_maps false t tyargs in
+                let (remaining_type, instantiation_maps) = Instantiate.type_arguments_to_instantiation_maps false x_type tyargs in
                 let overall_type = Instantiate.datatype instantiation_maps remaining_type in
                 if List.mem_assoc x parents then
                   `Closure (x, tyargs,`Variable parent_env), overall_type
@@ -446,9 +455,9 @@ struct
                   in
                   close x zs tyargs, overall_type
             else
-              `Variable x, t
+              `Variable x, x_type
           in
-          let overall_val, overall_type = var_val x in
+          let overall_val, overall_type = var_val y in
           overall_val, overall_type, o
         | v -> super#value v
 
@@ -497,6 +506,7 @@ struct
               (* fresh variable for the closure environment *)
               let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
               let z = Var.var_of_binder zb in
+              let _, o = o#binder zb in
               let o = o#set_context [fb] z cvars in
               Some zb, o in
           let body, _, o = o#computation body in
@@ -514,7 +524,7 @@ struct
               List.fold_right
                 (fun (f, (tyvars, xs, body), zb, location) (fs, defs,  o) ->
                    (* We have generalize the function's type here, but its body will only be generalized later on *)
-                   let f, o = o#binder (o# generalize_function_type_for_hoisting f) in
+                   let f, o = o#binder (o#generalize_function_type_for_hoisting f) in
                    let def = (f, (tyvars, xs, body), zb, location) in
                      (f::fs, def::defs, o))
                 defs
@@ -552,6 +562,7 @@ struct
                        in
                        (* fresh variable for the closure environment *)
                        let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
+                       let _, o = o#binder zb in
                        let z = Var.var_of_binder zb in
                        Some zb, o#set_context fbs z cvars in
                    let body, _, o = o#computation body in
