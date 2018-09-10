@@ -168,7 +168,6 @@ struct
       method super_special = super#special
 
 
-      (* The object called on must have visited the function, original_o has not *)
       method create_fenv_entry =
         let rec query_boundvars_stack var remaining_stack =
           match remaining_stack with
@@ -384,18 +383,16 @@ struct
   let create_tyargs tyvars =
     List.map (fun (tyvar, kind) ->
       let (primary_kind, sub_kind) = kind in
+      let new_type_variable () = Unionfind.fresh (`Var (tyvar, sub_kind, `Rigid)) in
       match primary_kind with
         | `Type ->
-            let new_type_variable = Unionfind.fresh (`Var (tyvar, sub_kind, `Rigid)) in
-            let t = `MetaTypeVar new_type_variable in
+            let t = `MetaTypeVar (new_type_variable ()) in
             `Type t
         | `Row ->
-            let new_type_variable = Unionfind.fresh (`Var (tyvar, sub_kind, `Rigid)) in
-            let r = (Types.empty_field_env, new_type_variable, false) in
+            let r = (Types.empty_field_env, (new_type_variable ()), false) in
             `Row r
         | `Presence ->
-            let new_type_variable = Unionfind.fresh (`Var (tyvar, sub_kind, `Rigid)) in
-            let p = `Var new_type_variable in
+            let p = `Var (new_type_variable ()) in
             `Presence p
       ) tyvars
 
@@ -580,18 +577,18 @@ struct
         List.fold_right (fun (typevar, kind) (qs, (type_map, row_map, presence_map) ) ->
           let  (primary_kind, subkind) = kind in
           let newvar = Types.fresh_raw_variable () in
+          let make_new_type_variable () = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
           let new_meta_var, updated_maps = match primary_kind with
             | `Type ->
-              let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
-
+              let new_type_variable = make_new_type_variable () in
               let t = `MetaTypeVar new_type_variable in
               (`Type new_type_variable, (IntMap.add typevar t type_map, row_map, presence_map))
             | `Row ->
-              let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+              let new_type_variable = make_new_type_variable () in
               let r = (Types.empty_field_env, new_type_variable, false) in
               (`Row new_type_variable, (type_map, IntMap.add typevar r row_map, presence_map))
             | `Presence ->
-              let new_type_variable = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+              let new_type_variable = make_new_type_variable () in
               let p = `Var new_type_variable in
               (`Presence new_type_variable, (type_map, row_map, IntMap.add typevar p presence_map)) in
           let new_quantifier = (newvar, subkind, new_meta_var) in
