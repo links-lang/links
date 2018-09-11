@@ -226,7 +226,7 @@ struct
             let (f, ft, o) = o#value f in
             let (args, _, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyPure (f, args), deconstruct return_type ft, o
+              `ApplyPure (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
 
         | `Closure (f, tyargs, z) ->
             let (f, t, o) = o#var f in

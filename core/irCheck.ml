@@ -484,20 +484,55 @@ struct
             ensure (is_pure_function f) "ApplyPure used for non-pure function" (`Value orig);
             `ApplyPure (f, args),  return_type ~overstep_quantifiers:false ft, o
 
-        | `Closure (f, z) ->
-            let (f, ft, o) = o#var f in
-            let (z, zt, o) = o#value z in
 
-            ensure (is_function_type ft) "Passing closure to non-funcion" (`Value orig);
-            begin match o#lookup_closure_def_for_fun f with
-            | Some optbinder ->
-              begin match optbinder with
-                | Some binder -> o#check_eq_types (Var.type_of_binder binder) zt (`Value orig)
-                | None -> raise_ir_type_error "Providing closure to a function that does not need one" (`Value orig)
-              end
-            | None -> raise_ir_type_error "Providing closure to untracked function" (`Value orig)
-            end;
-            `Closure (f, z), ft, o
+        | `Closure (f, tyargs, z) ->
+          (* We must not use o#var here, because by design that function fails if it sees an identifier denoting a function needing a closure *)
+          let ft = o#lookup_type f in
+          let (z, zt, o) = o#value z in
+
+          let ft_instantiated, instantiation_maps = if tyargs = []
+            then
+              (ft, (IntMap.empty, IntMap.empty, IntMap.empty))
+            else
+              let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false ft tyargs in
+              Instantiate.datatype instantiation_maps remaining_type, instantiation_maps  in
+
+          ensure (is_function_type (snd (TypeUtils.split_quantified_type ft_instantiated))) "Passing closure to non-funcion" (`Value orig);
+          begin match o#lookup_closure_def_for_fun f with
+          | Some optbinder ->
+            begin match optbinder with
+              | inner_quantifiers, Some  binder ->
+                let outer_quantifiers = TypeUtils.quantifiers ft in
+
+                let outer_to_inner_type_var_map  =
+                  List.fold_left2 (fun map iq oq  ->
+                      let iv = Types.var_of_quantifier iq in
+                      let ov = Types.var_of_quantifier oq in
+                      IntMap.add ov iv map
+                    )  IntMap.empty inner_quantifiers outer_quantifiers  in
+
+                (* Right now, the instantiation_maps map outer type variables to their substitutions. However,
+                  the types in the closure record are expressed in terms of the function's inner type variables *)
+                let tranform_outer_instantiation_map_to_inner map =
+                  IntMap.fold (fun outer_var oldvalue resultmap ->
+                      let inner_var = IntMap.find outer_var outer_to_inner_type_var_map in
+                      IntMap.add inner_var oldvalue resultmap
+                    ) map IntMap.empty in
+
+                let inner_typemap = tranform_outer_instantiation_map_to_inner (fst3 instantiation_maps) in
+                let inner_rowmap = tranform_outer_instantiation_map_to_inner (snd3 instantiation_maps) in
+                let inner_presencemap = tranform_outer_instantiation_map_to_inner (thd3 instantiation_maps) in
+                let inner_instantiation_maps = (inner_typemap, inner_rowmap, inner_presencemap) in
+
+                let uninstantiated_type_of_environment = (Var.type_of_binder binder) in
+                Debug.print (IntMap.show Types.pp_datatype (fst3 inner_instantiation_maps));
+                let type_of_environment = Instantiate.datatype inner_instantiation_maps uninstantiated_type_of_environment in
+                o#check_eq_types type_of_environment zt (`Value orig)
+              | _, None -> raise_ir_type_error "Providing closure to a function that does not need one" (`Value orig)
+            end
+          | None -> raise_ir_type_error "Providing closure to untracked function" (`Value orig)
+          end;
+          `Closure (f, tyargs, z), ft_instantiated, o
 
         | `Coerce (v, t) ->
             let v, vt, o = o#value v in
@@ -937,7 +972,7 @@ struct
 
                 let whole_function_expected = Var.type_of_binder f in
                 let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
-                let o = o#add_function_closure_binder (Var.var_of_binder f) z in
+                let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                 (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                 let o = OptionUtils.opt_app o#remove_binder o z in
@@ -975,7 +1010,7 @@ struct
 
                   let whole_function_expected = Var.type_of_binder f in
                   let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
-                  let o = o#add_function_closure_binder (Var.var_of_binder f) z in
+                  let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                   (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                   let o = OptionUtils.opt_app o#remove_binder o z in
