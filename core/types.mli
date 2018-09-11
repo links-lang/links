@@ -6,6 +6,7 @@ type 'a field_env = 'a stringmap [@@deriving show]
 
 (* type var sets *)
 module TypeVarSet : Utility.INTSET
+module TypeVarMap : Utility.INTMAP
 
 (* points *)
 type 'a point = 'a Unionfind.point
@@ -395,7 +396,6 @@ val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
-val typevarset_to_intset : TypeVarSet.t -> Utility.IntSet.t
 
 module type TRANSFORM =
 sig

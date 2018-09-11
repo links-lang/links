@@ -17,10 +17,10 @@ struct
       val bound_term_vars = IntSet.empty
 
       (* We need to track the kinds here. For term variables, the visitor has a dedicated environment. *)
-      val bound_type_vars = IntMap.empty
+      val bound_type_vars = Types.TypeVarMap.empty
 
       val free_term_vars = IntSet.empty
-      val free_type_vars = IntSet.empty
+      val free_type_vars = Types.TypeVarSet.empty
 
       (* each call of reset puts the active bound type vars on top of this stack, each call of restore pops an entry *)
       val bound_type_vars_stack = []
@@ -38,7 +38,7 @@ struct
         {< bound_term_vars = IntSet.add x bound_term_vars >}
 
       method bound_typevar x kind =
-        {< bound_type_vars = IntMap.add x kind bound_type_vars >}
+        {< bound_type_vars = Types.TypeVarMap.add x kind bound_type_vars >}
 
       (* recursively gather free variables required by inner closures *)
       method close_term x =
@@ -72,15 +72,15 @@ struct
           o#close_term x
 
       method register_type_var tv =
-        if IntMap.mem tv bound_type_vars then
+        if Types.TypeVarMap.mem tv bound_type_vars then
           o
         else
           (* (Debug.print ("registering typevar: " ^ string_of_int tv);*)
-          {< free_type_vars = IntSet.add tv free_type_vars >}
+          {< free_type_vars = Types.TypeVarSet.add tv free_type_vars >}
 
       method private reset =
         {< bound_term_vars = IntSet.empty; free_term_vars = IntSet.empty;
-            bound_type_vars = IntMap.empty; free_type_vars = IntSet.empty;
+            bound_type_vars = Types.TypeVarMap.empty; free_type_vars = Types.TypeVarSet.empty;
              bound_type_vars_stack = bound_type_vars::bound_type_vars_stack >}
       method restore bound_term_vars free_term_vars bound_type_vars free_type_vars =
         {< bound_term_vars = bound_term_vars; free_term_vars = free_term_vars;
@@ -138,9 +138,9 @@ struct
 
       (* t is a type_arg, which ranges over ordinary types, rows and presence specs *)
       method typ (t : Types.type_arg) =
-        let free_type_vars = Types.typevarset_to_intset (Types.free_tyarg_vars t) in
+        let free_type_vars = Types.free_tyarg_vars t in
         (*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*)
-        IntSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o
+        Types.TypeVarSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o
 
 
       method quantifier q =
@@ -150,7 +150,7 @@ struct
 
       method quantifier_remove q =
         let var = Types.var_of_quantifier q in
-        {< bound_type_vars = IntMap.remove  var bound_type_vars >}
+        {< bound_type_vars = Types.TypeVarMap.remove  var bound_type_vars >}
 
 
 
@@ -175,7 +175,7 @@ struct
         let rec query_boundvars_stack var remaining_stack =
           match remaining_stack with
             | m::ms ->
-              begin match IntMap.find_opt var m with
+              begin match Types.TypeVarMap.find_opt var m with
                 | Some kind -> Some (var, kind)
                 | None -> query_boundvars_stack var ms
               end
@@ -191,7 +191,7 @@ struct
            This prevents breaking the value restriction. Since the currently bound type variables may be hidden
            begind multiple calls of o#reset, we access the stack collecting bound variable environments shadowed by a call of o#reset *)
         let free_typevars =
-            IntSet.fold
+            Types.TypeVarSet.fold
                 (fun tvar zs -> match query_boundvars_stack tvar o#get_bound_type_vars_stack with
                   | Some info -> info::zs
                   | None -> zs )
