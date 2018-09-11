@@ -1,8 +1,7 @@
 open Utility
 
-type freevars = { termvars: (Ir.binder list) ; typevars: ((int * Types.kind) list)} [@@deriving show]
-type fenv = freevars IntMap.t
-    [@@deriving show]
+type freevars = {termvars: (Ir.binder list) ; typevars: Types.quantifier list} [@@deriving show]
+type fenv = freevars IntMap.t [@@deriving show]
 
 module ClosureVars =
 struct
@@ -52,7 +51,8 @@ struct
               o
               zs in
             List.fold_left
-              (fun o (tv,_) ->
+              (fun o q ->
+                let tv = Types.var_of_quantifier q in
                 o#register_type_var tv
               )
               o
@@ -145,12 +145,11 @@ struct
 
       method quantifier q =
         let var = Types.var_of_quantifier q in
-        let kind = Types.kind_of_quantifier q in
-        o#bound_typevar var kind
+        o#bound_typevar var q
 
       method quantifier_remove q =
         let var = Types.var_of_quantifier q in
-        {< bound_type_vars = Types.TypeVarMap.remove  var bound_type_vars >}
+        {< bound_type_vars = Types.TypeVarMap.remove var bound_type_vars >}
 
 
 
@@ -176,7 +175,7 @@ struct
           match remaining_stack with
             | m::ms ->
               begin match Types.TypeVarMap.find_opt var m with
-                | Some kind -> Some (var, kind)
+                | Some quantifier -> Some quantifier
                 | None -> query_boundvars_stack var ms
               end
             | [] -> None in
@@ -192,9 +191,9 @@ struct
            begind multiple calls of o#reset, we access the stack collecting bound variable environments shadowed by a call of o#reset *)
         let free_typevars =
             Types.TypeVarSet.fold
-                (fun tvar zs -> match query_boundvars_stack tvar o#get_bound_type_vars_stack with
-                  | Some info -> info::zs
-                  | None -> zs )
+                (fun tvar qlist -> match query_boundvars_stack tvar o#get_bound_type_vars_stack with
+                  | Some quantifier -> quantifier :: qlist
+                  | None -> qlist )
                 (o#get_free_type_vars)
                 [] in
         {termvars = free_binders ; typevars = free_typevars}
@@ -386,22 +385,6 @@ end
 module ClosureConvert =
 struct
 
-  let create_tyargs tyvars =
-    List.map (fun (tyvar, kind) ->
-      let (primary_kind, sub_kind) = kind in
-      let new_type_variable () = Unionfind.fresh (`Var (tyvar, sub_kind, `Rigid)) in
-      match primary_kind with
-        | `Type ->
-            let t = `MetaTypeVar (new_type_variable ()) in
-            `Type t
-        | `Row ->
-            let r = (Types.empty_field_env, (new_type_variable ()), false) in
-            `Row r
-        | `Presence ->
-            let p = `Var (new_type_variable ()) in
-            `Presence p
-      ) tyvars
-
   let close f zs tyargs =
     `Closure (f, tyargs, `Extend (List.fold_right
                             (fun (zname, zv) fields ->
@@ -442,7 +425,7 @@ struct
               match zs, tyvars with
               | [], [] -> `Variable x, x_type
               | _ ->
-                let tyargs = create_tyargs tyvars in
+                let tyargs = List.map Types.type_arg_of_quantifier tyvars in
                 let (remaining_type, instantiation_maps) = Instantiate.type_arguments_to_instantiation_maps false x_type tyargs in
                 let overall_type = Instantiate.datatype instantiation_maps remaining_type in
                 if List.mem_assoc x parents then
@@ -585,9 +568,11 @@ struct
       (** Given a list of free variables, return a tuple containing the following:
         - a list of fresh quantifiers, each corresponding to one free variable
         - Three maps mapping the old free variables to fresh ones (to be used with Instantiate)  **)
-      method create_substitutions_replacing_free_variables_with_fresh_ones (free_type_vars : (int * Types.kind) list)  =
-        List.fold_right (fun (typevar, kind) (qs, (type_map, row_map, presence_map) ) ->
-          let  (primary_kind, subkind) = kind in
+      method create_substitutions_replacing_free_variables_with_fresh_ones (free_type_vars : Types.quantifier list)  =
+        List.fold_right (fun oldq (qs, (type_map, row_map, presence_map) ) ->
+          let typevar = Types.var_of_quantifier oldq in
+          let primary_kind = Types.primary_kind_of_quantifier oldq in
+          let subkind = Types.subkind_of_quantifier oldq in
           let newvar = Types.fresh_raw_variable () in
           let make_new_type_variable () = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
           let new_meta_var, updated_maps = match primary_kind with
