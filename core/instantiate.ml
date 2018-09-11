@@ -301,10 +301,7 @@ module SEnv = Env.String
 let type_arguments_to_instantiation_maps : bool -> Types.datatype -> Types.type_arg list -> (datatype * (datatype IntMap.t * row IntMap.t * field_spec IntMap.t)) =
   fun must_instantiate_all_quantifiers pt tyargs ->
     (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
-    let t, vars =
-      match concrete_type pt with
-        | `ForAll (vars, t) -> t, Types.unbox_quantifiers vars
-        | t -> t, [] in
+    let vars, t = TypeUtils.split_quantified_type pt in
     let tyargs_length = List.length tyargs in
     let vars_length = List.length vars in
     let arities_okay = if must_instantiate_all_quantifiers
@@ -342,7 +339,7 @@ let type_arguments_to_instantiation_maps : bool -> Types.datatype -> Types.type_
     if remaining_quantifiers = [] then
       t, (tenv, renv, penv)
     else
-      `ForAll (ref remaining_quantifiers, t),  (tenv, renv, penv)
+      `ForAll (Types.box_quantifiers remaining_quantifiers, t),  (tenv, renv, penv)
 
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun pt tyargs ->

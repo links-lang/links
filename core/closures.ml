@@ -102,6 +102,7 @@ struct
           var, t, o#register_term_var var
 
       method! value = fun v -> match v with
+        (* We need to find all types occuring in the given IR fragment *)
         | `TApp (_, args) ->
           let o = List.fold_left (fun o arg -> o#typ arg) o args in
           o#super_value v
@@ -114,7 +115,7 @@ struct
         | `TAbs (quantifiers, v) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
           let (_, ti, o) = o#value v in
-          let t = `ForAll (ref quantifiers, ti) in
+          let t = `ForAll (Types.box_quantifiers quantifiers, ti) in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (v, t, o)
         | _ -> o#super_value v
@@ -122,6 +123,7 @@ struct
 
 
       method! special = fun s ->
+        (* We need to find all types occuring in the given IR fragment *)
         let o = match s with
           | `Table (_, _, _, (t1, t2, t3)) ->
             let o1 = o#typ (`Type t1) in
@@ -424,7 +426,7 @@ struct
       method! value =
         function
         | `Variable y ->
-          let y, t_y, o = o#var y in
+          let y, _, o = o#var y in
 
           let rec var_val x : (Ir.value * Types.datatype ) =
             let x_type = o#lookup_type x in
@@ -609,20 +611,25 @@ struct
 
       method generalize_function_type_for_hoisting f_binder =
         let f_var = Var.var_of_binder f_binder in
-        let f_type = Var.type_of_binder f_binder in
+
         let free_type_vars = (IntMap.find f_var fenv).typevars in
 
-        let outer_quantifiers, outer_maps = o#create_substitutions_replacing_free_variables_with_fresh_ones free_type_vars in
-
-        let f_type_generalized = match f_type with
-          | `ForAll (existing_qs_ref, t) ->
-              let existing_qs = !existing_qs_ref in
-              let t' = Instantiate.datatype outer_maps t in
-              `ForAll (ref (outer_quantifiers @ existing_qs), t' )
-          | t -> let t' = Instantiate.datatype outer_maps t in
-              `ForAll (ref outer_quantifiers, t' ) in
-        Var.update_type f_type_generalized f_binder
-
+        if free_type_vars = [] then
+          f_binder
+        else
+          begin
+            let outer_quantifiers, outer_maps = o#create_substitutions_replacing_free_variables_with_fresh_ones free_type_vars in
+            let f_type_generalized =
+              let f_type = Var.type_of_binder f_binder in
+              match TypeUtils.split_quantified_type f_type with
+                | [], t  ->
+                  let t' = Instantiate.datatype outer_maps t in
+                  `ForAll (Types.box_quantifiers outer_quantifiers, t')
+                | (f_quantifiers, t) ->
+                  let t' = Instantiate.datatype outer_maps t in
+                  `ForAll (Types.box_quantifiers (outer_quantifiers @ f_quantifiers), t') in
+              Var.update_type f_type_generalized f_binder
+            end
 
 
       method generalize_function_body_for_hoisting : Ir.fun_def ->  Ir.fun_def = fun fundef ->
@@ -632,22 +639,26 @@ struct
 
         (* We must have used generalize_function_type_for_hoisting on this function before and generalized the type in f (i.e., the binder)  already *)
 
-        let inner_quantifiers, inner_maps = o#create_substitutions_replacing_free_variables_with_fresh_ones free_type_vars in
-
-        let tyvars = inner_quantifiers @ tyvars in
-        let (z, o) = match z with
-          | Some zbinder ->
-            let zbinder = Var.update_type (Instantiate.datatype inner_maps (Var.type_of_binder zbinder)) zbinder in
-            (Some zbinder, snd (o#binder zbinder))
-          | None -> None, o in
-        let xs = List.fold_right (fun x xs ->
-            let newtype = Instantiate.datatype inner_maps (Var.type_of_binder x) in
-            (Var.update_type newtype x)::xs
-          ) xs [] in
-        (*Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (`Fun (f, (tyvars, xs, body), z, location)));*)
-        let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps body in
-        (*o#print_bindings [(`Fun (f, (tyvars, xs, body), z, location))];*)
-        (f, (tyvars, xs, body), z, location)
+        if free_type_vars = [] then
+          fundef
+        else
+          begin
+            let inner_quantifiers, inner_maps = o#create_substitutions_replacing_free_variables_with_fresh_ones free_type_vars in
+            let tyvars = inner_quantifiers @ tyvars in
+            let (z, o) = match z with
+              | Some zbinder ->
+                let zbinder = Var.update_type (Instantiate.datatype inner_maps (Var.type_of_binder zbinder)) zbinder in
+                (Some zbinder, snd (o#binder zbinder))
+              | None -> None, o in
+            let xs = List.fold_right (fun x xs ->
+                let newtype = Instantiate.datatype inner_maps (Var.type_of_binder x) in
+                (Var.update_type newtype x)::xs
+              ) xs [] in
+            (*Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (`Fun (f, (tyvars, xs, body), z, location)));*)
+            let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps body in
+            (*o#print_bindings [(`Fun (f, (tyvars, xs, body), z, location))];*)
+            (f, (tyvars, xs, body), z, location)
+          end
 
 
 
