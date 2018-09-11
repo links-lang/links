@@ -472,7 +472,6 @@ struct
         | [] -> [], o
         | b :: bs when Ir.binding_scope b = `Global ->
           let b, o = o#binding b in
-          (*o#print_bindings [b];*)
           let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
@@ -656,7 +655,6 @@ struct
               ) xs [] in
             (*Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (`Fun (f, (tyvars, xs, body), z, location)));*)
             let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps body in
-            (*o#print_bindings [(`Fun (f, (tyvars, xs, body), z, location))];*)
             (f, (tyvars, xs, body), z, location)
           end
 
