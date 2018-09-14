@@ -191,7 +191,7 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
-%token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON LEFT RIGHT
+%token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
 %token LENSPUT LENSGET
 %token READONLY DEFAULT
 %token ESCAPE
@@ -920,8 +920,8 @@ lens_expression:
 | LENSDROP VARIABLE DETERMINED BY VARIABLE
     DEFAULT exp FROM exp                                       { `LensDropLit ($9, $2, $5, $7, None), pos() } 
 | LENSSELECT FROM exp BY exp                                { `LensSelectLit ($3, $5, None), pos() } 
-| LENSJOIN exp WITH exp ON exp LEFT exp RIGHT exp              { `LensJoinLit ($2, $4, $6, $8, $10, None), pos() }
-| LENSJOIN exp WITH exp ON exp DELETE LEFT                     { `LensJoinLit ($2, $4, $6, (`Constant (`Bool true), pos()), (`Constant (`Bool false), pos()), None), pos() }
+| LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { `LensJoinLit ($2, $4, $6, $9, $11, None), pos() }
+| LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { `LensJoinLit ($2, $4, $6, (`Constant (`Bool true), pos()), (`Constant (`Bool false), pos()), None), pos() }
 | LENSGET exp                                                  { `LensGetLit ($2, None), pos() }
 | LENSPUT exp WITH exp                                         { `LensPutLit ($2, $4, None), pos() }
 

@@ -167,6 +167,7 @@ let keywords = [
  "database" , DATABASE;
  "default"  , DEFAULT;
  "delete"   , DELETE;
+ "delete_left", DELETE_LEFT;
  "determined", DETERMINED;
  "do"       , DOOP;
  "else"     , ELSE;
@@ -181,7 +182,6 @@ let keywords = [
  "handler"  , HANDLER;
  "if"       , IF;
  "in"       , IN;
- "left"     , LEFT;
  "lens"     , LENS;
  "lensdrop" , LENSDROP;
  "lensget"  , LENSGET;
@@ -208,7 +208,6 @@ let keywords = [
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "returning", RETURNING;
- "right"    , RIGHT;
  "select"   , SELECT;
  "server"   , SERVER;
  "set"      , SET;

@@ -17,7 +17,7 @@ var tracksTable =
 var albumsLens = lens albumsTable with { album -> quantity };
 var tracksLens = lens tracksTable with { track -> date rating };
 
-var joinedLens = lensjoin albumsLens with tracksLens on album delete left;
+var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
 var droppedLens = lensdrop date determined by track default 2018 from joinedLens;
 var filteredLens = lensselect from droppedLens by quantity > 2;
 
