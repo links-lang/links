@@ -1,3 +1,27 @@
+# 0.8 (Merchiston)
+
+## Relational Lenses
+
+Links 0.8 introduces support for Incremental Relational Lenses. See [the
+paper](https://arxiv.org/pdf/1807.01948.pdf) for details.
+
+
+## Minor Changes
+
+  1. Session exception handling is now more liberal, allowing variables
+     to be shared between the success and failure blocks.
+
+  2. Migrate to the Dune build system.
+
+## Bugfixes
+
+  1. Fix non-typechecking examples.
+  2. Fix type signatures for `domSetAttributeFromRef`,
+     `domSetPropertyFromRef`, and `domSetStyleAttrFromRef`.
+  3. Fix buggy implementation of `getValue` in `jslib`.
+  4. Fix `domGetChildrenFromRef` to return only DOM elements
+     instead of whitespaces
+
 # 0.7.3
 
 This minor release contains various bug fixes and improves the dynamic
