@@ -5,6 +5,10 @@ let debugging_enabled = Basicsettings.debugging_enabled
 let print message =
   (if Settings.get_value(debugging_enabled) then prerr_endline message; flush stderr)
 
+(** print a debug message if debugging is enabled *)
+let print_no_lf message =
+  (if Settings.get_value(debugging_enabled) then prerr_string message)
+
 (** print a debug message if debugging is enabled; [message] is a lazy expr. *)
 let print_l message =
   (if Settings.get_value(debugging_enabled) then
@@ -34,3 +38,11 @@ let debug_time msg f =
     print (msg ^" time: " ^ string_of_int (Utility.time_milliseconds() - start_time));
     raw_result
   else f ();;
+
+let debug_time_out f (withtime : int -> unit) = 
+  let start_time = Utility.time_milliseconds() in
+  let raw_result = f () in
+  let time = Utility.time_milliseconds() - start_time in
+  let _ = withtime time in
+  raw_result
+  

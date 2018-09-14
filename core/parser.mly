@@ -191,6 +191,8 @@ let cp_unit p = `Unquote ([], (`TupleLit [], p)), p
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
+%token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
+%token LENSPUT LENSGET
 %token READONLY DEFAULT
 %token ESCAPE
 %token CLIENT SERVER NATIVE
@@ -899,6 +901,31 @@ database_expression:
                                                                  pos() }
 | DATABASE atomic_expression perhaps_db_driver                 { `DatabaseLit ($2, $3), pos() }
 
+fn_dep_cols: 
+| VARIABLE                                                     { [$1] }
+| VARIABLE fn_dep_cols                                         { $1 :: $2 }
+
+fn_dep:
+| fn_dep_cols RARROW fn_dep_cols                               { ($1, $3) }
+
+fn_deps:
+| fn_dep                                                       { [ $1 ] }
+| fn_dep COMMA fn_deps                                         { $1 :: $3 }
+
+lens_expression:
+| database_expression                                          { $1 }
+| LENS exp DEFAULT                                             { `LensLit ($2, None), pos()}
+| LENS exp TABLEKEYS exp                                       { `LensKeysLit ($2, $4, None), pos()}
+| LENS exp WITH LBRACE fn_deps RBRACE                          { `LensFunDepsLit ($2, $5, None), pos()}
+| LENSDROP VARIABLE DETERMINED BY VARIABLE
+    DEFAULT exp FROM exp                                       { `LensDropLit ($9, $2, $5, $7, None), pos() } 
+| LENSSELECT FROM exp BY exp                                { `LensSelectLit ($3, $5, None), pos() } 
+| LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { `LensJoinLit ($2, $4, $6, $9, $11, None), pos() }
+| LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { `LensJoinLit ($2, $4, $6, (`Constant (`Bool true), pos()), (`Constant (`Bool false), pos()), None), pos() }
+| LENSGET exp                                                  { `LensGetLit ($2, None), pos() }
+| LENSPUT exp WITH exp                                         { `LensPutLit ($2, $4, None), pos() }
+
+
 record_labels:
 | record_label COMMA record_labels                             { $1 :: $3 }
 | record_label                                                 { [$1] }
@@ -943,7 +970,7 @@ perhaps_semi:
 | /* empty */                                                  {}
 
 exp:
-| database_expression                                          { $1 }
+| lens_expression                                              { $1 }
 
 labeled_exps:
 | record_label EQ exp                                          { [$1, $3] }

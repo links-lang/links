@@ -2,6 +2,9 @@
 
 val debugging_enabled : bool Settings.setting
 
+(** print a debug message without line feed if debugging is enabled *)
+val print_no_lf : string -> unit
+
 (** print a debug message if debugging is enabled *)
 val print : string -> unit
 
@@ -30,3 +33,9 @@ val if_set_l : bool Settings.setting -> string lazy_t -> unit
       run [f()] and measure running time; print [msg] with time and return result
 *)
 val debug_time : string -> (unit -> 'a) -> 'a
+
+(** [debug_time_out f withtime]:
+      run [f()] and measure running time; call function withtime
+      with running time as argument and then afterwards return result of [f()])
+*)
+val debug_time_out : (unit -> 'a) -> (int -> unit) -> 'a

@@ -153,6 +153,18 @@ sig
 
   val table_handle : value sem * value sem * value sem * (datatype * datatype * datatype) -> tail_computation sem
 
+  val lens_handle : value sem * Types.lens_sort -> tail_computation sem
+
+  val lens_drop_handle : value sem * string * string * value sem * Types.lens_sort -> tail_computation sem
+
+  val lens_select_handle : value sem * Types.lens_phrase * Types.lens_sort -> tail_computation sem
+
+  val lens_join_handle : value sem * value sem * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort -> tail_computation sem
+
+  val lens_get : value sem * datatype -> tail_computation sem
+
+  val lens_put : value sem * value sem * datatype -> tail_computation sem
+
   val wrong : datatype -> tail_computation sem
 
   val letfun :
@@ -459,6 +471,42 @@ struct
 	     bind keys
 		(fun keys ->  lift (`Special (`Table (database, table, keys, (r, w, n))),
                                `Table (r, w, n)))))
+
+  let lens_handle (table, sort) =
+      bind table 
+        (fun table -> 
+            lift (`Special (`Lens (table, sort)), `Lens (sort))) 
+
+  let lens_drop_handle (lens, drop, key, default, sort) =
+      bind lens
+        (fun lens ->
+            bind default
+            (fun default ->
+               lift (`Special (`LensDrop (lens, drop, key, default, sort)), `Lens (sort))))
+
+  let lens_select_handle (lens, pred, sort) = 
+      bind lens
+        (fun lens ->
+           lift (`Special (`LensSelect (lens, pred, sort)), `Lens (sort)))
+
+  let lens_join_handle (lens1, lens2, on, left, right, sort) =
+      bind lens1 
+        (fun lens1 ->
+          bind lens2 
+          (fun lens2 ->
+            lift (`Special (`LensJoin (lens1, lens2, on, left, right, sort)), `Lens (sort))))
+
+  let lens_get (lens, rtype) =
+      bind lens 
+        (fun lens ->
+            lift (`Special (`LensGet (lens, rtype)), Types.make_list_type rtype))
+
+  let lens_put (lens, data, rtype) =
+      bind lens 
+        (fun lens ->
+            bind data 
+                (fun data ->
+                        lift (`Special (`LensPut (lens, data, rtype)), Types.make_list_type rtype)))
 
   let wrong t = lift (`Special (`Wrong t), t)
 
@@ -865,6 +913,36 @@ struct
               in
                 I.database
                   (ev (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos))
+          | `LensLit (table, Some t) ->
+              let table = ev table in 
+                I.lens_handle (table, t) 
+          | `LensDropLit (lens, drop, key, default, Some t) ->
+              let _ = LensHelpers.ensure_lenses_enabled () in
+              let lens = ev lens in
+              let default = ev default in
+                I.lens_drop_handle (lens, drop, key, default, t)
+          | `LensSelectLit (lens, pred, Some t) ->
+              let _ = LensHelpers.ensure_lenses_enabled () in
+              let lens = ev lens in
+              let pred = LensQueryHelpers.lens_phrase_of_phrase pred in 
+                I.lens_select_handle (lens, pred, t)
+          | `LensJoinLit (lens1, lens2, on, left, right, Some t) ->
+              let _ = LensHelpers.ensure_lenses_enabled () in
+              let lens1 = ev lens1 in
+              let lens2 = ev lens2 in
+              let on = LensTypes.cols_of_phrase on in
+              let left = LensQueryHelpers.lens_phrase_of_phrase left in
+              let right = LensQueryHelpers.lens_phrase_of_phrase right in
+                I.lens_join_handle (lens1, lens2, on, left, right, t)
+          | `LensGetLit (lens, Some t) ->
+              let _ = LensHelpers.ensure_lenses_enabled () in
+              let lens = ev lens in
+                I.lens_get (lens, t)
+          | `LensPutLit (lens, data, Some t) ->
+              let _ = LensHelpers.ensure_lenses_enabled () in
+              let lens = ev lens in
+              let data = ev data in
+                I.lens_put (lens, data, t)
           | `TableLit (name, (_, Some (readtype, writetype, neededtype)), _constraints, keys, db) ->
               I.table_handle (ev db, ev name, ev keys, (readtype, writetype, neededtype))
           | `Xml (tag, attrs, attrexp, children) ->
@@ -964,6 +1042,14 @@ struct
           | `ConstructorLit _
           | `Switch _
           | `TableLit _
+          | `LensLit _
+          | `LensDropLit _
+          | `LensSelectLit _
+          | `LensJoinLit _
+          | `LensGetLit _
+          | `LensPutLit _
+          | `LensFunDepsLit _
+          | `LensKeysLit _
           | `Offer _
           | `QualifiedVar _
           | `HandlerLit _
