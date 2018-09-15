@@ -431,7 +431,6 @@ class map =
           TryInOtherwise (_p1, _pat, _p2, _p3, _ty)
       | Raise -> Raise
 
-
     method phrase : phrase -> phrase =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#phrasenode p
@@ -699,6 +698,9 @@ class map =
           let n = o#name n in
           let bs = o#list (fun o -> o#binding) bs in
           Module (n, bs)
+      | Import qname ->
+         let qname = o#qualified_name qname in
+         Import qname
       | AlienBlock (lang, lib, dts) ->
           let lang = o#name lang in
           let lib = o#name lib in
@@ -1353,6 +1355,7 @@ class fold =
           let o = o#name n in
           let o = o#list (fun o -> o#binding) bs in
           o
+      | Import qname -> o#qualified_name qname
       | AlienBlock (lang, lib, dts) ->
           let o = o#name lang in
           let o = o#name lib in
@@ -2141,6 +2144,9 @@ class fold_map =
           let (o, n) = o#string n in
           let (o, bs) = o#list (fun o -> o#binding) bs in
           (o, (Module (n, bs)))
+      | Import qname ->
+         let (o, qname) = o#qualified_name qname in
+         (o, Import qname)
       | AlienBlock (lang, lib, dts) ->
           let (o, lang) = o#name lang in
           let (o, lib) = o#name lib in

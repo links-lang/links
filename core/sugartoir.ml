@@ -1150,7 +1150,9 @@ struct
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | Handler _ | Fun _ | Foreign _ | AlienBlock _ | Module _ -> assert false
+                | Module _ -> assert false (* TODO *)
+                | Import _ -> assert false (* TODO *)
+                | Handler _ | Fun _ | Foreign _ | AlienBlock _ -> assert false
             end
 
   and evalv env e =

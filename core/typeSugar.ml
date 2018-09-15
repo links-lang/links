@@ -112,6 +112,7 @@ struct
       (* need to check that pattern matching cannot fail *)
     | AlienBlock _
     | Module _
+    | Import _
     | Fun _
     | Funs _
     | Infix
@@ -3907,8 +3908,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
       | Handler _
-      | AlienBlock _
-      | Module _ -> assert false
+      | AlienBlock _ -> assert false
+      | Module _ -> assert false (* TODO FIXME *)
+      | Import _ -> assert false (* TODO FIXME *)
     in
       WithPos.make ~pos typed, ctxt, usage
 and type_regex typing_env : regex -> regex =
