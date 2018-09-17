@@ -11,6 +11,28 @@ ret=0                              # Return code. If <> 0 then some tests failed
 STARTCOLOR="\e[31m"                # Control sequence to enable red text
 ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
 
+prepare_database_config () {
+    # Check if database configuration exists. If not the creating from
+    # a default config.sample file
+    if [[ ! -e $1/config ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default database test configuration $1/config"
+      echo -e  "from $1/config.sample"
+      echo -e  "Please customize to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp $1/config.sample $1/config
+    fi
+}
+
+if [[ "$1" == "lens" ]]; then
+    prepare_database_config "$DATABASE_TEST_DIR"
+    dune exec --profile=development tests/lens/unitTests.exe -- -runner sequential ${@:2}
+    if [ $? != 0 ]; then
+        ret=1
+    fi
+    exit $ret
+fi
+
 # Don't run normal tests if user passed in "db-only" flag
 if [[ "$1" != "db-only" ]]; then
     for i in tests/*.tests; do
@@ -33,16 +55,7 @@ fi
 #     `config.sample` containing a default database configuration.
 #  2. `testsuite.config` containing a list of tests to run
 run_database_testsuite () {
-    # Check if database configuration exists. If not the creating from
-    # a default config.sample file
-    if [[ ! -e $1/config ]]; then
-      echo -en "$STARTCOLOR"
-      echo -e  "Creating default database test configuration $1/config"
-      echo -e  "from $1/config.sample"
-      echo -e  "Please customize to match your local database setup."
-      echo -en "$ENDCOLOR"
-      cp $1/config.sample $1/config
-    fi
+    prepare_database_config "$1"
 
     # Check whether the config file specifies a user name and/or port
     # to access the database.  If so, use it with psql.

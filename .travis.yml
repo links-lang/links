@@ -19,4 +19,5 @@ script:
   - make nc-release
   - make tests
   - ./run-tests db-only shredding
-  - ./run-unit-tests
+  - opam install oUnit
+  - ./run-tests lens
