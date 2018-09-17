@@ -24,11 +24,11 @@ let dat_fd_set_2 = LensTestHelpers.fundepset_of_string "A -> B; B -> C"
 let rec_constr (cols : string list) (vals : int list) = Value.box_record (List.map2 (fun c v -> (c, box_int v)) cols vals)
 let delt_constr (cols : string list) (vals, m : int list * int) = rec_constr cols vals, m
 let dat_update_recs = List.map (LensTestHelpers.delt_constr_int "A B C") [
-    [1; 2; 3], -1; 
-    [1; 3; 2], +1; 
-    [2; 1; 3], -1; 
-    [2; 1; 4], +1; 
-    [3; 4; 5], 0; 
+    [1; 2; 3], -1;
+    [1; 3; 2], +1;
+    [2; 1; 3], -1;
+    [2; 1; 4], +1;
+    [3; 4; 5], 0;
     [4; 5; 6], 1;
     [5; 6; 7], -1;
 ]
@@ -40,7 +40,7 @@ let dat_fd_set_1_recs = List.map (LensTestHelpers.delt_constr_int "A B C D E F G
     [3; 2; 2; 2; 2; 2; 2], -1;
     [2; 4; 2; 2; 2; 2; 2], -1;
     [2; 4; 2; 2; 3; 2; 2], +1;
-    [4; 4; 2; 2; 2; 2; 2], -1; 
+    [4; 4; 2; 2; 2; 2; 2], -1;
     [4; 4; 3; 2; 4; 3; 3], +1;
     [5; 5; 5; 5; 5; 5; 5], -1;
     [6; 6; 6; 6; 6; 6; 6], +1;
@@ -48,18 +48,18 @@ let dat_fd_set_1_recs = List.map (LensTestHelpers.delt_constr_int "A B C D E F G
 
 (* Tests *)
 
-let test_show_fd_set test_ctx = 
+let test_show_fd_set test_ctx =
     let show = show_fundepset dat_fd_set in
     LensTestHelpers.print_verbose test_ctx show;
     let cmp = "{({A; B; }, {C; D; }); ({C; D; }, {E; }); ({E; }, {F; G; }); }" in
     assert_equal show cmp
 
-let test_show_fd_tree test_ctx = 
+let test_show_fd_tree test_ctx =
     let tree = FunDepTree.of_fds dat_fd_set |> OptionUtils.val_of in
     LensTestHelpers.fmt_std_v test_ctx (fun fmt -> FunDepTree.pp_pretty fmt tree)
 
 
-let test_transitive_closure _test_ctx = 
+let test_transitive_closure _test_ctx =
     let outp = FunDepSet.transitive_closure dat_cols dat_fd_set in
     assert_equal true (ColSet.equal outp dat_closure)
 
@@ -116,7 +116,7 @@ let construct_join_lens_2 l1 l2 on =
 let cat_tex cols name delta =
     let cs = List.fold_right (fun _a b -> b ^ "c") cols "" in
     let _ = Debug.print ("\\begin{array}{c|" ^ cs ^ "}") in
-    let _ = Debug.print ("\t" ^ name ^ 
+    let _ = Debug.print ("\t" ^ name ^
         (List.fold_left (fun a b -> a ^ " & " ^ b) "" cols )
     ^ "\\\\") in
     let _ = Debug.print "\t\\hline" in
@@ -163,7 +163,7 @@ let run_join_test_case_1 data _exp1 _exp2 _dbg =
         let _ = LensHelpers.lens_debug_delta outp2 in
         ()
     else
-        () in 
+        () in
     let _ = if false then
         let _ = cat_tex ["A"; "B"; "C"; "D"; "E"] "Q" data_c in
         let _ = Debug.print "& \\Rightarrow" in
@@ -171,10 +171,10 @@ let run_join_test_case_1 data _exp1 _exp2 _dbg =
         let _ = Debug.print "+" in
         let _ = cat_tex ["B"; "D"; "E"] "S" outp2 in
         let _ = Debug.print "\\\\" in
-        let _ = Debug.print "\\\\" in 
+        let _ = Debug.print "\\\\" in
         ()
     else
-        () in 
+        () in
     let cmp_left = constr_cmp_left exp1 in
     let cmp_left = List.sort_uniq LensRecordHelpers.compare_delta_entry cmp_left in
     let cmp_right = constr_cmp_right exp2 in
@@ -183,7 +183,7 @@ let run_join_test_case_1 data _exp1 _exp2 _dbg =
     let _ = assert_equal outp2 cmp_right in *)
     ()
 
-let test_join_1_insert_new _test_ctx = 
+let test_join_1_insert_new _test_ctx =
     run_join_test_case_1 [
         [1; 1; 1; 1; 1], +1;
     ] [
@@ -192,7 +192,7 @@ let test_join_1_insert_new _test_ctx =
         [1; 1; 1], 1;
     ] false
 
-let test_join_1_delete _test_ctx = 
+let test_join_1_delete _test_ctx =
     run_join_test_case_1 [
         [1; 1; 1; 1; 1], -1
     ] [
@@ -201,7 +201,7 @@ let test_join_1_delete _test_ctx =
         [1; 1; 1], 0;
     ] false
 
-let test_join_1_delete_l _test_ctx = 
+let test_join_1_delete_l _test_ctx =
     run_join_test_case_1 [
         [1; 1; 1; 1; 1], -1;
         [2; 1; 1; 1; 1], 0
@@ -232,7 +232,7 @@ let test_join_1_left_remove_left_add _test_ctx =
         [2; 1; 1], +1;
     ] [
         [1; 1; 1], 0;
-    ] false 
+    ] false
 
 let test_join_1_left_remove_left_add_2 _test_ctx =
     run_join_test_case_1 [
@@ -267,7 +267,7 @@ let test_join_1_weird_fd_right_change _test_ctx =
     ] [
         [1; 1; 1], 0;
         [2; 2; 1], +1;
-    ] false 
+    ] false
 
 let test_join_1_change_right_existing _test_ctx =
     run_join_test_case_1 [
@@ -288,7 +288,7 @@ let test_join_1_change_add_existing _test_ctx =
     ] [
         [5; 5; 6], +1;
         [5; 5; 5], -1;
-    ] false 
+    ] false
 
 let test_join_1_change_add_right _test_ctx =
     run_join_test_case_1 [
@@ -297,7 +297,7 @@ let test_join_1_change_add_right _test_ctx =
         [9; 9; 9], +1;
     ] [
         [9; 9; 9], +1;
-    ] false 
+    ] false
 
 let test_join_1_add_left_neutral _test_ctx =
     run_join_test_case_1 [
@@ -360,4 +360,3 @@ let suite =
         "phrase_gen">::: [
         ];
     ];;
-

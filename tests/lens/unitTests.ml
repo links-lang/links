@@ -1,6 +1,6 @@
 open OUnit2
 
-let suites = 
+let suites =
    "All" >::: [
        "Lenses" >::: [
             UnitTestsLensCommon.suite;

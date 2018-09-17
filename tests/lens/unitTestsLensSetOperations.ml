@@ -95,7 +95,7 @@ let test_merge _test_ctx =
     ()
 
 
-let test_minus _test_ctx = 
+let test_minus _test_ctx =
     let set = box_list [
         box_record ["a", box_bool true; "b", box_int 5; "str", box_string "abc"];
         box_record ["a", box_bool true; "b", box_int 3; "str", box_string "this"];
@@ -112,7 +112,7 @@ let test_minus _test_ctx =
     (* print_endline ("\n" ^ _str); *)
     ()
 
-let test_project _test_ctx = 
+let test_project _test_ctx =
     let set = box_list [
         box_record ["a", box_bool true; "b", box_int 5; "str", box_string "abc"];
         box_record ["a", box_bool true; "b", box_int 3; "str", box_string "this"];
@@ -129,7 +129,7 @@ let test_project _test_ctx =
         [box_string "this"; box_int 3];
     ]; neg_rows = Array.of_list []; }
 
-let test_compare _test_ctx = 
+let test_compare _test_ctx =
     let set = box_list [
         box_record ["a", box_bool true; "b", box_int 5; "str", box_string "abc"];
         box_record ["a", box_bool true; "b", box_int 3; "str", box_string "this"];
@@ -233,7 +233,7 @@ let test_join_1 test_ctx =
         [box_int 5; box_string "abc"; box_string "this"];
         [box_int 14; box_string "9012"; box_string "exists"];
     ])
- 
+
 let test_join_neg_1 test_ctx =
     let data_l = test_data_6 in
     let data_r = test_data_7 in
