@@ -228,16 +228,13 @@ struct
               `ApplyPure (f, args), deconstruct return_type ft, o
 
         | `Closure (f, tyargs, z) ->
-
             let (f, t, o) = o#var f in
-            let t = if tyargs = []
-              then
-                t
-              else
-                begin
+            let t =
+              match tyargs with
+                | [] -> t
+                | _ ->
                   let (remaining_type, instantiation_maps) = Instantiate.type_arguments_to_instantiation_maps false t tyargs in
-                  Instantiate.datatype instantiation_maps remaining_type
-                end in
+                  Instantiate.datatype instantiation_maps remaining_type in
             let (z, _, o) = o#value z in
               (* TODO: check that closure environment types match expectations for f *)
               `Closure (f, tyargs, z), t, o

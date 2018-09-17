@@ -568,7 +568,7 @@ struct
       (** Given a list of free variables, return a tuple containing the following:
         - a list of fresh quantifiers, each corresponding to one free variable
         - Three maps mapping the old free variables to fresh ones (to be used with Instantiate)  **)
-      method create_substitutions_replacing_free_variables_with_fresh_ones (free_type_vars : Types.quantifier list)  =
+      method create_substitutions_replacing_free_variables (free_type_vars : Types.quantifier list)  =
         List.fold_right (fun oldq (qs, (type_map, row_map, presence_map) ) ->
           let typevar = Types.var_of_quantifier oldq in
           let primary_kind = Types.primary_kind_of_quantifier oldq in
@@ -602,7 +602,7 @@ struct
           f_binder
         else
           begin
-            let outer_quantifiers, outer_maps = o#create_substitutions_replacing_free_variables_with_fresh_ones free_type_vars in
+            let outer_quantifiers, outer_maps = o#create_substitutions_replacing_free_variables free_type_vars in
             let f_type_generalized =
               let f_type = Var.type_of_binder f_binder in
               match TypeUtils.split_quantified_type f_type with
@@ -627,7 +627,7 @@ struct
           fundef
         else
           begin
-            let inner_quantifiers, inner_maps = o#create_substitutions_replacing_free_variables_with_fresh_ones free_type_vars in
+            let inner_quantifiers, inner_maps = o#create_substitutions_replacing_free_variables free_type_vars in
             let tyvars = inner_quantifiers @ tyvars in
             let (z, o) = match z with
               | Some zbinder ->

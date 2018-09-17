@@ -298,7 +298,8 @@ let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
-let type_arguments_to_instantiation_maps : bool -> Types.datatype -> Types.type_arg list -> (datatype * (datatype IntMap.t * row IntMap.t * field_spec IntMap.t)) =
+let type_arguments_to_instantiation_maps :
+      bool -> Types.datatype -> Types.type_arg list -> (datatype * (datatype IntMap.t * row IntMap.t * field_spec IntMap.t)) =
   fun must_instantiate_all_quantifiers pt tyargs ->
     (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
     let vars, t = TypeUtils.split_quantified_type pt in
@@ -317,9 +318,11 @@ let type_arguments_to_instantiation_maps : bool -> Types.datatype -> Types.type_
          Debug.print tyargs';
          raise ArityMismatch);
 
-    let vars, remaining_quantifiers = if tyargs_length = vars_length
-      then vars, []
-      else (take tyargs_length vars, drop tyargs_length vars) in
+    let vars, remaining_quantifiers =
+      if tyargs_length = vars_length then
+        vars, []
+      else
+        (take tyargs_length vars, drop tyargs_length vars) in
     let tenv, renv, penv =
       List.fold_right2
         (fun var tyarg (tenv, renv, penv) ->
