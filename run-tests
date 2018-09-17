@@ -26,6 +26,7 @@ prepare_database_config () {
 
 if [[ "$1" == "lens" ]]; then
     prepare_database_config "$DATABASE_TEST_DIR"
+    export LINKS_CONFIG="$DATABASE_TEST_DIR"
     dune exec --profile=development tests/lens/unitTests.exe -- -runner sequential ${@:2}
     if [ $? != 0 ]; then
         ret=1
