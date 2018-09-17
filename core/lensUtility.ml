@@ -4,21 +4,21 @@ open Utility
 module ColSet = struct
     include StringSet
 
-    let pp_pretty fmt cs = 
+    let pp_pretty fmt cs =
         List.iter (fun c -> Format.pp_print_string fmt c; Format.pp_print_space fmt ()) (elements cs)
 end
 
 type colset = ColSet.t
       [@@deriving show]
 
-module FunDep = struct 
-    type t = colset * colset 
+module FunDep = struct
+    type t = colset * colset
       [@@deriving show]
 
     let left (l,_) = l
-    let right (_,r) = r 
-    
-    let compare (l1,r1) (l2, r2) = 
+    let right (_,r) = r
+
+    let compare (l1,r1) (l2, r2) =
         let res = ColSet.compare l1 l2 in
         if res = 0 then
             ColSet.compare r1 r2
@@ -39,18 +39,18 @@ module FunDep = struct
         make keys right
 end
 
-type fundep = colset * colset 
+type fundep = colset * colset
         [@@deriving show]
 
 module FunDepSet = struct
     include Set.Make(FunDep)
-    
+
     let of_lists (fds : (string list * string list) list) : t =
         let fds = List.map FunDep.of_lists fds in
         of_list fds
 
     let remove_defines (fds : t) (cols : colset) =
-        let remove fd = 
+        let remove fd =
             if ColSet.inter cols (FunDep.left fd) |> ColSet.is_empty |> not then
                 failwith "Cannot remove a column defining other columns.";
             let newRight = ColSet.diff (FunDep.right fd) cols in
@@ -64,7 +64,7 @@ module FunDepSet = struct
         of_list [FunDep.key_fd left right]
 
     (* Find the a functional dependency at the root, which is the functional dependency that defines all other nodes *)
-    let root_fd (fds : t) = 
+    let root_fd (fds : t) =
         let res = filter (fun fd ->
             not (exists (fun fd2 ->
                 ColSet.subset (FunDep.right fd2) (FunDep.left fd)) fds
@@ -78,7 +78,7 @@ module FunDepSet = struct
     (* Get the functional dependency which defines the columns cols *)
     let defining_fd (cols : colset) (fds : t) =
         let res = filter (fun fd ->
-            ColSet.subset cols (FunDep.right fd)    
+            ColSet.subset cols (FunDep.right fd)
         ) fds in
         min_elt res
 
@@ -97,18 +97,18 @@ end
 type fundepset = FunDepSet.t
         [@@deriving show]
 
-module FunDepTree = struct  
+module FunDepTree = struct
     type t = [ `FDNode of colset * (t list) ]
-    
-    let cols (n : t) = 
+
+    let cols (n : t) =
         match n with
         | `FDNode (cols, _) -> cols
 
     let subnodes (n : t) =
         match n with
-        | `FDNode (_, subnodes) -> subnodes 
+        | `FDNode (_, subnodes) -> subnodes
 
-    let rec pp_pretty (fmt : Format.formatter) (v : t) = 
+    let rec pp_pretty (fmt : Format.formatter) (v : t) =
         Format.pp_force_newline fmt ();
         Format.pp_open_box fmt 2;
         Format.pp_print_string fmt "-";
@@ -117,7 +117,7 @@ module FunDepTree = struct
         List.iter (fun node -> pp_pretty fmt node) (subnodes v);
         Format.pp_close_box fmt ()
 
-    let rec fd_subnodes (fds : FunDepSet.t) (fd : FunDep.t) : t = 
+    let rec fd_subnodes (fds : FunDepSet.t) (fd : FunDep.t) : t =
         let subfds = FunDepSet.filter (fun fd2 ->
             ColSet.subset (FunDep.right fd) (FunDep.left fd2)
         ) fds in
@@ -127,7 +127,7 @@ module FunDepTree = struct
         let subfds = if ColSet.is_empty remaining then subfds else `FDNode (remaining, []) :: subfds in
             `FDNode (FunDep.left fd, subfds)
 
-    let of_fds (fds : fundepset) = 
+    let of_fds (fds : fundepset) =
         let root = FunDepSet.root_fd fds in
         OptionUtils.opt_map (fd_subnodes fds) root
 

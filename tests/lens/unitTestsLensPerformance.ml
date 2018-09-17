@@ -19,7 +19,7 @@ let skip_long_performance test_ctx =
     skip_if (v) "Not running long performance tests because of -skip-long-perf"
 
 
-let test_join_five test_ctx n = 
+let test_join_five test_ctx n =
     skip_performance test_ctx;
     skip_long_performance test_ctx;
     let db = LensTestHelpers.get_db test_ctx in
@@ -49,7 +49,7 @@ let test_join_five test_ctx n =
     let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t4" in
     ()
 
-let create_join_n_lens test_ctx db n rows = 
+let create_join_n_lens test_ctx db n rows =
     let r = LensTestHelpers.range 1 n in
     let ls = List.map (fun i ->
         let stri = string_of_int i in
@@ -70,8 +70,8 @@ let cleanup_join_n_lens test_ctx db n _rows =
         LensTestHelpers.drop_if_cleanup test_ctx db name
     ) r in
     ()
-    
-let benchmark_nr_of_lenses_remove test_ctx = 
+
+let benchmark_nr_of_lenses_remove test_ctx =
     skip_performance test_ctx;
     let r = LensTestHelpers.range 1 10 in
     let db = LensTestHelpers.get_db test_ctx in
@@ -81,13 +81,13 @@ let benchmark_nr_of_lenses_remove test_ctx =
         let res = lens_get l None in
         let res = unbox_list res in
         let _put = box_list (List.tl res) in
-        (* let r = LensTestHelpers.time_query false (fun () -> lens_put l put None) in 
+        (* let r = LensTestHelpers.time_query false (fun () -> lens_put l put None) in
         let _ = LensTestHelpers.print_verbose test_ctx (string_of_value r) in *)
         cleanup_join_n_lens test_ctx db i
     ) r in
     ()
 
-let benchmark_nr_of_lenses_add test_ctx = 
+let benchmark_nr_of_lenses_add test_ctx =
     skip_performance test_ctx;
     let r = LensTestHelpers.range 1 10 in
     let db = LensTestHelpers.get_db test_ctx in
@@ -105,7 +105,7 @@ let benchmark_nr_of_lenses_add test_ctx =
     ) r in
     ()
 
-let create_join_five_lens test_ctx db n = 
+let create_join_five_lens test_ctx db n =
     let l1 = LensTestHelpers.drop_create_populate_table test_ctx db "t1" "a -> b c" "a b c" [`Seq; `RandTo (n / 15); `Rand] n in
     let l2 = LensTestHelpers.drop_create_populate_table test_ctx db "t2" "b -> d e" "b d e" [`Seq; `RandTo (n / 15 / 15); `Rand] (n / 15) in
     let l3 = LensTestHelpers.drop_create_populate_table test_ctx db "t3" "d -> f g" "d f g" [`Seq; `RandTo (n / 15 / 15 / 15); `Rand] (n / 15 / 15) in
@@ -116,17 +116,17 @@ let create_join_five_lens test_ctx db n =
     let l8 = LensTestHelpers.select_lens l7 (Phrase.equal (Phrase.var "b") (Phrase.constant_int 10)) in
     l8
 
-let cleanup_join_five_lens test_ctx db = 
+let cleanup_join_five_lens test_ctx db =
     let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t1" in
     let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t2" in
     let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t3" in
     let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t4" in
     ()
 
-let test_join_five_remove test_ctx n = 
+let test_join_five_remove test_ctx n =
     skip_performance test_ctx;
     let db = LensTestHelpers.get_db test_ctx in
-    let l8 = create_join_five_lens test_ctx db n in 
+    let l8 = create_join_five_lens test_ctx db n in
     (* modify res *)
     let res = lens_get l8 None in
     let res = unbox_list res in
@@ -143,10 +143,10 @@ let test_join_five_remove test_ctx n =
     let _ = cleanup_join_five_lens test_ctx db in
     ()
 
-let test_join_five_update test_ctx n = 
+let test_join_five_update test_ctx n =
     skip_performance test_ctx;
     let db = LensTestHelpers.get_db test_ctx in
-    let l8 = create_join_five_lens test_ctx db n in 
+    let l8 = create_join_five_lens test_ctx db n in
     (* modify res *)
     let res = lens_get l8 None in
     let res = unbox_list res in
@@ -158,16 +158,16 @@ let test_join_five_update test_ctx n =
     let _ = cleanup_join_five_lens test_ctx db in
     ()
 
-let test_join_five_10000 test_ctx = 
+let test_join_five_10000 test_ctx =
     test_join_five test_ctx 10000
 
-let test_join_five_remove_10000 test_ctx = 
+let test_join_five_remove_10000 test_ctx =
     test_join_five_remove test_ctx 10000
 
 let test_join_five_update_10000 test_ctx =
     test_join_five_update test_ctx 10000
-    
-let suite = 
+
+let suite =
     "lens_performance">:::
         [
             "join_five_update_10000">:: test_join_five_update_10000;

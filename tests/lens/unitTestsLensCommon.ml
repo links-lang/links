@@ -11,18 +11,18 @@ open LensSetOperations
 let _ = OptionUtils.opt_iter (Settings.load_file false) Basicsettings.config_file_path
 
 let display_table_query_opt = Conf.make_bool "display_table_query" false "Show queries to take and manipulate tables."
-let leave_tables_opt = Conf.make_bool "leave_tables" false "Do not delete tables after run." 
-let database_args_opt = Conf.make_string "database_args" ("links:" ^ Settings.get_value Basicsettings.database_args) "Database connection args." 
+let leave_tables_opt = Conf.make_bool "leave_tables" false "Do not delete tables after run."
+let database_args_opt = Conf.make_string "database_args" ("links:" ^ Settings.get_value Basicsettings.database_args) "Database connection args."
 let verbose_opt = Conf.make_bool "v" false "Print verbose information."
 let classic_opt = Conf.make_bool "classic_lenses" false "Use non incremental relational lenses."
 let benchmark_opt = Conf.make_bool "benchmark" false "Benchmark operations."
-let set_n_opt = Conf.make_int "set_n" 0 "Override n." 
+let set_n_opt = Conf.make_int "set_n" 0 "Override n."
 let set_upto_opt = Conf.make_int "set_upto" 10 "Override upto."
 
 module LensTestHelpers = struct
 
-    let get_db test_ctx = 
-        (* host port dbname user pw *) 
+    let get_db test_ctx =
+        (* host port dbname user pw *)
         let (conn,_) = get_pg_database_by_string (database_args_opt test_ctx) in
         conn
 
@@ -39,7 +39,7 @@ module LensTestHelpers = struct
         else
             ()
 
-    let print_verbose test_ctx message = 
+    let print_verbose test_ctx message =
         if verbose_opt test_ctx then
             print_endline message
         else
@@ -57,7 +57,7 @@ module LensTestHelpers = struct
     let delt_constr_int (cols : string) (vals, m : int list * int) =
     rec_constr_int cols vals, m
 
-    let colset_of_string str = 
+    let colset_of_string str =
         let cols = colslist_of_string str in
         ColSet.of_list cols
 
@@ -97,7 +97,7 @@ module LensTestHelpers = struct
         let sort = LensTypes.select_lens_sort sort phrase in
         `LensSelect (l, phrase, sort)
 
-    let drop_lens l drop key default = 
+    let drop_lens l drop key default =
         let sort = Lens.sort l in
         let (fds, cond, r) = sort in
         let fds = FunDepSet.remove_defines fds (ColSet.singleton drop) in
@@ -109,15 +109,15 @@ module LensTestHelpers = struct
 
     let create_table test_ctx db tablename (primary_key : string list) (fields : string list) =
         let colfn col = col ^ " INTEGER NOT NULL" in
-        let query = "CREATE TABLE " ^ tablename ^ " ( " 
+        let query = "CREATE TABLE " ^ tablename ^ " ( "
             ^ List.fold_left (fun a b -> a ^ colfn b ^ ", ") "" fields
             ^ "CONSTRAINT \"PK_" ^ tablename ^ "\" PRIMARY KEY ("
                 ^ List.fold_left (fun a b -> a ^ ", " ^ b) (List.hd primary_key) (List.tl primary_key)
             ^ "));" in
         let _ = if display_table_query_opt test_ctx then Debug.print query else () in
-        db#exec query 
+        db#exec query
 
-      
+
     let create_table_easy test_ctx db tablename str =
         let fd = fundep_of_string str in
         let left = FunDep.left fd in
@@ -133,15 +133,15 @@ module LensTestHelpers = struct
     let row_columns data =
         let data = unbox_list data in
         let r = List.hd data in
-        List.map fst (unbox_record r)  
+        List.map fst (unbox_record r)
 
-    let row_values db data = 
+    let row_values db data =
         let data = unbox_list data in
         let fn = List.map (value_as_string db -<- snd) in
         let data = List.map (fn -<- unbox_record) data in
         data
 
-    let box_int_record_list cols data = 
+    let box_int_record_list cols data =
         let data = List.map (List.map box_int) data in
         let data = List.map (List.combine cols) data in
         let data = List.map box_record data in
@@ -152,7 +152,7 @@ module LensTestHelpers = struct
         (* See lib.ml "InsertRows" *)
         let cols = row_columns data in
         let rows = row_values db data in
-        Database.execute_insert (table, cols, rows) db 
+        Database.execute_insert (table, cols, rows) db
 
     let drop_if_exists test_ctx (db : database) table =
         let query = "DROP TABLE IF EXISTS " ^ table in
@@ -160,9 +160,9 @@ module LensTestHelpers = struct
         db#exec query
 
     let drop_if_cleanup test_ctx (db : database) table =
-        if leave_tables_opt test_ctx then 
+        if leave_tables_opt test_ctx then
             ()
-        else 
+        else
             let _ = drop_if_exists test_ctx db table in
             ()
 
@@ -176,7 +176,7 @@ module LensTestHelpers = struct
     (* is there a more standardized function for this? *)
     let rec range a b =
         if a > b then []
-        else a :: range (a+1) b;; 
+        else a :: range (a+1) b;;
 
     let gen_data (cols : col_gen_type list) cnt =
         let _ = Random.self_init () in
@@ -184,9 +184,9 @@ module LensTestHelpers = struct
             List.map (function
                 | `Seq -> i
                 | `Constant n -> n
-                | `RandTo n -> 1 + Random.int (if n < 5 then 5 else n) 
+                | `RandTo n -> 1 + Random.int (if n < 5 then 5 else n)
                 | `Rand -> Random.bits ()
-            ) cols 
+            ) cols
         ) (range 1 cnt) in
         data
 
@@ -194,7 +194,7 @@ module LensTestHelpers = struct
         let cols = List.map (fun (a,b) -> a, `Present b) cols in
         `Record (Utility.StringMap.from_alist cols, Unionfind.fresh `Closed, false)
 
-    let create_lens_db db tablename fd (key : string list) (cols : string list) = 
+    let create_lens_db db tablename fd (key : string list) (cols : string list) =
         let colFn tbl name = {
             alias = name; name = name; table = tbl; typ = `Primitive `Int; present = true
         } in
@@ -226,7 +226,7 @@ module LensTestHelpers = struct
 
     let get_query_time () = !query_timer
 
-    let print_query_time () = 
+    let print_query_time () =
         print_endline ("Query Time: " ^ string_of_int (get_query_time ()) ^ " / " ^ string_of_int !query_count ^ " queries")
 
     let time_query _in_mem fn =
@@ -259,7 +259,7 @@ module LensTestHelpers = struct
             assert (actual = expected)
 end
 
-let test_fundep_of_string _test_ctx = 
+let test_fundep_of_string _test_ctx =
     let _fds = LensTestHelpers.fundepset_of_string "A B -> C; C -> D; D -> E F" in
     let _ = assert_equal "{{\"A\"; \"B\"; } -> {\"C\"; }; {\"C\"; } -> {\"D\"; }; {\"D\"; } -> {\"E\"; \"F\"; }; }" in
     ()

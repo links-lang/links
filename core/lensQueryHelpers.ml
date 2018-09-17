@@ -16,7 +16,7 @@ type select_query = {
     pred: lens_phrase option;
     db : database;
 }
-                    
+
 let value_of_constant : Constant.constant -> Value.t  = function
     | `Int a -> `Int a
     | `Float f -> `Float f
@@ -57,16 +57,16 @@ let rec lens_phrase_of_phrase : phrase -> lens_phrase = function
         end
     | _ -> failwith "Unknown phrasenode for lens_phrase to phrase."
 
-let rec calculate_predicate (expr : lens_phrase) (get_val : string -> Value.t) = 
+let rec calculate_predicate (expr : lens_phrase) (get_val : string -> Value.t) =
     match expr with
     | `Constant c -> value_of_constant c
-    | `Var v -> 
+    | `Var v ->
         begin
             try
                 get_val v
             with NotFound _ -> failwith ("Could not find column " ^ v ^ ".")
         end
-    | `InfixAppl (op, a1, a2) -> 
+    | `InfixAppl (op, a1, a2) ->
         let a1 = calculate_predicate a1 get_val in
         let a2 = calculate_predicate a2 get_val in
         begin
@@ -81,27 +81,27 @@ let rec calculate_predicate (expr : lens_phrase) (get_val : string -> Value.t) =
             | _ -> failwith ("Unknown binary operation " ^ string_of_binop op ^ ".")
         end
     | `TupleLit l -> calculate_predicate (List.hd l) get_val
-    | `UnaryAppl (op, arg) -> 
+    | `UnaryAppl (op, arg) ->
         begin
             match string_of_unary_op op with
-            | "!" -> 
+            | "!" ->
                 let res = calculate_predicate arg get_val in
                 let res = not (unbox_bool res) in
                 box_bool res
-            | ".-" -> 
+            | ".-" ->
                 let res = calculate_predicate arg get_val in
                 let res = -. (unbox_float res) in
                 box_float res
             | "-" ->
                 let res = calculate_predicate arg get_val in
                 let res = - (unbox_int res) in
-                box_int res 
+                box_int res
             | op -> failwith ("Unsupported unary operation " ^ op)
         end
-    | `In (names, vals) -> 
+    | `In (names, vals) ->
             let find = List.map get_val names in
             let vals = List.map (List.map value_of_constant) vals in
-            let res = List.mem find vals in 
+            let res = List.mem find vals in
             box_bool res
     | `Case (inp, cases, otherwise) ->
             let inp = match inp with
@@ -112,14 +112,14 @@ let rec calculate_predicate (expr : lens_phrase) (get_val : string -> Value.t) =
                 calculate_predicate v get_val
             with
                 NotFound _ -> calculate_predicate otherwise get_val
-    
+
     (* | `FnAppl (fn, arg) ->
         begin
             match name_of_var fn with
-            | "not" -> 
+            | "not" ->
                 let res = calculate_predicate (List.hd arg) get_val in
                 let res = not (unbox_bool res) in
-                box_bool res 
+                box_bool res
             | _ -> failwith "Unknown function."
         end *)
     | _ -> failwith "Unknown phrasenode for calculate_predicate."
@@ -137,21 +137,21 @@ class dummy_database = object(_self)
   method! make_insert_returning_query : (string * string list * string list list * string) -> string list =
     failwith "Dummy database make_insert_returning_query not supported"
 end
-  
+
 let rec construct_query_db (expr : lens_phrase) (db : Value.database) (mapCol : string -> string) =
     let construct_query expr = construct_query_db expr db mapCol in
     match expr with
     | `Constant c -> Constant.string_of_constant c
     | `Var v -> mapCol v
-    | `InfixAppl (op, a1, a2) -> construct_query a1 ^ " " ^ translate_op_to_sql (string_of_binop op) ^ " " ^ construct_query a2 
+    | `InfixAppl (op, a1, a2) -> construct_query a1 ^ " " ^ translate_op_to_sql (string_of_binop op) ^ " " ^ construct_query a2
     | `TupleLit l -> "(" ^ List.fold_left (fun a b -> a ^ ", " ^ (construct_query b)) (construct_query (List.hd l)) (List.tl l)  ^ ")"
-    | `UnaryAppl (op, a1) ->  
+    | `UnaryAppl (op, a1) ->
         begin
             match string_of_unary_op op with
             | "!" -> "NOT (" ^ construct_query a1 ^ ")"
             | a -> a ^ " (" ^ construct_query a1 ^ ")"
         end
-    | `In (names, vals) -> 
+    | `In (names, vals) ->
         let b = Buffer.create 255 in
         let cc = Buffer.add_string b in
         cc "("; List.iteri (fun i v -> if i > 0 then cc ", "; cc (mapCol v)) names; cc ") IN (";
@@ -159,7 +159,7 @@ let rec construct_query_db (expr : lens_phrase) (db : Value.database) (mapCol : 
             List.iteri (fun i2 v2 -> if i2 > 0 then cc ", "; cc (Constant.string_of_constant v2)) v; cc ")") vals;
             cc ")";
         Buffer.contents b
-    | `Case (inp, cases, otherwise) -> 
+    | `Case (inp, cases, otherwise) ->
             let otherwise = construct_query otherwise in
             if cases = [] then
                 (* special case: if there are no cases then just return query for otherwise *)
@@ -172,26 +172,26 @@ let rec construct_query_db (expr : lens_phrase) (db : Value.database) (mapCol : 
 let construct_query (expr : lens_phrase) =
   let db = (new dummy_database) in
   let mapCol = fun a -> db#quote_field a in
-  construct_query_db expr db mapCol  
+  construct_query_db expr db mapCol
 
 let construct_select_query (query : select_query) =
   let db = query.db in
-  let colFn col = db#quote_field col.table ^ "." ^ db#quote_field col.name ^ " AS " ^ db#quote_field col.alias in 
+  let colFn col = db#quote_field col.table ^ "." ^ db#quote_field col.name ^ " AS " ^ db#quote_field col.alias in
   let tableFn (table, alias) = db#quote_field table ^ " AS " ^ db#quote_field alias in
   let cols = List.filter (fun c -> c.present) query.cols in
   let cols = List.fold_left (fun a b -> a ^ ", " ^ colFn b) (colFn (List.hd cols)) (List.tl cols) in
   let tables = query.tables in
   let tables = List.fold_left (fun a b -> a ^ ", " ^ tableFn b) (tableFn (List.hd tables)) (List.tl tables) in
   let sql = "SELECT " ^ cols ^ " FROM " ^ tables in
-  let mapCol = fun a -> 
+  let mapCol = fun a ->
     let col = List.find (fun c -> c.alias = a) query.cols in
     db#quote_field col.table ^ "." ^ db#quote_field col.name in
-   match query.pred with 
+   match query.pred with
   | Some qphrase -> sql ^ " WHERE " ^ construct_query_db qphrase db mapCol
   | None -> sql
 
 let construct_select_query_sort db (sort : lens_sort) =
-  let colFn col = db#quote_field col.table ^ "." ^ db#quote_field col.name ^ " AS " ^ db#quote_field col.alias in 
+  let colFn col = db#quote_field col.table ^ "." ^ db#quote_field col.name ^ " AS " ^ db#quote_field col.alias in
   let tableFn (table, alias) = db#quote_field table ^ " AS " ^ db#quote_field alias in
   let cols = LensSort.cols sort in
   let colsF = List.filter (fun c -> c.present) cols in
@@ -201,10 +201,10 @@ let construct_select_query_sort db (sort : lens_sort) =
   let colsQ = List.fold_left (fun a b -> a ^ ", " ^ colFn b) (colFn (List.hd colsF)) (List.tl colsF) in
   let tablesQ = List.fold_left (fun a b -> a ^ ", " ^ tableFn b) (tableFn (List.hd tables)) (List.tl tables) in
   let sql = "SELECT " ^ colsQ ^ " FROM " ^ tablesQ in
-  let mapCol = fun a -> 
+  let mapCol = fun a ->
     let col = List.find (fun c -> c.alias = a) cols in
     db#quote_field col.table ^ "." ^ db#quote_field col.name in
-   match get_lens_sort_pred sort with 
+   match get_lens_sort_pred sort with
   | Some qphrase -> sql ^ " WHERE " ^ construct_query_db qphrase db mapCol
   | None -> sql
 
@@ -225,33 +225,33 @@ let create_phrase_var (name : string) =
 let create_phrase_constant_of_record_col (r : Value.t) (key : string) =
     `Constant (constant_of_value (get_record_val key r))
 
-let create_phrase_not (arg : lens_phrase) = 
+let create_phrase_not (arg : lens_phrase) =
     `UnaryAppl (`Name "!", arg)
 
 let create_phrase_tuple (arg : lens_phrase) =
     `TupleLit [arg]
 
 module Phrase = struct
-    let combine_and phrase1 phrase2 = 
-        let tup_or x = match x with 
+    let combine_and phrase1 phrase2 =
+        let tup_or x = match x with
             | `InfixAppl (`Or, _, _) -> create_phrase_tuple x
             | _ -> x in
-        match phrase1 with 
-        | Some x -> 
+        match phrase1 with
+        | Some x ->
             begin
                 match phrase2 with
                 | Some x' -> Some (create_phrase_and (tup_or x) (tup_or x'))
-                | None -> phrase1 
+                | None -> phrase1
             end
         | None -> phrase2
 
     let combine_or phrase1 phrase2 =
-        match phrase1 with 
-        | Some x -> 
+        match phrase1 with
+        | Some x ->
             begin
                 match phrase2 with
                 | Some x' -> Some (create_phrase_or x x')
-                | None -> phrase1 
+                | None -> phrase1
             end
         | None -> phrase2
 
@@ -272,14 +272,14 @@ module Phrase = struct
     let constant_val v = `Constant (constant_of_value v)
     let constant_int i = `Constant (`Int i)
 
-    let fold_or phrases = 
+    let fold_or phrases =
         let ored = List.fold_left combine_or None phrases in
         match ored with
         | None -> Some (constant_bool false)
         | _ -> ored
 
     let equal = create_phrase_equal
-    let greater_than left right = 
+    let greater_than left right =
         `InfixAppl (`Name ">", left, right)
 
     let constant_from_col = create_phrase_constant_of_record_col
@@ -301,8 +301,8 @@ module Phrase = struct
         ) None (List.combine on row) in
         phrase
 
-    let matching_cols (on : ColSet.t) row = 
-        let phrase = List.fold_left (fun phrase on -> 
+    let matching_cols (on : ColSet.t) row =
+        let phrase = List.fold_left (fun phrase on ->
             let term = Some (equal (var on) (constant_from_col row on)) in
             combine_and phrase term
         ) None (ColSet.elements on) in
@@ -323,14 +323,14 @@ module Phrase = struct
         let expr = match expr with
         | `Constant _ -> expr
         | `Var _ -> expr
-        | `UnaryAppl (a, arg) -> 
+        | `UnaryAppl (a, arg) ->
                 let arg = fn arg in
                 `UnaryAppl (a, arg)
-        | `InfixAppl (a, a1, a2) -> 
+        | `InfixAppl (a, a1, a2) ->
                 let a1 = fn a1 in
                 let a2 = fn a2 in
-                `InfixAppl (a, a1, a2) 
-        | `TupleLit (x :: []) -> 
+                `InfixAppl (a, a1, a2)
+        | `TupleLit (x :: []) ->
                 let x = fn x in
                 `TupleLit ([x])
         | `Case (phr, cases, otherwise) ->
@@ -354,16 +354,16 @@ module Phrase = struct
         traverse expr (fun expr ->
             match expr with
             | `Var n ->
-                let v = List.find_opt (fun (k,_v) -> k = n) repl in 
+                let v = List.find_opt (fun (k,_v) -> k = n) repl in
                 let v = OptionUtils.opt_map (fun (_k,v) -> `Var v) v in
                 OptionUtils.from_option expr v
             | _ -> expr
         )
-    
+
     let replace_var (expr : lens_phrase) (repl : (string * Value.t) list) : lens_phrase =
-        traverse expr (fun expr -> 
+        traverse expr (fun expr ->
             match expr with
-            | `Var n -> 
+            | `Var n ->
                 let v = List.find_opt (fun (k,_v) -> k = n) repl in
                 let v = OptionUtils.opt_map (fun (_,v) -> `Constant (constant_of_value v)) v in
                 OptionUtils.from_option expr v
@@ -373,9 +373,9 @@ module Phrase = struct
 
 end
 
-(*let calculate_predicate (expr : phrase) pred = 
+(*let calculate_predicate (expr : phrase) pred =
     (* let _ = Debug.print (construct_query expr) in
-    let _ = Debug.print (string_of_value (calculate_predicate expr (fun a -> match a with "itemID" -> `Int 6 | "name" -> `String "john"))) in 
+    let _ = Debug.print (string_of_value (calculate_predicate expr (fun a -> match a with "itemID" -> `Int 6 | "name" -> `String "john"))) in
     let _ = Debug.print (construct_query (replace_var expr ["itemID", `Int 5;"test", `Int 3])) in
     let expr, pos = expr in
     let expr2 = (expr,pos) in
@@ -384,14 +384,14 @@ end
     let _ = Debug.print (construct_query testExpr) in *)
     `Bool true *)
 
-let calculate_predicate_rec (expr : lens_phrase) (r : Value.t) = 
+let calculate_predicate_rec (expr : lens_phrase) (r : Value.t) =
     let get_val = fun x -> get_record_val x r in
     calculate_predicate expr get_val
 
 
 
 
-(* execution, as taken from database.ml (this cannot be reused though, as 
+(* execution, as taken from database.ml (this cannot be reused though, as
       database.ml is lower down in the compile chain) *)
 
 let value_of_db_string (value:string) t =
@@ -464,4 +464,3 @@ let execute_select
     : Value.t =
   let result,rs = execute_select_result field_types query db in
   build_result (result,rs)
-
