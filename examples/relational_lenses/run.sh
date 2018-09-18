@@ -10,10 +10,10 @@ if [[ ! -e config ]]; then
   echo -e  "Please customize to match your local database setup."
   echo -en "$ENDCOLOR"
   cp config.sample config
-fi 
+fi
 
 PSQL="psql links -U links -h localhost"
 $PSQL < music_example.sql
 ../../linx cds.links --config=config
 echo "SELECT * FROM albums" | $PSQL
-echo "SELECT * FROM tracks" | $PSQL 
+echo "SELECT * FROM tracks" | $PSQL

@@ -9,11 +9,11 @@ th.price-col, td.price-col { text-align: right }
 th.total-col, td.total-col { text-align: right }
 label { text-align: right }
 td.label { text-align: right }
-p.instructions { 
+p.instructions {
   margin: 12px;
 #  background-color: #ff8
 }
-table.data-entry { 
+table.data-entry {
   padding: 12px;
 #  background-color: #faa;
   width: 100%;
@@ -41,7 +41,7 @@ h2 { font-size: 16pt;
 }
 
 div.filter-box {
-   border: 1px solid black; 
+   border: 1px solid black;
    padding: 6px;
    margin: 6px;
    float: right;

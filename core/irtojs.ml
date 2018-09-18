@@ -578,7 +578,7 @@ end
  *   type source = [
  *     | `Bindings of Ir.binding list
  *     | `Program of Ir.program ]
- * 
+ *
  *   val compile : source -> Value.env -> Js.program
  * end *)
 

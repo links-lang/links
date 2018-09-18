@@ -129,7 +129,7 @@ module Shredding = struct
   let shredding = Settings.add_bool("shredding", false, `User)
 end
 
-module RelationalLenses = 
+module RelationalLenses =
 struct
     let relational_lenses = Settings.add_bool("relational_lenses", false, `User)
 

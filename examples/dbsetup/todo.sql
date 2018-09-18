@@ -3,7 +3,7 @@
 --
 
 --
--- Name: items; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: items; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE items (

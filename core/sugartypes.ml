@@ -231,7 +231,7 @@ and phrasenode = [
 | `LensKeysLit      of phrase * phrase * Types.lens_sort option
 | `LensFunDepsLit   of phrase * (string list * string list) list * Types.lens_sort option
 | `LensDropLit      of phrase * string * string * phrase * Types.lens_sort option
-| `LensSelectLit    of phrase * phrase * Types.lens_sort option 
+| `LensSelectLit    of phrase * phrase * Types.lens_sort option
 | `LensJoinLit      of phrase * phrase * phrase * phrase * phrase * Types.lens_sort option
 | `LensGetLit       of phrase * Types.datatype option
 | `LensPutLit       of phrase * phrase * Types.datatype option
@@ -388,7 +388,7 @@ struct
 
     | `LensLit (l, _) -> phrase l
     (* this should be converted to `LensLit during typeSugar *)
-    | `LensFunDepsLit _ -> assert false 
+    | `LensFunDepsLit _ -> assert false
     | `LensKeysLit (l, _, _) -> phrase l
     | `LensSelectLit (l, _, _) -> phrase l
     | `LensDropLit (l, _, _, _, _) -> phrase l

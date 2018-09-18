@@ -48,11 +48,11 @@ let settings_result =
     None
   with Error msg -> Some msg
 
-(* Unit testing allows the use of command line options which throw errors during evalution. 
+(* Unit testing allows the use of command line options which throw errors during evalution.
  * To still allow unit testing with other command line options, the command line options are
  * parsed without throwing any fatal errors. This function throws a fatal error message if
  * an error occured during parsing. *)
-let validate_settings () = 
+let validate_settings () =
   OptionUtils.opt_iter (fun err_msg ->
     Printf.fprintf stderr "error: %s\n" err_msg; flush stderr; exit 1
   ) settings_result

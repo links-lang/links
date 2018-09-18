@@ -10,7 +10,7 @@ CREATE SEQUENCE author_id_seq
     CACHE 1;
 
 --
--- Name: authors; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: authors; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE authors (
@@ -32,7 +32,7 @@ CREATE SEQUENCE paper_id_seq
 
 
 --
--- Name: paperauthor; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: paperauthor; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE paperauthor (
@@ -42,7 +42,7 @@ CREATE TABLE paperauthor (
 
 
 --
--- Name: papers; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: papers; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE papers (
@@ -52,7 +52,7 @@ CREATE TABLE papers (
 
 
 --
--- Name: paperauthor_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: paperauthor_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY paperauthor

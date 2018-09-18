@@ -3,7 +3,7 @@
 --
 
 --
--- Name: countries; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: countries; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE countries (
@@ -13,7 +13,7 @@ CREATE TABLE countries (
 
 
 --
--- Name: customer; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: customer; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE customer (
@@ -33,7 +33,7 @@ CREATE TABLE customer (
 
 
 --
--- Name: grape_variety; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: grape_variety; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE grape_variety (
@@ -43,7 +43,7 @@ CREATE TABLE grape_variety (
 
 
 --
--- Name: inventory; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: inventory; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE inventory (
@@ -68,7 +68,7 @@ CREATE SEQUENCE item_id_seq
 
 
 --
--- Name: items; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: items; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE items (
@@ -82,7 +82,7 @@ CREATE TABLE items (
 
 
 --
--- Name: orders; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: orders; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE orders (
@@ -96,7 +96,7 @@ CREATE TABLE orders (
 
 
 --
--- Name: region; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: region; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE region (
@@ -106,7 +106,7 @@ CREATE TABLE region (
 
 
 --
--- Name: titles; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: titles; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE titles (
@@ -116,7 +116,7 @@ CREATE TABLE titles (
 
 
 --
--- Name: users; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: users; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE users (
@@ -127,7 +127,7 @@ CREATE TABLE users (
 
 
 --
--- Name: wine; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: wine; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE wine (
@@ -141,7 +141,7 @@ CREATE TABLE wine (
 
 
 --
--- Name: wine_type; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: wine_type; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE wine_type (
@@ -151,7 +151,7 @@ CREATE TABLE wine_type (
 
 
 --
--- Name: wine_variety; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: wine_variety; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE wine_variety (
@@ -162,7 +162,7 @@ CREATE TABLE wine_variety (
 
 
 --
--- Name: winery; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: winery; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE winery (
@@ -177,225 +177,225 @@ CREATE TABLE winery (
 --
 
 COPY countries (country_id, country) FROM stdin;
-1	Afghanistan                   
-2	Albania                       
-3	Algeria                       
-4	American Samoa                
-5	Andorra                       
-6	Angola                        
-7	Anguilla                      
-8	Antigua & Barbuda             
-9	Argentina                     
-10	Armenia                       
-11	Aruba                         
-12	Australia                     
-13	Austria                       
-14	Azerbaijan                    
-15	Bahamas                       
-16	Bahrain                       
-17	Bangladesh                    
-18	Barbados                      
-19	Belarus                       
-20	Belgium                       
-21	Belize                        
-22	Benin                         
-23	Bermuda                       
-24	Bhutan                        
-25	Bolivia                       
-26	Bosnia-Herzegovina            
-27	Botswana                      
-28	Brazil                        
-29	British Virgin Is.            
-30	Brunei                        
-31	Bulgaria                      
-32	Burkina Faso                  
-33	Burundi                       
-34	Cambodia                      
-35	Cameroon                      
-36	Canada                        
-37	Canary Is.                    
-38	Cape Verde                    
-39	Central Africa                
-40	Chad                          
-41	Chile                         
-42	China                         
-43	Cocos I.                      
-44	Colombia                      
-45	Congo (Republic of the)       
-46	Corsica                       
-47	Costa Rica                    
-48	Cote d'Ivoire                 
-49	Crete                         
-50	Croatia                       
-51	Cuba                          
-52	Cyprus                        
-53	Czech Republic                
-54	Dem. Rep. of Congo            
-55	Denmark                       
-56	Djibouti                      
-57	Dominica                      
-58	Dominican Republic            
-59	DPR of Korea                  
-60	Easter I.                     
-61	Ecuador                       
-62	Egypt                         
-63	El Salvador                   
-64	England                       
-65	Equatorial Guinea             
-66	Eritrea                       
-67	Estonia                       
-68	Ethiopia                      
-69	Fed. Rep. of Germany          
-70	Fiji                          
-71	Finland                       
-72	France                        
-73	French Guiana                 
-74	French Polynesia              
-75	Gabon                         
-76	Galapagos Is.                 
-77	Georgia                       
-78	Ghana                         
-79	Gibraltar                     
-80	Greece                        
-81	Greenland                     
-82	Grenada                       
-83	Guadeloupe                    
-84	Guam                          
-85	Guatemala                     
-86	Guernsey                      
-87	Guinea                        
-88	Guinea-Bissau                 
-89	Guyana                        
-90	Haiti                         
-91	Honduras                      
-92	Hong Kong                     
-93	Hungary                       
-94	Iceland                       
-95	India                         
-96	Indonesia                     
-97	Iran                          
-98	Iraq                          
-99	Ireland                       
-100	Isle of Man                   
-101	Israel                        
-102	Italy                         
-103	Jamaica                       
-104	Japan                         
-105	Jersey                        
-106	Jordan                        
-107	Kazakhstan                    
-108	Kenya                         
-109	Kuwait                        
-110	Kyrgyzstan                    
-111	Laos                          
-112	Latvia                        
-113	Lebanon                       
-114	Lesotho                       
-115	Liberia                       
-116	Libya                         
-117	Liechtenstein                 
-118	Lithuania                     
-119	Luxembourg                    
-120	Macao                         
-121	Macedonia                     
-122	Madagascar                    
-123	Malawi                        
-124	Malaysia                      
-125	Maldives                      
-126	Mali                          
-127	Malta                         
-128	Mauritania                    
-129	Mauritius                     
-130	Mexico                        
-131	Micronesia                    
-132	Moldovia                      
-133	Monaco                        
-134	Mongolia                      
-135	Montserrat                    
-136	Morocco                       
-137	Mozambique                    
-138	Myanmar                       
-139	Namibia                       
-140	Nauru                         
-141	Nepal                         
-142	Netherlands                   
-143	New Caledonia                 
-144	New Zealand                   
-145	Nicaragua                     
-146	Niger                         
-147	Nigeria                       
-148	Northern Ireland              
-149	Norway                        
-150	Oman                          
-151	Pakistan                      
-152	Panama                        
-153	Papua New Guinea              
-154	Paraguay                      
-155	Peru                          
-156	Philippines                   
-157	Poland                        
-158	Portugal                      
-159	Puerto Rico                   
-160	Qatar                         
-161	Republic of Korea             
-162	Revillagigedo                 
-163	Romania                       
-164	Russia                        
-165	Rwanda                        
-166	Samoa                         
-167	San Marino                    
-168	Sardinia                      
-169	Saudi Arabia                  
-170	Scotland                      
-171	Senegal                       
-172	Serbia and Montenegro         
-173	Seychelles                    
-174	Sierra Leone                  
-175	Singapore                     
-176	Slovak Republic               
-177	Slovenia                      
-178	Solomon Is.                   
-179	Somalia                       
-180	South Africa                  
-181	Spain                         
-182	Sri Lanka                     
-183	stine                         
-184	St. Kitts & Nevis             
-185	St. Lucia                     
-186	St. Vincent                   
-187	Sudan                         
-188	Suriname                      
-189	Swaziland                     
-190	Sweden                        
-191	Switzerland                   
-192	Syria                         
-193	Taiwan                        
-194	Tajikistan                    
-195	Tanzania                      
-196	Thailand                      
-197	The Gambia                    
-198	Togo                          
-199	Tonga                         
-200	Trinidad & Tobago             
-201	Tunisia                       
-202	Turkey                        
-203	Turkmenistan                  
-204	Tuvalu                        
-205	Uganda                        
-206	Ukraine                       
-207	United Arab Emirates          
-208	United States of America      
-209	Uruguay                       
-210	Uzbekistan                    
-211	Vanuatu                       
-212	Vatican                       
-213	Venezuela                     
-214	Vietnam                       
-215	Virgin Is.                    
-216	Wales                         
-217	Yemen                         
-218	Zambia                        
-219	Zimbabwe                      
+1	Afghanistan
+2	Albania
+3	Algeria
+4	American Samoa
+5	Andorra
+6	Angola
+7	Anguilla
+8	Antigua & Barbuda
+9	Argentina
+10	Armenia
+11	Aruba
+12	Australia
+13	Austria
+14	Azerbaijan
+15	Bahamas
+16	Bahrain
+17	Bangladesh
+18	Barbados
+19	Belarus
+20	Belgium
+21	Belize
+22	Benin
+23	Bermuda
+24	Bhutan
+25	Bolivia
+26	Bosnia-Herzegovina
+27	Botswana
+28	Brazil
+29	British Virgin Is.
+30	Brunei
+31	Bulgaria
+32	Burkina Faso
+33	Burundi
+34	Cambodia
+35	Cameroon
+36	Canada
+37	Canary Is.
+38	Cape Verde
+39	Central Africa
+40	Chad
+41	Chile
+42	China
+43	Cocos I.
+44	Colombia
+45	Congo (Republic of the)
+46	Corsica
+47	Costa Rica
+48	Cote d'Ivoire
+49	Crete
+50	Croatia
+51	Cuba
+52	Cyprus
+53	Czech Republic
+54	Dem. Rep. of Congo
+55	Denmark
+56	Djibouti
+57	Dominica
+58	Dominican Republic
+59	DPR of Korea
+60	Easter I.
+61	Ecuador
+62	Egypt
+63	El Salvador
+64	England
+65	Equatorial Guinea
+66	Eritrea
+67	Estonia
+68	Ethiopia
+69	Fed. Rep. of Germany
+70	Fiji
+71	Finland
+72	France
+73	French Guiana
+74	French Polynesia
+75	Gabon
+76	Galapagos Is.
+77	Georgia
+78	Ghana
+79	Gibraltar
+80	Greece
+81	Greenland
+82	Grenada
+83	Guadeloupe
+84	Guam
+85	Guatemala
+86	Guernsey
+87	Guinea
+88	Guinea-Bissau
+89	Guyana
+90	Haiti
+91	Honduras
+92	Hong Kong
+93	Hungary
+94	Iceland
+95	India
+96	Indonesia
+97	Iran
+98	Iraq
+99	Ireland
+100	Isle of Man
+101	Israel
+102	Italy
+103	Jamaica
+104	Japan
+105	Jersey
+106	Jordan
+107	Kazakhstan
+108	Kenya
+109	Kuwait
+110	Kyrgyzstan
+111	Laos
+112	Latvia
+113	Lebanon
+114	Lesotho
+115	Liberia
+116	Libya
+117	Liechtenstein
+118	Lithuania
+119	Luxembourg
+120	Macao
+121	Macedonia
+122	Madagascar
+123	Malawi
+124	Malaysia
+125	Maldives
+126	Mali
+127	Malta
+128	Mauritania
+129	Mauritius
+130	Mexico
+131	Micronesia
+132	Moldovia
+133	Monaco
+134	Mongolia
+135	Montserrat
+136	Morocco
+137	Mozambique
+138	Myanmar
+139	Namibia
+140	Nauru
+141	Nepal
+142	Netherlands
+143	New Caledonia
+144	New Zealand
+145	Nicaragua
+146	Niger
+147	Nigeria
+148	Northern Ireland
+149	Norway
+150	Oman
+151	Pakistan
+152	Panama
+153	Papua New Guinea
+154	Paraguay
+155	Peru
+156	Philippines
+157	Poland
+158	Portugal
+159	Puerto Rico
+160	Qatar
+161	Republic of Korea
+162	Revillagigedo
+163	Romania
+164	Russia
+165	Rwanda
+166	Samoa
+167	San Marino
+168	Sardinia
+169	Saudi Arabia
+170	Scotland
+171	Senegal
+172	Serbia and Montenegro
+173	Seychelles
+174	Sierra Leone
+175	Singapore
+176	Slovak Republic
+177	Slovenia
+178	Solomon Is.
+179	Somalia
+180	South Africa
+181	Spain
+182	Sri Lanka
+183	stine
+184	St. Kitts & Nevis
+185	St. Lucia
+186	St. Vincent
+187	Sudan
+188	Suriname
+189	Swaziland
+190	Sweden
+191	Switzerland
+192	Syria
+193	Taiwan
+194	Tajikistan
+195	Tanzania
+196	Thailand
+197	The Gambia
+198	Togo
+199	Tonga
+200	Trinidad & Tobago
+201	Tunisia
+202	Turkey
+203	Turkmenistan
+204	Tuvalu
+205	Uganda
+206	Ukraine
+207	United Arab Emirates
+208	United States of America
+209	Uruguay
+210	Uzbekistan
+211	Vanuatu
+212	Vatican
+213	Venezuela
+214	Vietnam
+215	Virgin Is.
+216	Wales
+217	Yemen
+218	Zambia
+219	Zimbabwe
 \.
 
 
@@ -12211,13 +12211,13 @@ COPY region (region_id, region_name) FROM stdin;
 --
 
 COPY titles (title_id, title) FROM stdin;
-1	Mr        
-2	Mrs       
-3	Miss      
-4	Ms        
-5	Dr        
-6	Prof      
-7	Rev       
+1	Mr
+2	Mrs
+3	Miss
+4	Ms
+5	Dr
+6	Prof
+7	Rev
 \.
 
 
@@ -15169,7 +15169,7 @@ COPY winery (winery_id, winery_name, region_id) FROM stdin;
 
 
 --
--- Name: countries_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: countries_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY countries
@@ -15177,7 +15177,7 @@ ALTER TABLE ONLY countries
 
 
 --
--- Name: customer_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: customer_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY customer
@@ -15185,7 +15185,7 @@ ALTER TABLE ONLY customer
 
 
 --
--- Name: grape_variety_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: grape_variety_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY grape_variety
@@ -15193,7 +15193,7 @@ ALTER TABLE ONLY grape_variety
 
 
 --
--- Name: inventory_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: inventory_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY inventory
@@ -15201,7 +15201,7 @@ ALTER TABLE ONLY inventory
 
 
 --
--- Name: items_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: items_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY items
@@ -15209,7 +15209,7 @@ ALTER TABLE ONLY items
 
 
 --
--- Name: orders_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: orders_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY orders
@@ -15217,7 +15217,7 @@ ALTER TABLE ONLY orders
 
 
 --
--- Name: region_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: region_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY region
@@ -15225,7 +15225,7 @@ ALTER TABLE ONLY region
 
 
 --
--- Name: titles_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: titles_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY titles
@@ -15233,7 +15233,7 @@ ALTER TABLE ONLY titles
 
 
 --
--- Name: users_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: users_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY users
@@ -15241,7 +15241,7 @@ ALTER TABLE ONLY users
 
 
 --
--- Name: wine_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: wine_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY wine
@@ -15249,7 +15249,7 @@ ALTER TABLE ONLY wine
 
 
 --
--- Name: wine_type_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: wine_type_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY wine_type
@@ -15257,7 +15257,7 @@ ALTER TABLE ONLY wine_type
 
 
 --
--- Name: wine_variety_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: wine_variety_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY wine_variety
@@ -15265,7 +15265,7 @@ ALTER TABLE ONLY wine_variety
 
 
 --
--- Name: winery_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: winery_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY winery

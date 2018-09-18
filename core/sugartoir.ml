@@ -473,9 +473,9 @@ struct
                                `Table (r, w, n)))))
 
   let lens_handle (table, sort) =
-      bind table 
-        (fun table -> 
-            lift (`Special (`Lens (table, sort)), `Lens (sort))) 
+      bind table
+        (fun table ->
+            lift (`Special (`Lens (table, sort)), `Lens (sort)))
 
   let lens_drop_handle (lens, drop, key, default, sort) =
       bind lens
@@ -484,27 +484,27 @@ struct
             (fun default ->
                lift (`Special (`LensDrop (lens, drop, key, default, sort)), `Lens (sort))))
 
-  let lens_select_handle (lens, pred, sort) = 
+  let lens_select_handle (lens, pred, sort) =
       bind lens
         (fun lens ->
            lift (`Special (`LensSelect (lens, pred, sort)), `Lens (sort)))
 
   let lens_join_handle (lens1, lens2, on, left, right, sort) =
-      bind lens1 
+      bind lens1
         (fun lens1 ->
-          bind lens2 
+          bind lens2
           (fun lens2 ->
             lift (`Special (`LensJoin (lens1, lens2, on, left, right, sort)), `Lens (sort))))
 
   let lens_get (lens, rtype) =
-      bind lens 
+      bind lens
         (fun lens ->
             lift (`Special (`LensGet (lens, rtype)), Types.make_list_type rtype))
 
   let lens_put (lens, data, rtype) =
-      bind lens 
+      bind lens
         (fun lens ->
-            bind data 
+            bind data
                 (fun data ->
                         lift (`Special (`LensPut (lens, data, rtype)), Types.make_list_type rtype)))
 
@@ -914,8 +914,8 @@ struct
                 I.database
                   (ev (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos))
           | `LensLit (table, Some t) ->
-              let table = ev table in 
-                I.lens_handle (table, t) 
+              let table = ev table in
+                I.lens_handle (table, t)
           | `LensDropLit (lens, drop, key, default, Some t) ->
               let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
@@ -924,7 +924,7 @@ struct
           | `LensSelectLit (lens, pred, Some t) ->
               let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
-              let pred = LensQueryHelpers.lens_phrase_of_phrase pred in 
+              let pred = LensQueryHelpers.lens_phrase_of_phrase pred in
                 I.lens_select_handle (lens, pred, t)
           | `LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let _ = LensHelpers.ensure_lenses_enabled () in

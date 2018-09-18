@@ -1,5 +1,5 @@
 --
--- Name: contacts; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace: 
+-- Name: contacts; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace:
 --
 
 CREATE TABLE contacts (
@@ -9,7 +9,7 @@ CREATE TABLE contacts (
 );
 
 --
--- Name: departments; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace: 
+-- Name: departments; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace:
 --
 
 CREATE TABLE departments (
@@ -17,7 +17,7 @@ CREATE TABLE departments (
 );
 
 --
--- Name: employees; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace: 
+-- Name: employees; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace:
 --
 
 CREATE TABLE employees (
@@ -27,7 +27,7 @@ CREATE TABLE employees (
 );
 
 --
--- Name: keytasks; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace: 
+-- Name: keytasks; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace:
 --
 
 CREATE TABLE keytasks (
@@ -35,7 +35,7 @@ CREATE TABLE keytasks (
 );
 
 --
--- Name: tasks; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace: 
+-- Name: tasks; Type: TABLE; Schema: public; Owner: dbwiki; Tablespace:
 --
 
 CREATE TABLE tasks (

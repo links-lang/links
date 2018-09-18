@@ -47,7 +47,7 @@ fun waitForClient(s, orderedProducts, removedProducts) client
 	  nu c.({shipper(c)} |
 	        c[s].c(addressFull).c(s).
 	        s[summariseOrder(card, addressFull, orderedProducts, removedProducts)].
-	        c().s[]) 
+	        c().s[])
 	 } |>
 }
 
@@ -139,7 +139,7 @@ sig main : () ~> ()
 fun main() client
 {
 	var order = <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
-	
+
 	appendChildren(stringToXml(order!!0), getNodeById("items"));
 	appendChildren(stringToXml(order!!1), getNodeById("removed"));
 	appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
@@ -153,7 +153,7 @@ page
 	<body bgcolor="#E6E6FA">
 	<form l:onsubmit="{main()}">
 	<h3>Finished example from "Linear type theory for asynchronous session types":</h3>
-	<button type="submit">Start communication</button>	
+	<button type="submit">Start communication</button>
 	</form>
 	<p><b>Products ordered:</b></p>
 	<p id="items"></p>

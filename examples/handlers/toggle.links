@@ -66,7 +66,7 @@ fun mainPage(_) {
       <body>
         <form l:onsubmit="{toggleButton()}">
           <input type="submit" id="on" value="On" />
-          <input type="submit" id="off" value="Off" disabled="disabled" />          
+          <input type="submit" id="off" value="Off" disabled="disabled" />
           <input type="hidden" id="state" value="false" />
         </form>
       </body>
