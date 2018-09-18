@@ -18,7 +18,7 @@ DIRS=("core" "bin" "tests" "examples")
 ERRORS=0
 
 for dir in ${DIRS[@]}; do
-    for file in $(find "$dir"  -type f -exec egrep -l " +$" {} \;); do
+    for file in $(find "$dir"  -type f -not -name "*.pdf" -exec egrep -l " +$" {} \;); do
         echo -n "$file"
         if [[ $STRIP -eq 1 ]]; then
             echo -n "..."
