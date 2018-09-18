@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# Checks whether the current source tree can be rebased on top of the
+# current master branch.
+#
+
+# Name of the "authoritative master" branch.
+ORIGIN="origin"
+MASTER="master"
+
+CUR_BRANCH=$(git branch | grep \* | cut -d ' ' -f2)
+TEMP_BRANCH=$(hexdump -n 16 -e '4/4 "%08X" 1 "\n"' /dev/random)
+
+ERROR=0
+
+git fetch
+git checkout -b $TEMP_BRANCH -t "$ORIGIN/$MASTER"
+git rebase "$ORIGIN/$MASTER"
+if [[ $? -ne 0 ]]; then
+    git rebase --abort
+    echo "Automatic rebase of $CUR_BRANCH on top of $ORIGIN/$MASTER FAILED."
+    ERROR=1
+fi
+git checkout $CUR_BRANCH
+git branch -D $TEMP_BRANCH
+
+exit $ERROR

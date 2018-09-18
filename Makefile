@@ -5,7 +5,7 @@ BUILD_DIR:=$(ROOT)/_build
 BUILD=dune build
 FLAGS=--build-dir=$(BUILD_DIR) --profile=development
 
-.PHONY: build-dev-nodb build-dev nc native clean tests unit install uninstall clean
+.PHONY: build-dev-nodb build-dev clean install nc native rule-check tests uninstall
 .DEFAULT_GOAL: nc
 
 nc: build-dev-all create-startup-script
@@ -40,13 +40,14 @@ uninstall:
 tests: links
 	@OCAMLRUNPARAM="" ./run-tests
 
-unit: 
-	dune build -p links-postgresql,links,links-unit @install
-
 clean:
 	dune clean
 	rm -rf *.install
 	rm -rf links linx
+
+rule-check: tools/rule-check
+	@echo "Applying rule check"
+	@tools/rule-check
 
 REPO=../opam-repository
 PACKAGES=$(REPO)/packages
