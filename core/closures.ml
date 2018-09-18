@@ -426,7 +426,7 @@ struct
               | [], [] -> `Variable x, x_type
               | _ ->
                 let tyargs = List.map Types.type_arg_of_quantifier tyvars in
-                let (remaining_type, instantiation_maps) = Instantiate.type_arguments_to_instantiation_maps false x_type tyargs in
+                let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false x_type tyargs in
                 let overall_type = Instantiate.datatype instantiation_maps remaining_type in
                 if List.mem_assoc x parents then
                   `Closure (x, tyargs,`Variable parent_env), overall_type

@@ -14,6 +14,9 @@ type inst_type_env = meta_type_var IntMap.t
 type inst_row_env = meta_row_var IntMap.t
 type inst_env = inst_type_env * inst_row_env
 
+(* The type of maps given to the actual instantiation functions *)
+type instantiation_maps = (datatype IntMap.t * row IntMap.t * field_spec IntMap.t)
+
 exception ArityMismatch
 
 (* TODO: rationalise instantiation
@@ -22,7 +25,7 @@ exception ArityMismatch
      - is instantiation for first-class polymorphism correct?
 *)
 
-let instantiate_datatype : (datatype IntMap.t * row IntMap.t * field_spec IntMap.t) -> datatype -> datatype =
+let instantiate_datatype : instantiation_maps -> datatype -> datatype =
   fun (tenv, renv, penv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
@@ -298,16 +301,17 @@ let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
-let type_arguments_to_instantiation_maps :
-      bool -> Types.datatype -> Types.type_arg list -> (datatype * (datatype IntMap.t * row IntMap.t * field_spec IntMap.t)) =
+let instantiation_maps_of_type_arguments :
+      bool -> Types.datatype -> Types.type_arg list -> (datatype * instantiation_maps) =
   fun must_instantiate_all_quantifiers pt tyargs ->
     (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
     let vars, t = TypeUtils.split_quantified_type pt in
     let tyargs_length = List.length tyargs in
     let vars_length = List.length vars in
-    let arities_okay = if must_instantiate_all_quantifiers
-      then tyargs_length = vars_length
-      else tyargs_length <= vars_length in
+    let arities_okay =
+      if must_instantiate_all_quantifiers
+        then tyargs_length = vars_length
+        else tyargs_length <= vars_length in
 
     if (not arities_okay) then
         (Debug.print (Printf.sprintf "# Type variables (total %d)" (List.length vars));
@@ -339,14 +343,14 @@ let type_arguments_to_instantiation_maps :
                         mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs))
         vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
     in
-    if remaining_quantifiers = [] then
-      t, (tenv, renv, penv)
-    else
-      `ForAll (Types.box_quantifiers remaining_quantifiers, t),  (tenv, renv, penv)
+    match remaining_quantifiers with
+      | [] -> t, (tenv, renv, penv)
+      | _ -> `ForAll (Types.box_quantifiers remaining_quantifiers, t),  (tenv, renv, penv)
+
 
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun pt tyargs ->
-  let (t, instantiation_maps) = type_arguments_to_instantiation_maps true pt tyargs in
+  let (t, instantiation_maps) = instantiation_maps_of_type_arguments true pt tyargs in
   instantiate_datatype instantiation_maps t
 
 (*
