@@ -87,7 +87,7 @@ fun minimum(l) {
     fun minimumHelper(l, currentMinimum) {
         switch (l) {
             case [] -> currentMinimum
-            case x::xs -> if (x < currentMinimum) minimumHelper(xs, x) else minimumHelper(xs, currentMinimum) 
+            case x::xs -> if (x < currentMinimum) minimumHelper(xs, x) else minimumHelper(xs, currentMinimum)
         }
     }
     minimumHelper(tl(l), hd(l))
@@ -175,7 +175,7 @@ fun intMapUpdateWithKey(f, i, im) {
                 }
         }
     }
-    
+
     h(f, i, im, [])
 }
 
@@ -192,14 +192,14 @@ fun intMapInsert(i, v, im) {
                 else h(i, v, xs, t ++ [x])
         }
     }
-    
+
     h(i, v, im, [])
 }
 
 fun intMapFilter(p, im) {
     switch (im) {
         case [] -> []
-        case x::xs -> if (p(x.2)) x::intMapFilter(p, xs) else intMapFilter(p, xs) 
+        case x::xs -> if (p(x.2)) x::intMapFilter(p, xs) else intMapFilter(p, xs)
     }
 }
 
@@ -266,13 +266,13 @@ fun main() {
     var initializeProcId = spawnClient {
         # LIST STUFF
         var lsNil = [];
-        
+
         #
         # CONSTANTS
         #
         # basic
         var gameName = "Links Pillman";
-        
+
         # math
         var pi = 3.14159265359;
 
@@ -315,7 +315,7 @@ fun main() {
         # planets
         var ghostPlanet                = (x = gameAreaCenterX   , y = gameAreaCenterY   , r = bigR   );
 
-        var innerLeftGhostPlanet       = (x = ghostPlanet.x -. 72.0, y = ghostPlanet.y -. 8.0, r = mediumR); 
+        var innerLeftGhostPlanet       = (x = ghostPlanet.x -. 72.0, y = ghostPlanet.y -. 8.0, r = mediumR);
         var innerRightGhostPlanet      = (x = ghostPlanet.x +. 72.0, y = ghostPlanet.y -. 8.0, r = mediumR);
         var leftGhostPlanet            = (x = innerLeftGhostPlanet.x -. 56.0, y = innerLeftGhostPlanet.y +. 28.0 , r = mediumR);
         var rightGhostPlanet           = (x = innerRightGhostPlanet.x +. 56.0, y = innerRightGhostPlanet.y +. 28.0, r = mediumR);
@@ -332,11 +332,11 @@ fun main() {
 
         var topPlanet                  = (x = overGhostPlanet.x , y = overGhostPlanet.y -. 64.0 , r = smallR );
 
-        var innerLeftTopPlanet         = (x = topPlanet.x -. 56.0, y = topPlanet.y       , r = mediumR); 
+        var innerLeftTopPlanet         = (x = topPlanet.x -. 56.0, y = topPlanet.y       , r = mediumR);
         var innerRightTopPlanet        = (x = topPlanet.x +. 56.0, y = topPlanet.y       , r = mediumR);
         var leftTopPlanet              = (x = innerLeftTopPlanet.x -. 64.0, y = innerLeftTopPlanet.y +. 4.0, r = mediumR);
         var rightTopPlanet             = (x = innerRightTopPlanet.x +. 64.0, y = innerRightTopPlanet.y +. 4.0, r = mediumR);
-        
+
 
         var leftPortal                 = (x = leftGhostPlanet.x -. 48.0 , y = leftGhostPlanet.y , r = 2.0);
         var rightPortal                = (x = rightGhostPlanet.x +. 48.0, y = rightGhostPlanet.y, r = 2.0);
@@ -357,7 +357,7 @@ fun main() {
         var leftBottomPlanet           = (x = innerLeftBottomPlanet.x -. 64.0, y = innerLeftBottomPlanet.y, r = smallR );
         var rightBottomPlanet          = (x = innerRightBottomPlanet.x +. 64.0, y = innerRightBottomPlanet.y, r = smallR );
 
-        
+
         var planets = [
             innerLeftTopPlanet        ,
             innerRightTopPlanet       ,
@@ -461,14 +461,14 @@ fun main() {
                     else pillLength(tl(l), n)
                 }
             }
-        
+
             if (empty(l)) n
             else {
                 var p = hd(l);
                 countPills(tl(l), n + pillLength(p.2, 0))
             }
         }
-        
+
         var pillCount = countPills(initialPills, 0);
 
         # ghosts
@@ -554,7 +554,7 @@ fun main() {
                     jsLineWidth(ctx, 1.0);
                     jsStrokeStyle(ctx, pillmanColor);
                     jsBeginPath(ctx);
-                    
+
                     jsMoveTo(ctx, x, y -. 3.0);
                     jsLineTo(ctx, x, y -. 5.0);
                     jsMoveTo(ctx, x, y +. 3.0);
@@ -563,7 +563,7 @@ fun main() {
                     jsLineTo(ctx, x -. 5.0, y);
                     jsMoveTo(ctx, x +. 3.0, y);
                     jsLineTo(ctx, x +. 5.0, y);
-                    
+
                     jsMoveTo(ctx, x -. 2.0, y -. 2.0);
                     jsLineTo(ctx, x -. 4.0, y -. 4.0);
                     jsMoveTo(ctx, x +. 2.0, y +. 2.0);
@@ -572,7 +572,7 @@ fun main() {
                     jsLineTo(ctx, x -. 4.0, y +. 4.0);
                     jsMoveTo(ctx, x +. 2.0, y -. 2.0);
                     jsLineTo(ctx, x +. 4.0, y -. 4.0);
-                    
+
                     jsClosePath(ctx);
                     jsStroke(ctx);
                 } else { # draw the animations for eating or being eaten
@@ -583,7 +583,7 @@ fun main() {
                     var angle =
                         if (pillman.dir == 1.0) -.pillman.angle -. (piFraction +. 0.1) *. pi
                         else -.pillman.angle +. (1.1 -. piFraction) *. pi;
-                    
+
                     var mouthOpen = switch (pillman.state) {
                         case Normal ->
                             piFraction *. pi *. (intToFloat(timeout + 1) /. intToFloat(totalTimeout))
@@ -591,7 +591,7 @@ fun main() {
                             piFraction *. pi *. (intToFloat(totalTimeout - timeout + 1) /. intToFloat(totalTimeout))
                         case _ -> 0.0
                     };
-                    
+
                     jsSetFillColor(ctx, pillmanColor);
                     jsBeginPath(ctx);
 
@@ -610,12 +610,12 @@ fun main() {
                     else {
                         var pillmanRR = (pillman.planet.r +. pillmanR +. margin);
                         var tailLength = 0.125 *. (bigR +. pillmanR +. margin) /. pillmanRR;
-                        
+
                         jsSetFillColor(ctx, pupilColor);
                         jsFillCircle(ctx, pillman.planet.x +. (pillmanRR -. 2.0) *. sin(pillman.angle -. pillman.dir *. tailLength),
                                           pillman.planet.y +. (pillmanRR -. 2.0) *. cos(pillman.angle -. pillman.dir *. tailLength),
                                           2.0);
-                                          
+
                         jsSetFillColor(ctx, eyeColor);
                         jsFillCircle(ctx, pillman.planet.x +. (pillmanRR -. 2.0) *. sin(pillman.angle -. pillman.dir *. tailLength),
                                           pillman.planet.y +. (pillmanRR -. 2.0) *. cos(pillman.angle -. pillman.dir *. tailLength),
@@ -714,15 +714,15 @@ fun main() {
             }
             else {
                 jsFillText(ctx, "Lives: " ^^ intToString(gameState.lives), 10.0, 70.0);
-            
-        
+
+
                 lsMapIgnore(fun (x) {
                     var x = intToFloat(x);
                     var pos = (20.0 +. x *. 2.5 *. pillmanR, 90.0);
                     drawPillman((pillmanDescription with position = pos, planet = (x = pos.1, y = pos.2, r = -.10.0)), (gameState with state = On))
                 }, intRange(0, gameState.lives - 1))
             };
-        
+
             # draw the game area
             var drawOffset = (x = 108.0, y = 24.0);
             jsSave(ctx);
@@ -781,7 +781,7 @@ fun main() {
 
             if (gameState.state == Over) { # don't draw the rest if game over
                 jsSetFillColor(ctx, gameOverColor);
-                jsFillText(ctx, "GAME     OVER", ghostPlanet.x -. 37.0, ghostPlanet.y +. 48.0); 
+                jsFillText(ctx, "GAME     OVER", ghostPlanet.x -. 37.0, ghostPlanet.y +. 48.0);
             }
             else {
                 # highlight the current planet
@@ -793,7 +793,7 @@ fun main() {
                 # draw Pillman
                 if (gameState.state == Ate) ()
                 else drawPillman(gameState.pillman, gameState);
-                    
+
                 # draw ghosts
                 if (gameState.state == Eaten || gameState.state == Eaten2) () # don't draw ghosts if eaten
                 else {
@@ -830,7 +830,7 @@ fun main() {
                         <br />
                         {stringToXml(imageName)}
                     </#>,
-                    downloadNode); 
+                    downloadNode);
                 jsSaveCanvas(getNodeById(mainCanvas), downloadNode, "image/png");
 
                 (gameState with state = On)
@@ -845,7 +845,7 @@ fun main() {
             var fpsInfo = (fpsInfo with frameCount = fpsInfo.frameCount + 1, dFps = dFps);
 
             jsFillText(ctx, "FPS: " ^^ strsub(floatToString(dFps), 0, 7), 10.0, 10.0);
-            
+
             var fpsInfo = if (fpsInfo.loFps > dFps) {
                 (fpsInfo with loFps = dFps, loFpsFrame = fpsInfo.frameCount - 1)
             }
@@ -856,7 +856,7 @@ fun main() {
             else fpsInfo;
 
             var fpsInfo = (fpsInfo with fpsAcc = fpsInfo.fpsAcc +. dFps);
-            
+
             var aFpsFrames = 100;
             var fpsInfo = if (fpsInfo.frameCount > aFpsFrames) {
                 (fpsInfo with avgFps = fpsInfo.fpsAcc /. intToFloat(aFpsFrames), fpsAcc = 0.0, frameCount = 0)
@@ -872,14 +872,14 @@ fun main() {
                 jsFillText(ctx, "loading data: " ^^ intToString(fpsInfo.frameCount) ^^ "/" ^^ intToString(aFpsFrames), 100.0, 10.0)
             else
                 jsFillText(ctx, "highest FPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 100.0, 10.0);
-            
+
             fpsInfo
         }
 
         fun swapBuffers(mainCanvas, dispCanvas) {
             var ctx = jsGetContext2D(getNodeById(dispCanvas));
             jsDrawImage(ctx, getNodeById(mainCanvas), 0.0, 0.0);
-            
+
             var _ = domSetStyleAttrFromRef(getNodeById(mainCanvas), "display", "block");
             var _ = domSetStyleAttrFromRef(getNodeById(dispCanvas), "display", "none");
             clear(ctx)
@@ -897,7 +897,7 @@ fun main() {
             var c = ((f.1 *. f.1) +. (f.2 *. f.2)) -. (circle.2 *. circle.2);
             var delta = (b *. b) -. (4.0 *. a *. c);
 
-            
+
             if (delta < 0.0) false
             else {
                 var delta = sqrt(delta);
@@ -946,7 +946,7 @@ fun main() {
         fun getCurrentSpeed(base, gameState) {
             base +. intToFloat(gameState.level) *. 0.00012
         }
-        
+
         fun resetGhost(ghost, gameState) {
             var ghost = if (ghost.state == Vulnerable) (ghost with speed = getCurrentSpeed(ghost.baseSpeed, gameState)) else ghost;
             (ghost with planet = ghostPlanet, state = Trapped, timeout = gameState.timeouts.trapped, state2 = Normal, timeout2 = 0) # should also reset the angle to starting position
@@ -954,12 +954,12 @@ fun main() {
 
         fun updateGhost(ghost, gameState) {
             var trappedGhostRR = (ghostPlanet.r /. 4.0 +. ghostR);
-            
+
             var ghostRR =
             if (ghost.state == Trapped) trappedGhostRR
             else if (ghost.state == Transition) ((ghost.planet.r /. intToFloat(ghost.timeout + 1)) +. ghostR +. margin)
             else (ghost.planet.r +. ghostR +. margin);
-        
+
             var ghost = (ghost with planet = if (ghost.planet == leftPortal) rightGhostPlanet else if (ghost.planet == rightPortal) leftGhostPlanet else ghost.planet);
             var ghost = (ghost with
                 angle = ghost.angle +. ghost.dir *. ghost.speed,
@@ -984,7 +984,7 @@ fun main() {
                 else if (ghost.state == Vulnerable)
                     (ghost with state = Normal, timeout = 0, speed = getCurrentSpeed(ghost.baseSpeed, gameState))
                 else if (ghost.state == Idle)
-                    (ghost with state = Normal, timeout = 0) 
+                    (ghost with state = Normal, timeout = 0)
                 else ghost;
             ghost
         }
@@ -1028,7 +1028,7 @@ fun main() {
                 if (empty(l)) (gameState, headPills)
                 else {
                     var pill = hd(l);
-                    
+
                     if (circleCircleCollision(((pill.1, pill.2), pillR), (gameState.pillman.position, pillmanR))) {
                         var gameState = switch (pill.3) {
                             case Regular ->
@@ -1054,7 +1054,7 @@ fun main() {
             if (empty(l)) gameState
             else {
                 var pillPlanet = hd(l);
-                
+
                 if (gameState.pillman.planet == pillPlanet.1) {
                     var (gameState, newPills) = getNewPills(pillPlanet.2, lsNil, gameState);
                     var t = [(gameState.pillman.planet, newPills)];
@@ -1074,7 +1074,7 @@ fun main() {
             fun ghostCollision(ghost) {
                 circleCircleCollision((gameState.pillman.position, pillmanR), (ghost.position, ghostR))
             }
-            
+
             fun ghostToInt(ghost) {
                 if (ghost.state == Vulnerable) 1 else 2
             }
@@ -1090,7 +1090,7 @@ fun main() {
             fun isEatState(ghost) {
                 ghost.state == Normal || ghost.state == Idle
             }
-            
+
             switch (gameState.state) {
                 case On ->
                     # ai updating functions:
@@ -1108,7 +1108,7 @@ fun main() {
                                     (ghost with planet = ghost.nextPlanet, angle = ghost.angle +. pi)
                                 } else ghost
                             };
-                            
+
                         if (ghost.planet == pillman.planet)
                             (ghost with dir = pillman.dir)
                         else ghost
@@ -1127,7 +1127,7 @@ fun main() {
                             } else ghost
                         }
                     }
-                    
+
                     fun updateRogerAI(ghost) {
                         var pillman = gameState.pillman;
                         var ghost =
@@ -1188,7 +1188,7 @@ fun main() {
                                 };
                                 ghost
                             }
-                            else if (ghost.state == Vulnerable) updateVulnerableGhostAI(ghost) 
+                            else if (ghost.state == Vulnerable) updateVulnerableGhostAI(ghost)
                             else if (ghost.state == Eyes) updateEyesGhostAI(ghost)
                             else ghost; # handle other states
 
@@ -1235,7 +1235,7 @@ fun main() {
                     var ghostScore =
                         200 * ghostToInt(gameState.roger) * ghostToInt(gameState.johnny) *
                             ghostToInt(gameState.greg) * ghostToInt(gameState.bill);
-                    
+
                     var gameState =
                         if (ghostCollision(gameState.roger))
                             if (gameState.roger.state == Vulnerable)
@@ -1296,7 +1296,7 @@ fun main() {
                 case NextLevel ->
                     if (gameState.timeout > 0) (gameState with timeout = gameState.timeout - 1)
                     else (gameState with state = NextLevel2, timeout = 0)
-                    
+
                 case NextLevel2 -> # animate
 
                     var gameState = (gameState with level = gameState.level + 1);
@@ -1347,7 +1347,7 @@ fun main() {
                 (gameState with pillman = (gameState.pillman with planet = newPlanet, angle = gameState.pillman.angle +. pi))
             } else gameState
         }
-        
+
         fun handleKey(k, gameState: Game) {
             # for some reason pattern matching doesn't work (always selects the first option), so I use if-else
             if (objectEq(k, KeyDown(restartKeyCode)))
@@ -1374,7 +1374,7 @@ fun main() {
         fun updateLogic(dt, gameState: Game, i) {
             if (dt > step) {
                 var gameState = mainGameLogic(gameState, i);
-                
+
                 updateLogic(dt -. step, gameState, [])
             } else (gameState, dt)
         }
@@ -1397,7 +1397,7 @@ fun main() {
                 if (gameStatePrim.metaState == Restart) # objectEq doesn't work here -- why?
                     ()
                 else if (floatEq(dtPrim, dt)) { # don't redraw if there were no logic updates
-                    mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i) 
+                    mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i)
                 } else {
                     mainLoop(if (gameStatePrim.metaState == Download) (gameStatePrim with metaState = Run) else gameStatePrim,#(gameStatePrim with state = On), # if state == Download, reset
                         dtPrim, now,
@@ -1414,9 +1414,9 @@ fun main() {
         }
         var updateProcId = spawn { updateState() };
 
-        
+
         fun onKeyDown(e) {
-            updateProcId ! (KeyDown(getCharCode(e)): Input); 
+            updateProcId ! (KeyDown(getCharCode(e)): Input);
         }
 
         fun onKeyUp(e) {
@@ -1425,7 +1425,7 @@ fun main() {
 
         fun initialize() {
             var _ = recv();
-            
+
             jsSetOnKeyDown(getNodeById(containerId), onKeyDown);
             jsSetOnEvent(getNodeById(containerId), "keyup", onKeyUp, true);
 

@@ -172,7 +172,7 @@ and is_negative_type_arg : TypeVarSet.t -> int -> type_arg -> bool =
       | `Type t -> is_negative bound_vars var t
       | `Row r -> is_negative_row bound_vars var r
       | `Presence _ -> false
-and is_negative_lens_sort : TypeVarSet.t -> int -> lens_sort -> bool = 
+and is_negative_lens_sort : TypeVarSet.t -> int -> lens_sort -> bool =
   fun bound_vars var sort ->
     let cols = LensSort.cols sort in
     List.exists (LensCol.typ ->- is_positive bound_vars var) cols
@@ -250,7 +250,7 @@ and is_positive_type_arg : TypeVarSet.t -> int -> type_arg -> bool =
       | `Row r -> is_positive_row bound_vars var r
       | `Presence f -> is_positive_presence bound_vars var f
 and is_positive_lens_sort : TypeVarSet.t -> int -> lens_sort -> bool =
-  fun bound_vars var sort -> 
+  fun bound_vars var sort ->
     let cols = LensSort.cols sort in
     List.exists (LensCol.typ ->- is_positive bound_vars var) cols
 

@@ -8,7 +8,7 @@ var albumsTable =
 	tablekeys [["album"]]
 	from db;
 
-var tracksTable = 
+var tracksTable =
 	table "tracks"
 	with (track: String, date: Int, rating: Int, album: String)
 	tablekeys [["track", "album"]]
@@ -24,11 +24,11 @@ var filteredLens = lensselect from droppedLens by quantity > 2;
 var tracks = lensget filteredLens;
 
 # filter out all tracks named "Trust" and change Lullaby's rating to 4.
-var newTracks = 
+var newTracks =
 	for (t <- tracks)
 	where (t.track <> "Trust")
 		if (t.track == "Lullaby") [(t with rating = 4)] else [t];
-var newTracks = 
+var newTracks =
 	for (t <- newTracks)
 		if (t.track == "Lovesong") [(t with album = "Disintegration", quantity = 7)] else [t];
 

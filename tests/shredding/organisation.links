@@ -41,32 +41,32 @@ fun dropTables() {
 }
 
 fun createTables () {
-  insert departments 
+  insert departments
   values (id, name)
-  [ (id = 1, name = "Product"), 
+  [ (id = 1, name = "Product"),
     (id = 2, name = "Quality"),
-    (id = 3, name = "Research"), 
+    (id = 3, name = "Research"),
     (id = 4, name = "Sales")];
-  insert employees 
+  insert employees
   values (id, dept, name, salary)
-  [ (id = 1, dept = "Product",  name = "Alex", salary =   20000), 
-    (id = 2, dept = "Product",  name = "Bert", salary =     900), 
-    (id = 3, dept = "Research", name = "Cora", salary =   50000), 
-    (id = 4, dept = "Research", name = "Drew", salary =   60000), 
+  [ (id = 1, dept = "Product",  name = "Alex", salary =   20000),
+    (id = 2, dept = "Product",  name = "Bert", salary =     900),
+    (id = 3, dept = "Research", name = "Cora", salary =   50000),
+    (id = 4, dept = "Research", name = "Drew", salary =   60000),
     (id = 5, dept = "Research", name = "Edna", salary = 2000000),
     (id = 6, dept = "Sales",    name = "Fred", salary =     700),
     (id = 7, dept = "Sales",    name = "Gina", salary = 100000)];
-  insert tasks 
+  insert tasks
   values (id, employee, task)
   [ (id = 1,  employee = "Alex", task = "build"),
     (id = 2,  employee = "Bert", task = "build"),
-    (id = 3,  employee = "Cora", task = "abstract"), 
+    (id = 3,  employee = "Cora", task = "abstract"),
     (id = 4,  employee = "Cora", task = "build"),
-    (id = 5,  employee = "Cora", task = "design"), 
-    (id = 6,  employee = "Drew", task = "abstract"), 
-    (id = 7,  employee = "Drew", task = "design"), 
-    (id = 8,  employee = "Edna", task = "abstract"), 
-    (id = 9,  employee = "Edna", task = "call"), 
+    (id = 5,  employee = "Cora", task = "design"),
+    (id = 6,  employee = "Drew", task = "abstract"),
+    (id = 7,  employee = "Drew", task = "design"),
+    (id = 8,  employee = "Edna", task = "abstract"),
+    (id = 9,  employee = "Edna", task = "call"),
     (id = 10, employee = "Edna", task = "design"),
     (id = 11, employee = "Fred", task = "call"),
     (id = 12, employee = "Gina", task = "call"),

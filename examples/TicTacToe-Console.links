@@ -29,10 +29,10 @@ fun x(gameState){
                 print("X won")
             else
                 o(newGameState)
-            
+
         }
         case Some(player) -> {
-           print("Already full") 
+           print("Already full")
         }
     }
 }
@@ -49,10 +49,10 @@ fun o(gameState){
                 print("O won")
             else
                 x(newGameState)
-                    
+
         }
         case Some(player) -> {
-           print("Already full") 
+           print("Already full")
         }
     }
 }
@@ -63,7 +63,7 @@ fun checkIfWon(player : Player, gameState){
     # very stupid. Couldn't understand how to loop through by rows and columns
     var zero = gameState !! 0;
     var one = gameState !! 1;
-    var two = gameState !! 2; 
+    var two = gameState !! 2;
     var three = gameState !! 3;
     var four = gameState !! 4;
     var five = gameState !! 5;
@@ -105,12 +105,12 @@ fun optionToString(xToString)(option){
     }
 }
 
-sig listToString : ([a], ((a) ~e~> String)) ~e~>  String 
+sig listToString : ([a], ((a) ~e~> String)) ~e~>  String
 fun listToString(list, xToString){
    "[" ^^ stringCat(intersperse(", ", map(xToString, list))) ^^ "]"
 }
 
-sig printState : ([Option(Player)]) ~> () 
+sig printState : ([Option(Player)]) ~> ()
 fun printState(state){
     print(listToString(state, optionToString(playerToString)))
 }

@@ -3,7 +3,7 @@
 --
 
 --
--- Name: factorials; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: factorials; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE factorials (

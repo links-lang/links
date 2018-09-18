@@ -39,10 +39,10 @@ let debug_time msg f =
     raw_result
   else f ();;
 
-let debug_time_out f (withtime : int -> unit) = 
+let debug_time_out f (withtime : int -> unit) =
   let start_time = Utility.time_milliseconds() in
   let raw_result = f () in
   let time = Utility.time_milliseconds() - start_time in
   let _ = withtime time in
   raw_result
-  
+

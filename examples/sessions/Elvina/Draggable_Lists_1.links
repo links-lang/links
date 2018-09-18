@@ -35,7 +35,7 @@ fun dragging(id, elem, s) {
 
 
 fun format(text) {
-    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; 
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1;
                border:1px solid #C5DEA1; cursor: move; margin: 0px;">
     {stringToXml(text)}</li>
 }
@@ -43,7 +43,7 @@ fun format(text) {
 sig manage : (DragSelect) {:[|MouseUp|MouseDown:DomNode|MouseOut:DomNode|]|_}~> ()
 fun manage(c) {
 	receive {
-	    case MouseUp         -> manage(select MouseUp c) 
+	    case MouseUp         -> manage(select MouseUp c)
 	    case MouseDown(elem) -> manage(send(elem, select MouseDown c))
             case MouseOut(elem)  -> manage(send(elem, select MouseOut c))
 	}
@@ -57,12 +57,12 @@ fun draggableList(id, items)
 
   var dragger = spawn { waiting(id, accept(accessPoint)) };
 
-  var manager = spawn { 
+  var manager = spawn {
     manage(request(accessPoint))
   };
 
 
-   <ul id="{id}" style="width: 200px; 
+   <ul id="{id}" style="width: 200px;
         list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{manager ! MouseUp}"
       l:onmouseuppage = "{manager ! MouseUp}"

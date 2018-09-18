@@ -31,9 +31,9 @@ fun cartProcess(content) client{
                     }
                 }, content)
         }
-        case Delete(id) -> {        
+        case Delete(id) -> {
             filter(fun((item = item, deleteAction = _, updateAction= _)){
-                
+
                 item.id <> id
             }, content)
         }
@@ -42,7 +42,7 @@ fun cartProcess(content) client{
 }
 
 
-sig deleteItem : (Int, Process( {hear : Cmd, wild:() |_} ))~> ()               
+sig deleteItem : (Int, Process( {hear : Cmd, wild:() |_} ))~> ()
 fun deleteItem(id, pId) client {
     pId ! Delete(id)
 }
@@ -69,9 +69,9 @@ fun getQuantityInput(id, prevQty) {
     if (not(isNegative(newQty))){
         print("Accepted");
         stringToInt(newQty)
-    } else{ 
+    } else{
         print("Not Accepted");
-        prevQty 
+        prevQty
     }
 }
 
@@ -108,7 +108,7 @@ fun getTotalPrice(items){
             case item::items -> loop(items, acc +. (item.item.price *. intToFloat(item.item.quantity)))
         }
     }
-    loop(items, 0.0) 
+    loop(items, 0.0)
 }
 
 sig itemsToXml : ([ActionableItem({ |_})]) ~> Xml
@@ -119,7 +119,7 @@ fun itemsToXml(items){
                 <div class="list-item width-list rounded-corners center">
 
                     <div class="item-left">
-                        <div class="item-name"> 
+                        <div class="item-name">
                             {stringToXml(item.name)}
                         </div>
                         <div class="under-name">
@@ -163,7 +163,7 @@ fun main_page(_) {
         }}
         .background{{
             width: 80%;
-            max-width: 1200px; 
+            max-width: 1200px;
             min-width: 300px;
             background-color: #f3f2f4;
             height: 100%;
@@ -203,7 +203,7 @@ fun main_page(_) {
             transform: translateY(-50%);
         }}
         .width-list{{
-           
+
             width: 80%;
         }}
         .margin-top{{
@@ -281,7 +281,7 @@ fun main_page(_) {
         }}
         .quantity{{
             width: 50%;
-            float: left;  
+            float: left;
         }}
         .input-field{{
             margin-bottom: 10px;

@@ -121,16 +121,16 @@ fun medium(pl, n){
 
 sig easy: (Player, Int) -> Int
 fun easy(pl, n){
-    1 
+    1
 }
 
 sig prepareGame: () ~%~> (Player, GameState)
 fun prepareGame(){
     var pl1 = stringToPlayer(getField("pl1"));
-    var pl2 = stringToPlayer(getField("pl2")); 
-    var check = stringToBool(getField("check")); 
-    var level = stringToLevel(getField("level")); 
-    var heap = stringToInt(getField("heap")); 
+    var pl2 = stringToPlayer(getField("pl2"));
+    var check = stringToBool(getField("check"));
+    var level = stringToLevel(getField("level"));
+    var heap = stringToInt(getField("heap"));
     var state = (player=(pl1, pl2), level=level, cheat=check, heap=heap);
     var moveHandler = switch(state.level){
         case Easy -> fun(game){moveHandler(game, easy)}
@@ -139,7 +139,7 @@ fun prepareGame(){
     };
     restartHandler(runState(moveHandler(game), state))
 }
- 
+
 sig gameProcess : () {Get-,Move-,Restart{_},Set-,hear:Cmd|_}~> (Player, GameState)
 fun gameProcess(){
     var (winner, st) = receive {
@@ -214,7 +214,7 @@ fun restartHandler(f){
         case Return(x) -> x
         case Restart(k) -> restart(self()); gameProcess()
     }
-  
+
 }
 
 sig setPlayer : (Player, Player) {Get: GameState, Set: (GameState) -> () |e}~> ()
@@ -236,7 +236,7 @@ fun setChecker(check){
 }
 
 sig parseNat: (String) ~> Option(Int)
-fun parseNat(n){ 
+fun parseNat(n){
     if (n =~ /^[0-9]+$/) {
         var m = stringToInt(n);
         if(m < 0){
@@ -339,8 +339,8 @@ fun renderView(view, pId){
         case Game(state) ->  domReplaceChildren(<#></#>, setup); domReplaceChildren(<#></#>, winner); removeWinnerGif(); domReplaceChildren(getGameXml(pId, state), gameview)
         case SetUp -> domReplaceChildren(getSetUpXml(pId), setup)
         case Winner(pl) -> {
-            domReplaceChildren(getWinnerXml(pId, pl), winner); 
-            domSetStyleAttrFromRef(getNodeById("game-head"), "display", "none"); 
+            domReplaceChildren(getWinnerXml(pId, pl), winner);
+            domSetStyleAttrFromRef(getNodeById("game-head"), "display", "none");
             domSetStyleAttrFromRef(getNodeById("restart-button"), "display", "none")
             #domReplaceChildren(stringToXml("Play Again"), getNodeById("restart-button"))
         }
@@ -353,20 +353,20 @@ fun updateView(n, rest, current){
     var step = {
         if(rest<=0){
             <#>
-                <div> 
+                <div>
                     <p class="steps centered-text bold font-10"> {stringToXml("End of Game.")}</p>
                 </div>
             </#>
-        } else{    
+        } else{
             switch(current){
                 case You -> {<#>
-                        <div> 
+                        <div>
                             <p class="steps centered-text font-10"> {stringToXml("You take "^^ intToString(n-rest)^^".")}</p>
                         </div>
                         <hr class="thin-grey width-90 center"/>
                     </#>}
                 case _ -> {<#>
-                        <div> 
+                        <div>
                             <p class="steps centered-text font-10"> {stringToXml(playerToString(current) ^^" takes "^^ intToString(n-rest)^^".")}</p>
                         </div>
                         <hr class="thin-grey width-90 center"/>
@@ -380,7 +380,7 @@ fun updateView(n, rest, current){
 sig getGameXml: (Process ({hear:Cmd |e}) , GameState) ~%~> Xml
 fun getGameXml(pId, gameState){
         <#>
-        
+
             <div class="field rounded-corners width-list center margin-10">
                 <div id="game-head" class="game-head center">
                     <div class="margin-10 width-90 center display-flex">
@@ -392,7 +392,7 @@ fun getGameXml(pId, gameState){
                     <hr class="thin-grey width-100 center"/>
                 </div>
                 <div class="game-view margin-10">
-                    <div class="game-left game-boxes"> 
+                    <div class="game-left game-boxes">
                         <div class="view-heading centered-text game-head-height"> Game Stats </div>
                         <p class="margin-left-25 sub-text font-10"> Players: {stringToXml(playerToString(gameState.player.1))} and {stringToXml(playerToString(gameState.player.2))}.</p>
                                                 <hr class="thin-grey width-90 center"/>
@@ -423,9 +423,9 @@ fun getSetUpXml(pId){
                 <p class="text"> Choose the players: </p>
                 <hr class="thin-grey width-100 center"/>
                 <div class="sub-text margin-hor-10 font-10"> You can play against Alice or Bob, or watch Alice and Bob play against each other.</div>
-                <div class="buttons center"> 
+                <div class="buttons center">
                     <button id="button-a" class="row-button rounded-corners margin-10 color-sec font-10 margin-all-4 selected-button" l:onclick="{
-                        setField(Alice, "pl1", playerToString); 
+                        setField(Alice, "pl1", playerToString);
                         setField(You, "pl2", playerToString);
                         buttonChosen("button-a", "buttons-player")}"
                         >Alice vs You</button>
@@ -435,7 +435,7 @@ fun getSetUpXml(pId){
                         buttonChosen("button-b", "buttons-player")}"
                         >You vs Bob</button>
                     <button id="button-c" class="row-button rounded-corners margin-10 color-sec font-10 margin-all-4" l:onclick="{
-                        setField(Alice, "pl1", playerToString); 
+                        setField(Alice, "pl1", playerToString);
                         setField(Bob, "pl2", playerToString);
                         buttonChosen("button-c", "buttons-player")}"
                         >Alice vs Bob</button>
@@ -449,12 +449,12 @@ fun getSetUpXml(pId){
                 <div class="display-left">
                     <div>
                         <ul class="sub-text-list bold"><li>Easy</li>
-                        <li>Medium</li> 
+                        <li>Medium</li>
                         <li>Hard</li> </ul>
                     </div>
                     <div>
                         <ul class="sub-text-list"> <li>Always takes one stick.</li>
-                        <li>Takes a random number of sticks.</li> 
+                        <li>Takes a random number of sticks.</li>
                         <li>Plays the perfect strategy.</li> </ul>
                     </div>
                     </div>
@@ -495,12 +495,12 @@ fun getSetUpXml(pId){
                 <p class="text">Please choose a heap size:</p>
                 <input class="input-field rounded-corners font-10 margin-all-4" id="start-number" value="8" type="text" />
             </div>
-                            
+
             <p class="error-message centered-text center font-10 margin-10" id="start-error-message"></p>
 
             <button class="rounded-corners block row-button center color-accent" l:onclick="{start(pId)}"> Start Game </button>
             </div>
-            
+
         </#>
 }
 
@@ -531,12 +531,12 @@ fun buttonChosen(nodeId, data){
     } else{
         var prevButton = getNodeById(prevId);
         domRemoveStyleClassFromRef(prevButton, "selected-button");
-        #domSetStyleAttrFromRef(prevButton, "background-color", "#a6d8cc");       
+        #domSetStyleAttrFromRef(prevButton, "background-color", "#a6d8cc");
         var node = getNodeById(nodeId);
         domAddStyleClassToRef(node, "selected-button");
-        domSetAttributeFromRef(getNodeById(data), "value", nodeId) 
+        domSetAttributeFromRef(getNodeById(data), "value", nodeId)
     }
-    
+
 }
 
 sig main_page : (_) ~> Page
@@ -780,16 +780,16 @@ fun main_page(_) {
     <div id="body">
         <div id="background" class="background-base background center">
             <div class="top-heading center">
-                 The Game of Nim 
+                 The Game of Nim
             </div>
             <hr class="thin-grey thin-grey-start width-90"/>
-            
+
             <div id="winner"></div>
             <div id="game">
-                <p class="width-list information center"> In the game of nim, two player take turns drawing sticks from a heap. 
-                For a correct move, a player would take one, two or three sticks from the heap. 
+                <p class="width-list information center"> In the game of nim, two player take turns drawing sticks from a heap.
+                For a correct move, a player would take one, two or three sticks from the heap.
                 The player who takes the last stick loses. </p>
-                <hr class="thin-grey width-90 center"/>                
+                <hr class="thin-grey width-90 center"/>
             </div>
             <div id="setUp">
                 {getSetUpXml(pId)}
