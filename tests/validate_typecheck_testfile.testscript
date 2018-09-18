@@ -7,8 +7,12 @@ missing=""
 
 while read file; do
     if ! grep  -q -E "^$file$" "$typecheck_tests_file"; then
-        echo "FAILURE: Links example file $file is not mentioned in $typecheck_tests_file"
-        missing+="$file "
+        # Only error if the file is tracked.
+        git ls-files --error-unmatch "$file" 2> /dev/null # Returns 1 when the file is untracked.
+        if [[ $? -ne 1 ]]; then
+            echo "FAILURE: Links example file $file is not mentioned in $typecheck_tests_file"
+            missing+="$file "
+        fi
     fi
 done <<< "$(find "$example_folder" -iname "*.links")"
 
