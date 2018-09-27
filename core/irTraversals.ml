@@ -226,11 +226,18 @@ struct
             let (args, _, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               `ApplyPure (f, args), deconstruct return_type ft, o
-        | `Closure (f, z) ->
+
+        | `Closure (f, tyargs, z) ->
             let (f, t, o) = o#var f in
+            let t =
+              match tyargs with
+                | [] -> t
+                | _ ->
+                  let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false t tyargs in
+                  Instantiate.datatype instantiation_maps remaining_type in
             let (z, _, o) = o#value z in
               (* TODO: check that closure environment types match expectations for f *)
-              `Closure (f, z), t, o
+              `Closure (f, tyargs, z), t, o
         | `Coerce (v, t) ->
             let v, _, o = o#value v in
             (* TODO: check that vt <: t *)
@@ -783,6 +790,9 @@ let ir_type_mod_visitor tyenv type_visitor =
             | `Coerce (var, datatype) ->
                let (datatype, _) = type_visitor#typ datatype in
                super#value (`Coerce (var, datatype))
+            | `Closure (var, tyargs, env) ->
+              let tyargs = List.map (fun targ -> fst (type_visitor#type_arg targ)) tyargs in
+              super#value (`Closure (var, tyargs, env))
             | other -> super#value other
 
           method! special = function
@@ -875,3 +885,26 @@ module ElimTypeAliases =
       p
 
   end
+
+
+(* Call Instantiate.datatype on all types occuring in a program *)
+module InstantiateTypes =
+  struct
+
+    let instantiate instantiation_maps =
+      object (o)
+        inherit Types.Transform.visitor
+
+        method! typ t =
+          match t with
+            | `Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
+            | _ -> (Instantiate.datatype instantiation_maps t, o)
+
+
+      end
+
+    let computation tyenv instantiation_maps c  =
+      let p, _, _ = (ir_type_mod_visitor tyenv (instantiate instantiation_maps))#computation c in
+      p
+
+end

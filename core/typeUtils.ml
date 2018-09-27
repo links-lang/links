@@ -219,6 +219,13 @@ let quantifiers t = match concrete_type t with
   | `ForAll (qs, _) -> Types.unbox_quantifiers qs
   | _ -> []
 
+
+(* Given a type, return its list of toplevel quantifiers and the remaining non-quantified type.
+   This merges adjacent ForAlls *)
+let split_quantified_type qt = match concrete_type qt with
+  | `ForAll (qtref, t) -> (Types.unbox_quantifiers qtref, t)
+  | t -> ([], t)
+
 let record_without t names =
   match concrete_type t with
     | `Record ((fields, row_var, dual) as row) ->

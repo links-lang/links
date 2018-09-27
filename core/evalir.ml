@@ -215,7 +215,7 @@ struct
           Value.box_list [Value.box_xml (Value.Node (tag, children))]
     | `ApplyPure (f, args) ->
       Proc.atomically (fun () -> apply K.empty env (value env f, List.map (value env) args))
-    | `Closure (f, v) ->
+    | `Closure (f, _, v) ->
       (* begin *)
 
       (* TODO: consider getting rid of `ClientFunction *)

@@ -489,7 +489,7 @@ struct
 
     | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
-    | `Closure (f, v) ->
+    | `Closure (f, _, v) ->
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)

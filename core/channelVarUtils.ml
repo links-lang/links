@@ -17,7 +17,7 @@ let variables_in_computation comp =
       StringMap.fold (fun _ v _ -> proj_fn v) smap ()
   and traverse_value = function
     | `Variable v -> add_variable v
-    | `Closure (_, value)
+    | `Closure (_, _, value)
     | `Project (_, value)
     | `Inject (_, value, _)
     | `TAbs (_, value)

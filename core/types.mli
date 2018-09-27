@@ -6,6 +6,7 @@ type 'a field_env = 'a stringmap [@@deriving show]
 
 (* type var sets *)
 module TypeVarSet : Utility.INTSET
+module TypeVarMap : Utility.INTMAP
 
 (* points *)
 type 'a point = 'a Unionfind.point
@@ -227,6 +228,7 @@ val xml_type : datatype
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
+val free_tyarg_vars : type_arg -> TypeVarSet.t
 val free_bound_type_vars     : ?include_aliases:bool -> typ -> Vars.vars_list
 val free_bound_row_type_vars : ?include_aliases:bool -> row -> Vars.vars_list
 

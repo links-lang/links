@@ -266,6 +266,7 @@ module IntMap = Map.Make(Int)
 module IntPairMap = Map.Make(IntPair)
 
 module type STRINGMAP = Map with type key = string
+module type INTMAP = Map with type key = int
 module StringSet = Set.Make(String)
 module StringMap : STRINGMAP = Map.Make(String)
 
