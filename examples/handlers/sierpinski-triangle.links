@@ -29,7 +29,7 @@ var dotSize = 25;
 var hoverColor = "#ff0";
 var nonHoverColor = "#61dafb";
 
-#Threading 
+#Threading
 
 sig enqueue: (a, Queue(a)) -> Queue(a)
 fun enqueue(x, q){
@@ -61,7 +61,7 @@ sig priorityDequeue: (PrioQueue(a)) ~> (Option((a, Priority)), PrioQueue(a) )
 fun priorityDequeue(pq){
     switch(dequeue(pq.high)){
         case (Some(x), q) -> (Some((x, High)), (pq with high= q))
-        case (None,_) -> 
+        case (None,_) ->
             switch(dequeue(pq.low)){
                 case (None, _) -> (None, pq)
                 case (Some(x), q) -> (Some((x, Low)), (pq with low=q))
@@ -78,8 +78,8 @@ sig fiberBulkEnqueue: ([Fiber({ |e})], FiberQueue({ |e})) ~> FiberQueue({ |e})
 fun fiberBulkEnqueue(fibers, q){
     switch(fibers){
         case [] -> q
-        case x::xs -> 
-            var pq = fiberEnqueue(x, q); 
+        case x::xs ->
+            var pq = fiberEnqueue(x, q);
             fiberBulkEnqueue(xs, pq)
     }
 }
@@ -138,9 +138,9 @@ fun schedule(main){
     fun runFiber(fiber, runQ){
         #dump(self());
         handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTime()) -> state){
-            case Return(x) -> 
+            case Return(x) ->
                 runNext(poll(state.runQ))
-            case Fork(f, resume) -> 
+            case Fork(f, resume) ->
                 var q = poll(state.runQ);
                 switch ((f.prio, state.prio)) {
                     case (High, _) ->
@@ -153,7 +153,7 @@ fun schedule(main){
                         var qq = fiberEnqueue(resumptionToFiber(resume, state.prio), q);
                         runFiber(f, qq)
                 }
-            case Yield(resume) -> 
+            case Yield(resume) ->
                 var currentTime = clientTime();
                 var buffer = switch(state.prio){
                     case High -> 120
@@ -161,7 +161,7 @@ fun schedule(main){
                 };
                 if (currentTime - state.startTime <= buffer) resume((), state)
                 else{
-                    var q = fiberEnqueue(resumptionToFiber(resume, state.prio), state.runQ); 
+                    var q = fiberEnqueue(resumptionToFiber(resume, state.prio), state.runQ);
                     runNext(poll(q))
                 }
         }
@@ -214,11 +214,11 @@ fun makeSTriangle(p, s, text, children){
 }
 
 sig drawTriangle: (STriangle({ |e}), Int) ~%~> ()
-fun drawTriangle(triangle, startTime){    
+fun drawTriangle(triangle, startTime){
     switch(triangle.children){
         case [] -> makeDot(triangle.point.x, triangle.point.y, startTime)
         case x::y::z::xs -> drawTriangle(x, startTime); drawTriangle(y, startTime); drawTriangle(z, startTime)
-    } 
+    }
 }
 
 sig setUpTriangle: (Int, String) ~> Option(STriangle({ |e}))
@@ -231,15 +231,15 @@ fun setUpTriangle(s, text){
             var yf = floatToInt(1.73 *. intToFloat(newS)) / 4;
             if (newS >= (dotSize - (dotSize/4))) {
                 [
-                    makeSTriangle( (x = x, y = y - yf), newS, text, getChildren((x = x, y = y - yf), newS)), 
-                    makeSTriangle( (x = x - (newS/2), y = y + yf), newS, text, getChildren((x = x - (newS/2), y = y + yf), newS)), 
+                    makeSTriangle( (x = x, y = y - yf), newS, text, getChildren((x = x, y = y - yf), newS)),
+                    makeSTriangle( (x = x - (newS/2), y = y + yf), newS, text, getChildren((x = x - (newS/2), y = y + yf), newS)),
                     makeSTriangle( (x = x + (newS/2), y = y + yf), newS, text, getChildren((x = x + (newS/2), y = y + yf), newS))
                 ]
             }
             else []
         }
         Some(makeSTriangle((x = 0, y = 0), s, "", getChildren((x = 0, y = 0), s)))
-    } 
+    }
     else None
 }
 
@@ -255,8 +255,8 @@ fun calculateScale(startTime){
     var scale = 1.0 +.  (intToFloat(w) /. intToFloat(2*n));
     #println("scale: " ^^ floatToString(scale/. 2.1));
     (scale, 1.0, 1.0)
-}   
- 
+}
+
 
 sig getCircleStyleAttributeString: (Int, Int, Bool) -> String
 fun getCircleStyleAttributeString(x, y, hover){
@@ -267,9 +267,9 @@ fun getCircleStyleAttributeString(x, y, hover){
     (" width: " ^^ intToString(s) ^^ "px; " ^^
     " height: " ^^ intToString(s) ^^ "px; " ^^
     " left: " ^^ intToString(x) ^^ "px;" ^^
-    " top: " ^^ intToString(y) ^^ "px;" ^^ 
+    " top: " ^^ intToString(y) ^^ "px;" ^^
     " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
-    " background-color: " ^^ color ^^";")     
+    " background-color: " ^^ color ^^";")
 }
 
 sig getScaleTransformAttributeString: ((Float, Float, Float)) -> String
@@ -325,7 +325,7 @@ fun prepareTick(nodeId){
     }
 }
 
-sig makeDot: (Int, Int, Int) {Gensym: Int|e}~> ()  
+sig makeDot: (Int, Int, Int) {Gensym: Int|e}~> ()
 fun makeDot(x, y, startTime) {
     var nodeId = "dot-" ^^ intToString(do Gensym);
     fun g(draw)() {
@@ -344,7 +344,7 @@ fun start(){
     var startTime = clientTime();
     switch(tri){
         case None -> ()
-        case Some(triangle) -> 
+        case Some(triangle) ->
             fork(makeFiber(Low, forever));
             gensymHandler(fun(){drawTriangle(triangle, startTime)});
     }
@@ -405,7 +405,7 @@ sig main: () ~> ()
 fun main() {
     addRoute("/", main_page);
     addStaticRoute("/js", "js", [("js", "text/javascript")]);
-    
+
     servePages()
 }
 

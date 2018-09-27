@@ -89,3 +89,8 @@ Type annotation on inner function (correct, recursive)
 ./tests/functions/innerfun3.links
 filemode : true
 stdout : "Hello!" : String
+
+Closure conversion: Test generalization of free type variables during hoisting
+./tests/functions/nested-functions-polymorphic.links
+filemode : true
+stdout : 123 : Int

@@ -215,7 +215,7 @@ struct
           Value.box_list [Value.box_xml (Value.Node (tag, children))]
     | `ApplyPure (f, args) ->
       Proc.atomically (fun () -> apply K.empty env (value env f, List.map (value env) args))
-    | `Closure (f, v) ->
+    | `Closure (f, _, v) ->
       (* begin *)
 
       (* TODO: consider getting rid of `ClientFunction *)
@@ -592,18 +592,18 @@ struct
     function
     | `Wrong _                    -> raise Exceptions.Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | `Lens (table, sort) -> 
+    | `Lens (table, sort) ->
       begin
           let typ = LensRecordHelpers.get_lens_sort_row_type sort in
-          match value env table, (TypeUtils.concrete_type typ) with 
+          match value env table, (TypeUtils.concrete_type typ) with
             | `Table ((_, tableName, _, _) as tinfo), `Record _row ->
                  apply_cont cont env (`Lens (tinfo, LensRecordHelpers.set_lens_sort_table_name sort tableName))
             | `List records, `Record _row -> apply_cont cont env (`LensMem (`List records, sort))
             | _ -> failwith ("Unsupported underlying lens value.")
       end
-    | `LensDrop (lens, drop, key, def, _sort) -> 
+    | `LensDrop (lens, drop, key, def, _sort) ->
         let _ = LensHelpers.ensure_lenses_enabled () in
-        let lens = value env lens in 
+        let lens = value env lens in
         let def = value env def in
         let sort = LensTypes.drop_lens_sort (Lens.sort lens) (ColSet.singleton drop) (ColSet.singleton key) in
           apply_cont cont env (`LensDrop (lens, drop, key, def, sort))
@@ -634,10 +634,10 @@ struct
         let data = value env data in
         let classic = Settings.get_value Basicsettings.RelationalLenses.classic_lenses in
         if classic then
-            LensHelpersClassic.lens_put lens data 
+            LensHelpersClassic.lens_put lens data
         else
             LensHelpersIncremental.lens_put lens data;
-        apply_cont cont env (Value.box_unit ()) 
+        apply_cont cont env (Value.box_unit ())
     | `Table (db, name, keys, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have

@@ -14,7 +14,7 @@ CREATE SEQUENCE def_id_seq
     CACHE 1;
 
 --
--- Name: definitions; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: definitions; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE definitions (
@@ -25,7 +25,7 @@ CREATE TABLE definitions (
 
 
 --
--- Name: wordlist; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: wordlist; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE wordlist (
@@ -63,7 +63,7 @@ ALTER TABLE ONLY definitions ALTER COLUMN id SET DEFAULT nextval('wordlist_id_se
 
 
 --
--- Name: wordlist_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: wordlist_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY definitions
@@ -71,7 +71,7 @@ ALTER TABLE ONLY definitions
 
 
 --
--- Name: wordlist_word_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: wordlist_word_index; Type: INDEX; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE INDEX wordlist_word_index ON definitions USING btree (word);

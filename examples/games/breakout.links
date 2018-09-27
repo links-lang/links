@@ -93,7 +93,7 @@ fun main() {
     var initBlockStates =
         (for (x <- [20.0, 120.0, 220.0, 320.0, 420.0, 520.0],
                 (y, lives) <- [(60.0,2), (100.0,1), (140.0,2), (180.0,1), (220.0,1), (260.0,1)])
-                    [(blockPos = (x, y), blockLives = lives)]): [BlockState]; 
+                    [(blockPos = (x, y), blockLives = lives)]): [BlockState];
     var blockColor1 = "#4a4";
     var blockColor2 = "#aa4";
 
@@ -115,8 +115,8 @@ fun main() {
             if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none")
                 (canvasId, canvas2Id)
             else (canvas2Id, canvasId);
-        
-        var mainCanvasNode = getNodeById(mainCanvas); 
+
+        var mainCanvasNode = getNodeById(mainCanvas);
         var ctx = jsGetContext2D(mainCanvasNode);
         clear(ctx);
 
@@ -139,7 +139,7 @@ fun main() {
                     jsFillRect(ctx, playerRectangle.x +. halfPlayerHeight, playerRectangle.y, playerRectangle.width -. playerHeight, playerRectangle.height);
                     jsFillCircle(ctx, playerRectangle.x +. halfPlayerHeight , playerRectangle.y +. halfPlayerHeight, halfPlayerHeight);
                     jsFillCircle(ctx, playerRectangle.x +. playerWidth -. halfPlayerHeight, playerRectangle.y +. halfPlayerHeight, halfPlayerHeight);
-                
+
                     # draw the blocks:
                     ignore(map(fun (x) { drawBlock(ctx, x) }, gs.blocks));
 
@@ -150,11 +150,11 @@ fun main() {
 
             case _ -> ()
         };
-        
+
         var fpsInfo =
             if (displayDebug) drawFps(ctx, fpsInfo, 1000.0 /. (intToFloat(now - lastTime) +. 1.0))
             else fpsInfo;
-        
+
         swapBuffers(mainCanvasNode, getNodeById(dispCanvas));
         fpsInfo
     }
@@ -163,7 +163,7 @@ fun main() {
         var fpsInfo = (fpsInfo with frameCount = fpsInfo.frameCount + 1);
 
         jsFillText(ctx, "~FPS: " ^^ strsub(floatToString(dFps), 0, 7), 10.0, 10.0);
-        
+
         var fpsInfo = if (fpsInfo.loFps > dFps) {
             (fpsInfo with loFps = dFps, loFpsFrame = fpsInfo.frameCount - 1)
         }
@@ -174,7 +174,7 @@ fun main() {
         else fpsInfo;
 
         var fpsInfo = (fpsInfo with fpsAcc = fpsInfo.fpsAcc +. dFps);
-        
+
         var aFpsFrames = 1000;
         var fpsInfo = if (fpsInfo.frameCount > aFpsFrames) {
             (fpsInfo with avgFps = fpsInfo.fpsAcc /. intToFloat(aFpsFrames), fpsAcc = 0.0, frameCount = 0)
@@ -189,7 +189,7 @@ fun main() {
         } else (fpsInfo with hiFps = 0.0);
         jsFillText(ctx, "~loFPS: " ^^ strsub(floatToString(fpsInfo.loFps), 0, 7), 200.0, 10.0);
         jsFillText(ctx, "~hiFPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 300.0, 10.0);
-        jsFillText(ctx, "loFPS@: " ^^ intToString(fpsInfo.loFpsFrame), 400.0, 10.0);  
+        jsFillText(ctx, "loFPS@: " ^^ intToString(fpsInfo.loFpsFrame), 400.0, 10.0);
         jsFillText(ctx, "~u: " ^^ strsub(intToString(fpsInfo.upFrames), 0, 7), 475.0, 10.0);
         jsFillText(ctx, "~d: " ^^ strsub(intToString(fpsInfo.downFrames), 0, 7), 525.0, 10.0);
         jsFillText(ctx, "~r: " ^^ strsub(floatToString(intToFloat(fpsInfo.upFrames)/.intToFloat(fpsInfo.downFrames)), 0, 7), 10.0, 30.0);
@@ -200,7 +200,7 @@ fun main() {
     fun swapBuffers(mainCanvasNode, dispCanvasNode) {
         var ctx = jsGetContext2D(dispCanvasNode);
         jsDrawImage(ctx, mainCanvasNode, 0.0, 0.0);
-        
+
         ignore(domSetStyleAttrFromRef(mainCanvasNode, "display", "block"));
         ignore(domSetStyleAttrFromRef(dispCanvasNode, "display", "none"));
         clear(ctx)
@@ -229,13 +229,13 @@ fun main() {
                     var oldBlockStates = other.blocks;
 
                     var (ballBlockColls, blockColls) = ballBlocksCollisions(oldBallState, oldBlockStates); # very expensive
-                    
+
                     # expensive
                     var colls = ballWallCollisions(oldBallState) ++ ballPlayerCollisions(plState, oldBallState) ++ ballBlockColls;
-                    
+
                     var currBallState = ballState(oldBallState, colls);
                     var currBlockStates = blockStates(oldBlockStates, blockColls); # very expensive
-                    
+
                     var res = ProperGameState((player = ((xPos = plState): PlayerState), ball = currBallState, blocks = currBlockStates));
                     res
                 case _ -> gs
@@ -267,7 +267,7 @@ fun main() {
     fun playerVelocity(inEvents) {
         var leftDown = keyDown(leftKeyCode, inEvents);
         var rightDown = keyDown(rightKeyCode, inEvents);
-        
+
         if (leftDown) -.playerSpeed
         else if (rightDown) playerSpeed
         else 0.0
@@ -275,9 +275,9 @@ fun main() {
 
     fun ballState(bs: BallState, collEvents: [BallCollision]) {
         var vel = ballVelocity(bs.ballSpeed, collEvents);
-        
+
         var pos = vectorAdd(bs.ballPos, vel);
-        
+
         ((ballPos = pos, ballSpeed = vel): BallState)
     }
 
@@ -290,7 +290,7 @@ fun main() {
                 case DownBounce -> (vx, -.fabs(vy))
             }
         }
-        
+
         fold_left(bounce, (vx, vy), coll)
     }
 
@@ -301,12 +301,12 @@ fun main() {
                 case Just(bs) -> if (bs.blockLives == 1) Nothing else Just((bs with blockLives = 1))
             }
         }
-        
+
         fold_left(updatef, Just(initState), blockColls)
     }
 
     fun blockStates(obs: [BlockState], blockColls: [[BlockCollision]]) {
-        var res = map(blockState, zip(obs, blockColls)); 
+        var res = map(blockState, zip(obs, blockColls));
         var result = filter(isJust, res);
         catMaybes(result)
     }
@@ -317,7 +317,7 @@ fun main() {
             else if (inp == KeyDown(code)) true
             else old
         }
-        
+
         fold_left(step, false, inEvents)
     }
 
@@ -402,9 +402,9 @@ fun main() {
     fun updateLogic(dt, st, i) {
         if (dt > step) {
             masterProcId ! (dummyProcId, KeyDown(-1): Input); # reset input
-            
+
             var stprim = mainGameLogic(st, i);
-            
+
             updateLogic(dt -. step, stprim, []: [Input])
         } else (st, dt)
     }
@@ -451,14 +451,14 @@ fun main() {
         if (not(r == KeyDown(-1)))
             updateProcId ! i
         else ();
-        
+
         inputStateLoop(i)
     }
     var inputProcId = spawnClient { inputStateLoop([]: [Input]) };
 
-    
+
     fun onKeyDown(e) {
-        inputProcId ! (KeyDown(getCharCode(e)): Input); 
+        inputProcId ! (KeyDown(getCharCode(e)): Input);
     }
 
     fun onKeyUp(e) {
@@ -470,7 +470,7 @@ fun main() {
 
     fun initialize() {
         ignore(recv());
-        
+
         jsSetOnKeyDown(getNodeById(containerId), onKeyDown);
         jsSetOnEvent(getNodeById(containerId), "keyup", onKeyUp, true);
 
@@ -529,7 +529,7 @@ fun main() {
                         <canvas id="{canvasId}" width="600" height="500"></canvas>
                         <div id="info">Click this rectangle to start the game.</div>
                     </div>
-                    <div id="msg"></div> 
+                    <div id="msg"></div>
                 </div>
             </body>
         </html>

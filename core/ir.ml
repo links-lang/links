@@ -52,7 +52,7 @@ type value =
   | `XmlNode of (name * value name_map * value list)
   | `ApplyPure of (value * value list)
 
-  | `Closure of var * value
+  | `Closure of var * tyarg list * value
 
   | `Coerce of (value * Types.datatype)
   ]

@@ -17,7 +17,7 @@ let variables_in_computation comp =
       StringMap.fold (fun _ v _ -> proj_fn v) smap ()
   and traverse_value = function
     | `Variable v -> add_variable v
-    | `Closure (_, value)
+    | `Closure (_, _, value)
     | `Project (_, value)
     | `Inject (_, value, _)
     | `TAbs (_, value)
@@ -86,7 +86,7 @@ let variables_in_computation comp =
         traverse_value v;
         traverse_stringmap (fun (_, c) ->
           traverse_computation c) clauses
-    | `Lens (value, _) 
+    | `Lens (value, _)
     | `LensSelect (value, _, _)
     | `LensGet (value, _) -> traverse_value value
     | `LensDrop (v1, _, _, v2, _)

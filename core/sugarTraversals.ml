@@ -1029,21 +1029,21 @@ class fold =
       | `LensLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#option (fun o -> o#unknown) _x_i1 in
-            o 
+            o
       | `LensKeysLit ((_x, _x_i1, _x_i2)) ->
-          let o = o#phrase _x in 
+          let o = o#phrase _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
       | `LensFunDepsLit ((_x, _x_i1, _x_i2)) ->
-          let o = o#phrase _x in 
+          let o = o#phrase _x in
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
       | `LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let o = o#phrase _x in
           let o = o#string _x_i1 in
           let o = o#string _x_i2 in
-          let o = o#phrase _x_i3 in 
+          let o = o#phrase _x_i3 in
           let o = o#option (fun o -> o#unknown) _x_i4 in
             o
       | `LensSelectLit ((_x, _x_i1, _x_i2)) ->
@@ -1052,11 +1052,11 @@ class fold =
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
       | `LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
-          let o = o#phrase _x in 
+          let o = o#phrase _x in
           let o = o#phrase _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#option (fun o -> o#unknown) _x_i5 in
-            o 
+            o
       | `LensGetLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#option (fun o -> o#unknown) _x_i1 in
@@ -1740,7 +1740,7 @@ class fold_map =
           in (o, (`TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
       | `LensLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in 
+          let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
             (o, (`LensLit (_x, _x_i1)))
       | `LensKeysLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
@@ -1758,12 +1758,12 @@ class fold_map =
           let (o, _x_i3) = o#phrase _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#unknown) _x_i4 in
             (o, (`LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
-      | `LensSelectLit ((_x, _x_i1, _x_i2)) -> 
+      | `LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           (* let (o, _x_i1) = o#phrase _x_i1 in *)
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2 in
             (o, (`LensSelectLit ((_x, _x_i1, _x_i2))))
-      
+
       | `LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in

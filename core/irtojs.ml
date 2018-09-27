@@ -578,7 +578,7 @@ end
  *   type source = [
  *     | `Bindings of Ir.binding list
  *     | `Program of Ir.program ]
- * 
+ *
  *   val compile : source -> Value.env -> Js.program
  * end *)
 
@@ -699,7 +699,7 @@ end = functor (K : CONTINUATION) -> struct
          | _ ->
             Call (gv f, List.map gv vs)
        end
-    | `Closure (f, v) ->
+    | `Closure (f, _, v) ->
        if session_exceptions_enabled
        then Call (Var "partialApplySE", [gv (`Variable f); gv v])
        else Call (Var "partialApply", [gv (`Variable f); gv v])

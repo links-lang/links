@@ -14,6 +14,9 @@ type inst_type_env = meta_type_var IntMap.t
 type inst_row_env = meta_row_var IntMap.t
 type inst_env = inst_type_env * inst_row_env
 
+(* The type of maps given to the actual instantiation functions *)
+type instantiation_maps = (datatype IntMap.t * row IntMap.t * field_spec IntMap.t)
+
 exception ArityMismatch
 
 (* TODO: rationalise instantiation
@@ -22,7 +25,7 @@ exception ArityMismatch
      - is instantiation for first-class polymorphism correct?
 *)
 
-let instantiate_datatype : (datatype IntMap.t * row IntMap.t * field_spec IntMap.t) -> datatype -> datatype =
+let instantiate_datatype : instantiation_maps -> datatype -> datatype =
   fun (tenv, renv, penv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
@@ -298,15 +301,19 @@ let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
-let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
-  fun pt tyargs ->
+let instantiation_maps_of_type_arguments :
+      bool -> Types.datatype -> Types.type_arg list -> (datatype * instantiation_maps) =
+  fun must_instantiate_all_quantifiers pt tyargs ->
     (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
-    let t, vars =
-      match concrete_type pt with
-        | `ForAll (vars, t) -> t, Types.unbox_quantifiers vars
-        | t -> t, [] in
-    let tenv, renv, penv =
-      if (List.length vars <> List.length tyargs) then
+    let vars, t = TypeUtils.split_quantified_type pt in
+    let tyargs_length = List.length tyargs in
+    let vars_length = List.length vars in
+    let arities_okay =
+      if must_instantiate_all_quantifiers
+        then tyargs_length = vars_length
+        else tyargs_length <= vars_length in
+
+    if (not arities_okay) then
         (Debug.print (Printf.sprintf "# Type variables (total %d)" (List.length vars));
          let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.show_quantifier t) vars in
          Debug.print tyvars;
@@ -314,6 +321,13 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
          let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ Types.show_type_arg arg) tyargs in
          Debug.print tyargs';
          raise ArityMismatch);
+
+    let vars, remaining_quantifiers =
+      if tyargs_length = vars_length then
+        vars, []
+      else
+        (take tyargs_length vars, drop tyargs_length vars) in
+    let tenv, renv, penv =
       List.fold_right2
         (fun var tyarg (tenv, renv, penv) ->
            match (var, tyarg) with
@@ -329,7 +343,15 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype =
                         mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs))
         vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
     in
-      instantiate_datatype (tenv, renv, penv) t
+    match remaining_quantifiers with
+      | [] -> t, (tenv, renv, penv)
+      | _ -> `ForAll (Types.box_quantifiers remaining_quantifiers, t),  (tenv, renv, penv)
+
+
+
+let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun pt tyargs ->
+  let (t, instantiation_maps) = instantiation_maps_of_type_arguments true pt tyargs in
+  instantiate_datatype instantiation_maps t
 
 (*
   ensure that t has fresh quantifiers

@@ -7,7 +7,7 @@ fun choice() {
           else { 4 };
   var y = if (do Choose()) { 8 }
           else { 16 };
-  x + y	  
+  x + y
 }
 
 #

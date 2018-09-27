@@ -10,7 +10,7 @@ typename DragOffer    = mu b.[&|MouseUp:[&|MouseDown:?DomNode.b|&], MouseOut:?Do
 sig waiting : (String, WaitOffer) ~> ()
 fun waiting(id, s) client {
  offer (s) {
-  case MouseDown(s)  -> var (elem, s) = receive(s); 
+  case MouseDown(s)  -> var (elem, s) = receive(s);
 			dragging(id, elem, s)
  }
 }
@@ -31,11 +31,11 @@ fun dragging(id, elem, s) {
 sig manageWait : (String, WaitSelect) {:[|MouseUp|MouseDown:DomNode|MouseOut:DomNode|]|_}~> ()
 fun manageWait(id, c) {
 	receive {
-	    case MouseUp         -> manageWait(id, c) 
+	    case MouseUp         -> manageWait(id, c)
 
-	    case MouseDown(elem) -> if (isElementNode(elem) && (parentNode(elem) == getNodeById(id))) 
-					  manageDrag(id, send(elem, select MouseDown c)) 
-					  
+	    case MouseDown(elem) -> if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+					  manageDrag(id, send(elem, select MouseDown c))
+
 				    else  manageWait(id, c)
 
             case MouseOut(elem)  -> manageWait(id, c)
@@ -44,7 +44,7 @@ fun manageWait(id, c) {
 
 sig manageDrag : (String, DragSelect) {:[|MouseUp|MouseDown:DomNode|MouseOut:DomNode|]|_}~> ()
 fun manageDrag(id, c) {
- 
+
 	receive {
 	    case MouseUp           -> manageWait(id, select MouseUp c)
 	    case MouseDown(elem)   -> manageDrag(id, c)
@@ -59,12 +59,12 @@ fun draggableList(id, items)
 
   var dragger = spawn { waiting(id, accept(accessPoint)) };
 
-  var manager = spawn { 
+  var manager = spawn {
     manageWait(id, request(accessPoint))
   };
 
 
-   <ul id="{id}" style="width: 200px; 
+   <ul id="{id}" style="width: 200px;
         list-style-image: url(http://script.aculo.us/images/bullet.gif)"
       l:onmouseup   = "{manager ! MouseUp}"
       l:onmouseuppage = "{manager ! MouseUp}"
@@ -78,7 +78,7 @@ fun draggableList(id, items)
 
 
 fun format(text) {
-    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; 
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1;
                border:1px solid #C5DEA1; cursor: move; margin: 0px;">
     {stringToXml(text)}</li>
 }

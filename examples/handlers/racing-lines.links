@@ -37,7 +37,7 @@ typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
 var colors = ["green", "red", "blue", "yellow"];
 var priorities = [High, High, Low, Low];
 
-#Threading 
+#Threading
 
 sig enqueue: (a, Queue(a)) -> Queue(a)
 fun enqueue(x, q){
@@ -70,7 +70,7 @@ sig priorityDequeue: (PrioQueue(a)) ~> (Option((a, Priority)), PrioQueue(a) )
 fun priorityDequeue(pq){
     switch(dequeue(pq.high)){
         case (Some(x), q) -> (Some((x, High)), (pq with high= q))
-        case (None,_) -> 
+        case (None,_) ->
             switch(dequeue(pq.low)){
                 case (None, _) -> (None, pq)
                 case (Some(x), q) -> (Some((x, Low)), (pq with low=q))
@@ -87,8 +87,8 @@ sig fiberBulkEnqueue: ([Fiber({ |e})], FiberQueue({ |e})) ~> FiberQueue({ |e})
 fun fiberBulkEnqueue(fibers, q){
     switch(fibers){
         case [] -> q
-        case x::xs -> 
-            var pq = fiberEnqueue(x, q); 
+        case x::xs ->
+            var pq = fiberEnqueue(x, q);
             fiberBulkEnqueue(xs, pq)
     }
 }
@@ -148,9 +148,9 @@ fun schedule(main){
         #println("runQ: " ^^ intToString(fiberQueueLength(runQ)));
         #dump(self());
         handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTime()) -> state){
-            case Return(x) -> 
+            case Return(x) ->
                 runNext(poll(state.runQ))
-            case Fork(f, resume) -> 
+            case Fork(f, resume) ->
                 var q = poll(state.runQ);
                 switch ((f.prio, state.prio)) {
                     case (High, _) ->
@@ -163,15 +163,15 @@ fun schedule(main){
                         var qq = fiberEnqueue(resumptionToFiber(resume, state.prio), q);
                         runFiber(f, qq)
                 }
-            case Yield(resume) -> 
+            case Yield(resume) ->
                 var currentTime = clientTime();
                 var buffer = switch(state.prio){
                     case High -> 400
-                    case Low -> 200 
+                    case Low -> 200
                 };
                 if (currentTime - state.startTime <= buffer) resume((), state)
                 else{
-                    var q = fiberEnqueue(resumptionToFiber(resume, state.prio), state.runQ); 
+                    var q = fiberEnqueue(resumptionToFiber(resume, state.prio), state.runQ);
                     runNext(poll(q))
                 }
         }
@@ -219,7 +219,7 @@ fun absolute(n){
 }
 
 sig parseInt: (String) ~> Option(Int)
-fun parseInt(n){ 
+fun parseInt(n){
     if (n =~ /^[0-9]+$/) {
         Some(stringToInt(n))
     } else{
@@ -246,7 +246,7 @@ fun updatePoints(startx, starty, endx, endy){
 
 sig getPoints: () ~> Option((Point, Point))
 fun getPoints(){
-    var startx = parseInt(getValue("start-x")); 
+    var startx = parseInt(getValue("start-x"));
     var starty = parseInt(getValue("start-y"));
     var endx = parseInt(getValue("end-x"));
     var endy = parseInt(getValue("end-y"));
@@ -435,7 +435,7 @@ sig main: () ~> ()
 fun main() {
     addRoute("/", main_page);
     addStaticRoute("/js", "js", [("js", "text/javascript")]);
-    
+
     servePages()
 }
 

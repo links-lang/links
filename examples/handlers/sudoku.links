@@ -79,7 +79,7 @@ fun layoutSudoku(sudoku) server {
       (id=nodeId, class=class, value=val)
     }, xs)
   }
-  var rows = mapi(formatRow, sudoku.grid);  
+  var rows = mapi(formatRow, sudoku.grid);
   <table class="{getTableClass(sudoku)}">
     {for (row <- rows) {
       <tr>
@@ -140,7 +140,7 @@ fun checkSudoku(sudoku) {
     if (predicate(g) && predicate(transpose(g))) Just(g)
     else Nothing
   }
-  
+
   switch (return(sudoku.grid) >>= allDefined >>= unique) {
     case Nothing -> Invalid
     case Just(_) -> Valid
@@ -152,7 +152,7 @@ fun validateSudoku(sudoku) {
   (name=sudoku.name
   ,grid=sudoku.grid
   ,status=checkSudoku(sudoku))
-   
+
 }
 
 sig readSudoku : (String) ~> Sudoku
@@ -168,7 +168,7 @@ fun readSudoku(sudokuName) client {
       if (j > 8) []
       else {
         var nodeId = makeGridId(sudokuName, i, j);
-        var value = convertValue $ getInputValue(nodeId);    
+        var value = convertValue $ getInputValue(nodeId);
         value :: buildRow(j+1)
       }
     }
@@ -192,7 +192,7 @@ fun renderSudoku(sudoku) client {
 
 # Page
 fun mainPage(_) {
-  page    
+  page
     <html>
       <head>
        <meta charset="UTF-8" />
@@ -205,15 +205,15 @@ fun mainPage(_) {
          .sudoku-container {{
            padding-bottom: 15px;
          }}
-         
+
          .grid {{
-	   border: 5px solid #666;	   
+	   border: 5px solid #666;
          }}
 
          .grid td {{
 	   margin: 0;
          }}
-         
+
          .grid input {{
 	   width: 40px;
 	   height: 40px;
@@ -239,7 +239,7 @@ fun mainPage(_) {
       </head>
       <body>
         <div class="container">
-          <h1>Sudoku solver</h1>        
+          <h1>Sudoku solver</h1>
           <div id="sudoku-container">
             {layoutSudoku(testSudoku)}
           </div>

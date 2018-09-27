@@ -2359,14 +2359,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            `LensLit(erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensKeysLit (table, keys, _) ->
            let table = tc table in
-           let cols = LensTypes.sort_cols_of_table "" (typ table) in 
-           let keys = LensTypes.cols_of_phrase keys in 
+           let cols = LensTypes.sort_cols_of_table "" (typ table) in
+           let keys = LensTypes.cols_of_phrase keys in
            let fds = FunDepSet.key_fds keys (LensColList.present_aliases cols) in
            let lens_sort = (fds, None, cols) in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensFunDepsLit (table, fds, _) ->
            let table = tc table in
-           let cols = LensTypes.sort_cols_of_table "" (typ table) in 
+           let cols = LensTypes.sort_cols_of_table "" (typ table) in
            let fds = LensHelpersIncremental.get_fds fds cols in
            let lens_sort = (fds, None, cols) in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
@@ -2385,7 +2385,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                `LensSelectLit(erase lens, predicate, Some (lens_sort)), `Lens(lens_sort), merge_usages [usages lens]
         | `LensJoinLit (lens1, lens2, on, left, right, _) ->
            let _ = LensHelpers.ensure_lenses_enabled () in
-           let lens1 = tc lens1 
+           let lens1 = tc lens1
            and lens2 = tc lens2 in
            let sort1 = LensType.sort (typ lens1)
            and sort2 = LensType.sort (typ lens2) in
@@ -2399,7 +2399,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            `LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | `LensPutLit (lens, data, _) ->
            let _ = LensHelpers.ensure_lenses_enabled () in
-           let lens = tc lens in 
+           let lens = tc lens in
            let sort = LensType.sort (typ lens) in
            let trowtype = LensRecordHelpers.get_lens_sort_row_type sort in
            let data = tc data in

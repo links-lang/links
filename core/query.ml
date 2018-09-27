@@ -489,7 +489,7 @@ struct
 
     | `ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
-    | `Closure (f, v) ->
+    | `Closure (f, _, v) ->
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)
@@ -1218,7 +1218,7 @@ struct
             let fields = string_of_fields fields in
               "select * from (select " ^ fields ^ ") as " ^ fresh_dummy_var () ^ " where " ^ sb condition
         | `Select (fields, tables, condition, os) ->
-            let tables = mapstrcat "," (fun (t, x) -> t ^ " as " ^ (string_of_table_var x)) tables in
+            let tables = mapstrcat "," (fun (t, x) -> db#quote_field t ^ " as " ^ (string_of_table_var x)) tables in
             let fields = string_of_fields fields in
             let orderby =
               match os with

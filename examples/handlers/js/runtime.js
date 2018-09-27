@@ -35,9 +35,9 @@ const SystemQueue = (function(){
         queue = LINKEDLIST.Cons(fiber, queue);
         return CONSTANTS.UNIT;
     }
-    
+
     function dequeue(){
-        let temp = queue; 
+        let temp = queue;
         queue = LINKEDLIST.Nil;
         return temp;
     }

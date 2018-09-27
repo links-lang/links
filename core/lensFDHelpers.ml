@@ -34,11 +34,11 @@ let lens_join_split_updates (fds_left : fundepset) (fds_right : fundepset) (data
 (* record revision *)
 
 let apply_fd_update (m : Value.t) (n : Value.t) (fd : fundep) : Value.t =
-    (* update all columns from the right side of the functional dependency fd 
+    (* update all columns from the right side of the functional dependency fd
        in m with the value from n  *)
     (* assume we know that n and m have the same values for columns in left(fd) *)
     let n_cols = unbox_record n in
-    let m_cols = List.map (fun (k, v) -> 
+    let m_cols = List.map (fun (k, v) ->
             if ColSet.exists (fun a -> a = k) (FunDep.right fd) then
                 let _, n_v = List.find (fun (n_k, _) -> n_k = k) n_cols in
                 k, n_v
@@ -50,13 +50,13 @@ let apply_fd_update (m : Value.t) (n : Value.t) (fd : fundep) : Value.t =
 let is_row_cols_record_match (m : Value.t) (n : Value.t) (cols : colset) : bool =
     (* determines wether the records m and n have the same values for the columns in cols *)
     (* check if all columns in left(fd) match *)
-    let is_match = 
-        ColSet.for_all (fun col -> 
-            try 
+    let is_match =
+        ColSet.for_all (fun col ->
+            try
                 let n_v = get_record_val col m in
                 let m_v = get_record_val col n in
                     n_v = m_v
-            with NotFound _ -> false 
+            with NotFound _ -> false
         ) cols in
     is_match
 
@@ -81,15 +81,15 @@ let apply_fd_record_revision (m : Value.t) (n : Value.t) (fds : fundepset) : boo
                 let upd_t, mrow = apply_fd_record_row_revision mrow nrow fd in
                 upd_t || upd, mrow
             ) fds (upd, mrow)
-    ) (unbox_list n) (false, m) 
+    ) (unbox_list n) (false, m)
 
-let mark_found_records (n : Value.t) (data : (Value.t * bool) array) : unit = 
-    Array.iteri (fun i (row, marked) -> 
+let mark_found_records (n : Value.t) (data : (Value.t * bool) array) : unit =
+    Array.iteri (fun i (row, marked) ->
         if not marked && (records_equal row n) then
             Array.set data i (row, true)
     ) data
 
-let apply_fd_merge_record_revision (n : Value.t) (m : Value.t) (fds : fundepset) = 
+let apply_fd_merge_record_revision (n : Value.t) (m : Value.t) (fds : fundepset) =
     (* `List `Record * `List `Record * fds *)
     let arrM = Array.of_list (List.map (fun r -> r,false) (unbox_list m)) in
     let output = ref [] in
