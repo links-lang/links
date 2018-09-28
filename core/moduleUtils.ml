@@ -151,7 +151,7 @@ let create_module_info_map program =
     (* Recursively traverse a list of modules *)
     let rec traverse_modules = function
       | [] -> []
-      | {node=Module (submodule_name, mod_bs);_} :: bs ->
+      | {node=Module (submodule_name, _, mod_bs);_} :: bs ->
           (* Recursively process *)
           let new_path = if name = "" then [] else parent_path @ [name] in
           create_and_add_module_info new_path submodule_name mod_bs;

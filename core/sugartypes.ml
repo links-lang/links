@@ -314,7 +314,7 @@ and bindingnode =
   | Typenames of typename list
   | Infix
   | Exp     of phrase
-  | Module  of name * binding list
+  | Module  of name * Types.module_t option * binding list
   | AlienBlock of name * name * ((Binder.with_pos * datatype') list)
   | Import  of QualifiedName.t
 and binding = bindingnode WithPos.t
@@ -545,7 +545,7 @@ struct
             (StringSet.empty) decls in
         bound_foreigns, empty
     | Import _ -> empty, empty
-    | Module (name, bs) ->
+    | Module (name, _, bs) ->
        let (_, fvs) =
          List.fold_right
            (fun b (bvs, fvs) ->

@@ -3964,7 +3964,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
           Exp (erase e), empty_context, usages e
       | Handler _
       | AlienBlock _ -> assert false
-      | Module (name, bindings) ->
+      | Module (name, _, bindings) ->
          let module_ctx, bindings, usage_builder = type_bindings context bindings in
          (* FIXME: This is unnecessary work, since Env is using a StringMap internally. Should we give Env the ability to expose the StringMap? *)
          let env_to_stringmap env =
@@ -3977,7 +3977,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
          } in
          let context' = {empty_context with module_env = Env.bind Env.empty (name, module_type) } in
          let module_usages = usage_builder StringMap.empty in
-          Module (name, bindings), context', module_usages
+          Module (name, Some module_type, bindings), context', module_usages
       | Import _ ->
          failwith "Import statements must have been removed by now"
     in

@@ -5,6 +5,7 @@ open SourceCode
 open SourceCode.WithPos
 open Ir
 open Var
+open SugarToIrEnv
 
 (* {0 Sugar To IR}
 
@@ -53,21 +54,6 @@ let show_compiled_ir = Basicsettings.Sugartoir.show_compiled_ir
 
 module QualifiedName = Sugartypes.QualifiedName
 
-type datatype = Types.datatype
-
-module NEnv = Env.String
-module TEnv = Env.Int
-
-type nenv = var NEnv.t
-type tenv = Types.datatype TEnv.t
-
-type env = nenv * tenv * Types.row
-
-let lookup_name_and_type name (nenv, tenv, _eff) =
-  let var = NEnv.lookup nenv name in
-    var, TEnv.lookup tenv var
-
-let lookup_effects (_, _, eff)= eff
 
 (* Hmm... shouldn't we need to use something like this? *)
 
@@ -535,9 +521,8 @@ struct
            M.bind
              (comp_binding (Var.info_of_type (sem_type v), Return e))
              (fun var ->
-                let nenv, tenv, eff = env in
-                let tenv = TEnv.bind tenv (var, sem_type v) in
-                let (bs, tc) = CompilePatterns.compile_choices (nenv, tenv, eff) (t, var, cases) in
+                let env' = bind_type var (sem_type v) env in
+                let (bs, tc) = CompilePatterns.compile_choices env' (t, var, cases) in
                   reflect (bs, (tc, t))))
 
   let db_insert _env (source, rows) =
@@ -721,9 +706,8 @@ struct
            M.bind
              (comp_binding (Var.info_of_type (sem_type v), Return e))
              (fun var ->
-                let nenv, tenv, eff = env in
-                let tenv = TEnv.bind tenv (var, sem_type v) in
-                let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv, eff) (t, var, cases) in
+                let env' = bind_type var (sem_type v) env in
+                let (bs, tc) = CompilePatterns.compile_cases env' (t, var, cases) in
                   reflect (bs, (tc, t))))
 
   let tabstr (tyvars, s) =
@@ -738,15 +722,27 @@ end
 
 module Eval(I : INTERPRETATION) =
 struct
-  let extend xs vs (nenv, tenv, eff) =
-    List.fold_left2
-      (fun (nenv, tenv, eff) x (v, t) ->
-         (NEnv.bind nenv (x, v), TEnv.bind tenv (v, t), eff))
-      (nenv, tenv, eff)
-      xs
-      vs
 
-  let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff')
+  let resolve_qualified_name env qname =
+    let rec rqn value = function
+      | `Ident name -> I.project (value, name)
+      | `Dot (module_name, remainder) -> rqn (I.project (value, module_name)) remainder in
+    match qname with
+      | `Ident x -> (I.var (lookup_name_and_type x env))
+      | `Dot (module_name, remainder) ->
+        let module_record_var, module_record_type  = lookup_record_for_module module_name env in
+        rqn (I.var (module_record_var, module_record_type)) remainder
+
+  let rec ir_type_of_module_type module_type =
+    let field_env = StringMap.fold (fun field t fenv ->
+        StringMap.add field  t fenv
+      ) module_type.Types.fields StringMap.empty in
+
+    let module_env = StringMap.fold (fun module_name mt fenv ->
+        StringMap.add module_name (ir_type_of_module_type mt) fenv
+      ) module_type.Types.modules field_env in
+    let record_row = Types.make_closed_row module_env in
+    `Record record_row
 
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
     fun env {node=e; pos} ->
@@ -781,7 +777,7 @@ struct
         let open Sugartypes in
         match e with
           | Constant c -> cofv (I.constant c)
-          | Var x -> cofv (I.var (lookup_name_and_type (QualifiedName.unqualify x) env)) (* TODO: FiXME *)
+          | Var qname -> cofv (resolve_qualified_name env qname)
           | RangeLit (low, high) ->
               I.apply (instantiate_mb "intRange", [ev low; ev high])
           | ListLit ([], Some t) ->
@@ -887,7 +883,7 @@ struct
              I.do_operation (name, vs, t)
           | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
              let henv, params =
-               let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
+               let empty_env = SugarToIrEnv.make_empty (Types.make_empty_open_row (lin_any, res_any)) in
                 match (sh_descr.shd_params) with
                 | None -> empty_env, []
                 | Some { shp_bindings = bindings; shp_types = types } ->
@@ -987,7 +983,7 @@ struct
                 (I.apply_pure
                    (instantiate_mb "stringToXml",
                     [ev (WithPos.make ~pos (Sugartypes.Constant (Constant.String name)))]))
-          | Block (bs, e) -> eval_bindings Scope.Local env bs e
+          | Block (bs, e) -> eval_comp Scope.Local env bs e
           | Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
 	  | DBInsert (source, _fields, rows, None) ->
@@ -1068,11 +1064,11 @@ struct
               Debug.print ("oops: " ^ show_phrasenode e);
               assert false
 
-  and eval_bindings scope env bs' e =
+  and eval_bindings scope env bs' cont =
     let ec = eval env in
     let ev = evalv env in
       match bs' with
-        | [] -> ec e
+        | [] -> cont env
         | { node = b; _ }::bs ->
             begin
               let open Sugartypes in
@@ -1086,12 +1082,12 @@ struct
                         (x_info,
                          ec body,
                          fun v ->
-                           eval_bindings scope (extend [x] [(v, xt)] env) bs e)
+                           eval_bindings scope (extend [x] [(v, xt)] env) bs cont)
                 | Val (p, (_, body), _, _) ->
                     let p, penv = CompilePatterns.desugar_pattern p in
                     let env' = env ++ penv in
                     let s = ev body in
-                    let ss = eval_bindings scope env' bs e in
+                    let ss = eval_bindings scope env' bs cont in
                       I.comp env (p, s, ss)
                 | Fun (bndr, _, (tyvars, ([ps], body)), location, _)
                      when Binder.has_type bndr ->
@@ -1108,9 +1104,9 @@ struct
                       I.letfun
                         env
                         ((ft, f, scope), (tyvars, (ps, body)), location)
-                        (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
+                        (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs cont)
                 | Exp e' ->
-                    I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
+                    I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs cont)
                 | Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
@@ -1139,21 +1135,48 @@ struct
                              ((ft, f, scope), (tyvars, (ps, body)), location))
                         defs
                     in
-                      I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
+                      I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs cont)
                 | Foreign (bndr, raw_name, language, _file, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
                     let xt = Binder.to_type_exn bndr in
-                    I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
+                    I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs cont)
                 | Typenames _
                 | Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
-                    eval_bindings scope env bs e
-                | Module _ -> assert false (* TODO *)
-                | Import _ -> assert false (* TODO *)
+                    eval_bindings scope env bs cont
+                | Module (name, module_interface_opt , module_bindings) ->
+                  let module_interface =
+                    begin match module_interface_opt with
+                      | None -> failwith "Typesugar must add module signature"
+                      | Some ms -> ms
+                    end in
+                  let module_cont env =
+                    let module_record_fields1 = StringMap.fold (fun field _ list ->
+                        let x, xt = lookup_name_and_type name env in
+                        let field_value = I.var (x, xt) in
+                        (field, field_value) :: list  ) module_interface.Types.fields [] in
+                    let module_record_fields2 = StringMap.fold (fun module_name _ list ->
+                      let x, xt = lookup_record_for_module module_name env in
+                      let module_value = I.var (x, xt) in
+                      (module_name, module_value) :: list  ) module_interface.Types.modules module_record_fields1 in
+                    I.comp_of_value (I.record (module_record_fields2, None)) in
+                  let module_type = ir_type_of_module_type module_interface in
+                  let x_info = (module_type, name, scope) in
+                  I.letvar
+                    (x_info,
+                      eval_bindings scope env module_bindings module_cont,
+                      fun v ->
+                        eval_bindings scope (extend_module name v module_type env) bs cont)
+
+                | Import _ -> eval_bindings scope env bs cont
                 | Handler _ | Fun _ | Foreign _ | AlienBlock _ -> assert false
             end
+
+
+  and eval_comp scope env bs e =
+    eval_bindings scope env bs (fun env' -> eval env' e)
 
   and evalv env e =
     I.value_of_comp (eval env e)
@@ -1209,33 +1232,49 @@ struct
       globals, (locals, main), nenv
 
 
-  let compile env (bindings, body) =
+  let compile (env : SugarToIrEnv.env) (bindings, body) =
     Debug.print ("compiling to IR");
 (*     Debug.print (Sugartypes.show_program (bindings, body)); *)
     let body =
       match body with
         | None -> WithPos.dummy (Sugartypes.RecordLit ([], None))
         | Some body -> body in
-      let s = eval_bindings Scope.Global env bindings body in
-        let r = (I.reify s) in
-          Debug.print ("compiled IR");
-          Debug.if_set show_compiled_ir (fun () -> Ir.string_of_program r);
-          r, I.sem_type s
+      let s = eval_comp Scope.Global env bindings body in
+      let r = (I.reify s) in
+      Debug.print ("compiled IR");
+      Debug.if_set show_compiled_ir (fun () -> Ir.string_of_program r);
+      r, I.sem_type s
 end
 
 module C = Eval(Interpretation(BindingListMonad))
 
+(* external env type *)
+type nenv = Var.var Env.String.t
+type tenv = Types.datatype Env.Int.t
+type env = nenv * tenv * Types.row
+
+
+(* This is only necessary until the whole pipeline uses the right env type *)
+let external_env_to_internal_env (nenv, tenv, row) : SugarToIrEnv.env = {
+  sugar_to_ir_names = nenv ;
+  ir_type_env = tenv;
+  module_to_record = NEnv.empty ;
+  effects = row
+}
+
+
 let desugar_expression : env -> Sugartypes.phrase -> Ir.computation =
   fun env e ->
-    let (bs, body), _ = C.compile env ([], Some e) in
+    let (bs, body), _ = C.compile (external_env_to_internal_env env) ([], Some e) in
       (bs, body)
 
 let desugar_program : env -> Sugartypes.program -> Ir.binding list * Ir.computation * nenv =
   fun env p ->
-    let (bs, body), _ = C.compile env p in
+    let (bs, body), _ = C.compile (external_env_to_internal_env env) p in
       C.partition_program (bs, body)
 
 let desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * nenv =
   fun env bs ->
     let globals, _, nenv = desugar_program env (bs, None) in
-      globals, nenv
+    let nenv_ext =  nenv in
+      globals, nenv_ext

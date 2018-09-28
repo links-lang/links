@@ -694,10 +694,10 @@ class map =
           Typenames ts
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
-      | Module (n, bs) ->
+      | Module (n, interface, bs) ->
           let n = o#name n in
           let bs = o#list (fun o -> o#binding) bs in
-          Module (n, bs)
+          Module (n, interface, bs)
       | Import qname ->
          let qname = o#qualified_name qname in
          Import qname
@@ -1351,7 +1351,7 @@ class fold =
           o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
-      | Module (n, bs) ->
+      | Module (n, _, bs) ->
           let o = o#name n in
           let o = o#list (fun o -> o#binding) bs in
           o
@@ -2140,10 +2140,10 @@ class fold_map =
           in (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
-      | Module (n, bs) ->
+      | Module (n, interface, bs) ->
           let (o, n) = o#string n in
           let (o, bs) = o#list (fun o -> o#binding) bs in
-          (o, (Module (n, bs)))
+          (o, (Module (n, interface, bs)))
       | Import qname ->
          let (o, qname) = o#qualified_name qname in
          (o, Import qname)

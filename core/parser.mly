@@ -395,7 +395,7 @@ module_binding:
 | MODULE CONSTRUCTOR LBRACE declarations? RBRACE               { let decls = match $4 with
                                                                     | None -> []
                                                                     | Some xs -> xs
-                                                                 in with_pos $loc (Module ($2, decls)) }
+                                                                 in with_pos $loc (Module ($2, None, decls)) }
 
 module_import:
 | OPEN qualified_type_name SEMICOLON                           { with_pos $loc (Import (QualifiedName.of_path $2)) }
