@@ -467,16 +467,7 @@ end
 
 
 
-module type TYPE_TRANSFORMER =
-sig
-    val datatype : typ -> typ
-    val row : row -> row
-    val type_arg : type_arg -> type_arg
-    val field_spec : field_spec -> field_spec
-    val quantifier : quantifier -> quantifier
-end
-
-module DecycleTypes : TYPE_TRANSFORMER =
+module DecycleTypes  =
 struct
   let elim_recursive_type_cycles_visitor = new ElimRecursiveTypeCyclesTransform.visitor
 
@@ -486,6 +477,7 @@ struct
   let type_arg ta = fst (elim_recursive_type_cycles_visitor#type_arg ta)
   let row_var rv = fst (elim_recursive_type_cycles_visitor#row_var rv)
   let quantifier q = fst (elim_recursive_type_cycles_visitor#quantifier q)
+  let lens_sort ls = fst (elim_recursive_type_cycles_visitor#lens_sort ls)
 
 end
 
@@ -2752,3 +2744,5 @@ let pp_row : Format.formatter -> row -> unit = fun fmt t ->
     Format.pp_print_string fmt (string_of_row t)
   else
     pp_row fmt (DecycleTypes.row t)
+let pp_lens_sort : Format.formatter -> lens_sort -> unit = fun fmt ls ->
+  pp_lens_sort fmt (DecycleTypes.lens_sort ls)

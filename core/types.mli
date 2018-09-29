@@ -389,7 +389,7 @@ val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
-
+val pp_lens_sort : Format.formatter  -> lens_sort -> unit
 val pp_datatype : Format.formatter -> datatype -> unit
 val pp_quantifier : Format.formatter -> quantifier -> unit
 val pp_type_arg :  Format.formatter -> type_arg -> unit
@@ -423,15 +423,3 @@ end
 
 module Transform : TYPE_VISITOR
 module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR
-
-
-module type TYPE_TRANSFORMER =
-sig
-    val datatype : datatype -> datatype
-    val row : row -> row
-    val type_arg : type_arg -> type_arg
-    val field_spec : field_spec -> field_spec
-    val quantifier : quantifier -> quantifier
-end
-
-module DecycleTypes : TYPE_TRANSFORMER
