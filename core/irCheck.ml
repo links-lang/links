@@ -6,14 +6,14 @@ open Ir
 let fail_on_ir_type_error = false
 exception IRTypeError of string
 
-let raise_ir_type_error msg occurence =
-  let occurence_string = match occurence with
+let raise_ir_type_error msg occurrence =
+  let occurrence_string = match occurrence with
     | `TC tc -> "\noccuring in tail computation: " ^  Ir.string_of_tail_computation tc
     | `Value v -> "\noccuring in value: " ^ Ir.string_of_value v
     | `Special s -> "\noccuring in special tail computation: " ^ Ir.string_of_special s
     | `Binding b -> "\noccuring in binding: " ^ Ir.string_of_binding b
     | `None -> "" in
-  raise (IRTypeError (msg ^ occurence_string))
+  raise (IRTypeError (msg ^ occurrence_string))
 
 let handle_ir_type_error error alternative =
   match error with
@@ -30,8 +30,8 @@ let handle_ir_type_error error alternative =
     |  e-> failwith ("Unknown exception during IR type-checking: " ^ Printexc.to_string e)
 
 
-let ensure condition msg occurence =
-  if condition then () else raise_ir_type_error msg occurence
+let ensure condition msg occurrence =
+  if condition then () else raise_ir_type_error msg occurrence
 
 let _print_substmap subst =
   Debug.print ("Substmap\n:" ^ IntMap.show (fun fmt num -> Format.pp_print_int fmt num) subst)
@@ -75,7 +75,7 @@ end
 
 
 
-let eq_types occurence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
+let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
   fun  context (t1, t2) ->
     let lookupVar lvar map  =
       match IntMap.find_opt lvar map with
@@ -93,7 +93,7 @@ let eq_types occurence : type_eq_context -> (Types.datatype * Types.datatype) ->
               (primary_kind = primary_kind_env &&  rsk = subkind_env)
               "Mismatch between (sub) kind information in variable vs stored in kind environment"
               `None
-          | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurence
+          | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurrence
         end;
       (ctx, is_equal) in
     let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
@@ -312,36 +312,36 @@ let eq_types occurence : type_eq_context -> (Types.datatype * Types.datatype) ->
 
 
 
-let check_eq_types (ctx : type_eq_context) et at occurence =
-  if not (eq_types occurence ctx (et, at)) then
+let check_eq_types (ctx : type_eq_context) et at occurrence =
+  if not (eq_types occurrence ctx (et, at)) then
     raise_ir_type_error
       ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
-      occurence
+      occurrence
 
-let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurence ->
+let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
     if List.length exptl <> List.length actl then
       raise_ir_type_error "Arity mismatch" `None
     else
       List.iter2 (fun  et at ->
-          check_eq_types ctx et at occurence
+          check_eq_types ctx et at occurrence
        )  exptl actl
 
 
 
 
-let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurence =
+let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurrence =
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) in
   match StringMap.find_opt required_effect_name map with
-    | Some (`Present et) -> check_eq_types ctx et required_effect_type occurence
-    | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurence
+    | Some (`Present et) -> check_eq_types ctx et required_effect_type occurrence
+    | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurrence
 
 
 
-let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurence =
+let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurrence =
   ensure
-    (eq_types occurence ctx (`Record allowed_effects, `Record imposed_effects_row))
+    (eq_types occurrence ctx (`Record allowed_effects, `Record imposed_effects_row))
     ("Incompatible effects; Allowed:\n" ^ (Types.string_of_row allowed_effects) ^ "\nactual effects:\n" ^  (Types.string_of_row imposed_effects_row))
-    occurence
+    occurrence
 
 
 
@@ -378,8 +378,8 @@ struct
 
     method set_allowed_effects eff_row = {< allowed_effects = eff_row >}, allowed_effects
 
-    method impose_presence_of_effect effect_name effect_typ occurence : unit =
-      ensure_effect_present_in_row (o#extract_type_equality_context ()) allowed_effects effect_name effect_typ occurence
+    method impose_presence_of_effect effect_name effect_typ occurrence : unit =
+      ensure_effect_present_in_row (o#extract_type_equality_context ()) allowed_effects effect_name effect_typ occurrence
 
     method add_typevar_to_context id kind = {< type_var_env = Env.bind type_var_env (id, kind)  >}
     method remove_typevar_to_context id  = {< type_var_env = Env.unbind type_var_env id >}
@@ -388,7 +388,7 @@ struct
     method add_function_closure_binder f binder = {< closure_def_env = Env.bind closure_def_env (f, binder) >}
     method remove_function_closure_binder f = {< closure_def_env = Env.unbind closure_def_env f  >}
 
-    method check_eq_types t1 t2 occurence = check_eq_types (o#extract_type_equality_context ()) t1 t2 occurence
+    method check_eq_types t1 t2 occurrence = check_eq_types (o#extract_type_equality_context ()) t1 t2 occurrence
 
     method! var : var -> (var * datatype * 'self_type) =
       fun var -> (var, o#lookup_type var, o)
