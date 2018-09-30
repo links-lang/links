@@ -2482,8 +2482,14 @@ struct
     effect_row = make_empty_closed_row ()  }
 
   let normalise_typing_environment env =
+    let rec normalise_module_t mt =
+    {
+      fields = StringMap.map normalise_datatype mt.fields;
+      modules = StringMap.map normalise_module_t mt.modules;
+    } in
   { env with
       var_env = Env.String.map normalise_datatype env.var_env;
+      module_env = Env.String.map normalise_module_t env.module_env;
       (* FIXME: normalise types in module types, too? *)
       (* what about tycon_env? *)
       effect_row = normalise_row env.effect_row }
