@@ -36,18 +36,29 @@ object ('self)
   val effect_row : Types.row
 
   method get_var_env     : unit -> Types.FrontendTypeEnv.var_environment
+  method get_module_env  : unit -> Types.FrontendTypeEnv.module_environment
   method get_tycon_env   : unit -> Types.FrontendTypeEnv.tycon_environment
   method get_formlet_env : unit -> Types.FrontendTypeEnv.var_environment
 
-  method backup_envs     :  Types.FrontendTypeEnv.var_environment * Types.FrontendTypeEnv.tycon_environment * Types.FrontendTypeEnv.var_environment * Types.row
-  method restore_envs    : (Types.FrontendTypeEnv.var_environment * Types.FrontendTypeEnv.tycon_environment * Types.FrontendTypeEnv.var_environment * Types.row) -> 'self
+  method backup_envs     :   Types.FrontendTypeEnv.var_environment
+                           * Types.FrontendTypeEnv.module_environment
+                           * Types.FrontendTypeEnv.tycon_environment
+                           * Types.FrontendTypeEnv.var_environment
+                           * Types.row
+  method restore_envs    :  (   Types.FrontendTypeEnv.var_environment
+                              * Types.FrontendTypeEnv.module_environment
+                              * Types.FrontendTypeEnv.tycon_environment
+                              * Types.FrontendTypeEnv.var_environment
+                              * Types.row)
+                            -> 'self
 
   method with_var_env     : Types.FrontendTypeEnv.var_environment -> 'self
+  method with_module_env  : Types.FrontendTypeEnv.module_environment -> 'self
   method with_formlet_env : Types.FrontendTypeEnv.var_environment -> 'self
 
   method bind_tycon      : string -> Types.tycon_spec -> 'self
 
-  method lookup_type     : name -> Types.datatype
+  method lookup_type     : QualifiedName.t -> Types.datatype
   method lookup_effects  : Types.row
   method with_effects    : Types.row -> 'self
 

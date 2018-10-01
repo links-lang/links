@@ -133,21 +133,26 @@ let check_type_application (e, t) k =
 class transform (env : Types.FrontendTypeEnv.t) =
   object (o : 'self_type)
     val var_env = env.Types.FrontendTypeEnv.var_env
+    val module_env = env.Types.FrontendTypeEnv.module_env
     val tycon_env = env.Types.FrontendTypeEnv.tycon_env
     val formlet_env = TyEnv.empty
     val effect_row = fst (Types.unwrap_row env.Types.FrontendTypeEnv.effect_row)
 
     method get_var_env : unit -> Types.FrontendTypeEnv.var_environment = fun () -> var_env
+    method get_module_env :  unit -> Types.FrontendTypeEnv.module_environment = fun () -> module_env
     method get_tycon_env : unit -> Types.FrontendTypeEnv.tycon_environment = fun () -> tycon_env
     method get_formlet_env : unit -> Types.FrontendTypeEnv.var_environment = fun () -> formlet_env
 
-    method backup_envs = var_env, tycon_env, formlet_env, effect_row
-    method restore_envs (var_env, tycon_env, formlet_env, effect_row) =
-      {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env;
+    method backup_envs = var_env, module_env, tycon_env, formlet_env, effect_row
+    method restore_envs (var_env, module_env, tycon_env, formlet_env, effect_row) =
+      {< var_env = var_env; module_env = module_env; tycon_env = tycon_env; formlet_env = formlet_env;
          effect_row = effect_row >}
 
     method with_var_env var_env =
       {< var_env = var_env >}
+
+    method with_module_env module_env =
+      {< module_env = module_env >}
 
     method with_formlet_env formlet_env =
       {< formlet_env = formlet_env >}
@@ -155,8 +160,17 @@ class transform (env : Types.FrontendTypeEnv.t) =
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
 
-    method lookup_type : name -> Types.datatype = fun var ->
-      TyEnv.lookup var_env var
+    method lookup_type : QualifiedName.t -> Types.datatype = fun var ->
+      let rec lookup cur_module_env cur_var_env = function
+        | `Ident x ->  StringMap.find x cur_var_env
+        | `Dot (moodule, remainder) ->
+          let module_t = StringMap.find moodule cur_module_env in
+          lookup module_t.Types.modules module_t.Types.fields remainder in
+      match var with
+        | `Ident x ->  TyEnv.lookup var_env x
+        | `Dot (moodule, remainder) ->
+          let module_t = TyEnv.lookup module_env moodule in
+          lookup module_t.Types.modules module_t.Types.fields remainder
 
     method lookup_effects : Types.row = effect_row
 
@@ -241,7 +255,7 @@ class transform (env : Types.FrontendTypeEnv.t) =
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
       function
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
-      | Var var -> (o, Var var, o#lookup_type (QualifiedName.unqualify var))
+      | Var qvar -> (o, Var qvar, o#lookup_type qvar)
       | FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
@@ -827,7 +841,24 @@ class transform (env : Types.FrontendTypeEnv.t) =
       | Infix -> (o, Infix)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
       | AlienBlock _ -> assert false
-      | Module _ -> assert false
+      | Module (name, interface_opt, bs) ->
+        let update_map o m f =
+          StringMap.fold (fun k v (o, m) ->
+            let o, new_entry = f o v in
+            o, StringMap.add k new_entry m
+          )  m (o,StringMap.empty) in
+        let rec visit_module_t o mt =
+          let (o, fields) = update_map o mt.Types.fields (fun o t -> o#datatype t) in
+          let (o, modules) = update_map o mt.Types.modules visit_module_t in
+          (o, {Types.fields = fields ; Types.modules = modules}) in
+
+        let envs = o#backup_envs in
+        let (o, bs) = listu o (fun o b -> o#binding b) bs in
+        let o = o#restore_envs envs in
+        let (o, interface) = visit_module_t o (OptionUtils.val_of interface_opt) in
+        let new_module_env = Env.String.bind (o#get_module_env ()) (name, interface)  in
+        let o = o#with_module_env new_module_env in
+        o, Module (name, Some interface, bs)
       | Import qname -> (o, Import qname)
 
     method binding : binding -> ('self_type * binding) =
