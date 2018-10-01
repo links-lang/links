@@ -5,7 +5,6 @@ module Helpers = struct
   module Classic = LensHelpersClassic
   module Incremental = LensHelpersIncremental
   module Query = LensQueryHelpers
-  module FunDeps = LensFDHelpers
 end
 
 module Utility = struct
@@ -14,8 +13,4 @@ end
 
 module Types = struct
   include LensTypes
-end
-
-module SetOperations = struct
-  include LensSetOperations
 end

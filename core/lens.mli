@@ -12,9 +12,6 @@ module Helpers : sig
   module Query : sig
     include module type of struct include LensQueryHelpers end
   end
-  module FunDeps : sig
-    include module type of LensFDHelpers
-  end
 end
 
 module Utility : sig
@@ -23,8 +20,4 @@ end
 
 module Types : sig
   include module type of LensTypes
-end
-
-module SetOperations : sig
-  include module type of struct include LensSetOperations end
 end
