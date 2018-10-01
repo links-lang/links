@@ -600,7 +600,6 @@ struct
             | _ -> failwith ("Unsupported underlying lens value.")
       end
     | `LensDrop (lens, drop, key, def, _sort) ->
-        let _ = LensHelpers.ensure_lenses_enabled () in
         let lens = value env lens in
         let def = value env def in
         let sort =

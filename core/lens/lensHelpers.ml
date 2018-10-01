@@ -13,12 +13,6 @@ let query_count = ref 0
 let print message =
   (if false then print_endline message)
 
-let ensure_lenses_enabled () =
-  if Settings.get_value Basicsettings.RelationalLenses.relational_lenses then
-    ()
-  else
-    failwith "Code uses relational lenses, but relational lenses are not enabled. Please set the relational lenses flag."
-
 module Lens' = struct
     type t = Value.t
 
