@@ -1,7 +1,7 @@
 open Ir
 open Utility
 
-module type TRANSFORM =
+module type IR_VISITOR =
 sig
   type environment = Types.datatype Env.Int.t
 
@@ -53,13 +53,15 @@ end
 module type PROGTRANSFORM =
 sig
    val program : Types.datatype Env.Int.t -> program -> program
+   val bindings : Types.datatype Env.Int.t -> binding list -> binding list
 end
 
-module Transform : TRANSFORM
+
+module Transform : IR_VISITOR
 
 module Inline : PROGTRANSFORM
 module ElimDeadDefs : PROGTRANSFORM
-
+module ElimBodiesFromMetaTypeVars : PROGTRANSFORM
 module CheckForCycles : PROGTRANSFORM
 module ElimTypeAliases : PROGTRANSFORM
 module InstantiateTypes :

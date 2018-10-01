@@ -1186,6 +1186,7 @@ struct
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in
       globals, (locals, main), nenv
 
+
   let compile env (bindings, body) =
     Debug.print ("compiling to IR");
 (*     Debug.print (Sugartypes.show_program (bindings, body)); *)
@@ -1196,7 +1197,7 @@ struct
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-          Debug.if_set show_compiled_ir (fun () -> Ir.show_program r);
+          Debug.if_set show_compiled_ir (fun () -> Ir.string_of_program r);
           r, I.sem_type s
 end
 

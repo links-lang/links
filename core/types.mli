@@ -10,7 +10,6 @@ module TypeVarMap : Utility.INTMAP
 
 (* points *)
 type 'a point = 'a Unionfind.point
-  [@@deriving show]
 
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     [@@deriving show]
@@ -35,19 +34,17 @@ type kind = primary_kind * subkind
 type 't meta_type_var_non_rec_basis =
     [ `Var of (int * subkind * freedom)
     | `Body of 't ]
-      [@@deriving show]
+
 
 type 't meta_type_var_basis =
     [ 't meta_type_var_non_rec_basis
     | `Recursive of (int * 't) ]
-      [@@deriving show]
+
 
 type 't meta_row_var_basis =
      [ 't meta_type_var_basis | `Closed ]
-      [@@deriving show]
 
 type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
-      [@@deriving show]
 
 module Abstype :
 sig
@@ -86,7 +83,6 @@ type ('t, 'r) session_type_basis =
     | `Choice of 'r
     | `Dual of 't
     | `End ]
-      [@@deriving show]
 
 (* Lenses *)
 type lens_phrase =
@@ -138,13 +134,10 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
-      [@@deriving show]
 
 type session_type = (typ, row) session_type_basis
-  [@@deriving show]
 
 type datatype = typ
-      [@@deriving show]
 
 (* base kind stuff *)
 val is_base_type : datatype -> bool
@@ -191,7 +184,6 @@ type environment        = datatype Env.String.t
  and typing_environment = { var_env   : environment ;
                             tycon_env : tycon_environment ;
                             effect_row : row }
-    [@@deriving show]
 
 val empty_typing_environment : typing_environment
 
@@ -300,6 +292,7 @@ val get_row_var : row -> int option
 val make_closed_row : datatype field_env -> row
 val row_with : (string * field_spec) -> row -> row
 val extend_row : datatype field_env -> row -> row
+val extend_row_safe : datatype field_env -> row -> row option
 
 (** constants *)
 val empty_field_env : field_spec_map
@@ -396,11 +389,21 @@ val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
+val pp_lens_sort : Format.formatter  -> lens_sort -> unit
+val pp_datatype : Format.formatter -> datatype -> unit
+val pp_quantifier : Format.formatter -> quantifier -> unit
+val pp_type_arg :  Format.formatter -> type_arg -> unit
+val show_quantifier : quantifier -> string
+val pp_row : Format.formatter -> row -> unit
+val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
 
-module type TRANSFORM =
+module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
+    method remove_rec_row_binding : int -> 'self_type
+    method remove_rec_type_binding : int ->'self_type
+
     method primitive : primitive -> (primitive * 'self_type)
     method lens_col : lens_col -> (lens_col * 'self_type)
     method lens_sort : lens_sort -> (lens_sort * 'self_type)
@@ -418,4 +421,5 @@ sig
   end
 end
 
-module Transform : TRANSFORM
+module Transform : TYPE_VISITOR
+module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR
