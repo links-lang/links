@@ -1154,7 +1154,7 @@ struct
                     end in
                   let module_cont env =
                     let module_record_fields1 = StringMap.fold (fun field _ list ->
-                        let x, xt = lookup_name_and_type name env in
+                        let x, xt = lookup_name_and_type field env in
                         let field_value = I.var (x, xt) in
                         (field, field_value) :: list  ) module_interface.Types.fields [] in
                     let module_record_fields2 = StringMap.fold (fun module_name _ list ->
