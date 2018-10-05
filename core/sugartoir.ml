@@ -917,29 +917,24 @@ struct
               let table = ev table in
                 I.lens_handle (table, t)
           | `LensDropLit (lens, drop, key, default, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
               let default = ev default in
                 I.lens_drop_handle (lens, drop, key, default, t)
           | `LensSelectLit (lens, pred, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
-              let pred = LensQueryHelpers.lens_phrase_of_phrase pred in
+              let pred = Lens.Helpers.Query.lens_phrase_of_phrase pred in
                 I.lens_select_handle (lens, pred, t)
           | `LensJoinLit (lens1, lens2, on, left, right, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
-              let on = LensTypes.cols_of_phrase on in
-              let left = LensQueryHelpers.lens_phrase_of_phrase left in
-              let right = LensQueryHelpers.lens_phrase_of_phrase right in
+              let on = Lens.Types.cols_of_phrase on in
+              let left = Lens.Helpers.Query.lens_phrase_of_phrase left in
+              let right = Lens.Helpers.Query.lens_phrase_of_phrase right in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
           | `LensGetLit (lens, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
                 I.lens_get (lens, t)
           | `LensPutLit (lens, data, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
               let data = ev data in
                 I.lens_put (lens, data, t)

@@ -18,3 +18,6 @@
   (modes native)
   (libraries str yojson ppx_deriving_yojson.runtime unix safepass base64 ANSITerminal linenoise cohttp lwt websocket websocket-lwt.cohttp findlib)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
+
+;; Make Lens modules available.
+(copy_files# lens/*.ml)

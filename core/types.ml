@@ -1,5 +1,4 @@
 open Utility
-open LensUtility
 
 [@@@ocaml.warning "-32"] (** disable warnings about unused functions in this module**)
 
@@ -145,7 +144,7 @@ type lens_phrase =
   | `Case      of lens_phrase option * (lens_phrase * lens_phrase) list * lens_phrase
   | `TupleLit  of lens_phrase list
   ]
-      [@@deriving show]
+  [@@deriving show]
 
 (* End of Lenses *)
 
@@ -164,7 +163,7 @@ type typ =
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
-and lens_sort     = fundepset * lens_phrase option * (lens_col list)
+and lens_sort     = LensUtility.fundepset * lens_phrase option * (lens_col list)
 and lens_col      = {
   table : string;
   name : string;
