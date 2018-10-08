@@ -19,4 +19,4 @@ script:
   - make nc-release
   - make tests
   - ./run-tests db-only shredding
-  - ./run-tests lens
+  - ./run-tests unit 
