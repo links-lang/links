@@ -13,7 +13,7 @@ let query_count = ref 0
 let print message =
   (if false then print_endline message)
 
-module Lens' = struct
+module LensValue = struct
     type t = Value.t
 
     let sort (v : t) =
@@ -23,7 +23,7 @@ module Lens' = struct
         | `LensDrop (_lens, _drop, _key, _def, sort) -> sort
         | `LensSelect (_lens, _pred, sort) -> sort
         | `LensJoin (_lens1, _lens2, _on, _left, _right, sort) -> sort
-        | _e -> failwith "Did not match a lens value (Lens'.sort)"
+        | _e -> failwith "Did not match a lens value (LensValue.sort)"
 
     let rec is_memory_lens (lens : Value.t) =
         match lens with
@@ -151,11 +151,11 @@ let rec lens_get_query (lens : Value.t) =
 
 (* BUG: Lists can be too big for List.map; need to be careful about recursion *)
 let lens_get (lens : Value.t) callfn =
-    if Lens'.is_memory_lens lens then
+    if LensValue.is_memory_lens lens then
         lens_get_mem lens callfn
     else
         let _ = Debug.print "getting tables" in
-        let sort = Lens'.sort lens in
+        let sort = LensValue.sort lens in
         let db = lens_get_db lens in
         let cols = LensSort.cols sort in
         (* print_endline (ListUtils.print_list (get_lens_sort_cols_list sort)); *)
@@ -174,11 +174,11 @@ let lens_debug_delta (delta : (Value.t * int) list) =
     List.map (fun (t,m) -> print (string_of_int m ^ ": " ^ string_of_value t)) delta
 
 let project_lens (l : Value.t) (t : (Value.t * int) list) =
-    let cols = Lens'.colset l in
+    let cols = LensValue.colset l in
     List.map (fun (row,t) -> project_record_columns cols row,t) t
 
 let lens_select (lens : Value.t) (phrase : Types.lens_phrase) =
-    let sort = Lens'.sort lens in
+    let sort = LensValue.sort lens in
     let sort = LensTypes.select_lens_sort sort phrase in
     `LensSelect (lens, phrase, sort)
 
@@ -209,9 +209,9 @@ let calculate_fd_changelist (fds : FunDepSet.t) (data : (Value.t * int) list) =
     res
 
 let query_exists (lens : Value.t) phrase =
-    let sort = Lens'.sort lens in
+    let sort = LensValue.sort lens in
     let sort = LensTypes.select_lens_sort sort phrase in
-    if Lens'.is_memory_lens lens then
+    if LensValue.is_memory_lens lens then
         let res = lens_get (`LensSelect (lens, phrase, sort)) None in
         unbox_list res <> []
     else

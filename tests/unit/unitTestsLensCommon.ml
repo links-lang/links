@@ -88,20 +88,20 @@ module LensTestHelpers = struct
         mem_lens (fundepset_of_string fds) name data
 
     let join_lens_dl l1 l2 on =
-        let sort, on = join_lens_sort (Lens.Helpers.Lens'.sort l1) (Lens.Helpers.Lens'.sort l2) on in
+        let sort, on = join_lens_sort (Lens.Helpers.LensValue.sort l1) (Lens.Helpers.LensValue.sort l2) on in
         `LensJoin (l1, l2, on, `Constant (`Bool true), `Constant (`Bool false), sort)
 
     let join_lens_dr l1 l2 on =
-        let sort, on = join_lens_sort (Lens.Helpers.Lens'.sort l1) (Lens.Helpers.Lens'.sort l2) on in
+        let sort, on = join_lens_sort (Lens.Helpers.LensValue.sort l1) (Lens.Helpers.LensValue.sort l2) on in
         `LensJoin (l1, l2, on, `Constant (`Bool false), `Constant (`Bool true), sort)
 
     let select_lens l phrase =
-        let sort = Lens.Helpers.Lens'.sort l in
+        let sort = Lens.Helpers.LensValue.sort l in
         let sort = LensTypes.select_lens_sort sort phrase in
         `LensSelect (l, phrase, sort)
 
     let drop_lens l drop key default =
-        let sort = Lens.Helpers.Lens'.sort l in
+        let sort = Lens.Helpers.LensValue.sort l in
         let (fds, cond, r) = sort in
         let fds = FunDepSet.remove_defines fds (ColSet.singleton drop) in
         let r = LensRecordHelpers.remove_record_type_column drop r in
