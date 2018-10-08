@@ -251,7 +251,7 @@ let test_put_delta test_ctx =
     ) in
     let table = match l1 with `Lens (t,_) -> t | _ -> assert false in
     let run = if classic_opt then
-        let cols = Lens.Helpers.Lens'.cols_present_aliases l1 in
+        let cols = Lens.Helpers.LensValue.cols_present_aliases l1 in
         let data = SortedRecords.construct_cols cols res in
         let run () = LensHelpersClassic.apply_table_data table data in
         run

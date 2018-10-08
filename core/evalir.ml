@@ -604,7 +604,7 @@ struct
         let def = value env def in
         let sort =
           Lens.Types.drop_lens_sort
-            (Lens.Helpers.Lens'.sort lens)
+            (Lens.Helpers.LensValue.sort lens)
             (Lens.Utility.ColSet.singleton drop)
             (Lens.Utility.ColSet.singleton key)
         in
@@ -613,7 +613,7 @@ struct
         let lens = value env lens in
         let sort =
           Lens.Types.select_lens_sort
-            (Lens.Helpers.Lens'.sort lens)
+            (Lens.Helpers.LensValue.sort lens)
             pred
         in
         apply_cont cont env (`LensSelect (lens, pred, sort))
@@ -622,15 +622,15 @@ struct
         let lens2 = value env lens2 in
         let lens1, lens2 =
           if Lens.Helpers.join_lens_should_swap
-               (Lens.Helpers.Lens'.sort lens1)
-               (Lens.Helpers.Lens'.sort lens2) on
+               (Lens.Helpers.LensValue.sort lens1)
+               (Lens.Helpers.LensValue.sort lens2) on
           then lens2, lens1
           else lens1, lens2
         in
         let sort, on =
           Lens.Helpers.join_lens_sort
-            (Lens.Helpers.Lens'.sort lens1)
-            (Lens.Helpers.Lens'.sort lens2) on
+            (Lens.Helpers.LensValue.sort lens1)
+            (Lens.Helpers.LensValue.sort lens2) on
         in
         apply_cont cont env (`LensJoin (lens1, lens2, on, left, right, sort))
     | `LensGet (lens, _rtype) ->

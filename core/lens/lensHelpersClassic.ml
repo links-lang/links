@@ -66,12 +66,12 @@ let relational_update (fds : fundepset) (changedata : SortedRecords.recs) (updat
 let lens_put_set_step (lens : Value.t) (data : SortedRecords.recs) (fn : Value.t -> SortedRecords.recs -> unit) =
     let get l =
         let dat = LensHelpers.lens_get l () in
-        SortedRecords.construct_cols (Lens'.cols_present_aliases l) dat in
+        SortedRecords.construct_cols (LensValue.cols_present_aliases l) dat in
     match lens with
     | `Lens _ -> fn lens data
     | `LensDrop (l, drop, key, default, _sort) ->
             let r = get l in
-            let cols = Lens'.cols_present_aliases lens in
+            let cols = LensValue.cols_present_aliases lens in
             let nplus = SortedRecords.minus data (SortedRecords.project_onto r cols) in
             let a = SortedRecords.construct (box_list [box_record [drop, default]]) in
             let m = SortedRecords.merge (SortedRecords.join r data cols) (SortedRecords.join nplus a []) in
@@ -79,8 +79,8 @@ let lens_put_set_step (lens : Value.t) (data : SortedRecords.recs) (fn : Value.t
             fn l res
     | `LensJoin (l1, l2, join, pd, qd, _sort)  ->
             let join_simp = List.map (fun (a,_,_) -> a) join in
-            let getfds l = Lens'.fundeps l in
-            let cols l = Lens'.cols_present_aliases l in
+            let getfds l = LensValue.fundeps l in
+            let cols l = LensValue.cols_present_aliases l in
             let r = get l1 in
             let s = get l2 in
             let m0 = relational_update (getfds l1) (SortedRecords.project_onto data (cols l1)) r in
@@ -95,7 +95,7 @@ let lens_put_set_step (lens : Value.t) (data : SortedRecords.recs) (fn : Value.t
             fn l1 m;
             fn l2 n
     | `LensSelect (l, pred, _sort) ->
-            let sort = Lens'.sort l in
+            let sort = LensValue.sort l in
             let r = get l in
             let m1 = relational_update (LensSort.fundeps sort) data (SortedRecords.filter r pred) in
             let nh = SortedRecords.minus (SortedRecords.filter m1 pred) data in
@@ -126,7 +126,7 @@ let apply_table_data (t : Value.table) (data : SortedRecords.recs) =
     ()
 
 let lens_put_step (lens : Value.t) (data : Value.t) (fn : Value.t -> SortedRecords.recs -> unit) =
-    let data = SortedRecords.construct_cols (Lens'.cols_present_aliases lens) data in
+    let data = SortedRecords.construct_cols (LensValue.cols_present_aliases lens) data in
     lens_put_set_step lens data fn
 
 let lens_put (lens : Value.t) (data : Value.t) =
@@ -134,4 +134,4 @@ let lens_put (lens : Value.t) (data : Value.t) =
         match lens with
         | `Lens (t,_) -> apply_table_data t data
         | _ -> lens_put_set_step lens data do_step_rec in
-    do_step_rec lens (SortedRecords.construct_cols (Lens'.cols_present_aliases lens) data)
+    do_step_rec lens (SortedRecords.construct_cols (LensValue.cols_present_aliases lens) data)
