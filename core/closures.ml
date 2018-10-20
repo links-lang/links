@@ -473,8 +473,9 @@ struct
           let zs = (IntMap.find f fenv).termvars in
           let cvars = List.fold_left (fun cvars (z, _) -> IntSet.add z cvars) IntSet.empty zs in
 
-          (* The following type annotation is necessary as of OCaml
-             4.07.0. Is this a bug in OCaml? *)
+          (* HACK: this function and the type annotation (o : 'self)
+             work around an as yet undiagnosed bug in OCaml 4.07.0 *)
+          let binder_hack x = o#binder x in
           let zb, (o : 'self) =
             match zs with
             | [] -> None, o
@@ -490,7 +491,11 @@ struct
               (* fresh variable for the closure environment *)
               let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
               let z = Var.var_of_binder zb in
-              let _, o = o#binder zb in
+              (* HACK: the following line leads to a compiler error in
+                 OCaml 4.07.0: Fatal error: exception Ctype.Unify(_)
+                 *)
+              (* let _, o = o#binder zb in *)
+              let _, o = binder_hack zb in
               let o = o#set_context [fb] z cvars in
               Some zb, o in
           let body, _, o = o#computation body in
@@ -568,7 +573,7 @@ struct
       (** Given a list of free variables, return a tuple containing the following:
         - a list of fresh quantifiers, each corresponding to one free variable
         - Three maps mapping the old free variables to fresh ones (to be used with Instantiate)  **)
-      method create_substitutions_replacing_free_variables (free_type_vars : Types.quantifier list)  =
+      method create_substitutions_replacing_free_variables (free_type_vars : Types.quantifier list) =
         List.fold_right (fun oldq (qs, (type_map, row_map, presence_map) ) ->
           let typevar = Types.var_of_quantifier oldq in
           let primary_kind = Types.primary_kind_of_quantifier oldq in
