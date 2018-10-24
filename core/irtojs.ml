@@ -111,8 +111,9 @@ end
 module type JS_PAGE_COMPILER = sig
   include JS_COMPILER
 
+  val generate_program : venv -> Ir.computation -> venv * js
   val generate_stubs : Value.env -> Ir.bindings -> js
-  val generate_toplevel_bindings : Value.env -> Json.json_state -> Ir.bindings -> js * Json.json_state
+  val generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * js
   val wrap_with_server_lib_stubs : js -> js (* TODO remove *)
   val primitive_bindings : string (* TODO remove *)
 end
@@ -238,9 +239,9 @@ module Primitive_Compiler = struct
             let (symbol, _) = StringMap.find op builtins in
             match symbol with
             | `StrictEq when op = "==" || op = "objectEq" ->
-               apply (prim "LINKS.eq")) args
+               apply (prim "LINKS.eq") args
             | `StrictNeq when op = "<>" ->
-               unary `Not (apply (prim "LINKS.eq")) args
+               unary `Not (apply (prim "LINKS.eq") args)
             | _ ->
                let (x, y) = List.(hd args, hd (tl args)) in
                binary symbol x y
@@ -414,6 +415,8 @@ module type CONTINUATION = sig
      reflects the result as a continuation. The continuation parameter
      in the callback provides access to the current continuation. *)
   val contify_with_env : (t -> venv * Js.expr) -> venv * t
+
+  val primitive_bindings : string
 end
 
 (* The standard Links continuation (no extensions) *)
@@ -454,7 +457,7 @@ module Default_Continuation : CONTINUATION = struct
     match k with
     | Code (Var _) -> body k
     | _ ->
-        (* It is important to generate a unique name for continuation
+       (* It is important to generate a unique name for continuation
            bindings because in the JavaScript code:
 
            var f = e;
@@ -464,7 +467,7 @@ module Default_Continuation : CONTINUATION = struct
            might expect in a saner language. (In other words var f =
            function(args) {body} is just syntactic sugar for function
            f(args) {body}.)
-         *)
+        *)
        let kappa = Ident.fresh_binder ~prefix:"_kappa" () in
        let stmts = body (reflect (variable (Ident.to_var kappa))) in
        const kappa (reify k) :: stmts
@@ -476,9 +479,17 @@ module Default_Continuation : CONTINUATION = struct
   let install_trap _ _ = assert false
 
   let contify_with_env fn = assert false
-    (* match fn Identity with
-     * | env, (Fn _ as k) -> env, reflect k
-     * | _ -> failwith "error: contify: non-function argument." *)
+  (* match fn Identity with
+   * | env, (Fn _ as k) -> env, reflect k
+   * | _ -> failwith "error: contify: non-function argument." *)
+
+  let primitive_bindings =
+    "function _makeCont(k) { return k; }\n" ^
+      "var _idy = function(x) { return; };\n" ^
+        "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
+          "var _cont_kind = \"Default_Continuation\";\n" ^
+            "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }\n" ^
+              "var receive = _default_receive;"
 end
 
 (* The higher-order continuation structure for effect handlers
@@ -600,6 +611,17 @@ module Higher_Order_Continuation : CONTINUATION = struct
     match fn (reflect (variable (Ident.to_var kappa))) with
     | env, Func def -> env, reflect (Func { def with params = def.params @ [kappa] })
     | _ -> failwith "error: contify: none function argument."
+
+  let primitive_bindings =
+    "function _makeCont(k) {\n" ^
+      "  return _Cons(k, _singleton(_efferr));\n" ^
+        "}\n" ^
+          "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
+            "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
+              "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
+                "function is_continuation(kappa) {\n" ^
+                  "return kappa !== null && typeof kappa === 'object' && _hd(kappa) !== undefined && _tl(kappa) !== undefined;\n" ^
+                    "}\n"
 end
 
 (** Compiler interface *)
@@ -879,26 +901,37 @@ end = functor (K : CONTINUATION) -> struct
          generate_special env special kappa
       | `Case (scrutinee, cases, default) ->
          let scrutinee = gv scrutinee in
-         let k, x =
+         let k, scrutinee' =
            match scrutinee with
-           | Var x -> (fun s -> lift_stmt s), x
+           | Var x -> (fun s -> lift_stmt s), variable x
            | _ ->
-              let xb = Ident.fresh_binder ~prefix:"x" () in
-              (fun (s : stmt) -> sequence (lift_stmt @@ const xb scrutinee) (lift_stmt s)), Ident.to_var xb
+              let xb = Ident.fresh_binder ~prefix:"scrutinee" () in
+              (fun (s : stmt) -> sequence (lift_stmt @@ const xb scrutinee) (lift_stmt s)), variable (Ident.to_var xb)
          in
          K.bind kappa
            (fun kappa ->
-             let gen_cont (xb, c) =
-               let xb' = Ident.of_binder xb in
-               let x_name = Ident.name_binder xb in
-               x_name, (snd (generate_computation (VEnv.bind env (Var.var_of_binder xb, x_name)) c kappa)) in
-             let cases = StringMap.map gen_cont cases in
-             let default = opt_map gen_cont default in
-             k (switch ~default (variable x) cases))
+             let gen_cont scrutinee (xb, comp) =
+               let xb'     = Ident.of_binder xb in
+               let x_name  = Ident.name_binder xb' in
+               let env'    = VEnv.bind env (Var.var_of_binder xb, x_name) in
+               let _, body = generate_computation env' comp kappa in
+               let binding = const xb' scrutinee in
+               sequence (lift_stmt binding) body
+             in
+             let cases =
+               List.rev (StringMap.fold
+                 (fun name body acc ->
+                   let body' = gen_cont scrutinee' body in
+                   (name, body') :: acc
+                 ) cases [])
+             in
+             let default = opt_map (gen_cont scrutinee') default in
+             let expr = (project scrutinee' "_label") in
+             k (switch ?default expr cases))
       | `If (v, c1, c2) ->
          K.bind kappa
            (fun kappa ->
-             ifthenelse (gv v) (gc c1 kappa) (gc c2 kappa))
+             lift_stmt (ifthenelse (gv v) (gc c1 kappa) (gc c2 kappa)))
 
   and generate_special env : Ir.special -> continuation -> js
     = fun sp kappa ->
@@ -946,7 +979,7 @@ end = functor (K : CONTINUATION) -> struct
          let arg =
            (apply
               ~strategy:`Direct
-              (variable (Ident.of_string "_send"))
+              (prim "_send")
               [obj ["_label", strlit l; "_value", obj []]; gv c])
          in
          return (K.apply kappa arg)
@@ -978,7 +1011,7 @@ end = functor (K : CONTINUATION) -> struct
          in
          let op =
            obj [ ("_label", strlit name)
-               ; ("_value", obj [("p", box args); ("s", Ident.of_string "LINKEDLIST.Nil")]) ]
+               ; ("_value", obj [("p", box args); ("s", prim "LINKEDLIST.Nil")]) ]
          in
          return (K.trap kappa op)
          (* let maybe_box = function
@@ -1016,7 +1049,11 @@ end = functor (K : CONTINUATION) -> struct
       | `Handle { Ir.ih_comp = comp; Ir.ih_return = val_case; Ir.ih_cases = eff_cases; Ir.ih_depth = depth } ->
          (* Generate body *)
          let gb env binder body kappas =
-           let env' = VEnv.bind env (Var.var_of_binder binder, Ident.(name_binder -<- of_binder) binder) in
+           let var = match Ident.to_var binder with
+             | `Var v -> v
+             | `Primitive _ -> assert false
+           in
+           let env' = VEnv.bind env (var, Ident.name_binder binder) in
            snd (generate_computation env' body kappas)
          in
          let val_case_decl, val_case =
@@ -1037,9 +1074,11 @@ end = functor (K : CONTINUATION) -> struct
          let eff_decl, eff =
            (* Generate clause *)
            let gc env (xb, rb, body) kappas _z =
+             let xb' = Ident.of_binder xb in
+             let rb' = Ident.of_binder rb in
              let env' =
-               let env = VEnv.bind env (Ident.to_var xb, Ident.name_binder xb) in
-               VEnv.bind env (Ident.to_var rb, Ident.name_binder rb)
+               let env = VEnv.bind env (Var.var_of_binder xb, Ident.name_binder xb') in
+               VEnv.bind env (Var.var_of_binder rb, Ident.name_binder rb')
              in
              let vb, v = Ident.fresh_binder ~prefix:"_v" (), project _z "_value" in
              let p = project (variable (Ident.to_var vb)) "p" in
@@ -1051,10 +1090,10 @@ end = functor (K : CONTINUATION) -> struct
                  | `Deep [] -> Ident.of_string "_K.deepResume"
                  | `Deep _ -> failwith "Parameterised handlers not yet supported."
                in
-               apply (variable e) [s]
+               apply (variable (Ident.to_var e)) [s]
              in
-             let stmts = gb env' xb body kappas in
-             (const vb v) :: (const rb r) :: (const xb p) :: stmts
+             let stmts = gb env' xb' body kappas in
+             (const vb v) :: (const rb' r) :: (const xb' p) :: stmts
            in
            let eff_b = Ident.fresh_binder ~prefix:"_eff" () in
            let eff_decl =
@@ -1067,15 +1106,22 @@ end = functor (K : CONTINUATION) -> struct
                      [_z; _fs]
                      (let _z = variable (Ident.to_var _z) in
                       let _fs = K.reflect (variable (Ident.to_var _fs)) in
-                      let forward = return (K.forward _fs _z) in
-                      let cases = StringMap.map (fun clause -> gc env clause _fs _z)  eff_cases in
-                      switch ~default:forward (project _z "_label") cases)))
+                      let forward = Some (lift_stmt (LispJs.return (K.forward _fs _z))) in
+                      let cases =
+                        List.rev
+                          (StringMap.fold
+                             (fun label case acc ->
+                               let case' = gc env case _fs _z in
+                               (label, case') :: acc)
+                             eff_cases [])
+                      in
+                      lift_stmt (switch ?default:forward (project _z "_label") cases))))
            in
-           eff_decl, variable eff_b
+           eff_decl, variable (Ident.to_var eff_b)
          in
          let kappa = K.install_trap (val_case, eff) kappa in
          let _, stmts = generate_computation env comp kappa in
-         return_decl :: eff_decl :: stmts
+         val_case_decl :: eff_decl :: stmts
 
          (* let comp_env = env in
           * let cons v vs =
@@ -1207,37 +1253,43 @@ end = functor (K : CONTINUATION) -> struct
           function
           | `Let (b, (_, `Return v)) :: bs ->
              let xb' = Ident.of_binder b in
-             let env', rest = gbs (VEnv.bind env (Var.var_of_binder xb', Ident.name_binder xb')) kappa bs in
-             (env', const xb' (generate_value env v, rest))
+             let env', rest = gbs (VEnv.bind env (Var.var_of_binder b, Ident.name_binder xb')) kappa bs in
+             (env', const xb' (generate_value env v) :: rest)
           | `Let (b, (_, tc)) :: bs ->
              let xb' = Ident.of_binder b in
              let _fs = Ident.fresh_binder ~prefix:"_fs" () in
              let env', body =
                gbs
-                 (VEnv.bind env (Var.var_of_binder xb, Ident.name_binder xb'))
+                 (VEnv.bind env (Var.var_of_binder b, Ident.name_binder xb'))
                  K.(reflect (variable (Ident.to_var _fs)))
                  bs
              in
              let f =
-               fun_expr (fun_def [xb'; _fs]) body
+               fun_expr (fun_def [xb'; _fs] body)
              in
              let kappa', stmts = K.(f &> kappa) in
              let stmts' = generate_tail_computation env tc kappa' in
              env', stmts @ stmts'
           | `Fun ((fb, _, _zs, _location) as def) :: bs ->
-             let fb = Ident.of_binder fb in
+             let fb' = Ident.of_binder fb in
              let fun_def = generate_function env [] def in
-             let env', rest = gbs (VEnv.bind env (Ident.to_var fb, Ident.name_binder fb)) kappa bs in
+             let env', rest = gbs (VEnv.bind env (Var.var_of_binder fb, Ident.name_binder fb')) kappa bs in
              (env', (fun_decl fun_def) :: rest)
           | `Rec defs :: bs ->
              let fbs = List.map (fun (fb, _, _, _) -> Ident.of_binder fb) defs in
              let env', rest =
                gbs
-                 (List.fold_left (fun env fb -> VEnv.bind env (Ident.to_var fb, Ident.name_binder fb)) env fs)
-                 kappa
-                 bs
+                 (List.fold_left
+                    (fun env fb ->
+                      let var = match Ident.to_var fb with
+                        | `Primitive _ -> assert false
+                        | `Var v -> v
+                      in
+                      VEnv.bind env (var, Ident.name_binder fb))
+                    env fbs)
+                 kappa bs
              in
-             (env', (List.map (fun def -> fun_def (generate_function env fs def)) defs) @ rest)
+             (env', (List.map (fun def -> fun_decl (generate_function env fbs def)) defs) @ rest)
           | `Module _ :: bs
           | `Alien _ :: bs -> gbs env kappa bs
           | [] -> (env, generate_tail_computation env tc kappa)
@@ -1257,18 +1309,22 @@ end = functor (K : CONTINUATION) -> struct
     let body_env =
       List.fold_left
         (fun env b ->
-          VEnv.bind env (Ident.to_var b, Ident.name_binder b))
-        (fs @ bs)
+          let var = match Ident.to_var b with
+            | `Var v -> v
+            | `Primitive _ -> assert false
+          in
+          VEnv.bind env (var, Ident.name_binder b))
+        env (fs @ bs)
     in
     let body =
       match location with
       | `Client | `Unknown ->
          snd (generate_computation body_env body (K.reflect (variable (Ident.to_var __kappa))))
-      | `Server -> generate_remote_call f bs (obj [])
+      | `Server -> lift_expr (generate_remote_call (Ident.to_var fb) bs (obj []))
       | `Native -> failwith ("Not implemented native calls yet")
     in
     fun_def
-    ~name:(`Binder fb)
+    ~name:fb
      (bs @ [__kappa])
      body
   (* and generate_cancel_stub env (action: code -> code) (kappa: K.t)  =
@@ -1307,14 +1363,14 @@ end = functor (K : CONTINUATION) -> struct
 
     fun valenv state varenv ->
     let json_parse e =
-      apply (Ident.of_string "JSON.parse") [e]
+      apply (prim "JSON.parse") [e]
     in
       function
       | `Let (b, _) ->
          let b' = Ident.of_binder b in
       (* Debug.print ("let_binding: " ^ x_name); *)
-         let varenv = VEnv.bind varenv (Ident.to_var b', Ident.name_binder b') in
-         let value = Value.Env.find (Var.var_of_binder x) valenv in
+         let varenv = VEnv.bind varenv (Var.var_of_binder b, Ident.name_binder b') in
+         let value = Value.Env.find (Var.var_of_binder b) valenv in
          let jsonized_val = Json.jsonize_value value in
          let state = ResolveJsonState.add_value_information value state in
          (state,
@@ -1324,7 +1380,7 @@ end = functor (K : CONTINUATION) -> struct
             (const b' (json_parse (lit (String jsonized_val))))) (* TODO represent "json state" in the JS IR *)
       | `Fun ((fb, _, _zs, _location) as def) ->
          let fb' = Ident.of_binder fb in
-         let varenv = VEnv.bind varenv (Ident.to_var fb', Ident.name_binder fb') in
+         let varenv = VEnv.bind varenv (Var.var_of_binder fb, Ident.name_binder fb') in
          let def_header = generate_function varenv [] def in
          (state,
           varenv,
@@ -1332,14 +1388,23 @@ end = functor (K : CONTINUATION) -> struct
           lift_stmt (fun_decl def_header))
       | `Rec defs ->
          let fbs = List.map (fun (fb, _, _, _) -> Ident.of_binder fb) defs in
-         let varenv = List.fold_left (fun env fb -> VEnv.bind env (Ident.to_var fb, Ident.name_binder fb)) fbs in
+         let varenv =
+           List.fold_left
+             (fun env fb ->
+               let var = match Ident.to_var fb with
+                 | `Primitive _ -> assert false
+                 | `Var v -> v
+               in
+               VEnv.bind env (var, Ident.name_binder fb))
+            varenv fbs
+         in
          let fun_defs =
-           List.map (generate_function varenv fs) defs
+           List.map (generate_function varenv fbs) defs
          in
          (state, varenv, None, List.map fun_decl fun_defs) (* TODO possibly inline `fun_decl` into the map above. *)
       | `Alien (bnd, raw_name, _lang) ->
          let b = Ident.of_binder bnd in
-         let varenv = VEnv.bind varenv (Ident.to_var b, raw_name) in
+         let varenv = VEnv.bind varenv (Var.var_of_binder bnd, raw_name) in
          state, varenv, None, skip
       | `Module _ -> state, varenv, None, skip
 
@@ -1363,6 +1428,13 @@ end = functor (K : CONTINUATION) -> struct
     generate_computation venv comp K.toplevel
 
   let primitive_bindings = K.primitive_bindings
+
+  type source = [
+    | `Bindings of Ir.binding list
+    | `Program of Ir.program ]
+
+  let compile : source -> Value.env -> Js.program
+    = fun _ _ -> assert false
 end
 
 module Continuation =

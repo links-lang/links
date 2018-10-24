@@ -200,7 +200,7 @@ module NewCodeGen : JS_CODEGEN = struct
   end
 
   module type STMT = sig
-    val transl : env -> stmt -> t
+    val transl : env -> stmt -> env * t
   end
 
   (* module type DECL = sig
@@ -345,11 +345,11 @@ module NewCodeGen : JS_CODEGEN = struct
          hgrp (text "await" $/ expr)
       end
 
-  module Make_Stmt (Js : JS) (Expr : EXPR) = struct
-    let rec transl env : stmt -> env * t =
+  module Make_Stmt (Js : JS) (Expr : EXPR) (Misc : MISC) = struct
+    let transl env : stmt -> env * t =
       let lift stmt = env, stmt in
       function
-      | Expr expr -> lift ( semi (Expr.transl env expr) (
+      | Expr expr -> lift ( semi (Expr.transl env expr) )
       | Return expr ->
          lift ( hgrp ( semi ((text "return") $/ (Expr.transl env expr)) ) )
       | If (cond, tt, ff) ->
@@ -457,11 +457,11 @@ module NewCodeGen : JS_CODEGEN = struct
     let transl env : js -> env * t
       = fun stmts ->
       let env', stmts =
-        List.fold_left
-          (fun (env, stmts) stmt ->
+        List.fold_right
+          (fun stmt (env, stmts) ->
             let env, stmt = Stmt.transl env stmt in
             (env, stmt :: stmts))
-          (env, []) stmts
+          stmts (env, [])
       in
       env',
       (vgrp
@@ -471,7 +471,7 @@ module NewCodeGen : JS_CODEGEN = struct
 
   module rec Expr : EXPR = Make_Expr(Js)(Misc)
   (* and        Decl : DECL = Make_Decl(Misc)(Expr) *)
-  and        Stmt : STMT = Make_Stmt(Js)(Expr)
+  and        Stmt : STMT = Make_Stmt(Js)(Expr)(Misc)
   and          Js : JS   = Make_Js(Stmt)
   and        Misc : MISC = Make_Misc(Js)
 
