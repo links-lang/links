@@ -734,7 +734,7 @@ end = functor (K : CONTINUATION) -> struct
          | _ ->
             apply (gv f) args
        end
-    | `Closure (f, v) ->
+    | `Closure (f, _, v) ->
        let prim_name =
          if session_exceptions_enabled
          then "partialApplySE"
@@ -963,13 +963,11 @@ end = functor (K : CONTINUATION) -> struct
          return (die "Attempt to run a database update on the client")
       | `Delete _ ->
          return (die "Attempt to run a database delete on the client")
-              | `LensSelect _ | `LensJoin _ | `LensDrop _ | `Lens _ ->
-              (* Is there a reason to not use js_hide_database_info ? *)
-              K.apply kappa (Dict [])
-      | `LensGet _ | `LensPut _ -> Die "Attempt to run a relational lens operation on client"
-      | `Query _ -> Die "Attempt to run a query on the client"
-      | `Update _ -> Die "Attempt to run a database update on the client"
-      | `Delete _ -> Die "Attempt to run a database delete on the client"
+      | `LensSelect _ | `LensJoin _ | `LensDrop _ | `Lens _ ->
+         (* Is there a reason to not use js_hide_database_info ? *)
+          return (K.apply kappa (obj []))
+      | `LensGet _ | `LensPut _ ->
+         return (die "Attempt to run a relational lens operation on client")
       | `CallCC v ->
          K.bind kappa
            (fun kappa ->
