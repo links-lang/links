@@ -274,7 +274,7 @@ module NewCodeGen : JS_CODEGEN = struct
          text (match lookup v env with
                | None      -> failwith (Printf.sprintf "Unbound variable %s" (Ident.string_of_var v))
                | Some name -> name)
-      | Func fun_def -> snd (Misc.fun_def env fun_def)
+      | Fun fun_def -> snd (Misc.fun_def env fun_def)
       | Arrow (params, body) ->
          let env', params =
            let env, params =
@@ -420,7 +420,7 @@ module NewCodeGen : JS_CODEGEN = struct
              $/ (Expr.transl env' expr))
          in
          env', pretty_b
-      | Fun fun_def -> Misc.fun_def env fun_def
+      | LetFun fun_def -> Misc.fun_def env fun_def
   end
 
   (* module Make_Decl (Misc : MISC) (Expr : EXPR) = struct

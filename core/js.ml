@@ -184,7 +184,7 @@ module Lang = struct
   type expr =
     | Lit of literal
     | Var of Ident.var
-    | Func of fun_def
+    | Fun of fun_def
     | Arrow of Ident.binder list * js
     | Apply of expr * expr list
     | Unary of unary_op * expr
@@ -206,7 +206,7 @@ module Lang = struct
     | Continue
   (* and decl = *)
     | Let of { kind: let_kind; binder: Ident.binder; expr: expr }
-    | Fun of fun_def
+    | LetFun of fun_def
   and fun_def = {
       kind: fun_kind;
       fun_binder: [`Anonymous | `Binder of Ident.binder];
@@ -221,7 +221,7 @@ module Lang = struct
   and js = stmt list
   and program = js
 
-  module LispJs = struct
+  module Jasp = struct
     let lit : literal -> expr
       = fun c -> Lit c
 
@@ -237,10 +237,10 @@ module Lang = struct
       { kind; fun_binder; params; fun_body }
 
     let fun_expr : fun_def -> expr
-      = fun fd -> Func fd
-
-    let fun_decl : fun_def -> stmt
       = fun fd -> Fun fd
+
+    let letfun : fun_def -> stmt
+      = fun fd -> LetFun fd
 
     let arrow : Ident.binder list -> js -> expr
       = fun params body -> Arrow (params, body)

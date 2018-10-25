@@ -1,7 +1,7 @@
 (** JavaScript generation *)
 open Utility
 open Js
-open LispJs
+open Jasp
 
 let _ = ParseSettings.config_file
 
@@ -160,7 +160,7 @@ module Primitive_Compiler = struct
   module Make (P: PRIMITIVE_AUX): sig
     include PRIMITIVE_COMPILER
   end = struct
-    open LispJs
+    open Jasp
 
     let recognise op = StringMap.mem op P.builtins
     let arity op = snd (StringMap.find op P.builtins)
@@ -503,7 +503,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
          | Reflect of Js.expr
          | Identity
 
-  open LispJs
+  open Jasp
   (* Auxiliary functions for manipulating the continuation stack *)
   let nil = prim "LINKEDLIST.Nil"
   let cons x xs = apply (prim "LINKEDLIST.Cons") [x; xs]
@@ -609,7 +609,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
   let contify_with_env fn =
     let kappa = Ident.fresh_binder ~prefix:"_kappa" () in
     match fn (reflect (variable (Ident.to_var kappa))) with
-    | env, Func def -> env, reflect (Func { def with params = def.params @ [kappa] })
+    | env, Fun def -> env, reflect (Fun { def with params = def.params @ [kappa] })
     | _ -> failwith "error: contify: none function argument."
 
   let primitive_bindings =
@@ -650,16 +650,16 @@ end = functor (K : CONTINUATION) -> struct
     = fun ?(strategy=`Yield) ?(kappa = None) f args ->
     match strategy, kappa with
     | `Direct, Some kappa ->
-       LispJs.apply f (args @ [K.reify kappa])
+       Jasp.apply f (args @ [K.reify kappa])
     | `Direct, None       ->
-       LispJs.apply f args
+       Jasp.apply f args
     | `Yield, kappa ->
        let g =
          thunk
            (lift_stmt
               (return (apply ~strategy:`Direct ~kappa f args)))
        in
-       LispJs.apply (prim "_yield") [g]
+       Jasp.apply (prim "_yield") [g]
 
   let apply_prim : string -> expr list -> expr
     = fun prim_name args ->
@@ -727,7 +727,7 @@ end = functor (K : CONTINUATION) -> struct
                   && not (List.mem f_name cps_prims)
                   && Lib.primitive_location f_name <> `Server
                then
-                 apply ~strategy:`Direct (prim ("_" ^ f_name)) args
+                 apply_prim ("_" ^ f_name) args
                else
                  apply ~strategy:`Direct (gv (`Variable f)) args
             end
@@ -740,7 +740,7 @@ end = functor (K : CONTINUATION) -> struct
          then "partialApplySE"
          else "partialApply"
        in
-       apply ~strategy:`Direct (prim prim_name) [gv (`Variable f); gv v]
+       apply_prim prim_name [gv (`Variable f); gv v]
     | `Coerce (v, _) -> gv v
 
   and generate_xml env tag attrs children =
@@ -784,8 +784,8 @@ end = functor (K : CONTINUATION) -> struct
         match location with
         | `Client | `Native | `Unknown ->
            lift_stmt
-             (fun_decl
-                (LispJs.fun_def
+             (letfun
+                (Jasp.fun_def
                    ~name:fb
                    (bs' @ [__kappa])
                    (lift_stmt
@@ -796,8 +796,8 @@ end = functor (K : CONTINUATION) -> struct
                             (List.map (fun b -> variable (Ident.to_var b)) bs)))))) (* TODO: there's something dubious about this code (~name:fb and apply fb) *)
         | `Server ->
            lift_stmt
-             (fun_decl
-                (LispJs.fun_def
+             (letfun
+                (Jasp.fun_def
                    ~name:fb
                    (bs' @ [__kappa])
                    (lift_stmt @@ return (generate_remote_call (Ident.to_var fb) bs env))))
@@ -846,8 +846,8 @@ end = functor (K : CONTINUATION) -> struct
       in
       List.map
         (fun (name, args, body) ->
-          fun_decl
-            (LispJs.fun_def ~name args (lift_stmt @@ return body)))
+          letfun
+            (Jasp.fun_def ~name args (lift_stmt @@ return body)))
         prim_server_calls
   end
 
@@ -1106,7 +1106,7 @@ end = functor (K : CONTINUATION) -> struct
                      [_z; _fs]
                      (let _z = variable (Ident.to_var _z) in
                       let _fs = K.reflect (variable (Ident.to_var _fs)) in
-                      let forward = Some (lift_stmt (LispJs.return (K.forward _fs _z))) in
+                      let forward = Some (lift_stmt (Jasp.return (K.forward _fs _z))) in
                       let cases =
                         List.rev
                           (StringMap.fold
@@ -1274,7 +1274,7 @@ end = functor (K : CONTINUATION) -> struct
              let fb' = Ident.of_binder fb in
              let fun_def = generate_function env [] def in
              let env', rest = gbs (VEnv.bind env (Var.var_of_binder fb, Ident.name_binder fb')) kappa bs in
-             (env', (fun_decl fun_def) :: rest)
+             (env', (letfun fun_def) :: rest)
           | `Rec defs :: bs ->
              let fbs = List.map (fun (fb, _, _, _) -> Ident.of_binder fb) defs in
              let env', rest =
@@ -1289,7 +1289,7 @@ end = functor (K : CONTINUATION) -> struct
                     env fbs)
                  kappa bs
              in
-             (env', (List.map (fun def -> fun_decl (generate_function env fbs def)) defs) @ rest)
+             (env', (List.map (fun def -> letfun (generate_function env fbs def)) defs) @ rest)
           | `Module _ :: bs
           | `Alien _ :: bs -> gbs env kappa bs
           | [] -> (env, generate_tail_computation env tc kappa)
@@ -1385,7 +1385,7 @@ end = functor (K : CONTINUATION) -> struct
          (state,
           varenv,
           None,
-          lift_stmt (fun_decl def_header))
+          lift_stmt (letfun def_header))
       | `Rec defs ->
          let fbs = List.map (fun (fb, _, _, _) -> Ident.of_binder fb) defs in
          let varenv =
@@ -1401,7 +1401,7 @@ end = functor (K : CONTINUATION) -> struct
          let fun_defs =
            List.map (generate_function varenv fbs) defs
          in
-         (state, varenv, None, List.map fun_decl fun_defs) (* TODO possibly inline `fun_decl` into the map above. *)
+         (state, varenv, None, List.map letfun fun_defs) (* TODO possibly inline `letfun` into the map above. *)
       | `Alien (bnd, raw_name, _lang) ->
          let b = Ident.of_binder bnd in
          let varenv = VEnv.bind varenv (Var.var_of_binder bnd, raw_name) in
