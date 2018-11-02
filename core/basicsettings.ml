@@ -185,7 +185,7 @@ let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)
 
 (* For testing only. If this is set, programs are not executed, but
    Links terminates after type-checking and compiling to the IR. *)
-let typecheck_only = Settings.add_bool ("typecheck_only", false, `User)
+let typecheck_only = Settings.add_bool ("typecheck_only", false, `System)
 
 (* Handlers stuff *)
 module Handlers = struct
