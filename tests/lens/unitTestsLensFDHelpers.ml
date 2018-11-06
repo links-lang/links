@@ -2,6 +2,8 @@
 
 open UnitTestsLensCommon
 open OUnit2
+
+open Links_core
 open Types
 open Value
 open Utility

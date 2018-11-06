@@ -1,7 +1,9 @@
+open OUnit2
+
+open Links_core
 open LensSetOperations
 open SortedRecords
 open UnitTestsLensCommon
-open OUnit2
 open Value
 
 let test_data_1 = { SortedRecords.columns = ["a"; "b"; "str";]; plus_rows = Array.of_list [
