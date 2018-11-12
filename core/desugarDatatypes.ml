@@ -3,6 +3,8 @@ open Sugartypes
 open Operators
 open Utility
 open List
+open SourceCode
+open Lexing
 
 module SEnv = Env.String
 
@@ -76,7 +78,7 @@ object (self)
     | `Type _    -> self
     | b          -> super#bindingnode b
 
-  method! datatype = function
+  method! datatypenode = function
     | `TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
     | `Mu (v, t)       -> let o = self#bind (v, (`Type, None), `Rigid) in o#datatype t
     | `Forall (qs, t)  ->
@@ -88,7 +90,7 @@ object (self)
             qs
         in
           o#datatype t
-    | dt                  -> super#datatype dt
+    | dt                  -> super#datatypenode dt
 
   method! row_var = function
     | `Closed               -> self
@@ -112,9 +114,11 @@ exception UnexpectedOperationEffects of string
 
 module Desugar =
 struct
-  let rec datatype var_env (alias_env : Types.tycon_environment) t =
-    let datatype var_env t = datatype var_env alias_env t in
-    let lookup_type t = StringMap.find t var_env.tenv in
+  let rec datatype var_env (alias_env : Types.tycon_environment) t' =
+    let datatype var_env t' = datatype var_env alias_env t' in
+    match t' with
+    | (t, pos) ->
+      let lookup_type t = StringMap.find t var_env.tenv in
       match t with
         | `TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
                                 with NotFound _ -> raise (UnexpectedFreeVar s))
@@ -179,7 +183,9 @@ struct
         | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
         | `TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
-              | None -> failwith (Printf.sprintf "Unbound type constructor %s" tycon)
+              | None -> let (pos,_,_) = resolve_pos pos in
+                 failwith (Printf.sprintf "%s:%d: Unbound type constructor %s"
+                           (Filename.basename pos.pos_fname) pos.pos_lnum tycon)
               | Some (`Alias (qs, _dt)) ->
                  let exception Kind_mismatch (* TODO add more information *) in
                  let match_kinds (q, t) =
@@ -243,7 +249,6 @@ struct
     | `Dual s -> `Dual (datatype var_env alias_env s)
     | `End -> `End
     | _ -> assert false
-
   and fieldspec var_env alias_env =
     let lookup_flag = flip StringMap.find var_env.penv in
       function
@@ -284,14 +289,14 @@ struct
          unbound effect variable.  *)
       try List.map
             (function
-            | (name, `Present (`Function (domain, (fields, rv), codomain))) as op
+            | (name, `Present (`Function (domain, (fields, rv), codomain), pos)) as op
                 when not (TypeUtils.is_builtin_effect name) ->
                (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
                begin match rv, fields with
                | `Closed, [] -> op
                | `Open _, []
                | (`Recursive _), [] -> (* might need an extra check on recursive rows *)
-                  (name, `Present (`Function (domain, ([], `Closed), codomain)))
+                  (name, `Present (`Function (domain, ([], `Closed), codomain), pos))
                | _,_ -> raise (UnexpectedOperationEffects name)
                end
             | x -> x)

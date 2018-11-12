@@ -7,11 +7,11 @@ open Sugartypes
 
 let type_variable_counter = ref 0
 
-let fresh_type_variable : subkind option -> datatype =
+let fresh_type_variable : subkind option -> datatypenode =
   function subkind ->
     incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
-let fresh_rigid_type_variable : subkind option -> datatype =
+let fresh_rigid_type_variable : subkind option -> datatypenode =
   function subkind ->
     incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
@@ -983,9 +983,9 @@ just_datatype:
 | datatype END                                                 { $1 }
 
 datatype:
-| mu_datatype                                                  { $1 }
-| straight_arrow                                               { $1 }
-| squiggly_arrow                                               { $1 }
+| mu_datatype                                                  { $1, pos() }
+| straight_arrow                                               { $1, pos() }
+| squiggly_arrow                                               { $1, pos() }
 
 arrow_prefix:
 | LBRACE RBRACE                                                { ([], `Closed) }
@@ -1004,17 +1004,17 @@ squig_arrow_prefix:
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { row_with
-                                                                   ("wild", `Present `Unit)
+                                                                   ("wild", `Present (`Unit, dummy_position))
                                                                    (row_with
                                                                       ("hear", `Present $3)
                                                                       $5) }
-| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present `Unit);
+| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present (`Unit, dummy_position));
                                                                    ("hear", `Present $3)],
                                                                   `Closed) }
-| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present `Unit);
+| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present (`Unit, dummy_position));
                                                                    ("hear", `Present $3)],
                                                                   $5) }
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present `Unit);
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present (`Unit, dummy_position));
                                                                    ("hear", `Present $3)],
                                                                   $5) }
 
@@ -1032,29 +1032,29 @@ squiggly_arrow:
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1,
                                                                                row_with
-                                                                                 ("wild", `Present `Unit)
+                                                                                 ("wild", `Present (`Unit, dummy_position))
                                                                                  $2,
                                                                                $4) }
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli ($1,
                                                                             row_with
-                                                                              ("wild", `Present `Unit)
+                                                                              ("wild", `Present (`Unit, dummy_position))
                                                                             $2,
                                                                             $4) }
 /*| parenthesized_datatypes hear_arrow_prefix
   SQUIGRARROW datatype                                         { `Function ($1, $2, $4) }
 */
 | parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1,
-                                                                               ([("wild", `Present `Unit)],
+                                                                               ([("wild", `Present (`Unit, pos()))],
                                                                                  fresh_rigid_row_variable None),
                                                                                 $3) }
 | parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli ($1,
-                                                                            ([("wild", `Present `Unit)],
+                                                                            ([("wild", `Present (`Unit, dummy_position))],
                                                                              fresh_rigid_row_variable None),
                                                                             $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                  { `Mu ($2, $4) }
+| MU VARIABLE DOT mu_datatype                                  { `Mu ($2, ($4, pos())) }
 | forall_datatype                                              { $1 }
 
 forall_datatype:
@@ -1081,13 +1081,13 @@ session_datatype:
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
-| LPAREN qualified_type_name RPAREN                            { [`QualifiedTypeApplication ($2, [])] }
+| LPAREN qualified_type_name RPAREN                            { [`QualifiedTypeApplication ($2, []), pos()] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
 primary_datatype:
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> `Unit
-                                                                   | [t] -> t
+                                                                   | [t,_] -> t
                                                                    | ts  -> `Tuple ts }
 | LPAREN rfields RPAREN                                        { `Record $2 }
 | TABLEHANDLE
@@ -1154,7 +1154,7 @@ fields:
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
-| field_label                                                  { $1, `Present `Unit }
+| field_label                                                  { $1, `Present (`Unit, dummy_position) }
 | field_label fieldspec                                        { $1, $2 }
 
 field_label:
@@ -1189,7 +1189,7 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR                                                  { $1, `Present `Unit }
+| CONSTRUCTOR                                                  { $1, `Present (`Unit, dummy_position) }
 | CONSTRUCTOR fieldspec                                        { $1, $2 }
 
 efields:
@@ -1201,7 +1201,7 @@ efields:
 | efield COMMA efields                                         { $1 :: fst $3, snd $3 }
 
 efield:
-| effect_label                                                 { $1, `Present `Unit }
+| effect_label                                                 { $1, `Present (`Unit, dummy_position) }
 | effect_label fieldspec                                       { $1, $2 }
 
 effect_label:
@@ -1281,7 +1281,7 @@ regex_pattern_sequence:
  */
 pattern:
 | typed_pattern                                             { $1 }
-| typed_pattern COLON primary_datatype                      { (`HasType ($1, datatype $3), pos()) }
+| typed_pattern COLON primary_datatype                      { (`HasType ($1, datatype ($3, pos())), pos()) }
 
 typed_pattern:
 | cons_pattern                                              { $1 }

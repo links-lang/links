@@ -568,7 +568,7 @@ class map =
         let _x = o#string _x in
         let _x_i1 = o#list (fun o -> o#string) _x_i1 in (_x, _x_i1)
 
-    method datatype : datatype -> datatype =
+    method datatypenode : datatypenode -> datatypenode =
       function
       | `TypeVar _x ->
           let _x = o#known_type_variable _x in `TypeVar _x
@@ -623,6 +623,11 @@ class map =
       | `Dual _x ->
         let _x = o#datatype _x in `Dual _x
       | `End -> `End
+
+    method datatype : datatype -> datatype =
+      fun (_x, _x_i1) ->
+        let _x = o#datatypenode _x in
+        let _x_i1 = o#position _x_i1 in (_x, _x_i1)
 
     method type_arg : type_arg -> type_arg =
       function
@@ -1233,7 +1238,7 @@ class fold =
 
     method tyvar : tyvar -> 'self_type = fun _ -> o
 
-    method datatype : datatype -> 'self_type =
+    method datatypenode : datatypenode -> 'self_type =
       function
       | `TypeVar _x ->
           let o = o#known_type_variable _x in o
@@ -1281,6 +1286,10 @@ class fold =
       | `Dual _x ->
         let o = o#datatype _x in o
       | `End -> o
+
+    method datatype : datatype -> 'self_type =
+      fun (_x, _x_i1) ->
+        let o = o#datatypenode _x in let o = o#position _x_i1 in o
 
     method type_arg : type_arg -> 'self_type =
       function
@@ -2003,7 +2012,7 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
         in (o, (_x, _x_i1))
 
-    method datatype : datatype -> ('self_type * datatype) =
+    method datatypenode : datatypenode -> ('self_type * datatypenode) =
       function
       | `TypeVar _x ->
           let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
@@ -2063,6 +2072,11 @@ class fold_map =
       | `Dual _x ->
         let (o, _x) = o#datatype _x in (o, `Dual _x)
       | `End -> (o, `End)
+
+    method datatype : datatype -> ('self_type * datatype) =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#datatypenode _x in
+        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
 
     method type_arg : type_arg -> ('self_type * type_arg) =
       function
