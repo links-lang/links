@@ -273,7 +273,7 @@ and perform_renaming module_table path term_ht type_ht =
           (self, `Var fqn)
       | phr -> super#phrasenode phr
 
-    method! datatype = function
+    method! datatypenode = function
       | `Function (dts, row, dt) ->
           let (_, dts') = self#list (fun o -> o#datatype) dts in
           let (_, dt') = self#datatype dt in
@@ -298,7 +298,7 @@ and perform_renaming module_table path term_ht type_ht =
               (o, (fqn, fspec'))) xs in
           let (o, rv') = o#row_var rv in
           (o, `Variant (xs', rv'))
-      | dt -> super#datatype dt
+      | dt -> super#datatypenode dt
 
   end
 

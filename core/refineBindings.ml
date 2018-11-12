@@ -114,13 +114,13 @@ object (self)
   method references =
     StringSet.elements (StringSet.from_list (List.rev references))
 
-  method! datatype = function
+  method! datatypenode = function
     | `TypeApplication (tyAppName, argList) ->
           let o =
             List.fold_left (fun acc ta -> acc#type_arg ta) self argList
           in
             o#add tyAppName
-    | x -> super#datatype x
+    | x -> super#datatypenode x
 
   method! row_var = function
     | `Open (x, _, _) -> self#add x
@@ -139,15 +139,15 @@ let subst_ty_app refFrom refTo =
 object(_self)
   inherit SugarTraversals.map as super
 
-  method! datatype : datatype -> datatype = function
+  method! datatypenode : datatypenode -> datatypenode = function
     | `TypeApplication (tyAppName, _) as tyApp ->
         if tyAppName = refFrom then `TypeVar (refTo, Some default_subkind, `Rigid)
-        else super#datatype tyApp
-    | dt -> super#datatype dt
+        else super#datatypenode tyApp
+    | dt -> super#datatypenode dt
 end
 
 let substTyApp ty refFrom refTo =
-  (subst_ty_app refFrom refTo)#datatype ty
+  (subst_ty_app refFrom refTo)#datatypenode ty
 
 
 (* Type variable substitution *)
@@ -161,23 +161,23 @@ object(self)
    *  - This is the one found in the application
    *)
 
-  method! datatype : datatype -> datatype =
+  method! datatypenode : datatypenode -> datatypenode =
     fun dt ->
       match dt with
         | `TypeVar (n, _, _) when n = varFrom ->
             (match taTo with
-               | `Type dtTo -> dtTo
-               | _ -> super#datatype dt)
-        | `Forall (qs, quantDt) ->
+               | `Type (dtTo, _) -> dtTo
+               | _ -> super#datatypenode dt)
+        | `Forall (qs, (quantDt, pos)) ->
             (match taTo with
-              | `Type (`TypeVar (n, _, _)) ->
+              | `Type (`TypeVar (n, _, _), _) ->
                   let qs' =
                     List.map (fun (tv, k, f as q) ->
                       if tv = varFrom then
                         (n, k, f)
-                      else q) qs in `Forall (qs', self#datatype quantDt)
-              | _ -> super#datatype dt)
-        | _ -> super#datatype dt
+                      else q) qs in `Forall (qs', (self#datatypenode quantDt, pos))
+              | _ -> super#datatypenode dt)
+        | _ -> super#datatypenode dt
 
   method! fieldspec : fieldspec -> fieldspec =
     fun fs ->
@@ -198,14 +198,14 @@ object(self)
 end
 
 let substTyArg varFrom taTo ty =
-  (subst_ty_var varFrom taTo)#datatype ty
+  (subst_ty_var varFrom taTo)#datatypenode ty
 
 (* Type inlining *)
 let inline_ty toFind inlineArgs toInline =
 object(_self)
   inherit SugarTraversals.map as super
 
-  method! datatype : datatype -> datatype =
+  method! datatypenode : datatypenode -> datatypenode =
     fun dt ->
       match dt with
         | `TypeApplication (tyAppName, argList) as tyApp ->
@@ -227,13 +227,13 @@ object(_self)
                 (* Arity error, let something else pick it up *)
                  tyApp
             else
-              super#datatype dt
-        | x -> super#datatype x
+              super#datatypenode dt
+        | x -> super#datatypenode x
 
 end
 
 let inlineTy ty tyRef inlineArgs refinedTy =
-  (inline_ty tyRef inlineArgs refinedTy)#datatype ty
+  (inline_ty tyRef inlineArgs refinedTy)#datatypenode ty
 
 (* Similar to refine_bindings, RefineTypeBindings.refineTypeBindings finds
  * sequences of mutually recursive types, and rewrites them as explicit mus. *)
@@ -302,9 +302,9 @@ module RefineTypeBindings = struct
     fun (_, _, (dt, _)) -> dt
 
   (* Updates the datatype in a type binding. *)
-  let updateDT : type_ty -> datatype -> type_ty =
-    fun (name, tyArgs, (_, unsugaredDT)) newDT ->
-      (name, tyArgs, (newDT, unsugaredDT))
+  let updateDT : type_ty -> datatypenode -> type_ty =
+    fun (name, tyArgs, ((_, pos), unsugaredDT)) newDT ->
+      (name, tyArgs, ((newDT, pos), unsugaredDT))
 
   let referenceInfo : binding list -> type_hashtable -> reference_info =
     fun binds typeHt ->
@@ -349,7 +349,7 @@ module RefineTypeBindings = struct
         if rts || List.length sccs > 1 then
           let muName = gensym ~prefix:"refined_mu" () in
             ((tyName, muName) :: env, `Mu (muName, sugaredDT))
-        else (env, sugaredDT) in
+        else (env, fst sugaredDT) in
       (* Now, we go through the list of type references.
        * If the reference is in the substitution environment, we replace it
        * with the mu variable we've created.
@@ -368,7 +368,7 @@ module RefineTypeBindings = struct
                let to_refine = Hashtbl.find ht tyRef in
                let (_, arg_list, _) = to_refine in
                let to_refine_args = List.map fst arg_list in
-               let (_, _, (refinedRef, _)) = refineType to_refine env' ht sccs ri in
+               let (_, _, ((refinedRef,_), _)) = refineType to_refine env' ht sccs ri in
                inlineTy curDataTy tyRef to_refine_args refinedRef)
         else
           curDataTy

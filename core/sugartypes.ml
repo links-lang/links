@@ -69,7 +69,7 @@ let rigidify (name, kind, _) = (name, kind, `Rigid)
 type fieldconstraint = [ `Readonly | `Default ]
     [@@deriving show]
 
-type datatype =
+type datatypenode =
   [ `TypeVar         of known_type_variable
   | `QualifiedTypeApplication of (name list * type_arg list)
   | `Function        of datatype list * row * datatype
@@ -92,6 +92,7 @@ type datatype =
   | `Choice          of row
   | `Dual            of datatype
   | `End ]
+and datatype = datatypenode * position
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed

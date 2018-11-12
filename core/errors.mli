@@ -13,6 +13,7 @@ exception MultiplyDefinedToplevelNames of
 exception Type_error of (SourceCode.pos * string)
 exception RichSyntaxError of synerrspec
 exception SugarError of (SourceCode.pos * string)
+exception UnboundTyCon of (SourceCode.pos * string)
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string

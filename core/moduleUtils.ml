@@ -58,9 +58,9 @@ object
     | `Module _ -> {< has_no_modules = false >}
     | b -> super#bindingnode b
 
-  method! datatype = function
+  method! datatypenode = function
     | `QualifiedTypeApplication _ -> {< has_no_modules = false >}
-    | dt -> super#datatype dt
+    | dt -> super#datatypenode dt
 
   method! phrasenode = function
     | `QualifiedVar _ -> {< has_no_modules = false >}
@@ -139,10 +139,10 @@ let get_data_constructors init_constrs =
             {< constrs = StringSet.add constr constrs >}
         method get_constrs = StringSet.elements constrs
 
-        method! datatype = function
+        method! datatypenode = function
             | `Variant (xs, _) ->
                 self#list (fun o (lbl, _) -> o#add_constr lbl) xs
-            | dt -> super#datatype dt
+            | dt -> super#datatypenode dt
     end
 
 let create_module_info_map program =
