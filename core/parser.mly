@@ -120,27 +120,27 @@ let subkind_of pos =
   | "Eff"  -> Some (`Unl, `Effect)
   | sk -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos))
 
-let attach_kind _pos (t, k) = (t, k, `Rigid)
+let attach_kind (t, k) = (t, k, `Rigid)
 
-let attach_subkind_helper update _pos sk = update sk
+let attach_subkind_helper update sk = update sk
 
-let attach_subkind pos (t, subkind) =
+let attach_subkind (t, subkind) =
   let update sk =
     match t with
     | `TypeVar (x, _, freedom) ->
        `TypeVar (x, sk, freedom)
     | _ -> assert false
   in
-    attach_subkind_helper update pos subkind
+    attach_subkind_helper update subkind
 
-let attach_row_subkind pos (r, subkind) =
+let attach_row_subkind (r, subkind) =
   let update sk =
     match r with
     | `Open (x, _, freedom) ->
        `Open (x, sk, freedom)
     | _ -> assert false
   in
-    attach_subkind_helper update pos subkind
+    attach_subkind_helper update subkind
 
 let row_with field (fields, row_var) = field::fields, row_var
 
@@ -394,7 +394,7 @@ subkind:
 
 typearg:
 | VARIABLE                                                     { (($1, (`Type, None), `Rigid), None) }
-| VARIABLE kind                                                { (attach_kind (pos()) ($1, $2), None) }
+| VARIABLE kind                                                { (attach_kind ($1, $2), None) }
 
 varlist:
 | typearg                                                      { [$1] }
@@ -1117,7 +1117,7 @@ type_var:
 | PERCENT                                                      { fresh_type_variable None }
 
 kinded_type_var:
-| type_var subkind                                             { attach_subkind (pos()) ($1, $2) }
+| type_var subkind                                             { attach_subkind ($1, $2) }
 
 type_arg_list:
 | type_arg                                                     { [$1] }
@@ -1233,10 +1233,10 @@ row_var:
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
 
 kinded_nonrec_row_var:
-| nonrec_row_var subkind                                       { attach_row_subkind (pos()) ($1, $2) }
+| nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }
 
 kinded_row_var:
-| row_var subkind                                              { attach_row_subkind (pos()) ($1, $2) }
+| row_var subkind                                              { attach_row_subkind ($1, $2) }
 
 /*
  * Regular expression grammar
