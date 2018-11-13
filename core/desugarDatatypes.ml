@@ -3,8 +3,7 @@ open Sugartypes
 open Operators
 open Utility
 open List
-open SourceCode
-open Lexing
+open Errors
 
 module SEnv = Env.String
 
@@ -183,9 +182,7 @@ struct
         | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
         | `TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
-              | None -> let (pos,_,_) = resolve_pos pos in
-                 failwith (Printf.sprintf "%s:%d: Unbound type constructor %s"
-                           (Filename.basename pos.pos_fname) pos.pos_lnum tycon)
+              | None -> raise (UnboundTyCon (pos,tycon))
               | Some (`Alias (qs, _dt)) ->
                  let exception Kind_mismatch (* TODO add more information *) in
                  let match_kinds (q, t) =
