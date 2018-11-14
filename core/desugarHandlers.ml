@@ -22,8 +22,8 @@ let dp = Sugartypes.dummy_position
 
 (* Computes the set of names in a given pattern *)
 let rec names : pattern -> string list
-  = fun (pat,_) ->
-    match pat with
+  = fun pat ->
+    match pat.node with
       `Variant (_,pat_opt) -> opt_app names [] pat_opt
     | `Record (name_pats,pat_opt) ->
        let optns = opt_app names [] pat_opt in
@@ -44,27 +44,26 @@ let rec names : pattern -> string list
 let resolve_name_conflicts : pattern -> stringset -> pattern
   = fun pat conflicts ->
     let rec hide_names : pattern -> pattern
-      = fun (pat,pos) ->
-	(begin
-	  match pat with
+      = fun pat -> mkWithPos
+	 begin
+	  match pat.node with
 	  | `Variant (label, pat_opt)    -> `Variant (label, opt_map hide_names pat_opt)
 	  | `Record (name_pats, pat_opt) -> `Record  (List.map (fun (label, pat) -> (label, hide_names pat)) name_pats, opt_map hide_names pat_opt)
 	  | `Variable (name,_,_)         ->
 	     if StringSet.mem name conflicts
 	     then `Any
-	     else pat
+	     else pat.node
 	  | `Cons (pat, pat')            -> `Cons (hide_names pat, hide_names pat')
 	  | `Tuple pats                  -> `Tuple (List.map hide_names pats)
 	  | `List pats                   -> `List (List.map hide_names pats)
 	  | `Negative _                  -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
-	  | `As ((name,_,_) as n,pat) -> let (p,_) as pat = hide_names pat in
+	  | `As ((name,_,_) as n,pat) -> let {node;_} as pat = hide_names pat in
 					    if StringSet.mem name conflicts
-					    then p
+					    then node
 					    else `As (n, pat)
 	  | `HasType (pat, t)            -> `HasType (hide_names pat, t)
-	  | _ -> pat
-	 end
-	   , pos)
+	  | _ -> pat.node
+	 end pat.pos
     in hide_names pat
 
 (* This function parameterises each clause computation, e.g.
@@ -106,9 +105,9 @@ let parameterize : (pattern * phrase) list -> pattern list list option -> (patte
 
 (* This function assigns fresh names to `Any (_) *)
 let rec deanonymize : pattern -> pattern
-  = fun (pat, pos) ->
-    (begin
-      match pat with
+  = fun pat -> mkWithPos
+     begin
+      match pat.node with
 	`Any                         -> `Variable (Utility.gensym ~prefix:"dsh" (), None, dp)
       | `Nil                         -> `Nil
       | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
@@ -122,13 +121,13 @@ let rec deanonymize : pattern -> pattern
       | `Variable b                  -> `Variable b
       | `As (b,p)                    -> `As (b, deanonymize p)
       | `HasType (p,t)               -> `HasType (deanonymize p, t)
-     end, pos)
+     end pat.pos
 
 (* This function translates a pattern into a phrase. It assumes that the given pattern has been deanonymised. *)
 let rec phrase_of_pattern : pattern -> phrase
-  = fun (pat,pos) ->
+  = fun pat ->
     (begin
-      match pat with
+      match pat.node with
 	`Any                         -> assert false (* can never happen after the fresh name generation pass *)
       | `Nil                         -> `ListLit ([], None)
       | `Cons (hd, tl)               -> `InfixAppl (([], `Cons), phrase_of_pattern hd, phrase_of_pattern tl) (* x :: xs => (phrase_of_pattern x) :: (phrase_of_pattern xs) *)
@@ -142,7 +141,7 @@ let rec phrase_of_pattern : pattern -> phrase
       | `Variable b                  -> `Var (fst3 b)
       | `As (b,_)                    -> `Var (fst3 b)
       | `HasType (p,t)               -> `TypeAnnotation (phrase_of_pattern p, t)
-    end, pos)
+    end, pat.pos)
 
 (* This function applies the list of parameters to the generated handle. *)
 let apply_params : phrase -> phrase list list -> phrase
@@ -154,7 +153,7 @@ let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (
     let ret, ops =
       List.fold_left
         (fun (val_cases, eff_cases) (pat, body) ->
-          match fst pat with
+          match pat.node with
           | `Variant ("Return", None)     -> failwith "Improper pattern-matching on return value"
           | `Variant ("Return", Some pat) -> (pat, body) :: val_cases, eff_cases
           | _                             -> val_cases, (pat, body) :: eff_cases)
@@ -164,14 +163,14 @@ let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (
     | [] ->
        let x = "x" in
        let xb = (x, None, dp) in
-       let id = ((`Variable xb, dp), (`Var x, dp)) in
+       let id = (mkWithPos (`Variable xb) dp, (`Var x, dp)) in
        ([id], List.rev ops)
     | _ ->
        (List.rev ret, List.rev ops)
 
 let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
   = fun (depth, m, cases, params) ->
-    let pos = snd m in
+    let pos = m.pos in
     let m    = deanonymize m in
     let comp = `FnAppl (phrase_of_pattern m, []), pos in
     let cases = parameterize cases params in

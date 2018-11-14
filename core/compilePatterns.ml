@@ -75,7 +75,7 @@ let lookup_name name (nenv, _tenv, _eff, _penv) =
 let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 
 let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
-  fun scope (p, pos) ->
+  fun scope {Sugartypes.node=p; Sugartypes.pos} ->
     let pp = desugar_pattern scope in
     let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (`Any, `Any)) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
@@ -93,10 +93,10 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
             let p, env = pp p in
             let ps, env' = pp ps in
               `Cons (p, ps), env ++ env'
-        | `List [] -> pp (`Nil, pos)
+        | `List [] -> pp (Sugartypes.mkWithPos `Nil pos)
         | `List (p::ps) ->
             let p, env = pp p in
-            let ps, env' = pp (`List ps, pos) in
+            let ps, env' = pp (Sugartypes.mkWithPos (`List ps) pos) in
               `Cons (p, ps), env ++ env'
         | `Variant (name, None) -> `Variant (name, `Any), empty
         | `Variant (name, Some p) ->
@@ -130,8 +130,8 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
             in
               `Record (bs, p), env
         | `Tuple ps ->
-            let bs = mapIndex (fun (p, pos) i -> (string_of_int (i+1), (p, pos))) ps in
-              pp (`Record (bs, None), pos)
+            let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
+              pp (Sugartypes.mkWithPos (`Record (bs, None)) pos)
         | `Constant constant ->
             `Constant constant, empty
         | `Variable b ->

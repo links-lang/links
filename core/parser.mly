@@ -53,7 +53,7 @@ let annotate (signame, datatype) : _ -> binding =
             `Fun ((name, None, bpos), lin, ([], phrase), location, Some datatype), dpos
       | `Var (((name, bpos), phrase, location), dpos) ->
           let _ = checksig signame name in
-          `Val ([], (`Variable (name, None, bpos), dpos), phrase, location, Some datatype), dpos
+          `Val ([], (mkWithPos (`Variable (name, None, bpos)) dpos), phrase, location, Some datatype), dpos
       | `Handler ((name,_,_) as b, hnlit, dpos) ->
 	 let _ = checksig signame name in
 	 `Handler (b, hnlit, Some datatype), dpos
@@ -304,7 +304,7 @@ nofun_declaration:
                                                                    set assoc (from_option default_fixity $2) (fst $3);
                                                                    (`Infix, pos()) }
 | tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
-                                                                 in `Val ([], (`Variable (d, None, dpos), pos),p,l,None), pos }
+                                                                 in `Val ([], (mkWithPos (`Variable (d, None, dpos)) pos),p,l,None), pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
@@ -349,7 +349,7 @@ typed_handler_binding:
  									      (binder, hnlit, pos()) }
 
 optional_computation_parameter:
-| /* empty */                                                 { (`Any, pos()) }
+| /* empty */                                                 { mkWithPos `Any (pos()) }
 | LBRACKET pattern RBRACKET                                   { $2 }
 
 perhaps_uinteger:
@@ -1281,21 +1281,21 @@ regex_pattern_sequence:
  */
 pattern:
 | typed_pattern                                             { $1 }
-| typed_pattern COLON primary_datatype                      { (`HasType ($1, datatype (mkWithPos $3 (pos()))), pos()) }
+| typed_pattern COLON primary_datatype                      { mkWithPos (`HasType ($1, datatype (mkWithPos $3 (pos())))) (pos()) }
 /* FIXME: in production above $3 is annotated with position of whole production */
 
 typed_pattern:
 | cons_pattern                                              { $1 }
-| cons_pattern AS var                                       { `As ((fst $3, None, snd $3), $1), pos() }
+| cons_pattern AS var                                       { mkWithPos (`As ((fst $3, None, snd $3), $1)) (pos()) }
 
 cons_pattern:
 | constructor_pattern                                       { $1 }
-| constructor_pattern COLONCOLON cons_pattern               { `Cons ($1, $3), pos() }
+| constructor_pattern COLONCOLON cons_pattern               { mkWithPos (`Cons ($1, $3)) (pos()) }
 
 constructor_pattern:
 | negative_pattern                                          { $1 }
-| CONSTRUCTOR                                               { `Variant ($1, None), pos() }
-| CONSTRUCTOR parenthesized_pattern                         { `Variant ($1, Some $2), pos() }
+| CONSTRUCTOR                                               { mkWithPos (`Variant ($1, None)) (pos()) }
+| CONSTRUCTOR parenthesized_pattern                         { mkWithPos (`Variant ($1, Some $2)) (pos()) }
 
 constructors:
 | CONSTRUCTOR                                               { [$1] }
@@ -1303,22 +1303,22 @@ constructors:
 
 negative_pattern:
 | primary_pattern                                           { $1 }
-| MINUS CONSTRUCTOR                                         { `Negative [$2], pos() }
-| MINUS LPAREN constructors RPAREN                          { `Negative $3, pos() }
+| MINUS CONSTRUCTOR                                         { mkWithPos (`Negative [$2]) (pos()) }
+| MINUS LPAREN constructors RPAREN                          { mkWithPos (`Negative $3) (pos()) }
 
 parenthesized_pattern:
-| LPAREN RPAREN                                             { `Tuple [], pos() }
+| LPAREN RPAREN                                             { mkWithPos (`Tuple []) (pos()) }
 | LPAREN pattern RPAREN                                     { $2 }
-| LPAREN pattern COMMA patterns RPAREN                      { `Tuple ($2 :: $4), pos() }
-| LPAREN labeled_patterns VBAR pattern RPAREN               { `Record ($2, Some $4), pos() }
-| LPAREN labeled_patterns RPAREN                            { `Record ($2, None), pos() }
+| LPAREN pattern COMMA patterns RPAREN                      { mkWithPos (`Tuple ($2 :: $4)) (pos()) }
+| LPAREN labeled_patterns VBAR pattern RPAREN               { mkWithPos (`Record ($2, Some $4)) (pos()) }
+| LPAREN labeled_patterns RPAREN                            { mkWithPos (`Record ($2, None)) (pos()) }
 
 primary_pattern:
-| VARIABLE                                                  { `Variable ($1, None, pos()), pos() }
-| UNDERSCORE                                                { `Any, pos() }
-| constant                                                  { let c, p = $1 in `Constant c, p }
-| LBRACKET RBRACKET                                         { `Nil, pos() }
-| LBRACKET patterns RBRACKET                                { `List $2, pos() }
+| VARIABLE                                                  { mkWithPos (`Variable ($1, None, pos())) (pos()) }
+| UNDERSCORE                                                { mkWithPos `Any (pos()) }
+| constant                                                  { let c, p = $1 in mkWithPos (`Constant c) p }
+| LBRACKET RBRACKET                                         { mkWithPos `Nil (pos()) }
+| LBRACKET patterns RBRACKET                                { mkWithPos (`List $2) (pos()) }
 | parenthesized_pattern                                     { $1 }
 
 patterns:

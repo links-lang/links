@@ -15,7 +15,8 @@ type 'a with_pos = { node : 'a
                      [@@deriving show]
 
 let mkWithPos node pos = { node; pos }
-
+(* JSTOLAREK: attaching dummy_position is common pattern in desugar*.ml modules
+- worth having a separate mkWithDPos for it *)
 
 (* JSTOLAREK: change here *)
 type binder = name * Types.datatype option * position
@@ -100,7 +101,6 @@ type datatypenode =
   | `Choice          of row
   | `Dual            of datatype
   | `End ]
-(* JSTOLAREK: change here *)
 and datatype = datatypenode with_pos
 and row = (string * fieldspec) list * row_var
 and row_var =
@@ -139,8 +139,7 @@ type patternnode = [
 | `As       of binder * pattern
 | `HasType  of pattern * datatype'
 ]
-(* JSTOLAREK: change here *)
-and pattern = patternnode * position
+and pattern = patternnode with_pos
     [@@deriving show]
 
 type spawn_kind = [ `Angel | `Demon | `Wait ]
@@ -355,7 +354,7 @@ struct
   let union_map f = union_all -<- List.map f
   let option_map f = opt_app f empty
 
-  let rec pattern (p, _ : pattern) : StringSet.t = match p with
+  let rec pattern ({node; _} : pattern) : StringSet.t = match node with
     | `Any
     | `Nil
     | `Constant _

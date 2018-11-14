@@ -492,9 +492,9 @@ class map =
           let _x_i1 = o#datatype' _x_i1 in `HasType ((_x, _x_i1))
 
     method pattern : pattern -> pattern =
-      fun (_x, _x_i1) ->
-        let _x = o#patternnode _x in
-        let _x_i1 = o#position _x_i1 in (_x, _x_i1)
+      fun {node; pos} ->
+        let node = o#patternnode node in
+        let pos = o#position pos in {node; pos}
 
     method operator : operator -> operator =
       function
@@ -1169,8 +1169,10 @@ class fold =
           let o = o#pattern _x in let o = o#datatype' _x_i1 in o
 
     method pattern : pattern -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#patternnode _x in let o = o#position _x_i1 in o
+      fun {node; pos} ->
+        let o = o#patternnode node in
+        let o = o#position pos in
+        o
 
     method operator : operator -> 'self_type =
       function
@@ -1932,9 +1934,10 @@ class fold_map =
           let (o, _x_i1) = o#datatype' _x_i1 in (o, (`HasType ((_x, _x_i1))))
 
     method pattern : pattern -> ('self_type * pattern) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#patternnode _x in
-        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      fun {node; pos} ->
+        let (o, node) = o#patternnode node in
+        let (o, pos ) = o#position pos in
+        (o, {node; pos})
 
     method operator : operator -> ('self_type * operator) =
       function

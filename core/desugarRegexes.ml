@@ -40,7 +40,7 @@ let desugar_regex phrase regex_type pos : regex -> phrasenode =
       | `Replace (re, (`Splice e)) -> `ConstructorLit("Replace", Some (`TupleLit ([(aux re, pos); expr e]), pos), Some regex_type)
   in fun e ->
     let e = aux e in
-      `Block (List.map (fun (v, e1, t) -> (`Val ([], (`Variable (v, Some t, pos), pos), e1, `Unknown, None), pos)) !exprs,
+      `Block (List.map (fun (v, e1, t) -> (`Val ([], (mkWithPos (`Variable (v, Some t, pos)) pos), e1, `Unknown, None), pos)) !exprs,
               (e, pos))
 
 let appl pos name tyargs args =
