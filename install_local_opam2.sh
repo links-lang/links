@@ -10,7 +10,6 @@ if [ -e $ROOT_DIR ]; then
     exit 1
 fi
 
-
 wget "$OPAM2_URL" -O "$EXEC_NAME"
 chmod u+x "$EXEC_NAME"
 ./${EXEC_NAME} init --disable-sandboxing -n
