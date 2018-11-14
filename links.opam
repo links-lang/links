@@ -1,6 +1,7 @@
 opam-version: "2.0"
 maintainer: "Simon Fowler <simon.fowler@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
+synopsis: "The Links Programming Language"
 homepage: "https://github.com/links-lang/links"
 dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
@@ -14,8 +15,8 @@ build: [
 
 install: [
 # Install documentation
-  [ "mkdir" "-p" "%{doc}%"                                      ]
-  [ "cp" "INSTALL" "%{doc}%/README"                             ]
+  [ "mkdir" "-p" "%{doc}%"                                      ] {with-doc}
+  [ "cp" "INSTALL" "%{doc}%/README"                             ] {with-doc}
 # Copy examples
   [ "mkdir" "-p" "%{share}%/examples"                           ]
   [ "sh" "-c" "cp -r examples/dbsetup %{share}%/examples/dbsetup/" ]
@@ -47,7 +48,7 @@ remove: [
   [ "rm" "-rf" "%{lib}%/js" ]
   [ "rm" "-rf" "%{share}%/examples" ]
   [ "rm" "-f"  "%{etc}%/config" ]
-  [ "rm" "-f"  "%{doc}%/README" ]
+  [ "rm" "-f"  "%{doc}%/README" ] {with-doc}
 ]
 
 depends: [
