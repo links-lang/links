@@ -8,10 +8,14 @@ type name = string [@@deriving show]
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
 
+let pp_position : Format.formatter -> position -> unit = fun fmt _ -> Utility.format_omission fmt
+
 type 'a with_pos = { node : 'a
                    ; pos  : position }
+                     [@@deriving show]
 
-let pp_position : Format.formatter -> position -> unit = fun fmt _ -> Utility.format_omission fmt
+let mkWithPos node pos = { node; pos }
+
 
 (* JSTOLAREK: change here *)
 type binder = name * Types.datatype option * position
@@ -97,7 +101,7 @@ type datatypenode =
   | `Dual            of datatype
   | `End ]
 (* JSTOLAREK: change here *)
-and datatype = datatypenode * position
+and datatype = datatypenode with_pos
 and row = (string * fieldspec) list * row_var
 and row_var =
     [ `Closed

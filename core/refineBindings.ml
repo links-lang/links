@@ -166,16 +166,16 @@ object(self)
       match dt with
         | `TypeVar (n, _, _) when n = varFrom ->
             (match taTo with
-               | `Type (dtTo, _) -> dtTo
+               | `Type {node = dtTo; _} -> dtTo
                | _ -> super#datatypenode dt)
-        | `Forall (qs, (quantDt, pos)) ->
+        | `Forall (qs, {node = quantDt; pos}) ->
             (match taTo with
-              | `Type (`TypeVar (n, _, _), _) ->
+              | `Type {node = `TypeVar (n, _, _); _} ->
                   let qs' =
                     List.map (fun (tv, k, f as q) ->
                       if tv = varFrom then
                         (n, k, f)
-                      else q) qs in `Forall (qs', (self#datatypenode quantDt, pos))
+                      else q) qs in `Forall (qs', mkWithPos (self#datatypenode quantDt) pos)
               | _ -> super#datatypenode dt)
         | _ -> super#datatypenode dt
 
@@ -303,8 +303,8 @@ module RefineTypeBindings = struct
 
   (* Updates the datatype in a type binding. *)
   let updateDT : type_ty -> datatypenode -> type_ty =
-    fun (name, tyArgs, ((_, pos), unsugaredDT)) newDT ->
-      (name, tyArgs, ((newDT, pos), unsugaredDT))
+    fun (name, tyArgs, ({pos; _}, unsugaredDT)) newDT ->
+      (name, tyArgs, ((mkWithPos newDT pos), unsugaredDT))
 
   let referenceInfo : binding list -> type_hashtable -> reference_info =
     fun binds typeHt ->
@@ -349,7 +349,7 @@ module RefineTypeBindings = struct
         if rts || List.length sccs > 1 then
           let muName = gensym ~prefix:"refined_mu" () in
             ((tyName, muName) :: env, `Mu (muName, sugaredDT))
-        else (env, fst sugaredDT) in
+        else (env, sugaredDT.node) in
       (* Now, we go through the list of type references.
        * If the reference is in the substitution environment, we replace it
        * with the mu variable we've created.
@@ -368,8 +368,8 @@ module RefineTypeBindings = struct
                let to_refine = Hashtbl.find ht tyRef in
                let (_, arg_list, _) = to_refine in
                let to_refine_args = List.map fst arg_list in
-               let (_, _, ((refinedRef,_), _)) = refineType to_refine env' ht sccs ri in
-               inlineTy curDataTy tyRef to_refine_args refinedRef)
+               let (_, _, (refinedRef, _)) = refineType to_refine env' ht sccs ri in
+               inlineTy curDataTy tyRef to_refine_args refinedRef.node)
         else
           curDataTy
       ) sccs dt in

@@ -116,7 +116,7 @@ struct
   let rec datatype var_env (alias_env : Types.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
     match t' with
-    | (t, pos) ->
+    | {node = t; pos} ->
       let lookup_type t = StringMap.find t var_env.tenv in
       match t with
         | `TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
@@ -286,14 +286,14 @@ struct
          unbound effect variable.  *)
       try List.map
             (function
-            | (name, `Present (`Function (domain, (fields, rv), codomain), pos)) as op
+            | (name, `Present { node = `Function (domain, (fields, rv), codomain); pos}) as op
                 when not (TypeUtils.is_builtin_effect name) ->
                (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
                begin match rv, fields with
                | `Closed, [] -> op
                | `Open _, []
                | (`Recursive _), [] -> (* might need an extra check on recursive rows *)
-                  (name, `Present (`Function (domain, ([], `Closed), codomain), pos))
+                  (name, `Present { node = `Function (domain, ([], `Closed), codomain); pos})
                | _,_ -> raise (UnexpectedOperationEffects name)
                end
             | x -> x)
