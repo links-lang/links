@@ -11,6 +11,7 @@ object (o : 'self_type)
     | `CP p ->
        let rec desugar_cp = fun o (p, pos) ->
          let add_pos x = (x, pos) in
+         let add_withPos x = mkWithPos x pos in
          match p with
          | `Unquote (bs, e) ->
             let envs = o#backup_envs in
@@ -21,7 +22,7 @@ object (o : 'self_type)
          | `Grab ((c, _), None, p) ->
             let (o, e, t) = desugar_cp o p in
             o, `Block
-                  ([add_pos (`Val ([], add_pos `Any,
+                  ([add_pos (`Val ([], add_withPos `Any,
                                    add_pos (`FnAppl (add_pos (`Var "wait"),
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
@@ -35,8 +36,8 @@ object (o : 'self_type)
             let (o, e, t) = desugar_cp o p in
             let o = o#restore_envs envs in
             o, `Block
-                  ([add_pos (`Val ([], add_pos (`Record ([("1", add_pos (`Variable (x, Some u, pos)));
-                                                          ("2", add_pos (`Variable (c, Some s, pos)))], None)),
+                  ([add_pos (`Val ([], add_withPos (`Record ([("1", add_withPos (`Variable (x, Some u, pos)));
+                                                              ("2", add_withPos (`Variable (c, Some s, pos)))], None)),
                                    add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "receive", grab_tyargs)),
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
@@ -44,7 +45,7 @@ object (o : 'self_type)
          | `Give ((c, _), None, p) ->
             let (o, e, t) = desugar_cp o p in
             o, `Block
-                  ([add_pos (`Val ([], add_pos `Any,
+                  ([add_pos (`Val ([], add_withPos `Any,
                                    add_pos (`FnAppl (add_pos (`Var "close"),
                                                      [add_pos (`Var c)])),
                                    `Unknown, None))],
@@ -56,7 +57,7 @@ object (o : 'self_type)
             let (o, p, t) = desugar_cp o p in
             let o = o#restore_envs envs in
             o, `Block
-                  ([add_pos (`Val ([], add_pos (`Variable (c, Some s, pos)),
+                  ([add_pos (`Val ([], add_withPos (`Variable (c, Some s, pos)),
                                    add_pos (`FnAppl (add_pos (Sugartypes.tappl (`Var "send", give_tyargs)),
                                                      [e; add_pos (`Var c)])),
                                    `Unknown, None))],
@@ -69,7 +70,7 @@ object (o : 'self_type)
             let (o, p, t) = desugar_cp o p in
             let o = o#restore_envs envs in
             o, `Block
-                 ([add_pos (`Val ([], add_pos (`Variable (c, Some (TypeUtils.select_type label s), pos)),
+                 ([add_pos (`Val ([], add_withPos (`Variable (c, Some (TypeUtils.select_type label s), pos)),
                                   add_pos (`Select (label, (add_pos (`Var c)))),
                                   `Unknown, None))],
                   add_pos p), t
@@ -78,7 +79,7 @@ object (o : 'self_type)
               let envs = o#backup_envs in
               let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.choice_at label s) >} in
               let (o, p, t) = desugar_cp o p in
-              let pat : pattern = add_pos (`Variant (label, Some (add_pos (`Variable (c, Some (TypeUtils.choice_at label s), pos))))) in
+              let pat : pattern = add_withPos (`Variant (label, Some (add_withPos (`Variable (c, Some (TypeUtils.choice_at label s), pos))))) in
               o#restore_envs envs, ((pat, add_pos p), t) :: cases in
             let (o, cases) = List.fold_right desugar_branch cases (o, []) in
             (match List.split cases with
@@ -95,22 +96,21 @@ object (o : 'self_type)
             let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in
             let o = o#restore_envs envs in
-            let left_block = add_pos (`Spawn (`Angel, `NoSpawnLocation, add_pos (`Block ([add_pos (`Val ([], add_pos (`Variable (c, Some s, pos)),
-                                                                            add_pos (`FnAppl (add_pos (`Var "accept"), [add_pos (`Var c)])),
-                                                                            `Unknown, None));
-                                                            add_pos (`Val ([], add_pos (`Variable (c, Some Types.make_endbang_type, pos)),
-                                                                            add_pos left,
-                                                                            `Unknown, None))],
-                                                            add_pos (`FnAppl (add_pos (`Var "close"),
-                                                                              [add_pos (`Var c)])))),
+            let left_block = add_pos (`Spawn (`Angel, `NoSpawnLocation, add_pos (`Block (
+                                     [ add_pos (`Val ([], add_withPos (`Variable (c, Some s, pos)),
+                                                      add_pos (`FnAppl (add_pos (`Var "accept"), [add_pos (`Var c)])),
+                                                      `Unknown, None));
+                                       add_pos (`Val ([], add_withPos (`Variable (c, Some Types.make_endbang_type, pos)),
+                                                      add_pos left, `Unknown, None))],
+                                       add_pos (`FnAppl (add_pos (`Var "close"), [add_pos (`Var c)])))),
                                               Some (Types.make_singleton_closed_row ("wild", `Present Types.unit_type)))) in
             let o = o#restore_envs envs in
             o, `Block
-                  ([add_pos (`Val ([], add_pos (`Variable (c, Some (`Application (Types.access_point, [`Type s])), pos)),
+                  ([add_pos (`Val ([], add_withPos (`Variable (c, Some (`Application (Types.access_point, [`Type s])), pos)),
                                    add_pos (`FnAppl (add_pos (`Var "new"), [])),
                                    `Unknown, None));
-                    add_pos (`Val ([], add_pos (`Any), left_block, `Unknown, None));
-                    add_pos (`Val ([], add_pos (`Variable (c, Some (Types.dual_type s), pos)),
+                    add_pos (`Val ([], add_withPos `Any, left_block, `Unknown, None));
+                    add_pos (`Val ([], add_withPos (`Variable (c, Some (Types.dual_type s), pos)),
                                    add_pos (`FnAppl (add_pos (`Var "request"), [add_pos (`Var c)])),
                                    `Unknown, None))],
                    add_pos right), t

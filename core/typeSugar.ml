@@ -118,7 +118,7 @@ struct
     | `Exp p -> is_pure p
     | `Val (_, pat, rhs, _, _) ->
         is_safe_pattern pat && is_pure rhs
-  and is_safe_pattern (pat, _) = match pat with
+  and is_safe_pattern {node = pat; _} = match pat with
       (* safe patterns cannot fail *)
     | `Nil
     | `Cons _
@@ -1457,7 +1457,7 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
       | `Record row when Types.is_tuple row->
           let fields, row_var, dual = fst (Types.unwrap_row row) in
           let rec unwrap_at i p =
-            match fst p with
+            match p.node with
               | `Variable _ | `Any | `Constant _ -> p
               | `As (_, p) | `HasType (p, _) -> unwrap_at i p
               | `Tuple ps ->
@@ -1479,7 +1479,7 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
           let fields, row_var, lr = fst (Types.unwrap_row row) in
           assert (not lr);
           let rec unwrap_at name p =
-            match fst p with
+            match p.node with
               | `Variable _ | `Any | `Constant _ -> p
               | `As (_, p) | `HasType (p, _) -> unwrap_at name p
               | `Record (ps, default) ->
@@ -1507,7 +1507,7 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
           let fields, row_var, lr = fst (Types.unwrap_row row) in
           assert (not lr);
           let end_pos p =
-            let _, (_, end_pos, buf) = p in
+            let (_, end_pos, buf) = p.pos in
               (*
                 QUESTION:
 
@@ -1517,23 +1517,23 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
               (end_pos, end_pos, buf) in
 
           let rec unwrap_at : string -> pattern -> pattern list = fun name p ->
-            match fst p with
-              | `Variable _ | `Any -> [ `Any, end_pos p ]
+            match p.node with
+              | `Variable _ | `Any -> [ mkWithPos `Any (end_pos p) ]
               | `As (_, p) | `HasType (p, _) -> unwrap_at name p
               | `Variant (name', None) when name=name' ->
-                    [(`Record ([], None), end_pos p)]
+                    [mkWithPos (`Record ([], None)) (end_pos p)]
               | `Variant (name', Some p) when name=name' -> [p]
               | `Variant _ -> []
               | `Negative names when List.mem name names -> []
-              | `Negative _ -> [ `Any, end_pos p ]
+              | `Negative _ -> [ mkWithPos `Any (end_pos p) ]
               | `Nil | `Cons _ | `List _ | `Tuple _ | `Record _ | `Constant _ | `Effect _ -> assert false in
           let rec are_open : pattern list -> bool =
             function
               | [] -> false
-              | ((`Variable _ | `Any | `Negative _), _) :: _ -> true
-              | ((`As (_, p) | `HasType (p, _)), _) :: ps -> are_open (p :: ps)
-              | ((`Variant _), _) :: ps -> are_open ps
-              | ((`Nil | `Cons _ | `List _ | `Tuple _ | `Record _ | `Constant _ | `Effect _), _) :: _ -> assert false in
+              | {node = (`Variable _ | `Any | `Negative _); _} :: _ -> true
+              | {node = (`As (_, p) | `HasType (p, _)); _} :: ps -> are_open (p :: ps)
+              | {node = (`Variant _); _} :: ps -> are_open ps
+              | {node = (`Nil | `Cons _ | `List _ | `Tuple _ | `Record _ | `Constant _ | `Effect _); _} :: _ -> assert false in
           let fields =
             StringMap.fold
               (fun name field_spec env ->
@@ -1567,7 +1567,7 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
           assert (not lr);
 
           let unwrap_at : string -> pattern -> pattern list = fun name p ->
-            match fst p with
+            match p.node with
               | `Effect (name', ps, _) when name=name' -> ps
               | `Effect _ -> []
               | `Variable _ | `Any | `As _ | `HasType _ | `Negative _
@@ -1633,7 +1633,7 @@ let close_pattern_type : pattern list -> Types.datatype -> Types.datatype = fun 
       | `Application (l, [`Type t])
           when Types.Abstype.equal l Types.list ->
           let rec unwrap p : pattern list =
-            match fst p with
+            match p.node with
               | `Variable _ | `Any -> [p]
               | `Constant _ | `Nil -> []
               | `Cons (p1, p2) -> p1 :: unwrap p2
@@ -1711,7 +1711,7 @@ let check_for_duplicate_names : Sugartypes.position -> pattern list -> string li
     else
       StringMap.add name (1, [binder]) binderss in
 
-  let rec gather binderss ((p : patternnode), _pos) =
+  let rec gather binderss { node = (p : patternnode); _} =
     match p with
       | `Any -> binderss
       | `Nil -> binderss
@@ -1764,7 +1764,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
      using types from the inner type.
 
   *)
-  let rec type_pattern (pattern, pos' : pattern) : pattern * Types.environment * (Types.datatype * Types.datatype) =
+  let rec type_pattern {node = pattern; pos = pos'} : pattern * Types.environment * (Types.datatype * Types.datatype) =
     let _UNKNOWN_POS_ = "<unknown>" in
     let tp = type_pattern in
     let unify (l, r) = unify_or_raise ~pos:pos' (l, r)
@@ -1772,7 +1772,7 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
     and ot (_,_,(t,_)) = t
     and it (_,_,(_,t)) = t
     and env (_,e,_) = e
-    and pos ((_,p),_,_) = let (_,_,p) = SourceCode.resolve_pos p in p
+    and pos ({pos = p;_},_,_) = let (_,_,p) = SourceCode.resolve_pos p in p
     and (++) = Env.extend in
     let (p, env, (outer_type, inner_type)) :
       patternnode * Types.environment * (Types.datatype * Types.datatype) =
@@ -1829,18 +1829,18 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
              let effrow = Types.make_empty_open_row (`Unl, `Any) in
              Types.make_function_type [domain] effrow codomain
            in
-           let pos' = snd kpat in
-           match fst kpat with
+           let pos' = kpat.pos in
+           match kpat.node with
            | `Any ->
               let t = fresh_resumption_type () in
-              (`Any, pos'), Env.empty, (t, t)
+              mkWithPos `Any pos', Env.empty, (t, t)
            | `Variable (x,_,pos'') ->
               let xtype = fresh_resumption_type () in
-              ((`Variable (x, Some xtype, pos''), pos'), Env.bind Env.empty (x, xtype), (xtype, xtype))
+              (mkWithPos (`Variable (x, Some xtype, pos'')) pos', Env.bind Env.empty (x, xtype), (xtype, xtype))
            | `As ((x,_,pos''), pat') ->
               let p = type_resumption_pat pat' in
               let env' = Env.bind (env p) (x, it p) in
-              (`As (((x, Some (it p), pos''), erase p)), pos'), env', (ot p, it p)
+              mkWithPos (`As (((x, Some (it p), pos''), erase p))) pos', env', (ot p, it p)
            | `HasType (p, (_, Some t)) ->
               let p = type_resumption_pat p in
               let () = unify ~handle:Gripers.type_resumption_with_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
@@ -1935,15 +1935,15 @@ let type_pattern closed : pattern -> pattern * Types.environment * Types.datatyp
         let () = unify ~handle:Gripers.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
         `HasType (erase p, t'), env p, (ot p, t)
       | `HasType _ -> assert false in
-    (p, pos'), env, (outer_type, inner_type)
+    mkWithPos p pos', env, (outer_type, inner_type)
   in
   fun pattern ->
-    let _ = check_for_duplicate_names (snd pattern) [pattern] in
+    let _ = check_for_duplicate_names pattern.pos [pattern] in
     let pos, env, (outer_type, _) = type_pattern pattern in
     pos, env, outer_type
 
 let rec pattern_env : pattern -> Types.datatype Env.t =
-  fun (p, _) -> match p with
+  fun { node = p; _} -> match p with
     | `Any
     | `Nil
     | `Constant _ -> Env.empty
@@ -2096,7 +2096,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and erase_pat (p, _, _) = p
     and pattern_typ (_, _, t) = t
     and pattern_env (_, e, _) = e in
-    let pattern_pos ((_,p),_,_) = let (_,_,p) = SourceCode.resolve_pos p in p in
+    let pattern_pos ({pos=p; _},_,_) = let (_,_,p) = SourceCode.resolve_pos p in p in
     let ppos_and_typ p = (pattern_pos p, pattern_typ p) in
     let uexp_pos (_,p) = let (_,_,p) = SourceCode.resolve_pos p in p in
     let exp_pos (p,_,_) = uexp_pos p in
@@ -3170,8 +3170,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let ret, ops =
                List.fold_left
                  (fun (val_cases, eff_cases) (pat, body) ->
-                   match fst pat with
-                   | `Variant ("Return", None)     -> Gripers.die (snd pat) "Improper pattern-matching on return value"
+                   match pat.node with
+                   | `Variant ("Return", None)     -> Gripers.die pat.pos "Improper pattern-matching on return value"
                    | `Variant ("Return", Some pat) -> (pat, body) :: val_cases, eff_cases
                    | _                             -> val_cases, (pat, body) :: eff_cases)
                  ([], []) cases
@@ -3234,19 +3234,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                  (fun (pat, body) cases ->
                    let pat =
                      match pat with
-                     | `Variant (opname, Some pat'), pos ->
-                        begin match pat' with
-                        | `Tuple [], _ ->
-                           `Effect (opname, [], (`Any, SourceCode.dummy_pos)), pos
-                        | `Tuple ps, _ ->
+                     | { node = `Variant (opname, Some pat'); pos } ->
+                        begin match pat'.node with
+                        | `Tuple [] ->
+                           mkWithPos (`Effect (opname, [], mkWithPos `Any SourceCode.dummy_pos)) pos
+                        | `Tuple ps ->
                            let kpat, pats = pop_last ps in
                            let eff = `Effect (opname, pats, kpat) in
-                           eff, pos
-                        | _ -> `Effect (opname, [], pat'), pos
+                           mkWithPos eff pos
+                        | _ -> mkWithPos (`Effect (opname, [], pat')) pos
                         end
-                     | `Variant (opname, None), pos ->
-                        `Effect (opname, [], (`Any, SourceCode.dummy_pos)), pos
-                     | _, pos -> Gripers.die pos "Improper pattern matching"
+                     | { node = `Variant (opname, None); pos } ->
+                        mkWithPos (`Effect (opname, [], mkWithPos `Any SourceCode.dummy_pos)) pos
+                     | {pos;_} -> Gripers.die pos "Improper pattern matching"
                    in
                    let pat = tpo pat in
                    unify ~handle:Gripers.handle_effect_patterns
@@ -3260,7 +3260,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                       arity information. *)
                    let (pat, env, effrow) = pat in
                    let effname, kpat =
-                     match fst pat with
+                     match pat.node with
                      | `Effect (name, _, kpat) -> name, kpat
                      | _ -> assert false
                    in
@@ -3277,7 +3277,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      match descr.shd_params with
                      | Some params when descr.shd_depth = `Deep ->
                         let handler_params = params.shp_types in
-                        begin match fst kpat with
+                        begin match kpat.node with
                         | `Any ->
                            let kt =
                              let domain =
@@ -3309,7 +3309,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         | _ -> assert false
                         end
                      | _ ->
-                        match fst kpat with
+                        match kpat.node with
                         | `As ((kname,_,_),_)
                         | `Variable (kname,_,_) ->
                            let kt =
@@ -3359,7 +3359,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    let vs' = Env.domain henv.var_env in
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
                    let () =
-                     let (_,_,pos') = SourceCode.resolve_pos @@ snd (fst3 kpat) in
+                     let (_,_,pos') = SourceCode.resolve_pos @@ (fst3 kpat).pos in
                      let kt = TypeUtils.return_type (pattern_typ kpat) in
                      match descr.shd_depth with
                      | `Deep ->
@@ -3561,7 +3561,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     and (++) ctxt env' = {ctxt with var_env = Env.extend ctxt.var_env env'} in
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
-    let pattern_pos ((_,p),_,_) = let (_,_,p) = SourceCode.resolve_pos p in p in
+    let pattern_pos ({pos=p;_},_,_) = let (_,_,p) = SourceCode.resolve_pos p in p in
     let ppos_and_typ p = (pattern_pos p, pattern_typ p) in
     let uexp_pos (_,p) = let (_,_,p) = SourceCode.resolve_pos p in p in
     let exp_pos (p,_,_) = uexp_pos p in

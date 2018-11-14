@@ -1063,7 +1063,7 @@ struct
         | (b,_)::bs ->
             begin
               match b with
-                | `Val (_, (`Variable (x, Some xt, _xpos), _), body, _, _) ->
+                | `Val (_, {Sugartypes.node=`Variable (x, Some xt, _xpos); _}, body, _, _) ->
                     let x_info = (xt, x, scope) in
                       I.letvar
                         (x_info,

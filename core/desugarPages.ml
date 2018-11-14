@@ -51,7 +51,7 @@ let rec desugar_page (o, page_type) =
                         [(`FunLit
                             (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_effects]),
                              `Unl,
-                             ([[`Variable (x, Some (Types.xml_type), pos), pos]],
+                             ([[mkWithPos (`Variable (x, Some (Types.xml_type), pos)) pos]],
                               (`Xml (name, attrs, dynattrs,
                                      [`Block ([], (`Var x, pos)), pos]), pos)), `Unknown), pos);
                          desugar_nodes pos children]), pos)

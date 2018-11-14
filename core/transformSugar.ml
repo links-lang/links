@@ -658,8 +658,8 @@ class transform (env : Types.typing_environment) =
           let (o, p) = o#pattern p in (o, (`HasType (p, t)))
 
     method pattern : pattern -> ('self_type * pattern) =
-      fun (p, pos) ->
-        let (o, p) = o#patternnode p in (o, (p, pos))
+      fun {node; pos} ->
+        let (o, node) = o#patternnode node in (o, {node; pos})
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function

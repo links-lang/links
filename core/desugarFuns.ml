@@ -101,7 +101,7 @@ object (o : 'self_type)
         let ft : Types.datatype = `ForAll (Types.box_quantifiers [ab; rhob;  effb],
                                            `Function (Types.make_tuple_type [r], eff, a)) in
 
-        let pss = [[`Variable (x, Some r, dp), dp]] in
+        let pss = [[mkWithPos (`Variable (x, Some r, dp)) dp]] in
         let body = `Projection ((`Var x, dp), name), dp in
         let e : phrasenode =
           `Block
