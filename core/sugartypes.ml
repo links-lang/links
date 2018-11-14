@@ -8,8 +8,12 @@ type name = string [@@deriving show]
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
 
+type 'a with_pos = { node : 'a
+                   ; pos  : position }
+
 let pp_position : Format.formatter -> position -> unit = fun fmt _ -> Utility.format_omission fmt
 
+(* JSTOLAREK: change here *)
 type binder = name * Types.datatype option * position
     [@@deriving show]
 
@@ -92,6 +96,7 @@ type datatypenode =
   | `Choice          of row
   | `Dual            of datatype
   | `End ]
+(* JSTOLAREK: change here *)
 and datatype = datatypenode * position
 and row = (string * fieldspec) list * row_var
 and row_var =
@@ -130,6 +135,7 @@ type patternnode = [
 | `As       of binder * pattern
 | `HasType  of pattern * datatype'
 ]
+(* JSTOLAREK: change here *)
 and pattern = patternnode * position
     [@@deriving show]
 
@@ -252,6 +258,7 @@ and phrasenode = [
 | `TryInOtherwise   of (phrase * pattern * phrase * phrase * Types.datatype option)
 | `Raise
 ]
+(* JSTOLAREK: change here *)
 and phrase = phrasenode * position
 and bindingnode = [
 (*
@@ -273,6 +280,7 @@ and bindingnode = [
 | `Module  of name * binding list
 | `AlienBlock of (name * name * ((binder * datatype') list))
 ]
+(* JSTOLAREK: change here *)
 and binding = bindingnode * position
 and directive = string * string list
 and sentence = [
@@ -288,6 +296,7 @@ and cp_phrasenode = [
 | `Offer of binder * (string * cp_phrase) list
 | `Link of binder * binder
 | `Comp of binder * cp_phrase * cp_phrase ]
+(* JSTOLAREK: change here *)
 and cp_phrase = cp_phrasenode * position
     [@@deriving show]
 
