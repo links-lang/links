@@ -625,9 +625,10 @@ class map =
       | `End -> `End
 
     method datatype : datatype -> datatype =
-      fun (_x, _x_i1) ->
-        let _x = o#datatypenode _x in
-        let _x_i1 = o#position _x_i1 in (_x, _x_i1)
+      fun {node; pos} ->
+        let node = o#datatypenode node in
+        let pos  = o#position pos in
+        {node; pos}
 
     method type_arg : type_arg -> type_arg =
       function
@@ -1288,8 +1289,10 @@ class fold =
       | `End -> o
 
     method datatype : datatype -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#datatypenode _x in let o = o#position _x_i1 in o
+      fun {node; pos} ->
+        let o = o#datatypenode node in
+        let o = o#position pos in
+        o
 
     method type_arg : type_arg -> 'self_type =
       function
@@ -2074,9 +2077,9 @@ class fold_map =
       | `End -> (o, `End)
 
     method datatype : datatype -> ('self_type * datatype) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#datatypenode _x in
-        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      fun {node; pos} ->
+        let (o, node) = o#datatypenode node in
+        let (o, pos) = o#position pos in (o, {node; pos})
 
     method type_arg : type_arg -> ('self_type * type_arg) =
       function
