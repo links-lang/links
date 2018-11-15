@@ -7,15 +7,15 @@ before_install:
   - make rule-check
   - sudo add-apt-repository -y ppa:avsm/ppa
   - sudo apt-get -qq update
-  - sudo apt-get install -y ocaml-nox ocaml-native-compilers camlp4-extra opam
-  - opam init -a
-  - opam switch 4.06.1
-  - eval `opam config env`
-  - opam install -y postgresql oUnit
+  - sudo apt-get install -y ocaml-nox ocaml-native-compilers
+  - ./install_local_opam2.sh
+  - ./opam2_local switch create 4.06.1
+  - eval `./opam2_local config env`
+  - ./opam2_local install -y postgresql oUnit
   - psql -c 'create database links;' -U postgres
 script:
-  - opam pin add links . -y
-  - opam pin add links-postgresql . -y
+  - ./opam2_local pin add links . -y
+  - ./opam2_local pin add links-postgresql . -y
   - make nc-release
   - make tests
   - ./run-tests db-only shredding
