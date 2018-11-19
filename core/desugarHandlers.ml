@@ -163,7 +163,7 @@ let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (
     | [] ->
        let x = "x" in
        let xb = (x, None, dp) in
-       let id = (mkWithPos (`Variable xb) dp, (`Var x, dp)) in
+       let id = (mkWithDPos (`Variable xb), (`Var x, dp)) in
        ([id], List.rev ops)
     | _ ->
        (List.rev ret, List.rev ops)

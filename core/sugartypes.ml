@@ -14,9 +14,8 @@ type 'a with_pos = { node : 'a
                    ; pos  : position }
                      [@@deriving show]
 
-let mkWithPos node pos = { node; pos }
-(* JSTOLAREK: attaching dummy_position is common pattern in desugar*.ml modules
-- worth having a separate mkWithDPos for it *)
+let mkWithPos  node pos = { node; pos }
+let mkWithDPos node     = { node; pos = dummy_position }
 
 (* JSTOLAREK: change here *)
 type binder = name * Types.datatype option * position
