@@ -3895,7 +3895,7 @@ and type_bindings (globals : context)  bindings =
                    body_usage uinf
   in
     tyenv, List.rev bindings, usage_builder
-and type_cp (context : context) = fun (p, pos) ->
+and type_cp (context : context) = fun {node = p; pos} ->
   let with_channel = fun c s (p, t, u) ->
     if uses_of c u <> 1 then
       if Types.type_can_be_unl s then
@@ -4027,7 +4027,7 @@ and type_cp (context : context) = fun (p, pos) ->
        let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Dual s)) right) in
        unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.make_endbang_type, t);
        `Comp ((c, Some s, binder_pos), left, right), t', merge_usages [u; u'] in
-  (p, pos), t, u
+  {node = p; pos}, t, u
 
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
 

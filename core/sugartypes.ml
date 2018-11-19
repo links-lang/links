@@ -298,8 +298,7 @@ and cp_phrasenode = [
 | `Offer of binder * (string * cp_phrase) list
 | `Link of binder * binder
 | `Comp of binder * cp_phrase * cp_phrase ]
-(* JSTOLAREK: change here *)
-and cp_phrase = cp_phrasenode * position
+and cp_phrase = cp_phrasenode with_pos
     [@@deriving show]
 
 type program = binding list * phrase option
@@ -539,7 +538,7 @@ struct
     | `Splice p -> phrase p
     | `Replace (r, `Literal _) -> regex r
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
-  and cp_phrase (p, _pos) = match p with
+  and cp_phrase {node = p; _ } = match p with
     | `Unquote e -> block e
     | `Grab ((c, _t), Some (x, _u, _), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
     | `Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
