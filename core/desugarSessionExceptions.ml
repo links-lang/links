@@ -18,7 +18,7 @@ module TyEnv = Env.String
 let failure_op_name = Value.session_exception_operation
 
 let dp = Sugartypes.dummy_position
-let mk_var_pat name : pattern = mkWithPos (`Variable (name, Some `Not_typed, dp)) dp
+let mk_var_pat name : pattern = mkWithDPos (`Variable (name, Some `Not_typed, dp))
 let dummy_pat () = mk_var_pat @@ Utility.gensym ~prefix:"dsh" ()
 
 class insert_toplevel_handlers env =
@@ -72,7 +72,7 @@ object (o : 'self_type)
         let cont_pat = dummy_pat () in
 
         let otherwise_pat : Sugartypes.pattern =
-          mkWithPos (`Effect (failure_op_name, [], cont_pat)) dp in
+          mkWithDPos (`Effect (failure_op_name, [], cont_pat)) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 

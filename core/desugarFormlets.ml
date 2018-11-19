@@ -31,7 +31,7 @@ object (o : 'self_type)
       let dp = Sugartypes.dummy_position in
       match e with
         | _ when is_raw (e, pos) ->
-            [mkWithPos (`Tuple []) dp], [(`TupleLit []), dp], [Types.unit_type]
+            [mkWithDPos (`Tuple [])], [(`TupleLit []), dp], [Types.unit_type]
         | `FormBinding (f, p) ->
             let (_o, _f, ft) = o#phrase f in
             let t = Types.fresh_type_variable (`Any, `Any) in
@@ -40,7 +40,7 @@ object (o : 'self_type)
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
             let var = Utility.gensym ~prefix:"_formlet_" () in
             let (xb, x) = (var, Some t, dp), ((`Var var), dp) in
-              [mkWithPos (`As (xb, p)) dp], [x], [t]
+              [mkWithDPos (`As (xb, p))], [x], [t]
         | `Xml (_, _, _, [node]) ->
             o#formlet_patterns node
         | `Xml (_, _, _, contents) ->
@@ -51,7 +51,7 @@ object (o : 'self_type)
                      match ps', vs', ts' with
                        | [p], [v], [t] -> p::ps, v::vs, t::ts
                        | _ ->
-                           mkWithPos (`Tuple ps') dp::ps, ((`TupleLit vs'), dp)::vs, (Types.make_tuple_type ts')::ts)
+                           mkWithDPos (`Tuple ps')::ps, ((`TupleLit vs'), dp)::vs, (Types.make_tuple_type ts')::ts)
                 ([], [], []) contents
             in
               List.rev ps, List.rev vs, List.rev ts
@@ -99,7 +99,7 @@ object (o : 'self_type)
                                *)
                                [p]::pss, v::vs, t::ts
                            | _ ->
-                               [mkWithPos (`Tuple ps') dp]::pss, (`TupleLit vs', dp)::vs, (Types.make_tuple_type ts')::ts)
+                               [mkWithDPos (`Tuple ps')]::pss, (`TupleLit vs', dp)::vs, (Types.make_tuple_type ts')::ts)
                     ([], [], []) contents
                 in
                   List.rev pss, List.rev vs, List.rev ts in
@@ -151,7 +151,7 @@ object (o : 'self_type)
                 let (xb, x) = (var, Some (Types.xml_type), dp), ((`Var var), dp) in
                   (`FunLit (Some [Types.make_tuple_type [Types.xml_type], eff],
                             `Unl,
-                            ([[mkWithPos (`Variable xb) dp]],
+                            ([[mkWithDPos (`Variable xb)]],
                              (`Xml (tag, attrs, attrexp, [`Block ([], x), dp]), dp)), `Unknown), dp) in
               let (o, e, t) = o#formlet_body (`Xml ("#", [], None, contents), dp) in
                 (o,
@@ -179,7 +179,7 @@ object (o : 'self_type)
         let pss =
           match ps with
             | [p] -> [[p]]
-            | _ -> [[mkWithPos (`Tuple ps) dp]] in
+            | _ -> [[mkWithDPos (`Tuple ps)]] in
 
         let arg_type = Types.make_tuple_type ts in
         let mb = `Row (o#lookup_effects) in
