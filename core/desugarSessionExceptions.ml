@@ -18,7 +18,7 @@ module TyEnv = Env.String
 let failure_op_name = Value.session_exception_operation
 
 let dp = Sugartypes.dummy_position
-let mk_var_pat name : pattern = mkWithDPos (`Variable (name, Some `Not_typed, dp))
+let mk_var_pat name : pattern = with_dummy_pos (`Variable (make_binder name `Not_typed dp))
 let dummy_pat () = mk_var_pat @@ Utility.gensym ~prefix:"dsh" ()
 
 class insert_toplevel_handlers env =
@@ -72,7 +72,7 @@ object (o : 'self_type)
         let cont_pat = dummy_pat () in
 
         let otherwise_pat : Sugartypes.pattern =
-          mkWithDPos (`Effect (failure_op_name, [], cont_pat)) in
+          with_dummy_pos (`Effect (failure_op_name, [], cont_pat)) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 
@@ -164,7 +164,7 @@ let wrap_linear_handlers prog =
       method! phrase = function
         | (`TryInOtherwise (l, x, m, n, dtopt), pos) ->
             let fresh_var = Utility.gensym ?prefix:(Some "try_x") () in
-            let fresh_pat = mkWithPos (`Variable (fresh_var, None, pos)) pos in
+            let fresh_pat = with_pos (`Variable (make_untyped_binder fresh_var pos)) pos in
             (`Switch (
               (`TryInOtherwise
                 (super#phrase l,
@@ -173,8 +173,8 @@ let wrap_linear_handlers prog =
                  (`ConstructorLit ("Nothing", None, None), pos), dtopt),
                  pos),
               [
-                (mkWithPos (`Variant ("Just", (Some x))) pos, super#phrase m);
-                (mkWithPos (`Variant ("Nothing", None)) pos, super#phrase n)
+                (with_pos (`Variant ("Just", (Some x))) pos, super#phrase m);
+                (with_pos (`Variant ("Nothing", None)) pos, super#phrase n)
               ], None)), pos
         | p -> super#phrase p
     end

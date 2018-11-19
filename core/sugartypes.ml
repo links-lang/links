@@ -14,12 +14,23 @@ type 'a with_pos = { node : 'a
                    ; pos  : position }
                      [@@deriving show]
 
-let mkWithPos  node pos = { node; pos }
-let mkWithDPos node     = { node; pos = dummy_position }
+let with_pos       node pos = { node; pos }
+let with_dummy_pos node     = { node; pos = dummy_position }
 
-(* JSTOLAREK: change here *)
-type binder = name * Types.datatype option * position
+type binder = (name * Types.datatype option) with_pos
     [@@deriving show]
+
+let name_of_binder     {node=(n,_ );_} = n
+let type_of_binder     {node=(_,ty);_} = ty
+let type_of_binder_exn {node=(_,ty);_} =
+  Utility.OptionUtils.val_of ty (* raises exception when ty = None *)
+(* JSTOLAREK: merge make_binder and make_untyped_binder into a single function
+   with a default ty=None argument? *)
+let make_binder         n ty pos = { node=(n   , Some ty); pos }
+let make_untyped_binder n    pos = { node=(n   , None   ); pos }
+let set_binder_name {node=(_   ,ty); pos} name = { node=(name, ty     ); pos }
+let set_binder_type {node=(name,_ ); pos} ty   = { node=(name, Some ty); pos }
+let binder_has_type {node=(_,ty)   ; _  }      = Utility.OptionUtils.is_some ty
 
 (* type variables *)
 type tyvar = Types.quantifier
@@ -360,12 +371,12 @@ struct
     | `List ps               -> union_map pattern ps
     | `Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | `Variant (_, popt)     -> option_map pattern popt
-    | `Effect (_, ps, kopt) -> union (union_map pattern ps) (pattern kopt)
+    | `Effect (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
     | `Record (fields, popt) ->
         union (option_map pattern popt)
           (union_map (snd ->- pattern) fields)
-    | `Variable (v,_,_) -> singleton v
-    | `As ((v,_,_), pat)     -> add v (pattern pat)
+    | `Variable bndr         -> singleton (name_of_binder bndr)
+    | `As (bndr, pat)        -> add (name_of_binder bndr) (pattern pat)
     | `HasType (pat, _)      -> pattern pat
 
 
@@ -410,7 +421,7 @@ struct
     | `Query (None, p, _) -> phrase p
     | `Query (Some (limit, offset), p, _) -> union_all [phrase limit; phrase offset; phrase p]
 
-    | `Escape ((v,_,_), p) -> diff (phrase p) (singleton v)
+    | `Escape (v, p) -> diff (phrase p) (singleton (name_of_binder v))
     | `FormletPlacement (p1, p2, p3)
     | `Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | `Block b -> block b
@@ -491,24 +502,29 @@ struct
                                              * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
-    | `Handler ((name,_,_), hnlit, _) -> singleton name, (diff (handlerlit hnlit) (singleton name))
-    | `Fun ((name,_,_), _, (_, fn), _, _) -> singleton name, (diff (funlit fn) (singleton name))
+    | `Handler (bndr, hnlit, _) ->
+       let name = singleton (name_of_binder bndr) in
+       name, (diff (handlerlit hnlit) name)
+    | `Fun (bndr, _, (_, fn), _, _) ->
+       let name = singleton (name_of_binder bndr) in
+       name, (diff (funlit fn) name)
     | `Funs funs ->
         let names, rhss =
           List.fold_right
-            (fun ((n,_,_), _, (_, rhs), _, _, _) (names, rhss) ->
-               (add n names, rhs::rhss))
+            (fun (bndr, _, (_, rhs), _, _, _) (names, rhss) ->
+               (add (name_of_binder bndr) names, rhs::rhss))
             funs
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | `Foreign ((name, _, _), _, _, _, _) -> singleton name, empty
+    | `Foreign (bndr, _, _, _, _) -> singleton (name_of_binder bndr), empty
     | `QualifiedImport _
     | `Type _
     | `Infix -> empty, empty
     | `Exp p -> empty, phrase p
     | `AlienBlock (_, _, decls) ->
         let bound_foreigns =
-          List.fold_left (fun acc ((name, _, _), _) -> StringSet.add name acc)
+          List.fold_left (fun acc (bndr, _) ->
+              StringSet.add (name_of_binder bndr) acc)
             (StringSet.empty) decls in
         bound_foreigns, empty
         (* TODO: this needs to be implemented *)
@@ -539,12 +555,17 @@ struct
     | `Replace (r, `Splice p) -> union (regex r) (phrase p)
   and cp_phrase {node = p; _ } = match p with
     | `Unquote e -> block e
-    | `Grab ((c, _t), Some (x, _u, _), p) -> union (singleton c) (diff (cp_phrase p) (singleton x))
+    | `Grab ((c, _t), Some bndr, p) ->
+       union (singleton c) (diff (cp_phrase p) (singleton (name_of_binder bndr)))
     | `Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
     | `Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
-    | `GiveNothing (c, _, _) -> singleton c
-    | `Select ((c, _t, _), _label, p) -> union (singleton c) (cp_phrase p)
-    | `Offer ((c, _t, _), cases) -> union (singleton c) (union_map (fun (_label, p) -> cp_phrase p) cases)
-    | `Link ((c, _, _), (d, _, _)) -> union (singleton c) (singleton d)
-    | `Comp ((c, _t, _), left, right) -> diff (union (cp_phrase left) (cp_phrase right)) (singleton c)
+    | `GiveNothing bndr -> singleton (name_of_binder bndr)
+    | `Select (bndr, _label, p) ->
+       union (singleton (name_of_binder bndr)) (cp_phrase p)
+    | `Offer (bndr, cases) ->
+       union (singleton (name_of_binder bndr)) (union_map (fun (_label, p) -> cp_phrase p) cases)
+    | `Link (bndr1, bndr2) ->
+       union (singleton (name_of_binder bndr1)) (singleton (name_of_binder bndr2))
+    | `Comp (bndr, left, right) ->
+       diff (union (cp_phrase left) (cp_phrase right)) (singleton (name_of_binder bndr))
 end

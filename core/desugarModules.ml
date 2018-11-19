@@ -126,9 +126,10 @@ let rec rename_binders_get_shadow_tbl module_table
         {< term_shadow_table = term_ht; type_shadow_table = type_ht >}
 
     method! binder = function
-      | (n, dt_opt, pos) ->
-          let fqn = make_path_string path n in
-          (self#bind_shadow_term n fqn, (fqn, dt_opt, pos))
+      | bndr ->
+         let n = name_of_binder bndr in
+         let fqn = make_path_string path n in
+         (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
 
     method! bindingnode = function
       | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
@@ -185,9 +186,10 @@ and perform_renaming module_table path term_ht type_ht =
         {< type_shadow_table = shadow_binding name fqn type_shadow_table >}
 
     method! binder = function
-      | (n, dt_opt, pos) ->
-          let fqn = make_path_string path n in
-          (self#bind_shadow_term n fqn, (fqn, dt_opt, pos))
+      | bndr ->
+         let n = name_of_binder bndr in
+         let fqn = make_path_string path n in
+         (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
 
     method! patternnode = function
       | `Variant (n, p_opt) ->

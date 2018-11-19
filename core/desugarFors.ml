@@ -65,14 +65,14 @@ let results :  Types.row ->
             let ((qsb, qs) : Sugartypes.pattern list * Sugartypes.phrase list) =
               List.split
                 (List.map2 (fun x t ->
-                              (mkWithDPos (`Variable (x, Some t, dp))), ((`Var x), dp)) xs ts) in
-            let qb, q = (mkWithDPos (`Variable (x, Some t, dp)), ((`Var x), dp)) in
+                              (with_dummy_pos (`Variable (make_binder x t dp))), ((`Var x), dp)) xs ts) in
+            let qb, q = (with_dummy_pos (`Variable (make_binder x t dp)), ((`Var x), dp)) in
 
             let inner : Sugartypes.phrase =
               let ps =
                 match qsb with
                   | [p] -> [p]
-                  | _ -> [mkWithDPos (`Tuple qsb)] in
+                  | _ -> [with_dummy_pos (`Tuple qsb)] in
               let a =
                 match ts with
                   | [t] -> Types.make_tuple_type [t]
@@ -125,8 +125,8 @@ object (o : 'self_type)
                    let element_type = TypeUtils.element_type t in
 
                    let var = Utility.gensym ~prefix:"_for_" () in
-                   let (xb, x) = (var, Some t, dp), var in
-                     o, (e::es, mkWithDPos (`As (xb, p))::ps, x::xs, element_type::ts)
+                   let xb = make_binder var t dp in
+                     o, (e::es, with_dummy_pos (`As (xb, p))::ps, var::xs, element_type::ts)
                | `Table (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
@@ -141,8 +141,8 @@ object (o : 'self_type)
                    let e = `FnAppl ((`TAppl (((`Var ("AsList")), dp),
                                              [r; w; n; eff]), dp), [e]), dp in
                    let var = Utility.gensym ~prefix:"_for_" () in
-                   let (xb, x) = (var, Some t, dp), var in
-                     o, (e::es, mkWithDPos (`As (xb, p))::ps, x::xs, element_type::ts))
+                   let xb = make_binder var t dp in
+                     o, (e::es, with_dummy_pos (`As (xb, p))::ps, var::xs, element_type::ts))
           (o, ([], [], [], []))
           qs
       in
@@ -168,7 +168,7 @@ object (o : 'self_type)
         let arg =
           match ps with
             | [p] -> [p]
-            | ps -> [mkWithDPos (`Tuple ps)] in
+            | ps -> [with_dummy_pos (`Tuple ps)] in
 
         let arg_type =
           match ts with

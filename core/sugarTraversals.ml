@@ -47,10 +47,11 @@ class map =
       fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
 
     method binder : binder -> binder =
-      fun (_x, _x_i1, _x_i2) ->
-        let _x = o#name _x in
-        let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
-        let _x_i2 = o#position _x_i2 in (_x, _x_i1, _x_i2)
+      fun bndr ->
+        let name = o#name (name_of_binder bndr) in
+        let ty  = o#option (fun o -> o#unknown) (type_of_binder bndr) in
+        let pos = o#position bndr.pos in
+        {node=(name,ty); pos}
 
     method sentence : sentence -> sentence =
       function
@@ -450,7 +451,7 @@ class map =
       | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
-      fun {node; pos} -> mkWithPos (o#cp_phrasenode node) (o#position pos)
+      fun {node; pos} -> with_pos (o#cp_phrasenode node) (o#position pos)
 
     method patternnode : patternnode -> patternnode =
       function
@@ -771,10 +772,10 @@ class fold =
       fun (_x, _x_i1) -> o#unary_op _x_i1
 
     method binder : binder -> 'self_type =
-      fun (_x, _x_i1, _x_i2) ->
-        let o = o#name _x in
-        let o = o#option (fun o -> o#unknown) _x_i1 in
-        let o = o#position _x_i2 in o
+      fun bndr ->
+        let o = o#name (name_of_binder bndr) in
+        let o = o#option (fun o -> o#unknown) (type_of_binder bndr) in
+        let o = o#position bndr.pos in o
 
     method sentence : sentence -> 'self_type =
       function
@@ -2190,10 +2191,11 @@ class fold_map =
         (o, {node; pos})
 
     method binder : binder -> ('self_type * binder) =
-      fun (_x, _x_i1, _x_i2) ->
-        let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
-        let (o, _x_i2) = o#position _x_i2 in (o, (_x, _x_i1, _x_i2))
+      fun bndr ->
+        let (o, name) = o#name (name_of_binder bndr) in
+        let (o, ty  ) = o#option (fun o -> o#unknown) (type_of_binder bndr) in
+        let (o, pos ) = o#position bndr.pos in
+        (o, {node=name,ty;pos})
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
   end
