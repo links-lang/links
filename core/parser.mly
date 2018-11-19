@@ -41,22 +41,23 @@ let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_e
 let default_fixity = 9
 
 let annotate (signame, datatype) : _ -> binding =
-  let checksig (signame, _) name =
+  let checksig {node=signame; _} name =
     if signame <> name then
       raise (ConcreteSyntaxError
                ("Signature for `" ^ signame ^ "' should precede definition of `"
                 ^ signame ^ "', not `"^ name ^"'.",
                 pos ())) in
     function
-      | `Fun ((name, bpos), lin, phrase, location, dpos) ->
+      | `Fun ({node=name; pos=bpos}, lin, phrase, location, dpos) ->
           let _ = checksig signame name in
-            `Fun ((name, None, bpos), lin, ([], phrase), location, Some datatype), dpos
-      | `Var (((name, bpos), phrase, location), dpos) ->
+          mkWithPos (`Fun ((name, None, bpos), lin, ([], phrase), location, Some datatype)) dpos
+      | `Var (({node = name; pos = bpos}, phrase, location), dpos) ->
           let _ = checksig signame name in
-          `Val ([], (mkWithPos (`Variable (name, None, bpos)) dpos), phrase, location, Some datatype), dpos
+          mkWithPos (`Val ( [], (mkWithPos (`Variable (name, None, bpos)) dpos)
+                          , phrase, location, Some datatype)) dpos
       | `Handler ((name,_,_) as b, hnlit, dpos) ->
 	 let _ = checksig signame name in
-	 `Handler (b, hnlit, Some datatype), dpos
+	 mkWithPos (`Handler (b, hnlit, Some datatype)) dpos
 
 let primary_kind_of_string pos =
   function
@@ -242,7 +243,7 @@ let cp_unit p = mkWithPos (`Unquote ([], (`TupleLit [], p))) p
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.pattern> pattern
-%type <(Sugartypes.name * Sugartypes.position) * Sugartypes.declared_linearity * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
+%type <(Sugartypes.name Sugartypes.with_pos) * Sugartypes.declared_linearity * Sugartypes.funlit * Sugartypes.location * Sugartypes.position> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
@@ -283,7 +284,7 @@ arg:
 | FALSE                                                        { "false" }
 
 var:
-| VARIABLE                                                     { $1, pos() }
+| VARIABLE                                                     { mkWithPos $1 (pos()) }
 
 preamble:
 | /* empty */                                                  { [] }
@@ -298,13 +299,15 @@ declaration:
 
 nofun_declaration:
 | alien_block                                                  { $1 }
-| ALIEN VARIABLE STRING var COLON datatype SEMICOLON           { let (name, name_pos) = $4 in
-                                                                   `Foreign ((name, None, name_pos), name, $2, $3, datatype $6), pos() }
+| ALIEN VARIABLE STRING var COLON datatype SEMICOLON           { let {node = name; pos = name_pos} = $4 in
+                                                                 mkWithPos (`Foreign ((name, None, name_pos), name, $2, $3, datatype $6))
+                                                                           (pos()) }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                   set assoc (from_option default_fixity $2) (fst $3);
-                                                                   (`Infix, pos()) }
-| tlvarbinding SEMICOLON                                       { let ((d,dpos),p,l), pos = $1
-                                                                 in `Val ([], (mkWithPos (`Variable (d, None, dpos)) pos),p,l,None), pos }
+                                                                   set assoc (from_option default_fixity $2) ($3.node);
+                                                                   mkWithPos `Infix (pos()) }
+| tlvarbinding SEMICOLON                                       { let ({node=d;pos=dpos},p,l), pos = $1
+                                                                 in mkWithPos (`Val ([], (mkWithPos (`Variable (d, None, dpos)) pos),p,l,None))
+                                                                              pos }
 | signature tlvarbinding SEMICOLON                             { annotate $1 (`Var $2) }
 | typedecl SEMICOLON                                           { $1 }
 
@@ -312,7 +315,7 @@ nofun_declaration:
 | links_open                                                   { $1 }
 
 alien_datatype:
-| var COLON datatype SEMICOLON                                 { let (name, name_pos) = $1 in
+| var COLON datatype SEMICOLON                                 { let {node = name; pos = name_pos} = $1 in
                                                                  ((name, None, name_pos), datatype $3) }
 
 alien_datatypes:
@@ -321,12 +324,12 @@ alien_datatypes:
 
 links_module:
 | MODULE module_name moduleblock                               { let (mod_name, name_pos) = $2 in
-                                                                 `Module (mod_name, $3), name_pos }
+                                                                 mkWithPos (`Module (mod_name, $3)) name_pos }
 
 alien_block:
 | ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let language = $2 in
                                                                  let library_name = $3 in
-                                                                 `AlienBlock (language, library_name, $5), pos () }
+                                                                 mkWithPos (`AlienBlock (language, library_name, $5)) (pos()) }
 
 module_name:
 | CONSTRUCTOR                                                  { $1 , pos () }
@@ -336,15 +339,15 @@ fun_declarations:
 | fun_declaration                                              { [$1] }
 
 fun_declaration:
-| tlfunbinding                                                 { let ((d,dpos),lin,p,l,pos) = $1
-                                                                 in `Fun ((d, None, dpos),lin,([],p),l,None), pos }
+| tlfunbinding                                                 { let ({node=d;pos=dpos},lin,p,l,pos) = $1
+                                                                 in mkWithPos (`Fun ((d, None, dpos),lin,([],p),l,None)) pos }
 | signature tlfunbinding                                       { annotate $1 (`Fun $2) }
 | signature typed_handler_binding                              { annotate $1 (`Handler $2) }
 | typed_handler_binding                                        { let (b, hnlit, pos) = $1 in
-								 `Handler (b, hnlit, None), pos }
+								 mkWithPos (`Handler (b, hnlit, None)) pos }
 
 typed_handler_binding:
-| handler_depth optional_computation_parameter var handler_parameterization { let binder = (fst $3, None, snd $3) in
+| handler_depth optional_computation_parameter var handler_parameterization { let binder = ($3.node, None, $3.pos) in
 			   						      let hnlit  = ($1, $2, fst $4, snd $4) in
  									      (binder, hnlit, pos()) }
 
@@ -357,10 +360,10 @@ perhaps_uinteger:
 | UINTEGER                                                     { Some $1 }
 
 prefixop:
-| PREFIXOP                                                     { $1, pos() }
+| PREFIXOP                                                     { mkWithPos $1 (pos()) }
 
 postfixop:
-| POSTFIXOP                                                    { $1, pos() }
+| POSTFIXOP                                                    { mkWithPos $1 (pos()) }
 
 tlfunbinding:
 | FUN var arg_lists perhaps_location block                     { ($2, `Unl, ($3, (`Block $5, pos ())), $4, pos ()) }
@@ -377,7 +380,7 @@ signature:
 | SIG op COLON datatype                                        { $2, datatype $4 }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { `Type ($2, $3, datatype $5), pos()  }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { mkWithPos (`Type ($2, $3, datatype $5)) (pos()) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -519,39 +522,39 @@ parenthesized_thing:
 binop:
 | MINUS                                                        { `Minus }
 | MINUSDOT                                                     { `FloatMinus }
-| op                                                           { `Name (fst $1) }
+| op                                                           { `Name ($1.node) }
 
 op:
-| INFIX0                                                       { $1, pos() }
-| INFIXL0                                                      { $1, pos() }
-| INFIXR0                                                      { $1, pos() }
-| INFIX1                                                       { $1, pos() }
-| INFIXL1                                                      { $1, pos() }
-| INFIXR1                                                      { $1, pos() }
-| INFIX2                                                       { $1, pos() }
-| INFIXL2                                                      { $1, pos() }
-| INFIXR2                                                      { $1, pos() }
-| INFIX3                                                       { $1, pos() }
-| INFIXL3                                                      { $1, pos() }
-| INFIXR3                                                      { $1, pos() }
-| INFIX4                                                       { $1, pos() }
-| INFIXL4                                                      { $1, pos() }
-| INFIXR4                                                      { $1, pos() }
-| INFIX5                                                       { $1, pos() }
-| INFIXL5                                                      { $1, pos() }
-| INFIXR5                                                      { $1, pos() }
-| INFIX6                                                       { $1, pos() }
-| INFIXL6                                                      { $1, pos() }
-| INFIXR6                                                      { $1, pos() }
-| INFIX7                                                       { $1, pos() }
-| INFIXL7                                                      { $1, pos() }
-| INFIXR7                                                      { $1, pos() }
-| INFIX8                                                       { $1, pos() }
-| INFIXL8                                                      { $1, pos() }
-| INFIXR8                                                      { $1, pos() }
-| INFIX9                                                       { $1, pos() }
-| INFIXL9                                                      { $1, pos() }
-| INFIXR9                                                      { $1, pos() }
+| INFIX0                                                       { mkWithPos $1 (pos()) }
+| INFIXL0                                                      { mkWithPos $1 (pos()) }
+| INFIXR0                                                      { mkWithPos $1 (pos()) }
+| INFIX1                                                       { mkWithPos $1 (pos()) }
+| INFIXL1                                                      { mkWithPos $1 (pos()) }
+| INFIXR1                                                      { mkWithPos $1 (pos()) }
+| INFIX2                                                       { mkWithPos $1 (pos()) }
+| INFIXL2                                                      { mkWithPos $1 (pos()) }
+| INFIXR2                                                      { mkWithPos $1 (pos()) }
+| INFIX3                                                       { mkWithPos $1 (pos()) }
+| INFIXL3                                                      { mkWithPos $1 (pos()) }
+| INFIXR3                                                      { mkWithPos $1 (pos()) }
+| INFIX4                                                       { mkWithPos $1 (pos()) }
+| INFIXL4                                                      { mkWithPos $1 (pos()) }
+| INFIXR4                                                      { mkWithPos $1 (pos()) }
+| INFIX5                                                       { mkWithPos $1 (pos()) }
+| INFIXL5                                                      { mkWithPos $1 (pos()) }
+| INFIXR5                                                      { mkWithPos $1 (pos()) }
+| INFIX6                                                       { mkWithPos $1 (pos()) }
+| INFIXL6                                                      { mkWithPos $1 (pos()) }
+| INFIXR6                                                      { mkWithPos $1 (pos()) }
+| INFIX7                                                       { mkWithPos $1 (pos()) }
+| INFIXL7                                                      { mkWithPos $1 (pos()) }
+| INFIXR7                                                      { mkWithPos $1 (pos()) }
+| INFIX8                                                       { mkWithPos $1 (pos()) }
+| INFIXL8                                                      { mkWithPos $1 (pos()) }
+| INFIXR8                                                      { mkWithPos $1 (pos()) }
+| INFIX9                                                       { mkWithPos $1 (pos()) }
+| INFIXL9                                                      { mkWithPos $1 (pos()) }
+| INFIXR9                                                      { mkWithPos $1 (pos()) }
 
 spawn_expression:
 | SPAWNAT LPAREN exp COMMA block RPAREN                        { `Spawn (`Demon, (`ExplicitSpawnLocation $3), (`Block $5, pos()), None), pos () }
@@ -834,7 +837,7 @@ perhaps_orderby:
 
 escape_expression:
 | iteration_expression                                         { $1 }
-| ESCAPE var IN postfix_expression                             { `Escape ((fst $2, None, snd $2), $4), pos() }
+| ESCAPE var IN postfix_expression                             { `Escape (($2.node, None, $2.pos), $4), pos() }
 
 formlet_expression:
 | escape_expression                                            { $1 }
@@ -931,19 +934,23 @@ record_labels:
 | record_label                                                 { [$1] }
 
 links_open:
-| OPEN qualified_type_name                                     { `QualifiedImport $2, pos () }
-| OPEN CONSTRUCTOR                                             { `QualifiedImport [$2], pos () }
+| OPEN qualified_type_name                                     { mkWithPos (`QualifiedImport  $2 ) (pos()) }
+| OPEN CONSTRUCTOR                                             { mkWithPos (`QualifiedImport [$2]) (pos()) }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { `Val ([], $2, $4, `Unknown, None), pos () }
-| exp SEMICOLON                                                { `Exp $1, pos () }
+| VAR pattern EQ exp SEMICOLON                                 { mkWithPos (`Val ([], $2, $4, `Unknown, None)) (pos()) }
+| exp SEMICOLON                                                { mkWithPos (`Exp $1) (pos()) }
 | signature FUN var arg_lists block                            {  annotate $1 (`Fun ($3, `Unl, ($4, (`Block $5, pos ())), `Unknown, pos ())) }
 | signature LINFUN var arg_lists block                         {  annotate $1 (`Fun ($3, `Lin, ($4, (`Block $5, pos ())), `Unknown, pos ())) }
-| FUN var arg_lists block                                      { `Fun ((fst $2, None, snd $2), `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
-| LINFUN var arg_lists block                                   { `Fun ((fst $2, None, snd $2), `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None), pos () }
+| FUN var arg_lists block                                      { mkWithPos (`Fun (($2.node, None, $2.pos),
+                                                                                  `Unl, ([], ($3, (`Block $4, pos ()))), `Unknown, None))
+                                                                           (pos()) }
+| LINFUN var arg_lists block                                   { mkWithPos (`Fun (($2.node, None, $2.pos),
+                                                                                  `Lin, ([], ($3, (`Block $4, pos ()))), `Unknown, None))
+                                                                           (pos()) }
 | typedecl SEMICOLON                                           { $1 }
 | typed_handler_binding                                        { let (b, hnlit, pos) = $1 in
-                                                                 `Handler (b, hnlit, None), pos }
+                                                                 mkWithPos (`Handler (b, hnlit, None)) pos }
 | links_module                                                 { $1 }
 | alien_block                                                  { $1 }
 | links_open                                                   { $1 }
@@ -959,9 +966,9 @@ block:
 | LBRACE block_contents RBRACE                                 { $2 }
 
 block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [`Exp $2, pos ()], (`RecordLit ([], None), pos())) }
+| bindings exp SEMICOLON                                       { ($1 @ [mkWithPos (`Exp $2) (pos())], (`RecordLit ([], None), pos())) }
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([`Exp $1, pos ()], (`RecordLit ([], None), pos())) }
+| exp SEMICOLON                                                { ([mkWithPos (`Exp $1) (pos())], (`RecordLit ([], None), pos())) }
 | exp                                                          { [], $1 }
 | perhaps_semi                                                 { ([], (`TupleLit [], pos())) }
 
@@ -1286,7 +1293,7 @@ pattern:
 
 typed_pattern:
 | cons_pattern                                              { $1 }
-| cons_pattern AS var                                       { mkWithPos (`As ((fst $3, None, snd $3), $1)) (pos()) }
+| cons_pattern AS var                                       { mkWithPos (`As (($3.node, None, $3.pos), $1)) (pos()) }
 
 cons_pattern:
 | constructor_pattern                                       { $1 }

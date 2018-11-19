@@ -108,7 +108,8 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) 
     p', !lnames
 
 let let_in pos name rhs body : phrase =
-  `Block ([`Val ([], (mkWithPos (`Variable (name,None,pos)) pos), rhs, `Unknown, None), pos], body), pos
+  `Block ([mkWithPos (`Val ([], (mkWithPos (`Variable (name,None,pos)) pos), rhs
+                           , `Unknown, None)) pos], body), pos
 
 let bind_lname_vars lnames = function
   | "l:action" as attr, es ->

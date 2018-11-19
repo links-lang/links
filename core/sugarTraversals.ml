@@ -724,9 +724,10 @@ class map =
           `AlienBlock (lang, lib, dts)
 
     method binding : binding -> binding =
-      fun (_x, _x_i1) ->
-        let _x = o#bindingnode _x in
-        let _x_i1 = o#position _x_i1 in (_x, _x_i1)
+      fun {node; pos} ->
+        let node = o#bindingnode node in
+        let pos  = o#position    pos  in
+        {node; pos}
 
     method program : program -> program =
       fun (bindings, phrase) ->
@@ -1386,15 +1387,16 @@ class fold =
           o
 
     method binding : binding -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#bindingnode _x in let o = o#position _x_i1 in o
+      fun {node; pos} ->
+        let o = o#bindingnode node in
+        let o = o#position    pos  in
+        o
 
     method program : program -> 'self_type =
       fun (bindings, phrase) ->
         let o = o#list (fun o -> o#binding) bindings in
         let o = o#option (fun o -> o#phrase) phrase in
-          o
-
+        o
 
     method unknown : 'a. 'a -> 'self_type = fun _ -> o
   end
@@ -2182,9 +2184,10 @@ class fold_map =
           (o, (`AlienBlock (lang, lib, dts)))
 
     method binding : binding -> ('self_type * binding) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#bindingnode _x in
-        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      fun {node; pos} ->
+        let (o, node) = o#bindingnode node in
+        let (o, pos ) = o#position    pos  in
+        (o, {node; pos})
 
     method binder : binder -> ('self_type * binder) =
       fun (_x, _x_i1, _x_i2) ->

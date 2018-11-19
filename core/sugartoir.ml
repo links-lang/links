@@ -1060,7 +1060,7 @@ struct
     let ev = evalv env in
       match bs' with
         | [] -> ec e
-        | (b,_)::bs ->
+        | { Sugartypes.node = b; _ }::bs ->
             begin
               match b with
                 | `Val (_, {Sugartypes.node=`Variable (x, Some xt, _xpos); _}, body, _, _) ->

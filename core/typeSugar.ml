@@ -104,7 +104,7 @@ struct
     | `TryInOtherwise _
     | `Raise
     | `DBUpdate _ -> false
-  and is_pure_binding (bind, _ : binding) = match bind with
+  and is_pure_binding ({node ; _ }: binding) = match node with
       (* need to check that pattern matching cannot fail *)
     | `QualifiedImport _
     | `AlienBlock _
@@ -3547,7 +3547,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     usage map from the binder's body.
  *)
 and type_binding : context -> binding -> binding * context * usagemap =
-  fun context (def, pos) ->
+  fun context {node = def; pos} ->
     let type_check = type_check in
     let unify pos (l, r) = unify_or_raise ~pos:pos (l, r)
     and typ (_,t,_) = t
@@ -3849,7 +3849,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
       | `AlienBlock _
       | `Module _ -> assert false
     in
-      (typed, pos), ctxt, usage
+      {node = typed; pos}, ctxt, usage
 and type_regex typing_env : regex -> regex =
   fun m ->
     let erase (e, _, _) = e in
@@ -3877,7 +3877,7 @@ and type_bindings (globals : context)  bindings =
       (fun (ctxt, (bindings, uinf)) (binding : binding) ->
          let binding, ctxt', usage = type_binding (Types.extend_typing_environment globals ctxt) binding in
          let result_ctxt = Types.extend_typing_environment ctxt ctxt' in
-         result_ctxt, (binding::bindings, (snd binding,ctxt'.var_env,usage)::uinf))
+         result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
       (empty_context globals.Types.effect_row, ([], [])) bindings in
   let usage_builder body_usage =
     List.fold_left (fun usages (pos,env,usage) ->
@@ -4032,7 +4032,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
 
 let binding_purity_check bindings =
-  List.iter (fun ((_, pos) as b) ->
+  List.iter (fun ({pos;_} as b) ->
                if not (Utils.is_pure_binding b) then
                  Gripers.toplevel_purity_restriction pos b)
     bindings

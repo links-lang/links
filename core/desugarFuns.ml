@@ -46,11 +46,12 @@ let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
             let rt = TypeUtils.return_type t in
               ([ps],
                (`Block
-                  ([`Fun ((g, Some t, dp),
-                          lin,
-                          ([], make_lam rt (pss, body)),
-                          location,
-                          None), dp],
+                  ([mkWithDPos
+                      (`Fun ((g, Some t, dp),
+                             lin,
+                             ([], make_lam rt (pss, body)),
+                             location,
+                             None))],
                    ((`Var g), dp)), dp))
         | _, _ -> assert false
     in
@@ -84,8 +85,8 @@ object (o : 'self_type)
         let f = gensym ~prefix:"_fun_" () in
         let e =
           `Block
-            ([`Fun (unwrap_def ((f, Some ft, dp), lin, ([], lam), location, None)),
-              dp],
+            ([mkWithDPos (`Fun (unwrap_def ( (f, Some ft, dp), lin, ([], lam)
+                                           , location, None)))],
              ((`Var f), dp))
         in
           (o, e, ft)
@@ -105,7 +106,8 @@ object (o : 'self_type)
         let body = `Projection ((`Var x, dp), name), dp in
         let e : phrasenode =
           `Block
-            ([`Fun ((f, Some ft, dp), `Unl, ([ab; rhob; effb], (pss, body)), `Unknown, None), dp],
+            ([mkWithDPos (`Fun ( (f, Some ft, dp), `Unl
+                               , ([ab; rhob; effb], (pss, body)), `Unknown, None))],
              ((`Var f), dp))
         in
           (o, e, ft)

@@ -806,8 +806,8 @@ class transform (env : Types.typing_environment) =
       | `QualifiedImport _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
-      fun (b, pos) ->
-        let (o, b) = o#bindingnode b in (o, (b, pos))
+      fun {node; pos} ->
+        let (o, node) = o#bindingnode node in (o, {node; pos})
 
     method binder : binder -> ('self_type * binder) =
       function
