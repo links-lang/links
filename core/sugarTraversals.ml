@@ -450,7 +450,7 @@ class map =
       | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
-      fun (p, pos) -> (o#cp_phrasenode p, o#position pos)
+      fun {node; pos} -> mkWithPos (o#cp_phrasenode node) (o#position pos)
 
     method patternnode : patternnode -> patternnode =
       function
@@ -1134,7 +1134,7 @@ class fold =
       | `Comp (_c, p, q) -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
-      fun (p, pos) -> (o#cp_phrasenode p)#position pos
+      fun {node; pos} -> (o#cp_phrasenode node)#position pos
 
     method patternnode : patternnode -> 'self_type =
       function
@@ -1888,10 +1888,10 @@ class fold_map =
          o, `Comp (c, p, q)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
-      fun (p, pos) ->
-      let o, p = o#cp_phrasenode p in
-      let o, pos = o#position pos in
-      o, (p, pos)
+      fun {node; pos} ->
+      let o, node = o#cp_phrasenode node in
+      let o, pos  = o#position pos in
+      o, {node; pos}
 
     method patternnode : patternnode -> ('self_type * patternnode) =
       function

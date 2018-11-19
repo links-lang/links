@@ -9,7 +9,7 @@ object (o : 'self_type)
 
   method! phrasenode = function
     | `CP p ->
-       let rec desugar_cp = fun o (p, pos) ->
+       let rec desugar_cp = fun o {node = p; pos} ->
          let add_pos x = (x, pos) in
          let add_withPos x = mkWithPos x pos in
          match p with

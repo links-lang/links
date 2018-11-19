@@ -817,9 +817,9 @@ class transform (env : Types.typing_environment) =
       | _ -> assert false
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
-      fun (p, pos) ->
-      let (o, p, t) = o#cp_phrasenode p in
-      (o, (p, pos), t)
+      fun {node; pos} ->
+      let (o, node, t) = o#cp_phrasenode node in
+      (o, {node; pos}, t)
 
     (* TODO: should really invoke o#datatype on type annotations! *)
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
