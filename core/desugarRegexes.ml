@@ -39,11 +39,11 @@ let desugar_regex phrase regex_type pos : regex -> phrasenode =
                                                                           pos), Some regex_type)
       | `Replace (re, (`Splice e)) -> `ConstructorLit("Replace", Some (`TupleLit ([(aux re, pos); expr e]), pos), Some regex_type)
   in fun e ->
-    let e = aux e in
-      `Block (List.map (fun (v, e1, t) ->
-                  (mkWithPos (`Val ([], (mkWithPos (`Variable (v, Some t, pos)) pos), e1, `Unknown, None)) pos))
-                       !exprs,
-              (e, pos))
+     let e = aux e in
+     `Block (List.map (fun (v, e1, t) ->
+                 (with_pos (`Val ([], (with_pos (`Variable (make_binder v t pos)) pos), e1, `Unknown, None)) pos))
+                      !exprs,
+             (e, pos))
 
 let appl pos name tyargs args =
   (`FnAppl ((tappl (`Var name, tyargs), pos), args), pos : phrase)

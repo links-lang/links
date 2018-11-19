@@ -74,7 +74,7 @@ let desugar_lonevent : phrasenode -> phrasenode =
     | (name, [rhs]) ->
         let event_name = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
           `TupleLit [`Constant (`String event_name), pos;
-                     `FunLit (None, `Unl, ([[mkWithPos (`Variable ("event", None, pos)) pos]], rhs), `Client), pos], pos
+                     `FunLit (None, `Unl, ([[with_pos (`Variable (make_untyped_binder "event"  pos)) pos]], rhs), `Client), pos], pos
     | _ -> assert false
   in function
     | `Xml (tag, attrs, attrexp, children)
@@ -108,7 +108,7 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) 
     p', !lnames
 
 let let_in pos name rhs body : phrase =
-  `Block ([mkWithPos (`Val ([], (mkWithPos (`Variable (name,None,pos)) pos), rhs
+  `Block ([with_pos (`Val ([], (with_pos (`Variable (make_untyped_binder name pos)) pos), rhs
                            , `Unknown, None)) pos], body), pos
 
 let bind_lname_vars lnames = function

@@ -100,7 +100,7 @@ let get_pat_vars () =
       | `Record (ls, p_opt) ->
           let o1 = self#list (fun o (_, p) -> o#pattern p) ls in
           o1#option (fun o p -> o#pattern p) p_opt
-      | `Variable (n, _, _) -> self#add_binding n
+      | `Variable bndr -> self#add_binding (Sugartypes.name_of_binder bndr)
       | p -> super#patternnode p
   end
 
@@ -169,8 +169,10 @@ let create_module_info_map program =
     (* Getting binding names -- we're interested in function and value names *)
     let rec get_binding_names = function
       | [] -> []
-      | {node = `Val (_, pat, _, _, _); _} :: bs -> (get_pattern_variables pat) @ get_binding_names bs
-      | {node = `Fun ((n, _, _), _, _, _, _); _} :: bs -> n :: (get_binding_names bs)
+      | {node = `Val (_, pat, _, _, _); _} :: bs ->
+         (get_pattern_variables pat) @ get_binding_names bs
+      | {node = `Fun (bndr, _, _, _, _); _} :: bs ->
+         Sugartypes.name_of_binder bndr :: (get_binding_names bs)
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 
     (* Getting type names -- we're interested in typename decls *)

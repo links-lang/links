@@ -623,7 +623,7 @@ struct
     let body =
       List.fold_left2
         (fun body p (xb : binder) ->
-           let x = Var.var_of_binder xb in
+           let x  = Var.var_of_binder  xb in
            let xt = Var.type_of_binder xb in
              CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
         (reify body)
@@ -654,7 +654,7 @@ struct
              let body_type = sem_type body in
                List.fold_left2
                  (fun body p xb ->
-                    let x = Var.var_of_binder xb in
+                    let x  = Var.var_of_binder  xb in
                     let xt = Var.type_of_binder xb in
                       CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
                  (reify body)
@@ -766,8 +766,10 @@ struct
               cofv (instantiate "Nil" [`Type t])
           | `ListLit (e::es, Some t) ->
               cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff], [ev e; ev ((`ListLit (es, Some t)), pos)]))
-          | `Escape ((k, Some kt, _), body) ->
-              I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
+          | `Escape (bndr, body) when Sugartypes.binder_has_type bndr ->
+             let k  = Sugartypes.name_of_binder bndr in
+             let kt = Sugartypes.type_of_binder_exn bndr in
+             I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | `Section (`Minus) -> cofv (lookup_var "-")
           | `Section (`FloatMinus) -> cofv (lookup_var "-.")
           | `Section (`Name name) -> cofv (lookup_var name)
@@ -1063,7 +1065,10 @@ struct
         | { Sugartypes.node = b; _ }::bs ->
             begin
               match b with
-                | `Val (_, {Sugartypes.node=`Variable (x, Some xt, _xpos); _}, body, _, _) ->
+                | `Val (_, {Sugartypes.node=`Variable bndr; _}, body, _, _)
+                     when Sugartypes.binder_has_type bndr ->
+                    let x  = Sugartypes.name_of_binder bndr in
+                    let xt = Sugartypes.type_of_binder_exn bndr in
                     let x_info = (xt, x, scope) in
                       I.letvar
                         (x_info,
@@ -1076,7 +1081,10 @@ struct
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
-                | `Fun ((f, Some ft, _), _, (tyvars, ([ps], body)), location, _) ->
+                | `Fun (bndr, _, (tyvars, ([ps], body)), location, _)
+                     when Sugartypes.binder_has_type bndr ->
+                    let f  = Sugartypes.name_of_binder bndr in
+                    let ft = Sugartypes.type_of_binder_exn bndr in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
@@ -1094,7 +1102,9 @@ struct
                 | `Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
-                        (fun ((f, outer_opt, _), _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                        (fun (bndr, _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                          let f          = Sugartypes.name_of_binder     bndr in
+                          let outer_opt  = Sugartypes.type_of_binder bndr in
                           let outer      = OptionUtils.val_of outer_opt in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
@@ -1102,10 +1112,12 @@ struct
                         ([], [], []) in
                     let defs =
                       List.map
-                        (fun ((f, ft_opt, _), _, ((tyvars, _), (pss, body)), location, _, _) ->
+                        (fun (bndr, _, ((tyvars, _), (pss, body)), location, _, _) ->
                           assert (List.length pss = 1);
-                          let ft = OptionUtils.val_of ft_opt in
-                          let ps = List.hd pss in
+                          let f      = Sugartypes.name_of_binder     bndr in
+                          let ft_opt = Sugartypes.type_of_binder bndr in
+                          let ft     = OptionUtils.val_of ft_opt in
+                          let ps     = List.hd pss in
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
@@ -1118,7 +1130,10 @@ struct
                         defs
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
-                | `Foreign ((x, Some xt, _), raw_name, language, _file, _) ->
+                | `Foreign (bndr, raw_name, language, _file, _)
+                     when Sugartypes.binder_has_type bndr ->
+                    let x  = Sugartypes.name_of_binder bndr in
+                    let xt = Sugartypes.type_of_binder_exn bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | `Type _
                 | `Infix ->

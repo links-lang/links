@@ -34,7 +34,7 @@ let dp = Sugartypes.dummy_position
 (* unwrap a curried function definition as
    a collection of nested functions
 *)
-let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
+let unwrap_def ({node=f, ft; pos=fpos}, lin, (tyvars, lam), location, t) =
   let ft = val_of ft in
   let rt = TypeUtils.return_type ft in
   let lam =
@@ -46,8 +46,8 @@ let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
             let rt = TypeUtils.return_type t in
               ([ps],
                (`Block
-                  ([mkWithDPos
-                      (`Fun ((g, Some t, dp),
+                  ([with_dummy_pos
+                      (`Fun (make_binder g t dp,
                              lin,
                              ([], make_lam rt (pss, body)),
                              location,
@@ -57,7 +57,7 @@ let unwrap_def ((f, ft, fpos), lin, (tyvars, lam), location, t) =
     in
     make_lam rt lam
   in
-    ((f, Some ft, fpos), lin, (tyvars, lam), location, t)
+    (make_binder f ft fpos, lin, (tyvars, lam), location, t)
 
 (*
   unwrap a curried function definition
@@ -85,7 +85,7 @@ object (o : 'self_type)
         let f = gensym ~prefix:"_fun_" () in
         let e =
           `Block
-            ([mkWithDPos (`Fun (unwrap_def ( (f, Some ft, dp), lin, ([], lam)
+            ([with_dummy_pos (`Fun (unwrap_def ( make_binder f ft dp, lin, ([], lam)
                                            , location, None)))],
              ((`Var f), dp))
         in
@@ -102,11 +102,11 @@ object (o : 'self_type)
         let ft : Types.datatype = `ForAll (Types.box_quantifiers [ab; rhob;  effb],
                                            `Function (Types.make_tuple_type [r], eff, a)) in
 
-        let pss = [[mkWithDPos (`Variable (x, Some r, dp))]] in
+        let pss = [[with_dummy_pos (`Variable (make_binder x r dp))]] in
         let body = `Projection ((`Var x, dp), name), dp in
         let e : phrasenode =
           `Block
-            ([mkWithDPos (`Fun ( (f, Some ft, dp), `Unl
+            ([with_dummy_pos (`Fun ( make_binder f ft dp, `Unl
                                , ([ab; rhob; effb], (pss, body)), `Unknown, None))],
              ((`Var f), dp))
         in

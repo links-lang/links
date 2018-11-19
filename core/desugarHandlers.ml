@@ -28,12 +28,12 @@ let rec names : pattern -> string list
     | `Record (name_pats,pat_opt) ->
        let optns = opt_app names [] pat_opt in
        (List.fold_left (fun ns p -> (names p) @ ns) [] (List.map snd name_pats)) @ optns
-    | `Variable (name,_,_)        -> [name]
+    | `Variable bndr              -> [name_of_binder bndr]
     | `Cons (pat,pat')            -> (names pat) @ (names pat')
     | `Tuple pats
     | `List pats                  -> List.fold_left (fun ns pat -> (names pat) @ ns ) [] pats
     | `Negative ns'               -> List.fold_left (fun ns n -> n :: ns) [] ns'
-    | `As  ((name,_,_),pat)       -> [name] @ (names pat)
+    | `As  (bndr,pat)             -> [name_of_binder bndr] @ (names pat)
     | `HasType (pat,_)            -> names pat
     | _                           -> []
 
@@ -44,23 +44,23 @@ let rec names : pattern -> string list
 let resolve_name_conflicts : pattern -> stringset -> pattern
   = fun pat conflicts ->
     let rec hide_names : pattern -> pattern
-      = fun pat -> mkWithPos
+      = fun pat -> with_pos
 	 begin
 	  match pat.node with
 	  | `Variant (label, pat_opt)    -> `Variant (label, opt_map hide_names pat_opt)
 	  | `Record (name_pats, pat_opt) -> `Record  (List.map (fun (label, pat) -> (label, hide_names pat)) name_pats, opt_map hide_names pat_opt)
-	  | `Variable (name,_,_)         ->
-	     if StringSet.mem name conflicts
+	  | `Variable bndr               ->
+	     if StringSet.mem (name_of_binder bndr) conflicts
 	     then `Any
 	     else pat.node
 	  | `Cons (pat, pat')            -> `Cons (hide_names pat, hide_names pat')
 	  | `Tuple pats                  -> `Tuple (List.map hide_names pats)
 	  | `List pats                   -> `List (List.map hide_names pats)
 	  | `Negative _                  -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
-	  | `As ((name,_,_) as n,pat) -> let {node;_} as pat = hide_names pat in
-					    if StringSet.mem name conflicts
+	  | `As (bndr,pat)               -> let {node;_} as pat = hide_names pat in
+					    if StringSet.mem (name_of_binder bndr) conflicts
 					    then node
-					    else `As (n, pat)
+					    else `As (bndr, pat)
 	  | `HasType (pat, t)            -> `HasType (hide_names pat, t)
 	  | _ -> pat.node
 	 end pat.pos
@@ -105,10 +105,10 @@ let parameterize : (pattern * phrase) list -> pattern list list option -> (patte
 
 (* This function assigns fresh names to `Any (_) *)
 let rec deanonymize : pattern -> pattern
-  = fun pat -> mkWithPos
+  = fun pat -> with_pos
      begin
       match pat.node with
-	`Any                         -> `Variable (Utility.gensym ~prefix:"dsh" (), None, dp)
+	`Any                         -> `Variable (make_untyped_binder (Utility.gensym ~prefix:"dsh" ()) dp)
       | `Nil                         -> `Nil
       | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
       | `List ps                     -> `List (List.map deanonymize ps)
@@ -138,8 +138,8 @@ let rec phrase_of_pattern : pattern -> phrase
       | `Record (name_pats, pat_opt) -> `RecordLit (List.map (fun (n,p) -> (n, phrase_of_pattern p)) name_pats, opt_map phrase_of_pattern pat_opt)
       | `Tuple ps                    -> `TupleLit (List.map phrase_of_pattern ps)
       | `Constant c                  -> `Constant c
-      | `Variable b                  -> `Var (fst3 b)
-      | `As (b,_)                    -> `Var (fst3 b)
+      | `Variable b                  -> `Var (name_of_binder b)
+      | `As (b,_)                    -> `Var (name_of_binder b)
       | `HasType (p,t)               -> `TypeAnnotation (phrase_of_pattern p, t)
     end, pat.pos)
 
@@ -162,8 +162,8 @@ let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (
     match ret with
     | [] ->
        let x = "x" in
-       let xb = (x, None, dp) in
-       let id = (mkWithDPos (`Variable xb), (`Var x, dp)) in
+       let xb = make_untyped_binder x dp in
+       let id = (with_dummy_pos (`Variable xb), (`Var x, dp)) in
        ([id], List.rev ops)
     | _ ->
        (List.rev ret, List.rev ops)
