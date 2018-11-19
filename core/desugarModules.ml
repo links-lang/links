@@ -62,9 +62,9 @@ object(self)
   method get_bindings = List.rev bindings
 
   method! binding = function
-    | (`Module (_, bindings), _) ->
+    | {node = `Module (_, bindings); _} ->
         self#list (fun o -> o#binding) bindings
-    | (`QualifiedImport _, _) -> self
+    | {node = `QualifiedImport _; _} -> self
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
   method! program = function
@@ -93,7 +93,7 @@ let group_bindings : binding list -> binding list list = fun bindings ->
   let rec group_bindings_inner acc ret = function
     | [] when acc = [] -> List.rev ret
     | [] -> List.rev ((List.rev acc) :: ret)
-    | ((`Fun (_, _, _, _, _), _) as bnd) :: bs ->
+    | ({node=`Fun (_, _, _, _, _); _} as bnd) :: bs ->
         group_bindings_inner (bnd :: acc) ret bs
     | b :: bs ->
         (* End block of functions, need to start a new scope *)

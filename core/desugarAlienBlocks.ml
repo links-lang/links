@@ -36,16 +36,16 @@ object(self)
   method get_bindings = List.rev bindings
 
   method! binding = function
-    | (`AlienBlock (lang, lib, decls), _) ->
+    | {node=`AlienBlock (lang, lib, decls); _} ->
         self#list (fun o ((bnd, dt)) ->
           let (name, _, pos) = bnd in
-          o#add_binding (`Foreign (bnd, name, lang, lib, dt), pos)) decls
-    | (`Module (name, bindings), pos) ->
+          o#add_binding (mkWithPos (`Foreign (bnd, name, lang, lib, dt)) pos)) decls
+    | {node=`Module (name, bindings); pos} ->
         let flattened_bindings =
           List.concat (
             List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bindings
           ) in
-        self#add_binding (`Module (name, flattened_bindings), pos)
+        self#add_binding (mkWithPos (`Module (name, flattened_bindings)) pos)
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
   method! program = function

@@ -25,7 +25,7 @@ let refine_bindings : binding list -> binding list =
       (* group: the group we're currently working on, groups = the groups we've processed *)
       let group, groups =
         List.fold_right
-          (fun (binding,_ as bind) (thisgroup, othergroups) ->
+          (fun ({node=binding;_} as bind) (thisgroup, othergroups) ->
             match binding with
               (* Modules & qualified imports will have been eliminated by now. Funs
                * aren't introduced yet. *)
@@ -56,7 +56,7 @@ let refine_bindings : binding list -> binding list =
       = fun defs ->
         let defs = List.map
           (function
-            | `Fun ((name,_,_), _, (_, funlit), _, _), _ -> (name, funlit)
+            | {node=`Fun ((name,_,_), _, (_, funlit), _, _); _} -> (name, funlit)
             | _ -> assert false) defs in
         let names = StringSet.from_list (List.map fst defs) in
           List.map
@@ -68,11 +68,12 @@ let refine_bindings : binding list -> binding list =
     let groupFuns pos (funs : binding list) : binding list =
       (* Unwrap from the bindingnode type *)
       let unFun = function
-        | `Fun (b, lin, (_, funlit), location, dt), pos -> (b, lin, (([], None), funlit), location, dt, pos)
+        | {node = `Fun (b, lin, (_, funlit), location, dt); pos} ->
+           (b, lin, (([], None), funlit), location, dt, pos)
         | _ -> assert false in
       let find_fun name =
         List.find (function
-                     | `Fun ((n,_,_), _, _, _, _), _ when name = n -> true
+                     | {node=`Fun ((n,_,_), _, _, _, _); _} -> name = n
                      | _ -> false)
           funs in
       let graph = callgraph funs in
@@ -82,8 +83,9 @@ let refine_bindings : binding list -> binding list =
              let funs = List.map (find_fun ->- unFun) scc in
                match funs with
                  | [(((n, _, _) as b), lin, ((tyvars, _), body), location, dt, pos)]
-                     when not (StringSet.mem n (Freevars.funlit body)) -> `Fun (b, lin, (tyvars, body), location, dt), pos
-                 | _ -> `Funs (funs), pos)
+                     when not (StringSet.mem n (Freevars.funlit body)) ->
+                    mkWithPos (`Fun (b, lin, (tyvars, body), location, dt)) pos
+                 | _ -> mkWithPos (`Funs (funs)) pos)
 
           sccs
     in
@@ -94,7 +96,7 @@ let refine_bindings : binding list -> binding list =
            Compute the position corresponding to the whole collection
            of functions.
         *)
-      | (`Fun _, _)::_ as funs -> groupFuns (Lexing.dummy_pos, Lexing.dummy_pos, None) funs
+      | {node=`Fun _; _}::_ as funs -> groupFuns (Lexing.dummy_pos, Lexing.dummy_pos, None) funs
       | binds -> binds in
     concat_map groupBindings initial_groups
 
@@ -257,7 +259,7 @@ module RefineTypeBindings = struct
   let initialGroups : binding list -> binding list list =
     fun bindings ->
       let group, groups =
-        List.fold_right (fun (binding, _ as bind) (currentGroup, otherGroups) ->
+        List.fold_right (fun ({node=binding; _} as bind) (currentGroup, otherGroups) ->
 	  match binding with
           | `Handler _  (* Desugared at this point *)
           | `Module _
@@ -309,7 +311,7 @@ module RefineTypeBindings = struct
   let referenceInfo : binding list -> type_hashtable -> reference_info =
     fun binds typeHt ->
       let ht = Hashtbl.create 30 in
-      List.iter (fun (bind, pos) ->
+      List.iter (fun {node = bind; pos} ->
         match bind with
           | `Type (name, _, _ as tyTy) ->
               let refs = typeReferences tyTy typeHt in
@@ -386,11 +388,11 @@ module RefineTypeBindings = struct
         thd3 (Hashtbl.find ri name) in
       List.map (fun name ->
         let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
-        (`Type res, getPos name)
+        mkWithPos (`Type res) (getPos name)
       ) sccs
 
   let isTypeGroup : binding list -> bool = function
-    | (`Type _, _) :: _xs -> true
+    | {node = `Type _; _} :: _xs -> true
     | _ -> false
 
   (* Performs type refinement on a binding group. *)
@@ -398,8 +400,8 @@ module RefineTypeBindings = struct
     | binds when isTypeGroup binds ->
       (* Create a hashtable mapping names to type bindings. *)
       let ht = Hashtbl.create 30 in
-      List.iter (fun (x, _) ->
-        match x with
+      List.iter (fun {node; _} ->
+        match node with
           | `Type (name, _, _ as tyTy) ->
             Hashtbl.add ht name tyTy;
           | _ -> assert false;

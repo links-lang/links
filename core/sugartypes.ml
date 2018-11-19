@@ -282,8 +282,7 @@ and bindingnode = [
 | `Module  of name * binding list
 | `AlienBlock of (name * name * ((binder * datatype') list))
 ]
-(* JSTOLAREK: change here *)
-and binding = bindingnode * position
+and binding = bindingnode with_pos
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
@@ -488,8 +487,8 @@ struct
     | `QualifiedVar _ -> empty
     | `TryInOtherwise (p1, pat, p2, p3, _ty) -> union (union_map phrase [p1; p2; p3]) (pattern pat)
     | `Raise -> empty
-  and binding (binding, _: binding) : StringSet.t (* vars bound in the pattern *)
-                                    * StringSet.t (* free vars in the rhs *) =
+  and binding ({node = binding; _}: binding) : StringSet.t (* vars bound in the pattern *)
+                                             * StringSet.t (* free vars in the rhs *) =
     match binding with
     | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
     | `Handler ((name,_,_), hnlit, _) -> singleton name, (diff (handlerlit hnlit) (singleton name))
