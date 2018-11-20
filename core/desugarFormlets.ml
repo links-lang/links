@@ -1,15 +1,15 @@
 open Utility
 open Sugartypes
 
-let rec is_raw (phrase, pos) =
-  match phrase with
+let rec is_raw phrase =
+  match phrase.node with
     | `TextNode _ -> true
     | `Block _    -> true
     | `FormBinding _ -> false
     | `Xml (_, _, _, children) ->
         List.for_all is_raw children
     | _ ->
-        raise (Errors.SugarError (pos, "Invalid element in formlet literal"))
+        raise (Errors.SugarError (phrase.pos, "Invalid element in formlet literal"))
 
 let tt =
   function
@@ -27,11 +27,11 @@ object (o : 'self_type)
     (this roughly corresponds to the dagger transformation)
   *)
   method formlet_patterns : Sugartypes.phrase -> (Sugartypes.pattern list * Sugartypes.phrase list * Types.datatype list) =
-    fun (e, pos) ->
+    fun ph ->
       let dp = Sugartypes.dummy_position in
-      match e with
-        | _ when is_raw (e, pos) ->
-            [with_dummy_pos (`Tuple [])], [(`TupleLit []), dp], [Types.unit_type]
+      match ph.node with
+        | _ when is_raw ph ->
+            [with_dummy_pos (`Tuple [])], [with_dummy_pos (`TupleLit [])], [Types.unit_type]
         | `FormBinding (f, p) ->
             let (_o, _f, ft) = o#phrase f in
             let t = Types.fresh_type_variable (`Any, `Any) in
@@ -39,7 +39,7 @@ object (o : 'self_type)
               Unify.datatypes
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
             let var = Utility.gensym ~prefix:"_formlet_" () in
-            let (xb, x) = (make_binder var t dp), ((`Var var), dp) in
+            let (xb, x) = (make_binder var t dp), (with_dummy_pos (`Var var)) in
               [with_dummy_pos (`As (xb, p))], [x], [t]
         | `Xml (_, _, _, [node]) ->
             o#formlet_patterns node
@@ -51,7 +51,7 @@ object (o : 'self_type)
                      match ps', vs', ts' with
                        | [p], [v], [t] -> p::ps, v::vs, t::ts
                        | _ ->
-                           with_dummy_pos (`Tuple ps')::ps, ((`TupleLit vs'), dp)::vs, (Types.make_tuple_type ts')::ts)
+                           with_dummy_pos (`Tuple ps')::ps, (with_dummy_pos (`TupleLit vs'))::vs, (Types.make_tuple_type ts')::ts)
                 ([], [], []) contents
             in
               List.rev ps, List.rev vs, List.rev ts
@@ -66,10 +66,10 @@ object (o : 'self_type)
           | `TextNode s ->
               let e =
                 `FnAppl
-                  ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp),
-                   [`FnAppl
-                      ((`TAppl ((`Var "stringToXml", dp), [`Row (o#lookup_effects)]), dp),
-                       [`Constant (`String s), dp]), dp])
+                  (with_dummy_pos (`TAppl (with_dummy_pos (`Var "xml"), [`Row (o#lookup_effects)])),
+                   [with_dummy_pos (`FnAppl
+                    (with_dummy_pos (`TAppl (with_dummy_pos (`Var "stringToXml"), [`Row (o#lookup_effects)])),
+                     [with_dummy_pos (`Constant (`String s))]))])
               in
                 (o, e, Types.xml_type)
           | `Block (bs, e) ->
@@ -77,13 +77,14 @@ object (o : 'self_type)
                 o#phrasenode
                   (`Block
                      (bs,
-                      (`FnAppl
-                         ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp),
-                          [e]), dp)))
+                      with_dummy_pos
+                        (`FnAppl
+                         (with_dummy_pos (`TAppl (with_dummy_pos (`Var "xml"), [`Row (o#lookup_effects)])),
+                          [e]))))
               in
                 (o, e, Types.xml_type)
           | `FormBinding (f, _) ->
-              let (o, (f, _), ft) = o#phrase f in
+              let (o, {node=f; _}, ft) = o#phrase f in
                 (o, f, ft)
           | `Xml ("#", [], None, contents) ->
               (* pure (fun ps -> vs) <*> e1 <*> ... <*> ek *)
@@ -99,7 +100,7 @@ object (o : 'self_type)
                                *)
                                [p]::pss, v::vs, t::ts
                            | _ ->
-                               [with_dummy_pos (`Tuple ps')]::pss, (`TupleLit vs', dp)::vs, (Types.make_tuple_type ts')::ts)
+                               [with_dummy_pos (`Tuple ps')]::pss, with_dummy_pos (`TupleLit vs')::vs, (Types.make_tuple_type ts')::ts)
                     ([], [], []) contents
                 in
                   List.rev pss, List.rev vs, List.rev ts in
@@ -118,29 +119,31 @@ object (o : 'self_type)
                         in
                           (o,
                            (`FnAppl
-                              ((`TAppl ((`Var "xml", dp), [`Row (o#lookup_effects)]), dp), [e, dp])),
+                              (with_dummy_pos (`TAppl (with_dummy_pos (`Var "xml"), [`Row (o#lookup_effects)])), [with_dummy_pos e])),
                            Types.xml_type)
                     | _ ->
                         let (o, es, _) = TransformSugar.list o (fun o -> o#formlet_body) contents in
                         let mb = `Row (o#lookup_effects) in
                         let base : phrase =
-                          (`FnAppl
-                             ((`TAppl ((`Var "pure", dp), [`Type ft; mb]), dp),
-                              [`FunLit (Some (List.rev args), `Unl, (List.rev pss, (`TupleLit vs, dp)), `Unknown), dp]), dp) in
-                        let (e, _), et =
+                          with_dummy_pos
+                            (`FnAppl
+                             (with_dummy_pos (`TAppl (with_dummy_pos (`Var "pure"), [`Type ft; mb])),
+                              [with_dummy_pos (`FunLit (Some (List.rev args), `Unl,
+                                                       (List.rev pss, with_dummy_pos (`TupleLit vs)), `Unknown))])) in
+                        let p, et =
                           List.fold_right
                             (fun arg (base, ft) ->
                                let arg_type = List.hd (TypeUtils.arg_types ft) in
                                let ft = TypeUtils.return_type ft in
                                let base : phrase =
-                                 (`FnAppl
-                                    (((`TAppl (((`Var "@@@"), dp), [`Type arg_type; `Type ft; mb]), dp) : phrase),
-                                     [arg; base]), dp)
-                               in
-                                 base, ft)
+                                 with_dummy_pos (`FnAppl
+                                  (with_dummy_pos (`TAppl
+                                   (with_dummy_pos (`Var "@@@"), [`Type arg_type; `Type ft; mb])),
+                                   [arg; base]))
+                               in base, ft)
                             es (base, ft)
                         in
-                          (o, e, et)
+                          (o, p.node, et)
                 end
           | `Xml(tag, attrs, attrexp, contents) ->
               (* plug (fun x -> (<tag attrs>{x}</tag>)) (<#>contents</#>)^o*)
@@ -148,28 +151,28 @@ object (o : 'self_type)
               let eff = o#lookup_effects in
               let context : phrase =
                 let var = Utility.gensym ~prefix:"_formlet_" () in
-                let (xb, x) = (make_binder var (Types.xml_type) dp), ((`Var var), dp) in
-                  (`FunLit (Some [Types.make_tuple_type [Types.xml_type], eff],
+                let (xb, x) = (make_binder var (Types.xml_type) dp), (with_dummy_pos (`Var var)) in
+                  with_dummy_pos
+                    (`FunLit (Some [Types.make_tuple_type [Types.xml_type], eff],
                             `Unl,
                             ([[with_dummy_pos (`Variable xb)]],
-                             (`Xml (tag, attrs, attrexp, [`Block ([], x), dp]), dp)), `Unknown), dp) in
-              let (o, e, t) = o#formlet_body (`Xml ("#", [], None, contents), dp) in
+                               with_dummy_pos (`Xml (tag, attrs, attrexp, [with_dummy_pos (`Block ([], x))]))), `Unknown)) in
+              let (o, e, t) = o#formlet_body (with_dummy_pos (`Xml ("#", [], None, contents))) in
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "plug", dp), [`Type t; `Row eff]), dp),
+                   (with_dummy_pos (`TAppl (with_dummy_pos (`Var "plug"), [`Type t; `Row eff])),
                     [context; e]),
                  t)
           | _ -> assert false
 
   method formlet_body : Sugartypes.phrase -> ('self_type * Sugartypes.phrase * Types.datatype) =
-    fun (e, pos) ->
-      let (o, e, t) = o#formlet_body_node e in (o, (e, pos), t)
+    fun {node; pos} ->
+      let (o, node, t) = o#formlet_body_node node in (o, {node; pos}, t)
 
   method! phrasenode  : phrasenode -> ('self_type * phrasenode * Types.datatype) = function
     | `Formlet (body, yields) ->
         (* pure (fun q^ -> [[e]]* ) <*> q^o *)
         (* let e_in = `Formlet (body, yields) in *)
-        let dp = Sugartypes.dummy_position in
         let empty_eff = Types.make_empty_closed_row () in
         let (ps, _, ts) = o#formlet_patterns body in
         let (o, body, _body_type) = o#formlet_body body in
@@ -186,11 +189,10 @@ object (o : 'self_type)
 
         let e =
           `FnAppl
-            ((`TAppl ((`Var "@@@", dp), [`Type arg_type; `Type yields_type; mb]), dp),
-             [body;
-              `FnAppl
-                ((`TAppl ((`Var "pure", dp), [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]), dp),
-                 [`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], `Unl, (pss, yields), `Unknown), dp]), dp])
+            (with_dummy_pos (`TAppl (with_dummy_pos (`Var "@@@"), [`Type arg_type; `Type yields_type; mb])),
+             [body; with_dummy_pos (`FnAppl (with_dummy_pos (`TAppl (with_dummy_pos (`Var "pure"),
+                    [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb])),
+                      [with_dummy_pos (`FunLit (Some [Types.make_tuple_type [arg_type], empty_eff], `Unl, (pss, yields), `Unknown))]))])
         in
           (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)
     | e -> super#phrasenode e

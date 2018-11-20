@@ -37,7 +37,7 @@ let program =
 
       method! phrase =
         function
-          | `Var x, pos when o#bound x ->
+          | {Sugartypes.node=`Var x; Sugartypes.pos} when o#bound x ->
               o#use (x, o#lookup x, pos)
           | e -> super#phrase e
     end in

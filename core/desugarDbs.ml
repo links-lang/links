@@ -1,3 +1,5 @@
+open Sugartypes
+
 (*
   Desugaring database stuff
   -------------------------
@@ -35,8 +37,6 @@ move insert into the IR
 
 *)
 
-
-let dp = Sugartypes.dummy_position
 
 class desugar_dbs env =
 object (o : 'self_type)
@@ -151,13 +151,15 @@ object (o : 'self_type)
             | None ->
                 (o,
                  `FnAppl
-                   ((`TAppl ((`Var "InsertRows", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
+                   (with_dummy_pos (`TAppl (with_dummy_pos (`Var "InsertRows"),
+                             [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff])),
                     [table; rows]))
             | Some field ->
                 let o, field, _ = o#phrase field in
                   (o,
                    `FnAppl
-                     ((`TAppl ((`Var "InsertReturning", dp), [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff]), dp),
+                     (with_dummy_pos (`TAppl (with_dummy_pos (`Var "InsertReturning"),
+                               [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff])),
                       [table; rows; field]))
         in
           o, e, Types.unit_type

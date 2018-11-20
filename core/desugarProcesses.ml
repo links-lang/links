@@ -12,8 +12,6 @@ open Sugartypes
 *)
 
 
-let dp = Sugartypes.dummy_position
-
 class desugar_processes env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
@@ -31,8 +29,8 @@ object (o : 'self_type)
 
         let e : phrasenode =
           `FnAppl
-            ((`TAppl ((`Var "spawnWait", dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
-             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp)])
+            (with_dummy_pos (`TAppl (with_dummy_pos (`Var "spawnWait"), [`Row inner_eff; `Type body_type; `Row outer_eff])),
+             [with_dummy_pos (`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown))])
         in
           (o, e, body_type)
     | `Spawn (k, spawn_loc, body, Some inner_eff) ->
@@ -49,8 +47,10 @@ object (o : 'self_type)
         let spawn_loc_phr =
           match spawn_loc with
             | `ExplicitSpawnLocation phr -> phr
-            | `SpawnClient -> (`FnAppl ((`Var "there", dp), [(`TupleLit [], dp)]), dp)
-            | `NoSpawnLocation -> (`FnAppl ((`Var "here", dp), [(`TupleLit [], dp)]), dp) in
+            | `SpawnClient -> with_dummy_pos (`FnAppl (with_dummy_pos (`Var "there"),
+                                                      [with_dummy_pos (`TupleLit [])]))
+            | `NoSpawnLocation -> with_dummy_pos (`FnAppl (with_dummy_pos (`Var "here"),
+                                                          [with_dummy_pos (`TupleLit [])])) in
 
         let spawn_fun =
           match k with
@@ -64,8 +64,10 @@ object (o : 'self_type)
 
         let e : phrasenode =
           `FnAppl
-            ((`TAppl ((`Var spawn_fun, dp), [`Row inner_eff; `Type body_type; `Row outer_eff]), dp),
-             [(`FunLit (Some [(Types.make_tuple_type [], inner_eff)], `Unl, ([[]], body), `Unknown), dp);
+            (with_dummy_pos (`TAppl (with_dummy_pos (`Var spawn_fun),
+                                     [`Row inner_eff; `Type body_type; `Row outer_eff])),
+             [with_dummy_pos (`FunLit (Some [(Types.make_tuple_type [], inner_eff)],
+                                       `Unl, ([[]], body), `Unknown));
               spawn_loc_phr])
         in
           (o, e, process_type)
@@ -76,12 +78,12 @@ object (o : 'self_type)
             match StringMap.find "hear" fields with
               | (`Present mbt) ->
                   o#phrasenode
-                    (`Switch
-                       ((`FnAppl
-                           ((`TAppl ((`Var "recv", dp), [`Type mbt; `Row other_effects]), dp),
-                            []), dp),
-                        cases,
-                        Some t))
+                    (`Switch (with_dummy_pos
+                     (`FnAppl (with_dummy_pos
+                      (`TAppl (with_dummy_pos (`Var "recv"), [`Type mbt; `Row other_effects])),
+                               [])),
+                              cases,
+                              Some t))
               | _ -> assert false
         end
     | e -> super#phrasenode e
