@@ -1325,7 +1325,6 @@ regex_pattern_sequence:
 pattern:
 | typed_pattern                                             { $1 }
 | typed_pattern COLON primary_datatype                      { with_pos (`HasType ($1, datatype (with_pos $3 (pos())))) (pos()) }
-/* FIXME: in production above $3 is annotated with position of whole production */
 
 typed_pattern:
 | cons_pattern                                              { $1 }
