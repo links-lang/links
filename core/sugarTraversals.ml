@@ -435,9 +435,10 @@ class map =
 
 
     method phrase : phrase -> phrase =
-      fun (_x, _x_i1) ->
-        let _x = o#phrasenode _x in
-        let _x_i1 = o#position _x_i1 in (_x, _x_i1)
+      fun {node; pos} ->
+        let node = o#phrasenode node in
+        let pos  = o#position pos in
+        {node; pos}
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
@@ -1121,8 +1122,8 @@ class fold =
       | `Raise -> o
 
     method phrase : phrase -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#phrasenode _x in let o = o#position _x_i1 in o
+      fun {node; pos} ->
+        let o = o#phrasenode node in let o = o#position pos in o
 
     method cp_phrasenode : cp_phrasenode -> 'self_type =
       function
@@ -1855,9 +1856,10 @@ class fold_map =
       | `Raise -> (o, `Raise)
 
     method phrase : phrase -> ('self_type * phrase) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#phrasenode _x in
-        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      fun {node; pos} ->
+        let (o, node) = o#phrasenode node in
+        let (o, pos ) = o#position   pos  in
+        (o, {node; pos})
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
       function

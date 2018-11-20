@@ -44,15 +44,15 @@ let unwrap_def ({node=f, ft; pos=fpos}, lin, (tyvars, lam), location, t) =
         | (ps::pss, body) ->
             let g = gensym ~prefix:"_fun_" () in
             let rt = TypeUtils.return_type t in
-              ([ps],
-               (`Block
+              ([ps], with_dummy_pos
+                 (`Block
                   ([with_dummy_pos
                       (`Fun (make_binder g t dp,
                              lin,
                              ([], make_lam rt (pss, body)),
                              location,
                              None))],
-                   ((`Var g), dp)), dp))
+                   (with_dummy_pos (`Var g)))))
         | _, _ -> assert false
     in
     make_lam rt lam
@@ -87,7 +87,7 @@ object (o : 'self_type)
           `Block
             ([with_dummy_pos (`Fun (unwrap_def ( make_binder f ft dp, lin, ([], lam)
                                            , location, None)))],
-             ((`Var f), dp))
+             (with_dummy_pos (`Var f)))
         in
           (o, e, ft)
     | `Section (`Project name) ->
@@ -103,12 +103,12 @@ object (o : 'self_type)
                                            `Function (Types.make_tuple_type [r], eff, a)) in
 
         let pss = [[with_dummy_pos (`Variable (make_binder x r dp))]] in
-        let body = `Projection ((`Var x, dp), name), dp in
+        let body = with_dummy_pos (`Projection (with_dummy_pos (`Var x), name)) in
         let e : phrasenode =
           `Block
             ([with_dummy_pos (`Fun ( make_binder f ft dp, `Unl
-                               , ([ab; rhob; effb], (pss, body)), `Unknown, None))],
-             ((`Var f), dp))
+                                   , ([ab; rhob; effb], (pss, body)), `Unknown, None))],
+             (with_dummy_pos (`Var f)))
         in
           (o, e, ft)
     | e -> super#phrasenode e

@@ -355,7 +355,7 @@ class transform (env : Types.typing_environment) =
           let (o, e, t) = o#phrase e in
           let o = o#restore_quantifiers outer_tyvars in
           let t = Types.for_all (qs, t) in
-            (o, tabstr (qs, fst e), t)
+            (o, tabstr (qs, e.node), t)
       | `TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
             check_type_application
@@ -619,8 +619,9 @@ class transform (env : Types.typing_environment) =
       | e -> failwith ("oops: "^show_phrasenode  e)
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
-      fun (e, pos) ->
-        let (o, e, t) = o#phrasenode e in (o, (e, pos), t)
+      fun {node; pos} ->
+        let (o, node, t) = o#phrasenode node in
+        (o, {node;pos}, t)
 
     method patternnode : patternnode -> ('self_type * patternnode) =
       function

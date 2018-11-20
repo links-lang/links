@@ -1,7 +1,7 @@
 open Sugartypes
 
-let rec is_raw (phrase, pos) =
-  match phrase with
+let rec is_raw phrase =
+  match phrase.node with
     | `TextNode _ -> true
     | `Block _ -> true
     | `FormletPlacement _
@@ -9,7 +9,7 @@ let rec is_raw (phrase, pos) =
     | `Xml (_, _, _, children) ->
         List.for_all is_raw children
     | _e ->
-        raise (Errors.SugarError (pos, "Invalid element in page literal"))
+        raise (Errors.SugarError (phrase.pos, "Invalid element in page literal"))
 
 (* DODGEYNESS:
 
@@ -24,15 +24,15 @@ let rec is_raw (phrase, pos) =
 let rec desugar_page (o, page_type) =
   let desugar_nodes pos : phrase list -> phrase =
     fun children ->
-      (`FnAppl ((`TAppl ((`Var "joinManyP", pos), [`Row (o#lookup_effects)]), pos),
-                [`ListLit (List.map (desugar_page (o, page_type)) children, Some page_type), pos]), pos)
+      with_pos (`FnAppl (with_pos (`TAppl (with_pos (`Var "joinManyP") pos, [`Row (o#lookup_effects)])) pos,
+                [with_pos (`ListLit (List.map (desugar_page (o, page_type)) children, Some page_type)) pos])) pos
   in
-    fun (e, pos) ->
+    fun ({node=e; pos} as phrase) ->
       match e with
-        | _ when is_raw (e, pos) ->
+        | _ when is_raw phrase ->
           (* TODO: check that e doesn't contain any formletplacements or page placements *)
-            (`FnAppl ((`TAppl ((`Var "bodyP", pos), [`Row (o#lookup_effects)]), pos),
-                      [e, pos]), pos)
+           with_pos (`FnAppl (with_pos (`TAppl (with_pos (`Var "bodyP") pos, [`Row (o#lookup_effects)])) pos,
+                              [with_pos e pos])) pos
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
             let formlet_type = Types.concrete_type formlet_type in
@@ -40,21 +40,22 @@ let rec desugar_page (o, page_type) =
             let b = Types.fresh_type_variable (`Any, `Any) in
             let _template = `Alias (("Formlet", [`Type a]), b) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
-              (`FnAppl ((`TAppl ((`Var "formP", pos), [`Type a; `Row (o#lookup_effects)]), pos),
-                        [formlet; handler; attributes]), pos)
+              with_pos (`FnAppl (with_pos (`TAppl (with_pos (`Var "formP") pos, [`Type a; `Row (o#lookup_effects)])) pos,
+                                 [formlet; handler; attributes])) pos
         | `PagePlacement (page) -> page
         | `Xml ("#", [], _, children) ->
             desugar_nodes pos children
         | `Xml (name, attrs, dynattrs, children) ->
             let x = Utility.gensym ~prefix:"xml" () in
-              (`FnAppl ((`TAppl ((`Var "plugP", pos), [`Row (o#lookup_effects)]), pos),
-                        [(`FunLit
-                            (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_effects]),
-                             `Unl,
-                             ([[with_pos (`Variable (make_binder x Types.xml_type pos)) pos]],
-                              (`Xml (name, attrs, dynattrs,
-                                     [`Block ([], (`Var x, pos)), pos]), pos)), `Unknown), pos);
-                         desugar_nodes pos children]), pos)
+              with_pos (`FnAppl
+              (with_pos (`TAppl (with_pos (`Var "plugP") pos, [`Row (o#lookup_effects)])) pos,
+               [with_pos (`FunLit
+                           (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_effects]),
+                            `Unl,
+                            ([[with_pos (`Variable (make_binder x Types.xml_type pos)) pos]],
+                             with_pos (`Xml (name, attrs, dynattrs,
+                                             [with_pos (`Block ([], with_pos (`Var x) pos)) pos])) pos), `Unknown)) pos;
+                desugar_nodes pos children])) pos
         | _ ->
           raise (Errors.SugarError (pos, "Invalid element in page literal"))
 
@@ -66,8 +67,8 @@ object
     | `Page e ->
         let (o, e, _t) = super#phrase e in
         let page_type = Instantiate.alias "Page" [] env.Types.tycon_env in
-        let (e, _) = desugar_page (o, page_type) e in
-          (o, e, page_type)
+        let e = desugar_page (o, page_type) e in
+          (o, e.node, page_type)
     | e -> super#phrasenode e
 end
 

@@ -1,3 +1,5 @@
+open Sugartypes
+
 (* check that:
     - XML and page quasiquotes don't contain formlet bindings
     - XML and formlet quasiquotes don't contain formlet or page placements *)
@@ -12,7 +14,7 @@ let check mode pos e =
 
       method get_error = error
 
-      method! phrase = fun ((e, pos) as phrase) ->
+      method! phrase = fun ({node=e; pos} as phrase) ->
         match e with
         | `Xml (_, _, _, children) ->
           o#list (fun o -> o#phrase) children
@@ -34,7 +36,7 @@ let check mode pos e =
         | _ -> o
     end
   in
-  let o = checker#phrase (e, pos) in
+  let o = checker#phrase {node=e; pos} in
   let kind =
     match mode with
     | `Xml -> "XML"
@@ -68,19 +70,19 @@ object (o)
   method private phrase_with new_mode phrase =
     ((o#set_mode new_mode)#phrase phrase)#set_mode mode
 
-  method! phrase = fun ((e, pos) as phrase) ->
+  method! phrase = fun ({node=e; pos} as phrase) ->
     match e with
     | `Xml _ when mode = `Quasi ->
       super#phrase phrase
     | `Xml _ when mode = `Exp ->
       check `Xml pos e;
       o#phrase_with `Quasi phrase
-    | `Formlet ((body, _) as body', yields) when mode = `Exp ->
-      check `Formlet pos body;
-      (o#phrase_with `Quasi body')#phrase yields
-    | `Page ((body, _) as body') when mode = `Exp ->
-      check `Page pos body;
-      o#phrase_with `Quasi body'
+    | `Formlet (body, yields) when mode = `Exp ->
+      check `Formlet pos body.node;
+      (o#phrase_with `Quasi body)#phrase yields
+    | `Page body when mode = `Exp ->
+      check `Page pos body.node;
+      o#phrase_with `Quasi body
     | (`Formlet _ | `Page _) when mode = `Quasi ->
       (* The parser should prevent this from ever happening *)
       raise (Errors.SugarError (pos, "Malformed quasiquote (internal error)"))

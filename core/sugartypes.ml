@@ -1,5 +1,6 @@
 (*pp deriving *)
 open Operators
+open Utility
 
 (** The syntax tree created by the parser. *)
 
@@ -16,6 +17,10 @@ type 'a with_pos = { node : 'a
 
 let with_pos       node pos = { node; pos }
 let with_dummy_pos node     = { node; pos = dummy_position }
+let tuple_of_with_pos {node; pos} = (node, pos)
+
+let split_node_positions : 'a with_pos list -> 'a list * position list =
+  fun nodes_with_pos -> ListUtils.split_with tuple_of_with_pos nodes_with_pos
 
 type binder = (name * Types.datatype option) with_pos
     [@@deriving show]
@@ -23,7 +28,7 @@ type binder = (name * Types.datatype option) with_pos
 let name_of_binder     {node=(n,_ );_} = n
 let type_of_binder     {node=(_,ty);_} = ty
 let type_of_binder_exn {node=(_,ty);_} =
-  Utility.OptionUtils.val_of ty (* raises exception when ty = None *)
+  OptionUtils.val_of ty (* raises exception when ty = None *)
 (* JSTOLAREK: merge make_binder and make_untyped_binder into a single function
    with a default ty=None argument? *)
 let make_binder         n ty pos = { node=(n   , Some ty); pos }
@@ -271,9 +276,9 @@ and phrasenode = [
 | `TryInOtherwise   of (phrase * pattern * phrase * phrase * Types.datatype option)
 | `Raise
 ]
-(* JSTOLAREK: change here *)
-and phrase = phrasenode * position
+and phrase = phrasenode with_pos
 and bindingnode = [
+(* JSTOLAREK: clean this up *)
 (*
    TODO: (aesthetic change)
      change `Val constructor to:
@@ -347,12 +352,12 @@ let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
     | _ ->
-        `TAbstr (Types.box_quantifiers tyvars, (e, dummy_position))
+        `TAbstr (Types.box_quantifiers tyvars, with_dummy_pos e)
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
-    | _ -> `TAppl ((e, dummy_position), tys)
+    | _ -> `TAppl (with_dummy_pos e, tys)
 
 module Freevars =
 struct
@@ -380,12 +385,14 @@ struct
     | `HasType (pat, _)      -> pattern pat
 
 
-  let rec formlet_bound (p, _ : phrase) : StringSet.t = match p with
+  let rec formlet_bound ({node; _} : phrase) : StringSet.t = match node with
     | `Xml (_, _, _, children) -> union_map formlet_bound children
     | `FormBinding (_, pat) -> pattern pat
     | _ -> empty
 
-  let rec phrase (p, _ : phrase) : StringSet.t = match p with
+  let rec phrase (p : phrase) : StringSet.t =
+    let p = p.node in
+    match p with
     | `Var v -> singleton v
     | `Section (`Name n) -> singleton n
 

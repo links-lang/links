@@ -725,7 +725,8 @@ struct
   let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff')
 
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
-    fun env (e, pos) ->
+    fun env {Sugartypes.node=e; Sugartypes.pos} ->
+      let with_pos = Sugartypes.with_pos in
       let lookup_var name =
         let x, xt = lookup_name_and_type name env in
           I.var (x, xt) in
@@ -744,8 +745,8 @@ struct
                       prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
                       failwith "fatal internal error" in
 
-      let rec is_pure_primitive (e, _) =
-        match e with
+      let rec is_pure_primitive e =
+        match e.Sugartypes.node with
           | `TAbstr (_, e)
           | `TAppl (e, _) -> is_pure_primitive e
           | `Var f when Lib.is_pure_primitive f -> true
@@ -765,7 +766,8 @@ struct
           | `ListLit ([], Some t) ->
               cofv (instantiate "Nil" [`Type t])
           | `ListLit (e::es, Some t) ->
-              cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff], [ev e; ev ((`ListLit (es, Some t)), pos)]))
+              cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff],
+                                 [ev e; ev (with_pos (`ListLit (es, Some t)) pos)]))
           | `Escape (bndr, body) when Sugartypes.binder_has_type bndr ->
              let k  = Sugartypes.name_of_binder bndr in
              let kt = Sugartypes.type_of_binder_exn bndr in
@@ -806,9 +808,10 @@ struct
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | `UnaryAppl ((tyargs, `Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
-          | `FnAppl ((`Var f, _), es) when Lib.is_pure_primitive f ->
+          | `FnAppl ({Sugartypes.node=`Var f; _}, es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
-          | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Lib.is_pure_primitive f ->
+          | `FnAppl ({Sugartypes.node=`TAppl ({Sugartypes.node=`Var f; _}, tyargs); _}, es)
+               when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (instantiate f tyargs, evs es))
           | `FnAppl (e, es) when is_pure_primitive e ->
               cofv (I.apply_pure (ev e, evs es))
@@ -905,16 +908,16 @@ struct
               in
                 I.switch env (ev e, cases, t)
           | `DatabaseLit (name, (None, _)) ->
-              I.database (ev (`RecordLit ([("name", name)],
-                                          Some (`FnAppl ((`Var "getDatabaseConfig", pos), []), pos)), pos))
+              I.database (ev (with_pos (`RecordLit ([("name", name)],
+                                          Some (with_pos (`FnAppl (with_pos (`Var "getDatabaseConfig") pos, [])) pos))) pos))
           | `DatabaseLit (name, (Some driver, args)) ->
               let args =
                 match args with
-                  | None -> `Constant (`String ""), pos
+                  | None -> with_pos (`Constant (`String "")) pos
                   | Some args -> args
               in
                 I.database
-                  (ev (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos))
+                  (ev (with_pos (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None)) pos))
           | `LensLit (table, Some t) ->
               let table = ev table in
                 I.lens_handle (table, t)
@@ -981,7 +984,7 @@ struct
           | `TextNode name ->
               cofv
                 (I.apply_pure
-                   (instantiate_mb "stringToXml", [ev (`Constant (`String name), pos)]))
+                   (instantiate_mb "stringToXml", [ev (with_pos (`Constant (`String name)) pos)]))
           | `Block (bs, e) -> eval_bindings `Local env bs e
           | `Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
@@ -994,7 +997,7 @@ struct
                 opt_map
                   (fun where -> eval env' where)
                   where in
-              let body = eval env' (`RecordLit (fields, None), dp) in
+              let body = eval env' (with_pos (`RecordLit (fields, None)) dp) in
                 I.db_update env (p, source, where, body)
           | `DBDelete (p, source, where) ->
               let p, penv = CompilePatterns.desugar_pattern `Local p in
@@ -1202,7 +1205,7 @@ struct
 (*     Debug.print (Sugartypes.show_program (bindings, body)); *)
     let body =
       match body with
-        | None -> (`RecordLit ([], None), dp)
+        | None -> Sugartypes.with_dummy_pos (`RecordLit ([], None))
         | Some body -> body in
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in

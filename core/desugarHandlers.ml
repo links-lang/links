@@ -86,7 +86,7 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
 let parameterize : (pattern * phrase) list -> pattern list list option -> (pattern * phrase) list
   = fun cases params ->
   let wrap_fun params body =
-    (`FunLit (None, `Unl, (params, body), `Unknown), dp)
+    with_dummy_pos (`FunLit (None, `Unl, (params, body), `Unknown))
   in
   match params with
     None
@@ -125,8 +125,8 @@ let rec deanonymize : pattern -> pattern
 
 (* This function translates a pattern into a phrase. It assumes that the given pattern has been deanonymised. *)
 let rec phrase_of_pattern : pattern -> phrase
-  = fun pat ->
-    (begin
+  = fun pat -> with_pos
+     begin
       match pat.node with
 	`Any                         -> assert false (* can never happen after the fresh name generation pass *)
       | `Nil                         -> `ListLit ([], None)
@@ -141,12 +141,12 @@ let rec phrase_of_pattern : pattern -> phrase
       | `Variable b                  -> `Var (name_of_binder b)
       | `As (b,_)                    -> `Var (name_of_binder b)
       | `HasType (p,t)               -> `TypeAnnotation (phrase_of_pattern p, t)
-    end, pat.pos)
+     end pat.pos
 
 (* This function applies the list of parameters to the generated handle. *)
 let apply_params : phrase -> phrase list list -> phrase
   = fun h pss ->
-    List.fold_right (fun ps acc -> `FnAppl (acc, ps),dp ) (List.rev pss) h
+    List.fold_right (fun ps acc -> with_dummy_pos (`FnAppl (acc, ps)) ) (List.rev pss) h
 
 let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (pattern * phrase) list
   = fun cases ->
@@ -163,7 +163,7 @@ let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (
     | [] ->
        let x = "x" in
        let xb = make_untyped_binder x dp in
-       let id = (with_dummy_pos (`Variable xb), (`Var x, dp)) in
+       let id = (with_dummy_pos (`Variable xb), (with_dummy_pos (`Var x))) in
        ([id], List.rev ops)
     | _ ->
        (List.rev ret, List.rev ops)
@@ -172,10 +172,10 @@ let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
   = fun (depth, m, cases, params) ->
     let pos = m.pos in
     let m    = deanonymize m in
-    let comp = `FnAppl (phrase_of_pattern m, []), pos in
+    let comp = with_pos (`FnAppl (phrase_of_pattern m, [])) pos in
     let cases = parameterize cases params in
     let hndlr = Sugartypes.make_untyped_handler comp cases depth in
-    let handle : phrase = `Block ([], (`Handle hndlr, pos)),pos in
+    let handle = with_pos (`Block ([], (with_pos (`Handle hndlr) pos))) pos in
     let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =
       match params with
@@ -203,11 +203,12 @@ object
        super#phrasenode funlit
     | e -> super#phrasenode e
 
-  method! phrase (node, pos) =
+  method! phrase {node; pos} =
     match node with
     | `Handle h ->
        let (val_cases, eff_cases) = split_handler_cases h.sh_effect_cases in
-       `Handle { h with sh_effect_cases = eff_cases; sh_value_cases = val_cases }, pos
+       with_pos (`Handle { h with sh_effect_cases = eff_cases;
+                                  sh_value_cases  = val_cases }) pos
     (* | `Handle handler when handler.sh_descr.shd_depth = `Deep -> *)
     (*    begin match handler.sh_descr.shd_params with *)
     (*    | Some { shp_names; _ } -> *)
@@ -220,7 +221,7 @@ object
     (*       `Block (local_bindings, (`Handle handler, pos)), dp *)
     (*    | None -> `Handle handler, pos *)
     (*    end *)
-    | _ -> super#phrase (node, pos)
+    | _ -> super#phrase {node; pos}
 
   method! bindingnode = function
     | `Handler (binder, hnlit, annotation) ->
