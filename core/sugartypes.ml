@@ -15,12 +15,9 @@ type 'a with_pos = { node : 'a
                    ; pos  : position }
                      [@@deriving show]
 
-let with_pos       node pos = { node; pos }
-let with_dummy_pos node     = { node; pos = dummy_position }
+let with_pos           node pos   = { node; pos }
+let with_dummy_pos     node       = { node; pos = dummy_position }
 let tuple_of_with_pos {node; pos} = (node, pos)
-
-let split_node_positions : 'a with_pos list -> 'a list * position list =
-  fun nodes_with_pos -> ListUtils.split_with tuple_of_with_pos nodes_with_pos
 
 type binder = (name * Types.datatype option) with_pos
     [@@deriving show]
@@ -29,10 +26,8 @@ let name_of_binder     {node=(n,_ );_} = n
 let type_of_binder     {node=(_,ty);_} = ty
 let type_of_binder_exn {node=(_,ty);_} =
   OptionUtils.val_of ty (* raises exception when ty = None *)
-(* JSTOLAREK: merge make_binder and make_untyped_binder into a single function
-   with a default ty=None argument? *)
-let make_binder         n ty pos = { node=(n   , Some ty); pos }
-let make_untyped_binder n    pos = { node=(n   , None   ); pos }
+let make_binder         n ty pos = with_pos (n, Some ty) pos
+let make_untyped_binder n    pos = with_pos (n, None   ) pos
 let set_binder_name {node=(_   ,ty); pos} name = { node=(name, ty     ); pos }
 let set_binder_type {node=(name,_ ); pos} ty   = { node=(name, Some ty); pos }
 let binder_has_type {node=(_,ty)   ; _  }      = Utility.OptionUtils.is_some ty
@@ -278,7 +273,6 @@ and phrasenode = [
 ]
 and phrase = phrasenode with_pos
 and bindingnode = [
-(* JSTOLAREK: clean this up *)
 (*
    TODO: (aesthetic change)
      change `Val constructor to:

@@ -86,7 +86,7 @@ object (o : 'self_type)
         let e =
           `Block
             ([with_dummy_pos (`Fun (unwrap_def ( make_binder f ft dp, lin, ([], lam)
-                                           , location, None)))],
+                                               , location, None)))],
              (with_dummy_pos (`Var f)))
         in
           (o, e, ft)
