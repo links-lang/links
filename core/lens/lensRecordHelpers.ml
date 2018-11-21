@@ -42,29 +42,6 @@ module LensColList = struct
         List.find_opt (fun c -> LensCol.alias c = alias) cs
 end
 
-module LensSort = struct
-    type t = Types.lens_sort
-
-    let fundeps (fds, _, _ : t) = fds
-    let predicate = get_lens_sort_pred
-    let cols (_fds, _pred, rowType : t) = rowType
-
-    let cols_present_aliases (sort : t) =
-        let cols = cols sort in
-        LensColList.present_aliases cols
-
-    let colset (sort:t) =
-        let columns = cols sort in
-        let columns = LensColList.present_aliases columns in
-        ColSet.of_list columns
-
-    let make fds pred rowType : Types.lens_sort = (fds, pred, rowType)
-
-    let find_col_alias (alias : string) (sort : t) =
-        LensColList.find_alias alias (cols sort)
-end
-
-
 let get_record_type_from_cols rowType =
     let rowType = List.filter (fun f -> f.present) rowType in
     let map : field_spec_map = List.fold_left (fun a col -> StringMap.add col.alias (`Present col.typ) a) StringMap.empty rowType in

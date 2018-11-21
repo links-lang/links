@@ -163,7 +163,11 @@ type typ =
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
-and lens_sort     = LensUtility.fundepset * lens_phrase option * (lens_col list)
+and lens_sort     = {
+  fds : LensUtility.fundepset;
+  predicate : lens_phrase option;
+  cols : lens_col list;
+}
 and lens_col      = {
   table : string;
   name : string;
@@ -338,13 +342,12 @@ struct
      let (t', o) = o#typ col.typ in
      ({ col with typ = t' }, o)
 
-   method lens_sort (fds, phrase, cols) =
-     let (cols', o) = List.fold_right (fun arg (acc_args, o) ->
+   method lens_sort sort =
+     let (cols, o) = List.fold_right (fun arg (acc_args, o) ->
          let (arg', o) = o#lens_col arg in
          (arg' :: acc_args, o)
-     ) cols ([], o) in
-     ((fds, phrase, cols'), o)
-
+     ) sort.cols ([], o) in
+     ({sort with cols}, o)
 
    method typ = function
      | `Not_typed ->
@@ -1122,7 +1125,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
       | `Table (r, w, n)         ->
           S.union_all
             [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
-      | `Lens (_, _, _r)          -> S.empty
+      | `Lens _          -> S.empty
       | `Alias ((_, ts), datatype) ->
           S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
       | `Application (_, datatypes) -> S.union_all (List.map (free_tyarg_vars' rec_vars) datatypes)
@@ -1476,8 +1479,8 @@ let rec normalise_datatype rec_names t =
       | `Effect row              -> `Effect (nr row)
       | `Table (r, w, n)         ->
           `Table (nt r, nt w, nt n)
-      | `Lens (fds, cond, r)                ->
-          `Lens (fds, cond, r)
+      | `Lens sort                ->
+          `Lens sort
       | `Alias ((name, ts), datatype) ->
           `Alias ((name, ts), nt datatype)
       | `Application (abs, datatypes) ->
@@ -1718,7 +1721,7 @@ struct
             (fbtv f) @ (free_bound_row_type_vars ~include_aliases bound_vars m) @ (fbtv t)
         | `Record row
         | `Variant row -> free_bound_row_type_vars ~include_aliases bound_vars row
-        | `Lens (_fds, _cond, _r) -> []
+        | `Lens _ -> []
         | `Effect row -> free_bound_row_type_vars ~include_aliases bound_vars row
         | `Table (r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
         | `ForAll (tyvars, body) ->
@@ -2113,9 +2116,10 @@ struct
                datatype bound_vars p r ^ "," ^
                datatype bound_vars p w ^ "," ^
                datatype bound_vars p n ^ ")"
-          | `Lens (_fds, _cond, cols) ->
+          | `Lens sort ->
                 let fn col = col.alias  ^ ":" ^ datatype bound_vars p col.typ in
-                "Lens(" ^ List.fold_left (fun a b -> a ^ ", " ^ fn b) (fn (List.hd cols)) (List.tl cols) ^ ")"
+                let cols = List.map fn sort.cols in
+                "Lens(" ^ String.concat ", " cols ^ ")"
           | `Alias ((s,[]), _) ->  s
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg bound_vars p) elems ^"]"
@@ -2449,7 +2453,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Record row
       | `Variant row             -> make_env_r boundvars row
       | `Table (r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
-      | `Lens (_fds, _cond, _r)     -> empties
+      | `Lens _                  -> empties
       | `Alias ((_name, ts), d)  -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
       | `ForAll (qs, t)          ->

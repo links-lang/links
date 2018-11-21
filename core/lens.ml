@@ -1,3 +1,6 @@
+module Column = Lens_column
+module Sort = Lens_sort
+
 module Helpers = struct
   include LensHelpers
 
