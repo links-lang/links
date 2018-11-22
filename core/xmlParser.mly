@@ -30,7 +30,7 @@ let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_e
 /* XML */
 xml:
 | IGNORE xml                                                   { $2 }
-| xml_tree                                                     { $1 }
+| xml_tree END                                                 { $1 }
 
 xmlid:
 | VARIABLE                                                     { $1 }
