@@ -3,7 +3,7 @@ module A {
         typename Foo = Int;
     }
 
-    open B
+    open B;
     sig bar : (Foo) -> Foo
     fun bar(x) {
         x + 1

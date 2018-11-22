@@ -40,10 +40,10 @@ object (o: 'self_type)
         let o = o#with_effects inner_effects in
         let (o, body, _) = o#phrasenode body in
         let body =
-          `TryInOtherwise (with_pos body body_loc, as_pat,
+          `TryInOtherwise (with_pos body_loc body, as_pat,
                            (with_dummy_pos (`Var as_var)), unit_phr, (Some (Types.unit_type))) in
         let o = o#restore_envs envs in
-        (o, (`Spawn (k, spawn_loc, with_pos body body_loc, Some inner_effects)), process_type)
+        (o, (`Spawn (k, spawn_loc, with_pos body_loc body, Some inner_effects)), process_type)
     | e -> super#phrasenode e
 end
 
@@ -165,20 +165,19 @@ let wrap_linear_handlers prog =
       method! phrase = function
         | {node=`TryInOtherwise (l, x, m, n, dtopt); pos} ->
             let fresh_var = Utility.gensym ?prefix:(Some "try_x") () in
-            let fresh_pat = with_pos (`Variable (make_untyped_binder fresh_var pos)) pos in
-            with_pos
+            let fresh_pat = with_pos pos (`Variable (make_untyped_binder (with_pos pos fresh_var))) in
+            with_pos pos
             (`Switch (
-              with_pos
+              with_pos pos
                (`TryInOtherwise
                 (super#phrase l,
                  fresh_pat,
-                 with_pos (`ConstructorLit ("Just", Some (with_pos (`Var fresh_var) pos), None)) pos,
-                 with_pos (`ConstructorLit ("Nothing", None, None)) pos, dtopt))
-                 pos,
+                 with_pos pos (`ConstructorLit ("Just", Some (with_pos pos (`Var fresh_var)), None)),
+                 with_pos pos (`ConstructorLit ("Nothing", None, None)), dtopt)),
               [
-                (with_pos (`Variant ("Just", (Some x))) pos, super#phrase m);
-                (with_pos (`Variant ("Nothing", None)) pos, super#phrase n)
-              ], None)) pos
+                (with_pos pos (`Variant ("Just", (Some x))), super#phrase m);
+                (with_pos pos (`Variant ("Nothing", None)), super#phrase n)
+              ], None))
         | p -> super#phrase p
     end
   in o#program prog

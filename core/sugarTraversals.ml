@@ -452,7 +452,7 @@ class map =
       | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
-      fun {node; pos} -> with_pos (o#cp_phrasenode node) (o#position pos)
+      fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
 
     method patternnode : patternnode -> patternnode =
       function

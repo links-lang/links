@@ -93,10 +93,10 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
             let p, env = pp p in
             let ps, env' = pp ps in
               `Cons (p, ps), env ++ env'
-        | `List [] -> pp (Sugartypes.with_pos `Nil pos)
+        | `List [] -> pp (Sugartypes.with_pos pos `Nil)
         | `List (p::ps) ->
             let p, env = pp p in
-            let ps, env' = pp (Sugartypes.with_pos (`List ps) pos) in
+            let ps, env' = pp (Sugartypes.with_pos pos (`List ps)) in
               `Cons (p, ps), env ++ env'
         | `Variant (name, None) -> `Variant (name, `Any), empty
         | `Variant (name, Some p) ->
@@ -131,7 +131,7 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
               `Record (bs, p), env
         | `Tuple ps ->
             let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
-              pp (Sugartypes.with_pos (`Record (bs, None)) pos)
+              pp (Sugartypes.with_pos pos (`Record (bs, None)))
         | `Constant constant ->
             `Constant constant, empty
         | `Variable b ->

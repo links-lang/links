@@ -1,4 +1,4 @@
-open ModuleC
+open ModuleC;
 fun foo() {
   bar()
 }

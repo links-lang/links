@@ -10,5 +10,5 @@ module A {
   }
 }
 
-open A
+open A;
 A.foo()

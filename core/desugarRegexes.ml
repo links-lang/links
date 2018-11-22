@@ -15,50 +15,50 @@ let desugar_regex phrase regex_type pos : regex -> phrasenode =
     let v = Utility.gensym ~prefix:"_regex_" () in
       begin
         exprs := (v, e, t) :: !exprs;
-        with_pos (`Var v) pos
+        with_pos pos (`Var v)
       end in
   let rec aux : regex -> phrasenode =
     function
       | `Range (f, t)       -> `ConstructorLit ("Range",
-                                 Some (with_pos (`TupleLit [with_pos (`Constant (`Char f)) pos;
-                                                            with_pos (`Constant (`Char t)) pos]) pos),
+                                 Some (with_pos pos (`TupleLit [with_pos pos (`Constant (`Char f));
+                                                                with_pos pos (`Constant (`Char t))])),
                                  Some regex_type)
-      | `Simply s           -> `ConstructorLit ("Simply", Some (with_pos (`Constant (`String s)) pos), Some regex_type)
-      | `Quote s            -> `ConstructorLit ("Quote", Some (with_pos (aux s) pos), Some regex_type)
+      | `Simply s           -> `ConstructorLit ("Simply", Some (with_pos pos (`Constant (`String s))), Some regex_type)
+      | `Quote s            -> `ConstructorLit ("Quote", Some (with_pos pos (aux s)), Some regex_type)
       | `Any                -> `ConstructorLit ("Any", None, Some regex_type)
       | `StartAnchor        -> `ConstructorLit ("StartAnchor", None, Some regex_type)
       | `EndAnchor          -> `ConstructorLit ("EndAnchor", None, Some regex_type)
-      | `Seq rs             -> `ConstructorLit ("Seq", Some (with_pos (`ListLit (List.map (fun s -> with_pos (aux s) pos) rs,
-                                                                         Some (Types.make_list_type regex_type)))
-                                                             pos), Some regex_type)
+      | `Seq rs             -> `ConstructorLit ("Seq", Some (with_pos pos (`ListLit (List.map (fun s -> with_pos pos (aux s)) rs,
+                                                                                     Some (Types.make_list_type regex_type)))),
+                                                Some regex_type)
       | `Alternate (r1, r2) -> `ConstructorLit ("Alternate",
-                                 Some (with_pos (`TupleLit [ with_pos (aux r1) pos
-                                                           ; with_pos (aux r2) pos]) pos),
+                                 Some (with_pos pos (`TupleLit [ with_pos pos (aux r1)
+                                                               ; with_pos pos (aux r2)])),
                                  Some regex_type)
-      | `Group s            -> `ConstructorLit ("Group", Some (with_pos (aux s) pos), Some regex_type)
+      | `Group s            -> `ConstructorLit ("Group", Some (with_pos pos (aux s)), Some regex_type)
       | `Repeat (rep, r)    -> `ConstructorLit ("Repeat",
-                                 Some (with_pos (`TupleLit [with_pos (desugar_repeat regex_type rep) pos;
-                                                            with_pos (aux r) pos]) pos),
+                                 Some (with_pos pos (`TupleLit [with_pos pos (desugar_repeat regex_type rep);
+                                                                with_pos pos (aux r)])),
                                  Some regex_type)
       | `Splice e           -> `ConstructorLit ("Quote",
-                                 Some (with_pos (`ConstructorLit ("Simply", Some (expr e), Some regex_type)) pos),
+                                 Some (with_pos pos (`ConstructorLit ("Simply", Some (expr e), Some regex_type))),
                                  Some regex_type)
       | `Replace (re, (`Literal tmpl)) -> `ConstructorLit("Replace",
-                                 Some (with_pos (`TupleLit ([with_pos (aux re) pos;
-                                                             with_pos (`Constant (`String tmpl)) pos])) pos),
+                                 Some (with_pos pos (`TupleLit ([with_pos pos (aux re);
+                                                                 with_pos pos (`Constant (`String tmpl))]))),
                                  Some regex_type)
       | `Replace (re, (`Splice e)) -> `ConstructorLit("Replace",
-                                 Some (with_pos (`TupleLit ([with_pos (aux re) pos; expr e])) pos),
+                                 Some (with_pos pos (`TupleLit ([with_pos pos (aux re); expr e]))),
                                  Some regex_type)
   in fun e ->
      let e = aux e in
      `Block (List.map (fun (v, e1, t) ->
-                 (with_pos (`Val ([], (with_pos (`Variable (make_binder v t pos)) pos), e1, `Unknown, None)) pos))
-                      !exprs,
-             with_pos e pos)
+                 (with_pos pos (`Val ([], (with_pos pos (`Variable (make_binder v t pos))), e1, `Unknown, None))))
+               !exprs,
+             with_pos pos e)
 
 let appl pos name tyargs args =
-  with_pos (`FnAppl (with_pos (tappl (`Var name, tyargs)) pos, args)) pos
+  with_pos pos (`FnAppl (with_pos pos (tappl (`Var name, tyargs)), args))
 
 let desugar_regexes env =
 object(self)

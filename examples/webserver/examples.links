@@ -1,31 +1,31 @@
-open DictSuggestUpdate
-open Draggable
-open Progress
+open DictSuggestUpdate;
+open Draggable;
+open Progress;
 
-open Factorial
-open DictSuggest
-open DictSuggestLite
-open DraggableDb
+open Factorial;
+open DictSuggest;
+open DictSuggestLite;
+open DraggableDb;
 
-open Buttons
-open FormsTest
-open Validate
+open Buttons;
+open FormsTest;
+open Validate;
 
-open LoginFlow
-open Paginate
-open Mandelbrot
-open Mandelcolor
-open Todo
-open TodoDb
-open Crop
-open Wine
-open Filter
-open Citations
+open LoginFlow;
+open Paginate;
+open Mandelbrot;
+open Mandelcolor;
+open Todo;
+open TodoDb;
+open Crop;
+open Wine;
+open Filter;
+open Citations;
 
-open Twentyfortyeight
-open Breakout
-open Tetris
-open Pacman
+open Twentyfortyeight;
+open Breakout;
+open Tetris;
+open Pacman;
 
 fun main() {
   addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);

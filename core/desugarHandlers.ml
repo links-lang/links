@@ -18,8 +18,6 @@ open Sugartypes
 *)
 
 
-let dp = Sugartypes.dummy_position
-
 (* Computes the set of names in a given pattern *)
 let rec names : pattern -> string list
   = fun pat ->
@@ -44,7 +42,7 @@ let rec names : pattern -> string list
 let resolve_name_conflicts : pattern -> stringset -> pattern
   = fun pat conflicts ->
     let rec hide_names : pattern -> pattern
-      = fun pat -> with_pos
+      = fun pat -> with_pos pat.pos
 	 begin
 	  match pat.node with
 	  | `Variant (label, pat_opt)    -> `Variant (label, opt_map hide_names pat_opt)
@@ -63,7 +61,7 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
 					    else `As (bndr, pat)
 	  | `HasType (pat, t)            -> `HasType (hide_names pat, t)
 	  | _ -> pat.node
-	 end pat.pos
+	 end
     in hide_names pat
 
 (* This function parameterises each clause computation, e.g.
@@ -105,10 +103,10 @@ let parameterize : (pattern * phrase) list -> pattern list list option -> (patte
 
 (* This function assigns fresh names to `Any (_) *)
 let rec deanonymize : pattern -> pattern
-  = fun pat -> with_pos
+  = fun pat -> with_pos pat.pos
      begin
       match pat.node with
-	`Any                         -> `Variable (make_untyped_binder (Utility.gensym ~prefix:"dsh" ()) dp)
+	`Any                         -> `Variable (make_untyped_binder (with_dummy_pos (Utility.gensym ~prefix:"dsh" ())))
       | `Nil                         -> `Nil
       | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
       | `List ps                     -> `List (List.map deanonymize ps)
@@ -121,11 +119,11 @@ let rec deanonymize : pattern -> pattern
       | `Variable b                  -> `Variable b
       | `As (b,p)                    -> `As (b, deanonymize p)
       | `HasType (p,t)               -> `HasType (deanonymize p, t)
-     end pat.pos
+     end
 
 (* This function translates a pattern into a phrase. It assumes that the given pattern has been deanonymised. *)
 let rec phrase_of_pattern : pattern -> phrase
-  = fun pat -> with_pos
+  = fun pat -> with_pos pat.pos
      begin
       match pat.node with
 	`Any                         -> assert false (* can never happen after the fresh name generation pass *)
@@ -141,7 +139,7 @@ let rec phrase_of_pattern : pattern -> phrase
       | `Variable b                  -> `Var (name_of_binder b)
       | `As (b,_)                    -> `Var (name_of_binder b)
       | `HasType (p,t)               -> `TypeAnnotation (phrase_of_pattern p, t)
-     end pat.pos
+     end
 
 (* This function applies the list of parameters to the generated handle. *)
 let apply_params : phrase -> phrase list list -> phrase
@@ -162,7 +160,7 @@ let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (
     match ret with
     | [] ->
        let x = "x" in
-       let xb = make_untyped_binder x dp in
+       let xb = make_untyped_binder (with_dummy_pos x) in
        let id = (with_dummy_pos (`Variable xb), (with_dummy_pos (`Var x))) in
        ([id], List.rev ops)
     | _ ->
@@ -172,10 +170,10 @@ let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
   = fun (depth, m, cases, params) ->
     let pos = m.pos in
     let m    = deanonymize m in
-    let comp = with_pos (`FnAppl (phrase_of_pattern m, [])) pos in
+    let comp = with_pos pos (`FnAppl (phrase_of_pattern m, [])) in
     let cases = parameterize cases params in
     let hndlr = Sugartypes.make_untyped_handler comp cases depth in
-    let handle = with_pos (`Block ([], (with_pos (`Handle hndlr) pos))) pos in
+    let handle = with_pos pos (`Block ([], (with_pos pos (`Handle hndlr)))) in
     let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =
       match params with
@@ -207,8 +205,8 @@ object
     match node with
     | `Handle h ->
        let (val_cases, eff_cases) = split_handler_cases h.sh_effect_cases in
-       with_pos (`Handle { h with sh_effect_cases = eff_cases;
-                                  sh_value_cases  = val_cases }) pos
+       with_pos pos (`Handle { h with sh_effect_cases = eff_cases;
+                                      sh_value_cases  = val_cases })
     (* | `Handle handler when handler.sh_descr.shd_depth = `Deep -> *)
     (*    begin match handler.sh_descr.shd_params with *)
     (*    | Some { shp_names; _ } -> *)
