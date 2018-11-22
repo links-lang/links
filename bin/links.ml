@@ -52,10 +52,10 @@ let file_list : string list ref = ParseSettings.file_list
 let main () =
   let prelude, ((_valenv, _, _) as envs) = measure "prelude" load_prelude () in
 
-  for_each !to_evaluate (Evaluation.evaluate_string_in envs);
+  for_each !to_evaluate (Driver.evaluate_string_in envs);
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
-  for_each !file_list (Evaluation.run_file prelude envs);
+  for_each !file_list (Driver.run_file prelude envs);
   if Settings.get_value BS.interacting then
     begin
       print_endline (Settings.get_value BS.welcome_note);
