@@ -81,8 +81,8 @@ let websocket_req assoc_list =
     | _ -> failwith "Invalid opcode in websocket message"
 %}
 
-%token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
-%token COLON COMMA UNDERSCORE TRUE FALSE NULL
+%token LBRACE RBRACE LBRACKET RBRACKET
+%token COLON COMMA TRUE FALSE NULL
 %token <string> STRING
 %token <int> INT
 %token <float> FLOAT

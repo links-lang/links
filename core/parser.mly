@@ -172,7 +172,7 @@ let cp_unit p = with_pos (`Unquote ([], with_pos (`TupleLit []) p)) p
 
 %token END
 %token EQ IN
-%token FUN LINFUN RARROW LOLLI FATRARROW MINUSLBRACE VAR OP
+%token FUN LINFUN RARROW LOLLI FATRARROW VAR OP
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
