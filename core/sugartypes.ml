@@ -15,7 +15,7 @@ type 'a with_pos = { node : 'a
                    ; pos  : position }
                      [@@deriving show]
 
-let with_pos           node pos   = { node; pos }
+let with_pos           pos node   = { node; pos }
 let with_dummy_pos     node       = { node; pos = dummy_position }
 let tuple_of_with_pos {node; pos} = (node, pos)
 
@@ -26,11 +26,11 @@ let name_of_binder     {node=(n,_ );_} = n
 let type_of_binder     {node=(_,ty);_} = ty
 let type_of_binder_exn {node=(_,ty);_} =
   OptionUtils.val_of ty (* raises exception when ty = None *)
-let make_binder         n ty pos                 = with_pos (n   , Some ty) pos
-let make_untyped_binder {node;pos}               = with_pos (node, None   ) pos
-let set_binder_name   {node=(_   ,ty); pos} name = with_pos (name, ty     ) pos
-let set_binder_type   {node=(name,_ ); pos} ty   = with_pos (name, Some ty) pos
-let erase_binder_type {node=(name,_ ); pos}      = with_pos (name, None   ) pos
+let make_binder         n ty pos                 = with_pos pos (n   , Some ty)
+let make_untyped_binder {node;pos}               = with_pos pos (node, None   )
+let set_binder_name   {node=(_   ,ty); pos} name = with_pos pos (name, ty     )
+let set_binder_type   {node=(name,_ ); pos} ty   = with_pos pos (name, Some ty)
+let erase_binder_type {node=(name,_ ); pos}      = with_pos pos (name, None   )
 let binder_has_type   {node=(_   ,ty); _  }      = Utility.OptionUtils.is_some ty
 
 (* type variables *)

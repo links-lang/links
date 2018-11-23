@@ -10,7 +10,7 @@ object (o : 'self_type)
   method! phrasenode = function
     | `CP p ->
        let rec desugar_cp = fun o {node = p; pos} ->
-         let add_pos x = with_pos x pos in
+         let add_pos x = with_pos pos x in
          match p with
          | `Unquote (bs, e) ->
             let envs = o#backup_envs in

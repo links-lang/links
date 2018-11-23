@@ -93,14 +93,14 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) 
     | "l:name", [{node=`Constant (`String v); pos}] ->
         let id, name = fresh_names () in
           add v (id,name,pos);
-          [("name", [with_pos (`Constant (`String name)) pos]);
-           ("id"  , [with_pos (`Constant (`String id  )) pos])]
+          [("name", [with_pos pos (`Constant (`String name))]);
+           ("id"  , [with_pos pos (`Constant (`String id  ))])]
     | "l:name", _ -> failwith ("Invalid l:name binding")
     | a -> [a] in
   let rec aux : phrasenode -> phrasenode  = function
     | `Xml (tag, attrs, attrexp, children) ->
         let attrs = concat_map attr attrs
-        and children = List.map (fun {node;pos} -> with_pos (aux node) pos)
+        and children = List.map (fun {node;pos} -> with_pos pos (aux node))
                                 children in
           `Xml (tag, attrs, attrexp, children)
     | p -> p
@@ -109,8 +109,9 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) 
     p', !lnames
 
 let let_in pos name rhs body : phrase =
-  with_pos (`Block ([with_pos (`Val ( [], (with_pos (`Variable (make_untyped_binder (with_pos name pos))) pos), rhs
-                                    , `Unknown, None)) pos], body)) pos
+  with_pos pos (`Block ([with_pos pos (`Val ( [],
+   ( with_pos pos (`Variable (make_untyped_binder (with_pos pos name)))), rhs
+   , `Unknown, None))], body))
 
 let bind_lname_vars lnames = function
   | "l:action" as attr, es ->
@@ -135,7 +136,7 @@ let desugar_form : phrasenode -> phrasenode = function
         with StringMap.Not_disjoint (item, _) ->
           raise (Errors.SugarError (dummy_position, "Duplicate l:name binding: " ^ item)) in
       let attrs = List.map (bind_lname_vars lnames) attrs in
-        `Xml (form, attrs, attrexp, ListUtils.zip_with' with_pos children children_positions)
+        `Xml (form, attrs, attrexp, ListUtils.zip_with' with_pos children_positions children)
   | e -> e
 
 let replace_lattrs : phrasenode -> phrasenode = desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent ->-

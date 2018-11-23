@@ -46,8 +46,6 @@ open Ir
 
 let show_compiled_ir = Basicsettings.Sugartoir.show_compiled_ir
 
-let dp = Sugartypes.dummy_position
-
 type datatype = Types.datatype
 
 module NEnv = Env.String
@@ -767,7 +765,7 @@ struct
               cofv (instantiate "Nil" [`Type t])
           | `ListLit (e::es, Some t) ->
               cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff],
-                                 [ev e; ev (with_pos (`ListLit (es, Some t)) pos)]))
+                                 [ev e; ev (with_pos pos (`ListLit (es, Some t)))]))
           | `Escape (bndr, body) when Sugartypes.binder_has_type bndr ->
              let k  = Sugartypes.name_of_binder bndr in
              let kt = Sugartypes.type_of_binder_exn bndr in
@@ -908,16 +906,16 @@ struct
               in
                 I.switch env (ev e, cases, t)
           | `DatabaseLit (name, (None, _)) ->
-              I.database (ev (with_pos (`RecordLit ([("name", name)],
-                                          Some (with_pos (`FnAppl (with_pos (`Var "getDatabaseConfig") pos, [])) pos))) pos))
+              I.database (ev (with_pos pos (`RecordLit ([("name", name)],
+                                          Some (with_pos pos (`FnAppl (with_pos pos (`Var "getDatabaseConfig"), [])))))))
           | `DatabaseLit (name, (Some driver, args)) ->
               let args =
                 match args with
-                  | None -> with_pos (`Constant (`String "")) pos
+                  | None -> with_pos pos (`Constant (`String ""))
                   | Some args -> args
               in
                 I.database
-                  (ev (with_pos (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None)) pos))
+                  (ev (with_pos pos (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None))))
           | `LensLit (table, Some t) ->
               let table = ev table in
                 I.lens_handle (table, t)
@@ -984,7 +982,7 @@ struct
           | `TextNode name ->
               cofv
                 (I.apply_pure
-                   (instantiate_mb "stringToXml", [ev (with_pos (`Constant (`String name)) pos)]))
+                   (instantiate_mb "stringToXml", [ev (with_pos pos (`Constant (`String name)))]))
           | `Block (bs, e) -> eval_bindings `Local env bs e
           | `Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
@@ -997,7 +995,7 @@ struct
                 opt_map
                   (fun where -> eval env' where)
                   where in
-              let body = eval env' (with_pos (`RecordLit (fields, None)) dp) in
+              let body = eval env' (Sugartypes.with_dummy_pos (`RecordLit (fields, None))) in
                 I.db_update env (p, source, where, body)
           | `DBDelete (p, source, where) ->
               let p, penv = CompilePatterns.desugar_pattern `Local p in

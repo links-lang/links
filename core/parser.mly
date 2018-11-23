@@ -57,8 +57,7 @@ let fresh_rigid_presence_variable : subkind option -> fieldspec =
 
 let pos (start_pos, end_pos) : Sugartypes.position = start_pos, end_pos, None
 
-(* JSTOLAREK: temporary cludge. Remove once order od args in Sugartypes.with_pos is flipped *)
-let with_pos p node = Sugartypes.with_pos node (pos p)
+let with_pos p = Sugartypes.with_pos (pos p)
 
 let ensure_match p (opening : string) (closing : string) = function
   | result when opening = closing -> result

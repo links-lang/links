@@ -87,9 +87,8 @@ let refine_bindings : binding list -> binding list =
                  | [(bndr, lin, ((tyvars, _), body), location, dt, pos)]
                      when not (StringSet.mem (name_of_binder bndr)
                                              (Freevars.funlit body)) ->
-                    with_pos (`Fun (bndr, lin, (tyvars, body), location, dt))
-                              pos
-                 | _ -> with_pos (`Funs (funs)) pos)
+                    with_pos pos (`Fun (bndr, lin, (tyvars, body), location, dt))
+                 | _ -> with_pos pos (`Funs (funs)))
 
           sccs
     in
@@ -181,7 +180,7 @@ object(self)
                     List.map (fun (tv, k, f as q) ->
                       if tv = varFrom then
                         (n, k, f)
-                      else q) qs in `Forall (qs', with_pos (self#datatypenode quantDt) pos)
+                      else q) qs in `Forall (qs', with_pos pos (self#datatypenode quantDt))
               | _ -> super#datatypenode dt)
         | _ -> super#datatypenode dt
 
@@ -310,7 +309,7 @@ module RefineTypeBindings = struct
   (* Updates the datatype in a type binding. *)
   let updateDT : type_ty -> datatypenode -> type_ty =
     fun (name, tyArgs, ({pos; _}, unsugaredDT)) newDT ->
-      (name, tyArgs, ((with_pos newDT pos), unsugaredDT))
+      (name, tyArgs, ((with_pos pos newDT), unsugaredDT))
 
   let referenceInfo : binding list -> type_hashtable -> reference_info =
     fun binds typeHt ->
@@ -392,7 +391,7 @@ module RefineTypeBindings = struct
         thd3 (Hashtbl.find ri name) in
       List.map (fun name ->
         let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
-        with_pos (`Type res) (getPos name)
+        with_pos (getPos name) (`Type res)
       ) sccs
 
   let isTypeGroup : binding list -> bool = function
