@@ -337,7 +337,7 @@ nofun_declaration:
 | typedecl SEMICOLON                                           { $1 }
 
 | links_module                                                 { $1 }
-| links_open                                                   { $1 }
+| links_open SEMICOLON                                         { $1 }
 
 alien_datatype:
 | var COLON datatype SEMICOLON                                 { let {node = name; pos = name_pos} = $1 in
