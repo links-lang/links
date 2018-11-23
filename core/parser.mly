@@ -27,6 +27,13 @@ Once done with debugging remember to disable the flags!
 open Utility
 open Sugartypes
 
+module Links_core =
+struct
+  module Sugartypes = Sugartypes
+  module Types      = Types
+  module Operators  = Operators
+end
+
 (* Generation of fresh type variables *)
 
 let type_variable_counter = ref 0

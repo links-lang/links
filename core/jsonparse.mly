@@ -5,6 +5,11 @@ open Utility
 open ProcessTypes
 open WebsocketMessages
 
+module Links_core =
+struct
+  module Value = Value
+end
+
 (* let unparse_label = function *)
 (*   | `Char c -> String.make 1 c *)
 (*   | `List (`Char _::_) as s -> Value.unbox_string s *)

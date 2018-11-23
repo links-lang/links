@@ -4,6 +4,11 @@
 open Utility
 open Value
 
+module Links_core =
+struct
+  module Value = Value
+end
+
 let pos (start_pos, end_pos) : Sugartypes.position = start_pos, end_pos, None
 
 let ensure_match p (opening : string) (closing : string) = function
