@@ -10,7 +10,7 @@ module A {
   }
 }
 
-open A
+open A;
 fun foo() {
   "greetings"
 }

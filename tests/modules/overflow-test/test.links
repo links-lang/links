@@ -1,18 +1,18 @@
-open A0
-open A1
-open A2
-open A3
-open A4
-open A5
-open A6
-open A7
-open A8
-open A9
-open A10
-open A11
-open A12
-open A13
-open A14
+open A0;
+open A1;
+open A2;
+open A3;
+open A4;
+open A5;
+open A6;
+open A7;
+open A8;
+open A9;
+open A10;
+open A11;
+open A12;
+open A13;
+open A14;
 
 ()
 

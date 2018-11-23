@@ -3,7 +3,7 @@ module A {
   var foo = 5;
 }
 
-open A
+open A;
 sig bar : () -> (AInt)
 fun bar() {
   A.foo
