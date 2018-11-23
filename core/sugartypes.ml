@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 open Utility
 
+=======
+>>>>>>> 56dabbec... removed deriving
 (** The syntax tree created by the parser. *)
 
 (* The operators named here are the ones that it is difficult or
