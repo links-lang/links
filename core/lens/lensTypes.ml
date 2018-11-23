@@ -2,6 +2,7 @@ open Types
 open Utility
 open LensQueryHelpers
 open Lens_types
+open Sugartypes
 
 let unpack_field_spec (typ : Types.field_spec) =
     match typ with
