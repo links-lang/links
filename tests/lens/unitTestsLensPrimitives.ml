@@ -1,9 +1,12 @@
 open OUnitTest
+
+open Links_core
 open LensHelpers
 open LensQueryHelpers
 open LensSetOperations
-open UnitTestsLensCommon
 open Value
+
+open UnitTestsLensCommon
 
 (* define composition operator *)
 let (<<) f g x = f (g x)

@@ -1,5 +1,8 @@
 open OUnit2
-open Pg_database
+
+open Links_postgresql.Pg_database
+
+open Links_core
 open Types
 open Value
 open Utility
@@ -8,7 +11,7 @@ open LensHelpers
 open LensSetOperations
 
 (* ensure links configuration is loaded *)
-let _ = OptionUtils.opt_iter (Settings.load_file false) Basicsettings.config_file_path
+let _ = OptionUtils.opt_iter (Links_core.Settings.load_file false) Links_core.Basicsettings.config_file_path
 
 let display_table_query_opt = Conf.make_bool "display_table_query" false "Show queries to take and manipulate tables."
 let leave_tables_opt = Conf.make_bool "leave_tables" false "Do not delete tables after run."
