@@ -165,7 +165,7 @@ let wrap_linear_handlers prog =
       method! phrase = function
         | {node=`TryInOtherwise (l, x, m, n, dtopt); pos} ->
             let fresh_var = Utility.gensym ?prefix:(Some "try_x") () in
-            let fresh_pat = with_pos (`Variable (make_untyped_binder fresh_var pos)) pos in
+            let fresh_pat = with_pos (`Variable (make_untyped_binder (with_pos fresh_var pos))) pos in
             with_pos
             (`Switch (
               with_pos

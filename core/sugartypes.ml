@@ -26,11 +26,12 @@ let name_of_binder     {node=(n,_ );_} = n
 let type_of_binder     {node=(_,ty);_} = ty
 let type_of_binder_exn {node=(_,ty);_} =
   OptionUtils.val_of ty (* raises exception when ty = None *)
-let make_binder         n ty pos = with_pos (n, Some ty) pos
-let make_untyped_binder n    pos = with_pos (n, None   ) pos
-let set_binder_name {node=(_   ,ty); pos} name = { node=(name, ty     ); pos }
-let set_binder_type {node=(name,_ ); pos} ty   = { node=(name, Some ty); pos }
-let binder_has_type {node=(_,ty)   ; _  }      = Utility.OptionUtils.is_some ty
+let make_binder         n ty pos                 = with_pos (n   , Some ty) pos
+let make_untyped_binder {node;pos}               = with_pos (node, None   ) pos
+let set_binder_name   {node=(_   ,ty); pos} name = with_pos (name, ty     ) pos
+let set_binder_type   {node=(name,_ ); pos} ty   = with_pos (name, Some ty) pos
+let erase_binder_type {node=(name,_ ); pos}      = with_pos (name, None   ) pos
+let binder_has_type   {node=(_   ,ty); _  }      = Utility.OptionUtils.is_some ty
 
 (* type variables *)
 type tyvar = Types.quantifier

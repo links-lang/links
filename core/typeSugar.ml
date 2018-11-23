@@ -3751,7 +3751,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
                 (List.fold_left2
                    (fun defs_and_uses (bndr, lin, (_, (_, body)), location, t, pos) pats ->
                       let name = name_of_binder bndr in
-                      let name_pos = bndr.pos in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let context' = {context with var_env = Env.extend body_env pat_env} in
                       let effects = fresh_wild () in
@@ -3796,7 +3795,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                           else
                             ft in
                       let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
-                      ((make_untyped_binder name name_pos, lin, (([], None), (pats, body)), location, t, pos), used) :: defs_and_uses) [] defs patss)) in
+                      ((erase_binder_type bndr, lin, (([], None), (pats, body)), location, t, pos), used) :: defs_and_uses) [] defs patss)) in
 
           (* Generalise to obtain the outer types *)
           let defs, outer_env =
@@ -3804,7 +3803,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
               List.fold_left2
                 (fun (defs, outer_env) (bndr, lin, (_, (_, body)), location, t, pos) pats ->
                    let name = name_of_binder bndr in
-                   let name_pos = bndr.pos in
                    let inner = Env.lookup inner_env name in
                    let inner, outer, tyvars =
                      match inner with
@@ -3829,7 +3827,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
-                     ((make_binder name outer name_pos, lin, ((tyvars, Some inner), (pats, body)), location, t, pos)::defs,
+                     ((set_binder_type bndr outer, lin, ((tyvars, Some inner), (pats, body)), location, t, pos)::defs,
                       Env.bind outer_env (name, outer)))
                 ([], Env.empty) defs patss
             in

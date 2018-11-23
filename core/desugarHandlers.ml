@@ -18,8 +18,6 @@ open Sugartypes
 *)
 
 
-let dp = Sugartypes.dummy_position
-
 (* Computes the set of names in a given pattern *)
 let rec names : pattern -> string list
   = fun pat ->
@@ -108,7 +106,7 @@ let rec deanonymize : pattern -> pattern
   = fun pat -> with_pos
      begin
       match pat.node with
-	`Any                         -> `Variable (make_untyped_binder (Utility.gensym ~prefix:"dsh" ()) dp)
+	`Any                         -> `Variable (make_untyped_binder (with_dummy_pos (Utility.gensym ~prefix:"dsh" ())))
       | `Nil                         -> `Nil
       | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
       | `List ps                     -> `List (List.map deanonymize ps)
@@ -162,7 +160,7 @@ let split_handler_cases : (pattern * phrase) list -> (pattern * phrase) list * (
     match ret with
     | [] ->
        let x = "x" in
-       let xb = make_untyped_binder x dp in
+       let xb = make_untyped_binder (with_dummy_pos x) in
        let id = (with_dummy_pos (`Variable xb), (with_dummy_pos (`Var x))) in
        ([id], List.rev ops)
     | _ ->
