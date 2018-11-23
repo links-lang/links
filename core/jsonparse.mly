@@ -1,3 +1,5 @@
+(* See Note [Debugging grammar conflicts] in parser.mly *)
+
 %{
 open Utility
 open ProcessTypes
