@@ -1,6 +1,5 @@
 open Utility
 open Sugartypes
-open Operators
 
 module TyEnv = Env.String
 

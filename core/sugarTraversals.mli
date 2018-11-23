@@ -1,5 +1,4 @@
 open Sugartypes
-open Operators
 
 (* Make a copy of a value.  You can override any method(s) to get a
    different operation at that type.  For example, the function

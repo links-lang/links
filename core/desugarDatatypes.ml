@@ -1,6 +1,5 @@
 open Types
 open Sugartypes
-open Operators
 open Utility
 open List
 open Errors
