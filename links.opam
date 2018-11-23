@@ -64,4 +64,5 @@ depends: [
   "websocket-lwt"
   "safepass"
   "ocamlfind"
+  "menhir"
 ]
