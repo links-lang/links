@@ -164,7 +164,7 @@ type typ =
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
 and lens_sort     = {
-  fds : LensUtility.fundepset;
+  fds : Lens_fun_dep.Set.t;
   predicate : lens_phrase option;
   cols : lens_col list;
 }

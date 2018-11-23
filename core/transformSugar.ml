@@ -164,8 +164,8 @@ class transform (env : Types.typing_environment) =
           (o, (s, t))
 
     method lens_sort : Types.lens_sort -> ('self_type * Types.lens_sort) =
-      fun (fds, cond, t) ->
-            (o, (fds, cond, t))
+      fun sort ->
+            (o, sort)
 
     method row : Types.row -> ('self_type * Types.row) =
       fun row -> (o, row)

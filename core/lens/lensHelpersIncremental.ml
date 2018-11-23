@@ -1,31 +1,31 @@
 open Value
 open Utility
-open LensUtility
 open LensQueryHelpers
 open LensHelpers
 open LensSetOperations
 open LensRecordHelpers
 open LensSetOperations.SortedRecords
+open Lens_types
 
 
 
-let calculate_fd_changelist (fds : FunDepSet.t) (data : SortedRecords.recs) =
+let calculate_fd_changelist (fds : Fun_dep.Set.t) (data : SortedRecords.recs) =
     (* get the key of the row for finding complements *)
     let rec loop fds =
-        if FunDepSet.is_empty fds then
+        if Fun_dep.Set.is_empty fds then
             []
         else
-            let fd = FunDepSet.root_fd fds |> OptionUtils.val_of in
-            let fdl, fdr = FunDep.left fd, FunDep.right fd in
-            let cols_l = ColSet.elements fdl in
-            let cols_r = ColSet.elements fdr in
+            let fd = Fun_dep.Set.root_fd fds |> OptionUtils.val_of in
+            let fdl, fdr = Fun_dep.left fd, Fun_dep.right fd in
+            let cols_l = Alias.Set.elements fdl in
+            let cols_r = Alias.Set.elements fdr in
             let fdl_map = SortedRecords.get_cols_map data cols_l in
             let fdr_map = SortedRecords.get_cols_map data cols_r in
             let map = fun r -> fdl_map r, fdr_map r in
             let changeset = Array.to_list (Array.map map data.plus_rows) in
             (* remove duplicates and sort *)
             let changeset = List.sort_uniq (fun (a,_) (a',_) -> SortedRecords.compare a a') changeset in
-            let fds = FunDepSet.remove fd fds in
+            let fds = Fun_dep.Set.remove fd fds in
             ((cols_l, cols_r), changeset) :: loop fds in
     let res = loop fds in
     (* reverse the list, so that the FD roots appear first *)
@@ -41,7 +41,7 @@ let matches_change changes =
     Phrase.fold_or <| List.map is_changed changes
 
 
-let relational_update (fds : fundepset) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
+let relational_update (fds : Fun_dep.Set.t) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
     let fds = fds in
     let changelist = calculate_fd_changelist fds changedata in
     let changes = List.map (fun ((cols_l,_cols_r),_l) ->
@@ -98,7 +98,7 @@ let relational_update (fds : fundepset) (changedata : SortedRecords.recs) (updat
 
 let get_changes (lens : Value.t) (data : SortedRecords.recs) =
     let sort = LensValue.sort lens in
-    let fds = LensSort.fundeps sort in
+    let fds = Sort.fds sort in
     let changelist = calculate_fd_changelist fds data in
     (* query relevant rows in database *)
     let phrase = matches_change changelist in
@@ -145,9 +145,9 @@ let lens_put_set_step (lens : Value.t) (delt : SortedRecords.recs) (fn : Value.t
     | `LensJoin (l1, l2, cols, pd, qd, _sort)  ->
             let cols_simp = List.map (fun (a,_,_) -> a) cols in
             let sort1 = LensValue.sort l1 in
-            let proj1 = SortedRecords.project_onto delt (LensSort.cols_present_aliases sort1) in
+            let proj1 = SortedRecords.project_onto delt (Sort.cols_present_aliases sort1) in
             let sort2 = LensValue.sort l2 in
-            let proj2 = SortedRecords.project_onto delt (LensSort.cols_present_aliases sort2) in
+            let proj2 = SortedRecords.project_onto delt (Sort.cols_present_aliases sort2) in
             let delta_m0 = get_changes l1 proj1 in
             let delta_n0 = get_changes l2 proj2 in
             let delta_l =
@@ -272,11 +272,11 @@ let apply_delta (t : Value.table) (data : SortedRecords.recs) =
         end;
     ()
 
-let get_fds (fds : (string list * string list) list) (cols : Types.lens_col list) : fundepset =
-    let check_col xs = List.iter (fun x -> if not (LensCol.exists cols x) then failwith ("The column " ^ x ^ " does not exist.")) xs in
+let get_fds (fds : (string list * string list) list) (cols : Types.lens_col list) : Fun_dep.Set.t =
+    let check_col xs = List.iter (fun x -> if not (Column.exists cols x) then failwith ("The column " ^ x ^ " does not exist.")) xs in
     List.iter (fun (left, right) -> check_col left; check_col right) fds;
-    let fd_of (left, right) = ColSet.of_list left, ColSet.of_list right in
-    FunDepSet.of_list (List.map fd_of fds)
+    let fd_of (left, right) = Alias.Set.of_list left, Alias.Set.of_list right in
+    Fun_dep.Set.of_list (List.map fd_of fds)
 
 let lens_put (lens : Value.t) (data : Value.t) =
     let rec do_step_rec lens delt =

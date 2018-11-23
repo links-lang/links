@@ -1,6 +1,6 @@
 open Value
 open Utility
-open LensUtility
+open Lens_types
 open LensHelpers
 open LensHelpersIncremental
 open LensSetOperations
@@ -9,7 +9,7 @@ open LensSetOperations.SortedRecords
 
 
 
-let relational_update (fds : fundepset) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
+let relational_update (fds : Fun_dep.Set.t) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
     let fds = fds in
     let changelist = calculate_fd_changelist fds changedata in
     let changes = List.map (fun ((cols_l,_cols_r),_l) ->
@@ -75,7 +75,7 @@ let lens_put_set_step (lens : Value.t) (data : SortedRecords.recs) (fn : Value.t
             let nplus = SortedRecords.minus data (SortedRecords.project_onto r cols) in
             let a = SortedRecords.construct (box_list [box_record [drop, default]]) in
             let m = SortedRecords.merge (SortedRecords.join r data cols) (SortedRecords.join nplus a []) in
-            let res = relational_update (FunDepSet.of_lists [[key], [drop]]) r m in
+            let res = relational_update (Fun_dep.Set.of_lists [[key], [drop]]) r m in
             fn l res
     | `LensJoin (l1, l2, join, pd, qd, _sort)  ->
             let join_simp = List.map (fun (a,_,_) -> a) join in
@@ -97,7 +97,7 @@ let lens_put_set_step (lens : Value.t) (data : SortedRecords.recs) (fn : Value.t
     | `LensSelect (l, pred, _sort) ->
             let sort = LensValue.sort l in
             let r = get l in
-            let m1 = relational_update (LensSort.fundeps sort) data (SortedRecords.filter r pred) in
+            let m1 = relational_update (Sort.fds sort) data (SortedRecords.filter r pred) in
             let nh = SortedRecords.minus (SortedRecords.filter m1 pred) data in
             let r = SortedRecords.minus m1 nh in
             fn l r

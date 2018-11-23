@@ -1,6 +1,6 @@
 open Types
 open Utility
-open LensUtility
+open Lens_types
 open Value
 open LensFDHelpers
 open LensQueryHelpers
@@ -36,24 +36,24 @@ module LensValue = struct
 
     let cols (lens : t) =
         let sort = sort lens in
-        let cols = LensSort.cols sort in
+        let cols = Sort.cols sort in
         cols
 
     let cols_present_aliases (lens : t) =
         let cols = cols lens in
-        LensColList.present_aliases cols
+        Column.List.present_aliases cols
 
     let colset (lens : t) =
         let sort = sort lens in
-        LensSort.colset sort
+        Sort.colset sort
 
     let fundeps (lens : t) =
         let sort = sort lens in
-        LensSort.fundeps sort
+        Sort.fds sort
 
     let predicate (lens : t) =
         let sort = sort lens in
-        LensSort.predicate sort
+        Sort.predicate sort
 end
 
 module LensType = struct
@@ -71,14 +71,14 @@ end
 let rec get_primary_key (lens : Value.t) =
     match lens with
     | `Lens (_a, sort) ->
-        let fds = LensSort.fundeps sort in
-        let fd = FunDepSet.min_elt fds in
-        let left = FunDep.left fd in
+        let fds = Sort.fds sort in
+        let fd = Fun_dep.Set.min_elt fds in
+        let left = Fun_dep.left fd in
         left
     | `LensMem (_a, sort) ->
-        let fds = LensSort.fundeps sort in
-        let fd = FunDepSet.min_elt fds in
-        let left = FunDep.left fd in
+        let fds = Sort.fds sort in
+        let fd = Fun_dep.Set.min_elt fds in
+        let left = Fun_dep.left fd in
         left
     | `LensDrop (lens, _, _, _, _) -> get_primary_key lens
     | `LensSelect (lens, _, _) -> get_primary_key lens
@@ -102,7 +102,7 @@ let rec lens_get_mem (lens : Value.t) callfn =
         let records2 = lens_get_mem lens2 callfn in
         let on = List.map (fun (a, _, _) -> a) on in
         let output = List.map (fun r1 ->
-            let rows = List.filter (fun r2 -> is_row_cols_record_match r1 r2 (ColSet.of_list on)) (unbox_list records2) in
+            let rows = List.filter (fun r2 -> is_row_cols_record_match r1 r2 (Alias.Set.of_list on)) (unbox_list records2) in
             List.map (fun r2 ->  join_records r1 r2 on) rows
         ) (unbox_list records1) in
         box_list (List.concat output)
@@ -119,7 +119,7 @@ let rec lens_get_db (lens : Value.t) =
 let rec lens_get_query (lens : Value.t) =
   match lens with
   | `Lens (((db, _), table, _, _), sort) ->
-        let cols = LensSort.cols sort in
+        let cols = Sort.cols sort in
         {
             tables = [table, table];
             cols = cols;
@@ -142,11 +142,11 @@ let rec lens_get_query (lens : Value.t) =
                 NotFound _ -> (n2, al2)
         ) q2.tables in
         let tables = List.append q1.tables q2.tables in
-        let cols = LensSort.cols sort in
+        let cols = Lens_sort.cols sort in
         if (q1.db <> q2.db) then
             failwith "Only single database expressions supported."
         else
-            {tables = tables; cols = cols; pred = get_lens_sort_pred sort; db = q1.db}
+            {tables = tables; cols = cols; pred = Sort.predicate sort; db = q1.db}
   | _ -> failwith "Unsupported lens for query"
 
 (* BUG: Lists can be too big for List.map; need to be careful about recursion *)
@@ -157,13 +157,13 @@ let lens_get (lens : Value.t) callfn =
         let _ = Debug.print "getting tables" in
         let sort = LensValue.sort lens in
         let db = lens_get_db lens in
-        let cols = LensSort.cols sort in
+        let cols = Sort.cols sort in
         (* print_endline (ListUtils.print_list (get_lens_sort_cols_list sort)); *)
         let sql = construct_select_query_sort db sort in
         (* let _ = print_endline sql in *)
         (* let query = lens_get_query lens in
         let sql = construct_select_query query  in *)
-        let mappings = List.map (fun c -> get_lens_col_alias c, get_lens_col_type c) cols in
+        let mappings = List.map (fun c -> Column.alias c, Column.typ c) cols in
         let _ = Debug.print sql in
         let res = Debug.debug_time_out
             (fun () -> execute_select mappings sql db)
@@ -190,19 +190,19 @@ let lens_get_select_opt (lens : Value.t) (phrase : Types.lens_phrase option) =
     | None -> lens_get lens ()
     | Some phrase  -> lens_get_select lens phrase
 
-let calculate_fd_changelist (fds : FunDepSet.t) (data : (Value.t * int) list) =
+let calculate_fd_changelist (fds : Fun_dep.Set.t) (data : (Value.t * int) list) =
     let additions = List.filter (fun (_t,m) -> m = +1) data in
     let additions = List.map (fun (t,_m) -> t) additions in
     (* get the key of the row for finding complements *)
     let rec loop fds =
         begin
-            match FunDepSet.root_fd fds with
+            match Fun_dep.Set.root_fd fds with
             | None -> []
             | Some fd ->
-                let fdl, fdr = FunDep.left fd, FunDep.right fd in
+                let fdl, fdr = Fun_dep.left fd, Fun_dep.right fd in
                 let changeset = List.map (fun t ->
                     (Record.project t fdl, Record.project t fdr)) additions in
-                let fds = FunDepSet.remove fd fds in
+                let fds = Fun_dep.Set.remove fd fds in
                 (fd, changeset) :: loop fds
         end in
     let res = loop fds in
@@ -227,14 +227,14 @@ let query_exists (lens : Value.t) phrase =
         unbox_bool v
 
 let join_lens_should_swap (sort1 : Types.lens_sort) (sort2 : Types.lens_sort) (on_columns : string list) =
-    let fds1 = LensSort.fundeps sort1 in
-    let fds2 = LensSort.fundeps sort2 in
-    let on_cols = ColSet.of_list on_columns in
+    let fds1 = Sort.fds sort1 in
+    let fds2 = Sort.fds sort2 in
+    let on_cols = Alias.Set.of_list on_columns in
     let covers fds sort =
-        let fdcl = FunDepSet.transitive_closure on_cols fds in
-        let other = LensSort.colset sort in
+        let fdcl = Fun_dep.Set.transitive_closure ~cols:on_cols fds in
+        let other = Sort.colset sort in
         (* print_endline (ColSet.Show_t.show fdcl ^ " = " ^ ColSet.Show_t.show (other)); *)
-        ColSet.equal other fdcl in
+        Alias.Set.equal (Column.Set.alias_set other) fdcl in
     if covers fds2 sort2 then
         false
     else if covers fds1 sort1 then
@@ -246,49 +246,49 @@ let join_lens_sort (sort1 : Types.lens_sort) (sort2 : Types.lens_sort) (on_colum
     (* helper function to find new alias, e.g. for 'name' it will find 'name_1', 'name_2' etc. *)
     let rec get_new_alias alias columns num =
         let nal = alias ^ "_" ^ string_of_int num in
-        if LensColList.mem_alias nal columns then
+        if Column.List.mem_alias ~alias:nal columns then
             get_new_alias alias columns (num + 1)
         else
             nal in
     (* verify both sorts have all columns in on_columns and that the types match *)
     let on_match = List.for_all (fun onc ->
-        let c1 = LensSort.find_col_alias onc sort1 in
-        let c2 = LensSort.find_col_alias onc sort2 in
+        let c1 = Sort.find_col_alias ~alias:onc sort1 in
+        let c2 = Sort.find_col_alias ~alias:onc sort2 in
         match c1, c2 with
-        | Some c1, Some c2 -> LensCol.typ c1 = LensCol.typ c2
+        | Some c1, Some c2 -> Column.typ c1 = Column.typ c2
         | _ -> false) on_columns in
     if not on_match then
         failwith "The key does not match between the two lenses.";
     (* join the two column lists while renaming columns and keeping track of renames *)
     let union, join_renames = List.fold_left (fun (output, jrs) c ->
         (* see if column c's alias already exists *)
-        if LensColList.mem_alias (LensCol.alias c) output |> not then
+        if Column.List.mem_alias ~alias:(Column.alias c) output |> not then
             (* if not, just add the column *)
             c :: output, jrs
         else
             (* is the column a join column *)
             let new_alias = get_new_alias c.alias output 1 in
-            if List.mem (LensCol.alias c) on_columns then
+            if List.mem (Column.alias c) on_columns then
                 (* then renamed column and hide it *)
-                (c |> LensCol.rename new_alias |> LensCol.hide) :: output, (c.alias, new_alias) :: jrs
+                (c |> Column.rename ~alias:new_alias |> Column.hide) :: output, (c.alias, new_alias) :: jrs
             else
                 (* otherwise just rename the column *)
-                (c |> LensCol.rename new_alias) :: output, jrs
-    ) (LensSort.cols sort1, []) (LensSort.cols sort2) in
+                (c |> Column.rename ~alias:new_alias) :: output, jrs
+    ) (Sort.cols sort1, []) (Sort.cols sort2) in
     (* combine the predicates *)
-    let pred = match LensSort.predicate sort1, LensSort.predicate sort2 with
+    let pred = match Sort.predicate sort1, Sort.predicate sort2 with
     | None, None -> None
     | Some p1, None -> Some p1
     | None, Some p2 -> Some (Phrase.rename_var p2 join_renames)
     | Some p1, Some p2 -> Some (create_phrase_and (create_phrase_tuple p1) (create_phrase_tuple (Phrase.rename_var p2 join_renames))) in
-    let join_pred = List.fold_left (fun pred (alias, newalias) ->
+    let predicate = List.fold_left (fun pred (alias, newalias) ->
         let jn = create_phrase_equal (create_phrase_var alias) (create_phrase_var newalias) in
         match pred with Some p -> Some (create_phrase_and p jn) | None -> Some jn
     ) pred join_renames in
-    let fn_deps = FunDepSet.union (LensSort.fundeps sort1) (LensSort.fundeps sort2) in
+    let fds = Fun_dep.Set.union (Sort.fds sort1) (Sort.fds sort2) in
     (* determine the on column renames as a tuple (join, left, right) *)
     let jrs = List.map (fun on ->
         let left = on in
         let (_, right) = List.find (fun (a,_) -> a = on) join_renames in
         on, left, right) on_columns in
-    (fn_deps, join_pred, union), jrs
+    Sort.make ~fds ~predicate union, jrs

@@ -115,7 +115,11 @@ type typ =
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
-and lens_sort      = LensUtility.fundepset * lens_phrase option * (lens_col list)
+and lens_sort     = {
+  fds : Lens_fun_dep.Set.t;
+  predicate : lens_phrase option;
+  cols : lens_col list;
+}
 and lens_col       = {
   table : string;
   name : string;
@@ -134,6 +138,7 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
+    [@@deriving show]
 
 type session_type = (typ, row) session_type_basis
 

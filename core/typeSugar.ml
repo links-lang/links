@@ -2352,64 +2352,69 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               merge_usages [usages tname; usages db]
         | `TableLit _ -> assert false
         | `LensLit (table, _) ->
+           let open Lens in
            let table = tc table in
-           let cols = Lens.Types.sort_cols_of_table "" (typ table) in
-           let lens_sort = (Lens.Utility.FunDepSet.empty, None, cols) in
+           let cols = Types.sort_cols_of_table "" (typ table) in
+           let lens_sort = Sort.make cols in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensKeysLit (table, keys, _) ->
+           let open Lens in
            let table = tc table in
-           let cols = Lens.Types.sort_cols_of_table "" (typ table) in
-           let keys = Lens.Types.cols_of_phrase keys in
-           let fds =
-             Lens.Utility.FunDepSet.key_fds
-               keys
-               (Lens.Helpers.Record.LensColList.present_aliases cols)
-           in
-           let lens_sort = (fds, None, cols) in
+           let cols = Types.sort_cols_of_table "" (typ table) in
+           let keys = Types.cols_of_phrase keys in
+           let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases cols) in
+           let lens_sort = Sort.make ~fds cols in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensFunDepsLit (table, fds, _) ->
+           let open Lens in
            let table = tc table in
-           let cols = Lens.Types.sort_cols_of_table "" (typ table) in
-           let fds = Lens.Helpers.Incremental.get_fds fds cols in
-           let lens_sort = (fds, None, cols) in
+           let cols = Types.sort_cols_of_table "" (typ table) in
+           let fds = Helpers.Incremental.get_fds fds cols in
+           let lens_sort = Sort.make ~fds cols in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensDropLit (lens, drop, key, default, _) ->
+           let open Lens in
            let lens = tc lens
            and default = tc default in
            let sort =
-             Lens.Types.drop_lens_sort
-               (Lens.Helpers.LensType.sort (typ lens))
-               (Lens.Utility.ColSet.singleton drop)
-               (Lens.Utility.ColSet.singleton key)
+             Types.drop_lens_sort
+               (Helpers.LensType.sort (typ lens))
+               (Alias.Set.singleton drop)
+               (Alias.Set.singleton key)
            in
            `LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens (sort), merge_usages [usages lens; usages default]
         | `LensSelectLit (lens, predicate, _) ->
+           let open Lens in
            let lens = tc lens in
-           let lens_sort = Lens.Helpers.LensType.sort (typ lens) in
+           let lens_sort = Helpers.LensType.sort (typ lens) in
                `LensSelectLit(erase lens, predicate, Some (lens_sort)), `Lens(lens_sort), merge_usages [usages lens]
         | `LensJoinLit (lens1, lens2, on, left, right, _) ->
+           let open Lens in
            let lens1 = tc lens1
            and lens2 = tc lens2 in
-           let sort1 = Lens.Helpers.LensType.sort (typ lens1) in
-           let sort2 = Lens.Helpers.LensType.sort (typ lens2) in
+           let sort1 = Helpers.LensType.sort (typ lens1) in
+           let sort2 = Helpers.LensType.sort (typ lens2) in
            let sort, _ =
-             Lens.Helpers.join_lens_sort
+             Helpers.join_lens_sort
                sort1
                sort2
-               (Lens.Types.cols_of_phrase on)
+               (Types.cols_of_phrase on)
            in
            `LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens(sort), merge_usages [usages lens1; usages lens2]
         | `LensGetLit (lens, _) ->
+           let open Lens in
            let lens = tc lens in
            let sort = LensHelpers.LensType.sort (typ lens) in
-           let trowtype = Lens.Helpers.Record.get_lens_sort_row_type sort in
-           `LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
+           let trowtype = Sort.record_type sort in
+           `LensGetLit (erase lens, Some trowtype), trowtype, merge_usages [usages lens]
         | `LensPutLit (lens, data, _) ->
+           let make_tuple_type = Types.make_tuple_type in
+           let open Lens in
            let lens = tc lens in
-           let sort = Lens.Helpers.LensType.sort (typ lens) in
-           let trowtype = Lens.Helpers.Record.get_lens_sort_row_type sort in
+           let sort = Helpers.LensType.sort (typ lens) in
+           let trowtype = Sort.record_type sort in
            let data = tc data in
-           `LensPutLit (erase lens, erase data, Some trowtype), Types.make_tuple_type [], merge_usages [usages lens; usages data]
+           `LensPutLit (erase lens, erase data, Some trowtype), make_tuple_type [], merge_usages [usages lens; usages data]
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in

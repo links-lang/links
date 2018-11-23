@@ -591,22 +591,24 @@ struct
     | `Wrong _                    -> raise Exceptions.Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Lens (table, sort) ->
+      let open Lens in
       begin
-          let typ = Lens.Helpers.Record.get_lens_sort_row_type sort in
+          let typ = Sort.record_type sort in
           match value env table, (TypeUtils.concrete_type typ) with
-            | `Table ((_, tableName, _, _) as tinfo), `Record _row ->
-                 apply_cont cont env (`Lens (tinfo, Lens.Helpers.Record.set_lens_sort_table_name sort tableName))
+            | `Table ((_, table, _, _) as tinfo), `Record _row ->
+                 apply_cont cont env (`Lens (tinfo, Sort.update_table_name sort ~table))
             | `List records, `Record _row -> apply_cont cont env (`LensMem (`List records, sort))
             | _ -> failwith ("Unsupported underlying lens value.")
       end
     | `LensDrop (lens, drop, key, def, _sort) ->
+        let open Lens in
         let lens = value env lens in
         let def = value env def in
         let sort =
-          Lens.Types.drop_lens_sort
-            (Lens.Helpers.LensValue.sort lens)
-            (Lens.Utility.ColSet.singleton drop)
-            (Lens.Utility.ColSet.singleton key)
+          Types.drop_lens_sort
+            (Helpers.LensValue.sort lens)
+            (Alias.Set.singleton drop)
+            (Alias.Set.singleton key)
         in
         apply_cont cont env (`LensDrop (lens, drop, key, def, sort))
     | `LensSelect (lens, pred, _sort) ->

@@ -1,81 +1,7 @@
 open Types
 open Utility
-open LensUtility
+open Lens_types
 open Value
-
-
-let get_lens_sort_pred (_, pred, _ : Types.lens_sort) = pred
-
-
-module LensCol = struct
-    type t = Types.lens_col
-
-    let alias (col : t) = col.alias
-    let exists (cols : t list) (colalias : string) = List.exists (fun c -> alias c = colalias) cols
-    let present (col : t) = col.present
-    let typ (col : t) = col.typ
-
-    let hide (cs : t) =
-        { cs with present = false }
-
-    let rename (name : string) (cs : t) =
-        { cs with alias = name }
-end
-
-module LensColList = struct
-    type t = LensCol.t list
-
-    let present (cs : t) =
-        List.filter LensCol.present cs
-
-    let aliases (cs : t) =
-        List.map LensCol.alias cs
-
-    let present_aliases (cs : t) =
-        let pr = present cs in
-        aliases pr
-
-    let mem_alias (alias : string) (cs : t) =
-        List.exists (fun c -> LensCol.alias c = alias) cs
-
-    let find_alias (alias : string) (cs : t) =
-        List.find_opt (fun c -> LensCol.alias c = alias) cs
-end
-
-let get_record_type_from_cols rowType =
-    let rowType = List.filter (fun f -> f.present) rowType in
-    let map : field_spec_map = List.fold_left (fun a col -> StringMap.add col.alias (`Present col.typ) a) StringMap.empty rowType in
-    `Record (map, Unionfind.fresh `Closed, false)
-
-let get_lens_sort_row_type (_, _, rowType : Types.lens_sort) =
-   let map = get_record_type_from_cols rowType in
-   map
-
-let set_lens_sort_table_name (fn_dep, pred, rowType : Types.lens_sort) (table : string) =
-    let rowType = List.map (fun c -> {c with table = table;}) rowType in
-    (fn_dep, pred, rowType)
-
-let get_lens_col_by_alias (cols : lens_col list) alias =
-    try
-        Some (List.find (fun col -> col.alias = alias) cols)
-    with
-        NotFound _ -> None
-
-let get_lens_sort_col_by_alias sort alias =
-    let cols = LensSort.cols sort in
-    get_lens_col_by_alias cols alias
-
-let get_lens_col_type (col : Types.lens_col) = col.typ
-
-let get_lens_col_alias (col : Types.lens_col) = col.alias
-
-let set_lens_col_alias (col : Types.lens_col) (new_alias : string) = { col with alias = new_alias; }
-
-let match_lens_col_alias (c1 : lens_col) (c2 : lens_col) = c1.alias = c2.alias
-
-
-let remove_list_values (l : string list) (remove : string list) =
-    List.filter (fun x -> not (List.mem x remove)) l
 
 let update_rowtype_cols (cols : Types.field_spec_map) (rowType : Types.typ) =
     match rowType with
@@ -139,7 +65,7 @@ let reorder_delta_list_cols (recs : (Value.t * int) list) =
         (t,m)::xs
 
 let reorder_delta_list_cols_sort (sort : lens_sort) (recs : (Value.t * int) list) =
-    let cols = List.filter (fun c -> c.present) (LensSort.cols sort) in
+    let cols = List.filter (fun c -> c.present) (Lens_sort.cols sort) in
     let cols = List.map (fun c -> c.alias) cols in
     List.map (fun (t,m) -> (reorder_record_cols cols t, m)) recs
 
@@ -163,11 +89,11 @@ let compare_delta_entry (t,m) (t',m') =
 
 (* Drop related methods *)
 let remove_record_type_column (a : string) (r : Types.lens_col list) =
-    let fields = List.filter (fun col -> get_lens_col_alias col <> a) r in
+    let fields = List.filter (fun col -> Lens_column.alias col <> a) r in
     fields
 
-let project_record_columns (a : colset) (record : Value.t) =
-    let columns = List.filter (fun (name, _) -> ColSet.mem name a) (unbox_record record) in
+let project_record_columns (cols : Column.Set.t) (record : Value.t) =
+    let columns = List.filter (fun (alias, _) -> Column.Set.mem_alias ~alias cols) (unbox_record record) in
     box_record columns
 
 let drop_record_columns (a : string list) (record : Value.t) =
@@ -206,7 +132,7 @@ module Record = struct
     let match_on = records_match_on
     let project record cols =
         let d = unbox_record record in
-        let d = List.filter (fun (k,_v) -> ColSet.mem k cols) d in
+        let d = List.filter (fun (k,_v) -> Alias.Set.mem k cols) d in
         box_record d
 
     let set_column (record : Value.t) (k : string) (v : Value.t) =

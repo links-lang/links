@@ -1,5 +1,7 @@
 module Column = Lens_column
 module Sort = Lens_sort
+module Fun_dep = Lens_fun_dep
+module Alias = Lens_alias
 
 module Helpers = struct
   include LensHelpers
@@ -8,10 +10,6 @@ module Helpers = struct
   module Classic = LensHelpersClassic
   module Incremental = LensHelpersIncremental
   module Query = LensQueryHelpers
-end
-
-module Utility = struct
-  include LensUtility
 end
 
 module Types = struct

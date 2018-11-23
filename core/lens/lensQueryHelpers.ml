@@ -1,9 +1,9 @@
 open Types
 open Sugartypes
 open Utility
-open LensUtility
 open Value
 open LensRecordHelpers
+open Lens_types
 
 exception Runtime_error = Errors.Runtime_error
 
@@ -189,10 +189,10 @@ let construct_select_query (query : select_query) =
   | Some qphrase -> sql ^ " WHERE " ^ construct_query_db qphrase db mapCol
   | None -> sql
 
-let construct_select_query_sort db (sort : lens_sort) =
+let construct_select_query_sort db (sort : Lens_sort.t) =
   let colFn col = db#quote_field col.table ^ "." ^ db#quote_field col.name ^ " AS " ^ db#quote_field col.alias in
   let tableFn (table, alias) = db#quote_field table ^ " AS " ^ db#quote_field alias in
-  let cols = LensSort.cols sort in
+  let cols = Lens_sort.cols sort in
   let colsF = List.filter (fun c -> c.present) cols in
   let tables = List.map (fun c -> c.table) cols in
   let tables = List.sort_uniq compare tables in
@@ -203,7 +203,7 @@ let construct_select_query_sort db (sort : lens_sort) =
   let mapCol = fun a ->
     let col = List.find (fun c -> c.alias = a) cols in
     db#quote_field col.table ^ "." ^ db#quote_field col.name in
-   match get_lens_sort_pred sort with
+   match Lens_sort.predicate sort with
   | Some qphrase -> sql ^ " WHERE " ^ construct_query_db qphrase db mapCol
   | None -> sql
 
@@ -300,11 +300,11 @@ module Phrase = struct
         ) None (List.combine on row) in
         phrase
 
-    let matching_cols (on : ColSet.t) row =
+    let matching_cols (on : Alias.Set.t) row =
         let phrase = List.fold_left (fun phrase on ->
             let term = Some (equal (var on) (constant_from_col row on)) in
             combine_and phrase term
-        ) None (ColSet.elements on) in
+        ) None (Alias.Set.elements on) in
         phrase
 
     let negate = create_phrase_not
@@ -341,10 +341,10 @@ module Phrase = struct
         dosth expr
 
     let get_vars expr =
-        let cols = ref ColSet.empty in
+        let cols = ref Alias.Set.empty in
         let _ = traverse expr (fun expr ->
             match expr with
-            | `Var n -> cols := ColSet.add n (!cols); expr
+            | `Var n -> cols := Alias.Set.add n (!cols); expr
             | _ -> expr
         ) in
         !cols
