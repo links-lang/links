@@ -433,13 +433,7 @@ qualified_name_inner:
 | VARIABLE                                                     { [$1] }
 
 qualified_type_name:
-| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
-
-qualified_type_name_inner:
-| CONSTRUCTOR DOT qualified_type_name_inner                    { $1 :: $3 }
-| CONSTRUCTOR                                                  { [$1] }
-
-
+| CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
 
 atomic_expression:
 | qualified_name                                               { with_pos (`QualifiedVar $1) (pos()) }
