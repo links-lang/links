@@ -981,8 +981,7 @@ record_labels:
 | record_label                                                 { [$1] }
 
 links_open:
-| OPEN qualified_type_name                                     { with_pos (`QualifiedImport  $2 ) (pos()) }
-| OPEN CONSTRUCTOR                                             { with_pos (`QualifiedImport [$2]) (pos()) }
+| OPEN separated_nonempty_list( DOT, CONSTRUCTOR)              { with_pos (`QualifiedImport  $2 ) (pos()) }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { with_pos (`Val ([], $2, $4, `Unknown, None)) (pos()) }
