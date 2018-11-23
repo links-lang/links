@@ -4,12 +4,12 @@
 open Utility
 open Value
 
-let ensure_match (start, finish, _) (opening : string) (closing : string) = function
+let pos (start_pos, end_pos) : Sugartypes.position = start_pos, end_pos, None
+
+let ensure_match p (opening : string) (closing : string) = function
   | result when opening = closing -> result
   | _ -> raise (Sugartypes.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-                                     (start, finish, None)))
-
-let pos () : Sugartypes.position = Parsing.symbol_start_pos (), Parsing.symbol_end_pos (), None
+                                     pos p))
 
 %}
 
@@ -53,11 +53,11 @@ attr_val:
 
 xml_tree:
 | LXML SLASHRXML                                               { Node ($1, []) }
-| LXML RXML ENDTAG                                             { ensure_match (pos()) $1 $3 (Node ($1, [])) }
-| LXML RXML xml_contents_list ENDTAG                           { ensure_match (pos()) $1 $4 (Node ($1, $3)) }
-| LXML attrs RXML ENDTAG                                       { ensure_match (pos()) $1 $4 (Node ($1, $2)) }
+| LXML RXML ENDTAG                                             { ensure_match $loc $1 $3 (Node ($1, [])) }
+| LXML RXML xml_contents_list ENDTAG                           { ensure_match $loc $1 $4 (Node ($1, $3)) }
+| LXML attrs RXML ENDTAG                                       { ensure_match $loc $1 $4 (Node ($1, $2)) }
 | LXML attrs SLASHRXML                                         { Node ($1, $2) }
-| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match (pos()) $1 $5 (Node ($1, $2 @ $4)) }
+| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match $loc $1 $5 (Node ($1, $2 @ $4)) }
 
 xml_contents_list:
 | IGNORE                                                       { [] }
