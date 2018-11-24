@@ -40,6 +40,9 @@ module Set : sig
   (** Get a root functional dependency *)
   val root_fd : t -> elt option
 
+  (** Get the functional dependency that defines the columns [cols] *)
+  val defining_fd : t -> cols:Alias.Set.t -> elt
+
   (** Get the transitive closure of a functional dependency *)
   val transitive_closure : t -> cols:Alias.Set.t -> Alias.Set.t
 end

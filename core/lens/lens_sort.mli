@@ -18,6 +18,9 @@ val cols_present_aliases : t -> string list
 (** Get the columns as a set *)
 val colset : t -> Lens_column.Set.t
 
+(** Get a set of the present columns *)
+val present_colset : t -> Lens_column.Set.t
+
 (** Construct a lens sort *)
 val make : ?fds:Lens_fun_dep.Set.t -> ?predicate:Types.lens_phrase option -> Types.lens_col list -> t
 

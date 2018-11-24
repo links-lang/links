@@ -1,6 +1,5 @@
 open Types
 open Utility
-open LensQueryHelpers
 open Lens_types
 open Sugartypes
 

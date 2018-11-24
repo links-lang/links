@@ -30,11 +30,17 @@ val of_phrase : phrase -> t
 (** Traverse a lens phrase, applying [dosth] to each nod and then replacing the result *)
 val traverse : t -> (t -> t) -> t
 
+(** Get a list of variables in the expression *)
+val get_vars : t -> Utility.StringSet.t
+
 (** Calculate the vale of an expression given a lookup function for variables. *)
 val eval : t -> (string -> Value.t) -> Value.t
 
-(** Rename all variables with an entry in the given map*)
+(** Rename all variables with an entry in the given map *)
 val rename_var : t -> replace:string Lens_alias.Map.t -> t
+
+(** Replace all variable nodes with nodes by the given map *)
+val replace_var : t -> replace:Value.t Lens_alias.Map.t -> t
 
 module Constant : sig
 
@@ -81,6 +87,10 @@ end
 
 module Record : sig
   type record = Value.t
+
+  val matching_cols_simp : Lens_alias.t list -> Value.t list -> Option.t
+
+  val matching_cols : Lens_alias.Set.t -> Value.t -> Option.t
 
   (** Evaluate the phrase with a given record *)
   val eval : t -> record -> record

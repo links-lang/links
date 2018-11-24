@@ -1,12 +1,9 @@
 open Value
 open Utility
-open LensQueryHelpers
 open LensHelpers
 open LensSetOperations
-open LensRecordHelpers
 open LensSetOperations.SortedRecords
 open Lens_types
-open Lens_utility
 
 
 let calculate_fd_changelist (fds : Fun_dep.Set.t) (data : SortedRecords.recs) =

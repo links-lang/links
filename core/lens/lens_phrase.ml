@@ -95,11 +95,11 @@ module Constant = struct
   let of_value v = Constant (of_value v)
 end
 
-let replace_var expr repl =
+let replace_var expr ~replace =
   traverse expr (fun expr ->
     match expr with
     | Var key ->
-      Alias.Map.find ~key repl
+      Alias.Map.find ~key replace
       |> Option.map ~f:Constant.of_value
       |> Option.value ~default:expr
     | _ -> expr

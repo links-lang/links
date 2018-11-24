@@ -59,6 +59,12 @@ module List : sig
   (** determine if the calumn [alias] is present *)
   val mem_alias : t -> alias:string -> bool
 
+  (** Convert the list of columns into a set *)
+  val colset : t -> Set.t
+
+  (** Convetr the list of columns into a map from the alias to the column *)
+  val colmap : t -> elt Lens_alias.Map.t
+
   (** find the column with [alias] *)
   val find_alias : t -> alias:string -> elt option
 

@@ -51,8 +51,6 @@ module Set = struct
   let find_alias_opt t ~alias = find_opt (dummy_alias alias) t
 end
 
-module Map = Utility.StringMap
-
 module List = struct
   type elt = t
   type t = elt list
@@ -72,7 +70,7 @@ module List = struct
 
   let colset t = Set.of_list t
 
-  let colmap t = List.map (fun t -> alias t, t) t |> Map.from_alist
+  let colmap t = List.map (fun t -> alias t, t) t |> Lens_alias.Map.from_alist
 
   let record_type t =
     let map = present t

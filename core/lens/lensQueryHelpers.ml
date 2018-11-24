@@ -1,11 +1,5 @@
-open Types
-open Sugartypes
 open Utility
 open Value
-open LensRecordHelpers
-open Lens_types
-open Lens_operators
-open Lens_utility
 
 module Constant = Lens_constant
 

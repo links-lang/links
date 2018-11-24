@@ -4,7 +4,6 @@ open Lens_types
 open LensHelpers
 open LensHelpersIncremental
 open LensSetOperations
-open LensRecordHelpers
 open LensSetOperations.SortedRecords
 
 

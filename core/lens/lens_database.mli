@@ -17,6 +17,9 @@ val fmt_phrase : db:t -> map:(string -> string) -> Format.formatter -> Lens_phra
 (** Formats a phrase using a dummy db driver. This should only be used for debugging. *)
 val fmt_phrase_dummy : Format.formatter -> Lens_phrase.t -> unit
 
+(** Convert the phrase to a string using a dummy db driver. This should only be used for debugging. *)
+val to_string_dummy : Lens_phrase.t -> string
+
 module Select : sig
   type db = t
 
@@ -27,6 +30,7 @@ module Select : sig
       db : db;
   }
 
+  (** Construct a select query from a lens sort. *)
   val of_sort : db -> sort:Lens_sort.t -> t
 
   val fmt : Format.formatter -> t -> unit

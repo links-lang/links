@@ -1,5 +1,3 @@
-open Value
-
 type t = Value.t
 
 let get t ~key =

@@ -1,5 +1,3 @@
-open Utility
-
 type 'a t = 'a option
 
 let bind v ~f =

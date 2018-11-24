@@ -285,8 +285,8 @@ let join_lens_sort (sort1 : Types.lens_sort) (sort2 : Types.lens_sort) (on_colum
     let pred = match Sort.predicate sort1, Sort.predicate sort2 with
     | None, None -> None
     | Some p1, None -> Some p1
-    | None, Some p2 -> Some (Phrase.rename_var p2 join_renames_m)
-    | Some p1, Some p2 -> Some (Phrase.and' (Phrase.tuple_singleton p1) (Phrase.tuple_singleton (Phrase.rename_var p2 join_renames_m))) in
+    | None, Some p2 -> Some (Phrase.rename_var p2 ~replace:join_renames_m)
+    | Some p1, Some p2 -> Some (Phrase.and' (Phrase.tuple_singleton p1) (Phrase.tuple_singleton (Phrase.rename_var p2 ~replace:join_renames_m))) in
     let predicate = List.fold_left (fun pred (alias, newalias) ->
         let jn = Phrase.equal (Phrase.var alias) (Phrase.var newalias) in
         match pred with Some p -> Some (Phrase.and' p jn) | None -> Some jn
