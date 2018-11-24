@@ -925,14 +925,14 @@ struct
                 I.lens_drop_handle (lens, drop, key, default, t)
           | `LensSelectLit (lens, pred, Some t) ->
               let lens = ev lens in
-              let pred = Lens.Helpers.Query.lens_phrase_of_phrase pred in
+              let pred = Lens.Phrase.of_phrase pred in
                 I.lens_select_handle (lens, pred, t)
           | `LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
               let on = Lens.Types.cols_of_phrase on in
-              let left = Lens.Helpers.Query.lens_phrase_of_phrase left in
-              let right = Lens.Helpers.Query.lens_phrase_of_phrase right in
+              let left = Lens.Phrase.of_phrase left in
+              let right = Lens.Phrase.of_phrase right in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
           | `LensGetLit (lens, Some t) ->
               let lens = ev lens in

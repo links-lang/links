@@ -6,7 +6,7 @@ open LensSetOperations
 open LensRecordHelpers
 open LensSetOperations.SortedRecords
 open Lens_types
-
+open Lens_utility
 
 
 let calculate_fd_changelist (fds : Fun_dep.Set.t) (data : SortedRecords.recs) =
@@ -34,11 +34,11 @@ let calculate_fd_changelist (fds : Fun_dep.Set.t) (data : SortedRecords.recs) =
 let matches_change changes =
     let is_changed ((cols_l, _cols_r),(vals)) =
         let vals_l = List.map (fun (left,_) -> left) vals in
-        Phrase.in_expr cols_l vals_l in (*
+        Phrase.Option.in_expr cols_l vals_l in (*
         List.fold_left (fun phrase (on,_) ->
             let term = Phrase.matching_cols_simp cols_l on in
             Phrase.combine_or phrase term) None vals in *)
-    Phrase.fold_or <| List.map is_changed changes
+    List.map is_changed changes |> Phrase.List.fold_or_opt
 
 
 let relational_update (fds : Fun_dep.Set.t) (changedata : SortedRecords.recs) (updatedata : SortedRecords.recs) =
@@ -111,7 +111,7 @@ let query_join_records (lens : Value.t) (set : SortedRecords.recs) (on : string 
     let proj = SortedRecords.project_onto set on in
     let recs = List.append (Array.to_list proj.plus_rows) (Array.to_list proj.neg_rows) in
     let recs = List.sort_uniq SortedRecords.compare recs in
-    let query = Phrase.in_expr on recs in
+    let query = Phrase.Option.in_expr on recs in
     let recs = lens_get_select_opt lens query in
     SortedRecords.construct_cols (LensValue.cols_present_aliases lens) recs
 
@@ -119,7 +119,7 @@ let query_project_records (lens : Value.t) (set : SortedRecords.recs) (key : str
     let proj = SortedRecords.project_onto set key in
     let recs = List.append (Array.to_list proj.plus_rows) (Array.to_list proj.neg_rows) in
     let recs = List.sort_uniq SortedRecords.compare recs in
-    let query = Phrase.in_expr key recs in
+    let query = Phrase.Option.in_expr key recs in
     let recs = lens_get_select_opt lens query in
     let recs = SortedRecords.construct_cols (LensValue.cols_present_aliases lens) recs in
     SortedRecords.project_onto recs (List.append key drop)
@@ -173,7 +173,7 @@ let lens_put_set_step (lens : Value.t) (delt : SortedRecords.recs) (fn : Value.t
             fn l2 delta_n
 
     | `LensSelect (l, pred, _sort) ->
-            let delta_m1 = SortedRecords.merge (get_changes (lens_select l (Phrase.negate pred)) delt)
+            let delta_m1 = SortedRecords.merge (get_changes (lens_select l (Phrase.not' pred)) delt)
             { columns = delt.columns; plus_rows = Array.of_list []; neg_rows = delt.neg_rows } in
             (* Debug.print (SortedRecords.to_string_tabular delta_m1);  *)
             let m1_cap_P = SortedRecords.filter delta_m1 pred in
@@ -273,9 +273,10 @@ let apply_delta (t : Value.table) (data : SortedRecords.recs) =
     ()
 
 let get_fds (fds : (string list * string list) list) (cols : Types.lens_col list) : Fun_dep.Set.t =
-    let check_col xs = List.iter (fun x -> if not (Column.exists cols x) then failwith ("The column " ^ x ^ " does not exist.")) xs in
+    let check_col xs = List.iter (fun alias -> if not (Column.List.mem_alias cols ~alias) then failwith ("The column " ^ alias ^ " does not exist.")) xs in
     List.iter (fun (left, right) -> check_col left; check_col right) fds;
-    let fd_of (left, right) = Alias.Set.of_list left, Alias.Set.of_list right in
+    let fd_of (left, right) =
+      Fun_dep.make (Alias.Set.of_list left) (Alias.Set.of_list right) in
     Fun_dep.Set.of_list (List.map fd_of fds)
 
 let lens_put (lens : Value.t) (data : Value.t) =

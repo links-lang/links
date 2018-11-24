@@ -1,6 +1,5 @@
 open Utility
 
-
 module Alias = Lens_alias
 
 type t [@@deriving show]
@@ -14,7 +13,7 @@ val left : t -> Alias.Set.t
 val right : t -> Alias.Set.t
 
 (** Convert two sets of alias lists into a functional dependency *)
-val of_lists : Alias.t list -> Alias.t list -> t
+val of_lists : Alias.t list * Alias.t list -> t
 
 (** Construct a single functional dependency from a set of columns and a key *)
 val key_fd : keys:Alias.t list -> cols:Alias.t list -> t
@@ -38,14 +37,18 @@ module Set : sig
   (** Generate a single functional dependency as a set from the given keys and columns *)
   val key_fds :  keys:Alias.t list -> cols:Alias.t list -> t
 
-  val root_fd : t -> elt
+  (** Get a root functional dependency *)
+  val root_fd : t -> elt option
+
+  (** Get the transitive closure of a functional dependency *)
+  val transitive_closure : t -> cols:Alias.Set.t -> Alias.Set.t
 end
 
 module Tree : sig
-  type elt = Alias.Set.t [@@deriving]
-  type t = | FDNode of elt * (t list) [@@deriving]
+  type elt = Alias.Set.t [@@deriving show]
+  type t = | FDNode of elt * (t list) [@@deriving show]
 
   val pp_pretty : Format.formatter -> t -> unit
 
-  val of_fds : Set.t -> t
+  val of_fds : Set.t -> t option
 end

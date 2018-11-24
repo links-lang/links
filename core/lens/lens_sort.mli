@@ -1,6 +1,6 @@
 open Types
 
-type t
+type t = Types.lens_sort
 
 
 (** Get the functional dependencies *)
@@ -15,11 +15,20 @@ val cols : t -> Lens_column.List.t
 (** Gets a list of the aliases of all present columns *)
 val cols_present_aliases : t -> string list
 
+(** Get the columns as a set *)
+val colset : t -> Lens_column.Set.t
+
 (** Construct a lens sort *)
 val make : ?fds:Lens_fun_dep.Set.t -> ?predicate:Types.lens_phrase option -> Types.lens_col list -> t
 
-val find_col_alias : t -> alias:string -> Types.lens_col
+(** Find the column with the specified alias *)
+val find_col_alias : t -> alias:string -> Types.lens_col option
 
-val find_col_alias_opt : t -> alias:string -> Types.lens_col option
-
+(** Replace the predicate *)
 val update_predicate : t -> predicate:lens_phrase option -> t
+
+(** Update all columns with a table name *)
+val update_table_name : t -> table:string -> t
+
+(** Get the record type *)
+val record_type : t -> Types.typ

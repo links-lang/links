@@ -6,6 +6,9 @@ open LensFDHelpers
 open LensQueryHelpers
 open LensRecordHelpers
 
+module Database = Lens_database
+module Phrase = Lens_phrase
+
 let query_timer = ref 0
 let query_count = ref 0
 
@@ -95,7 +98,7 @@ let rec lens_get_mem (lens : Value.t) callfn =
           `List result
     | `LensSelect (lens, pred, _sort) ->
         let records = lens_get_mem lens callfn in
-        let res = List.filter (fun x -> unbox_bool (calculate_predicate_rec pred x)) (unbox_list records) in
+        let res = List.filter (fun x -> unbox_bool (Phrase.Record.eval pred x)) (unbox_list records) in
            box_list res
     | `LensJoin (lens1, lens2, on, _left, _right, _sort) ->
         let records1 = lens_get_mem lens1 callfn in
@@ -117,18 +120,19 @@ let rec lens_get_db (lens : Value.t) =
     | _ -> failwith "Unsupported lens for get db."
 
 let rec lens_get_query (lens : Value.t) =
+  let open Database.Select in
   match lens with
   | `Lens (((db, _), table, _, _), sort) ->
         let cols = Sort.cols sort in
         {
             tables = [table, table];
             cols = cols;
-            pred = None;
+            predicate = None;
             db = db;
         }
   | `LensSelect (lens, pred, _sort) ->
         let query = lens_get_query lens in
-        { query with pred = Some pred }
+        { query with predicate = Some pred }
         (* get_lens_sort_row_type sort *)
   | `LensJoin (lens1, lens2, _on, _left, _right, sort) ->
         let q1 = lens_get_query lens1 in
@@ -146,7 +150,7 @@ let rec lens_get_query (lens : Value.t) =
         if (q1.db <> q2.db) then
             failwith "Only single database expressions supported."
         else
-            {tables = tables; cols = cols; pred = Sort.predicate sort; db = q1.db}
+            {tables = tables; cols = cols; predicate = Sort.predicate sort; db = q1.db}
   | _ -> failwith "Unsupported lens for query"
 
 (* BUG: Lists can be too big for List.map; need to be careful about recursion *)
@@ -159,7 +163,8 @@ let lens_get (lens : Value.t) callfn =
         let db = lens_get_db lens in
         let cols = Sort.cols sort in
         (* print_endline (ListUtils.print_list (get_lens_sort_cols_list sort)); *)
-        let sql = construct_select_query_sort db sort in
+        let query  = Database.Select.of_sort db ~sort in
+        let sql = Format.asprintf "%a" Database.Select.fmt query in
         (* let _ = print_endline sql in *)
         (* let query = lens_get_query lens in
         let sql = construct_select_query query  in *)
@@ -216,8 +221,8 @@ let query_exists (lens : Value.t) phrase =
         unbox_list res <> []
     else
         let db = lens_get_db lens in
-        let sql = construct_select_query_sort db sort in
-        let sql = "SELECT EXISTS(" ^ sql ^ ") AS t" in
+        let query = Database.Select.of_sort db ~sort in
+        let sql = Format.asprintf "SELECT EXISTS (%a) AS t" Database.Select.fmt query in
         let mappings = ["t", `Primitive `Bool] in
         let res = Debug.debug_time_out
             (fun () -> execute_select mappings sql db)
@@ -276,14 +281,15 @@ let join_lens_sort (sort1 : Types.lens_sort) (sort2 : Types.lens_sort) (on_colum
                 (c |> Column.rename ~alias:new_alias) :: output, jrs
     ) (Sort.cols sort1, []) (Sort.cols sort2) in
     (* combine the predicates *)
+    let join_renames_m = Alias.Map.from_alist join_renames in
     let pred = match Sort.predicate sort1, Sort.predicate sort2 with
     | None, None -> None
     | Some p1, None -> Some p1
-    | None, Some p2 -> Some (Phrase.rename_var p2 join_renames)
-    | Some p1, Some p2 -> Some (create_phrase_and (create_phrase_tuple p1) (create_phrase_tuple (Phrase.rename_var p2 join_renames))) in
+    | None, Some p2 -> Some (Phrase.rename_var p2 join_renames_m)
+    | Some p1, Some p2 -> Some (Phrase.and' (Phrase.tuple_singleton p1) (Phrase.tuple_singleton (Phrase.rename_var p2 join_renames_m))) in
     let predicate = List.fold_left (fun pred (alias, newalias) ->
-        let jn = create_phrase_equal (create_phrase_var alias) (create_phrase_var newalias) in
-        match pred with Some p -> Some (create_phrase_and p jn) | None -> Some jn
+        let jn = Phrase.equal (Phrase.var alias) (Phrase.var newalias) in
+        match pred with Some p -> Some (Phrase.and' p jn) | None -> Some jn
     ) pred join_renames in
     let fds = Fun_dep.Set.union (Sort.fds sort1) (Sort.fds sort2) in
     (* determine the on column renames as a tuple (join, left, right) *)

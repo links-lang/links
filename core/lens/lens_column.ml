@@ -3,10 +3,12 @@ open Utility
 
 type t = Types.lens_col
 
+let name t = t.name
 let alias t = t.alias
-let exists (cols : t list) (colalias : string) = List.exists (fun c -> alias c = colalias) cols
 let present t = t.present
 let typ t = t.typ
+
+let table t = t.table
 
 let hide t =
     { t with present = false }
@@ -52,7 +54,8 @@ end
 module Map = Utility.StringMap
 
 module List = struct
-  type t = Types.lens_col list
+  type elt = t
+  type t = elt list
 
   let present t = List.filter present t
 

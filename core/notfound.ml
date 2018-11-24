@@ -57,6 +57,12 @@ struct
     try find p l
     with Not_found -> not_found "List.find" "<matching predicate>"
 
+  let rec filter_opt l =
+    match l with
+    | [] -> []
+    | Some x :: xs -> x :: filter_opt xs
+    | None :: xs -> filter_opt xs
+
   let assoc v l =
     try assoc v l
     with Not_found -> not_found "List.assoc" v

@@ -2,6 +2,17 @@ open Utility
 
 type t = string
 
+module Map = struct
+  include StringMap
+
+  let find t ~key =
+    find_opt key t
+
+  let from_alist l =
+    List.to_seq l
+    |> of_seq
+end
+
 module Set = struct
   include StringSet
 

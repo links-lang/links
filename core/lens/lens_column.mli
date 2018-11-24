@@ -10,10 +10,13 @@ val name : t -> string
 val table : t -> string
 
 (** Return the column type. *)
-val typ : t -> string
+val typ : t -> Types.typ
 
 (** Determine if the column is present. *)
 val present : t -> bool
+
+(** Get the table name *)
+val table : t -> string
 
 val hide : t -> t
 
@@ -22,13 +25,16 @@ val rename : t -> alias:string -> t
 val equal : t -> t -> bool
 
 module Set : sig
-  include Set.S
+  include Set.S with type elt = t
 
   (** Generate a dummy column with a given alias *)
   val dummy_alias : string -> elt
 
   (** Determine if there is a column with the specified alias *)
   val mem_alias : t -> alias:string -> bool
+
+  (** Convert to an alias set. *)
+  val alias_set : t -> Lens_alias.Set.t
 
   (** Find the column with the given alias. *)
   val find_alias : t -> alias:string -> elt

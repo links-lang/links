@@ -1,6 +1,7 @@
 open Value
 open Utility
 
+module Phrase = Lens_phrase
 
 module SortedRecords = struct
     (* simplified record type drops column names for efficiency *)
@@ -228,7 +229,7 @@ module SortedRecords = struct
         let get_col_val row col = match (getv col) with
             | Some a -> a row
             | None -> failwith ("Column " ^ col ^ " not in record set.") in
-        let filter rows = Array.of_list (List.filter (fun r -> LensQueryHelpers.calculate_predicate pred (get_col_val r) = box_bool true) (Array.to_list rows)) in
+        let filter rows = Array.of_list (List.filter (fun r -> Phrase.eval pred (get_col_val r) = box_bool true) (Array.to_list rows)) in
         {
             columns = rs.columns;
             plus_rows = filter rs.plus_rows;

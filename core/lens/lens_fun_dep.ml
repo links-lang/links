@@ -115,8 +115,8 @@ module Tree = struct
     let remaining = Alias.Set.filter (fun col ->
       not (Set.exists (fun fd2 -> Alias.Set.mem col (left fd2)) subfds)) (right fd) in
     let subfds = List.map (fd_subnodes fds) (Set.elements subfds) in
-    let subfds = if Alias.Set.is_empty remaining then subfds else `FDNode (remaining, []) :: subfds in
-      `FDNode (left fd, subfds)
+    let subfds = if Alias.Set.is_empty remaining then subfds else FDNode (remaining, []) :: subfds in
+      FDNode (left fd, subfds)
 
   let of_fds fds =
     let root = Set.root_fd fds in
