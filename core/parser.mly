@@ -1304,18 +1304,19 @@ kinded_row_var:
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_alternate regex_flags_opt                                  { with_pos $loc($2) (`Regex $2), $3 }
-| SLASH regex_flags_opt                                                          { with_pos $loc (`Regex (`Simply "")), $2 }
-| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { with_pos $loc (`Regex (`Replace ($2, $4))),
-                                                                                   `RegexReplace :: $5 }
+| SLASH regex_pattern_alternate regex_flags_opt                { with_pos $loc($2) (`Regex $2), $3 }
+| SLASH regex_flags_opt                                        { with_pos $loc (`Regex (`Simply "")), $2 }
+| SSLASH regex_pattern_alternate SLASH regex_replace
+    regex_flags_opt                                            { with_pos $loc (`Regex (`Replace ($2, $4))),
+                                                                 `RegexReplace :: $5 }
 
 regex_flags_opt:
-| SLASH                                                        {[]}
-| SLASHFLAGS                                                   {parseRegexFlags $1}
+| SLASH                                                        { [] }
+| SLASHFLAGS                                                   { parseRegexFlags $1 }
 
 regex_replace:
-| /* empty */                                                  { `Literal ""}
-| REGEXREPL                                                    { `Literal $1}
+| /* empty */                                                  { `Literal "" }
+| REGEXREPL                                                    { `Literal $1 }
 | block                                                        { `Splice (with_pos $loc (`Block $1)) }
 
 regex_pattern:
@@ -1336,8 +1337,7 @@ regex_pattern_alternate:
 | regex_pattern_sequence ALTERNATE regex_pattern_alternate     { `Alternate (`Seq $1, $3) }
 
 regex_pattern_sequence:
-| regex_pattern                                                { [$1] }
-| regex_pattern regex_pattern_sequence                         { $1 :: $2 }
+| nonempty_list(regex_pattern)                                 { $1 }
 
 /*
  * Pattern grammar
