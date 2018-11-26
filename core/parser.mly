@@ -972,15 +972,13 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3)) }
 
 fn_dep_cols:
-| VARIABLE                                                     { [$1] }
-| VARIABLE fn_dep_cols                                         { $1 :: $2 }
+| nonempty_list( VARIABLE )                                    { $1 }
 
 fn_dep:
 | fn_dep_cols RARROW fn_dep_cols                               { ($1, $3) }
 
 fn_deps:
-| fn_dep                                                       { [ $1 ] }
-| fn_dep COMMA fn_deps                                         { $1 :: $3 }
+| separated_nonempty_list(COMMA, fn_dep)                       { $1 }
 
 lens_expression:
 | database_expression                                          { $1 }
@@ -999,8 +997,7 @@ lens_expression:
 
 
 record_labels:
-| record_label COMMA record_labels                             { $1 :: $3 }
-| record_label                                                 { [$1] }
+| separated_nonempty_list(COMMA, record_label)                 { $1 }
 
 links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
@@ -1018,11 +1015,8 @@ binding:
 | LINFUN var arg_lists block                                   { with_pos $loc (`Fun (make_untyped_binder $2,
                                                                                   `Lin, ([], ($3, with_pos $loc($4) (`Block $4))), `Unknown,
                                                                                   None)) }
-| typedecl SEMICOLON                                           { $1 }
 | typed_handler_binding                                        { with_pos $loc (`Handler $1) }
-| links_module                                                 { $1 }
-| alien_block                                                  { $1 }
-| links_open                                                   { $1 }
+| typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
 bindings:
 | binding                                                      { [$1] }
@@ -1041,18 +1035,14 @@ block_contents:
 | exp SEMICOLON                                                { ([with_pos $loc($1) (`Exp $1)],
                                                                   with_pos $loc (`RecordLit ([], None))) }
 | exp                                                          { ([], $1) }
-| perhaps_semi                                                 { ([], with_pos $loc (`TupleLit [])) }
-
-perhaps_semi:
-| SEMICOLON                                                    {}
-| /* empty */                                                  {}
+| SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }
 
 exp:
 | lens_expression                                              { $1 }
 
 labeled_exps:
-| record_label EQ exp                                          { [$1, $3] }
-| record_label EQ exp COMMA labeled_exps                       { ($1, $3) :: $5 }
+| separated_nonempty_list(COMMA,
+    separated_pair(record_label, EQ, exp))                     { $1 }
 
 /*
  * Datatype grammar
