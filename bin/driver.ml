@@ -7,8 +7,19 @@ module BS = Basicsettings
 module Eval = Evalir.Eval(Webserver)
 module Webif = Webif.WebIf(Webserver)
 
+type evaluation_env =   Value.env (* maps int identifiers to their values *)
+                      * Ir.var Env.String.t (* map string identifiers to int identifiers *)
+                      * Types.typing_environment (* typing info, using string identifiers *)
+
 (** optimise and evaluate a program *)
-let process_program ?printer interacting (valenv, nenv, tyenv) (program, t) external_files =
+let process_program
+      ?printer
+      (interacting : bool)
+      (envs : evaluation_env)
+      (program : Ir.program)
+      (t : Types.datatype)
+      external_files =
+  let (valenv, nenv, tyenv) = envs in
   let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
 
   let perform_optimisations = Settings.get_value BS.optimise && not interacting in
@@ -25,8 +36,8 @@ let process_program ?printer interacting (valenv, nenv, tyenv) (program, t) exte
   valenv, v
 
 
-let process_program ?printer interacting (valenv, nenv, tyenv) (program, t) external_files =
-  lazy (process_program ?printer interacting (valenv, nenv, tyenv) (program, t) external_files) |>measure_as<| "process_program"
+let process_program ?printer interacting envs program t external_files =
+  lazy (process_program ?printer interacting envs program t external_files) |>measure_as<| "process_program"
 
 
 let die_on_exception_unless_interacting is_interacting f x =
@@ -39,11 +50,17 @@ let die_on_exception_unless_interacting is_interacting f x =
 
 
 (** Read Links source code, then optimise and run it. *)
-let evaluate ?printer ?(handle_errors=die_on_exception_unless_interacting) interacting parse (_, nenv, tyenv as envs) =
+let evaluate
+      ?printer
+      ?(handle_errors=die_on_exception_unless_interacting)
+      interacting
+      parse_fun
+      (envs : evaluation_env) =
+  let (_, nenv, tyenv) = envs in
   let evaluate_inner x =
-    let (program, t), (nenv', tyenv'), external_files = parse (nenv, tyenv) x in
+    let (program, t), (nenv', tyenv'), external_files = parse_fun (nenv, tyenv) x in
 
-    let valenv, v = process_program ?printer interacting envs (program, t) external_files in
+    let valenv, v = process_program ?printer interacting envs program t external_files in
     (valenv,
      Env.String.extend nenv nenv',
      Types.extend_typing_environment tyenv tyenv'), v

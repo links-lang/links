@@ -212,8 +212,9 @@ let interact envs =
                       Driver.process_program
                         true
                         envs
-                        ((defs, `Return (`Extend (StringMap.empty, None))),
-                         Types.unit_type) [] in
+                        (defs, `Return (`Extend (StringMap.empty, None)))
+                        Types.unit_type
+                        [] in
 
                       Env.String.fold (* TBD: Make Env.String.foreach. *)
                         (fun name spec () ->
@@ -254,7 +255,7 @@ let interact envs =
                        Env.String.extend nenv nenv',
                        Types.extend_typing_environment tyenv tyenv')
                 | `Expression (e, t), _ ->
-                    let valenv, _ = Driver.process_program ~printer:print_value true envs (e, t) [] in
+                    let valenv, _ = Driver.process_program ~printer:print_value true envs e t [] in
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
