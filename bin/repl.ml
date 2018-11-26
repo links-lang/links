@@ -1,3 +1,4 @@
+open Links_core
 open Utility
 open List
 
@@ -11,7 +12,7 @@ type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  if Settings.get_value Basicsettings.web_mode || not (Settings.get_value Basicsettings.print_pretty || Settings.get_value Basicsettings.interacting)
+  if Settings.get_value Basicsettings.web_mode || not (Settings.get_value Basicsettings.print_pretty)
   then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get_value(BS.printing_types) then
@@ -141,7 +142,7 @@ let rec directives
                   let (globals, (locals, main), t) = source.program in
                   let external_files = source.external_dependencies in
                   ((globals @ locals, main), t), (nenv, tyenv), external_files in
-              let envs, _ = Driver.evaluate ~printer:print_value parse_and_desugar envs filename in
+              let envs, _ = Driver.evaluate ~printer:print_value true parse_and_desugar envs filename in
                 envs
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, extending the current environment");
@@ -209,6 +210,7 @@ let interact envs =
                 | `Definitions (defs, nenv'), tyenv' ->
                     let valenv, _ =
                       Driver.process_program
+                        true
                         envs
                         ((defs, `Return (`Extend (StringMap.empty, None))),
                          Types.unit_type) [] in
@@ -252,7 +254,7 @@ let interact envs =
                        Env.String.extend nenv nenv',
                        Types.extend_typing_environment tyenv tyenv')
                 | `Expression (e, t), _ ->
-                    let valenv, _ = Driver.process_program ~printer:print_value envs (e, t) [] in
+                    let valenv, _ = Driver.process_program ~printer:print_value true envs (e, t) [] in
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in

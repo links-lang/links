@@ -1,12 +1,6 @@
 (** Whether to turn on debug printing *)
 let debugging_enabled = Settings.add_bool ("debug", false, `User)
 
-(**
- Whether to run the interactive loop
- (default is true)
-*)
-let interacting = Settings.add_bool ("interacting", true, `System)
-
 (** [true] if we're in web mode *)
 let web_mode = Settings.add_bool ("web_mode", false, `System)
 

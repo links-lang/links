@@ -87,4 +87,4 @@ let parse_string ?in_context:context grammar string =
   let context = normalize_context context in
     read ?nlhook:None ~parse:grammar ~infun:(reader_of_string string) ~name:"<string>" ~context
 
-let parse_xml s = fst (Errors.display_fatal (parse_string xml) s)
+let parse_xml s = fst (Errors.display (lazy (parse_string xml s)))

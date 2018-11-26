@@ -127,16 +127,3 @@ let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
     output_string stream (format_exception exc ^ "\n");
     flush stream;
     default exc
-
-(* Display fatal used to default to exiting.
- * Now, we exit only if Links is not running in interactive mode. *)
-let display_fatal ?(stream=stderr) f a =
-  display ~default:(fun e ->
-		    if Settings.get_value Basicsettings.interacting then
-		      raise e
-		    else
-		      exit 1
-		   ) ~stream:stream (lazy (f a))
-
-let display_fatal_l ?(stream=stderr) e =
-  display ~default:(fun _ -> exit 1) ~stream:stream e

@@ -1,48 +1,12 @@
 open Links_core
-open Webserver
-
 open Performance
 open Utility
 
 module BS = Basicsettings
-module Eval = Evalir.Eval(Webserver)
-module Webif = Webif.WebIf(Webserver)
+
 
 (** Ensure the settings were parsed correctly *)
 let _ = ParseSettings.validate_settings ()
-
-
-
-let load_prelude () =
-  (if Settings.get_value Basicsettings.Ir.show_lib_function_env then
-    (Debug.print "lib.ml mappings:";
-    Env.String.iter (fun name var -> Debug.print (string_of_int var ^ " -> " ^ name ^ " :: " ^
-      Types.string_of_datatype (Env.String.lookup Lib.typing_env.Types.var_env name ) )) Lib.nenv));
-
-  let open Loader in
-  let source =
-    (Errors.display_fatal
-       (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
-  in
-  let (nenv, tyenv) = source.envs in
-  let (globals, _, _) = source.program in
-
-  let tyenv = Lib.patch_prelude_funs tyenv in
-
-  Lib.prelude_tyenv := Some tyenv;
-  Lib.prelude_nenv := Some nenv;
-
-  let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
-
-  let globals = Backend.transform_prelude tenv globals in
-
-  let valenv = Eval.run_defs Value.Env.empty globals in
-  let envs =
-    (valenv,
-     Env.String.extend Lib.nenv nenv,
-     Types.extend_typing_environment Lib.typing_env tyenv)
-  in
-    globals, envs
 
 
 
@@ -50,13 +14,14 @@ let to_evaluate : string list ref = ParseSettings.to_evaluate
 let file_list : string list ref = ParseSettings.file_list
 
 let main () =
-  let prelude, ((_valenv, _, _) as envs) = measure "prelude" load_prelude () in
+  let prelude, ((_valenv, _, _) as envs) = measure "prelude" Driver.NonInteractive.load_prelude () in
 
-  for_each !to_evaluate (Driver.evaluate_string_in envs);
+  for_each !to_evaluate (Driver.NonInteractive.evaluate_string_in envs);
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
-  for_each !file_list (Driver.run_file prelude envs);
-  if Settings.get_value BS.interacting then
+  for_each !file_list (Driver.NonInteractive.run_file prelude envs);
+  let should_start_repl = !to_evaluate = [] && !file_list = [] in
+  if should_start_repl then
     begin
       print_endline (Settings.get_value BS.welcome_note);
       Repl.interact envs
