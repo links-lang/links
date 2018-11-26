@@ -5,7 +5,7 @@ open Utility
 open ProcessTypes
 open WebsocketMessages
 
-module Links_core =
+module Links_core = (* See Note [Dune "wrapped" workaround] in parser.mly *)
 struct
   module Value = Value
 end
