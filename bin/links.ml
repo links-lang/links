@@ -22,14 +22,23 @@ let print_simple rtype value =
         else
           "")
 
+let process_filearg prelude envs file =
+  let result = Driver.NonInteractive.run_file prelude envs file in
+  print_simple result.Driver.result_type result.Driver.result_value
+
+let process_exprarg envs expr =
+  let result = Driver.NonInteractive.evaluate_string_in envs expr in
+  print_simple result.Driver.result_type result.Driver.result_value
+
+
 
 let main () =
-  let prelude, ((_valenv, _, _) as envs) = measure "prelude" Driver.NonInteractive.load_prelude () in
+  let prelude, envs = measure "prelude" Driver.NonInteractive.load_prelude () in
 
-  for_each !to_evaluate (Driver.NonInteractive.evaluate_string_in envs print_simple);
+  for_each !to_evaluate (process_exprarg envs);
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
-  for_each !file_list (Driver.NonInteractive.run_file prelude envs print_simple);
+  for_each !file_list (process_filearg prelude envs);
   let should_start_repl = !to_evaluate = [] && !file_list = [] in
   if should_start_repl then
     begin

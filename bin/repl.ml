@@ -142,8 +142,9 @@ let rec directives
                   let (globals, (locals, main), t) = source.program in
                   let external_files = source.external_dependencies in
                   ((globals @ locals, main), t), (nenv, tyenv), external_files in
-              let envs, _ = Driver.evaluate ~printer:print_value true parse_and_desugar envs filename in
-                envs
+              let r = Driver.evaluate true parse_and_desugar envs filename in
+                print_value r.result_type r.result_value;
+                r.result_env
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, extending the current environment");
 
@@ -255,7 +256,8 @@ let interact envs =
                        Env.String.extend nenv nenv',
                        Types.extend_typing_environment tyenv tyenv')
                 | `Expression (e, t), _ ->
-                    let valenv, _ = Driver.process_program ~printer:print_value true envs e t [] in
+                    let valenv, v = Driver.process_program true envs e t [] in
+                      print_value t v;
                       valenv, nenv, tyenv
                 | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
     in
