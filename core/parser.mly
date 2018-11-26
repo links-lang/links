@@ -1356,12 +1356,10 @@ cons_pattern:
 
 constructor_pattern:
 | negative_pattern                                          { $1 }
-| CONSTRUCTOR                                               { with_pos $loc (`Variant ($1, None)) }
-| CONSTRUCTOR parenthesized_pattern                         { with_pos $loc (`Variant ($1, Some $2)) }
+| CONSTRUCTOR parenthesized_pattern?                        { with_pos $loc (`Variant ($1, $2)) }
 
 constructors:
-| CONSTRUCTOR                                               { [$1] }
-| CONSTRUCTOR COMMA constructors                            { $1 :: $3 }
+| separated_nonempty_list(COMMA, CONSTRUCTOR)               { $1 }
 
 negative_pattern:
 | primary_pattern                                           { $1 }
@@ -1372,8 +1370,7 @@ parenthesized_pattern:
 | LPAREN RPAREN                                             { with_pos $loc (`Tuple []) }
 | LPAREN pattern RPAREN                                     { $2 }
 | LPAREN pattern COMMA patterns RPAREN                      { with_pos $loc (`Tuple ($2 :: $4)) }
-| LPAREN labeled_patterns VBAR pattern RPAREN               { with_pos $loc (`Record ($2, Some $4)) }
-| LPAREN labeled_patterns RPAREN                            { with_pos $loc (`Record ($2, None)) }
+| LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN   { with_pos $loc (`Record ($2, $3)) }
 
 primary_pattern:
 | VARIABLE                                                  { with_pos $loc (`Variable (make_untyped_binder (with_pos $loc $1))) }
@@ -1384,17 +1381,14 @@ primary_pattern:
 | parenthesized_pattern                                     { $1 }
 
 patterns:
-| pattern                                                   { [$1] }
-| pattern COMMA patterns                                    { $1 :: $3 }
+| separated_nonempty_list(COMMA, pattern)                   { $1 }
 
 labeled_patterns:
-| record_label EQ pattern                                   { [($1, $3)] }
-| record_label EQ pattern COMMA labeled_patterns            { ($1, $3) :: $5 }
+| separated_nonempty_list(COMMA,
+   separated_pair(record_label, EQ,  pattern))              { $1 }
 
 multi_args:
-| LPAREN patterns RPAREN                                    { $2 }
-| LPAREN RPAREN                                             { [] }
+| LPAREN separated_list(COMMA, pattern) RPAREN              { $2 }
 
 arg_lists:
-| multi_args                                                { [$1] }
-| multi_args arg_lists                                      { $1 :: $2 }
+| nonempty_list(multi_args)                                 { $1 }
