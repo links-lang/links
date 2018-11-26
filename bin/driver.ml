@@ -77,7 +77,7 @@ struct
 
 
 
-  let evaluate_string_in envs v =
+  let evaluate_string_in envs printer v =
     let parse_and_desugar (nenv, tyenv) s =
       let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value BS.pp) Parse.program s in
       let (program, t, _), _ = Frontend.Pipeline.program tyenv pos_context sugar in
@@ -87,7 +87,7 @@ struct
       let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
       ((globals @ locals, main), t), (nenv, tyenv), []
     in
-      ignore (evaluate false parse_and_desugar envs v)
+      ignore (evaluate ~printer false parse_and_desugar envs v)
 
 
 

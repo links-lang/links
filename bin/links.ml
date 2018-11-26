@@ -13,10 +13,20 @@ let _ = ParseSettings.validate_settings ()
 let to_evaluate : string list ref = ParseSettings.to_evaluate
 let file_list : string list ref = ParseSettings.file_list
 
+
+let print_simple rtype value =
+  print_string (Value.string_of_value value);
+  print_endline
+    (if Settings.get_value (BS.printing_types) then
+          " : " ^ Types.string_of_datatype rtype
+        else
+          "")
+
+
 let main () =
   let prelude, ((_valenv, _, _) as envs) = measure "prelude" Driver.NonInteractive.load_prelude () in
 
-  for_each !to_evaluate (Driver.NonInteractive.evaluate_string_in envs);
+  for_each !to_evaluate (Driver.NonInteractive.evaluate_string_in envs print_simple);
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
   for_each !file_list (Driver.NonInteractive.run_file prelude envs);
