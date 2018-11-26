@@ -74,7 +74,7 @@ module NonInteractive =
 struct
 
 
-  let run_file prelude envs filename =
+  let run_file prelude envs printer filename =
     Webserver.set_prelude prelude;
     let parse_and_desugar (nenv, tyenv) filename =
       let source =
@@ -86,11 +86,11 @@ struct
         let external_files = source.external_dependencies in
         ((globals @ locals, main), t), (nenv, tyenv), external_files
     in
-      ignore (evaluate false parse_and_desugar envs filename)
+      ignore (evaluate ~printer false parse_and_desugar envs filename)
 
 
-  let run_file prelude envs filename =
-    lazy (run_file prelude envs filename) |>measure_as<| ("run_file "^filename)
+  let run_file prelude envs printer filename =
+    lazy (run_file prelude envs printer filename) |>measure_as<| ("run_file "^filename)
 
 
 

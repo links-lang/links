@@ -29,7 +29,7 @@ let main () =
   for_each !to_evaluate (Driver.NonInteractive.evaluate_string_in envs print_simple);
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
-  for_each !file_list (Driver.NonInteractive.run_file prelude envs);
+  for_each !file_list (Driver.NonInteractive.run_file prelude envs print_simple);
   let should_start_repl = !to_evaluate = [] && !file_list = [] in
   if should_start_repl then
     begin
