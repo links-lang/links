@@ -528,8 +528,7 @@ cp_expression:
 
 primary_expression:
 | atomic_expression                                            { $1 }
-| LBRACKET RBRACKET                                            { with_pos $loc (`ListLit ([], None)) }
-| LBRACKET exps RBRACKET                                       { with_pos $loc (`ListLit ($2, None)) }
+| LBRACKET perhaps_exps RBRACKET                               { with_pos $loc (`ListLit ($2, None)) }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
 | xml                                                          { $1 }
 | FUN arg_lists block                                          { with_pos $loc     (`FunLit (None, `Unl, ($2,
@@ -602,10 +601,9 @@ spawn_expression:
                                                                           with_pos $loc($2) (`Block $2), None)) }
 
 postfix_expression:
-| primary_expression                                           { $1 }
+| primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { with_pos $loc (`UnaryAppl (([], `Name $2), $1)) }
 | block                                                        { with_pos $loc (`Block $1) }
-| spawn_expression                                             { $1 }
 | QUERY block                                                  { with_pos $loc (`Query (None, with_pos $loc($2) (`Block $2), None)) }
 | QUERY LBRACKET exp RBRACKET block                            { with_pos $loc (`Query (Some ($3, with_pos $loc (`Constant (`Int 0))),
                                                                                         with_pos $loc($5) (`Block $5), None)) }
@@ -615,19 +613,19 @@ postfix_expression:
 
 
 arg_spec:
-| LPAREN RPAREN                                                { [] }
-| LPAREN exps RPAREN                                           { $2 }
+| LPAREN perhaps_exps RPAREN                                   { $2 }
 
 exps:
-| exp COMMA exps                                               { $1 :: $3 }
-| exp                                                          { [$1] }
+| separated_nonempty_list(COMMA, exp)                          { $1 }
+
+perhaps_exps:
+| separated_list(COMMA, exp)                                   { $1 }
 
 unary_expression:
 | MINUS unary_expression                                       { with_pos $loc (`UnaryAppl (([], `Minus     ), $2)) }
 | MINUSDOT unary_expression                                    { with_pos $loc (`UnaryAppl (([], `FloatMinus), $2)) }
 | PREFIXOP unary_expression                                    { with_pos $loc (`UnaryAppl (([], `Name $1   ), $2)) }
-| postfix_expression                                           { $1 }
-| constructor_expression                                       { $1 }
+| postfix_expression | constructor_expression                  { $1 }
 | DOOP CONSTRUCTOR arg_spec                                    { with_pos $loc (`DoOperation ($2, $3, None)) }
 | DOOP CONSTRUCTOR                                             { with_pos $loc (`DoOperation ($2, [], None)) }
 
