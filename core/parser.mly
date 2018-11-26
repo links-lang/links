@@ -1061,9 +1061,7 @@ just_datatype:
 | datatype END                                                 { $1 }
 
 datatype:
-| mu_datatype                                                  { with_pos $loc $1 }
-| straight_arrow                                               { with_pos $loc $1 }
-| squiggly_arrow                                               { with_pos $loc $1 }
+| mu_datatype | straight_arrow | squiggly_arrow                { with_pos $loc $1 }
 
 arrow_prefix:
 | LBRACE RBRACE                                                { ([], `Closed) }
@@ -1144,8 +1142,6 @@ primary_datatype:
 | LPAREN rfields RPAREN                                        { `Record $2 }
 | TABLEHANDLE
      LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
-/* | TABLEHANDLE datatype perhaps_table_constraints            { `Table ($2, $3) } */
-
 | LBRACKETBAR vrow BARRBRACKET                                 { `Variant $2 }
 | LBRACKET datatype RBRACKET                                   { `List $2 }
 | type_var                                                     { $1 }
@@ -1172,8 +1168,7 @@ kinded_type_var:
 | type_var subkind                                             { attach_subkind ($1, $2) }
 
 type_arg_list:
-| type_arg                                                     { [$1] }
-| type_arg COMMA type_arg_list                                 { $1 :: $3 }
+| separated_nonempty_list(COMMA, type_arg)                     { $1 }
 
 /* TODO: fix the syntax for type arguments
    (TYPE, ROW, and PRESENCE are no longer tokens...)
@@ -1190,8 +1185,7 @@ vrow:
 | /* empty */                                                  { [], `Closed }
 
 datatypes:
-| datatype                                                     { [$1] }
-| datatype COMMA datatypes                                     { $1 :: $3 }
+| separated_nonempty_list(COMMA, datatype)                     { $1 }
 
 row:
 | fields                                                       { $1 }
@@ -1199,10 +1193,8 @@ row:
 
 fields:
 | field                                                        { [$1], `Closed }
-| field VBAR row_var                                           { [$1], $3 }
-| field VBAR kinded_row_var                                    { [$1], $3 }
-| VBAR row_var                                                 { [], $2 }
-| VBAR kinded_row_var                                          { [], $2 }
+| list(field) VBAR row_var                                     {  $1 , $3 }
+| list(field) VBAR kinded_row_var                              {  $1 , $3 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
@@ -1217,10 +1209,8 @@ field_label:
 
 rfields:
 | rfield                                                       { [$1], `Closed }
-| rfield VBAR row_var                                          { [$1], $3 }
-| rfield VBAR kinded_row_var                                   { [$1], $3 }
-| VBAR row_var                                                 { [], $2 }
-| VBAR kinded_row_var                                          { [], $2 }
+| list(rfield) VBAR row_var                                    {  $1, $3 }
+| list(rfield) VBAR kinded_row_var                             {  $1, $3 }
 | rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
 
 rfield:
@@ -1228,7 +1218,6 @@ rfield:
    the type (a,b,c) a record with fields a, b, c or a polymorphic tuple
    with type variables a, b, c?
 */
-/*| record_label                                               { $1, `Present `Unit } */
 | record_label fieldspec                                       { $1, $2 }
 
 record_label:
