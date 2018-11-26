@@ -52,37 +52,44 @@ end
 let type_variable_counter = ref 0
 
 let fresh_type_variable : subkind option -> datatypenode =
-  function subkind ->
-    incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
+  fun subkind ->
+    incr type_variable_counter;
+    `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
 let fresh_rigid_type_variable : subkind option -> datatypenode =
-  function subkind ->
-    incr type_variable_counter; `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
+  fun subkind ->
+    incr type_variable_counter;
+    `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
 let fresh_row_variable : subkind option -> row_var =
-  function subkind ->
-    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
+  fun subkind ->
+    incr type_variable_counter;
+    `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
 let fresh_rigid_row_variable : subkind option -> row_var =
-  function subkind ->
-    incr type_variable_counter; `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
+  fun subkind ->
+    incr type_variable_counter;
+    `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
 let fresh_presence_variable : subkind option -> fieldspec =
-  function subkind ->
-    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
+  fun subkind ->
+    incr type_variable_counter;
+    `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
 
 let fresh_rigid_presence_variable : subkind option -> fieldspec =
-  function subkind ->
-    incr type_variable_counter; `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
+  fun subkind ->
+    incr type_variable_counter;
+    `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let pos (start_pos, end_pos) : Sugartypes.position = start_pos, end_pos, None
+let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
 
 let with_pos p = Sugartypes.with_pos (pos p)
 
 let ensure_match p (opening : string) (closing : string) = function
   | result when opening = closing -> result
-  | _ -> raise (ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-                                     pos p))
+  | _ -> raise (ConcreteSyntaxError
+          ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening
+           ^ "'.", pos p))
 
 let default_fixity = 9
 
@@ -108,32 +115,35 @@ let annotate sigpos (signame, datatype) dpos : _ -> binding =
 
 let primary_kind_of_string p =
   function
-  | "Type" -> `Type
-  | "Row" -> `Row
+  | "Type"     -> `Type
+  | "Row"      -> `Row
   | "Presence" -> `Presence
-  | pk -> raise (ConcreteSyntaxError ("Invalid primary kind: " ^ pk, pos p))
+  | pk         ->
+     raise (ConcreteSyntaxError ("Invalid primary kind: " ^ pk, pos p))
 
 let linearity_of_string p =
   function
   | "Any" -> `Any
   | "Unl" -> `Unl
-  | lin -> raise (ConcreteSyntaxError ("Invalid kind linearity: " ^ lin, pos p))
+  | lin   ->
+     raise (ConcreteSyntaxError ("Invalid kind linearity: " ^ lin, pos p))
 
 let restriction_of_string p =
   function
-  | "Any" -> `Any
-  | "Base" -> `Base
+  | "Any"     -> `Any
+  | "Base"    -> `Base
   | "Session" -> `Session
-  | rest -> raise (ConcreteSyntaxError ("Invalid kind restriction: " ^ rest, pos p))
+  | rest      ->
+     raise (ConcreteSyntaxError ("Invalid kind restriction: " ^ rest, pos p))
 
 let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
-  let l = linearity_of_string pos lin in
-  let r = restriction_of_string pos rest in
-  p, Some (l, r)
+  let l = linearity_of_string    pos lin  in
+  let r = restriction_of_string  pos rest in
+  (p, Some (l, r))
 
 let full_subkind_of pos lin rest =
-  let l = linearity_of_string pos lin in
+  let l = linearity_of_string   pos lin  in
   let r = restriction_of_string pos rest in
   Some (l, r)
 
@@ -149,24 +159,24 @@ perhaps. *)
 let kind_of p =
   function
   (* primary kind abbreviation  *)
-  | "Type" -> `Type, None
-  | "Row" -> `Row, None
-  | "Presence" -> `Presence, None
+  | "Type"     -> (`Type, None)
+  | "Row"      -> (`Row, None)
+  | "Presence" -> (`Presence, None)
   (* subkind of type abbreviations *)
-  | "Any" -> `Type, Some (`Any, `Any)
-  | "Base" -> `Type, Some (`Unl, `Base)
-  | "Session" -> `Type, Some (`Any, `Session)
-  | "Eff"     -> `Row, Some (`Unl, `Effect)
-  | k -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
+  | "Any"      -> (`Type, Some (`Any, `Any))
+  | "Base"     -> (`Type, Some (`Unl, `Base))
+  | "Session"  -> (`Type, Some (`Any, `Session))
+  | "Eff"      -> (`Row, Some (`Unl, `Effect))
+  | k          -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
 
 let subkind_of p =
   function
   (* subkind abbreviations *)
-  | "Any" -> Some (`Any, `Any)
-  | "Base" -> Some (`Unl, `Base)
+  | "Any"     -> Some (`Any, `Any)
+  | "Base"    -> Some (`Unl, `Base)
   | "Session" -> Some (`Any, `Session)
-  | "Eff"  -> Some (`Unl, `Effect)
-  | sk -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos p))
+  | "Eff"     -> Some (`Unl, `Effect)
+  | sk        -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos p))
 
 let attach_kind (t, k) = (t, k, `Rigid)
 
@@ -175,20 +185,16 @@ let attach_subkind_helper update sk = update sk
 let attach_subkind (t, subkind) =
   let update sk =
     match t with
-    | `TypeVar (x, _, freedom) ->
-       `TypeVar (x, sk, freedom)
+    | `TypeVar (x, _, freedom) -> `TypeVar (x, sk, freedom)
     | _ -> assert false
-  in
-    attach_subkind_helper update subkind
+  in attach_subkind_helper update subkind
 
 let attach_row_subkind (r, subkind) =
   let update sk =
     match r with
-    | `Open (x, _, freedom) ->
-       `Open (x, sk, freedom)
+    | `Open (x, _, freedom) -> `Open (x, sk, freedom)
     | _ -> assert false
-  in
-    attach_subkind_helper update subkind
+  in attach_subkind_helper update subkind
 
 let row_with field (fields, row_var) = field::fields, row_var
 
@@ -212,9 +218,14 @@ let parseRegexFlags f =
               | 'g' -> `RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
-let datatype d = d, None
+let datatype d = (d, None)
 
 let cp_unit p = with_pos p (`Unquote ([], with_pos p (`TupleLit [])))
+let present = `Present (with_dummy_pos `Unit)
+
+let wild = "wild"
+let hear = "hear"
+
 %}
 
 %token END
@@ -301,48 +312,49 @@ let cp_unit p = with_pos p (`Unquote ([], with_pos p (`TupleLit [])))
 
 %%
 
+(* soption = singleton option.  Allows an argument to appear optionally.  If it
+   does, it is placed in a singleton list.  This combinator is useful when
+   defining various *field productions.  *)
+%inline soption(X):
+| /* nothing */   { []  }
+| x = X           { [x] }
+
 interactive:
 | nofun_declaration                                            { `Definitions [$1] }
-| fun_declarations SEMICOLON                                   { `Definitions $1 }
-| SEMICOLON                                                    { `Definitions [] }
-| exp SEMICOLON                                                { `Expression $1 }
-| directive                                                    { `Directive $1 }
+| fun_declarations SEMICOLON                                   { `Definitions $1   }
+| SEMICOLON                                                    { `Definitions []   }
+| exp SEMICOLON                                                { `Expression $1    }
+| directive                                                    { `Directive $1     }
 | END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
-| preamble declarations exp END                                { $1 @ $2, Some $3 }
-| preamble exp END                                             { $1, Some $2 }
-| preamble declarations END                                    { $1 @ $2, None }
+| declarations exp? END                                        { ($1, $2     ) }
+| exp END                                                      { ([], Some $1) }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
 
 args:
-| /* empty */                                                  { [] }
-| arg args                                                     { $1 :: $2 }
+| arg*                                                         { $1 }
 
 arg:
 | STRING                                                       { $1 }
 | VARIABLE                                                     { $1 }
 | CONSTRUCTOR                                                  { $1 }
-| UINTEGER                                                     { string_of_int $1 }
+| UINTEGER                                                     { string_of_int    $1 }
 | UFLOAT                                                       { string_of_float' $1 }
-| TRUE                                                         { "true" }
+| TRUE                                                         { "true"  }
 | FALSE                                                        { "false" }
 
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
-
-preamble:
-| /* empty */                                                  { [] }
 
 declarations:
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
 
 declaration:
-| fun_declaration                                              { $1 }
-| nofun_declaration                                            { $1 }
+| fun_declaration | nofun_declaration                          { $1 }
 
 nofun_declaration:
 | alien_block                                                  { $1 }
@@ -355,32 +367,25 @@ nofun_declaration:
                                                                  in with_pos $loc($1) (`Val ([],
                                                                     (with_pos $loc($1) (`Variable (make_untyped_binder bndr))), p, l, None)) }
 | signature tlvarbinding SEMICOLON                             { annotate $loc($1) $1 $loc($2) (`Var $2) }
-| typedecl SEMICOLON                                           { $1 }
-
-| links_module                                                 { $1 }
-| links_open SEMICOLON                                         { $1 }
+| typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
 alien_datatype:
 | var COLON datatype SEMICOLON                                 { (make_untyped_binder $1, datatype $3) }
 
 alien_datatypes:
-| alien_datatype                                               { [$1] }
-| alien_datatype alien_datatypes                               { $1 :: $2 }
+| alien_datatype+                                              { $1 }
 
 links_module:
 | MODULE module_name moduleblock                               { with_pos $loc($2) (`Module ($2, $3)) }
 
 alien_block:
-| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let language     = $2 in
-                                                                 let library_name = $3 in
-                                                                 with_pos $loc (`AlienBlock (language, library_name, $5)) }
+| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (`AlienBlock ($2, $3, $5)) }
 
 module_name:
 | CONSTRUCTOR                                                  { $1 }
 
 fun_declarations:
-| fun_declarations fun_declaration                             { $1 @ [$2] }
-| fun_declaration                                              { [$1] }
+| fun_declaration+                                             { $1 }
 
 fun_declaration:
 | tlfunbinding                                                 { let (bndr,lin,p,l) = $1
@@ -391,17 +396,16 @@ fun_declaration:
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
-                handler_parameterization                       { let binder = make_untyped_binder $3 in
-                                                                 let hnlit  = ($1, $2, fst $4, snd $4) in
-                                                                 (binder, hnlit, None) }
+                handler_parameterization                        { let binder = make_untyped_binder $3 in
+                                                                  let hnlit  = ($1, $2, fst $4, snd $4) in
+                                                                  (binder, hnlit, None) }
 
 optional_computation_parameter:
-| /* empty */                                                 { with_pos $sloc `Any }
-| LBRACKET pattern RBRACKET                                   { $2 }
+| /* empty */                                                  { with_pos $sloc `Any }
+| LBRACKET pattern RBRACKET                                    { $2 }
 
 perhaps_uinteger:
-| /* empty */                                                  { None }
-| UINTEGER                                                     { Some $1 }
+| UINTEGER?                                                    { $1 }
 
 prefixop:
 | PREFIXOP                                                     { with_pos $loc $1 }
@@ -420,8 +424,8 @@ tlvarbinding:
 | VAR var perhaps_location EQ exp                              { ($2, $5, $3) }
 
 signature:
-| SIG var COLON datatype                                       { $2, datatype $4 }
-| SIG op COLON datatype                                        { $2, datatype $4 }
+| SIG var COLON datatype                                       { ($2, datatype $4) }
+| SIG op COLON datatype                                        { ($2, datatype $4) }
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (`Type ($2, $3, datatype $5)) }
@@ -433,36 +437,35 @@ typeargs_opt:
 kind:
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
                                                                { full_kind_of $loc $2 $4 $6 }
-| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2 }
+| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2        }
 
 subkind:
 | COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN       { full_subkind_of $loc $3 $5 }
-| COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2 }
+| COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
 | VARIABLE                                                     { (($1, (`Type, None), `Rigid), None) }
-| VARIABLE kind                                                { (attach_kind ($1, $2), None) }
+| VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
 
 varlist:
-| typearg                                                      { [$1] }
-| typearg COMMA varlist                                        { $1 :: $3 }
+| separated_nonempty_list(COMMA, typearg)                      { $1 }
 
 fixity:
-| INFIX                                                        { `None, $1 }
-| INFIXL                                                       { `Left, $1 }
-| INFIXR                                                       { `Right, $1 }
-| PREFIX                                                       { `Pre, $1 }
-| POSTFIX                                                      { `Post, $1 }
+| INFIX                                                        { (`None , $1) }
+| INFIXL                                                       { (`Left , $1) }
+| INFIXR                                                       { (`Right, $1) }
+| PREFIX                                                       { (`Pre  , $1) }
+| POSTFIX                                                      { (`Post , $1) }
 
 perhaps_location:
-| SERVER                                                       { `Server }
-| CLIENT                                                       { `Client }
-| NATIVE                                                       { `Native }
+| SERVER                                                       { `Server  }
+| CLIENT                                                       { `Client  }
+| NATIVE                                                       { `Native  }
 | /* empty */                                                  { `Unknown }
 
 constant:
-| UINTEGER                                                     { `Int $1     }
-| UFLOAT                                                       { `Float $1   }
+| UINTEGER                                                     { `Int    $1  }
+| UFLOAT                                                       { `Float  $1  }
 | STRING                                                       { `String $1  }
 | TRUE                                                         { `Bool true  }
 | FALSE                                                        { `Bool false }
@@ -473,7 +476,7 @@ qualified_name:
 
 qualified_name_inner:
 | CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
-| VARIABLE                                                     { [$1] }
+| VARIABLE                                                     { [$1]     }
 
 qualified_type_name:
 | CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
@@ -494,37 +497,33 @@ cp_label:
 | CONSTRUCTOR                                                  { $1 }
 
 cp_case:
-| CASE cp_label RARROW cp_expression                           { $2, $4 }
+| CASE cp_label RARROW cp_expression                           { ($2, $4) }
 
 cp_cases:
-| cp_case                                                      { [$1] }
-| cp_case cp_cases                                             { $1 :: $2 }
+| cp_case+                                                     { $1 }
 
 perhaps_cp_cases:
-| /* empty */                                                  { [] }
-| cp_cases                                                     { $1 }
+| loption(cp_cases)                                            { $1 }
 
 perhaps_name:
-|                                                              { None }
-| cp_name                                                      { Some $1 }
+| cp_name?                                                     { $1 }
 
 cp_expression:
-| LBRACE block_contents RBRACE                                  { with_pos $loc (`Unquote $2) }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression          { with_pos $loc (`Grab ((name_of_binder $1, None), $3, $6)) }
-| cp_name LPAREN perhaps_name RPAREN                            { with_pos $loc (`Grab ((name_of_binder $1, None), $3, cp_unit $loc)) }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression               { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, $6)) }
-| cp_name LBRACKET exp RBRACKET                                 { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
-| cp_name LBRACKET RBRACKET                                     { with_pos $loc (`GiveNothing $1) }
-| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                  { with_pos $loc (`Offer ($2, $4)) }
-| cp_label cp_name DOT cp_expression                            { with_pos $loc (`Select ($2, $1, $4)) }
-| cp_label cp_name                                              { with_pos $loc (`Select ($2, $1, cp_unit $loc)) }
-| cp_name LRARROW cp_name                                       { with_pos $loc (`Link ($1, $3)) }
-| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { with_pos $loc (`Comp ($2, $5, $7)) }
+| LBRACE block_contents RBRACE                                 { with_pos $loc (`Unquote $2) }
+| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (`Grab ((name_of_binder $1, None), $3, $6)) }
+| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (`Grab ((name_of_binder $1, None), $3, cp_unit $loc)) }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, $6)) }
+| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
+| cp_name LBRACKET RBRACKET                                    { with_pos $loc (`GiveNothing $1) }
+| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (`Offer ($2, $4)) }
+| cp_label cp_name DOT cp_expression                           { with_pos $loc (`Select ($2, $1, $4)) }
+| cp_label cp_name                                             { with_pos $loc (`Select ($2, $1, cp_unit $loc)) }
+| cp_name LRARROW cp_name                                      { with_pos $loc (`Link ($1, $3)) }
+| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (`Comp ($2, $5, $7)) }
 
 primary_expression:
 | atomic_expression                                            { $1 }
-| LBRACKET RBRACKET                                            { with_pos $loc (`ListLit ([], None)) }
-| LBRACKET exps RBRACKET                                       { with_pos $loc (`ListLit ($2, None)) }
+| LBRACKET perhaps_exps RBRACKET                               { with_pos $loc (`ListLit ($2, None)) }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
 | xml                                                          { $1 }
 | FUN arg_lists block                                          { with_pos $loc     (`FunLit (None, `Unl, ($2,
@@ -537,12 +536,11 @@ primary_expression:
                                                                   let hnlit = ($1, $2, body, args) in
                                                                   with_pos $loc (`HandlerLit hnlit) }
 handler_parameterization:
-| handler_body                         { ($1, None) }
-| arg_lists handler_body               { ($2, Some $1) }
+| arg_lists? handler_body                                       { ($2, $1) }
 
 handler_depth:
-| HANDLER                    { `Deep }
-| SHALLOWHANDLER             { `Shallow }
+| HANDLER                                                      { `Deep }
+| SHALLOWHANDLER                                               { `Shallow }
 
 handler_body:
 | LBRACE cases RBRACE                                          { $2 }
@@ -555,47 +553,26 @@ parenthesized_thing:
 | LPAREN binop RPAREN                                          { with_pos $loc (`Section $2)              }
 | LPAREN DOT record_label RPAREN                               { with_pos $loc (`Section (`Project $3))   }
 | LPAREN RPAREN                                                { with_pos $loc (`RecordLit ([], None))    }
-| LPAREN labeled_exps VBAR exp RPAREN                          { with_pos $loc (`RecordLit ($2, Some $4)) }
-| LPAREN labeled_exps RPAREN                                   { with_pos $loc (`RecordLit ($2, None))    }
+| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { with_pos $loc (`RecordLit ($2, $3))      }
 | LPAREN exps RPAREN                                           { with_pos $loc (`TupleLit ($2))           }
 | LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (`With ($2, $4))           }
 
 binop:
-| MINUS                                                        { `Minus }
-| MINUSDOT                                                     { `FloatMinus }
+| MINUS                                                        { `Minus          }
+| MINUSDOT                                                     { `FloatMinus     }
 | op                                                           { `Name ($1.node) }
 
 op:
-| INFIX0                                                       { with_pos $loc $1 }
-| INFIXL0                                                      { with_pos $loc $1 }
-| INFIXR0                                                      { with_pos $loc $1 }
-| INFIX1                                                       { with_pos $loc $1 }
-| INFIXL1                                                      { with_pos $loc $1 }
-| INFIXR1                                                      { with_pos $loc $1 }
-| INFIX2                                                       { with_pos $loc $1 }
-| INFIXL2                                                      { with_pos $loc $1 }
-| INFIXR2                                                      { with_pos $loc $1 }
-| INFIX3                                                       { with_pos $loc $1 }
-| INFIXL3                                                      { with_pos $loc $1 }
-| INFIXR3                                                      { with_pos $loc $1 }
-| INFIX4                                                       { with_pos $loc $1 }
-| INFIXL4                                                      { with_pos $loc $1 }
-| INFIXR4                                                      { with_pos $loc $1 }
-| INFIX5                                                       { with_pos $loc $1 }
-| INFIXL5                                                      { with_pos $loc $1 }
-| INFIXR5                                                      { with_pos $loc $1 }
-| INFIX6                                                       { with_pos $loc $1 }
-| INFIXL6                                                      { with_pos $loc $1 }
-| INFIXR6                                                      { with_pos $loc $1 }
-| INFIX7                                                       { with_pos $loc $1 }
-| INFIXL7                                                      { with_pos $loc $1 }
-| INFIXR7                                                      { with_pos $loc $1 }
-| INFIX8                                                       { with_pos $loc $1 }
-| INFIXL8                                                      { with_pos $loc $1 }
-| INFIXR8                                                      { with_pos $loc $1 }
-| INFIX9                                                       { with_pos $loc $1 }
-| INFIXL9                                                      { with_pos $loc $1 }
-| INFIXR9                                                      { with_pos $loc $1 }
+| INFIX0 | INFIXL0 | INFIXR0
+| INFIX1 | INFIXL1 | INFIXR1
+| INFIX2 | INFIXL2 | INFIXR2
+| INFIX3 | INFIXL3 | INFIXR3
+| INFIX4 | INFIXL4 | INFIXR4
+| INFIX5 | INFIXL5 | INFIXR5
+| INFIX6 | INFIXL6 | INFIXR6
+| INFIX7 | INFIXL7 | INFIXR7
+| INFIX8 | INFIXL8 | INFIXR8
+| INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
 
 spawn_expression:
 | SPAWNAT LPAREN exp COMMA block RPAREN                        { with_pos $loc
@@ -618,10 +595,9 @@ spawn_expression:
                                                                           with_pos $loc($2) (`Block $2), None)) }
 
 postfix_expression:
-| primary_expression                                           { $1 }
+| primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { with_pos $loc (`UnaryAppl (([], `Name $2), $1)) }
 | block                                                        { with_pos $loc (`Block $1) }
-| spawn_expression                                             { $1 }
 | QUERY block                                                  { with_pos $loc (`Query (None, with_pos $loc($2) (`Block $2), None)) }
 | QUERY LBRACKET exp RBRACKET block                            { with_pos $loc (`Query (Some ($3, with_pos $loc (`Constant (`Int 0))),
                                                                                         with_pos $loc($5) (`Block $5), None)) }
@@ -631,26 +607,25 @@ postfix_expression:
 
 
 arg_spec:
-| LPAREN RPAREN                                                { [] }
-| LPAREN exps RPAREN                                           { $2 }
+| LPAREN perhaps_exps RPAREN                                   { $2 }
 
 exps:
-| exp COMMA exps                                               { $1 :: $3 }
-| exp                                                          { [$1] }
+| separated_nonempty_list(COMMA, exp)                          { $1 }
+
+perhaps_exps:
+| loption(exps)                                                { $1 }
 
 unary_expression:
 | MINUS unary_expression                                       { with_pos $loc (`UnaryAppl (([], `Minus     ), $2)) }
 | MINUSDOT unary_expression                                    { with_pos $loc (`UnaryAppl (([], `FloatMinus), $2)) }
 | PREFIXOP unary_expression                                    { with_pos $loc (`UnaryAppl (([], `Name $1   ), $2)) }
-| postfix_expression                                           { $1 }
-| constructor_expression                                       { $1 }
-| DOOP CONSTRUCTOR arg_spec                                    { with_pos $loc (`DoOperation ($2, $3, None)) }
-| DOOP CONSTRUCTOR                                             { with_pos $loc (`DoOperation ($2, [], None)) }
+| postfix_expression | constructor_expression                  { $1 }
+| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (`DoOperation ($2, $3, None)) }
 
 
 infixr_9:
 | unary_expression                                             { $1 }
-| unary_expression INFIX9 unary_expression                     { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| unary_expression INFIX9 unary_expression
 | unary_expression INFIXR9 infixr_9                            { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_9:
@@ -659,7 +634,7 @@ infixl_9:
 
 infixr_8:
 | infixl_9                                                     { $1 }
-| infixl_9 INFIX8  infixl_9                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_9 INFIX8  infixl_9
 | infixl_9 INFIXR8 infixr_8                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 | infixl_9 COLONCOLON infixr_8                                 { with_pos $loc (`InfixAppl (([], `Cons   ), $1, $3)) }
 
@@ -669,7 +644,7 @@ infixl_8:
 
 infixr_7:
 | infixl_8                                                     { $1 }
-| infixl_8 INFIX7  infixl_8                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_8 INFIX7  infixl_8
 | infixl_8 INFIXR7 infixr_7                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_7:
@@ -678,7 +653,7 @@ infixl_7:
 
 infixr_6:
 | infixl_7                                                     { $1 }
-| infixl_7 INFIX6  infixl_7                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_7 INFIX6  infixl_7
 | infixl_7 INFIXR6 infixr_6                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_6:
@@ -691,7 +666,7 @@ infixl_6:
 
 infixr_5:
 | infixl_6                                                     { $1 }
-| infixl_6 INFIX5  infixl_6                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_6 INFIX5  infixl_6
 | infixl_6 INFIXR5 infixr_5                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_5:
@@ -700,7 +675,7 @@ infixl_5:
 
 infixr_4:
 | infixl_5                                                     { $1 }
-| infixl_5 INFIX4    infixl_5                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_5 INFIX4    infixl_5
 | infixl_5 INFIXR4   infixr_4                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 | infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in
                                                                  with_pos $loc (`InfixAppl (([], `RegexMatch flags), $1, r)) }
@@ -711,7 +686,7 @@ infixl_4:
 
 infixr_3:
 | infixl_4                                                     { $1 }
-| infixl_4 INFIX3  infixl_4                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_4 INFIX3  infixl_4
 | infixl_4 INFIXR3 infixr_3                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_3:
@@ -720,7 +695,7 @@ infixl_3:
 
 infixr_2:
 | infixl_3                                                     { $1 }
-| infixl_3 INFIX2  infixl_3                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_3 INFIX2  infixl_3
 | infixl_3 INFIXR2 infixr_2                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_2:
@@ -729,7 +704,7 @@ infixl_2:
 
 infixr_1:
 | infixl_2                                                     { $1 }
-| infixl_2 INFIX1  infixl_2                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_2 INFIX1  infixl_2
 | infixl_2 INFIXR1 infixr_1                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_1:
@@ -738,7 +713,7 @@ infixl_1:
 
 infixr_0:
 | infixl_1                                                     { $1 }
-| infixl_1 INFIX0    infixl_1                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_1 INFIX0    infixl_1
 | infixl_1 INFIXR0   infixr_0                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_0:
@@ -775,18 +750,18 @@ attrs:
 | attr_list block                                              { $1, Some (with_pos $loc($2) (`Block $2)) }
 
 attr_list:
-| attr                                                         { [$1] }
-| attr_list attr                                               { $2 :: $1 }
+| rev(attr+)                                                   { $1 }
 
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
 | xmlid EQ LQUOTE RQUOTE                                       { ($1, [with_pos $loc($3) (`Constant (`String ""))]) }
 
 attr_val:
-| block                                                        { [with_pos $loc (`Block $1)] }
-| STRING                                                       { [with_pos $loc (`Constant (`String $1))] }
-| block attr_val                                               {  with_pos $loc($1) (`Block $1) :: $2 }
-| STRING attr_val                                              {  with_pos $loc($1) (`Constant (`String $1)) :: $2}
+| attr_val_entry+                                              { $1 }
+
+attr_val_entry:
+| block                                                        { with_pos $loc (`Block $1) }
+| STRING                                                       { with_pos $loc (`Constant (`String $1)) }
 
 xml_tree:
 | LXML SLASHRXML                                               { with_pos $loc (`Xml ($1, [], None, [])) }
@@ -797,14 +772,11 @@ xml_tree:
 | LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match $loc $1 $5 (with_pos $loc (`Xml ($1, fst $2, snd $2, $4))) }
 
 xml_contents_list:
-| xml_contents                                                 { [$1] }
-| xml_contents xml_contents_list                               { $1 :: $2 }
+| xml_contents+                                                { $1 }
 
 xml_contents:
 | block                                                        { with_pos $loc (`Block $1) }
-| formlet_binding                                              { $1 }
-| formlet_placement                                            { $1 }
-| page_placement                                               { $1 }
+| formlet_binding | formlet_placement | page_placement
 | xml_tree                                                     { $1 }
 | CDATA                                                        { with_pos $loc (`TextNode (Utility.xml_unescape $1)) }
 
@@ -831,16 +803,14 @@ conditional_expression:
 | session_expression                                           { $1 }
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (`Conditional ($3, $5, $7)) }
 
-cases:
-| case                                                         { [$1] }
-| case cases                                                   { $1 :: $2 }
-
 case:
 | CASE pattern RARROW block_contents                           { $2, with_pos $loc($4) (`Block ($4)) }
 
+cases:
+| case+                                                        { $1 }
+
 perhaps_cases:
-| /* empty */                                                  { [] }
-| cases                                                        { $1 }
+| case*                                                        { $1 }
 
 case_expression:
 | conditional_expression                                       { $1 }
@@ -855,8 +825,8 @@ case_expression:
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (`TryInOtherwise ($2, $4, $6, $8, None)) }
 
 handle_params:
-| logical_expression RARROW pattern { [($1, $3)] }
-| handle_params COMMA logical_expression RARROW pattern  { ($3,$5) :: $1 }
+| rev(separated_nonempty_list(COMMA,
+      separated_pair(logical_expression, RARROW, pattern)))    { $1 }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -866,15 +836,10 @@ iteration_expression:
       exp                                                      { with_pos $loc (`Iteration ($3, $7, $5, $6)) }
 
 perhaps_generators:
-| /* empty */                                                  { [] }
-| generators                                                   { $1 }
-
-generators:
-| generator                                                    { [$1] }
-| generator COMMA generators                                   { $1 :: $3 }
+| separated_list(COMMA, generator)                             { $1 }
 
 generator:
-| list_generator                                               { `List $1 }
+| list_generator                                               { `List $1  }
 | table_generator                                              { `Table $1 }
 
 list_generator:
@@ -884,7 +849,7 @@ table_generator:
 | pattern LLARROW exp                                          { ($1, $3) }
 
 perhaps_where:
-| /* empty */                                                  { None }
+| /* empty */                                                  { None    }
 | WHERE LPAREN exp RPAREN                                      { Some $3 }
 
 perhaps_orderby:
@@ -898,7 +863,7 @@ escape_expression:
 formlet_expression:
 | escape_expression                                            { $1 }
 | FORMLET xml YIELDS exp                                       { with_pos $loc (`Formlet ($2, $4)) }
-| PAGE xml                                                     { with_pos $loc (`Page $2) }
+| PAGE xml                                                     { with_pos $loc (`Page $2)          }
 
 table_expression:
 | formlet_expression                                           { $1 }
@@ -909,32 +874,28 @@ table_expression:
             TABLEKEYS exp FROM exp                             { with_pos $loc (`TableLit ($2, datatype $4, $5, $7, $9))}
 
 perhaps_table_constraints:
-| WHERE table_constraints                                      { $2 }
-| /* empty */                                                  { [] }
+| loption(preceded(WHERE, table_constraints))                  { $1 }
 
 table_constraints:
-| record_label field_constraints                               { [($1, $2)] }
-| record_label field_constraints COMMA table_constraints       { ($1, $2) :: $4 }
+| separated_nonempty_list(COMMA,
+    pair(record_label, field_constraints))                     { $1 }
 
 field_constraints:
-| field_constraint                                             { [$1] }
-| field_constraint field_constraints                           { $1 :: $2 }
+| field_constraint+                                            { $1 }
 
 field_constraint:
 | READONLY                                                     { `Readonly }
-| DEFAULT                                                      { `Default }
+| DEFAULT                                                      { `Default  }
 
 perhaps_db_args:
-| atomic_expression                                            { Some $1 }
-| /* empty */                                                  { None }
+| atomic_expression?                                           { $1 }
 
 perhaps_db_driver:
-| atomic_expression perhaps_db_args                            { Some $1, $2 }
-| /* empty */                                                  { None, None }
+| atomic_expression perhaps_db_args                            { Some $1, $2   }
+| /* empty */                                                  { None   , None }
 
 database_expression:
 | table_expression                                             { $1 }
-| INSERT exp VALUES LPAREN RPAREN exp                          { with_pos $loc (`DBInsert ($2, [], $6, None)) }
 | INSERT exp VALUES LPAREN record_labels RPAREN exp            { with_pos $loc (`DBInsert ($2, $5, $7, None)) }
 | INSERT exp VALUES
   LBRACKET LPAREN labeled_exps RPAREN RBRACKET                 { with_pos $loc (`DBInsert ($2,
@@ -943,9 +904,6 @@ database_expression:
                                                                                    (`ListLit ([with_pos $loc($6)
                                                                                                         (`RecordLit ($6, None))], None)),
                                                                           None)) }
-| INSERT exp VALUES LPAREN RPAREN db_expression
-  RETURNING VARIABLE                                           { with_pos $loc (`DBInsert ($2, [], $6,
-                                                                          Some (with_pos $loc($8) (`Constant (`String $8))))) }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
   RETURNING VARIABLE                                           { with_pos $loc (`DBInsert ($2, $5, $7,
                                                                           Some (with_pos $loc($9) (`Constant (`String $9))))) }
@@ -967,15 +925,13 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3)) }
 
 fn_dep_cols:
-| VARIABLE                                                     { [$1] }
-| VARIABLE fn_dep_cols                                         { $1 :: $2 }
+| VARIABLE+                                                    { $1 }
 
 fn_dep:
 | fn_dep_cols RARROW fn_dep_cols                               { ($1, $3) }
 
 fn_deps:
-| fn_dep                                                       { [ $1 ] }
-| fn_dep COMMA fn_deps                                         { $1 :: $3 }
+| separated_nonempty_list(COMMA, fn_dep)                       { $1 }
 
 lens_expression:
 | database_expression                                          { $1 }
@@ -994,8 +950,7 @@ lens_expression:
 
 
 record_labels:
-| record_label COMMA record_labels                             { $1 :: $3 }
-| record_label                                                 { [$1] }
+| separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
@@ -1013,14 +968,11 @@ binding:
 | LINFUN var arg_lists block                                   { with_pos $loc (`Fun (make_untyped_binder $2,
                                                                                   `Lin, ([], ($3, with_pos $loc($4) (`Block $4))), `Unknown,
                                                                                   None)) }
-| typedecl SEMICOLON                                           { $1 }
 | typed_handler_binding                                        { with_pos $loc (`Handler $1) }
-| links_module                                                 { $1 }
-| alien_block                                                  { $1 }
-| links_open                                                   { $1 }
+| typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
 bindings:
-| binding                                                      { [$1] }
+| binding                                                      { [$1]      }
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:
@@ -1036,18 +988,14 @@ block_contents:
 | exp SEMICOLON                                                { ([with_pos $loc($1) (`Exp $1)],
                                                                   with_pos $loc (`RecordLit ([], None))) }
 | exp                                                          { ([], $1) }
-| perhaps_semi                                                 { ([], with_pos $loc (`TupleLit [])) }
-
-perhaps_semi:
-| SEMICOLON                                                    {}
-| /* empty */                                                  {}
+| SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }
 
 exp:
 | lens_expression                                              { $1 }
 
 labeled_exps:
-| record_label EQ exp                                          { [$1, $3] }
-| record_label EQ exp COMMA labeled_exps                       { ($1, $3) :: $5 }
+| separated_nonempty_list(COMMA,
+    separated_pair(record_label, EQ, exp))                     { $1 }
 
 /*
  * Datatype grammar
@@ -1056,64 +1004,47 @@ just_datatype:
 | datatype END                                                 { $1 }
 
 datatype:
-| mu_datatype                                                  { with_pos $loc $1 }
-| straight_arrow                                               { with_pos $loc $1 }
-| squiggly_arrow                                               { with_pos $loc $1 }
+| mu_datatype | straight_arrow | squiggly_arrow                { with_pos $loc $1 }
 
 arrow_prefix:
 | LBRACE RBRACE                                                { ([], `Closed) }
-| LBRACE efields RBRACE                                        { $2 }
+| LBRACE efields RBRACE                                        { $2            }
 
 straight_arrow_prefix:
-| arrow_prefix                                                 { $1 }
-| MINUS nonrec_row_var                                         { ([], $2) }
-| MINUS kinded_nonrec_row_var                                  { ([], $2) }
+| arrow_prefix                                                 { $1       }
+| MINUS nonrec_row_var | MINUS kinded_nonrec_row_var           { ([], $2) }
 
 squig_arrow_prefix:
-| hear_arrow_prefix                                            { $1 }
-| arrow_prefix                                                 { $1 }
-| TILDE nonrec_row_var                                         { ([], $2) }
-| TILDE kinded_nonrec_row_var                                  { ([], $2) }
+| hear_arrow_prefix | arrow_prefix                             { $1       }
+| TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { row_with
-                                                                   ("wild", `Present (with_dummy_pos `Unit))
-                                                                   (row_with ("hear", `Present $3) $5) }
-| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present (with_dummy_pos `Unit));
-                                                                   ("hear", `Present $3)], `Closed) }
-| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present (with_dummy_pos `Unit));
-                                                                   ("hear", `Present $3)], $5) }
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present (with_dummy_pos `Unit));
-                                                                   ("hear", `Present $3)], $5) }
+                                                                   (wild, present)
+                                                                   (row_with (hear, `Present $3) $5) }
+| LBRACE COLON datatype RBRACE                                 { ([(wild, present);
+                                                                   (hear, `Present $3)], `Closed) }
+| LBRACE COLON datatype VBAR nonrec_row_var RBRACE
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([(wild, present);
+                                                                   (hear, `Present $3)], $5) }
 
 straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { `Function ($1, ([], fresh_rigid_row_variable None),
-                                                                            $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable None), $3) }
+| parenthesized_datatypes RARROW datatype                      { `Function ($1, ([], fresh_rigid_row_variable None), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli    ($1, ([], fresh_rigid_row_variable None), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with
-                                                                                  ("wild", `Present (with_dummy_pos `Unit))
-                                                                                $2,
-                                                                            $4) }
+  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with (wild, present) $2, $4) }
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli ($1, row_with ("wild", `Present (with_dummy_pos `Unit))
-                                                                             $2,
-                                                                         $4) }
-/*| parenthesized_datatypes hear_arrow_prefix
-  SQUIGRARROW datatype                                         { `Function ($1, $2, $4) }
-*/
-| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, ([("wild", `Present (with_dummy_pos `Unit))],
-                                                                                 fresh_rigid_row_variable None),
-                                                                            $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli ($1, ([("wild", `Present (with_dummy_pos `Unit))],
-                                                                              fresh_rigid_row_variable None),
-                                                                         $3) }
+  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with (wild, present) $2, $4) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, ([(wild, present)],
+                                                                                 fresh_rigid_row_variable None), $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, ([(wild, present)],
+                                                                                 fresh_rigid_row_variable None), $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { `Mu ($2, with_pos $loc($4) $4) }
@@ -1135,11 +1066,11 @@ forall_datatype:
 session_datatype:
 | BANG datatype DOT datatype                                   { `Output ($2, $4) }
 | QUESTION datatype DOT datatype                               { `Input  ($2, $4) }
-| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2 }
-| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2 }
-| TILDE datatype                                               { `Dual $2 }
-| END                                                          { `End }
-| primary_datatype                                             { $1 }
+| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
+| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
+| TILDE datatype                                               { `Dual $2         }
+| END                                                          { `End             }
+| primary_datatype                                             { $1               }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
@@ -1149,13 +1080,11 @@ parenthesized_datatypes:
 primary_datatype:
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> `Unit
-                                                                   | [{ node  ; _ }] -> node
+                                                                   | [{node;_}] -> node
                                                                    | ts  -> `Tuple ts }
 | LPAREN rfields RPAREN                                        { `Record $2 }
 | TABLEHANDLE
      LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
-/* | TABLEHANDLE datatype perhaps_table_constraints            { `Table ($2, $3) } */
-
 | LBRACKETBAR vrow BARRBRACKET                                 { `Variant $2 }
 | LBRACKET datatype RBRACKET                                   { `List $2 }
 | type_var                                                     { $1 }
@@ -1173,51 +1102,51 @@ primary_datatype:
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
 
 type_var:
-| VARIABLE                                                     { `TypeVar ($1, None, `Rigid) }
+| VARIABLE                                                     { `TypeVar ($1, None, `Rigid)    }
 | PERCENTVAR                                                   { `TypeVar ($1, None, `Flexible) }
 | UNDERSCORE                                                   { fresh_rigid_type_variable None }
-| PERCENT                                                      { fresh_type_variable None }
+| PERCENT                                                      { fresh_type_variable None       }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind ($1, $2) }
 
 type_arg_list:
-| type_arg                                                     { [$1] }
-| type_arg COMMA type_arg_list                                 { $1 :: $3 }
+| separated_nonempty_list(COMMA, type_arg)                     { $1 }
 
 /* TODO: fix the syntax for type arguments
    (TYPE, ROW, and PRESENCE are no longer tokens...)
 */
 type_arg:
-| datatype                                                     { `Type $1 }
-| TYPE LPAREN datatype RPAREN                                  { `Type $3 }
-| ROW LPAREN row RPAREN                                        { `Row $3 }
+| datatype                                                     { `Type $1     }
+| TYPE LPAREN datatype RPAREN                                  { `Type $3     }
+| ROW LPAREN row RPAREN                                        { `Row $3      }
 | PRESENCE LPAREN fieldspec RPAREN                             { `Presence $3 }
-| LBRACE row RBRACE                                            { `Row $2 }
-
-vrow:
-| vfields                                                      { $1 }
-| /* empty */                                                  { [], `Closed }
+| LBRACE row RBRACE                                            { `Row $2      }
 
 datatypes:
-| datatype                                                     { [$1] }
-| datatype COMMA datatypes                                     { $1 :: $3 }
+| separated_nonempty_list(COMMA, datatype)                     { $1 }
+
+vrow:
+| vfields                                                      { $1            }
+| /* empty */                                                  { ([], `Closed) }
 
 row:
-| fields                                                       { $1 }
-| /* empty */                                                  { [], `Closed }
+| fields                                                       { $1            }
+| /* empty */                                                  { ([], `Closed) }
+
+fields_def(field_prod, row_var_prod, kinded_row_var_prod):
+| field_prod                                                   { ([$1]       , `Closed) }
+| soption(field_prod) VBAR row_var_prod                        { ( $1        , $3     ) }
+| soption(field_prod) VBAR kinded_row_var_prod                 { ( $1        , $3     ) }
+| field_prod COMMA
+    fields_def(field_prod, row_var_prod, kinded_row_var_prod)  { ( $1::fst $3, snd $3 ) }
 
 fields:
-| field                                                        { [$1], `Closed }
-| field VBAR row_var                                           { [$1], $3 }
-| field VBAR kinded_row_var                                    { [$1], $3 }
-| VBAR row_var                                                 { [], $2 }
-| VBAR kinded_row_var                                          { [], $2 }
-| field COMMA fields                                           { $1 :: fst $3, snd $3 }
+| fields_def(field, row_var, kinded_row_var)                   { $1 }
 
 field:
-| field_label                                                  { $1, `Present (with_pos $loc `Unit) }
-| field_label fieldspec                                        { $1, $2 }
+| field_label                                                  { ($1, present) }
+| field_label fieldspec                                        { ($1, $2) }
 
 field_label:
 | CONSTRUCTOR                                                  { $1 }
@@ -1226,45 +1155,34 @@ field_label:
 | UINTEGER                                                     { string_of_int $1 }
 
 rfields:
-| rfield                                                       { [$1], `Closed }
-| rfield VBAR row_var                                          { [$1], $3 }
-| rfield VBAR kinded_row_var                                   { [$1], $3 }
-| VBAR row_var                                                 { [], $2 }
-| VBAR kinded_row_var                                          { [], $2 }
-| rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
+| fields_def(rfield, row_var, kinded_row_var)                  { $1 }
 
 rfield:
 /* The following sugar is tempting, but it leads to a conflict. Is
    the type (a,b,c) a record with fields a, b, c or a polymorphic tuple
    with type variables a, b, c?
 */
-/*| record_label                                               { $1, `Present `Unit } */
-| record_label fieldspec                                       { $1, $2 }
+| record_label fieldspec                                       { ($1, $2) }
 
 record_label:
 | field_label                                                  { $1 }
 
 vfields:
-| vfield                                                       { [$1], `Closed }
-| row_var                                                      { [], $1 }
-| kinded_row_var                                               { [], $1 }
-| vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
+| vfield                                                       { ([$1]      , `Closed) }
+| row_var                                                      { ([]        , $1     ) }
+| kinded_row_var                                               { ([]        , $1     ) }
+| vfield VBAR vfields                                          { ($1::fst $3, snd $3 ) }
 
 vfield:
-| CONSTRUCTOR                                                  { $1, `Present (with_pos $loc `Unit) }
-| CONSTRUCTOR fieldspec                                        { $1, $2 }
+| CONSTRUCTOR                                                  { ($1, present) }
+| CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| efield                                                       { [$1], `Closed }
-| efield VBAR nonrec_row_var                                   { [$1], $3 }
-| efield VBAR kinded_nonrec_row_var                            { [$1], $3 }
-| VBAR nonrec_row_var                                          { [], $2 }
-| VBAR kinded_nonrec_row_var                                   { [], $2 }
-| efield COMMA efields                                         { $1 :: fst $3, snd $3 }
+| fields_def(efield, nonrec_row_var, kinded_nonrec_row_var)    { $1 }
 
 efield:
-| effect_label                                                 { $1, `Present (with_pos $loc `Unit) }
-| effect_label fieldspec                                       { $1, $2 }
+| effect_label                                                 { ($1, present) }
+| effect_label fieldspec                                       { ($1, $2)      }
 
 effect_label:
 | CONSTRUCTOR                                                  { $1 }
@@ -1281,10 +1199,10 @@ fieldspec:
 | LBRACE PERCENT RBRACE                                        { fresh_presence_variable None }
 
 nonrec_row_var:
-| VARIABLE                                                     { `Open ($1, None, `Rigid) }
-| PERCENTVAR                                                   { `Open ($1, None, `Flexible) }
+| VARIABLE                                                     { `Open ($1, None, `Rigid   )   }
+| PERCENTVAR                                                   { `Open ($1, None, `Flexible)   }
 | UNDERSCORE                                                   { fresh_rigid_row_variable None }
-| PERCENT                                                      { fresh_row_variable None }
+| PERCENT                                                      { fresh_row_variable None       }
 
 /* FIXME:
  *
@@ -1304,18 +1222,19 @@ kinded_row_var:
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_alternate regex_flags_opt                                  { with_pos $loc($2) (`Regex $2), $3 }
-| SLASH regex_flags_opt                                                          { with_pos $loc (`Regex (`Simply "")), $2 }
-| SSLASH regex_pattern_alternate SLASH regex_replace regex_flags_opt             { with_pos $loc (`Regex (`Replace ($2, $4))),
-                                                                                   `RegexReplace :: $5 }
+| SLASH regex_pattern_alternate regex_flags_opt                { with_pos $loc($2) (`Regex $2), $3 }
+| SLASH regex_flags_opt                                        { with_pos $loc (`Regex (`Simply "")), $2 }
+| SSLASH regex_pattern_alternate SLASH regex_replace
+    regex_flags_opt                                            { with_pos $loc (`Regex (`Replace ($2, $4))),
+                                                                 `RegexReplace :: $5 }
 
 regex_flags_opt:
-| SLASH                                                        {[]}
-| SLASHFLAGS                                                   {parseRegexFlags $1}
+| SLASH                                                        { [] }
+| SLASHFLAGS                                                   { parseRegexFlags $1 }
 
 regex_replace:
-| /* empty */                                                  { `Literal ""}
-| REGEXREPL                                                    { `Literal $1}
+| /* empty */                                                  { `Literal "" }
+| REGEXREPL                                                    { `Literal $1 }
 | block                                                        { `Splice (with_pos $loc (`Block $1)) }
 
 regex_pattern:
@@ -1336,65 +1255,58 @@ regex_pattern_alternate:
 | regex_pattern_sequence ALTERNATE regex_pattern_alternate     { `Alternate (`Seq $1, $3) }
 
 regex_pattern_sequence:
-| regex_pattern                                                { [$1] }
-| regex_pattern regex_pattern_sequence                         { $1 :: $2 }
+| regex_pattern+                                               { $1 }
 
 /*
  * Pattern grammar
  */
 pattern:
-| typed_pattern                                             { $1 }
-| typed_pattern COLON primary_datatype                      { with_pos $loc (`HasType ($1, datatype (with_pos $loc($3) $3))) }
+| typed_pattern                                                { $1 }
+| typed_pattern COLON primary_datatype                         { with_pos $loc (`HasType ($1, datatype (with_pos $loc($3) $3))) }
 
 typed_pattern:
-| cons_pattern                                              { $1 }
-| cons_pattern AS var                                       { with_pos $loc (`As (make_untyped_binder $3, $1)) }
+| cons_pattern                                                 { $1 }
+| cons_pattern AS var                                          { with_pos $loc (`As (make_untyped_binder $3, $1)) }
 
 cons_pattern:
-| constructor_pattern                                       { $1 }
-| constructor_pattern COLONCOLON cons_pattern               { with_pos $loc (`Cons ($1, $3)) }
+| constructor_pattern                                          { $1 }
+| constructor_pattern COLONCOLON cons_pattern                  { with_pos $loc (`Cons ($1, $3)) }
 
 constructor_pattern:
-| negative_pattern                                          { $1 }
-| CONSTRUCTOR                                               { with_pos $loc (`Variant ($1, None)) }
-| CONSTRUCTOR parenthesized_pattern                         { with_pos $loc (`Variant ($1, Some $2)) }
+| negative_pattern                                             { $1 }
+| CONSTRUCTOR parenthesized_pattern?                           { with_pos $loc (`Variant ($1, $2)) }
 
 constructors:
-| CONSTRUCTOR                                               { [$1] }
-| CONSTRUCTOR COMMA constructors                            { $1 :: $3 }
+| separated_nonempty_list(COMMA, CONSTRUCTOR)                  { $1 }
 
 negative_pattern:
-| primary_pattern                                           { $1 }
-| MINUS CONSTRUCTOR                                         { with_pos $loc (`Negative [$2]) }
-| MINUS LPAREN constructors RPAREN                          { with_pos $loc (`Negative $3) }
+| primary_pattern                                              { $1 }
+| MINUS CONSTRUCTOR                                            { with_pos $loc (`Negative [$2]) }
+| MINUS LPAREN constructors RPAREN                             { with_pos $loc (`Negative $3)   }
 
 parenthesized_pattern:
-| LPAREN RPAREN                                             { with_pos $loc (`Tuple []) }
-| LPAREN pattern RPAREN                                     { $2 }
-| LPAREN pattern COMMA patterns RPAREN                      { with_pos $loc (`Tuple ($2 :: $4)) }
-| LPAREN labeled_patterns VBAR pattern RPAREN               { with_pos $loc (`Record ($2, Some $4)) }
-| LPAREN labeled_patterns RPAREN                            { with_pos $loc (`Record ($2, None)) }
+| LPAREN RPAREN                                                { with_pos $loc (`Tuple []) }
+| LPAREN pattern RPAREN                                        { $2 }
+| LPAREN pattern COMMA patterns RPAREN                         { with_pos $loc (`Tuple ($2 :: $4)) }
+| LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (`Record ($2, $3)) }
 
 primary_pattern:
-| VARIABLE                                                  { with_pos $loc (`Variable (make_untyped_binder (with_pos $loc $1))) }
-| UNDERSCORE                                                { with_pos $loc `Any }
-| constant                                                  { with_pos $loc (`Constant $1) }
-| LBRACKET RBRACKET                                         { with_pos $loc `Nil }
-| LBRACKET patterns RBRACKET                                { with_pos $loc (`List $2) }
-| parenthesized_pattern                                     { $1 }
+| VARIABLE                                                     { with_pos $loc (`Variable (make_untyped_binder (with_pos $loc $1))) }
+| UNDERSCORE                                                   { with_pos $loc `Any }
+| constant                                                     { with_pos $loc (`Constant $1) }
+| LBRACKET RBRACKET                                            { with_pos $loc `Nil }
+| LBRACKET patterns RBRACKET                                   { with_pos $loc (`List $2) }
+| parenthesized_pattern                                        { $1 }
 
 patterns:
-| pattern                                                   { [$1] }
-| pattern COMMA patterns                                    { $1 :: $3 }
+| separated_nonempty_list(COMMA, pattern)                      { $1 }
 
 labeled_patterns:
-| record_label EQ pattern                                   { [($1, $3)] }
-| record_label EQ pattern COMMA labeled_patterns            { ($1, $3) :: $5 }
+| separated_nonempty_list(COMMA,
+   separated_pair(record_label, EQ,  pattern))                 { $1 }
 
 multi_args:
-| LPAREN patterns RPAREN                                    { $2 }
-| LPAREN RPAREN                                             { [] }
+| LPAREN separated_list(COMMA, pattern) RPAREN                 { $2 }
 
 arg_lists:
-| multi_args                                                { [$1] }
-| multi_args arg_lists                                      { $1 :: $2 }
+| multi_args+                                                  { $1 }
