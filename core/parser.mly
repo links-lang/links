@@ -215,6 +215,11 @@ let parseRegexFlags f =
 let datatype d = d, None
 
 let cp_unit p = with_pos p (`Unquote ([], with_pos p (`TupleLit [])))
+let present = `Present (with_dummy_pos `Unit)
+
+let wild = "wild"
+let hear = "hear"
+
 %}
 
 %token END
@@ -1066,54 +1071,39 @@ arrow_prefix:
 
 straight_arrow_prefix:
 | arrow_prefix                                                 { $1 }
-| MINUS nonrec_row_var                                         { ([], $2) }
-| MINUS kinded_nonrec_row_var                                  { ([], $2) }
+| MINUS nonrec_row_var | MINUS kinded_nonrec_row_var           { ([], $2) }
 
 squig_arrow_prefix:
-| hear_arrow_prefix                                            { $1 }
-| arrow_prefix                                                 { $1 }
-| TILDE nonrec_row_var                                         { ([], $2) }
-| TILDE kinded_nonrec_row_var                                  { ([], $2) }
+| hear_arrow_prefix | arrow_prefix                             { $1 }
+| TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { row_with
-                                                                   ("wild", `Present (with_dummy_pos `Unit))
-                                                                   (row_with ("hear", `Present $3) $5) }
-| LBRACE COLON datatype RBRACE                                 { ([("wild", `Present (with_dummy_pos `Unit));
-                                                                   ("hear", `Present $3)], `Closed) }
-| LBRACE COLON datatype VBAR nonrec_row_var RBRACE             { ([("wild", `Present (with_dummy_pos `Unit));
-                                                                   ("hear", `Present $3)], $5) }
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([("wild", `Present (with_dummy_pos `Unit));
-                                                                   ("hear", `Present $3)], $5) }
+                                                                   (wild, present)
+                                                                   (row_with (hear, `Present $3) $5) }
+| LBRACE COLON datatype RBRACE                                 { ([(wild, present);
+                                                                   (hear, `Present $3)], `Closed) }
+| LBRACE COLON datatype VBAR nonrec_row_var RBRACE
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([(wild, present);
+                                                                   (hear, `Present $3)], $5) }
 
 straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { `Function ($1, ([], fresh_rigid_row_variable None),
-                                                                            $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli ($1, ([], fresh_rigid_row_variable None), $3) }
+| parenthesized_datatypes RARROW datatype                      { `Function ($1, ([], fresh_rigid_row_variable None), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli    ($1, ([], fresh_rigid_row_variable None), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with
-                                                                                  ("wild", `Present (with_dummy_pos `Unit))
-                                                                                $2,
-                                                                            $4) }
+  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with (wild, present) $2, $4) }
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli ($1, row_with ("wild", `Present (with_dummy_pos `Unit))
-                                                                             $2,
-                                                                         $4) }
-/*| parenthesized_datatypes hear_arrow_prefix
-  SQUIGRARROW datatype                                         { `Function ($1, $2, $4) }
-*/
-| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, ([("wild", `Present (with_dummy_pos `Unit))],
-                                                                                 fresh_rigid_row_variable None),
-                                                                            $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli ($1, ([("wild", `Present (with_dummy_pos `Unit))],
-                                                                              fresh_rigid_row_variable None),
-                                                                         $3) }
+  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with (wild, present) $2, $4) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, ([(wild, present)],
+                                                                                 fresh_rigid_row_variable None), $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, ([(wild, present)],
+                                                                                 fresh_rigid_row_variable None), $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { `Mu ($2, with_pos $loc($4) $4) }
@@ -1216,7 +1206,7 @@ fields:
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
-| field_label                                                  { $1, `Present (with_pos $loc `Unit) }
+| field_label                                                  { $1, present }
 | field_label fieldspec                                        { $1, $2 }
 
 field_label:
@@ -1251,7 +1241,7 @@ vfields:
 | vfield VBAR vfields                                          { $1 :: fst $3, snd $3 }
 
 vfield:
-| CONSTRUCTOR                                                  { $1, `Present (with_pos $loc `Unit) }
+| CONSTRUCTOR                                                  { $1, present }
 | CONSTRUCTOR fieldspec                                        { $1, $2 }
 
 efields:
@@ -1263,7 +1253,7 @@ efields:
 | efield COMMA efields                                         { $1 :: fst $3, snd $3 }
 
 efield:
-| effect_label                                                 { $1, `Present (with_pos $loc `Unit) }
+| effect_label                                                 { $1, present }
 | effect_label fieldspec                                       { $1, $2 }
 
 effect_label:
