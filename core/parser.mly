@@ -560,8 +560,7 @@ parenthesized_thing:
 | LPAREN binop RPAREN                                          { with_pos $loc (`Section $2)              }
 | LPAREN DOT record_label RPAREN                               { with_pos $loc (`Section (`Project $3))   }
 | LPAREN RPAREN                                                { with_pos $loc (`RecordLit ([], None))    }
-| LPAREN labeled_exps VBAR exp RPAREN                          { with_pos $loc (`RecordLit ($2, Some $4)) }
-| LPAREN labeled_exps RPAREN                                   { with_pos $loc (`RecordLit ($2, None))    }
+| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { with_pos $loc (`RecordLit ($2, $3))      }
 | LPAREN exps RPAREN                                           { with_pos $loc (`TupleLit ($2))           }
 | LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (`With ($2, $4))           }
 
@@ -571,36 +570,16 @@ binop:
 | op                                                           { `Name ($1.node) }
 
 op:
-| INFIX0                                                       { with_pos $loc $1 }
-| INFIXL0                                                      { with_pos $loc $1 }
-| INFIXR0                                                      { with_pos $loc $1 }
-| INFIX1                                                       { with_pos $loc $1 }
-| INFIXL1                                                      { with_pos $loc $1 }
-| INFIXR1                                                      { with_pos $loc $1 }
-| INFIX2                                                       { with_pos $loc $1 }
-| INFIXL2                                                      { with_pos $loc $1 }
-| INFIXR2                                                      { with_pos $loc $1 }
-| INFIX3                                                       { with_pos $loc $1 }
-| INFIXL3                                                      { with_pos $loc $1 }
-| INFIXR3                                                      { with_pos $loc $1 }
-| INFIX4                                                       { with_pos $loc $1 }
-| INFIXL4                                                      { with_pos $loc $1 }
-| INFIXR4                                                      { with_pos $loc $1 }
-| INFIX5                                                       { with_pos $loc $1 }
-| INFIXL5                                                      { with_pos $loc $1 }
-| INFIXR5                                                      { with_pos $loc $1 }
-| INFIX6                                                       { with_pos $loc $1 }
-| INFIXL6                                                      { with_pos $loc $1 }
-| INFIXR6                                                      { with_pos $loc $1 }
-| INFIX7                                                       { with_pos $loc $1 }
-| INFIXL7                                                      { with_pos $loc $1 }
-| INFIXR7                                                      { with_pos $loc $1 }
-| INFIX8                                                       { with_pos $loc $1 }
-| INFIXL8                                                      { with_pos $loc $1 }
-| INFIXR8                                                      { with_pos $loc $1 }
-| INFIX9                                                       { with_pos $loc $1 }
-| INFIXL9                                                      { with_pos $loc $1 }
-| INFIXR9                                                      { with_pos $loc $1 }
+| INFIX0 | INFIXL0 | INFIXR0
+| INFIX1 | INFIXL1 | INFIXR1
+| INFIX2 | INFIXL2 | INFIXR2
+| INFIX3 | INFIXL3 | INFIXR3
+| INFIX4 | INFIXL4 | INFIXR4
+| INFIX5 | INFIXL5 | INFIXR5
+| INFIX6 | INFIXL6 | INFIXR6
+| INFIX7 | INFIXL7 | INFIXR7
+| INFIX8 | INFIXL8 | INFIXR8
+| INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
 
 spawn_expression:
 | SPAWNAT LPAREN exp COMMA block RPAREN                        { with_pos $loc
@@ -655,7 +634,7 @@ unary_expression:
 
 infixr_9:
 | unary_expression                                             { $1 }
-| unary_expression INFIX9 unary_expression                     { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| unary_expression INFIX9 unary_expression
 | unary_expression INFIXR9 infixr_9                            { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_9:
@@ -664,7 +643,7 @@ infixl_9:
 
 infixr_8:
 | infixl_9                                                     { $1 }
-| infixl_9 INFIX8  infixl_9                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_9 INFIX8  infixl_9
 | infixl_9 INFIXR8 infixr_8                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 | infixl_9 COLONCOLON infixr_8                                 { with_pos $loc (`InfixAppl (([], `Cons   ), $1, $3)) }
 
@@ -674,7 +653,7 @@ infixl_8:
 
 infixr_7:
 | infixl_8                                                     { $1 }
-| infixl_8 INFIX7  infixl_8                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_8 INFIX7  infixl_8
 | infixl_8 INFIXR7 infixr_7                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_7:
@@ -683,7 +662,7 @@ infixl_7:
 
 infixr_6:
 | infixl_7                                                     { $1 }
-| infixl_7 INFIX6  infixl_7                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_7 INFIX6  infixl_7
 | infixl_7 INFIXR6 infixr_6                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_6:
@@ -696,7 +675,7 @@ infixl_6:
 
 infixr_5:
 | infixl_6                                                     { $1 }
-| infixl_6 INFIX5  infixl_6                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_6 INFIX5  infixl_6
 | infixl_6 INFIXR5 infixr_5                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_5:
@@ -705,7 +684,7 @@ infixl_5:
 
 infixr_4:
 | infixl_5                                                     { $1 }
-| infixl_5 INFIX4    infixl_5                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_5 INFIX4    infixl_5
 | infixl_5 INFIXR4   infixr_4                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 | infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in
                                                                  with_pos $loc (`InfixAppl (([], `RegexMatch flags), $1, r)) }
@@ -716,7 +695,7 @@ infixl_4:
 
 infixr_3:
 | infixl_4                                                     { $1 }
-| infixl_4 INFIX3  infixl_4                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_4 INFIX3  infixl_4
 | infixl_4 INFIXR3 infixr_3                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_3:
@@ -725,7 +704,7 @@ infixl_3:
 
 infixr_2:
 | infixl_3                                                     { $1 }
-| infixl_3 INFIX2  infixl_3                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_3 INFIX2  infixl_3
 | infixl_3 INFIXR2 infixr_2                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_2:
@@ -734,7 +713,7 @@ infixl_2:
 
 infixr_1:
 | infixl_2                                                     { $1 }
-| infixl_2 INFIX1  infixl_2                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_2 INFIX1  infixl_2
 | infixl_2 INFIXR1 infixr_1                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_1:
@@ -743,7 +722,7 @@ infixl_1:
 
 infixr_0:
 | infixl_1                                                     { $1 }
-| infixl_1 INFIX0    infixl_1                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_1 INFIX0    infixl_1
 | infixl_1 INFIXR0   infixr_0                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
 
 infixl_0:
@@ -780,18 +759,18 @@ attrs:
 | attr_list block                                              { $1, Some (with_pos $loc($2) (`Block $2)) }
 
 attr_list:
-| attr                                                         { [$1] }
-| attr_list attr                                               { $2 :: $1 }
+| rev(nonempty_list(attr))                                     { $1 }
 
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
 | xmlid EQ LQUOTE RQUOTE                                       { ($1, [with_pos $loc($3) (`Constant (`String ""))]) }
 
 attr_val:
-| block                                                        { [with_pos $loc (`Block $1)] }
-| STRING                                                       { [with_pos $loc (`Constant (`String $1))] }
-| block attr_val                                               {  with_pos $loc($1) (`Block $1) :: $2 }
-| STRING attr_val                                              {  with_pos $loc($1) (`Constant (`String $1)) :: $2}
+| nonempty_list(attr_val_entry)                                { $1 }
+
+attr_val_entry:
+| block                                                        { with_pos $loc (`Block $1) }
+| STRING                                                       { with_pos $loc (`Constant (`String $1)) }
 
 xml_tree:
 | LXML SLASHRXML                                               { with_pos $loc (`Xml ($1, [], None, [])) }
@@ -802,14 +781,11 @@ xml_tree:
 | LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match $loc $1 $5 (with_pos $loc (`Xml ($1, fst $2, snd $2, $4))) }
 
 xml_contents_list:
-| xml_contents                                                 { [$1] }
-| xml_contents xml_contents_list                               { $1 :: $2 }
+| nonempty_list( xml_contents )                                { $1 }
 
 xml_contents:
 | block                                                        { with_pos $loc (`Block $1) }
-| formlet_binding                                              { $1 }
-| formlet_placement                                            { $1 }
-| page_placement                                               { $1 }
+| formlet_binding | formlet_placement | page_placement
 | xml_tree                                                     { $1 }
 | CDATA                                                        { with_pos $loc (`TextNode (Utility.xml_unescape $1)) }
 
@@ -836,16 +812,14 @@ conditional_expression:
 | session_expression                                           { $1 }
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (`Conditional ($3, $5, $7)) }
 
-cases:
-| case                                                         { [$1] }
-| case cases                                                   { $1 :: $2 }
-
 case:
 | CASE pattern RARROW block_contents                           { $2, with_pos $loc($4) (`Block ($4)) }
 
+cases:
+| nonempty_list(case)                                          { $1 }
+
 perhaps_cases:
-| /* empty */                                                  { [] }
-| cases                                                        { $1 }
+| list(case)                                                   { $1 }
 
 case_expression:
 | conditional_expression                                       { $1 }
@@ -860,8 +834,8 @@ case_expression:
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (`TryInOtherwise ($2, $4, $6, $8, None)) }
 
 handle_params:
-| logical_expression RARROW pattern { [($1, $3)] }
-| handle_params COMMA logical_expression RARROW pattern  { ($3,$5) :: $1 }
+| rev(separated_nonempty_list(COMMA,
+      separated_pair(logical_expression, RARROW, pattern)))    { $1 }
 
 iteration_expression:
 | case_expression                                              { $1 }
@@ -871,12 +845,7 @@ iteration_expression:
       exp                                                      { with_pos $loc (`Iteration ($3, $7, $5, $6)) }
 
 perhaps_generators:
-| /* empty */                                                  { [] }
-| generators                                                   { $1 }
-
-generators:
-| generator                                                    { [$1] }
-| generator COMMA generators                                   { $1 :: $3 }
+| separated_list(COMMA, generator)                             { $1 }
 
 generator:
 | list_generator                                               { `List $1 }
@@ -918,12 +887,11 @@ perhaps_table_constraints:
 | /* empty */                                                  { [] }
 
 table_constraints:
-| record_label field_constraints                               { [($1, $2)] }
-| record_label field_constraints COMMA table_constraints       { ($1, $2) :: $4 }
+| separated_nonempty_list(COMMA,
+    pair(record_label, field_constraints))                     { $1 }
 
 field_constraints:
-| field_constraint                                             { [$1] }
-| field_constraint field_constraints                           { $1 :: $2 }
+| nonempty_list(field_constraint)                              { $1 }
 
 field_constraint:
 | READONLY                                                     { `Readonly }
@@ -939,7 +907,6 @@ perhaps_db_driver:
 
 database_expression:
 | table_expression                                             { $1 }
-| INSERT exp VALUES LPAREN RPAREN exp                          { with_pos $loc (`DBInsert ($2, [], $6, None)) }
 | INSERT exp VALUES LPAREN record_labels RPAREN exp            { with_pos $loc (`DBInsert ($2, $5, $7, None)) }
 | INSERT exp VALUES
   LBRACKET LPAREN labeled_exps RPAREN RBRACKET                 { with_pos $loc (`DBInsert ($2,
@@ -948,9 +915,6 @@ database_expression:
                                                                                    (`ListLit ([with_pos $loc($6)
                                                                                                         (`RecordLit ($6, None))], None)),
                                                                           None)) }
-| INSERT exp VALUES LPAREN RPAREN db_expression
-  RETURNING VARIABLE                                           { with_pos $loc (`DBInsert ($2, [], $6,
-                                                                          Some (with_pos $loc($8) (`Constant (`String $8))))) }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
   RETURNING VARIABLE                                           { with_pos $loc (`DBInsert ($2, $5, $7,
                                                                           Some (with_pos $loc($9) (`Constant (`String $9))))) }
@@ -997,7 +961,7 @@ lens_expression:
 
 
 record_labels:
-| separated_nonempty_list(COMMA, record_label)                 { $1 }
+| separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
@@ -1183,8 +1147,10 @@ row:
 
 fields:
 | field                                                        { [$1], `Closed }
-| list(field) VBAR row_var                                     {  $1 , $3 }
-| list(field) VBAR kinded_row_var                              {  $1 , $3 }
+| field VBAR row_var                                           { [$1], $3 }
+| field VBAR kinded_row_var                                    { [$1], $3 }
+| VBAR row_var                                                 {  [] , $2 }
+| VBAR kinded_row_var                                          {  [] , $2 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
@@ -1199,8 +1165,10 @@ field_label:
 
 rfields:
 | rfield                                                       { [$1], `Closed }
-| list(rfield) VBAR row_var                                    {  $1, $3 }
-| list(rfield) VBAR kinded_row_var                             {  $1, $3 }
+| rfield VBAR row_var                                          { [$1], $3 }
+| rfield VBAR kinded_row_var                                   { [$1], $3 }
+| VBAR row_var                                                 { []  , $2 }
+| VBAR kinded_row_var                                          { []  , $2 }
 | rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
 
 rfield:
