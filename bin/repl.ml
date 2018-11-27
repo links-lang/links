@@ -143,8 +143,8 @@ let rec directives
                   let external_files = source.external_dependencies in
                   ((globals @ locals, main), t), (nenv, tyenv), external_files in
               let r = Driver.evaluate true parse_and_desugar envs filename in
-                print_value r.result_type r.result_value;
-                r.result_env
+                print_value r.Driver.result_type r.Driver.result_value;
+                r.Driver.result_env
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, extending the current environment");
 
@@ -194,6 +194,60 @@ let execute_directive (name, args) (valenv, nenv, typingenv) =
     envs
 
 
+let evaluate_parse_result envs parse_result =
+  let _, nenv, tyenv = envs in
+  match parse_result with
+    | `Definitions (defs, nenv'), tyenv' ->
+        let valenv, _ =
+          Driver.process_program
+            true
+            envs
+            (defs, `Return (`Extend (StringMap.empty, None)))
+            [] in
+
+          Env.String.fold (* TBD: Make Env.String.foreach. *)
+            (fun name spec () ->
+                  print_endline (name ^" = "^
+                                Types.string_of_tycon_spec spec); ())
+            (tyenv'.Types.tycon_env)
+            ();
+
+          Env.String.fold
+            (fun name var () ->
+                let v, t =
+                  (* function values are bound in a global
+                    table, whereas other values are bound
+                    in the value environment *)
+                  match Tables.lookup Tables.fun_defs var with
+                  | None ->
+                    let v = Value.Env.find var valenv in
+                    let t = Env.String.lookup tyenv'.Types.var_env name in
+                    v, t
+                  | Some (finfo, _, None, location) ->
+                    let v =
+                      match location with
+                      | `Server | `Unknown ->
+                        `FunctionPtr (var, None)
+                      | `Client ->
+                        `ClientFunction (Js.var_name_binder (var, finfo))
+                      | `Native -> assert false in
+                    let t = Var.info_type finfo in v, t
+                  | _ -> assert false
+                in
+                print_endline(name
+                              ^" = "^Value.string_of_value v
+                              ^" : "^Types.string_of_datatype t))
+            nenv'
+            ();
+
+          (valenv,
+            Env.String.extend nenv nenv',
+            Types.extend_typing_environment tyenv tyenv')
+    | `Expression (e, t), _ ->
+        let valenv, v = Driver.process_program true envs e [] in
+          print_value t v;
+          valenv, nenv, tyenv
+    | `Directive directive, _ -> try execute_directive directive envs with _ -> envs
 
 
 (** Interactive loop *)
@@ -204,62 +258,8 @@ let interact envs =
   ignore (LNoise.history_set ~max_length:100);
   let rec interact envs =
     let evaluate_replitem parse envs =
-      let _, nenv, tyenv = envs in
         Errors.display ~default:(fun _ -> envs)
-          (lazy
-             (match parse () with
-                | `Definitions (defs, nenv'), tyenv' ->
-                    let valenv, _ =
-                      Driver.process_program
-                        true
-                        envs
-                        (defs, `Return (`Extend (StringMap.empty, None)))
-                        Types.unit_type
-                        [] in
-
-                      Env.String.fold (* TBD: Make Env.String.foreach. *)
-                        (fun name spec () ->
-                             print_endline (name ^" = "^
-                                            Types.string_of_tycon_spec spec); ())
-                        (tyenv'.Types.tycon_env)
-                        ();
-
-                      Env.String.fold
-                        (fun name var () ->
-                           let v, t =
-                             (* function values are bound in a global
-                                table, whereas other values are bound
-                                in the value environment *)
-                             match Tables.lookup Tables.fun_defs var with
-                             | None ->
-                               let v = Value.Env.find var valenv in
-                               let t = Env.String.lookup tyenv'.Types.var_env name in
-                               v, t
-                             | Some (finfo, _, None, location) ->
-                               let v =
-                                 match location with
-                                 | `Server | `Unknown ->
-                                   `FunctionPtr (var, None)
-                                 | `Client ->
-                                   `ClientFunction (Js.var_name_binder (var, finfo))
-                                 | `Native -> assert false in
-                               let t = Var.info_type finfo in v, t
-                             | _ -> assert false
-                           in
-                           print_endline(name
-                                         ^" = "^Value.string_of_value v
-                                         ^" : "^Types.string_of_datatype t))
-                        nenv'
-                        ();
-
-                      (valenv,
-                       Env.String.extend nenv nenv',
-                       Types.extend_typing_environment tyenv tyenv')
-                | `Expression (e, t), _ ->
-                    let valenv, v = Driver.process_program true envs e t [] in
-                      print_value t v;
-                      valenv, nenv, tyenv
-                | `Directive directive, _ -> try execute_directive directive envs with _ -> envs))
+          (lazy (evaluate_parse_result envs (parse ())))
     in
       let use_linenoise = Settings.get_value Basicsettings.Readline.native_readline in
       begin

@@ -23,7 +23,6 @@ let process_program
       (interacting : bool)
       (envs : evaluation_env)
       (program : Ir.program)
-      (t : Types.datatype)
       external_files
           : (Value.env * Value.t) =
   let (valenv, nenv, tyenv) = envs in
@@ -39,8 +38,8 @@ let process_program
   lazy (Eval.run_program valenv program) |>measure_as<| "run_program"
 
 
-let process_program  interacting envs program t external_files =
-  lazy (process_program  interacting envs program t external_files) |>measure_as<| "process_program"
+let process_program  interacting envs program external_files =
+  lazy (process_program  interacting envs program external_files) |>measure_as<| "process_program"
 
 
 let die_on_exception_unless_interacting is_interacting f x =
@@ -64,7 +63,7 @@ let evaluate
   let evaluate_inner f =
     let (program, t), (nenv', tyenv'), external_files = parse_fun (nenv, tyenv) f in
 
-    let valenv, v = process_program interacting envs program t external_files in
+    let valenv, v = process_program interacting envs program external_files in
     {
     result_env = (valenv,
       Env.String.extend nenv nenv',
