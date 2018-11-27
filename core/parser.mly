@@ -315,16 +315,14 @@ interactive:
 | END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
-| preamble declarations exp END                                { $1 @ $2, Some $3 }
-| preamble exp END                                             { $1, Some $2 }
-| preamble declarations END                                    { $1 @ $2, None }
+| declarations exp? END                                        { $1, $2 }
+| exp END                                                      { [], Some $1 }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
 
 args:
-| /* empty */                                                  { [] }
-| arg args                                                     { $1 :: $2 }
+| arg*                                                         { $1 }
 
 arg:
 | STRING                                                       { $1 }
@@ -338,16 +336,12 @@ arg:
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
 
-preamble:
-| /* empty */                                                  { [] }
-
 declarations:
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
 
 declaration:
-| fun_declaration                                              { $1 }
-| nofun_declaration                                            { $1 }
+| fun_declaration | nofun_declaration                          { $1 }
 
 nofun_declaration:
 | alien_block                                                  { $1 }
@@ -369,8 +363,7 @@ alien_datatype:
 | var COLON datatype SEMICOLON                                 { (make_untyped_binder $1, datatype $3) }
 
 alien_datatypes:
-| alien_datatype                                               { [$1] }
-| alien_datatype alien_datatypes                               { $1 :: $2 }
+| alien_datatype+                                              { $1 }
 
 links_module:
 | MODULE module_name moduleblock                               { with_pos $loc($2) (`Module ($2, $3)) }
@@ -757,14 +750,14 @@ attrs:
 | attr_list block                                              { $1, Some (with_pos $loc($2) (`Block $2)) }
 
 attr_list:
-| rev(nonempty_list(attr))                                     { $1 }
+| rev(attr+)                                                   { $1 }
 
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
 | xmlid EQ LQUOTE RQUOTE                                       { ($1, [with_pos $loc($3) (`Constant (`String ""))]) }
 
 attr_val:
-| nonempty_list(attr_val_entry)                                { $1 }
+| attr_val_entry+                                              { $1 }
 
 attr_val_entry:
 | block                                                        { with_pos $loc (`Block $1) }
@@ -779,7 +772,7 @@ xml_tree:
 | LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match $loc $1 $5 (with_pos $loc (`Xml ($1, fst $2, snd $2, $4))) }
 
 xml_contents_list:
-| nonempty_list( xml_contents )                                { $1 }
+| xml_contents+                                                { $1 }
 
 xml_contents:
 | block                                                        { with_pos $loc (`Block $1) }
@@ -814,10 +807,10 @@ case:
 | CASE pattern RARROW block_contents                           { $2, with_pos $loc($4) (`Block ($4)) }
 
 cases:
-| nonempty_list(case)                                          { $1 }
+| case+                                                        { $1 }
 
 perhaps_cases:
-| list(case)                                                   { $1 }
+| case*                                                        { $1 }
 
 case_expression:
 | conditional_expression                                       { $1 }
@@ -889,7 +882,7 @@ table_constraints:
     pair(record_label, field_constraints))                     { $1 }
 
 field_constraints:
-| nonempty_list(field_constraint)                              { $1 }
+| field_constraint+                                            { $1 }
 
 field_constraint:
 | READONLY                                                     { `Readonly }
@@ -934,7 +927,7 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3)) }
 
 fn_dep_cols:
-| nonempty_list( VARIABLE )                                    { $1 }
+| VARIABLE+                                                    { $1 }
 
 fn_dep:
 | fn_dep_cols RARROW fn_dep_cols                               { ($1, $3) }
@@ -1272,7 +1265,7 @@ regex_pattern_alternate:
 | regex_pattern_sequence ALTERNATE regex_pattern_alternate     { `Alternate (`Seq $1, $3) }
 
 regex_pattern_sequence:
-| nonempty_list(regex_pattern)                                 { $1 }
+| regex_pattern+                                            { $1 }
 
 /*
  * Pattern grammar
@@ -1326,4 +1319,4 @@ multi_args:
 | LPAREN separated_list(COMMA, pattern) RPAREN              { $2 }
 
 arg_lists:
-| nonempty_list(multi_args)                                 { $1 }
+| multi_args+                                               { $1 }
