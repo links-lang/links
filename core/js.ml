@@ -204,7 +204,8 @@ module Lang = struct
     (* | Skip *)
     | Break
     | Continue
-  (* and decl = *)
+    | Binding of decl
+  and decl =
     | Let of { kind: let_kind; binder: Ident.binder; expr: expr }
     | LetFun of fun_def
   and fun_def = {
@@ -240,7 +241,7 @@ module Lang = struct
       = fun fd -> Fun fd
 
     let letfun : fun_def -> stmt
-      = fun fd -> LetFun fd
+      = fun fd -> Binding (LetFun fd)
 
     let arrow : Ident.binder list -> js -> expr
       = fun params body -> Arrow (params, body)
@@ -312,13 +313,13 @@ module Lang = struct
      *   | s0, s1           -> Seq [s0; s1] *)
 
     let const : Ident.binder -> expr -> stmt
-      = fun binder expr -> Let { kind = `Const; binder; expr }
+      = fun binder expr -> Binding (Let { kind = `Const; binder; expr })
 
     let let_ : Ident.binder -> expr -> stmt
-      = fun binder expr -> Let { kind = `Let; binder; expr }
+      = fun binder expr -> Binding (Let { kind = `Let; binder; expr })
 
     let var : Ident.binder -> expr -> stmt
-      = fun binder expr -> Let { kind = `Var; binder; expr }
+      = fun binder expr -> Binding (Let { kind = `Var; binder; expr })
 
     let lift_stmt : stmt -> js
       = fun stmt -> [stmt]

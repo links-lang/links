@@ -64,7 +64,7 @@ module VariableInspection = struct
    *   go code;
    *   get_vars () *)
 
-  let get_affected_variables _code = assert false
+  (* let get_affected_variables _code = assert false *)
     (* let open Pervasives in
      * inspect_code_variables code
      * |> List.map (fun v -> Var(v)) *)
@@ -446,7 +446,7 @@ module Default_Continuation : CONTINUATION = struct
 
   let (&>) f = function
     | Identity -> Code f, skip
-    | Code expr -> assert false (* TODO *)
+    | Code _expr -> assert false (* TODO *)
 
   let reflect x = Code x
   let rec reify = function
@@ -478,7 +478,7 @@ module Default_Continuation : CONTINUATION = struct
   let trap _ _ = assert false
   let install_trap _ _ = assert false
 
-  let contify_with_env fn = assert false
+  let contify_with_env _fn = assert false
   (* match fn Identity with
    * | env, (Fn _ as k) -> env, reflect k
    * | _ -> failwith "error: contify: non-function argument." *)
@@ -507,8 +507,8 @@ module Higher_Order_Continuation : CONTINUATION = struct
   (* Auxiliary functions for manipulating the continuation stack *)
   let nil = prim "LINKEDLIST.Nil"
   let cons x xs = apply (prim "LINKEDLIST.Cons") [x; xs]
-  let head xs = apply (prim "LINKEDLIST.head") [xs]
-  let tail xs = apply (prim "LINKEDLIST.tail") [xs]
+  (* let head xs = apply (prim "LINKEDLIST.head") [xs]
+   * let tail xs = apply (prim "LINKEDLIST.tail") [xs] *)
   let augment f kappa = apply (prim "_K.augment") [f; kappa]
 
   let toplevel =
@@ -556,7 +556,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
        let ks' = Ident.fresh_binder ~prefix:"_kappa" () in
        let decl = const ks' (cons f ks) in
        Cons (Static (variable (Ident.to_var ks'), ret, eff), tail), lift_stmt decl
-    | Cons (Dynamic ks, tail) as v -> assert false (* TODO *)
+    | Cons (Dynamic _ks, _tail) as _v -> assert false (* TODO *)
     | Reflect v ->
        let kappa = Ident.fresh_binder ~prefix:"_kappa" () in
        let decl = const kappa (augment f v) in
@@ -665,8 +665,8 @@ end = functor (K : CONTINUATION) -> struct
     = fun prim_name args ->
     apply ~strategy:`Direct (prim prim_name) args
 
-  let contify fn =
-    snd @@ K.contify_with_env (fun k -> VEnv.empty, fn k)
+  (* let contify fn =
+   *   snd @@ K.contify_with_env (fun k -> VEnv.empty, fn k) *)
 
   let rec generate_value env : Ir.value -> expr =
     let gv v = generate_value env v in
@@ -674,9 +674,9 @@ end = functor (K : CONTINUATION) -> struct
     | `Constant c ->
        begin
          match c with
-         | `Int v  -> lit (Int v)
+         | `Int v      -> lit (Int v)
          | `Float v    -> lit (Float v)
-         | `Bool v  -> lit (Bool v)
+         | `Bool v     -> lit (Bool v)
          | `Char v     -> chrlit v
          | `String v   -> chrlistlit v
        end
@@ -981,7 +981,7 @@ end = functor (K : CONTINUATION) -> struct
               [obj ["_label", strlit l; "_value", obj []]; gv c])
          in
          return (K.apply kappa arg)
-      | `Choice (c, bs) -> assert false (* TODO *)
+      | `Choice (_c, _bs) -> assert false (* TODO *)
          (* let result = Ident.fresh_binder ~prefix:"_result" () in
           * let received = Ident.fresh_binder ~prefix:"_received" () in
           * let bind, skappa, skappas = K.pop kappa in
@@ -1401,7 +1401,7 @@ end = functor (K : CONTINUATION) -> struct
          in
          (state, varenv, None, List.map letfun fun_defs) (* TODO possibly inline `letfun` into the map above. *)
       | `Alien (bnd, raw_name, _lang) ->
-         let b = Ident.of_binder bnd in
+         let _ = Ident.of_binder bnd in
          let varenv = VEnv.bind varenv (Var.var_of_binder bnd, raw_name) in
          state, varenv, None, skip
       | `Module _ -> state, varenv, None, skip

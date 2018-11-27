@@ -1,5 +1,5 @@
 open Js
-open Irtojs
+(* open Irtojs *)
 open Utility
 
 module type JS_CODEGEN = sig
@@ -113,9 +113,9 @@ type env = string IntMap.t
 module NewCodeGen : JS_CODEGEN = struct
   open Js
 
-  let is_primitive_var : Ident.var -> bool = function
-    | `Primitive _ -> true
-    | _ -> false
+  (* let is_primitive_var : Ident.var -> bool = function
+   *   | `Primitive _ -> true
+   *   | _ -> false *)
 
   let lookup : Ident.var -> env -> string option
     = fun k env ->
@@ -403,7 +403,7 @@ module NewCodeGen : JS_CODEGEN = struct
       (* | Skip -> empty *)
       | (Break : stmt) -> lift ( hgrp (semi (text "break")) )
       | Continue -> lift ( hgrp (semi (text "continue")) )
-      | Let { kind; binder; expr } ->
+      | Binding (Let { kind; binder; expr }) ->
          let name = Ident.name_binder binder in
          let env' = extend (Ident.to_var binder, name) env in
          let modifier =
@@ -420,7 +420,7 @@ module NewCodeGen : JS_CODEGEN = struct
              $/ (Expr.transl env' expr))
          in
          env', pretty_b
-      | LetFun fun_def -> Misc.fun_def env fun_def
+      | Binding (LetFun fun_def) -> Misc.fun_def env fun_def
   end
 
   (* module Make_Decl (Misc : MISC) (Expr : EXPR) = struct

@@ -114,7 +114,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     let json_state = ResolveJsonState.add_value_information v json_state in
     (* Json.jsonize_state req_data v in *)
 
-    (* divide HTML into head and body secitions (as we need to augment the head) *)
+    (* divide HTML into head and body sections (as we need to augment the head) *)
     let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
     let _nenv, venv, _tenv = initialise_envs (nenv, tyenv) in
 
