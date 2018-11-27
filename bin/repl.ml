@@ -7,7 +7,7 @@ module BS = Basicsettings
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
 
-type envs = Value.env * Ir.var Env.String.t * Types.typing_environment
+type envs = Driver.evaluation_env
 
 
 (** Print a value (including its type if `printing_types' is [true]). *)
