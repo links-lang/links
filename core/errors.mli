@@ -18,6 +18,4 @@ exception UnboundTyCon of (SourceCode.pos * string)
 val format_exception : exn -> string
 val format_exception_html : exn -> string
 
-val display_fatal : ?stream:out_channel -> ('a -> 'b) -> ('a -> 'b)
-val display_fatal_l : ?stream:out_channel -> ('b lazy_t) -> 'b
 val display : ?default:(exn -> 'a) -> ?stream:out_channel -> ('a lazy_t) -> 'a

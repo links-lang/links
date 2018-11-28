@@ -23,16 +23,12 @@ let only_if predicate transformer =
 let only_if_set setting =
              only_if (Settings.get_value setting)
 
-let is_interactive  = Settings.get_value Basicsettings.interacting
-let perform_optimisations = not is_interactive && Settings.get_value Basicsettings.optimise
-
 
 let print_program _ p =
   Debug.print (Ir.string_of_program p);p
 
 let print_bindings _ bs =
   List.iter (Debug.print -<- Ir.string_of_binding) bs;bs
-
 
 
 let run pipeline tyenv p =
@@ -73,7 +69,7 @@ struct
       ]
 
 
-    let main_pipeline = [
+    let main_pipeline perform_optimisations = [
         only_if perform_optimisations (measure "optimise" (run optimisation_pipeline));
         Closures.program Lib.primitive_vars;
         perform_for_side_effects (BuildTables.program Lib.primitive_vars);
@@ -91,8 +87,8 @@ struct
 end
 
 
-let transform_program tyenv p =
-  run Pipelines.main_pipeline tyenv p
+let transform_program perform_optimisations tyenv p =
+  run (Pipelines.main_pipeline perform_optimisations) tyenv p
 
 let transform_prelude tyenv bindings =
   run Pipelines.prelude_pipeline tyenv bindings
