@@ -306,6 +306,13 @@ let hear = "hear"
 
 %%
 
+(* soption = singleton option.  Allows an argument to appear optionally.  If it
+   does, it is placed in a singleton list.  This combinator is useful when
+   defining various *field productions.  *)
+%inline soption(X):
+| /* nothing */   { []  }
+| x = X           { [x] }
+
 interactive:
 | nofun_declaration                                            { `Definitions [$1] }
 | fun_declarations SEMICOLON                                   { `Definitions $1 }
@@ -1138,10 +1145,8 @@ row:
 
 fields:
 | field                                                        { [$1], `Closed }
-| field VBAR row_var                                           { [$1], $3 }
-| field VBAR kinded_row_var                                    { [$1], $3 }
-| VBAR row_var                                                 {  [] , $2 }
-| VBAR kinded_row_var                                          {  [] , $2 }
+| soption(field) VBAR row_var                                  {  $1 , $3 }
+| soption(field) VBAR kinded_row_var                           {  $1 , $3 }
 | field COMMA fields                                           { $1 :: fst $3, snd $3 }
 
 field:
@@ -1156,10 +1161,8 @@ field_label:
 
 rfields:
 | rfield                                                       { [$1], `Closed }
-| rfield VBAR row_var                                          { [$1], $3 }
-| rfield VBAR kinded_row_var                                   { [$1], $3 }
-| VBAR row_var                                                 { []  , $2 }
-| VBAR kinded_row_var                                          { []  , $2 }
+| soption(rfield) VBAR row_var                                 {  $1 , $3 }
+| soption(rfield) VBAR kinded_row_var                          {  $1 , $3 }
 | rfield COMMA rfields                                         { $1 :: fst $3, snd $3 }
 
 rfield:
@@ -1184,10 +1187,8 @@ vfield:
 
 efields:
 | efield                                                       { [$1], `Closed }
-| efield VBAR nonrec_row_var                                   { [$1], $3 }
-| efield VBAR kinded_nonrec_row_var                            { [$1], $3 }
-| VBAR nonrec_row_var                                          { [], $2 }
-| VBAR kinded_nonrec_row_var                                   { [], $2 }
+| soption(efield) VBAR nonrec_row_var                          {  $1 , $3 }
+| soption(efield) VBAR kinded_nonrec_row_var                   {  $1 , $3 }
 | efield COMMA efields                                         { $1 :: fst $3, snd $3 }
 
 efield:
