@@ -384,8 +384,7 @@ module_name:
 | CONSTRUCTOR                                                  { $1 }
 
 fun_declarations:
-| fun_declarations fun_declaration                             { $1 @ [$2] }
-| fun_declaration                                              { [$1] }
+| fun_declaration+                                             { $1 }
 
 fun_declaration:
 | tlfunbinding                                                 { let (bndr,lin,p,l) = $1
@@ -452,11 +451,11 @@ varlist:
 | typearg COMMA varlist                                        { $1 :: $3 }
 
 fixity:
-| INFIX                                                        { `None, $1 }
-| INFIXL                                                       { `Left, $1 }
+| INFIX                                                        { `None , $1 }
+| INFIXL                                                       { `Left , $1 }
 | INFIXR                                                       { `Right, $1 }
-| PREFIX                                                       { `Pre, $1 }
-| POSTFIX                                                      { `Post, $1 }
+| PREFIX                                                       { `Pre  , $1 }
+| POSTFIX                                                      { `Post , $1 }
 
 perhaps_location:
 | SERVER                                                       { `Server }
@@ -538,12 +537,12 @@ primary_expression:
                                                                   let hnlit = ($1, $2, body, args) in
                                                                   with_pos $loc (`HandlerLit hnlit) }
 handler_parameterization:
-| handler_body                         { ($1, None) }
-| arg_lists handler_body               { ($2, Some $1) }
+| handler_body                                                 { ($1, None) }
+| arg_lists handler_body                                       { ($2, Some $1) }
 
 handler_depth:
-| HANDLER                    { `Deep }
-| SHALLOWHANDLER             { `Shallow }
+| HANDLER                                                      { `Deep }
+| SHALLOWHANDLER                                               { `Shallow }
 
 handler_body:
 | LBRACE cases RBRACE                                          { $2 }
