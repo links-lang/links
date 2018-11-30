@@ -396,17 +396,16 @@ fun_declaration:
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
-                handler_parameterization                       { let binder = make_untyped_binder $3 in
-                                                                 let hnlit  = ($1, $2, fst $4, snd $4) in
-                                                                 (binder, hnlit, None) }
+                handler_parameterization                        { let binder = make_untyped_binder $3 in
+                                                                  let hnlit  = ($1, $2, fst $4, snd $4) in
+                                                                  (binder, hnlit, None) }
 
 optional_computation_parameter:
-| /* empty */                                                 { with_pos $sloc `Any }
-| LBRACKET pattern RBRACKET                                   { $2 }
+| /* empty */                                                  { with_pos $sloc `Any }
+| LBRACKET pattern RBRACKET                                    { $2 }
 
 perhaps_uinteger:
-| /* empty */                                                  { None }
-| UINTEGER                                                     { Some $1 }
+| UINTEGER?                                                    { $1 }
 
 prefixop:
 | PREFIXOP                                                     { with_pos $loc $1 }
@@ -506,12 +505,10 @@ cp_cases:
 | cp_case cp_cases                                             { $1 :: $2 }
 
 perhaps_cp_cases:
-| /* empty */                                                  { [] }
-| cp_cases                                                     { $1 }
+| loption(cp_cases)                                            { $1 }
 
 perhaps_name:
-|                                                              { None }
-| cp_name                                                      { Some $1 }
+| cp_name?                                                     { $1 }
 
 cp_expression:
 | LBRACE block_contents RBRACE                                  { with_pos $loc (`Unquote $2) }
@@ -856,7 +853,7 @@ table_generator:
 | pattern LLARROW exp                                          { ($1, $3) }
 
 perhaps_where:
-| /* empty */                                                  { None }
+| /* empty */                                                  { None    }
 | WHERE LPAREN exp RPAREN                                      { Some $3 }
 
 perhaps_orderby:
@@ -881,8 +878,7 @@ table_expression:
             TABLEKEYS exp FROM exp                             { with_pos $loc (`TableLit ($2, datatype $4, $5, $7, $9))}
 
 perhaps_table_constraints:
-| WHERE table_constraints                                      { $2 }
-| /* empty */                                                  { [] }
+| loption(preceded(WHERE, table_constraints))                  { $1 }
 
 table_constraints:
 | separated_nonempty_list(COMMA,
@@ -896,8 +892,7 @@ field_constraint:
 | DEFAULT                                                      { `Default }
 
 perhaps_db_args:
-| atomic_expression                                            { Some $1 }
-| /* empty */                                                  { None }
+| atomic_expression?                                           { $1 }
 
 perhaps_db_driver:
 | atomic_expression perhaps_db_args                            { Some $1, $2 }
