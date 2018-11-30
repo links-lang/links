@@ -315,15 +315,15 @@ let hear = "hear"
 
 interactive:
 | nofun_declaration                                            { `Definitions [$1] }
-| fun_declarations SEMICOLON                                   { `Definitions $1 }
-| SEMICOLON                                                    { `Definitions [] }
-| exp SEMICOLON                                                { `Expression $1 }
-| directive                                                    { `Directive $1 }
+| fun_declarations SEMICOLON                                   { `Definitions $1   }
+| SEMICOLON                                                    { `Definitions []   }
+| exp SEMICOLON                                                { `Expression $1    }
+| directive                                                    { `Directive $1     }
 | END                                                          { `Directive ("quit", []) (* rather hackish *) }
 
 file:
-| declarations exp? END                                        { $1, $2 }
-| exp END                                                      { [], Some $1 }
+| declarations exp? END                                        { ($1, $2     ) }
+| exp END                                                      { ([], Some $1) }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
@@ -335,9 +335,9 @@ arg:
 | STRING                                                       { $1 }
 | VARIABLE                                                     { $1 }
 | CONSTRUCTOR                                                  { $1 }
-| UINTEGER                                                     { string_of_int $1 }
+| UINTEGER                                                     { string_of_int    $1 }
 | UFLOAT                                                       { string_of_float' $1 }
-| TRUE                                                         { "true" }
+| TRUE                                                         { "true"  }
 | FALSE                                                        { "false" }
 
 var:
@@ -361,10 +361,7 @@ nofun_declaration:
                                                                  in with_pos $loc($1) (`Val ([],
                                                                     (with_pos $loc($1) (`Variable (make_untyped_binder bndr))), p, l, None)) }
 | signature tlvarbinding SEMICOLON                             { annotate $loc($1) $1 $loc($2) (`Var $2) }
-| typedecl SEMICOLON                                           { $1 }
-
-| links_module                                                 { $1 }
-| links_open SEMICOLON                                         { $1 }
+| typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
 alien_datatype:
 | var COLON datatype SEMICOLON                                 { (make_untyped_binder $1, datatype $3) }
@@ -376,9 +373,7 @@ links_module:
 | MODULE module_name moduleblock                               { with_pos $loc($2) (`Module ($2, $3)) }
 
 alien_block:
-| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let language     = $2 in
-                                                                 let library_name = $3 in
-                                                                 with_pos $loc (`AlienBlock (language, library_name, $5)) }
+| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (`AlienBlock ($2, $3, $5)) }
 
 module_name:
 | CONSTRUCTOR                                                  { $1 }
@@ -423,8 +418,8 @@ tlvarbinding:
 | VAR var perhaps_location EQ exp                              { ($2, $5, $3) }
 
 signature:
-| SIG var COLON datatype                                       { $2, datatype $4 }
-| SIG op COLON datatype                                        { $2, datatype $4 }
+| SIG var COLON datatype                                       { ($2, datatype $4) }
+| SIG op COLON datatype                                        { ($2, datatype $4) }
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (`Type ($2, $3, datatype $5)) }
@@ -436,36 +431,35 @@ typeargs_opt:
 kind:
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
                                                                { full_kind_of $loc $2 $4 $6 }
-| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2 }
+| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2        }
 
 subkind:
 | COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN       { full_subkind_of $loc $3 $5 }
-| COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2 }
+| COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
 | VARIABLE                                                     { (($1, (`Type, None), `Rigid), None) }
-| VARIABLE kind                                                { (attach_kind ($1, $2), None) }
+| VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
 
 varlist:
-| typearg                                                      { [$1] }
-| typearg COMMA varlist                                        { $1 :: $3 }
+| separated_nonempty_list(COMMA, typearg)                      { $1 }
 
 fixity:
-| INFIX                                                        { `None , $1 }
-| INFIXL                                                       { `Left , $1 }
-| INFIXR                                                       { `Right, $1 }
-| PREFIX                                                       { `Pre  , $1 }
-| POSTFIX                                                      { `Post , $1 }
+| INFIX                                                        { (`None , $1) }
+| INFIXL                                                       { (`Left , $1) }
+| INFIXR                                                       { (`Right, $1) }
+| PREFIX                                                       { (`Pre  , $1) }
+| POSTFIX                                                      { (`Post , $1) }
 
 perhaps_location:
-| SERVER                                                       { `Server }
-| CLIENT                                                       { `Client }
-| NATIVE                                                       { `Native }
+| SERVER                                                       { `Server  }
+| CLIENT                                                       { `Client  }
+| NATIVE                                                       { `Native  }
 | /* empty */                                                  { `Unknown }
 
 constant:
-| UINTEGER                                                     { `Int $1     }
-| UFLOAT                                                       { `Float $1   }
+| UINTEGER                                                     { `Int    $1  }
+| UFLOAT                                                       { `Float  $1  }
 | STRING                                                       { `String $1  }
 | TRUE                                                         { `Bool true  }
 | FALSE                                                        { `Bool false }
@@ -476,7 +470,7 @@ qualified_name:
 
 qualified_name_inner:
 | CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
-| VARIABLE                                                     { [$1] }
+| VARIABLE                                                     { [$1]     }
 
 qualified_type_name:
 | CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
@@ -497,11 +491,10 @@ cp_label:
 | CONSTRUCTOR                                                  { $1 }
 
 cp_case:
-| CASE cp_label RARROW cp_expression                           { $2, $4 }
+| CASE cp_label RARROW cp_expression                           { ($2, $4) }
 
 cp_cases:
-| cp_case                                                      { [$1] }
-| cp_case cp_cases                                             { $1 :: $2 }
+| cp_case+                                                     { $1 }
 
 perhaps_cp_cases:
 | loption(cp_cases)                                            { $1 }
@@ -510,17 +503,17 @@ perhaps_name:
 | cp_name?                                                     { $1 }
 
 cp_expression:
-| LBRACE block_contents RBRACE                                  { with_pos $loc (`Unquote $2) }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression          { with_pos $loc (`Grab ((name_of_binder $1, None), $3, $6)) }
-| cp_name LPAREN perhaps_name RPAREN                            { with_pos $loc (`Grab ((name_of_binder $1, None), $3, cp_unit $loc)) }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression               { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, $6)) }
-| cp_name LBRACKET exp RBRACKET                                 { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
-| cp_name LBRACKET RBRACKET                                     { with_pos $loc (`GiveNothing $1) }
-| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                  { with_pos $loc (`Offer ($2, $4)) }
-| cp_label cp_name DOT cp_expression                            { with_pos $loc (`Select ($2, $1, $4)) }
-| cp_label cp_name                                              { with_pos $loc (`Select ($2, $1, cp_unit $loc)) }
-| cp_name LRARROW cp_name                                       { with_pos $loc (`Link ($1, $3)) }
-| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN { with_pos $loc (`Comp ($2, $5, $7)) }
+| LBRACE block_contents RBRACE                                 { with_pos $loc (`Unquote $2) }
+| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (`Grab ((name_of_binder $1, None), $3, $6)) }
+| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (`Grab ((name_of_binder $1, None), $3, cp_unit $loc)) }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, $6)) }
+| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
+| cp_name LBRACKET RBRACKET                                    { with_pos $loc (`GiveNothing $1) }
+| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (`Offer ($2, $4)) }
+| cp_label cp_name DOT cp_expression                           { with_pos $loc (`Select ($2, $1, $4)) }
+| cp_label cp_name                                             { with_pos $loc (`Select ($2, $1, cp_unit $loc)) }
+| cp_name LRARROW cp_name                                      { with_pos $loc (`Link ($1, $3)) }
+| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (`Comp ($2, $5, $7)) }
 
 primary_expression:
 | atomic_expression                                            { $1 }
@@ -537,8 +530,7 @@ primary_expression:
                                                                   let hnlit = ($1, $2, body, args) in
                                                                   with_pos $loc (`HandlerLit hnlit) }
 handler_parameterization:
-| handler_body                                                 { ($1, None) }
-| arg_lists handler_body                                       { ($2, Some $1) }
+| arg_lists? handler_body                                       { ($2, $1) }
 
 handler_depth:
 | HANDLER                                                      { `Deep }
