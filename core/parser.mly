@@ -1123,22 +1123,26 @@ type_arg:
 | PRESENCE LPAREN fieldspec RPAREN                             { `Presence $3 }
 | LBRACE row RBRACE                                            { `Row $2      }
 
+datatypes:
+| separated_nonempty_list(COMMA, datatype)                     { $1 }
+
 vrow:
 | vfields                                                      { $1            }
 | /* empty */                                                  { ([], `Closed) }
-
-datatypes:
-| separated_nonempty_list(COMMA, datatype)                     { $1 }
 
 row:
 | fields                                                       { $1            }
 | /* empty */                                                  { ([], `Closed) }
 
+fields_def(field_prod, row_var_prod, kinded_row_var_prod):
+| field_prod                                                   { ([$1]       , `Closed) }
+| soption(field_prod) VBAR row_var_prod                        { ( $1        , $3     ) }
+| soption(field_prod) VBAR kinded_row_var_prod                 { ( $1        , $3     ) }
+| field_prod COMMA
+    fields_def(field_prod, row_var_prod, kinded_row_var_prod)  { ( $1::fst $3, snd $3 ) }
+
 fields:
-| field                                                        { ([$1]       , `Closed) }
-| soption(field) VBAR row_var                                  { ( $1        , $3     ) }
-| soption(field) VBAR kinded_row_var                           { ( $1        , $3     ) }
-| field COMMA fields                                           { ( $1::fst $3, snd $3 ) }
+| fields_def(field, row_var, kinded_row_var)                   { $1 }
 
 field:
 | field_label                                                  { ($1, present) }
@@ -1151,10 +1155,7 @@ field_label:
 | UINTEGER                                                     { string_of_int $1 }
 
 rfields:
-| rfield                                                       { ([$1]       , `Closed) }
-| soption(rfield) VBAR row_var                                 { ( $1        , $3     ) }
-| soption(rfield) VBAR kinded_row_var                          { ( $1        , $3     ) }
-| rfield COMMA rfields                                         { ( $1::fst $3, snd $3 ) }
+| fields_def(rfield, row_var, kinded_row_var)                  { $1 }
 
 rfield:
 /* The following sugar is tempting, but it leads to a conflict. Is
@@ -1177,10 +1178,7 @@ vfield:
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| efield                                                       { ([$1]       , `Closed) }
-| soption(efield) VBAR nonrec_row_var                          { ( $1        , $3     ) }
-| soption(efield) VBAR kinded_nonrec_row_var                   { ( $1        , $3     ) }
-| efield COMMA efields                                         { ( $1::fst $3, snd $3 ) }
+| fields_def(efield, nonrec_row_var, kinded_nonrec_row_var)    { $1 }
 
 efield:
 | effect_label                                                 { ($1, present) }
@@ -1201,10 +1199,10 @@ fieldspec:
 | LBRACE PERCENT RBRACE                                        { fresh_presence_variable None }
 
 nonrec_row_var:
-| VARIABLE                                                     { `Open ($1, None, `Rigid   ) }
-| PERCENTVAR                                                   { `Open ($1, None, `Flexible) }
+| VARIABLE                                                     { `Open ($1, None, `Rigid   )   }
+| PERCENTVAR                                                   { `Open ($1, None, `Flexible)   }
 | UNDERSCORE                                                   { fresh_rigid_row_variable None }
-| PERCENT                                                      { fresh_row_variable None }
+| PERCENT                                                      { fresh_row_variable None       }
 
 /* FIXME:
  *
