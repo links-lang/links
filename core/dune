@@ -3,7 +3,7 @@
 
 (menhir
   (modules parser jsonparse xmlParser)
-  (flags "--table" "--explain" "--dump") ;; slower parser, but compilation *much* faster
+  (flags "--table") ;; slower parser, but compilation *much* faster
 )
 
 (library
