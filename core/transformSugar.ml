@@ -130,16 +130,16 @@ let check_type_application (e, t) k =
       raise (Instantiate.ArityMismatch (exp, prov))
   end
 
-class transform (env : Types.typing_environment) =
+class transform (env : Types.FrontendTypeEnv.t) =
   object (o : 'self_type)
-    val var_env = env.Types.var_env
-    val tycon_env = env.Types.tycon_env
+    val var_env = env.Types.FrontendTypeEnv.var_env
+    val tycon_env = env.Types.FrontendTypeEnv.tycon_env
     val formlet_env = TyEnv.empty
-    val effect_row = fst (Types.unwrap_row env.Types.effect_row)
+    val effect_row = fst (Types.unwrap_row env.Types.FrontendTypeEnv.effect_row)
 
-    method get_var_env : unit -> Types.environment = fun () -> var_env
-    method get_tycon_env : unit -> Types.tycon_environment = fun () -> tycon_env
-    method get_formlet_env : unit -> Types.environment = fun () -> formlet_env
+    method get_var_env : unit -> Types.FrontendTypeEnv.var_environment = fun () -> var_env
+    method get_tycon_env : unit -> Types.FrontendTypeEnv.tycon_environment = fun () -> tycon_env
+    method get_formlet_env : unit -> Types.FrontendTypeEnv.var_environment = fun () -> formlet_env
 
     method backup_envs = var_env, tycon_env, formlet_env, effect_row
     method restore_envs (var_env, tycon_env, formlet_env, effect_row) =

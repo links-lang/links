@@ -70,7 +70,7 @@ object
   method! phrasenode = function
     | Page e ->
         let (o, e, _t) = super#phrase e in
-        let page_type = Instantiate.alias "Page" [] env.Types.tycon_env in
+        let page_type = Instantiate.alias "Page" [] env.Types.FrontendTypeEnv.tycon_env in
         let e = desugar_page (o, page_type) e in
           (o, e.node, page_type)
     | e -> super#phrasenode e

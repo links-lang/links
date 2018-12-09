@@ -432,7 +432,7 @@ struct
     val type_var_env = Env.empty
 
     (* initialize to the default row of allowed toplevel effects*)
-    val allowed_effects = Lib.typing_env.effect_row
+    val allowed_effects = Lib.typing_env.FrontendTypeEnv.effect_row
 
     (* TODO: closure handling needs to be reworked properly *)
     method lookup_closure_def_for_fun fid = Env.find closure_def_env fid

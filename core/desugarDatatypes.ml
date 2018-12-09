@@ -142,7 +142,7 @@ struct
                     ((var, subkind, `Presence point))::args,
                      {tenv; renv; penv=StringMap.add name point penv})
 
-  let rec datatype var_env (alias_env : Types.tycon_environment) t' =
+  let rec datatype var_env (alias_env : Types.FrontendTypeEnv.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
     match t' with
     | {node = t; pos} ->
@@ -635,10 +635,10 @@ let program typing_env (bindings, p : Sugartypes.program) :
 
 let sentence typing_env = function
   | Definitions bs ->
-      let alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
-        {typing_env with tycon_env = alias_env}, Definitions bs'
-  | Expression  p  -> let o, p = phrase typing_env.tycon_env p in
-      {typing_env with tycon_env = o#aliases}, Expression p
+      let alias_env, bs' = toplevel_bindings typing_env.FrontendTypeEnv.tycon_env bs in
+        {typing_env with FrontendTypeEnv.tycon_env = alias_env}, Definitions bs'
+  | Expression  p  -> let o, p = phrase typing_env.FrontendTypeEnv.tycon_env p in
+      {typing_env with FrontendTypeEnv.tycon_env = o#aliases}, Expression p
   | Directive   d  -> typing_env, Directive d
 
 let read ~aliases s =

@@ -168,6 +168,10 @@ and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
       [@@deriving show]
+and module_t = {
+        fields : typ stringmap ;
+        modules : module_t stringmap;
+      }
 
 type session_type = (typ, row) session_type_basis
   [@@deriving show]
@@ -937,7 +941,6 @@ let pp_meta_row_var = fun f _ -> Utility.format_omission f*)
 
 let type_var_number = var_of_quantifier
 
-module Env = Env.String
 
 
 (* type ops stuff *)
@@ -2453,32 +2456,51 @@ let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
 
-type environment       = datatype Env.t
-and tycon_environment  = tycon_spec Env.t
-and typing_environment = { var_env    : environment
-                         ; tycon_env  : tycon_environment
-                         ; effect_row : row} [@@deriving show]
+module BackendTypeEnv =
+struct
+  type environment       = datatype Env.Int.t
+  and t = environment
+     [@@deriving show]
+end
 
-let empty_typing_environment = { var_env = Env.empty; tycon_env =  Env.empty; effect_row = make_empty_closed_row ()  }
 
-let normalise_typing_environment env =
+
+module FrontendTypeEnv =
+struct
+  type var_environment   = datatype Env.String.t
+  and module_environment = module_t Env.String.t
+  and tycon_environment  = tycon_spec Env.String.t
+  and t = {  var_env    : var_environment
+           ; module_env : module_environment
+           ; tycon_env  : tycon_environment
+           ; effect_row : row } [@@deriving show]
+
+  let empty_typing_environment = {
+    var_env = Env.String.empty;
+    module_env = Env.String.empty;
+    tycon_env =  Env.String.empty;
+    effect_row = make_empty_closed_row ()  }
+
+  let normalise_typing_environment env =
   { env with
-      var_env = Env.map normalise_datatype env.var_env;
+      var_env = Env.String.map normalise_datatype env.var_env;
+      (* FIXME: normalise types in module types, too? *)
       (* what about tycon_env? *)
       effect_row = normalise_row env.effect_row }
 
-(* Functions on environments *)
-let extend_typing_environment
-    {var_env = l ; tycon_env = al ; effect_row = _  }
-    {var_env = r ; tycon_env = ar ; effect_row = er } : typing_environment =
-  { var_env    = Env.extend l r
-  ; tycon_env  = Env.extend al ar
-  ; effect_row = er }
+  (* Functions on environments *)
+  let extend_typing_environment
+      {var_env = l ; module_env = ml ; tycon_env = al ; effect_row = _  }
+      {var_env = r ; module_env = mr ; tycon_env = ar ; effect_row = er } : t =
+    {var_env = Env.String.extend l r ; module_env = Env.String.extend ml mr  ; tycon_env = Env.String.extend al ar ; effect_row = er }
 
-let string_of_environment = show_environment
+  let string_of_environment = show_var_environment
 
-let string_of_typing_environment { var_env = env; _ }
-  = string_of_environment env
+  let string_of_typing_environment { var_env = env; _ }
+    = string_of_environment env
+end
+
+
 
 let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec IntMap.t =
   let module S = IntSet in

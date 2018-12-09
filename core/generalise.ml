@@ -205,7 +205,7 @@ let extract_quantifiers quantifiers =
     Types.quantifiers_of_type_args
       (remove_duplicates (concat_map quantifier_type_args quantifiers))
 
-let env_type_vars (env : Types.environment) =
+let env_type_vars (env : Types.FrontendTypeEnv.var_environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
 let rigidify_quantifier : quantifier -> unit =
@@ -223,7 +223,7 @@ let rigidify_quantifier : quantifier -> unit =
 (** generalise:
     Universally quantify any free type variables in the expression.
 *)
-let generalise : gen_kind -> environment -> datatype -> ((quantifier list * type_arg list) * datatype) =
+let generalise : gen_kind -> FrontendTypeEnv.var_environment -> datatype -> ((quantifier list * type_arg list) * datatype) =
   fun kind env t ->
     (* throw away any existing top-level quantifiers *)
     let t = match Types.concrete_type t with
@@ -277,6 +277,6 @@ let generalise_rigid = generalise `Rigid
 (** generalise both rigid and flexible type variables *)
 let generalise = generalise `All
 
-let get_quantifiers : environment -> datatype -> quantifier list =
+let get_quantifiers : FrontendTypeEnv.var_environment -> datatype -> quantifier list =
   fun env t ->
     get_quantifiers (env_type_vars env) t

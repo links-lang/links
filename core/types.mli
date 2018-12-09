@@ -124,7 +124,11 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
-    [@@deriving show]
+and module_t = {
+        fields : typ stringmap;
+        modules : module_t stringmap;
+  }
+  [@@deriving show]
 
 type session_type = (typ, row) session_type_basis
 
@@ -175,20 +179,36 @@ type tycon_spec = [
   | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
 ]
 
-type environment        = datatype Env.String.t
- and tycon_environment  = tycon_spec Env.String.t
- and typing_environment = { var_env   : environment ;
-                            tycon_env : tycon_environment ;
-                            effect_row : row }
+module BackendTypeEnv :
+sig
+    type environment       = datatype Env.Int.t
+    and t = environment
+     [@@deriving show]
 
-val empty_typing_environment : typing_environment
+end
+
+module FrontendTypeEnv :
+sig
+    type var_environment    = datatype Env.String.t
+    and module_environment = module_t Env.String.t
+    and tycon_environment  = tycon_spec Env.String.t
+    and t = {  var_env    : var_environment
+           ; module_env : module_environment
+           ; tycon_env  : tycon_environment
+           ; effect_row : row } [@@deriving show]
+
+    val empty_typing_environment : t
+    val extend_typing_environment : t -> t -> t
+    val normalise_typing_environment : t -> t
+    val string_of_environment        : var_environment -> string
+    val string_of_typing_environment : t -> string
+end
 
 val concrete_type : datatype -> datatype
 val concrete_field_spec : field_spec -> field_spec
 
 val normalise_datatype : datatype -> datatype
 val normalise_row : row -> row
-val normalise_typing_environment : typing_environment -> typing_environment
 
 val hoist_quantifiers : datatype -> unit
 
@@ -348,7 +368,7 @@ type inference_type_map =
     ((datatype Unionfind.point) Utility.IntMap.t ref *
        (row Unionfind.point) Utility.IntMap.t ref)
 
-val extend_typing_environment : typing_environment -> typing_environment -> typing_environment
+
 
 val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
 val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
@@ -370,8 +390,6 @@ val string_of_row_var    : ?policy:(unit -> Print.policy)
                         -> ?refresh_tyvar_names:bool -> row_var    -> string
 val string_of_tycon_spec : ?policy:(unit -> Print.policy)
                         -> ?refresh_tyvar_names:bool -> tycon_spec -> string
-val string_of_environment        : environment -> string
-val string_of_typing_environment : typing_environment -> string
 
 (** generating type variable names *)
 val build_tyvar_names : ('a -> Vars.vars_list)

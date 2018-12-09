@@ -22,7 +22,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     "  <script type='text/javascript' src=\""^base^file^"\"></script>"
 
   let initialise_envs (nenv, tyenv) =
-    let dt = DesugarDatatypes.read ~aliases:tyenv.Types.tycon_env in
+    let dt = DesugarDatatypes.read ~aliases:tyenv.Types.FrontendTypeEnv.tycon_env in
 
     (* TODO:
 
@@ -30,13 +30,14 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
        - get rid of ConcatMap here?
      *)
     let tyenv =
-      {Types.var_env =
+      {Types.FrontendTypeEnv.var_env =
           Env.String.bind
-            (Env.String.bind tyenv.Types.var_env
+            (Env.String.bind tyenv.Types.FrontendTypeEnv.var_env
                ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
             ("stringifyB64", dt "(a) -> String");
-       Types.tycon_env = tyenv.Types.tycon_env;
-       Types.effect_row = tyenv.Types.effect_row } in
+       Types.FrontendTypeEnv.module_env = tyenv.Types.FrontendTypeEnv.module_env;
+       Types.FrontendTypeEnv.tycon_env = tyenv.Types.FrontendTypeEnv.tycon_env;
+       Types.FrontendTypeEnv.effect_row = tyenv.Types.FrontendTypeEnv.effect_row } in
     let nenv =
       Env.String.bind
         (Env.String.bind nenv
@@ -48,7 +49,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
         (fun name v venv -> VEnv.bind venv (v, name))
         nenv
         VEnv.empty in
-    let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
+    let tenv = Var.varify_env (nenv, tyenv.Types.FrontendTypeEnv.var_env) in
     (nenv, venv, tenv)
 
   let script_tag body =
@@ -102,7 +103,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
 
   let page : ?cgi_env:(string * string) list ->
              wsconn_url:(Webserver_types.websocket_url option) ->
-             (Var.var Env.String.t * Types.typing_environment) ->
+             (Var.var Env.String.t * Types.FrontendTypeEnv.t) ->
              Ir.binding list -> (Value.env * Value.t) -> Loader.ext_dep list -> string
     = fun ?(cgi_env=[]) ~wsconn_url (nenv, tyenv) defs (valenv, v) deps ->
     let open Json in

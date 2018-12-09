@@ -80,7 +80,7 @@ let rec directives
             (fun k s () ->
                Printf.fprintf stderr "typename %s = %s\n" k
                  (Types.string_of_tycon_spec s))
-            (Lib.typing_env.Types.tycon_env) ();
+            (Lib.typing_env.Types.FrontendTypeEnv.tycon_env) ();
           StringSet.iter (fun n ->
                             let t = Env.String.lookup Lib.type_env n in
                               Printf.fprintf stderr " %-16s : %s\n"
@@ -92,7 +92,7 @@ let rec directives
     (ignore_envs (fun _ -> exit 0), "exit the interpreter");
 
     "typeenv",
-    ((fun ((_, _, { Types.var_env = typeenv; _ }) as envs) _ ->
+    ((fun ((_, _, { Types.FrontendTypeEnv.var_env = typeenv; _ }) as envs) _ ->
         StringSet.iter
           (fun k ->
              let t = Env.String.lookup typeenv k in
@@ -104,12 +104,12 @@ let rec directives
      "display the current type environment");
 
     "tyconenv",
-    ((fun ((_, _, {Types.tycon_env = tycon_env; _ }) as envs) _ ->
+    ((fun ((_, _, {Types.FrontendTypeEnv.tycon_env = tycon_env; _ }) as envs) _ ->
         StringSet.iter (fun k ->
                           let s = Env.String.lookup tycon_env k in
                             Printf.fprintf stderr " %s = %s\n" k
                               (Types.string_of_tycon_spec s))
-          (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
+          (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.FrontendTypeEnv.tycon_env));
         envs),
      "display the current type alias environment");
 
@@ -119,7 +119,7 @@ let rec directives
           (fun name var () ->
             if not (Lib.is_primitive name) then
               let ty = (Types.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
-                        -<- Env.String.lookup tyenv.Types.var_env) name in
+                        -<- Env.String.lookup tyenv.Types.FrontendTypeEnv.var_env) name in
               let name =
                 if Settings.get_value Debug.debugging_enabled
                 then Printf.sprintf "%s(%d)" name var
@@ -165,7 +165,7 @@ let rec directives
      "dynamically load in a Links extension");
 
     "withtype",
-    ((fun (_, _, {Types.var_env = tenv; Types.tycon_env = aliases; _} as envs) args ->
+    ((fun (_, _, {Types.FrontendTypeEnv.var_env = tenv; Types.FrontendTypeEnv.tycon_env = aliases; _} as envs) args ->
         match args with
           [] -> prerr_endline "syntax: @withtype type"; envs
           | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
@@ -211,7 +211,7 @@ let evaluate_parse_result envs parse_result =
             (fun name spec () ->
                   print_endline (name ^" = "^
                                 Types.string_of_tycon_spec spec); ())
-            (tyenv'.Types.tycon_env)
+            (tyenv'.Types.FrontendTypeEnv.tycon_env)
             ();
 
           Env.String.fold
@@ -223,7 +223,7 @@ let evaluate_parse_result envs parse_result =
                   match Tables.lookup Tables.fun_defs var with
                   | None ->
                     let v = Value.Env.find var valenv in
-                    let t = Env.String.lookup tyenv'.Types.var_env name in
+                    let t = Env.String.lookup tyenv'.Types.FrontendTypeEnv.var_env name in
                     v, t
                   | Some (finfo, _, None, location) ->
                     let v =
@@ -244,7 +244,7 @@ let evaluate_parse_result envs parse_result =
 
           (valenv,
             Env.String.extend nenv nenv',
-            Types.extend_typing_environment tyenv tyenv')
+            Types.FrontendTypeEnv.extend_typing_environment tyenv tyenv')
     | `Expression (e, t), _ ->
         let valenv, v = Driver.process_program true envs e [] in
           print_value t v;
@@ -286,12 +286,12 @@ let interact envs =
              Frontend.Pipeline.interactive?*)
         let sentence' = match sentence with
           | Definitions defs ->
-              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-              let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.Types.effect_row) defs in
+              let tenv = Var.varify_env (nenv, tyenv.Types.FrontendTypeEnv.var_env) in
+              let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.Types.FrontendTypeEnv.effect_row) defs in
                 `Definitions (defs, nenv')
           | Expression e     ->
-              let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-              let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.Types.effect_row) e in
+              let tenv = Var.varify_env (nenv, tyenv.Types.FrontendTypeEnv.var_env) in
+              let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.Types.FrontendTypeEnv.effect_row) e in
                 `Expression (e, t)
           | Directive d      -> `Directive d
         in

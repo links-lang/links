@@ -1,2 +1,2 @@
-val desugar_regexes : Types.typing_environment -> TransformSugar.transform
+val desugar_regexes : Types.FrontendTypeEnv.t -> TransformSugar.transform
 val has_no_regexes : SugarTraversals.predicate
