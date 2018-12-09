@@ -1450,34 +1450,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          datatype "() -> Int",
          IMPURE);
 
-    "dumpTypes",
-  (`Server (p1 (fun code ->
-                  try
-                    let ts = DumpTypes.program (val_of (!prelude_tyenv)) (Value.unbox_string code) in
-
-                    let line {Lexing.pos_lnum=l; _} = l in
-                    let start {Lexing.pos_bol=b; Lexing.pos_cnum=c; _ } = c-b in
-                    let finish {Lexing.pos_bol=b; Lexing.pos_cnum=c; _} = c-b in
-
-                    let resolve (name, t, pos) =
-                      (* HACK: we need to be more principled about foralls  *)
-                      let t =
-                        match Types.concrete_type t with
-                          | `ForAll (_, t) -> t
-                          | _ -> t
-                      in
-                        `Record [("name", Value.box_string name);
-                                 ("t", Value.box_string (Types.string_of_datatype t));
-                                 ("pos", `Record [("line", Value.box_int (Position.start pos |> line));
-                                                  ("start", Value.box_int (Position.start pos |> start));
-                                                  ("finish", Value.box_int (Position.finish pos |> finish))])]
-                    in
-                      `Variant ("Success", Value.box_list (List.map resolve ts))
-                  with e ->
-                    `Variant ("Failure", Value.box_string(Errors.format_exception e ^ "\n"))
-               )),
-            datatype "(String) ~> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
-            IMPURE);
 
     "connectSocket",
     (`Server (p2 (fun serverv portv ->
