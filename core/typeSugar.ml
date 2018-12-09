@@ -21,8 +21,14 @@ module Env = Env.String
 module Utils : sig
   val dummy_source_name : unit -> name
   val unify : Types.datatype * Types.datatype -> unit
+
+  val instantiate_typ : Types.datatype -> (Types.type_arg list * Types.datatype)
+
+  (* FIXME: Check if we need to pass the whole environment here, too, so that we can respect variables bound in module env *)
   val instantiate : Types.FrontendTypeEnv.var_environment -> string ->
                     (Types.type_arg list * Types.datatype)
+
+  (* FIXME: Check if we need to pass the whole environment here, too, so that we can respect variables bound in module env *)
   val generalise : Types.FrontendTypeEnv.var_environment -> Types.datatype ->
                    ((Types.quantifier list*Types.type_arg list) * Types.datatype)
 
@@ -38,6 +44,7 @@ struct
 
   let unify = Unify.datatypes
   let instantiate = Instantiate.var
+  let instantiate_typ = Instantiate.typ
   let generalise = Generalise.generalise
 
   let rec opt_generalisable o = opt_app is_pure true o
@@ -347,6 +354,9 @@ sig
   val try_in_unless_pat : griper
   val try_in_unless_branches : griper
   val try_in_unless_linearity : Position.t -> string -> unit
+
+  val unknown_variable : Position.t -> QualifiedName.t -> 'a
+  val unknown_module : Position.t -> QualifiedName.t -> 'a
 
 end
   = struct
@@ -1356,6 +1366,12 @@ end
       die pos ("All variables in the as- and unless- branches of an " ^
                "exception handler must be unrestricted, but " ^ nl () ^
                "variable " ^ v ^ " is linear.")
+
+    let unknown_variable pos var =
+      die pos ("Unknown variable " ^ QualifiedName.canonical_name var)
+
+    let unknown_module pos moodule =
+      die pos ("Unknown module " ^ QualifiedName.canonical_name moodule)
 end
 
 type context = Types.FrontendTypeEnv.t = {
@@ -2097,6 +2113,40 @@ let usage_compat =
 let usages_cases bs =
   usage_compat (List.map (fun (_, (_, _, m)) -> m) bs)
 
+
+let lookup_qualified_variable pos context qname : Types.datatype =
+  let rec traverse_module_path count current_qname (current_module_type : Types.module_t) : Types.datatype =
+    match current_qname with
+      | `Ident name ->
+        begin match StringMap.find_opt name current_module_type.fields with
+          | None -> Gripers.unknown_variable pos qname
+          | Some t -> t
+        end
+      | `Dot (m_name, remainder) ->
+        begin match StringMap.find_opt m_name current_module_type.modules with
+          | None ->
+            let module_path_until_failure = QualifiedName.prefix (count+1) qname in
+            Gripers.unknown_module pos module_path_until_failure
+          | Some next_module_type ->
+              traverse_module_path (count+1) remainder next_module_type
+        end in
+  match qname with
+    | `Ident name ->
+      begin match Env.find context.var_env name with
+        | None -> Gripers.unknown_variable pos qname
+        | Some t ->  t
+      end
+    | `Dot (first_module, remainder) ->
+      begin match Env.find context.module_env first_module with
+        | None ->
+          let module_path_until_failure = QualifiedName.prefix 1 qname in
+          Gripers.unknown_module pos module_path_until_failure
+        | Some first_module_type ->
+          traverse_module_path 1 remainder first_module_type
+      end
+
+
+
 let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
   fun context {node=expr; pos} ->
     let _UNKNOWN_POS_ = "<unknown>" in
@@ -2170,17 +2220,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       match (expr : phrasenode) with
         | Var q            ->
            (
-             let v = QualifiedName.unqualify q in
-              try
-                let (tyargs, t) = Utils.instantiate context.var_env v in
-                  if Settings.get_value Instantiate.quantified_instantiation then
-                    let tyvars = Types.quantifiers_of_type_args tyargs in
-                      tabstr(tyvars, tappl (Var q, tyargs)), t, StringMap.singleton v 1
-                  else
-                    tappl (Var q, tyargs), t, StringMap.singleton v 1
-              with
-                  Errors.UndefinedVariable _msg ->
-                    Gripers.die pos ("Unknown variable " ^ v ^ ".")
+             let var_type = lookup_qualified_variable pos context q in
+             let usage_map =
+              if QualifiedName.is_qualified q then
+                (* We assume that no module can publicly expose something linear,
+                   which means that this variable usage does not matter for linearity checks *)
+                StringMap.empty
+              else
+                StringMap.singleton (QualifiedName.unqualify q) 1  in
+             let (tyargs, t) = Utils.instantiate_typ var_type in
+               if Settings.get_value Instantiate.quantified_instantiation then
+                 let tyvars = Types.quantifiers_of_type_args tyargs in
+                   tabstr(tyvars, tappl (Var q, tyargs)), t, usage_map
+               else
+                 tappl (Var q, tyargs), t, usage_map
             )
         | Section _ as s   -> type_section context s
         (* literals *)
@@ -3045,8 +3098,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let eff = Types.make_singleton_open_row ("wild", `Present Types.unit_type) (lin_any, res_any) in
 
             let cont_type = `Function (Types.make_tuple_type [f], eff, t) in
-            let context' = {context
-                            with var_env = Env.bind context.var_env (name, cont_type)} in
+            let context' = bind_var context (name, cont_type) in
             let e = type_check context' e in
 
             let () =
@@ -3912,8 +3964,22 @@ and type_binding : context -> binding -> binding * context * usagemap =
           Exp (erase e), empty_context, usages e
       | Handler _
       | AlienBlock _ -> assert false
-      | Module _ -> assert false (* TODO FIXME *)
-      | Import _ -> assert false (* TODO FIXME *)
+      | Module (name, bindings) ->
+         let module_ctx, bindings, usage_builder = type_bindings context bindings in
+         (* FIXME: This is unnecessary work, since Env is using a StringMap internally. Should we give Env the ability to expose the StringMap? *)
+         let env_to_stringmap env =
+           Env.fold (fun name v map ->
+               StringMap.add name v map
+             ) env StringMap.empty in
+         let module_type : Types.module_t = {
+             fields  = env_to_stringmap module_ctx.var_env ;
+             modules = env_to_stringmap module_ctx.module_env ;
+         } in
+         let context' = {empty_context with module_env = Env.bind Env.empty (name, module_type) } in
+         let module_usages = usage_builder StringMap.empty in
+          Module (name, bindings), context', module_usages
+      | Import _ ->
+         failwith "Import statements must have been removed by now"
     in
       WithPos.make ~pos typed, ctxt, usage
 and type_regex typing_env : regex -> regex =
@@ -3944,7 +4010,7 @@ and type_bindings (globals : context)  bindings =
          let binding, ctxt', usage = type_binding (Types.FrontendTypeEnv.extend_typing_environment globals ctxt) binding in
          let result_ctxt = Types.FrontendTypeEnv.extend_typing_environment ctxt ctxt' in
          result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
-      (empty_context globals.Types.FrontendTypeEnv.effect_row, ([], [])) bindings in
+      (empty_context globals.effect_row, ([], [])) bindings in
   let usage_builder body_usage =
     List.fold_left (fun usages (pos,env,usage) ->
                     let vs = Env.domain env in

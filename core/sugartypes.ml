@@ -62,6 +62,17 @@ module QualifiedName = struct
 
   let canonical_name q =
     String.concat "\\" (split q)
+
+  let is_qualified = function
+    | `Ident _ -> false
+    | `Dot _ -> true
+
+  let rec prefix n qname =
+    match n, qname with
+      | (0, _) -> failwith "Illegal prefix length"
+      | _, `Ident _ -> qname
+      | 1, `Dot (s, _) -> `Ident s
+      | _, `Dot (s, remainder) -> `Dot (s, prefix (n-1) remainder)
 end
 
 
