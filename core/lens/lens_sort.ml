@@ -34,3 +34,9 @@ let update_table_name t ~table =
 
 let update_predicate t ~predicate =
   { t with predicate }
+
+let equal sort1 sort2 =
+  let fd_equal = Lens_fun_dep.Set.equal (fds sort1) (fds sort2) in
+  let pred_equal = (predicate sort1) = (predicate sort2) in
+  let cols_equal = Lens_column.Set.equal (colset sort1) (colset sort2) in
+  fd_equal && pred_equal && cols_equal
