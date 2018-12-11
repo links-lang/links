@@ -205,7 +205,7 @@ let extract_quantifiers quantifiers =
     Types.quantifiers_of_type_args
       (remove_duplicates (concat_map quantifier_type_args quantifiers))
 
-let env_type_vars (env : Types.FrontendTypeEnv.var_environment) =
+let env_type_vars (env : FrontendTypeEnv.var_environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
 let rigidify_quantifier : quantifier -> unit =

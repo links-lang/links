@@ -11,9 +11,9 @@ module AliasEnv = Env.String
 
 (* This is done in two stages because the datatype for regexes refers
    to the String alias *)
-let alias_env : Types.FrontendTypeEnv.tycon_environment = DefaultAliases.alias_env
+let alias_env : FrontendTypeEnv.tycon_environment = DefaultAliases.alias_env
 
-let alias_env : Types.FrontendTypeEnv.tycon_environment =
+let alias_env : FrontendTypeEnv.tycon_environment =
   AliasEnv.bind alias_env
     ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
 
@@ -1543,7 +1543,7 @@ let patch_prelude_funs tyenv =
          ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
          ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
          ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")]
-        tyenv.Types.FrontendTypeEnv.var_env}
+        tyenv.FrontendTypeEnv.var_env}
 
 let impl : located_primitive -> primitive option = function
   | `Client -> None
@@ -1589,10 +1589,10 @@ let value_array : primitive option array =
 let is_primitive_var var =
   minvar <= var && var <= maxvar
 
-let type_env : Types.FrontendTypeEnv.var_environment =
+let type_env : FrontendTypeEnv.var_environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
 
-let typing_env = {Types.FrontendTypeEnv.var_env = type_env;
+let typing_env = {FrontendTypeEnv.var_env = type_env;
                   tycon_env = alias_env;
                   module_env = Env.String.empty;
                   effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}

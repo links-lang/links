@@ -1,7 +1,7 @@
 open Utility
 open Performance
 
-type envs = Var.var Env.String.t * Types.FrontendTypeEnv.t
+type envs = Var.var Env.String.t * FrontendTypeEnv.t
 type program = Ir.binding list * Ir.computation * Types.datatype
 
 (* Filename of an external dependency *)
@@ -46,8 +46,8 @@ let read_file_source (nenv, tyenv) (filename:string) =
   let globals, main, nenv =
     Sugartoir.desugar_program
       (nenv,
-       Var.varify_env (nenv, tyenv.Types.FrontendTypeEnv.var_env),
-       tyenv.Types.FrontendTypeEnv.effect_row) program
+       Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env),
+       tyenv.FrontendTypeEnv.effect_row) program
   in
   {
     envs = (nenv, tenv);

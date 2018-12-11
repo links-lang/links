@@ -2455,59 +2455,6 @@ let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
     build_tyvar_names (fun x -> free_bound_quantifier_vars x) [quant];
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
-
-module BackendTypeEnv =
-struct
-  type environment       = datatype Env.Int.t
-  and t = environment
-     [@@deriving show]
-end
-
-
-
-module FrontendTypeEnv =
-struct
-  type var_environment   = datatype Env.String.t
-  and module_environment = module_t Env.String.t
-  and tycon_environment  = tycon_spec Env.String.t
-  and t = {  var_env    : var_environment
-           ; module_env : module_environment
-           ; tycon_env  : tycon_environment
-           ; effect_row : row } [@@deriving show]
-
-  let empty_typing_environment = {
-    var_env = Env.String.empty;
-    module_env = Env.String.empty;
-    tycon_env =  Env.String.empty;
-    effect_row = make_empty_closed_row ()  }
-
-  let normalise_typing_environment env =
-    let rec normalise_module_t mt =
-    {
-      fields = StringMap.map normalise_datatype mt.fields;
-      modules = StringMap.map normalise_module_t mt.modules;
-    } in
-  { env with
-      var_env = Env.String.map normalise_datatype env.var_env;
-      module_env = Env.String.map normalise_module_t env.module_env;
-      (* FIXME: normalise types in module types, too? *)
-      (* what about tycon_env? *)
-      effect_row = normalise_row env.effect_row }
-
-  (* Functions on environments *)
-  let extend_typing_environment
-      {var_env = l ; module_env = ml ; tycon_env = al ; effect_row = _  }
-      {var_env = r ; module_env = mr ; tycon_env = ar ; effect_row = er } : t =
-    {var_env = Env.String.extend l r ; module_env = Env.String.extend ml mr  ; tycon_env = Env.String.extend al ar ; effect_row = er }
-
-  let string_of_environment = show_var_environment
-
-  let string_of_typing_environment { var_env = env; _ }
-    = string_of_environment env
-end
-
-
-
 let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec IntMap.t =
   let module S = IntSet in
   let module M = IntMap in

@@ -2,11 +2,11 @@ module Check :
   sig
     open Sugartypes
 
-    val program : Types.FrontendTypeEnv.t
+    val program : FrontendTypeEnv.t
                -> program
-               -> program * Types.datatype * Types.FrontendTypeEnv.t
+               -> program * Types.datatype * FrontendTypeEnv.t
 
-    val sentence : Types.FrontendTypeEnv.t
+    val sentence : FrontendTypeEnv.t
                 -> sentence
-                -> sentence * Types.datatype * Types.FrontendTypeEnv.t
+                -> sentence * Types.datatype * FrontendTypeEnv.t
   end

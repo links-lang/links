@@ -3,15 +3,15 @@ open Utility
 module Pipeline :
 sig
   val program :
-    Types.FrontendTypeEnv.t ->
+    FrontendTypeEnv.t ->
     SourceCode.source_code ->
     Sugartypes.program ->
-    ((Sugartypes.program * Types.datatype * Types.FrontendTypeEnv.t) * string list)
+    ((Sugartypes.program * Types.datatype * FrontendTypeEnv.t) * string list)
   val interactive :
-    Types.FrontendTypeEnv.t ->
+    FrontendTypeEnv.t ->
     SourceCode.source_code ->
     Sugartypes.sentence ->
-    Sugartypes.sentence * Types.datatype * Types.FrontendTypeEnv.t
+    Sugartypes.sentence * Types.datatype * FrontendTypeEnv.t
 end
 =
 struct

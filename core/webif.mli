@@ -10,7 +10,7 @@ sig
   val should_contain_client_id : (string * string) list -> bool
 
   val do_request :
-    (Value.env * Ir.var Env.String.t * Types.FrontendTypeEnv.t) ->
+    (Value.env * Ir.var Env.String.t * FrontendTypeEnv.t) ->
     (string * string) list ->
     (unit -> (string * string) Lwt.t) ->
     Value.continuation ->

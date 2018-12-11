@@ -1,13 +1,13 @@
-val read : aliases:Types.FrontendTypeEnv.tycon_environment -> string -> Types.datatype
+val read : aliases:FrontendTypeEnv.tycon_environment -> string -> Types.datatype
 
 val sentence :
-  Types.FrontendTypeEnv.t ->
+  FrontendTypeEnv.t ->
   Sugartypes.sentence ->
-    Types.FrontendTypeEnv.t * Sugartypes.sentence
+    FrontendTypeEnv.t * Sugartypes.sentence
 
 val program :
-  Types.FrontendTypeEnv.t ->
+  FrontendTypeEnv.t ->
   Sugartypes.program ->
-    Types.FrontendTypeEnv.t * Sugartypes.program
+    FrontendTypeEnv.t * Sugartypes.program
 
 val all_datatypes_desugared : SugarTraversals.predicate

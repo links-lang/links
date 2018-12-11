@@ -179,30 +179,6 @@ type tycon_spec = [
   | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
 ]
 
-module BackendTypeEnv :
-sig
-    type environment       = datatype Env.Int.t
-    and t = environment
-     [@@deriving show]
-
-end
-
-module FrontendTypeEnv :
-sig
-    type var_environment    = datatype Env.String.t
-    and module_environment = module_t Env.String.t
-    and tycon_environment  = tycon_spec Env.String.t
-    and t = {  var_env    : var_environment
-           ; module_env : module_environment
-           ; tycon_env  : tycon_environment
-           ; effect_row : row } [@@deriving show]
-
-    val empty_typing_environment : t
-    val extend_typing_environment : t -> t -> t
-    val normalise_typing_environment : t -> t
-    val string_of_environment        : var_environment -> string
-    val string_of_typing_environment : t -> string
-end
 
 val concrete_type : datatype -> datatype
 val concrete_field_spec : field_spec -> field_spec

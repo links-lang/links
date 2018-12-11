@@ -1,1 +1,1 @@
-val desugar_cp : Types.FrontendTypeEnv.t -> TransformSugar.transform
+val desugar_cp : FrontendTypeEnv.t -> TransformSugar.transform

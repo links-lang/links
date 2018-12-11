@@ -9,7 +9,7 @@ module Webif = Webif.WebIf(Webserver)
 
 type evaluation_env =   Value.env (* maps int identifiers to their values *)
                       * Ir.var Env.String.t (* map string identifiers to int identifiers *)
-                      * Types.FrontendTypeEnv.t (* typing info, using string identifiers *)
+                      * FrontendTypeEnv.t (* typing info, using string identifiers *)
 
 type evaluation_result =
   {
@@ -26,7 +26,7 @@ let process_program
       external_files
           : (Value.env * Value.t) =
   let (valenv, nenv, tyenv) = envs in
-  let tenv = (Var.varify_env (nenv, tyenv.Types.FrontendTypeEnv.var_env)) in
+  let tenv = (Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env)) in
 
   let perform_optimisations = Settings.get_value BS.optimise && not interacting in
 
@@ -72,7 +72,7 @@ let evaluate
     {
     result_env = (valenv,
       Env.String.extend nenv nenv',
-      Types.FrontendTypeEnv.extend_typing_environment tyenv tyenv');
+      FrontendTypeEnv.extend_typing_environment tyenv tyenv');
     result_value = v;
     result_type = t
     }
@@ -111,9 +111,9 @@ struct
       let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value BS.pp) Parse.program s in
       let (program, t, _), _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
-      let tenv = Var.varify_env (nenv, tyenv.Types.FrontendTypeEnv.var_env) in
+      let tenv = Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env) in
 
-      let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.FrontendTypeEnv.effect_row) program in
+      let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.FrontendTypeEnv.effect_row) program in
       ((globals @ locals, main), t), (nenv, tyenv), []
     in
       evaluate false parse_and_desugar envs v
@@ -125,7 +125,7 @@ struct
     (if Settings.get_value Basicsettings.Ir.show_lib_function_env then
       (Debug.print "lib.ml mappings:";
       Env.String.iter (fun name var -> Debug.print (string_of_int var ^ " -> " ^ name ^ " :: " ^
-        Types.string_of_datatype (Env.String.lookup Lib.typing_env.Types.FrontendTypeEnv.var_env name ) )) Lib.nenv));
+        Types.string_of_datatype (Env.String.lookup Lib.typing_env.FrontendTypeEnv.var_env name ) )) Lib.nenv));
 
     let load_prelude_inner () =
       let open Loader in
@@ -141,7 +141,7 @@ struct
       Lib.prelude_tyenv := Some tyenv;
       Lib.prelude_nenv := Some nenv;
 
-      let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.FrontendTypeEnv.var_env)) in
+      let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.FrontendTypeEnv.var_env)) in
 
       let globals = Backend.transform_prelude tenv globals in
 
@@ -149,7 +149,7 @@ struct
       let envs =
         (valenv,
          Env.String.extend Lib.nenv nenv,
-         Types.FrontendTypeEnv.extend_typing_environment Lib.typing_env tyenv)
+         FrontendTypeEnv.extend_typing_environment Lib.typing_env tyenv)
       in
       globals, envs
     in

@@ -10,15 +10,15 @@ val is_primitive : string -> bool
 val is_primitive_var : Var.var -> bool
 val is_pure_primitive : string -> bool
 val value_env : primitive option Env.Int.t
-val type_env : Types.FrontendTypeEnv.var_environment
-val typing_env : Types.FrontendTypeEnv.t
+val type_env : FrontendTypeEnv.var_environment
+val typing_env : FrontendTypeEnv.t
 val nenv : Var.var Env.String.t
-val prelude_tyenv : Types.FrontendTypeEnv.t option ref
+val prelude_tyenv : FrontendTypeEnv.t option ref
 val prelude_nenv : Var.var Env.String.t option ref
 
 val primitive_vars : Utility.IntSet.t
 
-val patch_prelude_funs : Types.FrontendTypeEnv.t -> Types.FrontendTypeEnv.t
+val patch_prelude_funs : FrontendTypeEnv.t -> FrontendTypeEnv.t
 
 val apply_pfun : string -> Value.t list -> RequestData.request_data -> Value.t
 val primitive_stub : string -> Value.t

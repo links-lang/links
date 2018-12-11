@@ -29,32 +29,32 @@ val listu :
   'a list -> 'self_type * 'a list
 
 (* Transform a term and construct its type *)
-class transform : Types.FrontendTypeEnv.t ->
+class transform : FrontendTypeEnv.t ->
 object ('self)
-  val var_env : Types.FrontendTypeEnv.var_environment
-  val tycon_env : Types.FrontendTypeEnv.tycon_environment
+  val var_env : FrontendTypeEnv.var_environment
+  val tycon_env : FrontendTypeEnv.tycon_environment
   val effect_row : Types.row
 
-  method get_var_env     : unit -> Types.FrontendTypeEnv.var_environment
-  method get_module_env  : unit -> Types.FrontendTypeEnv.module_environment
-  method get_tycon_env   : unit -> Types.FrontendTypeEnv.tycon_environment
-  method get_formlet_env : unit -> Types.FrontendTypeEnv.var_environment
+  method get_var_env     : unit -> FrontendTypeEnv.var_environment
+  method get_module_env  : unit -> FrontendTypeEnv.module_environment
+  method get_tycon_env   : unit -> FrontendTypeEnv.tycon_environment
+  method get_formlet_env : unit -> FrontendTypeEnv.var_environment
 
-  method backup_envs     :   Types.FrontendTypeEnv.var_environment
-                           * Types.FrontendTypeEnv.module_environment
-                           * Types.FrontendTypeEnv.tycon_environment
-                           * Types.FrontendTypeEnv.var_environment
+  method backup_envs     :   FrontendTypeEnv.var_environment
+                           * FrontendTypeEnv.module_environment
+                           * FrontendTypeEnv.tycon_environment
+                           * FrontendTypeEnv.var_environment
                            * Types.row
-  method restore_envs    :  (   Types.FrontendTypeEnv.var_environment
-                              * Types.FrontendTypeEnv.module_environment
-                              * Types.FrontendTypeEnv.tycon_environment
-                              * Types.FrontendTypeEnv.var_environment
+  method restore_envs    :  (   FrontendTypeEnv.var_environment
+                              * FrontendTypeEnv.module_environment
+                              * FrontendTypeEnv.tycon_environment
+                              * FrontendTypeEnv.var_environment
                               * Types.row)
                             -> 'self
 
-  method with_var_env     : Types.FrontendTypeEnv.var_environment -> 'self
-  method with_module_env  : Types.FrontendTypeEnv.module_environment -> 'self
-  method with_formlet_env : Types.FrontendTypeEnv.var_environment -> 'self
+  method with_var_env     : FrontendTypeEnv.var_environment -> 'self
+  method with_module_env  : FrontendTypeEnv.module_environment -> 'self
+  method with_formlet_env : FrontendTypeEnv.var_environment -> 'self
 
   method bind_tycon      : string -> Types.tycon_spec -> 'self
 

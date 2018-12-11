@@ -1,4 +1,4 @@
-type envs = Var.var Env.String.t * Types.FrontendTypeEnv.t
+type envs = Var.var Env.String.t * FrontendTypeEnv.t
 
 type program = Ir.binding list * Ir.computation * Types.datatype
 

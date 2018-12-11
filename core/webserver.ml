@@ -74,8 +74,8 @@ struct
 
   let rt : routing_table ref = ref Trie.empty
 
-  let env : (Value.env * Ir.var Env.String.t * Types.FrontendTypeEnv.t) ref =
-    ref (Value.Env.empty, Env.String.empty, Types.FrontendTypeEnv.empty_typing_environment)
+  let env : (Value.env * Ir.var Env.String.t * FrontendTypeEnv.t) ref =
+    ref (Value.Env.empty, Env.String.empty, FrontendTypeEnv.empty_typing_environment)
   let prelude : Ir.binding list ref = ref []
   let globals : Ir.binding list ref = ref []
 
@@ -291,7 +291,7 @@ struct
     let start_server host port rt =
 
       let render_cont () =
-        let (_, nenv, {Types.FrontendTypeEnv.tycon_env = tycon_env; _ }) = !env in
+        let (_, nenv, {FrontendTypeEnv.tycon_env = tycon_env; _ }) = !env in
         let _, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
         let render_page = Env.String.lookup nenv "renderPage" in
         let tail = Ir.Apply (Ir.Variable render_page, [Ir.Variable x]) in

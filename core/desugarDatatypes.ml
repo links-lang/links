@@ -142,7 +142,7 @@ struct
                     ((var, subkind, `Presence point))::args,
                      {tenv; renv; penv=StringMap.add name point penv})
 
-  let rec datatype var_env (alias_env : Types.FrontendTypeEnv.tycon_environment) t' =
+  let rec datatype var_env (alias_env : FrontendTypeEnv.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
     match t' with
     | {node = t; pos} ->
