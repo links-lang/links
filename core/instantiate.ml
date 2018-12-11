@@ -277,9 +277,9 @@ let instantiate_typ = instantiate_typ false
     This returns the type arguments var is instantiated with
     and the instantiated type.
  *)
-let instantiate : FrontendTypeEnv.var_environment -> string -> type_arg list * datatype =
+let instantiate : FrontendTypeEnv.qual_var_environment -> string -> type_arg list * datatype =
   fun env var ->
-    let t =
+    let (_, t) =
       try
         Env.String.lookup env var
       with NotFound _ ->
@@ -290,9 +290,9 @@ let instantiate : FrontendTypeEnv.var_environment -> string -> type_arg list * d
 (*       Debug.print ("t2: " ^ Types.string_of_datatype (snd t)); *)
         t
 
-let rigid : FrontendTypeEnv.var_environment -> string -> type_arg list * datatype =
+let rigid : FrontendTypeEnv.qual_var_environment -> string -> type_arg list * datatype =
   fun env var ->
-    let t =
+    let (_, t) =
       try
         Env.String.lookup env var
       with NotFound _ ->

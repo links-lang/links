@@ -7,8 +7,8 @@ exception ArityMismatch of (int * int) (* Expected, provided *)
 val show_recursion : bool Settings.setting
 val quantified_instantiation : bool Settings.setting
 
-val var : FrontendTypeEnv.var_environment -> string -> (Types.type_arg list * Types.datatype)
-val rigid : FrontendTypeEnv.var_environment -> string -> (Types.type_arg list * Types.datatype)
+val var : FrontendTypeEnv.qual_var_environment -> string -> (Types.type_arg list * Types.datatype)
+val rigid : FrontendTypeEnv.qual_var_environment -> string -> (Types.type_arg list * Types.datatype)
 val typ : Types.datatype -> (Types.type_arg list * Types.datatype)
 val typ_rigid : Types.datatype -> (Types.type_arg list * Types.datatype)
 val datatype :

@@ -82,7 +82,7 @@ let rec directives
                  (Types.string_of_tycon_spec s))
             (Lib.typing_env.FrontendTypeEnv.tycon_env) ();
           StringSet.iter (fun n ->
-                            let t = Env.String.lookup Lib.type_env n in
+                            let (_, t) = Env.String.lookup Lib.type_env n in
                               Printf.fprintf stderr " %-16s : %s\n"
                                 n (Types.string_of_datatype t))
             (Env.String.domain Lib.type_env)),
@@ -95,7 +95,7 @@ let rec directives
     ((fun ((_, _, { FrontendTypeEnv.var_env = typeenv; _ }) as envs) _ ->
         StringSet.iter
           (fun k ->
-             let t = Env.String.lookup typeenv k in
+             let (_, t) = Env.String.lookup typeenv k in
                Printf.fprintf stderr " %-16s : %s\n" k
                  (Types.string_of_datatype t))
           (StringSet.diff (Env.String.domain typeenv)
@@ -119,6 +119,7 @@ let rec directives
           (fun name var () ->
             if not (Lib.is_primitive name) then
               let ty = (Types.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
+                        -<- snd
                         -<- Env.String.lookup tyenv.FrontendTypeEnv.var_env) name in
               let name =
                 if Settings.get_value Debug.debugging_enabled
@@ -172,7 +173,7 @@ let rec directives
               StringSet.iter
                 (fun id ->
                    try begin
-                     let t' = Env.String.lookup tenv id in
+                     let (_, t') = Env.String.lookup tenv id in
                      let ttype = Types.string_of_datatype t' in
                      let fresh_envs = Types.make_fresh_envs t' in
                      let t' = Instantiate.datatype fresh_envs t' in
@@ -223,7 +224,7 @@ let evaluate_parse_result envs parse_result =
                   match Tables.lookup Tables.fun_defs var with
                   | None ->
                     let v = Value.Env.find var valenv in
-                    let t = Env.String.lookup tyenv'.FrontendTypeEnv.var_env name in
+                    let (_, t) = Env.String.lookup tyenv'.FrontendTypeEnv.var_env name in
                     v, t
                   | Some (finfo, _, None, location) ->
                     let v =

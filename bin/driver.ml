@@ -125,7 +125,7 @@ struct
     (if Settings.get_value Basicsettings.Ir.show_lib_function_env then
       (Debug.print "lib.ml mappings:";
       Env.String.iter (fun name var -> Debug.print (string_of_int var ^ " -> " ^ name ^ " :: " ^
-        Types.string_of_datatype (Env.String.lookup Lib.typing_env.FrontendTypeEnv.var_env name ) )) Lib.nenv));
+        Types.string_of_datatype (snd (Env.String.lookup Lib.typing_env.FrontendTypeEnv.var_env name )))) Lib.nenv));
 
     let load_prelude_inner () =
       let open Loader in

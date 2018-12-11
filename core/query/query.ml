@@ -185,7 +185,9 @@ let rec type_of_expression : Q.t -> Types.datatype = fun v ->
       | Constant (Constant.String _) -> Types.string_type
       | Project (Var (_, field_types), name) -> StringMap.find name field_types
       | Apply ("Empty", _) -> Types.bool_type (* HACK *)
-      | Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
+      | Apply (f, _) ->
+        let (_, t) = (Env.String.lookup Lib.type_env f) in
+        TypeUtils.return_type t
       | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
 let default_of_base_type =

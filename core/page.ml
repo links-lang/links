@@ -33,8 +33,8 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       {FrontendTypeEnv.var_env =
           Env.String.bind
             (Env.String.bind tyenv.FrontendTypeEnv.var_env
-               ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
-            ("stringifyB64", dt "(a) -> String");
+               ("ConcatMap", (None, dt "((a) -> [b], [a]) -> [b]")))
+            ("stringifyB64", (None, dt "(a) -> String"));
        FrontendTypeEnv.module_env = tyenv.FrontendTypeEnv.module_env;
        FrontendTypeEnv.tycon_env = tyenv.FrontendTypeEnv.tycon_env;
        FrontendTypeEnv.effect_row = tyenv.FrontendTypeEnv.effect_row } in
