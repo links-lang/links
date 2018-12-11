@@ -52,7 +52,6 @@ open SugarToIrEnv
 
 let show_compiled_ir = Basicsettings.Sugartoir.show_compiled_ir
 
-module QualifiedName = Sugartypes.QualifiedName
 
 
 (* Hmm... shouldn't we need to use something like this? *)
