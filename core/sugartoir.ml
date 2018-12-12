@@ -727,7 +727,13 @@ struct
       | `Ident name -> I.project (value, name)
       | `Dot (module_name, remainder) -> rqn (I.project (value, module_name)) remainder in
     match qname with
-      | `Ident x -> (I.var (lookup_name_and_type x env))
+      | `Ident x -> I.var (lookup_name_and_type x env)
+      | `Dot (module_name, remainder) when module_name = Lib.BuiltinModules.lib ->
+        let x = QualifiedName.unqualify remainder in
+        (* We turn usages of lib.ml functions Lib.foo into plain foo. There is no actual module corresponding to
+           Lib. We rely here on the fact that lib.ml functions are kept in the type environment and the evaluator/
+           irtojs take care of them *)
+        I.var (lookup_name_and_type x env)
       | `Dot (module_name, remainder) ->
         let module_record_var, module_record_type  = lookup_record_for_module module_name env in
         rqn (I.var (module_record_var, module_record_type)) remainder

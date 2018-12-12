@@ -5,6 +5,12 @@ val less_or_equal : Value.t -> Value.t -> bool
 
 type primitive
 
+module BuiltinModules :
+sig
+  val lib : string
+  val prelude : string
+end
+
 val primitive_names : string list
 val is_primitive : string -> bool
 val is_primitive_var : Var.var -> bool

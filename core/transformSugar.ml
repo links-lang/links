@@ -173,6 +173,11 @@ class transform (env : FrontendTypeEnv.t) =
           lookup module_t.Types.modules module_t.Types.fields remainder in
       match var with
         | `Ident x ->  lookup_var var_env x
+        | `Dot (moodule, remainder) when moodule = Lib.BuiltinModules.lib ->
+          begin match QualifiedName.split remainder with
+            | [x] -> FrontendTypeEnv.lookup_var_venv Lib.type_env x
+            | _ -> failwith "illegal lib function"
+          end
         | `Dot (moodule, remainder) ->
           let module_t = snd (TyEnv.lookup module_env moodule) in
           lookup module_t.Types.modules module_t.Types.fields remainder

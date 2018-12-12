@@ -43,8 +43,8 @@
     = string_of_environment env
 
 
-  let lookup_var_tyenv tyenv name = Env.String.lookup tyenv.var_env name
-  let lookup_var_venv varenv name = Env.String.lookup varenv name
+  let lookup_var_tyenv tyenv name = snd (Env.String.lookup tyenv.var_env name)
+  let lookup_var_venv varenv name = snd (Env.String.lookup varenv name)
 
   (* Must not be used for binding vars that come from opening/importing a module *)
   let bind_var_tyenv tyenv (name, t) = Env.String.bind tyenv.var_env (name, (None, t))

@@ -2120,12 +2120,21 @@ let usages_cases bs =
   usage_compat (List.map (fun (_, (_, _, m)) -> m) bs)
 
 
-let lookup_qualified_variable pos context qname : Types.datatype =
-  let rec traverse_module_path count current_qname (current_module_type : Types.module_t) : Types.datatype =
+(* Looks up a qualified name in the context.
+   If the qualified name refers to something in an opened/imported module, re-write it
+   to explicitly state the full path *)
+let resolve_qualified_name pos context qname
+    (toplevel_env : (QualifiedName.t option * 'b) Env.t)
+    (ident_env_extractor : Types.module_t -> 'b stringmap)
+    (griper : Position.t -> QualifiedName.t -> 'b) : (QualifiedName.t * 'b) =
+  let append_opt prefix_opt original = match prefix_opt with
+    | None -> original
+    | Some prefix -> QualifiedName.append prefix original in
+  let rec traverse_module_path count current_qname (current_module_type : Types.module_t) : 'b =
     match current_qname with
       | `Ident name ->
-        begin match StringMap.find_opt name current_module_type.fields with
-          | None -> Gripers.unknown_variable pos qname
+        begin match StringMap.find_opt name (ident_env_extractor current_module_type) with
+          | None -> griper pos qname
           | Some t -> t
         end
       | `Dot (m_name, remainder) ->
@@ -2138,18 +2147,32 @@ let lookup_qualified_variable pos context qname : Types.datatype =
         end in
   match qname with
     | `Ident name ->
-      begin match Env.find context.var_env name with
-        | None -> Gripers.unknown_variable pos qname
-        | Some (_, t) ->  t
+      begin match Env.find toplevel_env name with
+        | None -> qname, griper pos qname
+        | Some (imported_path_opt, t) -> append_opt imported_path_opt qname, t
       end
     | `Dot (first_module, remainder) ->
       begin match Env.find context.module_env first_module with
         | None ->
           let module_path_until_failure = QualifiedName.prefix 1 qname in
           Gripers.unknown_module pos module_path_until_failure
-        | Some (_, first_module_type) ->
-          traverse_module_path 1 remainder first_module_type
+        | Some (imported_path_opt, first_module_type) ->
+          append_opt imported_path_opt qname, traverse_module_path 1 remainder first_module_type
       end
+
+
+(* Fixme: Using "extractor functions" here allows us to re-use the same implementation for both
+   qualified variable and module names, but we pay with up to two additional function calls per variable lookup:
+   1. The call of resolve_qualified_name (always)
+   2. The call of the extractor function once the `Ident is reached (only if the whole name is not just immediately an `Ident) *)
+let resolve_qualified_variable_name pos context qname : (QualifiedName.t * Types.datatype) =
+  resolve_qualified_name pos context qname context.var_env (fun moodule -> moodule.fields) Gripers.unknown_variable
+
+let resolve_qualified_module_name pos context qname : (QualifiedName.t * Types.module_t) =
+  resolve_qualified_name pos context qname context.module_env (fun moodule -> moodule.modules) Gripers.unknown_module
+
+
+
 
 
 
@@ -2226,20 +2249,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       match (expr : phrasenode) with
         | Var q            ->
            (
-             let var_type = lookup_qualified_variable pos context q in
+            let fully_qualified_name, var_type = resolve_qualified_variable_name pos context q in
              let usage_map =
-              if QualifiedName.is_qualified q then
+              if QualifiedName.is_qualified fully_qualified_name then
                 (* We assume that no module can publicly expose something linear,
                    which means that this variable usage does not matter for linearity checks *)
                 StringMap.empty
               else
-                StringMap.singleton (QualifiedName.unqualify q) 1  in
+                StringMap.singleton (QualifiedName.unqualify fully_qualified_name) 1  in
+
              let (tyargs, t) = Utils.instantiate_typ var_type in
                if Settings.get_value Instantiate.quantified_instantiation then
                  let tyvars = Types.quantifiers_of_type_args tyargs in
-                   tabstr(tyvars, tappl (Var q, tyargs)), t, usage_map
+                   tabstr(tyvars, tappl (Var fully_qualified_name, tyargs)), t, usage_map
                else
-                 tappl (Var q, tyargs), t, usage_map
+                 tappl (Var fully_qualified_name, tyargs), t, usage_map
             )
         | Section _ as s   -> type_section context s
         (* literals *)
@@ -3985,8 +4009,15 @@ and type_binding : context -> binding -> binding * context * usagemap =
          let context' = {empty_context with module_env = Env.bind Env.empty (name, (None, module_type)) } in
          let module_usages = usage_builder StringMap.empty in
           Module (name, Some module_type, bindings), context', module_usages
-      | Import _ ->
-         failwith "Import statements must have been removed by now"
+      | Import module_path ->
+         let full_path, module_type = resolve_qualified_module_name pos context module_path in
+         let augment_with_path new_map = StringMap.fold
+            (fun key value env ->
+              Env.bind env (key, (Some full_path, value))) new_map Env.empty in
+         let context' = { empty_context with
+            var_env = augment_with_path module_type.fields ;
+            module_env = augment_with_path module_type.modules ; } in
+         Import full_path, context', StringMap.empty
     in
       WithPos.make ~pos typed, ctxt, usage
 and type_regex typing_env : regex -> regex =

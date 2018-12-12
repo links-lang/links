@@ -33,3 +33,8 @@
       | _, `Ident _ -> qname
       | 1, `Dot (s, _) -> `Ident s
       | _, `Dot (s, remainder) -> `Dot (s, prefix (n-1) remainder)
+
+
+  let rec append prefix_qname qname = match prefix_qname with
+    | `Ident s -> `Dot (s, qname)
+    | `Dot (s, qname') -> `Dot (s, append qname' qname)
