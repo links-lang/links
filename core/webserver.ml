@@ -213,11 +213,10 @@ struct
               base / uri_path in
 
           let headers =
-            (* Filename.extension not defined until 4.04, because who would want such a thing *)
             let rec loop = function
               | [] -> Cohttp.Header.init ()
               | ((ext, content_type) :: rest) ->
-                 if Filename.check_suffix fname ("." ^ ext) then
+                 if String.equal (Filename.extension fname) ("." ^ ext) then
                    Cohttp.Header.init_with "content-type" content_type
                  else
                    loop rest in

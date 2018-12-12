@@ -1,14 +1,14 @@
 # Installing Links
 
-Links requires OCaml 4.04.0. We recommend installing Links using the
+Links requires OCaml 4.06.0. We recommend installing Links using the
 OPAM tool, available from:
 
   https://opam.ocaml.org/
 
 First run the following command to install the required version of
-OCaml 4.04.0 and activate it for use in the current shell session:
+OCaml 4.06.0 and activate it for use in the current shell session:
 
-  $ opam switch 4.04.0
+  $ opam switch 4.06.0
   $ eval `opam config env`
 
 If you wish to use Links' database functionality, you should first
