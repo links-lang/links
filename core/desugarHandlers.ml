@@ -43,25 +43,25 @@ let resolve_name_conflicts : pattern -> stringset -> pattern
   = fun pat conflicts ->
     let rec hide_names : pattern -> pattern
       = fun pat -> with_pos pat.pos
-	 begin
-	  match pat.node with
-	  | `Variant (label, pat_opt)    -> `Variant (label, opt_map hide_names pat_opt)
-	  | `Record (name_pats, pat_opt) -> `Record  (List.map (fun (label, pat) -> (label, hide_names pat)) name_pats, opt_map hide_names pat_opt)
-	  | `Variable bndr               ->
-	     if StringSet.mem (name_of_binder bndr) conflicts
-	     then `Any
-	     else pat.node
-	  | `Cons (pat, pat')            -> `Cons (hide_names pat, hide_names pat')
-	  | `Tuple pats                  -> `Tuple (List.map hide_names pats)
-	  | `List pats                   -> `List (List.map hide_names pats)
-	  | `Negative _                  -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
-	  | `As (bndr,pat)               -> let {node;_} as pat = hide_names pat in
-					    if StringSet.mem (name_of_binder bndr) conflicts
-					    then node
-					    else `As (bndr, pat)
-	  | `HasType (pat, t)            -> `HasType (hide_names pat, t)
-	  | _ -> pat.node
-	 end
+         begin
+          match pat.node with
+          | `Variant (label, pat_opt)    -> `Variant (label, opt_map hide_names pat_opt)
+          | `Record (name_pats, pat_opt) -> `Record  (List.map (fun (label, pat) -> (label, hide_names pat)) name_pats, opt_map hide_names pat_opt)
+          | `Variable bndr               ->
+             if StringSet.mem (name_of_binder bndr) conflicts
+             then `Any
+             else pat.node
+          | `Cons (pat, pat')            -> `Cons (hide_names pat, hide_names pat')
+          | `Tuple pats                  -> `Tuple (List.map hide_names pats)
+          | `List pats                   -> `List (List.map hide_names pats)
+          | `Negative _                  -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
+          | `As (bndr,pat)               -> let {node;_} as pat = hide_names pat in
+                                            if StringSet.mem (name_of_binder bndr) conflicts
+                                            then node
+                                            else `As (bndr, pat)
+          | `HasType (pat, t)            -> `HasType (hide_names pat, t)
+          | _ -> pat.node
+         end
     in hide_names pat
 
 (* This function parameterises each clause computation, e.g.
@@ -92,9 +92,9 @@ let parameterize : (pattern * phrase) list -> pattern list list option -> (patte
   | Some params ->
      List.map (fun (pat, body) ->
        let name_conflicts =
-	 let param_names = List.concat (List.map names (List.concat params)) in
-	 let pat_names   = names pat in
-	 StringSet.inter (StringSet.from_list pat_names) (StringSet.from_list param_names)
+         let param_names = List.concat (List.map names (List.concat params)) in
+         let pat_names   = names pat in
+         StringSet.inter (StringSet.from_list pat_names) (StringSet.from_list param_names)
        in
        let params = List.map (List.map (fun p -> resolve_name_conflicts p name_conflicts)) params in
        (pat, wrap_fun params body)
@@ -106,7 +106,7 @@ let rec deanonymize : pattern -> pattern
   = fun pat -> with_pos pat.pos
      begin
       match pat.node with
-	`Any                         -> `Variable (make_untyped_binder (with_dummy_pos (Utility.gensym ~prefix:"dsh" ())))
+        `Any                         -> `Variable (make_untyped_binder (with_dummy_pos (Utility.gensym ~prefix:"dsh" ())))
       | `Nil                         -> `Nil
       | `Cons (p, p')                -> `Cons (deanonymize p, deanonymize p')
       | `List ps                     -> `List (List.map deanonymize ps)
@@ -126,7 +126,7 @@ let rec phrase_of_pattern : pattern -> phrase
   = fun pat -> with_pos pat.pos
      begin
       match pat.node with
-	`Any                         -> assert false (* can never happen after the fresh name generation pass *)
+        `Any                         -> assert false (* can never happen after the fresh name generation pass *)
       | `Nil                         -> `ListLit ([], None)
       | `Cons (hd, tl)               -> `InfixAppl (([], `Cons), phrase_of_pattern hd, phrase_of_pattern tl) (* x :: xs => (phrase_of_pattern x) :: (phrase_of_pattern xs) *)
       | `List ps                     -> `ListLit (List.map phrase_of_pattern ps, None)
@@ -177,15 +177,15 @@ let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
     let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =
       match params with
-	None -> handle
+        None -> handle
       | Some params ->
-	 let params = List.map (List.map phrase_of_pattern) params in
-	 apply_params handle params
+         let params = List.map (List.map phrase_of_pattern) params in
+         apply_params handle params
     in
     let fnparams : pattern list list = [[]] in
     let fnparams =
       match params with
-	Some params -> params @ ([m] :: fnparams)
+        Some params -> params @ ([m] :: fnparams)
       | None -> [m] :: fnparams
     in
     let fnlit = (fnparams, body) in
