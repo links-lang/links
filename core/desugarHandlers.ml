@@ -207,18 +207,6 @@ object
        let (val_cases, eff_cases) = split_handler_cases h.sh_effect_cases in
        with_pos pos (`Handle { h with sh_effect_cases = eff_cases;
                                       sh_value_cases  = val_cases })
-    (* | `Handle handler when handler.sh_descr.shd_depth = `Deep -> *)
-    (*    begin match handler.sh_descr.shd_params with *)
-    (*    | Some { shp_names; _ } -> *)
-    (*       let local_bindings = *)
-    (*         List.fold_right *)
-    (*           (fun (name, pos) acc -> *)
-    (*             (`Val ([], (`Variable (name, None, pos), dp), (`Var name, pos), `Unknown, None), dp) :: acc) *)
-    (*           shp_names [] *)
-    (*       in *)
-    (*       `Block (local_bindings, (`Handle handler, pos)), dp *)
-    (*    | None -> `Handle handler, pos *)
-    (*    end *)
     | _ -> super#phrase {node; pos}
 
   method! bindingnode = function
