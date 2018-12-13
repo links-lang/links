@@ -492,11 +492,11 @@ object (self)
           ({< alias_env = SEnv.bind alias_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) >},
            `Type (name, vars, (t, Some dt)))
 
-    | `Val (tyvars, pat, p, loc, dt) ->
+    | `Val (pat, (tyvars, p), loc, dt) ->
         let o, pat = self#pattern pat in
         let o, p   = o#phrase p in
         let o, loc = o#location loc in
-          o, `Val (tyvars, pat, p, loc, opt_map (Desugar.datatype' map alias_env) dt)
+          o, `Val (pat, (tyvars, p), loc, opt_map (Desugar.datatype' map alias_env) dt)
     | `Fun (bind, lin, (tyvars, fl), loc, dt) ->
         let o, bind = self#binder bind in
         let o, fl   = o#funlit fl in

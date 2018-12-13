@@ -274,14 +274,7 @@ and phrasenode = [
 ]
 and phrase = phrasenode with_pos
 and bindingnode = [
-(*
-   TODO: (aesthetic change)
-     change `Val constructor to:
-       `Val of pattern * (tyvar list * phrase) * location * datatype' option
-     which corresponds to
-       let p=/\X.e in ...
-*)
-| `Val     of tyvar list * pattern * phrase * location * datatype' option
+| `Val     of pattern * (tyvar list * phrase) * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Handler of binder * handlerlit * datatype' option
@@ -503,7 +496,7 @@ struct
   and binding ({node = binding; _}: binding) : StringSet.t (* vars bound in the pattern *)
                                              * StringSet.t (* free vars in the rhs *) =
     match binding with
-    | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
+    | `Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
     | `Handler (bndr, hnlit, _) ->
        let name = singleton (name_of_binder bndr) in
        name, (diff (handlerlit hnlit) name)

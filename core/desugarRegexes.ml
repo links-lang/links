@@ -53,7 +53,7 @@ let desugar_regex phrase regex_type pos : regex -> phrasenode =
   in fun e ->
      let e = aux e in
      `Block (List.map (fun (v, e1, t) ->
-                 (with_pos pos (`Val ([], (with_pos pos (`Variable (make_binder v t pos))), e1, `Unknown, None))))
+                 (with_pos pos (`Val (with_pos pos (`Variable (make_binder v t pos)), ([], e1), `Unknown, None))))
                !exprs,
              with_pos pos e)
 

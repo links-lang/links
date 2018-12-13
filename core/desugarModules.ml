@@ -219,11 +219,11 @@ and perform_renaming module_table path term_ht type_ht =
           let o = self#bind_shadow_type n fqn in
           let (o, dt') = o#datatype' dt in
           (o, `Type (fqn, tvs, dt'))
-      | `Val (tvs, pat, phr, loc, dt_opt) ->
+      | `Val (pat, (tvs, phr), loc, dt_opt) ->
           let (_, phr') = self#phrase phr in
           let (o, pat') = self#pattern pat in
           let (o, dt_opt') = o#option (fun o -> o#datatype') dt_opt in
-          (o, `Val (tvs, pat', phr', loc, dt_opt'))
+          (o, `Val (pat', (tvs, phr'), loc, dt_opt'))
       | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           (* Binder will have been changed. We need to add the funlit pattern
            * to the env. *)

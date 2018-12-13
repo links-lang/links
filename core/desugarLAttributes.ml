@@ -109,8 +109,9 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) 
     p', !lnames
 
 let let_in pos name rhs body : phrase =
-  with_pos pos (`Block ([with_pos pos (`Val ( [],
-   ( with_pos pos (`Variable (make_untyped_binder (with_pos pos name)))), rhs
+  with_pos pos (`Block ([with_pos pos (`Val (
+   with_pos pos (`Variable (make_untyped_binder (with_pos pos name))),
+   ([], rhs)
    , `Unknown, None))], body))
 
 let bind_lname_vars lnames = function

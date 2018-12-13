@@ -107,8 +107,8 @@ let annotate sigpos (signame, datatype) dpos : _ -> binding =
       | `Var (name, phrase, location) ->
           let _ = checksig signame name.node in
           with_pos dpos
-            (`Val ( [], (with_pos dpos (`Variable (make_untyped_binder name)))
-                  , phrase, location, Some datatype))
+            (`Val ( with_pos dpos (`Variable (make_untyped_binder name))
+                  , ([], phrase), location, Some datatype))
       | `Handler (bndr, hnlit, _) ->
          let _ = checksig signame (name_of_binder bndr) in
          with_pos dpos (`Handler (bndr, hnlit, Some datatype))
@@ -364,8 +364,8 @@ nofun_declaration:
                                                                    set assoc (from_option default_fixity $2) ($3.node);
                                                                    with_pos $loc `Infix }
 | tlvarbinding SEMICOLON                                       { let (bndr,p,l) = $1
-                                                                 in with_pos $loc($1) (`Val ([],
-                                                                    (with_pos $loc($1) (`Variable (make_untyped_binder bndr))), p, l, None)) }
+                                                                 in with_pos $loc($1) (`Val (
+                                                                    (with_pos $loc($1) (`Variable (make_untyped_binder bndr))), ([], p), l, None)) }
 | signature tlvarbinding SEMICOLON                             { annotate $loc($1) $1 $loc($2) (`Var $2) }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
@@ -956,7 +956,7 @@ links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { with_pos $loc (`Val ([], $2, $4, `Unknown, None)) }
+| VAR pattern EQ exp SEMICOLON                                 { with_pos $loc (`Val ($2, ([], $4), `Unknown, None)) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
 | signature FUN var arg_lists block                            {  annotate $loc($1) $1 $loc
                                                                   (`Fun ($3, `Unl, ($4, with_pos $loc($5) (`Block $5)), `Unknown)) }
