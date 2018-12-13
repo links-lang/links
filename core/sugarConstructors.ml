@@ -1,10 +1,15 @@
 open Sugartypes
 open Utility
 
+(* A position produced by Menhir parser *)
+type ppos = SourceCode.lexpos * SourceCode.lexpos
+let dummy_ppos = (Lexing.dummy_pos, Lexing.dummy_pos)
+
 let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
 
 let with_pos p = Sugartypes.with_pos (pos p)
 
+(* JSTOLAREK: refactor and rename *)
 let annotate sigpos (signame, datatype) dpos : _ -> binding =
   let checksig {node=signame; _} name =
     if signame <> name then
@@ -25,11 +30,23 @@ let annotate sigpos (signame, datatype) dpos : _ -> binding =
          let _ = checksig signame (name_of_binder bndr) in
          with_pos dpos (`Handler (bndr, hnlit, Some datatype))
 
-let make_db_insert pos ins_exp lbls_pos lbls var_pos var =
-  with_pos pos (`DBInsert
-    (ins_exp, List.map fst lbls,
-     with_pos lbls_pos (`ListLit ([with_pos lbls_pos
-                                            (`RecordLit (lbls, None))]
-                                 , None)),
-     OptionUtils.opt_map (fun v -> with_pos var_pos (`Constant (`String v)))
-                         var))
+(* Create a record with a given list of labels *)
+let make_record pos lbls =
+  with_pos pos (`RecordLit (lbls, None))
+
+(* Create a list of labeled database expressions *)
+let make_db_exps pos exps =
+  with_pos pos (`ListLit ([make_record pos exps], None))
+
+let is_empty_db_exps : phrase -> bool = function
+  | {node=`ListLit ([{node=`RecordLit ([], _);_}], _);_} -> true
+  | _                                                    -> false
+
+(* Create a database insertion query.  Ensures that either the list of labeled
+   expression is non-empty or the returning variable has been named.*)
+let make_db_insert p ins_exp lbls exps var_pos var_opt =
+  if is_empty_db_exps exps && var_opt == None then
+    raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^
+      " a nonempty list of labeled expression or a return variable.", pos p));
+  with_pos p (`DBInsert (ins_exp, lbls, exps, OptionUtils.opt_map
+       (fun var -> with_pos var_pos (`Constant (`String var))) var_opt))

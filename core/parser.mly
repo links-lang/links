@@ -178,8 +178,10 @@ let row_with field (fields, row_var) = field::fields, row_var
 (* this preserves 1-tuples *)
 let make_tuple pos =
   function
-    | [e] -> with_pos pos (`RecordLit ([("1", e)], None))
+    | [e] -> make_record pos [("1", e)]
     | es  -> with_pos pos (`TupleLit es)
+
+let labels xs = fst (List.split xs)
 
 let parseRegexFlags f =
   let rec asList f i l =
@@ -527,7 +529,7 @@ constructor_expression:
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { with_pos $loc (`Section $2)              }
 | LPAREN DOT record_label RPAREN                               { with_pos $loc (`Section (`Project $3))   }
-| LPAREN RPAREN                                                { with_pos $loc (`RecordLit ([], None))    }
+| LPAREN RPAREN                                                { make_record $loc []                      }
 | LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { with_pos $loc (`RecordLit ($2, $3))      }
 | LPAREN exps RPAREN                                           { with_pos $loc (`TupleLit ($2))           }
 | LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (`With ($2, $4))           }
@@ -871,14 +873,13 @@ perhaps_db_driver:
 
 database_expression:
 | table_expression                                             { $1 }
-| INSERT exp VALUES LPAREN record_labels RPAREN exp            { with_pos $loc (`DBInsert ($2, $5, $7, None)) }
+| INSERT exp VALUES LPAREN record_labels RPAREN exp            { make_db_insert $loc $2 $5 $7 dummy_ppos None }
 
 | INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
-  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { make_db_insert $loc $2 $loc($6) $6 $loc($9) $9  }
+  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { make_db_insert $loc $2 (labels $6) (make_db_exps $loc($6) $6) $loc($9) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
-  RETURNING VARIABLE                                           { with_pos $loc (`DBInsert ($2, $5, $7,
-                                                                          Some (with_pos $loc($9) (`Constant (`String $9))))) }
-| DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3)) }
+  RETURNING VARIABLE                                           { make_db_insert $loc $2 $5 $7 $loc($9) (Some $9) }
+| DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
 | VARIABLE+                                                    { $1 }
@@ -939,10 +940,10 @@ block:
 
 block_contents:
 | bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (`Exp $2)],
-                                                                  with_pos $loc (`RecordLit ([], None))) }
+                                                                  make_record $loc []) }
 | bindings exp                                                 { ($1, $2) }
 | exp SEMICOLON                                                { ([with_pos $loc($1) (`Exp $1)],
-                                                                  with_pos $loc (`RecordLit ([], None))) }
+                                                                  make_record $loc []) }
 | exp                                                          { ([], $1) }
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }
 
@@ -1007,7 +1008,7 @@ mu_datatype:
 | forall_datatype                                              { $1 }
 
 forall_datatype:
-| FORALL varlist DOT datatype                                  { `Forall (List.map fst $2, $4) }
+| FORALL varlist DOT datatype                                  { `Forall (labels $2, $4) }
 | session_datatype                                             { $1 }
 
 /* Parenthesised dts disambiguate between sending qualified types and recursion variables.
