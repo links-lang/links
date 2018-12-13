@@ -365,9 +365,8 @@ fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { let (bndr,lin,p,l) = $1
-                                                                 in with_pos $loc (`Fun (make_untyped_binder bndr,lin,([],p),l,None)) }
-| signature tlfunbinding                                       { annotate $loc($1) $1 $loc($2) (`Fun     $2) }
+| tlfunbinding                                                 { make_fun None $loc $1 }
+| signature tlfunbinding                                       { make_fun (Some ($loc($1), $1)) $loc($2) $2 }
 | signature typed_handler_binding                              { annotate $loc($1) $1 $loc($2) (`Handler $2) }
 | typed_handler_binding                                        { with_pos $loc (`Handler $1) }
 
@@ -874,7 +873,6 @@ perhaps_db_driver:
 database_expression:
 | table_expression                                             { $1 }
 | INSERT exp VALUES LPAREN record_labels RPAREN exp            { make_db_insert $loc $2 $5 $7 dummy_ppos None }
-
 | INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
   RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { make_db_insert $loc $2 (labels $6) (make_db_exps $loc($6) $6) $loc($9) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
@@ -915,16 +913,14 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { with_pos $loc (`Val ($2, ([], $4), `Unknown, None)) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature FUN var arg_lists block                            {  annotate $loc($1) $1 $loc
-                                                                  (`Fun ($3, `Unl, ($4, with_pos $loc($5) (`Block $5)), `Unknown)) }
-| signature LINFUN var arg_lists block                         {  annotate $loc($1) $1 $loc
-                                                                  (`Fun ($3, `Lin, ($4, with_pos $loc($5) (`Block $5)), `Unknown)) }
-| FUN var arg_lists block                                      { with_pos $loc (`Fun (make_untyped_binder $2,
-                                                                                  `Unl, ([], ($3, with_pos $loc($4) (`Block $4))), `Unknown,
-                                                                                  None)) }
-| LINFUN var arg_lists block                                   { with_pos $loc (`Fun (make_untyped_binder $2,
-                                                                                  `Lin, ([], ($3, with_pos $loc($4) (`Block $4))), `Unknown,
-                                                                                  None)) }
+| signature FUN var arg_lists block                            { make_fun (Some ($loc($1), $1)) $loc
+                                                                  ($3, `Unl, ($4, with_pos $loc($5) (`Block $5)), `Unknown) }
+| signature LINFUN var arg_lists block                         { make_fun (Some ($loc($1), $1)) $loc
+                                                                  ($3, `Lin, ($4, with_pos $loc($5) (`Block $5)), `Unknown) }
+| FUN var arg_lists block                                      { make_fun None $loc
+                                                                          ($2, `Unl, ($3, with_pos $loc($4) (`Block $4)), `Unknown) }
+| LINFUN var arg_lists block                                   { make_fun None $loc
+                                                                          ($2, `Lin, ($3, with_pos $loc($4) (`Block $4)), `Unknown) }
 | typed_handler_binding                                        { with_pos $loc (`Handler $1) }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 

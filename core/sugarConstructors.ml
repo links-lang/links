@@ -9,26 +9,35 @@ let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
 
 let with_pos p = Sugartypes.with_pos (pos p)
 
+let checksig sigpos {node=signame; _} name =
+  if signame <> name then
+    raise (ConcreteSyntaxError
+             ("Signature for `" ^ signame ^ "' should precede definition of `"
+              ^ signame ^ "', not `"^ name ^"'.", pos sigpos))
+
 (* JSTOLAREK: refactor and rename *)
 let annotate sigpos (signame, datatype) dpos : _ -> binding =
-  let checksig {node=signame; _} name =
-    if signame <> name then
-      raise (ConcreteSyntaxError
-               ("Signature for `" ^ signame ^ "' should precede definition of `"
-                ^ signame ^ "', not `"^ name ^"'.", pos sigpos)) in
     function
-      | `Fun (name, lin, phrase, location) ->
-          let _ = checksig signame name.node in
-          with_pos dpos (`Fun ( make_untyped_binder name, lin, ([], phrase)
-                              , location, Some datatype))
       | `Var (name, phrase, location) ->
-          let _ = checksig signame name.node in
+          checksig sigpos signame name.node;
           with_pos dpos
             (`Val ( with_pos dpos (`Variable (make_untyped_binder name))
                   , ([], phrase), location, Some datatype))
       | `Handler (bndr, hnlit, _) ->
-         let _ = checksig signame (name_of_binder bndr) in
+         checksig sigpos signame (name_of_binder bndr);
          with_pos dpos (`Handler (bndr, hnlit, Some datatype))
+
+(* JSTOLAREK: create specialized Sig/NoSig datatype *)
+(* JSTOLAREK: split funlit into two separate arguments. Requires changing
+   tlfunbinding production and its type signature *)
+(* JSTOLAREK create specialized Lin and Unl versions *)
+let make_fun sig_opt funpos (bndr, linearity, funlit, location) =
+  let datatype = match sig_opt with
+    | Some (sigpos, (signame, datatype)) -> checksig sigpos signame bndr.node;
+                                            Some datatype
+    | None -> None in
+  with_pos funpos (`Fun (make_untyped_binder bndr, linearity, ([], funlit),
+                         location, datatype))
 
 (* Create a record with a given list of labels *)
 let make_record pos lbls =
@@ -42,6 +51,7 @@ let is_empty_db_exps : phrase -> bool = function
   | {node=`ListLit ([{node=`RecordLit ([], _);_}], _);_} -> true
   | _                                                    -> false
 
+(* JSTOLAREK: try to collapse var_pos inot var_opt *)
 (* Create a database insertion query.  Ensures that either the list of labeled
    expression is non-empty or the returning variable has been named.*)
 let make_db_insert p ins_exp lbls exps var_pos var_opt =
