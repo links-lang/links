@@ -116,7 +116,7 @@ struct
     | `Handler _
     | `Foreign _ -> true
     | `Exp p -> is_pure p
-    | `Val (_, pat, rhs, _, _) ->
+    | `Val (pat, (_, rhs), _, _) ->
         is_safe_pattern pat && is_pure rhs
   and is_safe_pattern {node = pat; _} = match pat with
       (* safe patterns cannot fail *)
@@ -3577,7 +3577,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let empty_context = empty_context (context.Types.effect_row) in
 
     let typed, ctxt, usage = match def with
-      | `Val (_, pat, body, location, datatype) ->
+      | `Val (pat, (_, body), location, datatype) ->
           let body = tc body in
           let pat = tpc pat in
           let penv = pattern_env pat in
@@ -3606,7 +3606,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               else
                 [], erase_pat pat, penv
           in
-            `Val (tyvars, pat, body, location, datatype),
+            `Val (pat, (tyvars, body), location, datatype),
             {empty_context with
               var_env = penv},
             usage

@@ -169,7 +169,7 @@ let create_module_info_map program =
     (* Getting binding names -- we're interested in function and value names *)
     let rec get_binding_names = function
       | [] -> []
-      | {node = `Val (_, pat, _, _, _); _} :: bs ->
+      | {node = `Val (pat, _, _, _); _} :: bs ->
          (get_pattern_variables pat) @ get_binding_names bs
       | {node = `Fun (bndr, _, _, _, _); _} :: bs ->
          Sugartypes.name_of_binder bndr :: (get_binding_names bs)
