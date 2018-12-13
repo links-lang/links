@@ -39,6 +39,7 @@ or Menhir it is no longer necessary.
 
 open Utility
 open Sugartypes
+open SugarConstructors
 
 module Links_core = (* See Note [Dune "wrapped" workaround] *)
 struct
@@ -81,10 +82,6 @@ let fresh_rigid_presence_variable : subkind option -> fieldspec =
     incr type_variable_counter;
     `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
 
-let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
-
-let with_pos p = Sugartypes.with_pos (pos p)
-
 let ensure_match p (opening : string) (closing : string) = function
   | result when opening = closing -> result
   | _ -> raise (ConcreteSyntaxError
@@ -92,26 +89,6 @@ let ensure_match p (opening : string) (closing : string) = function
            ^ "'.", pos p))
 
 let default_fixity = 9
-
-let annotate sigpos (signame, datatype) dpos : _ -> binding =
-  let checksig {node=signame; _} name =
-    if signame <> name then
-      raise (ConcreteSyntaxError
-               ("Signature for `" ^ signame ^ "' should precede definition of `"
-                ^ signame ^ "', not `"^ name ^"'.", pos sigpos)) in
-    function
-      | `Fun (name, lin, phrase, location) ->
-          let _ = checksig signame name.node in
-          with_pos dpos (`Fun ( make_untyped_binder name, lin, ([], phrase)
-                              , location, Some datatype))
-      | `Var (name, phrase, location) ->
-          let _ = checksig signame name.node in
-          with_pos dpos
-            (`Val ( with_pos dpos (`Variable (make_untyped_binder name))
-                  , ([], phrase), location, Some datatype))
-      | `Handler (bndr, hnlit, _) ->
-         let _ = checksig signame (name_of_binder bndr) in
-         with_pos dpos (`Handler (bndr, hnlit, Some datatype))
 
 let primary_kind_of_string p =
   function
@@ -203,8 +180,6 @@ let make_tuple pos =
   function
     | [e] -> with_pos pos (`RecordLit ([("1", e)], None))
     | es  -> with_pos pos (`TupleLit es)
-
-let labels = List.map fst
 
 let parseRegexFlags f =
   let rec asList f i l =
@@ -897,31 +872,12 @@ perhaps_db_driver:
 database_expression:
 | table_expression                                             { $1 }
 | INSERT exp VALUES LPAREN record_labels RPAREN exp            { with_pos $loc (`DBInsert ($2, $5, $7, None)) }
-| INSERT exp VALUES
-  LBRACKET LPAREN labeled_exps RPAREN RBRACKET                 { with_pos $loc (`DBInsert ($2,
-                                                                          labels $6,
-                                                                          with_pos $loc($6)
-                                                                                   (`ListLit ([with_pos $loc($6)
-                                                                                                        (`RecordLit ($6, None))], None)),
-                                                                          None)) }
+
+| INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
+  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { make_db_insert $loc $2 $loc($6) $6 $loc($9) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
   RETURNING VARIABLE                                           { with_pos $loc (`DBInsert ($2, $5, $7,
                                                                           Some (with_pos $loc($9) (`Constant (`String $9))))) }
-| INSERT exp VALUES
-  LBRACKET LPAREN RPAREN RBRACKET
-  RETURNING VARIABLE                                           { with_pos $loc (`DBInsert ($2,
-                                                                          [],
-                                                                          (with_pos $loc (`ListLit ([with_pos $loc (`RecordLit ([], None))],
-                                                                                                    None))),
-                                                                          Some (with_pos $loc($9) (`Constant (`String $9))))) }
-| INSERT exp VALUES
-  LBRACKET LPAREN labeled_exps RPAREN RBRACKET
-  RETURNING VARIABLE                                           { with_pos $loc (`DBInsert ($2,
-                                                                          labels $6,
-                                                                          (with_pos $loc($6) (`ListLit ([with_pos $loc($6)
-                                                                                                                  (`RecordLit ($6, None))],
-                                                                                                        None))),
-                                                                          Some (with_pos $loc (`Constant (`String $10))))) }
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3)) }
 
 fn_dep_cols:
