@@ -222,7 +222,7 @@ and phrasenode = [
 | `Escape           of binder * phrase
 | `Section          of sec
 | `Conditional      of phrase * phrase * phrase
-| `Block            of binding list * phrase
+| `Block            of block_body
 | `InfixAppl        of (tyarg list * binop) * phrase * phrase
 | `Regex            of regex
 | `UnaryAppl        of (tyarg list * unary_op) * phrase
@@ -287,6 +287,7 @@ and bindingnode = [
 | `AlienBlock of (name * name * ((binder * datatype') list))
 ]
 and binding = bindingnode with_pos
+and block_body = binding list * phrase
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
@@ -306,26 +307,6 @@ and cp_phrase = cp_phrasenode with_pos
 
 type program = binding list * phrase option
   [@@deriving show]
-
-
-let make_untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =
-  let shd_params =
-    match parameters with
-    | None -> None
-    | Some pps ->
-       Some { shp_bindings = pps;
-              shp_types = [] }
-  in
-  { sh_expr = expr;
-    sh_effect_cases = eff_cases;
-    sh_value_cases = val_cases;
-    sh_descr = {
-        shd_depth = depth;
-        shd_types = (Types.make_empty_closed_row (), `Not_typed, Types.make_empty_closed_row (), `Not_typed);
-        shd_raw_row = Types.make_empty_closed_row ();
-        shd_params = shd_params
-      };
-  }
 
 (* Why does ConcreteSyntaxError take an
    unresolved position and yet
