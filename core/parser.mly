@@ -459,7 +459,7 @@ and receive for session types. */
 | RECEIVE                                                      { with_pos $loc (`Var "receive") }
 
 cp_name:
-| VARIABLE                                                     { make_untyped_binder (with_pos $loc $1) }
+| var                                                          { make_untyped_binder $1 }
 
 cp_label:
 | CONSTRUCTOR                                                  { $1 }
@@ -864,11 +864,11 @@ perhaps_db_driver:
 
 database_expression:
 | table_expression                                             { $1 }
-| INSERT exp VALUES LPAREN record_labels RPAREN exp            { make_db_insert $loc $2 $5 $7 dummy_ppos None }
+| INSERT exp VALUES LPAREN record_labels RPAREN exp            { make_db_insert $loc $2 $5 $7 None }
 | INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
-  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { make_db_insert $loc $2 (labels $6) (make_db_exps $loc($6) $6) $loc($9) $9  }
+  RPAREN RBRACKET preceded(RETURNING, var)?                    { make_db_insert $loc $2 (labels $6) (make_db_exps $loc($6) $6) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
-  RETURNING VARIABLE                                           { make_db_insert $loc $2 $5 $7 $loc($9) (Some $9) }
+  RETURNING var                                                { make_db_insert $loc $2 $5 $7 (Some $9) }
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
@@ -1234,7 +1234,7 @@ parenthesized_pattern:
 
 primary_pattern:
 (* JSTOLAREK: use smart constructors here *)
-| VARIABLE                                                     { with_pos $loc (`Variable (make_untyped_binder (with_pos $loc $1))) }
+| var                                                          { with_pos $loc (`Variable (make_untyped_binder $1)) }
 | UNDERSCORE                                                   { with_pos $loc `Any }
 | constant                                                     { with_pos $loc (`Constant $1) }
 | LBRACKET RBRACKET                                            { with_pos $loc `Nil }

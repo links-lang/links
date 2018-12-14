@@ -80,12 +80,12 @@ let is_empty_db_exps : phrase -> bool = function
   | {node=`ListLit ([{node=`RecordLit ([], _);_}], _);_} -> true
   | _                                                    -> false
 
-(* JSTOLAREK: try to collapse var_pos inot var_opt *)
 (* Create a database insertion query.  Raises an exception when the list of
    labeled expression is empty and the returning variable has not been named.*)
-let make_db_insert p ins_exp lbls exps var_pos var_opt =
+let make_db_insert p ins_exp lbls exps var_opt =
   if is_empty_db_exps exps && var_opt == None then
     raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^
       " a nonempty list of labeled expression or a return variable.", pos p));
   with_pos p (`DBInsert (ins_exp, lbls, exps, OptionUtils.opt_map
-       (fun var -> with_pos var_pos (`Constant (`String var))) var_opt))
+       (fun {node; pos} -> Sugartypes.with_pos pos (`Constant (`String node)))
+       var_opt))

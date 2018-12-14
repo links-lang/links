@@ -36,6 +36,6 @@ val make_hnlit : [`Deep | `Shallow ] -> pattern
               -> clause list * pattern list list option
               -> handlerlit
 
-val make_db_insert : ppos -> phrase -> name list -> phrase -> ppos
-                  -> string option -> phrase
+val make_db_insert : ppos -> phrase -> name list -> phrase
+                  -> string with_pos option -> phrase
 val make_db_exps : ppos -> (name * phrase) list -> phrase
