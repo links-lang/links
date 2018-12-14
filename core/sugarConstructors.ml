@@ -15,18 +15,6 @@ let checksig sigpos {node=signame; _} name =
              ("Signature for `" ^ signame ^ "' should precede definition of `"
               ^ signame ^ "', not `"^ name ^"'.", pos sigpos))
 
-(* JSTOLAREK: refactor and rename *)
-let annotate sigpos (signame, datatype) dpos : _ -> binding =
-    function
-      | `Var (name, phrase, location) ->
-          checksig sigpos signame name.node;
-          with_pos dpos
-            (`Val ( with_pos dpos (`Variable (make_untyped_binder name))
-                  , ([], phrase), location, Some datatype))
-      | `Handler (bndr, hnlit, _) ->
-         checksig sigpos signame (name_of_binder bndr);
-         with_pos dpos (`Handler (bndr, hnlit, Some datatype))
-
 (* JSTOLAREK: change signature production to contain location.  This will allow
    to avoid passing extra sig_loc to make_fun and whatever functions replaced
    annotate.  Moreover, this might allow merging of rules in binding
@@ -53,6 +41,27 @@ let make_handler sig_opt hpos (binder, handlerlit) =
        Some datatype
     | None -> None in
   with_pos hpos (`Handler (binder, handlerlit, datatype))
+
+(* Used for passing an argument to make_val_binding *)
+type name_or_pat = Name of name with_pos | Pat of pattern
+
+(* Create a Val binding.  This function takes either a name for a variable
+   pattern or an already constructed pattern.  In the latter case no signature
+   should be passed.  *)
+let make_val_binding sig_opt vpos (name_or_pat, phrase, location) =
+  let pat, datatype = match name_or_pat with
+    | Name name ->
+       let pat = with_pos vpos (`Variable (make_untyped_binder name)) in
+       let datatype = match sig_opt with
+         | Some (sigpos, (signame, datatype)) ->
+            checksig sigpos signame name.node;
+            Some datatype
+         | None -> None in
+       (pat, datatype)
+    | Pat pat ->
+       assert (sig_opt = None);
+       (pat, None) in
+    with_pos vpos (`Val (pat, ([], phrase), location, datatype))
 
 (* Create a record with a given list of labels *)
 let make_record pos lbls =

@@ -43,9 +43,10 @@ open SugarConstructors
 
 module Links_core = (* See Note [Dune "wrapped" workaround] *)
 struct
-  module Sugartypes = Sugartypes
-  module Types      = Types
-  module Operators  = Operators
+  module Sugartypes        = Sugartypes
+  module SugarConstructors = SugarConstructors
+  module Types             = Types
+  module Operators         = Operators
 end
 
 (* Generation of fresh type variables *)
@@ -342,10 +343,8 @@ nofun_declaration:
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (from_option default_fixity $2) ($3.node);
                                                                    with_pos $loc `Infix }
-| tlvarbinding SEMICOLON                                       { let (bndr,p,l) = $1
-                                                                 in with_pos $loc($1) (`Val (
-                                                                    (with_pos $loc($1) (`Variable (make_untyped_binder bndr))), ([], p), l, None)) }
-| signature tlvarbinding SEMICOLON                             { annotate $loc($1) $1 $loc($2) (`Var $2) }
+| tlvarbinding SEMICOLON                                       { make_val_binding None $loc($1) $1 }
+| signature tlvarbinding SEMICOLON                             { make_val_binding (Some ($loc($1), $1)) $loc($2) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
 alien_datatype:
@@ -399,7 +398,7 @@ tlfunbinding:
 | OP pattern postfixop perhaps_location block                  { (`Unl, $3, [[$2]], $4, $5)     }
 
 tlvarbinding:
-| VAR var perhaps_location EQ exp                              { ($2, $5, $3) }
+| VAR var perhaps_location EQ exp                              { (Name $2, $5, $3) }
 
 signature:
 | SIG var COLON datatype                                       { ($2, datatype $4) }
@@ -913,7 +912,7 @@ links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { with_pos $loc (`Val ($2, ([], $4), `Unknown, None)) }
+| VAR pattern EQ exp SEMICOLON                                 { make_val_binding None $loc (Pat $2, $4, `Unknown) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
 | signature FUN var arg_lists block                            { make_fun (Some ($loc($1), $1)) $loc (`Unl, $3, $4, `Unknown, $5) }
 | signature LINFUN var arg_lists block                         { make_fun (Some ($loc($1), $1)) $loc (`Lin, $3, $4, `Unknown, $5) }
