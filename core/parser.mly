@@ -366,10 +366,10 @@ fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { make_fun     None $loc $1 }
-| typed_handler_binding                                        { make_handler None $loc $1 }
-| signature tlfunbinding                                       { make_fun     (Some ($loc($1), $1)) $loc($2) $2 }
-| signature typed_handler_binding                              { make_handler (Some ($loc($1), $1)) $loc($2) $2 }
+| tlfunbinding                                                 { make_fun_binding     None $loc $1 }
+| typed_handler_binding                                        { make_handler_binding None $loc $1 }
+| signature tlfunbinding                                       { make_fun_binding     (Some ($loc($1), $1)) $loc($2) $2 }
+| signature typed_handler_binding                              { make_handler_binding (Some ($loc($1), $1)) $loc($2) $2 }
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
@@ -914,11 +914,11 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { make_val_binding None $loc (Pat $2, $4, `Unknown) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature FUN var arg_lists block                            { make_fun (Some ($loc($1), $1)) $loc (`Unl, $3, $4, `Unknown, $5) }
-| signature LINFUN var arg_lists block                         { make_fun (Some ($loc($1), $1)) $loc (`Lin, $3, $4, `Unknown, $5) }
-| FUN var arg_lists block                                      { make_fun None $loc (`Unl, $2, $3, `Unknown, $4) }
-| LINFUN var arg_lists block                                   { make_fun None $loc (`Lin, $2, $3, `Unknown, $4) }
-| typed_handler_binding                                        { make_handler None $loc $1 }
+| signature FUN var arg_lists block                            { make_fun_binding (Some ($loc($1), $1)) $loc (`Unl, $3, $4, `Unknown, $5) }
+| signature LINFUN var arg_lists block                         { make_fun_binding (Some ($loc($1), $1)) $loc (`Lin, $3, $4, `Unknown, $5) }
+| FUN var arg_lists block                                      { make_fun_binding None $loc (`Unl, $2, $3, `Unknown, $4) }
+| LINFUN var arg_lists block                                   { make_fun_binding None $loc (`Lin, $2, $3, `Unknown, $4) }
+| typed_handler_binding                                        { make_handler_binding None $loc $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
 bindings:

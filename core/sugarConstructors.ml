@@ -22,7 +22,7 @@ let checksig sigpos {node=signame; _} name =
 
 (* JSTOLAREK: create specialized Sig/NoSig datatype *)
 (* JSTOLAREK create specialized Lin and Unl versions *)
-let make_fun sig_opt fpos (linearity, bndr, args, location, block) =
+let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
   let datatype = match sig_opt with
     | Some (sigpos, (signame, datatype)) ->
        checksig sigpos signame bndr.node;
@@ -34,7 +34,7 @@ let make_fun sig_opt fpos (linearity, bndr, args, location, block) =
                        ([], (args, with_pos fpos (`Block block))),
                        location, datatype))
 
-let make_handler sig_opt hpos (binder, handlerlit) =
+let make_handler_binding sig_opt hpos (binder, handlerlit) =
   let datatype = match sig_opt with
     | Some (sigpos, (signame, datatype)) ->
        checksig sigpos signame (name_of_binder binder);
