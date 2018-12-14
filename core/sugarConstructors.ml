@@ -34,16 +34,25 @@ let annotate sigpos (signame, datatype) dpos : _ -> binding =
 
 (* JSTOLAREK: create specialized Sig/NoSig datatype *)
 (* JSTOLAREK create specialized Lin and Unl versions *)
-let make_fun sig_opt funpos (linearity, bndr, args, location, block) =
+let make_fun sig_opt fpos (linearity, bndr, args, location, block) =
   let datatype = match sig_opt with
-    | Some (sigpos, (signame, datatype)) -> checksig sigpos signame bndr.node;
-                                            Some datatype
+    | Some (sigpos, (signame, datatype)) ->
+       checksig sigpos signame bndr.node;
+       Some datatype
     | None -> None in
-  with_pos funpos (`Fun (make_untyped_binder bndr, linearity,
-                         (* NOTE: position of the block is slightly inaccurate.
-                            This is done to make parser code less verbose. *)
-                         ([], (args, with_pos funpos (`Block block))),
-                         location, datatype))
+  with_pos fpos (`Fun (make_untyped_binder bndr, linearity,
+                       (* NOTE: position of the block is slightly inaccurate.
+                          This is done to make parser code less verbose. *)
+                       ([], (args, with_pos fpos (`Block block))),
+                       location, datatype))
+
+let make_handler sig_opt hpos (binder, handlerlit) =
+  let datatype = match sig_opt with
+    | Some (sigpos, (signame, datatype)) ->
+       checksig sigpos signame (name_of_binder binder);
+       Some datatype
+    | None -> None in
+  with_pos hpos (`Handler (binder, handlerlit, datatype))
 
 (* Create a record with a given list of labels *)
 let make_record pos lbls =

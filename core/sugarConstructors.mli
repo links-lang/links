@@ -16,6 +16,9 @@ val make_fun : (ppos * (string with_pos * datatype')) option -> ppos
             -> (declared_linearity * name with_pos * pattern list list *
                 location * (binding list * phrase))
             -> binding
+val make_handler : (ppos * (string with_pos * datatype')) option -> ppos
+                -> (binder * handlerlit)
+                -> binding
 val make_db_insert : ppos -> phrase -> name list -> phrase -> ppos
                   -> string option -> phrase
 val make_db_exps : ppos -> (name * phrase) list -> phrase

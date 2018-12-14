@@ -367,16 +367,16 @@ fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { make_fun None $loc $1 }
-| signature tlfunbinding                                       { make_fun (Some ($loc($1), $1)) $loc($2) $2 }
-| signature typed_handler_binding                              { annotate $loc($1) $1 $loc($2) (`Handler $2) }
-| typed_handler_binding                                        { with_pos $loc (`Handler $1) }
+| tlfunbinding                                                 { make_fun     None $loc $1 }
+| typed_handler_binding                                        { make_handler None $loc $1 }
+| signature tlfunbinding                                       { make_fun     (Some ($loc($1), $1)) $loc($2) $2 }
+| signature typed_handler_binding                              { make_handler (Some ($loc($1), $1)) $loc($2) $2 }
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
                 handler_parameterization                        { let binder = make_untyped_binder $3 in
                                                                   let hnlit  = ($1, $2, fst $4, snd $4) in
-                                                                  (binder, hnlit, None) }
+                                                                  (binder, hnlit) }
 
 optional_computation_parameter:
 | /* empty */                                                  { with_pos $sloc `Any }
@@ -919,7 +919,7 @@ binding:
 | signature LINFUN var arg_lists block                         { make_fun (Some ($loc($1), $1)) $loc (`Lin, $3, $4, `Unknown, $5) }
 | FUN var arg_lists block                                      { make_fun None $loc (`Unl, $2, $3, `Unknown, $4) }
 | LINFUN var arg_lists block                                   { make_fun None $loc (`Lin, $2, $3, `Unknown, $4) }
-| typed_handler_binding                                        { with_pos $loc (`Handler $1) }
+| typed_handler_binding                                        { make_handler None $loc $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
 bindings:
