@@ -366,9 +366,8 @@ fun_declaration:
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
-                handler_parameterization                        { let binder = make_untyped_binder $3 in
-                                                                  let hnlit  = ($1, $2, fst $4, snd $4) in
-                                                                  (binder, hnlit) }
+                handler_parameterization                        { let hnlit  = ($1, $2, fst $4, snd $4) in
+                                                                  ($3, hnlit) }
 
 optional_computation_parameter:
 | /* empty */                                                  { with_pos $sloc `Any }

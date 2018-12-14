@@ -44,9 +44,9 @@ let make_unl_fun_binding sig_opt fpos (bndr, args, block) =
 let make_lin_fun_binding sig_opt fpos (bndr, args, block) =
   make_fun_binding sig_opt fpos (`Lin, bndr, args, `Unknown, block)
 
-let make_handler_binding sig_opt hpos (binder, handlerlit) =
-  let datatype = datatype_opt_from_sig_opt sig_opt (name_of_binder binder) in
-  with_pos hpos (`Handler (binder, handlerlit, datatype))
+let make_handler_binding sig_opt hpos (name, handlerlit) =
+  let datatype = datatype_opt_from_sig_opt sig_opt name.node in
+  with_pos hpos (`Handler (make_untyped_binder name, handlerlit, datatype))
 
 (* Used for passing an argument to make_val_binding *)
 type name_or_pat = Name of name with_pos | Pat of pattern

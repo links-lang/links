@@ -26,7 +26,7 @@ val make_lin_fun_binding : signature -> ppos
                             (binding list * phrase))
                         -> binding
 val make_handler_binding : signature -> ppos
-                        -> (binder * handlerlit)
+                        -> (name with_pos * handlerlit)
                         -> binding
 val make_val_binding : signature -> ppos
                     -> (name_or_pat * phrase * location)
