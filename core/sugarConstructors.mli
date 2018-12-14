@@ -10,14 +10,16 @@ val make_record : ppos -> (name * phrase) list -> phrase
 
 (* Make bindings *)
 type name_or_pat = Name of name with_pos | Pat of pattern
-val make_fun_binding : (string with_pos * datatype') with_pos option -> ppos
+type signature_opt = Sig of (name with_pos * datatype') with_pos | NoSig
+
+val make_fun_binding : signature_opt -> ppos
                     -> (declared_linearity * name with_pos * pattern list list *
                         location * (binding list * phrase))
                     -> binding
-val make_handler_binding : (string with_pos * datatype') with_pos option -> ppos
+val make_handler_binding : signature_opt -> ppos
                         -> (binder * handlerlit)
                         -> binding
-val make_val_binding : (string with_pos * datatype') with_pos option -> ppos
+val make_val_binding : signature_opt -> ppos
                     -> (name_or_pat * phrase * location)
                     -> binding
 

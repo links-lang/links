@@ -10,26 +10,21 @@ let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
 (* Wrapper around with_pos that accepts parser positions *)
 let with_pos p = Sugartypes.with_pos (pos p)
 
-(* Ensure that name in a signature matches name in a declaration *)
-let checksig sigpos {node=signame; _} name =
-  if signame <> name then
-    raise (ConcreteSyntaxError
-             ("Signature for `" ^ signame ^ "' should precede definition of `"
-              ^ signame ^ "', not `"^ name ^"'.", sigpos))
+type signature_opt = Sig of (name with_pos * datatype') with_pos | NoSig
 
-(* JSTOLAREK: change signature production to contain location.  This will allow
-   to avoid passing extra sig_loc to make_fun and whatever functions replaced
-   annotate.  Moreover, this might allow merging of rules in binding
-   production*)
-
+(* Produces a datatype if a name is accompanied by a signature.  Raises an
+   exception if name does not match a name in a signature. *)
 let datatype_opt_from_sig_opt sig_opt name =
   match sig_opt with
-  | Some {node=(signame, datatype); pos} ->
-     checksig pos signame name;
+  | Sig {node=({node=signame; _}, datatype); pos} ->
+     (* Ensure that name in a signature matches name in a declaration *)
+     if signame <> name then
+       raise (ConcreteSyntaxError
+               ("Signature for `" ^ signame ^ "' should precede definition of `"
+                ^ signame ^ "', not `"^ name ^"'.", pos));
      Some datatype
-  | None -> None
+  | NoSig -> None
 
-(* JSTOLAREK: create specialized Sig/NoSig datatype *)
 (* JSTOLAREK create specialized Lin and Unl versions *)
 let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
   let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
@@ -56,7 +51,7 @@ let make_val_binding sig_opt vpos (name_or_pat, phrase, location) =
        let datatype = datatype_opt_from_sig_opt sig_opt name.node in
        (pat, datatype)
     | Pat pat ->
-       assert (sig_opt = None);
+       assert (sig_opt = NoSig);
        (pat, None) in
     with_pos vpos (`Val (pat, ([], phrase), location, datatype))
 
@@ -73,8 +68,8 @@ let is_empty_db_exps : phrase -> bool = function
   | _                                                    -> false
 
 (* JSTOLAREK: try to collapse var_pos inot var_opt *)
-(* Create a database insertion query.  Ensures that either the list of labeled
-   expression is non-empty or the returning variable has been named.*)
+(* Create a database insertion query.  Raises an exception when the list of
+   labeled expression is empty and the returning variable has not been named.*)
 let make_db_insert p ins_exp lbls exps var_pos var_opt =
   if is_empty_db_exps exps && var_opt == None then
     raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^

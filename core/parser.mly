@@ -343,8 +343,8 @@ nofun_declaration:
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (from_option default_fixity $2) ($3.node);
                                                                    with_pos $loc `Infix }
-| tlvarbinding SEMICOLON                                       { make_val_binding None $loc($1) $1 }
-| signature tlvarbinding SEMICOLON                             { make_val_binding (Some $1) $loc($2) $2 }
+| tlvarbinding SEMICOLON                                       { make_val_binding NoSig $loc($1) $1 }
+| signature tlvarbinding SEMICOLON                             { make_val_binding (Sig $1) $loc($2) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
 alien_datatype:
@@ -366,10 +366,10 @@ fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { make_fun_binding     None $loc $1 }
-| typed_handler_binding                                        { make_handler_binding None $loc $1 }
-| signature tlfunbinding                                       { make_fun_binding     (Some $1) $loc($2) $2 }
-| signature typed_handler_binding                              { make_handler_binding (Some $1) $loc($2) $2 }
+| tlfunbinding                                                 { make_fun_binding     NoSig $loc $1 }
+| typed_handler_binding                                        { make_handler_binding NoSig $loc $1 }
+| signature tlfunbinding                                       { make_fun_binding     (Sig $1) $loc($2) $2 }
+| signature typed_handler_binding                              { make_handler_binding (Sig $1) $loc($2) $2 }
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
@@ -912,13 +912,13 @@ links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { make_val_binding None $loc (Pat $2, $4, `Unknown) }
+| VAR pattern EQ exp SEMICOLON                                 { make_val_binding NoSig $loc (Pat $2, $4, `Unknown) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature FUN var arg_lists block                            { make_fun_binding (Some $1) $loc (`Unl, $3, $4, `Unknown, $5) }
-| signature LINFUN var arg_lists block                         { make_fun_binding (Some $1) $loc (`Lin, $3, $4, `Unknown, $5) }
-| FUN var arg_lists block                                      { make_fun_binding None $loc (`Unl, $2, $3, `Unknown, $4) }
-| LINFUN var arg_lists block                                   { make_fun_binding None $loc (`Lin, $2, $3, `Unknown, $4) }
-| typed_handler_binding                                        { make_handler_binding None $loc $1 }
+| signature FUN var arg_lists block                            { make_fun_binding (Sig $1) $loc (`Unl, $3, $4, `Unknown, $5) }
+| signature LINFUN var arg_lists block                         { make_fun_binding (Sig $1) $loc (`Lin, $3, $4, `Unknown, $5) }
+| FUN var arg_lists block                                      { make_fun_binding NoSig $loc (`Unl, $2, $3, `Unknown, $4) }
+| LINFUN var arg_lists block                                   { make_fun_binding NoSig $loc (`Lin, $2, $3, `Unknown, $4) }
+| typed_handler_binding                                        { make_handler_binding NoSig $loc $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
 bindings:
