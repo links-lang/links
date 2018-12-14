@@ -53,35 +53,29 @@ end
 
 let type_variable_counter = ref 0
 
-let fresh_type_variable : subkind option -> datatypenode =
-  fun subkind ->
+let fresh_type_variable () : datatypenode =
     incr type_variable_counter;
-    `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
+    `TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
 
-let fresh_rigid_type_variable : subkind option -> datatypenode =
-  fun subkind ->
+let fresh_rigid_type_variable () : datatypenode =
     incr type_variable_counter;
-    `TypeVar ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
+    `TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
-let fresh_row_variable : subkind option -> row_var =
-  fun subkind ->
+let fresh_row_variable () : row_var =
     incr type_variable_counter;
-    `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
+    `Open ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
 
-let fresh_rigid_row_variable : subkind option -> row_var =
-  fun subkind ->
+let fresh_rigid_row_variable () : row_var =
     incr type_variable_counter;
-    `Open ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
+    `Open ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
-let fresh_presence_variable : subkind option -> fieldspec =
-  fun subkind ->
+let fresh_presence_variable () : fieldspec =
     incr type_variable_counter;
-    `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Flexible)
+    `Var ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
 
-let fresh_rigid_presence_variable : subkind option -> fieldspec =
-  fun subkind ->
+let fresh_rigid_presence_variable () : fieldspec =
     incr type_variable_counter;
-    `Var ("_" ^ string_of_int (!type_variable_counter), subkind, `Rigid)
+    `Var ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
 let ensure_match p (opening : string) (closing : string) = function
   | result when opening = closing -> result
@@ -982,8 +976,8 @@ straight_arrow:
   straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { `Function ($1, ([], fresh_rigid_row_variable None), $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli    ($1, ([], fresh_rigid_row_variable None), $3) }
+| parenthesized_datatypes RARROW datatype                      { `Function ($1, ([], fresh_rigid_row_variable ()), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli    ($1, ([], fresh_rigid_row_variable ()), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
@@ -991,9 +985,9 @@ squiggly_arrow:
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with (wild, present) $2, $4) }
 | parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, ([(wild, present)],
-                                                                                 fresh_rigid_row_variable None), $3) }
+                                                                                 fresh_rigid_row_variable ()), $3) }
 | parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, ([(wild, present)],
-                                                                                 fresh_rigid_row_variable None), $3) }
+                                                                                 fresh_rigid_row_variable ()), $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { `Mu ($2, with_pos $loc($4) $4) }
@@ -1053,8 +1047,8 @@ primary_datatype:
 type_var:
 | VARIABLE                                                     { `TypeVar ($1, None, `Rigid)    }
 | PERCENTVAR                                                   { `TypeVar ($1, None, `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_type_variable None }
-| PERCENT                                                      { fresh_type_variable None       }
+| UNDERSCORE                                                   { fresh_rigid_type_variable ()   }
+| PERCENT                                                      { fresh_type_variable ()         }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind ($1, $2) }
@@ -1144,14 +1138,14 @@ fieldspec:
 | LBRACE MINUS RBRACE                                          { `Absent }
 | LBRACE VARIABLE RBRACE                                       { `Var ($2, None, `Rigid) }
 | LBRACE PERCENTVAR RBRACE                                     { `Var ($2, None, `Flexible) }
-| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable None }
-| LBRACE PERCENT RBRACE                                        { fresh_presence_variable None }
+| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
+| LBRACE PERCENT RBRACE                                        { fresh_presence_variable ()       }
 
 nonrec_row_var:
-| VARIABLE                                                     { `Open ($1, None, `Rigid   )   }
-| PERCENTVAR                                                   { `Open ($1, None, `Flexible)   }
-| UNDERSCORE                                                   { fresh_rigid_row_variable None }
-| PERCENT                                                      { fresh_row_variable None       }
+| VARIABLE                                                     { `Open ($1, None, `Rigid   ) }
+| PERCENTVAR                                                   { `Open ($1, None, `Flexible) }
+| UNDERSCORE                                                   { fresh_rigid_row_variable () }
+| PERCENT                                                      { fresh_row_variable ()       }
 
 /* FIXME:
  *
