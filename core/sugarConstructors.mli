@@ -13,7 +13,8 @@ val annotate : ppos -> (name with_pos * datatype') -> ppos ->
                | `Var of name with_pos * phrase * location ] ->  binding
 
 val make_fun : (ppos * (string with_pos * datatype')) option -> ppos
-            -> (string with_pos * declared_linearity * funlit * location)
+            -> (declared_linearity * name with_pos * pattern list list *
+                location * (binding list * phrase))
             -> binding
 val make_db_insert : ppos -> phrase -> name list -> phrase -> ppos
                   -> string option -> phrase

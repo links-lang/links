@@ -27,16 +27,22 @@ let annotate sigpos (signame, datatype) dpos : _ -> binding =
          checksig sigpos signame (name_of_binder bndr);
          with_pos dpos (`Handler (bndr, hnlit, Some datatype))
 
+(* JSTOLAREK: change signature production to contain location.  This will allow
+   to avoid passing extra sig_loc to make_fun and whatever functions replaced
+   annotate.  Moreover, this might allow merging of rules in binding
+   production*)
+
 (* JSTOLAREK: create specialized Sig/NoSig datatype *)
-(* JSTOLAREK: split funlit into two separate arguments. Requires changing
-   tlfunbinding production and its type signature *)
 (* JSTOLAREK create specialized Lin and Unl versions *)
-let make_fun sig_opt funpos (bndr, linearity, funlit, location) =
+let make_fun sig_opt funpos (linearity, bndr, args, location, block) =
   let datatype = match sig_opt with
     | Some (sigpos, (signame, datatype)) -> checksig sigpos signame bndr.node;
                                             Some datatype
     | None -> None in
-  with_pos funpos (`Fun (make_untyped_binder bndr, linearity, ([], funlit),
+  with_pos funpos (`Fun (make_untyped_binder bndr, linearity,
+                         (* NOTE: position of the block is slightly inaccurate.
+                            This is done to make parser code less verbose. *)
+                         ([], (args, with_pos funpos (`Block block))),
                          location, datatype))
 
 (* Create a record with a given list of labels *)

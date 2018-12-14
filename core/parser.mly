@@ -278,7 +278,9 @@ let hear = "hear"
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.pattern> pattern
-%type <(Sugartypes.name Sugartypes.with_pos) * Sugartypes.declared_linearity * Sugartypes.funlit * Sugartypes.location> tlfunbinding
+%type <Sugartypes.declared_linearity * (Sugartypes.name Sugartypes.with_pos) *
+       Sugartypes.pattern list list * Sugartypes.location *
+      (Sugartypes.binding list * Sugartypes.phrase)> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
@@ -390,11 +392,11 @@ postfixop:
 | POSTFIXOP                                                    { with_pos $loc $1 }
 
 tlfunbinding:
-| FUN var arg_lists perhaps_location block                     { ($2, `Unl, ($3, (with_pos $loc($5) (`Block $5))), $4) }
-| LINFUN var arg_lists perhaps_location block                  { ($2, `Lin, ($3, (with_pos $loc($5) (`Block $5))), $4) }
-| OP pattern op pattern perhaps_location block                 { ($3, `Unl, ([[$2; $4]], with_pos $loc($6) (`Block $6)), $5) }
-| OP prefixop pattern perhaps_location block                   { ($2, `Unl, ([[$3]], with_pos $loc($5) (`Block $5)), $4) }
-| OP pattern postfixop perhaps_location block                  { ($3, `Unl, ([[$2]], with_pos $loc($5) (`Block $5)), $4) }
+| FUN var arg_lists perhaps_location block                     { (`Unl, $2, $3, $4, $5)         }
+| LINFUN var arg_lists perhaps_location block                  { (`Lin, $2, $3, $4, $5)         }
+| OP pattern op pattern perhaps_location block                 { (`Unl, $3, [[$2; $4]], $5, $6) }
+| OP prefixop pattern perhaps_location block                   { (`Unl, $2, [[$3]], $4, $5)     }
+| OP pattern postfixop perhaps_location block                  { (`Unl, $3, [[$2]], $4, $5)     }
 
 tlvarbinding:
 | VAR var perhaps_location EQ exp                              { ($2, $5, $3) }
@@ -893,8 +895,8 @@ lens_expression:
 | LENS exp DEFAULT                                             { with_pos $loc (`LensLit ($2, None))}
 | LENS exp TABLEKEYS exp                                       { with_pos $loc (`LensKeysLit ($2, $4, None))}
 | LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (`LensFunDepsLit ($2, $5, None))}
-| LENSDROP VARIABLE DETERMINED BY VARIABLE
-    DEFAULT exp FROM exp                                       { with_pos $loc (`LensDropLit ($9, $2, $5, $7, None)) }
+| LENSDROP VARIABLE DETERMINED BY
+  VARIABLE DEFAULT exp FROM exp                                { with_pos $loc (`LensDropLit ($9, $2, $5, $7, None)) }
 | LENSSELECT FROM exp BY exp                                   { with_pos $loc (`LensSelectLit ($3, $5, None)) }
 | LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { with_pos $loc (`LensJoinLit ($2, $4, $6, $9, $11, None)) }
 | LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { with_pos $loc (`LensJoinLit ($2, $4, $6,
@@ -913,14 +915,10 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { with_pos $loc (`Val ($2, ([], $4), `Unknown, None)) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature FUN var arg_lists block                            { make_fun (Some ($loc($1), $1)) $loc
-                                                                  ($3, `Unl, ($4, with_pos $loc($5) (`Block $5)), `Unknown) }
-| signature LINFUN var arg_lists block                         { make_fun (Some ($loc($1), $1)) $loc
-                                                                  ($3, `Lin, ($4, with_pos $loc($5) (`Block $5)), `Unknown) }
-| FUN var arg_lists block                                      { make_fun None $loc
-                                                                          ($2, `Unl, ($3, with_pos $loc($4) (`Block $4)), `Unknown) }
-| LINFUN var arg_lists block                                   { make_fun None $loc
-                                                                          ($2, `Lin, ($3, with_pos $loc($4) (`Block $4)), `Unknown) }
+| signature FUN var arg_lists block                            { make_fun (Some ($loc($1), $1)) $loc (`Unl, $3, $4, `Unknown, $5) }
+| signature LINFUN var arg_lists block                         { make_fun (Some ($loc($1), $1)) $loc (`Lin, $3, $4, `Unknown, $5) }
+| FUN var arg_lists block                                      { make_fun None $loc (`Unl, $2, $3, `Unknown, $4) }
+| LINFUN var arg_lists block                                   { make_fun None $loc (`Lin, $2, $3, `Unknown, $4) }
 | typed_handler_binding                                        { with_pos $loc (`Handler $1) }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
