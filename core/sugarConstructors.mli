@@ -17,6 +17,14 @@ val make_fun_binding : signature -> ppos
                     -> (declared_linearity * name with_pos * pattern list list *
                         location * (binding list * phrase))
                     -> binding
+val make_unl_fun_binding : signature -> ppos
+                        -> (name with_pos * pattern list list *
+                            (binding list * phrase))
+                        -> binding
+val make_lin_fun_binding : signature -> ppos
+                        -> (name with_pos * pattern list list *
+                            (binding list * phrase))
+                        -> binding
 val make_handler_binding : signature -> ppos
                         -> (binder * handlerlit)
                         -> binding

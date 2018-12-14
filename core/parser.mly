@@ -907,10 +907,10 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { make_val_binding NoSig $loc (Pat $2, $4, `Unknown) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature FUN var arg_lists block                            { make_fun_binding (Sig $1) $loc (`Unl, $3, $4, `Unknown, $5) }
-| signature LINFUN var arg_lists block                         { make_fun_binding (Sig $1) $loc (`Lin, $3, $4, `Unknown, $5) }
-| FUN var arg_lists block                                      { make_fun_binding NoSig $loc (`Unl, $2, $3, `Unknown, $4) }
-| LINFUN var arg_lists block                                   { make_fun_binding NoSig $loc (`Lin, $2, $3, `Unknown, $4) }
+| signature FUN var arg_lists block                            { make_unl_fun_binding (Sig $1) $loc ($3, $4, $5) }
+| signature LINFUN var arg_lists block                         { make_lin_fun_binding (Sig $1) $loc ($3, $4, $5) }
+| FUN var arg_lists block                                      { make_unl_fun_binding NoSig $loc ($2, $3, $4) }
+| LINFUN var arg_lists block                                   { make_lin_fun_binding NoSig $loc ($2, $3, $4) }
 | typed_handler_binding                                        { make_handler_binding NoSig $loc $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 

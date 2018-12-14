@@ -28,7 +28,6 @@ let datatype_opt_from_sig_opt sig_opt name =
      Some datatype
   | NoSig -> None
 
-(* JSTOLAREK create specialized Lin and Unl versions *)
 let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
   let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
   with_pos fpos (`Fun (make_untyped_binder bndr, linearity,
@@ -36,6 +35,14 @@ let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
                           This is done to make parser code less verbose. *)
                        ([], (args, with_pos fpos (`Block block))),
                        location, datatype))
+
+(* Create a non-linear function binding with unknown location *)
+let make_unl_fun_binding sig_opt fpos (bndr, args, block) =
+  make_fun_binding sig_opt fpos (`Unl, bndr, args, `Unknown, block)
+
+(* Create a linear function binding with unknown location *)
+let make_lin_fun_binding sig_opt fpos (bndr, args, block) =
+  make_fun_binding sig_opt fpos (`Lin, bndr, args, `Unknown, block)
 
 let make_handler_binding sig_opt hpos (binder, handlerlit) =
   let datatype = datatype_opt_from_sig_opt sig_opt (name_of_binder binder) in
