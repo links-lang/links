@@ -335,8 +335,8 @@ nofun_declaration:
 | ALIEN VARIABLE STRING var COLON datatype SEMICOLON           { with_pos $loc
                                                                           (`Foreign (make_untyped_binder $4, $4.node, $2, $3, datatype $6)) }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                   set assoc (from_option default_fixity $2) ($3.node);
-                                                                   with_pos $loc `Infix }
+                                                                 set assoc (from_option default_fixity $2) ($3.node);
+                                                                 with_pos $loc `Infix }
 | signature? tlvarbinding SEMICOLON                            { make_val_binding (sig_of_opt $1) $loc($2) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
@@ -366,8 +366,7 @@ fun_declaration:
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
-                handler_parameterization                        { let hnlit  = ($1, $2, fst $4, snd $4) in
-                                                                  ($3, hnlit) }
+                handler_parameterization                       { ($3, make_hnlit $1 $2 $4) }
 
 optional_computation_parameter:
 | /* empty */                                                  { with_pos $sloc `Any }
@@ -501,9 +500,7 @@ primary_expression:
                                                                  with_pos $loc($3) (`Block $3)), `Unknown)) }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
 | handler_depth optional_computation_parameter handler_parameterization
-                                                               {  let (body, args) = $3 in
-                                                                  let hnlit = ($1, $2, body, args) in
-                                                                  with_pos $loc (`HandlerLit hnlit) }
+                                                               {  with_pos $loc (`HandlerLit (make_hnlit $1 $2 $3)) }
 handler_parameterization:
 | arg_lists? handler_body                                       { ($2, $1) }
 
@@ -515,8 +512,7 @@ handler_body:
 | LBRACE cases RBRACE                                          { $2 }
 
 constructor_expression:
-| CONSTRUCTOR                                                  { with_pos $loc (`ConstructorLit($1, None   , None)) }
-| CONSTRUCTOR parenthesized_thing                              { with_pos $loc (`ConstructorLit($1, Some $2, None)) }
+| CONSTRUCTOR parenthesized_thing?                             { with_pos $loc (`ConstructorLit($1, $2, None)) }
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { with_pos $loc (`Section $2)              }

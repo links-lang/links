@@ -32,6 +32,10 @@ val make_val_binding : signature -> ppos
                     -> (name_or_pat * phrase * location)
                     -> binding
 
+val make_hnlit : [`Deep | `Shallow ] -> pattern
+              -> clause list * pattern list list option
+              -> handlerlit
+
 val make_db_insert : ppos -> phrase -> name list -> phrase -> ppos
                   -> string option -> phrase
 val make_db_exps : ppos -> (name * phrase) list -> phrase

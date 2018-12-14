@@ -65,6 +65,9 @@ let make_val_binding sig_opt vpos (name_or_pat, phrase, location) =
        (pat, None) in
     with_pos vpos (`Val (pat, ([], phrase), location, datatype))
 
+let make_hnlit depth computation_param handler_param =
+  (depth, computation_param, fst handler_param, snd handler_param)
+
 (* Create a record with a given list of labels *)
 let make_record pos lbls =
   with_pos pos (`RecordLit (lbls, None))
