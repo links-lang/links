@@ -343,8 +343,7 @@ nofun_declaration:
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                    set assoc (from_option default_fixity $2) ($3.node);
                                                                    with_pos $loc `Infix }
-| tlvarbinding SEMICOLON                                       { make_val_binding NoSig $loc($1) $1 }
-| signature tlvarbinding SEMICOLON                             { make_val_binding (Sig $1) $loc($2) $2 }
+| signature? tlvarbinding SEMICOLON                            { make_val_binding (sig_of_opt $1) $loc($2) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
 alien_datatype:

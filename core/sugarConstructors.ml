@@ -1,7 +1,7 @@
 open Sugartypes
 open Utility
 
-(* ppos = parser position, ie. a position as produced by Menhir parser *)
+(* ppos = parser position, ie. a position as produced by Menhir *)
 type ppos = SourceCode.lexpos * SourceCode.lexpos
 let dummy_ppos = (Lexing.dummy_pos, Lexing.dummy_pos)
 
@@ -10,7 +10,10 @@ let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
 (* Wrapper around with_pos that accepts parser positions *)
 let with_pos p = Sugartypes.with_pos (pos p)
 
-type signature_opt = Sig of (name with_pos * datatype') with_pos | NoSig
+type signature = Sig of (name with_pos * datatype') with_pos | NoSig
+let sig_of_opt = function
+    | Some s -> Sig s
+    | None   -> NoSig
 
 (* Produces a datatype if a name is accompanied by a signature.  Raises an
    exception if name does not match a name in a signature. *)
@@ -21,7 +24,7 @@ let datatype_opt_from_sig_opt sig_opt name =
      if signame <> name then
        raise (ConcreteSyntaxError
                ("Signature for `" ^ signame ^ "' should precede definition of `"
-                ^ signame ^ "', not `"^ name ^"'.", pos));
+                ^ signame ^ "', not `" ^ name ^ "'.", pos));
      Some datatype
   | NoSig -> None
 
