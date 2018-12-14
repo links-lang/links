@@ -539,6 +539,7 @@ op:
 | INFIX8 | INFIXL8 | INFIXR8
 | INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
 
+(* JSTOLAREK: use smart constructors here *)
 spawn_expression:
 | SPAWNAT LPAREN exp COMMA block RPAREN                        { with_pos $loc
                                                                  (`Spawn (`Demon, `ExplicitSpawnLocation $3,
@@ -559,6 +560,7 @@ spawn_expression:
                                                                  (`Spawn (`Wait, `NoSpawnLocation,
                                                                           with_pos $loc($2) (`Block $2), None)) }
 
+(* JSTOLAREK: use smart constructors here *)
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { with_pos $loc (`UnaryAppl (([], `Name $2), $1)) }
@@ -588,6 +590,7 @@ unary_expression:
 | DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (`DoOperation ($2, $3, None)) }
 
 
+(* JSTOLAREK: use smart constructors here *)
 infixr_9:
 | unary_expression                                             { $1 }
 | unary_expression INFIX9 unary_expression
@@ -966,6 +969,7 @@ hear_arrow_prefix:
 | LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([(wild, present);
                                                                    (hear, `Present $3)], $5) }
 
+(* JSTOLAREK: use smart constructors here *)
 straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
@@ -1229,6 +1233,7 @@ parenthesized_pattern:
 | LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (`Record ($2, $3)) }
 
 primary_pattern:
+(* JSTOLAREK: use smart constructors here *)
 | VARIABLE                                                     { with_pos $loc (`Variable (make_untyped_binder (with_pos $loc $1))) }
 | UNDERSCORE                                                   { with_pos $loc `Any }
 | constant                                                     { with_pos $loc (`Constant $1) }
