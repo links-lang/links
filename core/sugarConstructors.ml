@@ -13,7 +13,7 @@ let checksig sigpos {node=signame; _} name =
   if signame <> name then
     raise (ConcreteSyntaxError
              ("Signature for `" ^ signame ^ "' should precede definition of `"
-              ^ signame ^ "', not `"^ name ^"'.", pos sigpos))
+              ^ signame ^ "', not `"^ name ^"'.", sigpos))
 
 (* JSTOLAREK: change signature production to contain location.  This will allow
    to avoid passing extra sig_loc to make_fun and whatever functions replaced
@@ -24,7 +24,7 @@ let checksig sigpos {node=signame; _} name =
 (* JSTOLAREK create specialized Lin and Unl versions *)
 let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
   let datatype = match sig_opt with
-    | Some (sigpos, (signame, datatype)) ->
+    | Some {node=(signame, datatype); pos=sigpos} ->
        checksig sigpos signame bndr.node;
        Some datatype
     | None -> None in
@@ -36,7 +36,7 @@ let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
 
 let make_handler_binding sig_opt hpos (binder, handlerlit) =
   let datatype = match sig_opt with
-    | Some (sigpos, (signame, datatype)) ->
+    | Some {node=(signame, datatype); pos=sigpos} ->
        checksig sigpos signame (name_of_binder binder);
        Some datatype
     | None -> None in
@@ -53,7 +53,7 @@ let make_val_binding sig_opt vpos (name_or_pat, phrase, location) =
     | Name name ->
        let pat = with_pos vpos (`Variable (make_untyped_binder name)) in
        let datatype = match sig_opt with
-         | Some (sigpos, (signame, datatype)) ->
+         | Some {node=(signame, datatype); pos=sigpos} ->
             checksig sigpos signame name.node;
             Some datatype
          | None -> None in
