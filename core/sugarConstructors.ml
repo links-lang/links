@@ -1,14 +1,16 @@
 open Sugartypes
 open Utility
 
-(* A position produced by Menhir parser *)
+(* ppos = parser position, ie. a position as produced by Menhir parser *)
 type ppos = SourceCode.lexpos * SourceCode.lexpos
 let dummy_ppos = (Lexing.dummy_pos, Lexing.dummy_pos)
 
+(* Convert position produced by a parser to Sugartypes position*)
 let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
-
+(* Wrapper around with_pos that accepts parser positions *)
 let with_pos p = Sugartypes.with_pos (pos p)
 
+(* Ensure that name in a signature matches name in a declaration *)
 let checksig sigpos {node=signame; _} name =
   if signame <> name then
     raise (ConcreteSyntaxError
@@ -20,14 +22,17 @@ let checksig sigpos {node=signame; _} name =
    annotate.  Moreover, this might allow merging of rules in binding
    production*)
 
+let datatype_opt_from_sig_opt sig_opt name =
+  match sig_opt with
+  | Some {node=(signame, datatype); pos} ->
+     checksig pos signame name;
+     Some datatype
+  | None -> None
+
 (* JSTOLAREK: create specialized Sig/NoSig datatype *)
 (* JSTOLAREK create specialized Lin and Unl versions *)
 let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
-  let datatype = match sig_opt with
-    | Some {node=(signame, datatype); pos=sigpos} ->
-       checksig sigpos signame bndr.node;
-       Some datatype
-    | None -> None in
+  let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
   with_pos fpos (`Fun (make_untyped_binder bndr, linearity,
                        (* NOTE: position of the block is slightly inaccurate.
                           This is done to make parser code less verbose. *)
@@ -35,11 +40,7 @@ let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
                        location, datatype))
 
 let make_handler_binding sig_opt hpos (binder, handlerlit) =
-  let datatype = match sig_opt with
-    | Some {node=(signame, datatype); pos=sigpos} ->
-       checksig sigpos signame (name_of_binder binder);
-       Some datatype
-    | None -> None in
+  let datatype = datatype_opt_from_sig_opt sig_opt (name_of_binder binder) in
   with_pos hpos (`Handler (binder, handlerlit, datatype))
 
 (* Used for passing an argument to make_val_binding *)
@@ -52,11 +53,7 @@ let make_val_binding sig_opt vpos (name_or_pat, phrase, location) =
   let pat, datatype = match name_or_pat with
     | Name name ->
        let pat = with_pos vpos (`Variable (make_untyped_binder name)) in
-       let datatype = match sig_opt with
-         | Some {node=(signame, datatype); pos=sigpos} ->
-            checksig sigpos signame name.node;
-            Some datatype
-         | None -> None in
+       let datatype = datatype_opt_from_sig_opt sig_opt name.node in
        (pat, datatype)
     | Pat pat ->
        assert (sig_opt = None);
