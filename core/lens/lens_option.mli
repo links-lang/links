@@ -12,3 +12,12 @@ val combine : 'a t -> 'a t -> f:('a -> 'a -> 'a) -> 'a option
 
 (** Get the underlying value of an option type or return [default] *)
 val value : 'a t -> default:'a -> 'a
+
+(** Return a constant value as a [Some]. *)
+val return : 'a -> 'a t
+
+(** Return true if the option value contains a value. *)
+val is_some : 'a t -> bool
+
+(** Return true if the option value is none. *)
+val is_some : 'a t -> bool

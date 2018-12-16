@@ -34,4 +34,8 @@ module Select : sig
   val of_sort : db -> sort:Lens_sort.t -> t
 
   val fmt : Format.formatter -> t -> unit
+
+  val execute : t -> database:db -> field_types:(string * Types.datatype) list -> Value.t
+
+  val query_exists : t -> database:db -> bool
 end

@@ -24,3 +24,12 @@ let value v ~default =
   match v with
   | None -> default
   | Some v -> v
+
+let return v = Some v
+
+let is_some v =
+  match v with
+  | Some _ -> true
+  | None -> false
+
+let is_none v = is_some v |> not
