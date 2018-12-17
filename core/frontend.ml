@@ -42,7 +42,7 @@ struct
       let program = DesugarAlienBlocks.transform_alien_blocks program in
       (* Module-y things *)
       let (program, ffi_files) =
-        (program, ModuleUtils.get_ffi_files program)
+        (program, [])
       in
       let _program = CheckXmlQuasiquotes.checker#program program in
       let () = DesugarSessionExceptions.settings_check program in

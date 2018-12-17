@@ -1,17 +1,15 @@
-type envs = Var.var Env.String.t * FrontendTypeEnv.t
 
-type program = Ir.binding list * Ir.computation * Types.datatype
 
-(* Filename of an external dependency *)
+(* Filename of an external FFI dependency *)
 type ext_dep = string
 
 type source = {
-  envs: envs;
-  program: program;
+  program: Sugartypes.binding;
   external_dependencies: ext_dep list
 }
 
-val read_file_source : envs -> string -> source
-val load_file : envs -> string -> source
+
+val load_source_file : string -> source
+val load_source_files_and_dependencies : string list -> source list
 
 val print : string -> unit

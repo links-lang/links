@@ -35,6 +35,14 @@
       | _, `Dot (s, remainder) -> `Dot (s, prefix (n-1) remainder)
 
 
+  let tail = function
+    | `Ident _ -> failwith "Calling tail on Ident qualified name"
+    | `Dot (_, rem) -> rem
+
+  let head = function
+    | `Ident name -> name
+    | `Dot (name, _) -> name
+
   let rec append prefix_qname qname = match prefix_qname with
     | `Ident s -> `Dot (s, qname)
     | `Dot (s, qname') -> `Dot (s, append qname' qname)

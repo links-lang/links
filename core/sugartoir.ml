@@ -1151,10 +1151,10 @@ struct
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs cont
-                | Module (name, module_interface_opt , module_bindings) ->
+                | Module (name, module_interface_opt, module_bindings) ->
                   let module_interface =
                     begin match module_interface_opt with
-                      | None -> failwith "Typesugar must add module signature"
+                      | None -> failwith "Typesugar must add module type"
                       | Some ms -> ms
                     end in
                   let module_cont env =

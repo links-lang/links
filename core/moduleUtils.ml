@@ -1,17 +1,34 @@
 open Utility
 open Printf
-open SourceCode.WithPos
 open Sugartypes
+open SugarConstructors.SugartypesPositions
+open CommonTypes
 
 let module_sep = "."
 
 let path_sep = ":"
 
-type term_shadow_table = string list stringmap
-type type_shadow_table = string list stringmap
-type shadow_table = string list stringmap
 
-let try_parse_file filename =
+
+
+
+(* Turns a program corresponding to a file into a module by binding the potential expression to a variable *)
+let modulify_program
+    toplevel_module_name
+    program
+      : Sugartypes.binding =
+  let (bindings, phraseopt) = program in
+  let combined_bindings = match phraseopt with
+    | None -> bindings
+    | Some phrase ->
+      let any_pattern_node : Pattern.with_pos = with_dummy_pos Pattern.Any in
+      let phrase_binding : Sugartypes.binding =
+        with_dummy_pos
+          (Val (any_pattern_node, ([], phrase), Location.Unknown, None)) in
+      bindings @ [phrase_binding] in
+  with_dummy_pos (Module (toplevel_module_name, None, combined_bindings) )
+
+let try_parse_file module_name filename : string * Sugartypes.binding =
   (* First, get the list of directories, with trailing slashes stripped *)
   let check_n_chop path =
     let dir_sep = Filename.dir_sep in
@@ -43,29 +60,18 @@ let try_parse_file filename =
         let candidate_filename =
           if x = "" then filename else (x ^ Filename.dir_sep ^ filename) in
         if Sys.file_exists candidate_filename then
-          Parse.parse_file Parse.program candidate_filename
+          let program, _ = Parse.parse_file Parse.program candidate_filename in
+          (candidate_filename, modulify_program module_name program)
         else
           loop xs) in
   loop poss_dirs
 
-let has_no_modules =
-object
-  inherit SugarTraversals.predicate as super
-
-  val has_no_modules = true
-  method satisfied = has_no_modules
-
-  method! bindingnode = function
-    | Module _ -> {< has_no_modules = false >}
-    | b -> super#bindingnode b
-
-end
 
 
 let separate_modules =
   List.fold_left (fun (mods, binds) b ->
     match b with
-      | {node = Module _; _} as m -> (m :: mods, binds)
+      | {SourceCode.WithPos.node = Module _; _} as m -> (m :: mods, binds)
       | b -> (mods, b :: binds)) ([], [])
 
 type module_info = {
@@ -151,7 +157,7 @@ let create_module_info_map program =
     (* Recursively traverse a list of modules *)
     let rec traverse_modules = function
       | [] -> []
-      | {node=Module (submodule_name, _, mod_bs);_} :: bs ->
+      | {SourceCode.WithPos.node=Module (submodule_name, _, mod_bs);_} :: bs ->
           (* Recursively process *)
           let new_path = if name = "" then [] else parent_path @ [name] in
           create_and_add_module_info new_path submodule_name mod_bs;
@@ -162,9 +168,9 @@ let create_module_info_map program =
     (* Getting binding names -- we're interested in function and value names *)
     let rec get_binding_names = function
       | [] -> []
-      | { node = Val (pat, _, _, _); _ } :: bs ->
+      | {SourceCode.WithPos.node = Val (pat, _, _, _); _} :: bs ->
          (get_pattern_variables pat) @ get_binding_names bs
-      | { node = Fun (bndr, _, _, _, _); _ } :: bs ->
+      | {SourceCode.WithPos.node = Fun (bndr, _, _, _, _); _} :: bs ->
          Binder.to_name bndr :: (get_binding_names bs)
       | { node = Funs fs ; _ } :: bs ->
           (List.map (fun (bnd, _, _, _, _, _) -> Binder.to_name bnd) fs)
@@ -174,12 +180,8 @@ let create_module_info_map program =
     (* Getting type names -- we're interested in typename decls *)
     let rec get_type_names = function
       | [] -> []
-      | b :: bs ->
-          match node b with
-            | Typenames ts ->
-                let ns = ListUtils.concat_map (fun (n, _, _, _) -> [n]) ts in
-                ns @ (get_type_names bs)
-            | _ -> get_type_names bs in
+      | { SourceCode.WithPos.node = Type (n, _, _); _} :: bs -> n :: (get_type_names bs)
+      | _ :: bs -> get_type_names bs in
 
     (* Gets data constructors for variants *)
     let get_constrs bs = ((get_data_constructors StringSet.empty)#list
@@ -285,4 +287,3 @@ let shadow_open module_plain module_fqn module_table term_ht type_ht =
 let lst_to_path = String.concat module_sep
 
 
-let contains_modules prog = not ((has_no_modules#program prog)#satisfied)
