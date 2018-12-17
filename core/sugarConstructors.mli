@@ -39,3 +39,7 @@ val make_hnlit : [`Deep | `Shallow ] -> pattern
 val make_db_insert : ppos -> phrase -> name list -> phrase
                   -> string with_pos option -> phrase
 val make_db_exps : ppos -> (name * phrase) list -> phrase
+
+val make_spawn : ppos -> spawn_kind -> given_spawn_location
+              -> binding list * phrase
+              -> phrase

@@ -539,26 +539,13 @@ op:
 | INFIX8 | INFIXL8 | INFIXR8
 | INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
 
-(* JSTOLAREK: use smart constructors here *)
 spawn_expression:
-| SPAWNAT LPAREN exp COMMA block RPAREN                        { with_pos $loc
-                                                                 (`Spawn (`Demon, `ExplicitSpawnLocation $3,
-                                                                          with_pos $loc($5) (`Block $5), None)) }
-| SPAWN block                                                  { with_pos $loc
-                                                                 (`Spawn (`Demon, `NoSpawnLocation,
-                                                                          with_pos $loc($2) (`Block $2), None)) }
-| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { with_pos $loc
-                                                                 (`Spawn (`Angel, (`ExplicitSpawnLocation $3),
-                                                                          with_pos $loc($5) (`Block $5), None)) }
-| SPAWNANGEL block                                             { with_pos $loc
-                                                                 (`Spawn (`Angel, `NoSpawnLocation,
-                                                                          with_pos $loc($2) (`Block $2), None)) }
-| SPAWNCLIENT block                                            { with_pos $loc
-                                                                 (`Spawn (`Demon, (`SpawnClient),
-                                                                          with_pos $loc($2) (`Block $2), None)) }
-| SPAWNWAIT block                                              { with_pos $loc
-                                                                 (`Spawn (`Wait, `NoSpawnLocation,
-                                                                          with_pos $loc($2) (`Block $2), None)) }
+| SPAWNAT LPAREN exp COMMA block RPAREN                        { make_spawn $loc `Demon (`ExplicitSpawnLocation $3) $5 }
+| SPAWN block                                                  { make_spawn $loc `Demon  `NoSpawnLocation           $2 }
+| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { make_spawn $loc `Angel (`ExplicitSpawnLocation $3) $5 }
+| SPAWNANGEL  block                                            { make_spawn $loc `Angel  `NoSpawnLocation           $2 }
+| SPAWNCLIENT block                                            { make_spawn $loc `Demon  `SpawnClient               $2 }
+| SPAWNWAIT   block                                            { make_spawn $loc `Wait   `NoSpawnLocation           $2 }
 
 (* JSTOLAREK: use smart constructors here *)
 postfix_expression:

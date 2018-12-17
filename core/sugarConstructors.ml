@@ -28,25 +28,25 @@ let datatype_opt_from_sig_opt sig_opt name =
      Some datatype
   | NoSig -> None
 
-let make_fun_binding sig_opt fpos (linearity, bndr, args, location, block) =
+let make_fun_binding sig_opt ppos (linearity, bndr, args, location, block) =
   let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
-  with_pos fpos (`Fun (make_untyped_binder bndr, linearity,
+  with_pos ppos (`Fun (make_untyped_binder bndr, linearity,
                        (* NOTE: position of the block is slightly inaccurate.
                           This is done to make parser code less verbose. *)
-                       ([], (args, with_pos fpos (`Block block))),
+                       ([], (args, with_pos ppos (`Block block))),
                        location, datatype))
 
 (* Create a non-linear function binding with unknown location *)
-let make_unl_fun_binding sig_opt fpos (bndr, args, block) =
-  make_fun_binding sig_opt fpos (`Unl, bndr, args, `Unknown, block)
+let make_unl_fun_binding sig_opt ppos (bndr, args, block) =
+  make_fun_binding sig_opt ppos (`Unl, bndr, args, `Unknown, block)
 
 (* Create a linear function binding with unknown location *)
-let make_lin_fun_binding sig_opt fpos (bndr, args, block) =
-  make_fun_binding sig_opt fpos (`Lin, bndr, args, `Unknown, block)
+let make_lin_fun_binding sig_opt ppos (bndr, args, block) =
+  make_fun_binding sig_opt ppos (`Lin, bndr, args, `Unknown, block)
 
-let make_handler_binding sig_opt hpos (name, handlerlit) =
+let make_handler_binding sig_opt ppos (name, handlerlit) =
   let datatype = datatype_opt_from_sig_opt sig_opt name.node in
-  with_pos hpos (`Handler (make_untyped_binder name, handlerlit, datatype))
+  with_pos ppos (`Handler (make_untyped_binder name, handlerlit, datatype))
 
 (* Used for passing an argument to make_val_binding *)
 type name_or_pat = Name of name with_pos | Pat of pattern
@@ -54,27 +54,27 @@ type name_or_pat = Name of name with_pos | Pat of pattern
 (* Create a Val binding.  This function takes either a name for a variable
    pattern or an already constructed pattern.  In the latter case no signature
    should be passed.  *)
-let make_val_binding sig_opt vpos (name_or_pat, phrase, location) =
+let make_val_binding sig_opt ppos (name_or_pat, phrase, location) =
   let pat, datatype = match name_or_pat with
     | Name name ->
-       let pat = with_pos vpos (`Variable (make_untyped_binder name)) in
+       let pat = with_pos ppos (`Variable (make_untyped_binder name)) in
        let datatype = datatype_opt_from_sig_opt sig_opt name.node in
        (pat, datatype)
     | Pat pat ->
        assert (sig_opt = NoSig);
        (pat, None) in
-    with_pos vpos (`Val (pat, ([], phrase), location, datatype))
+    with_pos ppos (`Val (pat, ([], phrase), location, datatype))
 
 let make_hnlit depth computation_param handler_param =
   (depth, computation_param, fst handler_param, snd handler_param)
 
 (* Create a record with a given list of labels *)
-let make_record pos lbls =
-  with_pos pos (`RecordLit (lbls, None))
+let make_record ppos lbls =
+  with_pos ppos (`RecordLit (lbls, None))
 
 (* Create a list of labeled database expressions *)
-let make_db_exps pos exps =
-  with_pos pos (`ListLit ([make_record pos exps], None))
+let make_db_exps ppos exps =
+  with_pos ppos (`ListLit ([make_record ppos exps], None))
 
 let is_empty_db_exps : phrase -> bool = function
   | {node=`ListLit ([{node=`RecordLit ([], _);_}], _);_} -> true
@@ -82,10 +82,14 @@ let is_empty_db_exps : phrase -> bool = function
 
 (* Create a database insertion query.  Raises an exception when the list of
    labeled expression is empty and the returning variable has not been named.*)
-let make_db_insert p ins_exp lbls exps var_opt =
+let make_db_insert ppos ins_exp lbls exps var_opt =
   if is_empty_db_exps exps && var_opt == None then
-    raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^
-      " a nonempty list of labeled expression or a return variable.", pos p));
-  with_pos p (`DBInsert (ins_exp, lbls, exps, OptionUtils.opt_map
+    raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide a " ^
+      "nonempty list of labeled expression or a return variable.", pos ppos));
+  with_pos ppos (`DBInsert (ins_exp, lbls, exps, OptionUtils.opt_map
        (fun {node; pos} -> Sugartypes.with_pos pos (`Constant (`String node)))
        var_opt))
+
+let make_spawn ppos spawn_kind location block =
+  with_pos ppos (`Spawn ( spawn_kind, location, with_pos ppos (`Block block)
+                        , None ))
