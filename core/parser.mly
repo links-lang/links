@@ -49,34 +49,6 @@ struct
   module Operators         = Operators
 end
 
-(* Generation of fresh type variables *)
-
-let type_variable_counter = ref 0
-
-let fresh_type_variable () : datatypenode =
-    incr type_variable_counter;
-    `TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
-
-let fresh_rigid_type_variable () : datatypenode =
-    incr type_variable_counter;
-    `TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
-
-let fresh_row_variable () : row_var =
-    incr type_variable_counter;
-    `Open ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
-
-let fresh_rigid_row_variable () : row_var =
-    incr type_variable_counter;
-    `Open ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
-
-let fresh_presence_variable () : fieldspec =
-    incr type_variable_counter;
-    `Var ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
-
-let fresh_rigid_presence_variable () : fieldspec =
-    incr type_variable_counter;
-    `Var ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
-
 let ensure_match p (opening : string) (closing : string) = function
   | result when opening = closing -> result
   | _ -> raise (ConcreteSyntaxError
@@ -168,8 +140,6 @@ let attach_row_subkind (r, subkind) =
     | _ -> assert false
   in attach_subkind_helper update subkind
 
-let row_with field (fields, row_var) = (field::fields, row_var)
-
 let labels xs = fst (List.split xs)
 
 let parseRegexFlags f =
@@ -183,11 +153,6 @@ let parseRegexFlags f =
               | 'n' -> `RegexNative
               | 'g' -> `RegexGlobal
               | _ -> assert false) (asList f 0 [])
-
-let wild = "wild"
-let hear = "hear"
-let wild_present = (wild, present)
-let hear_present p = (hear, `Present p)
 
 %}
 
@@ -936,29 +901,26 @@ squig_arrow_prefix:
 | TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 
 hear_arrow_prefix:
-| LBRACE COLON datatype COMMA efields RBRACE                   { row_with wild_present (row_with (hear_present $3) $5) }
-| LBRACE COLON datatype RBRACE                                 { ([wild_present; (hear_present $3)], `Closed) }
+| LBRACE COLON datatype COMMA efields RBRACE                   { make_hear_arrow_prefix $3 $5            }
+| LBRACE COLON datatype RBRACE                                 { make_hear_arrow_prefix $3 ([], `Closed) }
 | LBRACE COLON datatype VBAR nonrec_row_var RBRACE
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([wild_present; (hear_present $3)], $5) }
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { make_hear_arrow_prefix $3 ([], $5)      }
 
-(* JSTOLAREK: use smart constructors here *)
 straight_arrow:
 | parenthesized_datatypes
   straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
 | parenthesized_datatypes
-  straight_arrow_prefix LOLLI datatype                         { `Lolli ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { `Function ($1, ([], fresh_rigid_row_variable ()), $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli    ($1, ([], fresh_rigid_row_variable ()), $3) }
+  straight_arrow_prefix LOLLI datatype                         { `Lolli    ($1, $2, $4) }
+| parenthesized_datatypes RARROW datatype                      { `Function ($1, fresh_row (), $3) }
+| parenthesized_datatypes LOLLI datatype                       { `Lolli    ($1, fresh_row (), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with wild_present $2, $4) }
+  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with_wp $2, $4) }
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with wild_present $2, $4) }
-| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, ([wild_present],
-                                                                                 fresh_rigid_row_variable ()), $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, ([wild_present],
-                                                                                 fresh_rigid_row_variable ()), $3) }
+  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with_wp $2, $4) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, row_with_wp (fresh_row ()), $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, row_with_wp (fresh_row ()), $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { `Mu ($2, with_pos $loc($4) $4) }

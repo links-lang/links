@@ -7,6 +7,16 @@ val dummy_ppos : ppos
 val pos : ppos -> position
 val with_pos : ppos -> 'a -> 'a with_pos
 
+val fresh_type_variable           : unit -> datatypenode
+val fresh_rigid_type_variable     : unit -> datatypenode
+val fresh_row_variable            : unit -> row_var
+val fresh_rigid_row_variable      : unit -> row_var
+val fresh_presence_variable       : unit -> fieldspec
+val fresh_rigid_presence_variable : unit -> fieldspec
+
+val fresh_row : unit -> row
+val row_with_wp : row -> row
+
 val make_record : ppos -> (name * phrase) list -> phrase
 
 val make_variable_pat : ppos -> name with_pos -> pattern
@@ -17,6 +27,8 @@ val cp_unit  : ppos -> cp_phrase
 val present  : fieldspec
 
 val make_tuple : ppos -> phrase list -> phrase
+
+val make_hear_arrow_prefix : datatype -> row -> row
 
 (* Make bindings *)
 type name_or_pat = Name of name with_pos | Pat of pattern

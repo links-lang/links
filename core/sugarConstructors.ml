@@ -10,6 +10,34 @@ let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
 (* Wrapper around with_pos that accepts parser positions *)
 let with_pos p = Sugartypes.with_pos (pos p)
 
+(* Generation of fresh type variables *)
+
+let type_variable_counter = ref 0
+
+let fresh_type_variable () : datatypenode =
+    incr type_variable_counter;
+    `TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
+
+let fresh_rigid_type_variable () : datatypenode =
+    incr type_variable_counter;
+    `TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
+
+let fresh_row_variable () : row_var =
+    incr type_variable_counter;
+    `Open ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
+
+let fresh_rigid_row_variable () : row_var =
+    incr type_variable_counter;
+    `Open ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
+
+let fresh_presence_variable () : fieldspec =
+    incr type_variable_counter;
+    `Var ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
+
+let fresh_rigid_presence_variable () : fieldspec =
+    incr type_variable_counter;
+    `Var ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
+
 type signature = Sig of (name with_pos * datatype') with_pos | NoSig
 let sig_of_opt = function
     | Some s -> Sig s
@@ -38,7 +66,20 @@ let datatype d = (d, None)
 
 let cp_unit ppos = with_pos ppos (`Unquote ([], with_pos ppos (`TupleLit [])))
 
-let present = `Present (with_dummy_pos `Unit)
+let wild = "wild"
+let hear = "hear"
+
+let present        = `Present (with_dummy_pos `Unit)
+let wild_present   = (wild, present)
+let hear_present p = (hear, `Present p)
+
+let row_with field (fields, row_var) = (field::fields, row_var)
+let row_with_wp fields = row_with wild_present fields
+
+let fresh_row unit = ([], fresh_rigid_row_variable unit)
+
+let make_hear_arrow_prefix presence fields =
+  row_with wild_present (row_with (hear_present presence) fields)
 
 (* this preserves 1-tuples *)
 let make_tuple pos = function
