@@ -1,8 +1,6 @@
 open Sugartypes
 open Utility
 
-(* JSTOLAREK: document inacurate block positions *)
-
 (* ppos = parser position, ie. a position as produced by Menhir *)
 type ppos = SourceCode.lexpos * SourceCode.lexpos
 let dummy_ppos = (Lexing.dummy_pos, Lexing.dummy_pos)
@@ -62,7 +60,7 @@ let datatype_opt_from_sig_opt sig_opt name =
 let make_record ppos lbls =
   with_pos ppos (`RecordLit (lbls, None))
 
-let block ppos b = with_pos ppos (`Block b)
+let block {node;pos} = Sugartypes.with_pos pos (`Block node)
 
 let datatype d = (d, None)
 
@@ -89,20 +87,18 @@ let make_tuple pos = function
   | es  -> with_pos pos (`TupleLit es)
 
 let make_fun_lit ppos linearity pats blk =
-  with_pos ppos (`FunLit (None, linearity, (pats, block ppos blk), `Unknown))
+  with_pos ppos (`FunLit (None, linearity, (pats, block blk), `Unknown))
 
 let make_unl_fun_lit ppos pats blk = make_fun_lit ppos `Unl pats blk
 let make_lin_fun_lit ppos pats blk = make_fun_lit ppos `Lin pats blk
 
 let make_query ppos phrases_opt blk =
-  with_pos ppos (`Query (phrases_opt, block ppos blk, None))
+  with_pos ppos (`Query (phrases_opt, block blk, None))
 
 let make_fun_binding sig_opt ppos (linearity, bndr, args, location, blk) =
   let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
   with_pos ppos (`Fun (make_untyped_binder bndr, linearity,
-                       (* NOTE: position of the block is slightly inaccurate.
-                          This is done to make parser code less verbose. *)
-                       ([], (args, block ppos blk)), location, datatype))
+                       ([], (args, block blk)), location, datatype))
 
 (* Create a non-linear function binding with unknown location *)
 let make_unl_fun_binding sig_opt ppos (bndr, args, block) =
@@ -158,7 +154,7 @@ let make_db_insert ppos ins_exp lbls exps var_opt =
        var_opt))
 
 let make_spawn ppos spawn_kind location blk =
-  with_pos ppos (`Spawn (spawn_kind, location, block ppos blk, None))
+  with_pos ppos (`Spawn (spawn_kind, location, block blk, None))
 
 let make_infix_appl' ppos arg1 op arg2 =
   with_pos ppos (`InfixAppl (([], op), arg1, arg2))

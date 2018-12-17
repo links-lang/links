@@ -229,9 +229,9 @@ let parseRegexFlags f =
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.pattern> pattern
-%type <Sugartypes.declared_linearity * (Sugartypes.name Sugartypes.with_pos) *
+%type <Sugartypes.declared_linearity * Sugartypes.name Sugartypes.with_pos *
        Sugartypes.pattern list list * Sugartypes.location *
-      (Sugartypes.binding list * Sugartypes.phrase)> tlfunbinding
+       Sugartypes.block_body Sugartypes.with_pos> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
@@ -504,7 +504,7 @@ spawn_expression:
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { make_unary_appl $loc (`Name $2) $1 }
-| block                                                        { block $loc $1 }
+| block                                                        { block $1 }
 | QUERY block                                                  { make_query $loc None $2 }
 | QUERY LBRACKET exp RBRACKET block                            { make_query $loc (Some ($3, with_pos $loc (`Constant (`Int 0)))) $5 }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { make_query $loc (Some ($3, $5)) $7 }
@@ -651,9 +651,9 @@ xmlid:
 | VARIABLE                                                     { $1 }
 
 attrs:
-| block                                                        { [], Some (block $loc     $1) }
-| attr_list                                                    { $1, None                     }
-| attr_list block                                              { $1, Some (block $loc($2) $2) }
+| block                                                        { [], Some (block $1) }
+| attr_list                                                    { $1, None            }
+| attr_list block                                              { $1, Some (block $2) }
 
 attr_list:
 | rev(attr+)                                                   { $1 }
@@ -666,7 +666,7 @@ attr_val:
 | attr_val_entry+                                              { $1 }
 
 attr_val_entry:
-| block                                                        { block $loc $1 }
+| block                                                        { block $1 }
 | STRING                                                       { with_pos $loc (`Constant (`String $1)) }
 
 xml_tree:
@@ -681,7 +681,7 @@ xml_contents_list:
 | xml_contents+                                                { $1 }
 
 xml_contents:
-| block                                                        { block $loc $1 }
+| block                                                        { block $1 }
 | formlet_binding | formlet_placement | page_placement
 | xml_tree                                                     { $1 }
 | CDATA                                                        { with_pos $loc (`TextNode (Utility.xml_unescape $1)) }
@@ -710,7 +710,7 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (`Conditional ($3, $5, $7)) }
 
 case:
-| CASE pattern RARROW block_contents                           { $2, block $loc($4) $4 }
+| CASE pattern RARROW block_contents                           { $2, block (with_pos $loc($4) $4) }
 
 cases:
 | case+                                                        { $1 }
@@ -857,9 +857,8 @@ bindings:
 moduleblock:
 | LBRACE declarations RBRACE                                   { $2 }
 
-(* JSTOLAREK: attach location *)
 block:
-| LBRACE block_contents RBRACE                                 { $2 }
+| LBRACE block_contents RBRACE                                 { with_pos $loc $2 }
 
 block_contents:
 | bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (`Exp $2)],
@@ -1109,7 +1108,7 @@ regex_flags_opt:
 regex_replace:
 | /* empty */                                                  { `Literal "" }
 | REGEXREPL                                                    { `Literal $1 }
-| block                                                        { `Splice (block $loc $1) }
+| block                                                        { `Splice (block $1) }
 
 regex_pattern:
 | RANGE                                                        { `Range $1 }
@@ -1122,7 +1121,7 @@ regex_pattern:
 | regex_pattern STAR                                           { `Repeat (Regex.Star, $1) }
 | regex_pattern PLUS                                           { `Repeat (Regex.Plus, $1) }
 | regex_pattern QUESTION                                       { `Repeat (Regex.Question, $1) }
-| block                                                        { `Splice (block $loc $1) }
+| block                                                        { `Splice (block $1) }
 
 regex_pattern_alternate:
 | regex_pattern_sequence                                       { `Seq $1 }
