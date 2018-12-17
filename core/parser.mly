@@ -450,9 +450,8 @@ primary_expression:
 | LBRACKET perhaps_exps RBRACKET                               { with_pos $loc (`ListLit ($2, None)) }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
 | xml                                                          { $1 }
-(* JSTOLAREK: use smart constructors here *)
-| FUN arg_lists block                                          { with_pos $loc (`FunLit (None, `Unl, ($2, block $loc($3) $3), `Unknown)) }
-| LINFUN arg_lists block                                       { with_pos $loc (`FunLit (None, `Lin, ($2, block $loc($3) $3), `Unknown)) }
+| FUN arg_lists block                                          { make_unl_fun_lit $loc $2 $3 }
+| LINFUN arg_lists block                                       { make_lin_fun_lit $loc $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
 | handler_depth optional_computation_parameter handler_parameterization
                                                                {  with_pos $loc (`HandlerLit (make_hnlit $1 $2 $3)) }

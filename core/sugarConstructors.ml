@@ -86,6 +86,12 @@ let make_tuple pos = function
   | [e] -> make_record pos [("1", e)]
   | es  -> with_pos pos (`TupleLit es)
 
+let make_fun_lit ppos linearity pats blk =
+  with_pos ppos (`FunLit (None, linearity, (pats, block ppos blk), `Unknown))
+
+let make_unl_fun_lit ppos pats blk = make_fun_lit ppos `Unl pats blk
+let make_lin_fun_lit ppos pats blk = make_fun_lit ppos `Lin pats blk
+
 let make_fun_binding sig_opt ppos (linearity, bndr, args, location, blk) =
   let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
   with_pos ppos (`Fun (make_untyped_binder bndr, linearity,

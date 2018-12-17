@@ -30,6 +30,11 @@ val make_tuple : ppos -> phrase list -> phrase
 
 val make_hear_arrow_prefix : datatype -> row -> row
 
+val make_unl_fun_lit : ppos -> pattern list list -> (binding list * phrase)
+                    -> phrase
+val make_lin_fun_lit : ppos -> pattern list list -> (binding list * phrase)
+                    -> phrase
+
 (* Make bindings *)
 type name_or_pat = Name of name with_pos | Pat of pattern
 type signature = Sig of (name with_pos * datatype') with_pos | NoSig
