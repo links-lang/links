@@ -11,6 +11,8 @@ val make_record : ppos -> (name * phrase) list -> phrase
 
 val make_variable_pat : ppos -> name with_pos -> pattern
 
+val block : ppos -> binding list * phrase -> phrase
+
 (* Make bindings *)
 type name_or_pat = Name of name with_pos | Pat of pattern
 type signature = Sig of (name with_pos * datatype') with_pos | NoSig

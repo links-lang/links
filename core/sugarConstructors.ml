@@ -28,13 +28,14 @@ let datatype_opt_from_sig_opt sig_opt name =
      Some datatype
   | NoSig -> None
 
-let make_fun_binding sig_opt ppos (linearity, bndr, args, location, block) =
+let block ppos b = with_pos ppos (`Block b)
+
+let make_fun_binding sig_opt ppos (linearity, bndr, args, location, blk) =
   let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
   with_pos ppos (`Fun (make_untyped_binder bndr, linearity,
                        (* NOTE: position of the block is slightly inaccurate.
                           This is done to make parser code less verbose. *)
-                       ([], (args, with_pos ppos (`Block block))),
-                       location, datatype))
+                       ([], (args, block ppos blk)), location, datatype))
 
 (* Create a non-linear function binding with unknown location *)
 let make_unl_fun_binding sig_opt ppos (bndr, args, block) =
@@ -93,9 +94,8 @@ let make_db_insert ppos ins_exp lbls exps var_opt =
        (fun {node; pos} -> Sugartypes.with_pos pos (`Constant (`String node)))
        var_opt))
 
-let make_spawn ppos spawn_kind location block =
-  with_pos ppos (`Spawn ( spawn_kind, location, with_pos ppos (`Block block)
-                        , None ))
+let make_spawn ppos spawn_kind location blk =
+  with_pos ppos (`Spawn (spawn_kind, location, block ppos blk, None))
 
 let make_infix_appl' ppos arg1 op arg2 =
   with_pos ppos (`InfixAppl (([], op), arg1, arg2))

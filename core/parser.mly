@@ -168,7 +168,7 @@ let attach_row_subkind (r, subkind) =
     | _ -> assert false
   in attach_subkind_helper update subkind
 
-let row_with field (fields, row_var) = field::fields, row_var
+let row_with field (fields, row_var) = (field::fields, row_var)
 
 (* this preserves 1-tuples *)
 let make_tuple pos =
@@ -192,6 +192,7 @@ let parseRegexFlags f =
 
 let datatype d = (d, None)
 
+(* JSTOLAREK: move to smartConstructors *)
 let cp_unit p = with_pos p (`Unquote ([], with_pos p (`TupleLit [])))
 let present = `Present (with_dummy_pos `Unit)
 
@@ -495,10 +496,8 @@ primary_expression:
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
 | xml                                                          { $1 }
 (* JSTOLAREK: use smart constructors here *)
-| FUN arg_lists block                                          { with_pos $loc     (`FunLit (None, `Unl, ($2,
-                                                                 with_pos $loc($3) (`Block $3)), `Unknown)) }
-| LINFUN arg_lists block                                       { with_pos $loc     (`FunLit (None, `Lin, ($2,
-                                                                 with_pos $loc($3) (`Block $3)), `Unknown)) }
+| FUN arg_lists block                                          { with_pos $loc (`FunLit (None, `Unl, ($2, block $loc($3) $3), `Unknown)) }
+| LINFUN arg_lists block                                       { with_pos $loc (`FunLit (None, `Lin, ($2, block $loc($3) $3), `Unknown)) }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
 | handler_depth optional_computation_parameter handler_parameterization
                                                                {  with_pos $loc (`HandlerLit (make_hnlit $1 $2 $3)) }
@@ -552,11 +551,11 @@ spawn_expression:
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { make_unary_appl $loc (`Name $2) $1 }
-| block                                                        { with_pos $loc (`Block $1) }
-| QUERY block                                                  { with_pos $loc (`Query (None, with_pos $loc($2) (`Block $2), None)) }
+| block                                                        { block $loc $1 }
+| QUERY block                                                  { with_pos $loc (`Query (None, block $loc($2) $2, None)) }
 | QUERY LBRACKET exp RBRACKET block                            { with_pos $loc (`Query (Some ($3, with_pos $loc (`Constant (`Int 0))),
-                                                                                        with_pos $loc($5) (`Block $5), None)) }
-| QUERY LBRACKET exp COMMA exp RBRACKET block                  { with_pos $loc (`Query (Some ($3, $5), with_pos $loc($7) (`Block $7), None)) }
+                                                                                        block $loc($5) $5, None)) }
+| QUERY LBRACKET exp COMMA exp RBRACKET block                  { with_pos $loc (`Query (Some ($3, $5), block $loc($7) $7, None)) }
 | postfix_expression arg_spec                                  { with_pos $loc (`FnAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (`Projection ($1, $3)) }
 
@@ -700,9 +699,9 @@ xmlid:
 | VARIABLE                                                     { $1 }
 
 attrs:
-| block                                                        { [], Some (with_pos $loc (`Block $1)) }
-| attr_list                                                    { $1, None }
-| attr_list block                                              { $1, Some (with_pos $loc($2) (`Block $2)) }
+| block                                                        { [], Some (block $loc     $1) }
+| attr_list                                                    { $1, None                     }
+| attr_list block                                              { $1, Some (block $loc($2) $2) }
 
 attr_list:
 | rev(attr+)                                                   { $1 }
@@ -715,7 +714,7 @@ attr_val:
 | attr_val_entry+                                              { $1 }
 
 attr_val_entry:
-| block                                                        { with_pos $loc (`Block $1) }
+| block                                                        { block $loc $1 }
 | STRING                                                       { with_pos $loc (`Constant (`String $1)) }
 
 xml_tree:
@@ -730,7 +729,7 @@ xml_contents_list:
 | xml_contents+                                                { $1 }
 
 xml_contents:
-| block                                                        { with_pos $loc (`Block $1) }
+| block                                                        { block $loc $1 }
 | formlet_binding | formlet_placement | page_placement
 | xml_tree                                                     { $1 }
 | CDATA                                                        { with_pos $loc (`TextNode (Utility.xml_unescape $1)) }
@@ -759,7 +758,7 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (`Conditional ($3, $5, $7)) }
 
 case:
-| CASE pattern RARROW block_contents                           { $2, with_pos $loc($4) (`Block ($4)) }
+| CASE pattern RARROW block_contents                           { $2, block $loc($4) $4 }
 
 cases:
 | case+                                                        { $1 }
@@ -1164,7 +1163,7 @@ regex_flags_opt:
 regex_replace:
 | /* empty */                                                  { `Literal "" }
 | REGEXREPL                                                    { `Literal $1 }
-| block                                                        { `Splice (with_pos $loc (`Block $1)) }
+| block                                                        { `Splice (block $loc $1) }
 
 regex_pattern:
 | RANGE                                                        { `Range $1 }
@@ -1177,7 +1176,7 @@ regex_pattern:
 | regex_pattern STAR                                           { `Repeat (Regex.Star, $1) }
 | regex_pattern PLUS                                           { `Repeat (Regex.Plus, $1) }
 | regex_pattern QUESTION                                       { `Repeat (Regex.Question, $1) }
-| block                                                        { `Splice (with_pos $loc (`Block $1)) }
+| block                                                        { `Splice (block $loc $1) }
 
 regex_pattern_alternate:
 | regex_pattern_sequence                                       { `Seq $1 }
