@@ -170,12 +170,6 @@ let attach_row_subkind (r, subkind) =
 
 let row_with field (fields, row_var) = (field::fields, row_var)
 
-(* this preserves 1-tuples *)
-let make_tuple pos =
-  function
-    | [e] -> make_record pos [("1", e)]
-    | es  -> with_pos pos (`TupleLit es)
-
 let labels xs = fst (List.split xs)
 
 let parseRegexFlags f =
@@ -190,14 +184,10 @@ let parseRegexFlags f =
               | 'g' -> `RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
-let datatype d = (d, None)
-
-(* JSTOLAREK: move to smartConstructors *)
-let cp_unit p = with_pos p (`Unquote ([], with_pos p (`TupleLit [])))
-let present = `Present (with_dummy_pos `Unit)
-
 let wild = "wild"
 let hear = "hear"
+let wild_present = (wild, present)
+let hear_present p = (hear, `Present p)
 
 %}
 
@@ -946,14 +936,10 @@ squig_arrow_prefix:
 | TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 
 hear_arrow_prefix:
-| LBRACE COLON datatype COMMA efields RBRACE                   { row_with
-                                                                   (wild, present)
-                                                                   (row_with (hear, `Present $3) $5) }
-| LBRACE COLON datatype RBRACE                                 { ([(wild, present);
-                                                                   (hear, `Present $3)], `Closed) }
+| LBRACE COLON datatype COMMA efields RBRACE                   { row_with wild_present (row_with (hear_present $3) $5) }
+| LBRACE COLON datatype RBRACE                                 { ([wild_present; (hear_present $3)], `Closed) }
 | LBRACE COLON datatype VBAR nonrec_row_var RBRACE
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([(wild, present);
-                                                                   (hear, `Present $3)], $5) }
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { ([wild_present; (hear_present $3)], $5) }
 
 (* JSTOLAREK: use smart constructors here *)
 straight_arrow:
@@ -966,12 +952,12 @@ straight_arrow:
 
 squiggly_arrow:
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with (wild, present) $2, $4) }
+  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with wild_present $2, $4) }
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with (wild, present) $2, $4) }
-| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, ([(wild, present)],
+  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with wild_present $2, $4) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, ([wild_present],
                                                                                  fresh_rigid_row_variable ()), $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, ([(wild, present)],
+| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, ([wild_present],
                                                                                  fresh_rigid_row_variable ()), $3) }
 
 mu_datatype:

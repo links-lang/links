@@ -28,7 +28,22 @@ let datatype_opt_from_sig_opt sig_opt name =
      Some datatype
   | NoSig -> None
 
+(* Create a record with a given list of labels *)
+let make_record ppos lbls =
+  with_pos ppos (`RecordLit (lbls, None))
+
 let block ppos b = with_pos ppos (`Block b)
+
+let datatype d = (d, None)
+
+let cp_unit ppos = with_pos ppos (`Unquote ([], with_pos ppos (`TupleLit [])))
+
+let present = `Present (with_dummy_pos `Unit)
+
+(* this preserves 1-tuples *)
+let make_tuple pos = function
+  | [e] -> make_record pos [("1", e)]
+  | es  -> with_pos pos (`TupleLit es)
 
 let make_fun_binding sig_opt ppos (linearity, bndr, args, location, blk) =
   let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
@@ -71,10 +86,6 @@ let make_val_binding sig_opt ppos (name_or_pat, phrase, location) =
 
 let make_hnlit depth computation_param handler_param =
   (depth, computation_param, fst handler_param, snd handler_param)
-
-(* Create a record with a given list of labels *)
-let make_record ppos lbls =
-  with_pos ppos (`RecordLit (lbls, None))
 
 (* Create a list of labeled database expressions *)
 let make_db_exps ppos exps =

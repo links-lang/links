@@ -11,7 +11,12 @@ val make_record : ppos -> (name * phrase) list -> phrase
 
 val make_variable_pat : ppos -> name with_pos -> pattern
 
-val block : ppos -> binding list * phrase -> phrase
+val block    : ppos -> binding list * phrase -> phrase
+val datatype : datatype -> datatype * 'a option
+val cp_unit  : ppos -> cp_phrase
+val present  : fieldspec
+
+val make_tuple : ppos -> phrase list -> phrase
 
 (* Make bindings *)
 type name_or_pat = Name of name with_pos | Pat of pattern
