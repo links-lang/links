@@ -506,10 +506,9 @@ postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { make_unary_appl $loc (`Name $2) $1 }
 | block                                                        { block $loc $1 }
-| QUERY block                                                  { with_pos $loc (`Query (None, block $loc($2) $2, None)) }
-| QUERY LBRACKET exp RBRACKET block                            { with_pos $loc (`Query (Some ($3, with_pos $loc (`Constant (`Int 0))),
-                                                                                        block $loc($5) $5, None)) }
-| QUERY LBRACKET exp COMMA exp RBRACKET block                  { with_pos $loc (`Query (Some ($3, $5), block $loc($7) $7, None)) }
+| QUERY block                                                  { make_query $loc None $2 }
+| QUERY LBRACKET exp RBRACKET block                            { make_query $loc (Some ($3, with_pos $loc (`Constant (`Int 0)))) $5 }
+| QUERY LBRACKET exp COMMA exp RBRACKET block                  { make_query $loc (Some ($3, $5)) $7 }
 | postfix_expression arg_spec                                  { with_pos $loc (`FnAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (`Projection ($1, $3)) }
 
@@ -859,6 +858,7 @@ bindings:
 moduleblock:
 | LBRACE declarations RBRACE                                   { $2 }
 
+(* JSTOLAREK: attach location *)
 block:
 | LBRACE block_contents RBRACE                                 { $2 }
 
