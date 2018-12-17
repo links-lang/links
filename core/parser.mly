@@ -501,7 +501,6 @@ spawn_expression:
 | SPAWNCLIENT block                                            { make_spawn $loc `Demon  `SpawnClient               $2 }
 | SPAWNWAIT   block                                            { make_spawn $loc `Wait   `NoSpawnLocation           $2 }
 
-(* JSTOLAREK: use smart constructors here *)
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { make_unary_appl $loc (`Name $2) $1 }

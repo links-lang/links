@@ -2,7 +2,6 @@ open Sugartypes
 open Utility
 
 (* JSTOLAREK: document inacurate block positions *)
-(* JSTOLAREK: in sugartypes create a type alias for block body *)
 
 (* ppos = parser position, ie. a position as produced by Menhir *)
 type ppos = SourceCode.lexpos * SourceCode.lexpos

@@ -21,7 +21,7 @@ val make_record : ppos -> (name * phrase) list -> phrase
 
 val make_variable_pat : ppos -> name with_pos -> pattern
 
-val block    : ppos -> binding list * phrase -> phrase
+val block    : ppos -> block_body -> phrase
 val datatype : datatype -> datatype * 'a option
 val cp_unit  : ppos -> cp_phrase
 val present  : fieldspec
@@ -30,13 +30,10 @@ val make_tuple : ppos -> phrase list -> phrase
 
 val make_hear_arrow_prefix : datatype -> row -> row
 
-val make_unl_fun_lit : ppos -> pattern list list -> (binding list * phrase)
-                    -> phrase
-val make_lin_fun_lit : ppos -> pattern list list -> (binding list * phrase)
-                    -> phrase
+val make_unl_fun_lit : ppos -> pattern list list -> block_body -> phrase
+val make_lin_fun_lit : ppos -> pattern list list -> block_body -> phrase
 
-val make_query : ppos -> (phrase * phrase) option -> (binding list * phrase)
-              -> phrase
+val make_query : ppos -> (phrase * phrase) option -> block_body -> phrase
 
 (* Make bindings *)
 type name_or_pat = Name of name with_pos | Pat of pattern
@@ -45,21 +42,17 @@ val sig_of_opt : (name with_pos * datatype') with_pos option -> signature
 
 val make_fun_binding : signature -> ppos
                     -> (declared_linearity * name with_pos * pattern list list *
-                        location * (binding list * phrase))
+                        location * block_body)
                     -> binding
 val make_unl_fun_binding : signature -> ppos
-                        -> (name with_pos * pattern list list *
-                            (binding list * phrase))
+                        -> (name with_pos * pattern list list * block_body)
                         -> binding
 val make_lin_fun_binding : signature -> ppos
-                        -> (name with_pos * pattern list list *
-                            (binding list * phrase))
+                        -> (name with_pos * pattern list list * block_body)
                         -> binding
-val make_handler_binding : signature -> ppos
-                        -> (name with_pos * handlerlit)
+val make_handler_binding : signature -> ppos -> (name with_pos * handlerlit)
                         -> binding
-val make_val_binding : signature -> ppos
-                    -> (name_or_pat * phrase * location)
+val make_val_binding : signature -> ppos -> (name_or_pat * phrase * location)
                     -> binding
 
 val make_hnlit : [`Deep | `Shallow ] -> pattern
@@ -70,8 +63,7 @@ val make_db_insert : ppos -> phrase -> name list -> phrase
                   -> string with_pos option -> phrase
 val make_db_exps : ppos -> (name * phrase) list -> phrase
 
-val make_spawn : ppos -> spawn_kind -> given_spawn_location
-              -> (binding list * phrase)
+val make_spawn : ppos -> spawn_kind -> given_spawn_location -> block_body
               -> phrase
 
 val make_infix_appl  : ppos -> phrase -> string   -> phrase -> phrase

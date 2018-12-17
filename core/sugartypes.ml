@@ -222,7 +222,7 @@ and phrasenode = [
 | `Escape           of binder * phrase
 | `Section          of sec
 | `Conditional      of phrase * phrase * phrase
-| `Block            of binding list * phrase
+| `Block            of block_body
 | `InfixAppl        of (tyarg list * binop) * phrase * phrase
 | `Regex            of regex
 | `UnaryAppl        of (tyarg list * unary_op) * phrase
@@ -287,6 +287,7 @@ and bindingnode = [
 | `AlienBlock of (name * name * ((binder * datatype') list))
 ]
 and binding = bindingnode with_pos
+and block_body = binding list * phrase
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
