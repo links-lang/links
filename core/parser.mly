@@ -494,6 +494,7 @@ primary_expression:
 | LBRACKET perhaps_exps RBRACKET                               { with_pos $loc (`ListLit ($2, None)) }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
 | xml                                                          { $1 }
+(* JSTOLAREK: use smart constructors here *)
 | FUN arg_lists block                                          { with_pos $loc     (`FunLit (None, `Unl, ($2,
                                                                  with_pos $loc($3) (`Block $3)), `Unknown)) }
 | LINFUN arg_lists block                                       { with_pos $loc     (`FunLit (None, `Lin, ($2,
@@ -550,7 +551,7 @@ spawn_expression:
 (* JSTOLAREK: use smart constructors here *)
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
-| primary_expression POSTFIXOP                                 { with_pos $loc (`UnaryAppl (([], `Name $2), $1)) }
+| primary_expression POSTFIXOP                                 { make_unary_appl $loc (`Name $2) $1 }
 | block                                                        { with_pos $loc (`Block $1) }
 | QUERY block                                                  { with_pos $loc (`Query (None, with_pos $loc($2) (`Block $2), None)) }
 | QUERY LBRACKET exp RBRACKET block                            { with_pos $loc (`Query (Some ($3, with_pos $loc (`Constant (`Int 0))),
@@ -570,115 +571,114 @@ perhaps_exps:
 | loption(exps)                                                { $1 }
 
 unary_expression:
-| MINUS unary_expression                                       { with_pos $loc (`UnaryAppl (([], `Minus     ), $2)) }
-| MINUSDOT unary_expression                                    { with_pos $loc (`UnaryAppl (([], `FloatMinus), $2)) }
-| PREFIXOP unary_expression                                    { with_pos $loc (`UnaryAppl (([], `Name $1   ), $2)) }
+| MINUS unary_expression                                       { make_unary_appl $loc `Minus      $2 }
+| MINUSDOT unary_expression                                    { make_unary_appl $loc `FloatMinus $2 }
+| PREFIXOP unary_expression                                    { make_unary_appl $loc (`Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
 | DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (`DoOperation ($2, $3, None)) }
 
 
-(* JSTOLAREK: use smart constructors here *)
 infixr_9:
 | unary_expression                                             { $1 }
 | unary_expression INFIX9 unary_expression
-| unary_expression INFIXR9 infixr_9                            { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| unary_expression INFIXR9 infixr_9                            { make_infix_appl $loc $1 $2 $3 }
 
 infixl_9:
 | infixr_9                                                     { $1 }
-| infixl_9 INFIXL9 infixr_9                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_9 INFIXL9 infixr_9                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixr_8:
 | infixl_9                                                     { $1 }
 | infixl_9 INFIX8  infixl_9
-| infixl_9 INFIXR8 infixr_8                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
-| infixl_9 COLONCOLON infixr_8                                 { with_pos $loc (`InfixAppl (([], `Cons   ), $1, $3)) }
+| infixl_9 INFIXR8 infixr_8                                    { make_infix_appl  $loc $1 $2    $3 }
+| infixl_9 COLONCOLON infixr_8                                 { make_infix_appl' $loc $1 `Cons $3 }
 
 infixl_8:
 | infixr_8                                                     { $1 }
-| infixl_8 INFIXL8 infixr_8                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_8 INFIXL8 infixr_8                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixr_7:
 | infixl_8                                                     { $1 }
 | infixl_8 INFIX7  infixl_8
-| infixl_8 INFIXR7 infixr_7                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_8 INFIXR7 infixr_7                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixl_7:
 | infixr_7                                                     { $1 }
-| infixl_7 INFIXL7 infixr_7                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_7 INFIXL7 infixr_7                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixr_6:
 | infixl_7                                                     { $1 }
 | infixl_7 INFIX6  infixl_7
-| infixl_7 INFIXR6 infixr_6                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_7 INFIXR6 infixr_6                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixl_6:
 | infixr_6                                                     { $1 }
-| infixl_6 INFIXL6 infixr_6                                    { with_pos $loc (`InfixAppl (([], `Name $2   ), $1, $3)) }
-| infixl_6 MINUS infixr_6                                      { with_pos $loc (`InfixAppl (([], `Minus     ), $1, $3)) }
-| infixl_6 MINUSDOT infixr_6                                   { with_pos $loc (`InfixAppl (([], `FloatMinus), $1, $3)) }
+| infixl_6 INFIXL6 infixr_6                                    { make_infix_appl  $loc $1 $2          $3 }
+| infixl_6 MINUS infixr_6                                      { make_infix_appl' $loc $1 `Minus      $3 }
+| infixl_6 MINUSDOT infixr_6                                   { make_infix_appl' $loc $1 `FloatMinus $3 }
 /* HACK: the type variables should get inserted later... */
-| infixl_6 BANG infixr_6                                       { with_pos $loc (`InfixAppl (([], `Name "!"), $1, $3)) }
+| infixl_6 BANG infixr_6                                       { make_infix_appl  $loc $1 "!" $3         }
 
 infixr_5:
 | infixl_6                                                     { $1 }
 | infixl_6 INFIX5  infixl_6
-| infixl_6 INFIXR5 infixr_5                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_6 INFIXR5 infixr_5                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixl_5:
 | infixr_5                                                     { $1 }
-| infixl_5 INFIXL5 infixr_5                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_5 INFIXL5 infixr_5                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixr_4:
 | infixl_5                                                     { $1 }
 | infixl_5 INFIX4    infixl_5
-| infixl_5 INFIXR4   infixr_4                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_5 INFIXR4   infixr_4                                  { make_infix_appl $loc $1 $2 $3 }
 | infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in
-                                                                 with_pos $loc (`InfixAppl (([], `RegexMatch flags), $1, r)) }
+                                                                 make_infix_appl' $loc $1 (`RegexMatch flags) r }
 
 infixl_4:
 | infixr_4                                                     { $1 }
-| infixl_4 INFIXL4 infixr_4                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_4 INFIXL4 infixr_4                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixr_3:
 | infixl_4                                                     { $1 }
 | infixl_4 INFIX3  infixl_4
-| infixl_4 INFIXR3 infixr_3                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_4 INFIXR3 infixr_3                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixl_3:
 | infixr_3                                                     { $1 }
-| infixl_3 INFIXL3 infixr_3                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_3 INFIXL3 infixr_3                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixr_2:
 | infixl_3                                                     { $1 }
 | infixl_3 INFIX2  infixl_3
-| infixl_3 INFIXR2 infixr_2                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_3 INFIXR2 infixr_2                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixl_2:
 | infixr_2                                                     { $1 }
-| infixl_2 INFIXL2 infixr_2                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_2 INFIXL2 infixr_2                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixr_1:
 | infixl_2                                                     { $1 }
 | infixl_2 INFIX1  infixl_2
-| infixl_2 INFIXR1 infixr_1                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_2 INFIXR1 infixr_1                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixl_1:
 | infixr_1                                                     { $1 }
-| infixl_1 INFIXL1 infixr_1                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_1 INFIXL1 infixr_1                                    { make_infix_appl $loc $1 $2 $3 }
 
 infixr_0:
 | infixl_1                                                     { $1 }
 | infixl_1 INFIX0    infixl_1
-| infixl_1 INFIXR0   infixr_0                                  { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_1 INFIXR0   infixr_0                                  { make_infix_appl $loc $1 $2 $3 }
 
 infixl_0:
 | infixr_0                                                     { $1 }
-| infixl_0 INFIXL0 infixr_0                                    { with_pos $loc (`InfixAppl (([], `Name $2), $1, $3)) }
+| infixl_0 INFIXL0 infixr_0                                    { make_infix_appl $loc $1 $2 $3 }
 
 logical_expression:
 | infixl_0                                                     { $1 }
-| logical_expression BARBAR infixl_0                           { with_pos $loc (`InfixAppl (([], `Or ), $1, $3)) }
-| logical_expression AMPAMP infixl_0                           { with_pos $loc (`InfixAppl (([], `And), $1, $3)) }
+| logical_expression BARBAR infixl_0                           { make_infix_appl' $loc $1 `Or  $3 }
+| logical_expression AMPAMP infixl_0                           { make_infix_appl' $loc $1 `And $3 }
 
 typed_expression:
 | logical_expression                                           { $1 }
@@ -1220,8 +1220,7 @@ parenthesized_pattern:
 | LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (`Record ($2, $3)) }
 
 primary_pattern:
-(* JSTOLAREK: use smart constructors here *)
-| var                                                          { with_pos $loc (`Variable (make_untyped_binder $1)) }
+| var                                                          { make_variable_pat $loc $1 }
 | UNDERSCORE                                                   { with_pos $loc `Any }
 | constant                                                     { with_pos $loc (`Constant $1) }
 | LBRACKET RBRACKET                                            { with_pos $loc `Nil }

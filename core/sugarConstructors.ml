@@ -48,6 +48,9 @@ let make_handler_binding sig_opt ppos (name, handlerlit) =
   let datatype = datatype_opt_from_sig_opt sig_opt name.node in
   with_pos ppos (`Handler (make_untyped_binder name, handlerlit, datatype))
 
+let make_variable_pat ppos name =
+  with_pos ppos (`Variable (make_untyped_binder name))
+
 (* Used for passing an argument to make_val_binding *)
 type name_or_pat = Name of name with_pos | Pat of pattern
 
@@ -57,7 +60,7 @@ type name_or_pat = Name of name with_pos | Pat of pattern
 let make_val_binding sig_opt ppos (name_or_pat, phrase, location) =
   let pat, datatype = match name_or_pat with
     | Name name ->
-       let pat = with_pos ppos (`Variable (make_untyped_binder name)) in
+       let pat      = make_variable_pat ppos name in
        let datatype = datatype_opt_from_sig_opt sig_opt name.node in
        (pat, datatype)
     | Pat pat ->
@@ -93,3 +96,12 @@ let make_db_insert ppos ins_exp lbls exps var_opt =
 let make_spawn ppos spawn_kind location block =
   with_pos ppos (`Spawn ( spawn_kind, location, with_pos ppos (`Block block)
                         , None ))
+
+let make_infix_appl' ppos arg1 op arg2 =
+  with_pos ppos (`InfixAppl (([], op), arg1, arg2))
+
+let make_infix_appl ppos arg1 op arg2 =
+  make_infix_appl' ppos arg1 (`Name op) arg2
+
+let make_unary_appl ppos op arg =
+  with_pos ppos (`UnaryAppl (([], op), arg))

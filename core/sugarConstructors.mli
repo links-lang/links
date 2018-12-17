@@ -1,4 +1,5 @@
 open Sugartypes
+open Operators
 
 type ppos = SourceCode.lexpos * SourceCode.lexpos
 val dummy_ppos : ppos
@@ -7,6 +8,8 @@ val pos : ppos -> position
 val with_pos : ppos -> 'a -> 'a with_pos
 
 val make_record : ppos -> (name * phrase) list -> phrase
+
+val make_variable_pat : ppos -> name with_pos -> pattern
 
 (* Make bindings *)
 type name_or_pat = Name of name with_pos | Pat of pattern
@@ -41,5 +44,9 @@ val make_db_insert : ppos -> phrase -> name list -> phrase
 val make_db_exps : ppos -> (name * phrase) list -> phrase
 
 val make_spawn : ppos -> spawn_kind -> given_spawn_location
-              -> binding list * phrase
+              -> (binding list * phrase)
               -> phrase
+
+val make_infix_appl  : ppos -> phrase -> string   -> phrase -> phrase
+val make_infix_appl' : ppos -> phrase -> binop    -> phrase -> phrase
+val make_unary_appl  : ppos ->           unary_op -> phrase -> phrase
