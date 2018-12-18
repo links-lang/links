@@ -114,10 +114,6 @@ let make_hear_arrow_prefix presence fields =
 let make_fun_lit ppos linearity pats blk =
   with_pos ppos (`FunLit (None, linearity, (pats, block blk), `Unknown))
 
-(* Specialized non-linear and linear versions of FunLit *)
-let make_unl_fun_lit ppos pats blk = make_fun_lit ppos `Unl pats blk
-let make_lin_fun_lit ppos pats blk = make_fun_lit ppos `Lin pats blk
-
 (* Create an argument used by Handler and HandlerLit *)
 let make_hnlit_arg depth computation_param handler_param =
   (depth, computation_param, fst handler_param, snd handler_param)
@@ -136,14 +132,6 @@ let make_fun_binding sig_opt ppos (linearity, bndr, args, location, blk) =
   let datatype = datatype_opt_of_sig_opt sig_opt bndr.node in
   with_pos ppos (`Fun (make_untyped_binder bndr, linearity,
                        ([], (args, block blk)), location, datatype))
-
-(* Create a non-linear function binding with unknown location *)
-let make_unl_fun_binding sig_opt ppos (bndr, args, block) =
-  make_fun_binding sig_opt ppos (`Unl, bndr, args, `Unknown, block)
-
-(* Create a linear function binding with unknown location *)
-let make_lin_fun_binding sig_opt ppos (bndr, args, block) =
-  make_fun_binding sig_opt ppos (`Lin, bndr, args, `Unknown, block)
 
 (* Create a handler binding *)
 let make_handler_binding sig_opt ppos (name, handlerlit) =

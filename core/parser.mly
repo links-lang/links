@@ -331,9 +331,12 @@ prefixop:
 postfixop:
 | POSTFIXOP                                                    { with_pos $loc $1 }
 
+linearity:
+| FUN                                                          { `Unl }
+| LINFUN                                                       { `Lin }
+
 tlfunbinding:
-| FUN var arg_lists perhaps_location block                     { (`Unl, $2, $3, $4, $5)         }
-| LINFUN var arg_lists perhaps_location block                  { (`Lin, $2, $3, $4, $5)         }
+| linearity var arg_lists perhaps_location block               { ($1, $2, $3, $4, $5)           }
 | OP pattern op pattern perhaps_location block                 { (`Unl, $3, [[$2; $4]], $5, $6) }
 | OP prefixop pattern perhaps_location block                   { (`Unl, $2, [[$3]], $4, $5)     }
 | OP pattern postfixop perhaps_location block                  { (`Unl, $3, [[$2]], $4, $5)     }
@@ -444,8 +447,7 @@ primary_expression:
 | LBRACKET perhaps_exps RBRACKET                               { with_pos $loc (`ListLit ($2, None)) }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
 | xml                                                          { $1 }
-| FUN arg_lists block                                          { make_unl_fun_lit $loc $2 $3 }
-| LINFUN arg_lists block                                       { make_lin_fun_lit $loc $2 $3 }
+| linearity arg_lists block                                    { make_fun_lit $loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
 | handler_depth optional_computation_parameter
      handler_parameterization                                  { make_handler_lit $loc (make_hnlit_arg $1 $2 $3) }
@@ -823,10 +825,8 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { make_val_binding NoSig $loc (Pat $2, $4, `Unknown) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature FUN var arg_lists block                            { make_unl_fun_binding (Sig $1) $loc ($3, $4, $5) }
-| signature LINFUN var arg_lists block                         { make_lin_fun_binding (Sig $1) $loc ($3, $4, $5) }
-| FUN var arg_lists block                                      { make_unl_fun_binding NoSig $loc ($2, $3, $4) }
-| LINFUN var arg_lists block                                   { make_lin_fun_binding NoSig $loc ($2, $3, $4) }
+| signature linearity var arg_lists block                      { make_fun_binding (Sig $1) $loc ($2, $3, $4, `Unknown, $5) }
+| linearity var arg_lists block                                { make_fun_binding  NoSig   $loc ($1, $2, $3, `Unknown, $4) }
 | typed_handler_binding                                        { make_handler_binding NoSig $loc $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 

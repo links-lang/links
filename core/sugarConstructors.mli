@@ -40,10 +40,9 @@ val row_with_wp            : row -> row
 val make_hear_arrow_prefix : datatype -> row -> row
 
 (* Various phrases *)
-val make_unl_fun_lit
-    : ppos -> pattern list list -> block_body with_pos -> phrase
-val make_lin_fun_lit
-    : ppos -> pattern list list -> block_body with_pos -> phrase
+val make_fun_lit
+    : ppos -> declared_linearity -> pattern list list -> block_body with_pos
+   -> phrase
 val make_hnlit_arg
     : [`Deep | `Shallow ] -> pattern -> clause list * pattern list list option
    -> handlerlit
@@ -58,14 +57,6 @@ val make_fun_binding
     : signature -> ppos
    -> (declared_linearity * name with_pos * pattern list list * location *
        block_body with_pos)
-   -> binding
-val make_unl_fun_binding
-    : signature -> ppos
-   -> (name with_pos * pattern list list * block_body with_pos)
-   -> binding
-val make_lin_fun_binding
-    : signature -> ppos
-   -> (name with_pos * pattern list list * block_body with_pos)
    -> binding
 val make_handler_binding
     : signature -> ppos -> (name with_pos * handlerlit)
