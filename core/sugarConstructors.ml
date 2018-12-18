@@ -205,8 +205,9 @@ let make_unary_appl ppos op arg =
   with_pos ppos (`UnaryAppl (([], op), arg))
 
 (** XML *)
-
-let make_xml ppos tags_opt name (attr_list, blk) contents =
+(* Create an XML tree.  Raise an exception if opening and closing tags don't
+   match. *)
+let make_xml ppos tags_opt name attr_list blk_opt contents =
   let () = match tags_opt with
     | Some (opening, closing) when opening = closing -> ()
     | Some (opening, closing) ->
@@ -214,4 +215,5 @@ let make_xml ppos tags_opt name (attr_list, blk) contents =
                 ("Closing tag '" ^ closing ^ "' does not match start tag '"
                   ^ opening ^ "'.", pos ppos))
     | _ -> () in
+  let blk = OptionUtils.opt_map (fun blk -> block blk) blk_opt in
   with_pos ppos (`Xml (name, attr_list, blk, contents))

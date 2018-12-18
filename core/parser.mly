@@ -639,19 +639,11 @@ db_expression:
          SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in with_pos $loc (`DBUpdate(pat, phrase, $5, $8)) }
 
 /* XML */
-xml:
-| xml_tree                                                     { $1 }
-
 xmlid:
 | VARIABLE                                                     { $1 }
 
-attrs:
-| block                                                        { [], Some (block $1) }
-| attr_list                                                    { $1, None            }
-| attr_list block                                              { $1, Some (block $2) }
-
 attr_list:
-| rev(attr+)                                                   { $1 }
+| attr*                                                        { $1 }
 
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
@@ -664,21 +656,14 @@ attr_val_entry:
 | block                                                        { block $1 }
 | STRING                                                       { with_pos $loc (`Constant (`String $1)) }
 
-xml_tree:
-| LXML SLASHRXML                                               { make_xml $loc None $1 ([],None) [] }
-| LXML RXML ENDTAG                                             { make_xml $loc (Some ($1, $3)) $1 ([],None) [] }
-| LXML RXML xml_contents_list ENDTAG                           { make_xml $loc (Some ($1, $4)) $1 ([],None) $3 }
-| LXML attrs RXML ENDTAG                                       { make_xml $loc (Some ($1, $4)) $1 $2 [] }
-| LXML attrs SLASHRXML                                         { make_xml $loc None $1 $2 [] }
-| LXML attrs RXML xml_contents_list ENDTAG                     { make_xml $loc (Some ($1, $5)) $1 $2 $4 }
-
-xml_contents_list:
-| xml_contents+                                                { $1 }
+xml:
+| LXML attr_list block? SLASHRXML                              { make_xml $loc  None           $1 $2 $3 [] }
+| LXML attr_list block? RXML xml_contents* ENDTAG              { make_xml $loc (Some ($1, $6)) $1 $2 $3 $5 }
 
 xml_contents:
 | block                                                        { block $1 }
 | formlet_binding | formlet_placement | page_placement
-| xml_tree                                                     { $1 }
+| xml                                                          { $1 }
 | CDATA                                                        { with_pos $loc (`TextNode (Utility.xml_unescape $1)) }
 
 formlet_binding:

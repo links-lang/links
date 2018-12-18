@@ -90,5 +90,5 @@ val make_unary_appl  : ppos ->           unary_op -> phrase -> phrase
 (* XML *)
 val make_xml
     : ppos -> (string * string) option -> name
-   -> (name * (phrase list)) list * phrase option -> phrase list
+   -> (name * (phrase list)) list -> block_body with_pos option -> phrase list
    -> phrase
