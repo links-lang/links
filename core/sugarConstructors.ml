@@ -1,16 +1,20 @@
 open Sugartypes
 open Utility
 
+
+(** Positions *)
+
 (* ppos = parser position, ie. a position as produced by Menhir *)
 type ppos = SourceCode.lexpos * SourceCode.lexpos
-let dummy_ppos = (Lexing.dummy_pos, Lexing.dummy_pos)
 
-(* Convert position produced by a parser to Sugartypes position*)
+(* Convert position produced by a parser to Sugartypes position *)
 let pos (start_pos, end_pos) : Sugartypes.position = (start_pos, end_pos, None)
-(* Wrapper around with_pos that accepts parser positions *)
+
+(* Wrapper around Sugartypes.with_pos.  Accepts parser positions. *)
 let with_pos p = Sugartypes.with_pos (pos p)
 
-(* Generation of fresh type variables *)
+
+(** Generation of fresh type variables *)
 
 let type_variable_counter = ref 0
 
@@ -38,6 +42,15 @@ let fresh_rigid_presence_variable () : fieldspec =
     incr type_variable_counter;
     `Var ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
+
+(** Helper data types and functions for passing arguments to smart constructors
+   *)
+
+(* Stores either a name of variable to be used in a binding pattern or the
+   pattern itself.  Used for passing an argument to make_val_binding *)
+type name_or_pat = Name of name with_pos | Pat of pattern
+
+(* Optionally stores a datatype signature.  Isomporphic to Option. *)
 type signature = Sig of (name with_pos * datatype') with_pos | NoSig
 let sig_of_opt = function
     | Some s -> Sig s
@@ -45,7 +58,7 @@ let sig_of_opt = function
 
 (* Produces a datatype if a name is accompanied by a signature.  Raises an
    exception if name does not match a name in a signature. *)
-let datatype_opt_from_sig_opt sig_opt name =
+let datatype_opt_of_sig_opt sig_opt name =
   match sig_opt with
   | Sig {node=({node=signame; _}, datatype); pos} ->
      (* Ensure that name in a signature matches name in a declaration *)
@@ -56,47 +69,71 @@ let datatype_opt_from_sig_opt sig_opt name =
      Some datatype
   | NoSig -> None
 
-(* Create a record with a given list of labels *)
-let make_record ppos lbls =
-  with_pos ppos (`RecordLit (lbls, None))
 
+(** Common stuff *)
+
+(* Create a Block from block_body *)
 let block {node;pos} = Sugartypes.with_pos pos (`Block node)
-
 let datatype d = (d, None)
-
 let cp_unit ppos = with_pos ppos (`Unquote ([], with_pos ppos (`TupleLit [])))
 
-let wild = "wild"
-let hear = "hear"
+(* Create a record with a given list of labels *)
+let make_record ppos lbls = with_pos ppos (`RecordLit (lbls, None))
 
-let present        = `Present (with_dummy_pos `Unit)
-let wild_present   = (wild, present)
-let hear_present p = (hear, `Present p)
-
-let row_with field (fields, row_var) = (field::fields, row_var)
-let row_with_wp fields = row_with wild_present fields
-
-let fresh_row unit = ([], fresh_rigid_row_variable unit)
-
-let make_hear_arrow_prefix presence fields =
-  row_with wild_present (row_with (hear_present presence) fields)
-
-(* this preserves 1-tuples *)
+(* Creata a tuple.  Preserves 1-tuples *)
 let make_tuple pos = function
   | [e] -> make_record pos [("1", e)]
   | es  -> with_pos pos (`TupleLit es)
 
+(* Create a variable pattern with a given name *)
+let make_variable_pat ppos name =
+  with_pos ppos (`Variable (make_untyped_binder name))
+
+
+(** Fieldspec *)
+
+let wild           = "wild"
+let hear           = "hear"
+let present        = `Present (with_dummy_pos `Unit)
+let wild_present   = (wild, present)
+let hear_present p = (hear, `Present p)
+
+
+(** Rows *)
+
+let fresh_row   unit                       = ([], fresh_rigid_row_variable unit)
+let row_with    field (fields, row_var)    = (field::fields, row_var)
+let row_with_wp fields                     = row_with wild_present fields
+let make_hear_arrow_prefix presence fields =
+  row_with wild_present (row_with (hear_present presence) fields)
+
+
+(** Various phrases *)
+
+(* Create a FunLit *)
 let make_fun_lit ppos linearity pats blk =
   with_pos ppos (`FunLit (None, linearity, (pats, block blk), `Unknown))
 
+(* Specialized non-linear and linear versions of FunLit *)
 let make_unl_fun_lit ppos pats blk = make_fun_lit ppos `Unl pats blk
 let make_lin_fun_lit ppos pats blk = make_fun_lit ppos `Lin pats blk
 
-let make_query ppos phrases_opt blk =
-  with_pos ppos (`Query (phrases_opt, block blk, None))
+(* Create an argument used by Handler and HandlerLit *)
+let make_hnlit_arg depth computation_param handler_param =
+  (depth, computation_param, fst handler_param, snd handler_param)
 
+(* Create a HandlerLit *)
+let make_handler_lit ppos handlerlit = with_pos ppos (`HandlerLit handlerlit)
+
+(* Create a Spawn *)
+let make_spawn ppos spawn_kind location blk =
+  with_pos ppos (`Spawn (spawn_kind, location, block blk, None))
+
+
+(** Bindings *)
+(* Create a function binding *)
 let make_fun_binding sig_opt ppos (linearity, bndr, args, location, blk) =
-  let datatype = datatype_opt_from_sig_opt sig_opt bndr.node in
+  let datatype = datatype_opt_of_sig_opt sig_opt bndr.node in
   with_pos ppos (`Fun (make_untyped_binder bndr, linearity,
                        ([], (args, block blk)), location, datatype))
 
@@ -108,15 +145,10 @@ let make_unl_fun_binding sig_opt ppos (bndr, args, block) =
 let make_lin_fun_binding sig_opt ppos (bndr, args, block) =
   make_fun_binding sig_opt ppos (`Lin, bndr, args, `Unknown, block)
 
+(* Create a handler binding *)
 let make_handler_binding sig_opt ppos (name, handlerlit) =
-  let datatype = datatype_opt_from_sig_opt sig_opt name.node in
+  let datatype = datatype_opt_of_sig_opt sig_opt name.node in
   with_pos ppos (`Handler (make_untyped_binder name, handlerlit, datatype))
-
-let make_variable_pat ppos name =
-  with_pos ppos (`Variable (make_untyped_binder name))
-
-(* Used for passing an argument to make_val_binding *)
-type name_or_pat = Name of name with_pos | Pat of pattern
 
 (* Create a Val binding.  This function takes either a name for a variable
    pattern or an already constructed pattern.  In the latter case no signature
@@ -125,20 +157,21 @@ let make_val_binding sig_opt ppos (name_or_pat, phrase, location) =
   let pat, datatype = match name_or_pat with
     | Name name ->
        let pat      = make_variable_pat ppos name in
-       let datatype = datatype_opt_from_sig_opt sig_opt name.node in
+       let datatype = datatype_opt_of_sig_opt sig_opt name.node in
        (pat, datatype)
     | Pat pat ->
        assert (sig_opt = NoSig);
        (pat, None) in
     with_pos ppos (`Val (pat, ([], phrase), location, datatype))
 
-let make_hnlit depth computation_param handler_param =
-  (depth, computation_param, fst handler_param, snd handler_param)
+
+(** Database queries *)
 
 (* Create a list of labeled database expressions *)
 let make_db_exps ppos exps =
   with_pos ppos (`ListLit ([make_record ppos exps], None))
 
+(* Is the list of labeled database expressions empty? *)
 let is_empty_db_exps : phrase -> bool = function
   | {node=`ListLit ([{node=`RecordLit ([], _);_}], _);_} -> true
   | _                                                    -> false
@@ -153,14 +186,20 @@ let make_db_insert ppos ins_exp lbls exps var_opt =
        (fun {node; pos} -> Sugartypes.with_pos pos (`Constant (`String node)))
        var_opt))
 
-let make_spawn ppos spawn_kind location blk =
-  with_pos ppos (`Spawn (spawn_kind, location, block blk, None))
+(* Create a query *)
+let make_query ppos phrases_opt blk =
+  with_pos ppos (`Query (phrases_opt, block blk, None))
 
+
+(** Operator applications *)
+(* Apply a binary infix operator *)
 let make_infix_appl' ppos arg1 op arg2 =
   with_pos ppos (`InfixAppl (([], op), arg1, arg2))
 
+(* Apply a binary infix operator with a specified name *)
 let make_infix_appl ppos arg1 op arg2 =
   make_infix_appl' ppos arg1 (`Name op) arg2
 
+(* Apply an unary operator *)
 let make_unary_appl ppos op arg =
   with_pos ppos (`UnaryAppl (([], op), arg))

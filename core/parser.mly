@@ -322,7 +322,7 @@ fun_declaration:
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
-                handler_parameterization                       { ($3, make_hnlit $1 $2 $4) }
+                handler_parameterization                       { ($3, make_hnlit_arg $1 $2 $4) }
 
 optional_computation_parameter:
 | /* empty */                                                  { with_pos $sloc `Any }
@@ -453,10 +453,11 @@ primary_expression:
 | FUN arg_lists block                                          { make_unl_fun_lit $loc $2 $3 }
 | LINFUN arg_lists block                                       { make_lin_fun_lit $loc $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
-| handler_depth optional_computation_parameter handler_parameterization
-                                                               {  with_pos $loc (`HandlerLit (make_hnlit $1 $2 $3)) }
+| handler_depth optional_computation_parameter
+     handler_parameterization                                  { make_handler_lit $loc (make_hnlit_arg $1 $2 $3) }
+
 handler_parameterization:
-| arg_lists? handler_body                                       { ($2, $1) }
+| arg_lists? handler_body                                      { ($2, $1) }
 
 handler_depth:
 | HANDLER                                                      { `Deep }
@@ -669,6 +670,7 @@ attr_val_entry:
 | block                                                        { block $1 }
 | STRING                                                       { with_pos $loc (`Constant (`String $1)) }
 
+(* JSTOLAREK: use smart constructors here, eliminate need for ensure_match *)
 xml_tree:
 | LXML SLASHRXML                                               { with_pos $loc (`Xml ($1, [], None, [])) }
 | LXML RXML ENDTAG                                             { ensure_match $loc $1 $3 (with_pos $loc (`Xml ($1, [], None, []))) }
