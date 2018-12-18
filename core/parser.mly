@@ -49,12 +49,6 @@ struct
   module Operators         = Operators
 end
 
-let ensure_match p (opening : string) (closing : string) = function
-  | result when opening = closing -> result
-  | _ -> raise (ConcreteSyntaxError
-          ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening
-           ^ "'.", pos p))
-
 let default_fixity = 9
 
 let primary_kind_of_string p =
@@ -670,14 +664,13 @@ attr_val_entry:
 | block                                                        { block $1 }
 | STRING                                                       { with_pos $loc (`Constant (`String $1)) }
 
-(* JSTOLAREK: use smart constructors here, eliminate need for ensure_match *)
 xml_tree:
-| LXML SLASHRXML                                               { with_pos $loc (`Xml ($1, [], None, [])) }
-| LXML RXML ENDTAG                                             { ensure_match $loc $1 $3 (with_pos $loc (`Xml ($1, [], None, []))) }
-| LXML RXML xml_contents_list ENDTAG                           { ensure_match $loc $1 $4 (with_pos $loc (`Xml ($1, [], None, $3))) }
-| LXML attrs RXML ENDTAG                                       { ensure_match $loc $1 $4 (with_pos $loc (`Xml ($1, fst $2, snd $2, []))) }
-| LXML attrs SLASHRXML                                         { with_pos $loc (`Xml ($1, fst $2, snd $2, [])) }
-| LXML attrs RXML xml_contents_list ENDTAG                     { ensure_match $loc $1 $5 (with_pos $loc (`Xml ($1, fst $2, snd $2, $4))) }
+| LXML SLASHRXML                                               { make_xml $loc None $1 ([],None) [] }
+| LXML RXML ENDTAG                                             { make_xml $loc (Some ($1, $3)) $1 ([],None) [] }
+| LXML RXML xml_contents_list ENDTAG                           { make_xml $loc (Some ($1, $4)) $1 ([],None) $3 }
+| LXML attrs RXML ENDTAG                                       { make_xml $loc (Some ($1, $4)) $1 $2 [] }
+| LXML attrs SLASHRXML                                         { make_xml $loc None $1 $2 [] }
+| LXML attrs RXML xml_contents_list ENDTAG                     { make_xml $loc (Some ($1, $5)) $1 $2 $4 }
 
 xml_contents_list:
 | xml_contents+                                                { $1 }

@@ -86,3 +86,9 @@ val make_query
 val make_infix_appl' : ppos -> phrase -> binop    -> phrase -> phrase
 val make_infix_appl  : ppos -> phrase -> string   -> phrase -> phrase
 val make_unary_appl  : ppos ->           unary_op -> phrase -> phrase
+
+(* XML *)
+val make_xml
+    : ppos -> (string * string) option -> name
+   -> (name * (phrase list)) list * phrase option -> phrase list
+   -> phrase

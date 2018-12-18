@@ -203,3 +203,15 @@ let make_infix_appl ppos arg1 op arg2 =
 (* Apply an unary operator *)
 let make_unary_appl ppos op arg =
   with_pos ppos (`UnaryAppl (([], op), arg))
+
+(** XML *)
+
+let make_xml ppos tags_opt name (attr_list, blk) contents =
+  let () = match tags_opt with
+    | Some (opening, closing) when opening = closing -> ()
+    | Some (opening, closing) ->
+       raise (ConcreteSyntaxError
+                ("Closing tag '" ^ closing ^ "' does not match start tag '"
+                  ^ opening ^ "'.", pos ppos))
+    | _ -> () in
+  with_pos ppos (`Xml (name, attr_list, blk, contents))
