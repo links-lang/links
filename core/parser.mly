@@ -634,7 +634,6 @@ typed_expression:
 | typed_expression COLON datatype LARROW datatype              { with_pos $loc (`Upcast ($1, datatype $3, datatype $5)) }
 
 db_expression:
-| typed_expression                                             { $1 }
 | DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in with_pos $loc (`DBDelete (pat, phrase, $5)) }
 | UPDATE LPAREN table_generator RPAREN
          perhaps_where
@@ -683,12 +682,10 @@ page_placement:
 | LBRACEBAR exp BARRBRACE                                      { with_pos $loc($2) (`PagePlacement $2) }
 
 session_expression:
-| db_expression                                                { $1 }
 | SELECT field_label exp                                       { with_pos $loc (`Select ($2, $3))      }
 | OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { with_pos $loc (`Offer ($3, $6, None)) }
 
 conditional_expression:
-| session_expression                                           { $1 }
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (`Conditional ($3, $5, $7)) }
 
 case:
@@ -701,7 +698,6 @@ perhaps_cases:
 | case*                                                        { $1 }
 
 case_expression:
-| conditional_expression                                       { $1 }
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Switch ($3, $6, None)) }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (`Receive ($3, None)) }
 | SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (`Handle (make_untyped_handler $3 $6 `Shallow)) }
@@ -717,7 +713,6 @@ handle_params:
       separated_pair(logical_expression, RARROW, pattern)))    { $1 }
 
 iteration_expression:
-| case_expression                                              { $1 }
 | FOR LPAREN perhaps_generators RPAREN
       perhaps_where
       perhaps_orderby
@@ -745,16 +740,13 @@ perhaps_orderby:
 | ORDERBY LPAREN exps RPAREN                                   { Some (make_tuple $loc($3) $3) }
 
 escape_expression:
-| iteration_expression                                         { $1 }
 | ESCAPE var IN postfix_expression                             { with_pos $loc (`Escape (make_untyped_binder $2, $4)) }
 
 formlet_expression:
-| escape_expression                                            { $1 }
 | FORMLET xml YIELDS exp                                       { with_pos $loc (`Formlet ($2, $4)) }
 | PAGE xml                                                     { with_pos $loc (`Page $2)          }
 
 table_expression:
-| formlet_expression                                           { $1 }
 | TABLE exp WITH datatype perhaps_table_constraints FROM exp   { with_pos $loc (`TableLit ($2, datatype $4, $5,
                                                                                            with_pos $loc (`ListLit ([], None)), $7)) }
 /* SAND */
@@ -782,8 +774,20 @@ perhaps_db_driver:
 | atomic_expression perhaps_db_args                            { Some $1, $2   }
 | /* empty */                                                  { None   , None }
 
+exp:
+| case_expression
+| conditional_expression
+| database_expression
+| db_expression
+| escape_expression
+| formlet_expression
+| iteration_expression
+| lens_expression
+| session_expression
+| table_expression
+| typed_expression                                             { $1 }
+
 database_expression:
-| table_expression                                             { $1 }
 | INSERT exp VALUES LPAREN record_labels RPAREN exp            { make_db_insert $loc $2 $5 $7 None }
 | INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
   RPAREN RBRACKET preceded(RETURNING, var)?                    { make_db_insert $loc $2 (labels $6) (make_db_exps $loc($6) $6) $9  }
@@ -801,7 +805,6 @@ fn_deps:
 | separated_nonempty_list(COMMA, fn_dep)                       { $1 }
 
 lens_expression:
-| database_expression                                          { $1 }
 | LENS exp DEFAULT                                             { with_pos $loc (`LensLit ($2, None))}
 | LENS exp TABLEKEYS exp                                       { with_pos $loc (`LensKeysLit ($2, $4, None))}
 | LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (`LensFunDepsLit ($2, $5, None))}
@@ -848,9 +851,6 @@ block_contents:
                                                                   make_record $loc []) }
 | exp                                                          { ([], $1) }
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }
-
-exp:
-| lens_expression                                              { $1 }
 
 labeled_exps:
 | separated_nonempty_list(COMMA,
