@@ -1558,20 +1558,29 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    knowing that they are in fact tame
 *)
 let patch_prelude_funs tyenv =
-  let prelude_id = Some (QualifiedName.of_name BuiltinModules.prelude) in
+  let _, prelude_module =
+    Env.String.lookup tyenv.FrontendTypeEnv.module_env BuiltinModules.prelude in
+
+  let patched_prelude_module_fields =
+    List.fold_right
+      (fun (name, t) env ->
+        if Env.String.has env name then
+          Env.String.bind env (name, (prelude_id, t))
+        else
+          env)
+      [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
+        ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
+        ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
+        ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")]
+      prelude_module.fields in
+
+  let patched_prelude_module =
+    {prelude_module with fields = patched_prelude_module_fields} in
+
   {tyenv with
-     FrontendTypeEnv.var_env =
-      List.fold_right
-        (fun (name, t) env ->
-          if Env.String.has env name then
-            Env.String.bind env (name, (prelude_id, t))
-          else
-            env)
-        [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
-         ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
-         ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
-         ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")]
-        tyenv.FrontendTypeEnv.var_env}
+    module_env = Env.String.bind tyenv.module_env (BuiltinModules.prelude, patched_prelude_module)}
+
+
 
 let impl : located_primitive -> primitive option = function
   | `Client -> None
