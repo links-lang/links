@@ -1,5 +1,5 @@
 open Sugartypes
-open Utility
+open Utility.OptionUtils
 
 module Make = struct
 
@@ -172,7 +172,7 @@ module Make = struct
       raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^
           " a nonempty list of labeled expression or a return variable.",
            pos ppos));
-    with_pos ppos (`DBInsert (ins_exp, lbls, exps, OptionUtils.opt_map
+    with_pos ppos (`DBInsert (ins_exp, lbls, exps, opt_map
        (fun {node; pos} -> Sugartypes.with_pos pos (`Constant (`String node)))
        var_opt))
 
@@ -205,30 +205,22 @@ module Make = struct
                   ("Closing tag '" ^ closing ^ "' does not match start tag '"
                    ^ opening ^ "'.", pos ppos))
       | _ -> () in
-    let blk = OptionUtils.opt_map (fun blk -> block blk) blk_opt in
+    let blk = opt_map (fun blk -> block blk) blk_opt in
     with_pos ppos (`Xml (name, attr_list, blk, contents))
 
   (** Handlers *)
   let untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =
-    let shd_params =
-      match parameters with
-      | None -> None
-      | Some pps ->
-         Some { shp_bindings = pps;
-                shp_types = [] }
-    in
-    { sh_expr = expr;
+    { sh_expr         = expr;
       sh_effect_cases = eff_cases;
-      sh_value_cases = val_cases;
+      sh_value_cases  = val_cases;
       sh_descr = {
           shd_depth = depth;
           shd_types = ( Types.make_empty_closed_row (), `Not_typed
                       , Types.make_empty_closed_row (), `Not_typed);
           shd_raw_row = Types.make_empty_closed_row ();
-          shd_params = shd_params
+          shd_params = opt_map (fun pps -> {shp_bindings = pps; shp_types = []})
+                               parameters
         };
     }
-
-
 
 end
