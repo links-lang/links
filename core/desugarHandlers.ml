@@ -172,7 +172,7 @@ let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
     let m    = deanonymize m in
     let comp = with_pos pos (`FnAppl (phrase_of_pattern m, [])) in
     let cases = parameterize cases params in
-    let hndlr = Sugartypes.make_untyped_handler comp cases depth in
+    let hndlr = SugarConstructors.Make.untyped_handler comp cases depth in
     let handle = with_pos pos (`Block ([], (with_pos pos (`Handle hndlr)))) in
     let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =
