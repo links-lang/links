@@ -208,4 +208,27 @@ module Make = struct
     let blk = OptionUtils.opt_map (fun blk -> block blk) blk_opt in
     with_pos ppos (`Xml (name, attr_list, blk, contents))
 
+  (** Handlers *)
+  let untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =
+    let shd_params =
+      match parameters with
+      | None -> None
+      | Some pps ->
+         Some { shp_bindings = pps;
+                shp_types = [] }
+    in
+    { sh_expr = expr;
+      sh_effect_cases = eff_cases;
+      sh_value_cases = val_cases;
+      sh_descr = {
+          shd_depth = depth;
+          shd_types = ( Types.make_empty_closed_row (), `Not_typed
+                      , Types.make_empty_closed_row (), `Not_typed);
+          shd_raw_row = Types.make_empty_closed_row ();
+          shd_params = shd_params
+        };
+    }
+
+
+
 end

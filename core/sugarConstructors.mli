@@ -86,4 +86,10 @@ module Make : sig
       : ppos -> (string * string) option -> name
      -> (name * (phrase list)) list -> block_body with_pos option -> phrase list
      -> phrase
+
+  (* Handlers *)
+  val untyped_handler
+      : ?val_cases:(clause list) -> ?parameters:((phrase * pattern) list)
+     -> phrase -> clause list -> [`Deep | `Shallow]
+     -> handler
 end
