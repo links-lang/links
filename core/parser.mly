@@ -39,7 +39,7 @@ or Menhir it is no longer necessary.
 
 open Utility
 open Sugartypes
-open SugarConstructors
+open SugarConstructors.Make
 
 module Links_core = (* See Note [Dune "wrapped" workaround] *)
 struct
@@ -287,7 +287,7 @@ nofun_declaration:
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                  set assoc (from_option default_fixity $2) ($3.node);
                                                                  with_pos $loc `Infix }
-| signature? tlvarbinding SEMICOLON                            { make_val_binding (sig_of_opt $1) $loc($2) $2 }
+| signature? tlvarbinding SEMICOLON                            { val_binding (sig_of_opt $1) $loc($2) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
 alien_datatype:
@@ -309,14 +309,14 @@ fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { make_fun_binding     NoSig $loc $1 }
-| typed_handler_binding                                        { make_handler_binding NoSig $loc $1 }
-| signature tlfunbinding                                       { make_fun_binding     (Sig $1) $loc($2) $2 }
-| signature typed_handler_binding                              { make_handler_binding (Sig $1) $loc($2) $2 }
+| tlfunbinding                                                 { fun_binding     NoSig $loc $1        }
+| typed_handler_binding                                        { handler_binding NoSig $loc $1        }
+| signature tlfunbinding                                       { fun_binding     (Sig $1) $loc($2) $2 }
+| signature typed_handler_binding                              { handler_binding (Sig $1) $loc($2) $2 }
 
 typed_handler_binding:
 | handler_depth optional_computation_parameter var
-                handler_parameterization                       { ($3, make_hnlit_arg $1 $2 $4) }
+                handler_parameterization                       { ($3, hnlit_arg $1 $2 $4) }
 
 optional_computation_parameter:
 | /* empty */                                                  { with_pos $sloc `Any }
@@ -447,10 +447,10 @@ primary_expression:
 | LBRACKET perhaps_exps RBRACKET                               { with_pos $loc (`ListLit ($2, None)) }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
 | xml                                                          { $1 }
-| linearity arg_lists block                                    { make_fun_lit $loc $1 $2 $3 }
+| linearity arg_lists block                                    { fun_lit $loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
 | handler_depth optional_computation_parameter
-     handler_parameterization                                  { make_handler_lit $loc (make_hnlit_arg $1 $2 $3) }
+     handler_parameterization                                  { handler_lit $loc (hnlit_arg $1 $2 $3) }
 
 handler_parameterization:
 | arg_lists? handler_body                                      { ($2, $1) }
@@ -468,7 +468,7 @@ constructor_expression:
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { with_pos $loc (`Section $2)              }
 | LPAREN DOT record_label RPAREN                               { with_pos $loc (`Section (`Project $3))   }
-| LPAREN RPAREN                                                { make_record $loc []                      }
+| LPAREN RPAREN                                                { record $loc []                           }
 | LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { with_pos $loc (`RecordLit ($2, $3))      }
 | LPAREN exps RPAREN                                           { with_pos $loc (`TupleLit ($2))           }
 | LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (`With ($2, $4))           }
@@ -491,20 +491,20 @@ op:
 | INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
 
 spawn_expression:
-| SPAWNAT LPAREN exp COMMA block RPAREN                        { make_spawn $loc `Demon (`ExplicitSpawnLocation $3) $5 }
-| SPAWN block                                                  { make_spawn $loc `Demon  `NoSpawnLocation           $2 }
-| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { make_spawn $loc `Angel (`ExplicitSpawnLocation $3) $5 }
-| SPAWNANGEL  block                                            { make_spawn $loc `Angel  `NoSpawnLocation           $2 }
-| SPAWNCLIENT block                                            { make_spawn $loc `Demon  `SpawnClient               $2 }
-| SPAWNWAIT   block                                            { make_spawn $loc `Wait   `NoSpawnLocation           $2 }
+| SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn $loc `Demon (`ExplicitSpawnLocation $3) $5 }
+| SPAWN block                                                  { spawn $loc `Demon  `NoSpawnLocation           $2 }
+| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { spawn $loc `Angel (`ExplicitSpawnLocation $3) $5 }
+| SPAWNANGEL  block                                            { spawn $loc `Angel  `NoSpawnLocation           $2 }
+| SPAWNCLIENT block                                            { spawn $loc `Demon  `SpawnClient               $2 }
+| SPAWNWAIT   block                                            { spawn $loc `Wait   `NoSpawnLocation           $2 }
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
-| primary_expression POSTFIXOP                                 { make_unary_appl $loc (`Name $2) $1 }
+| primary_expression POSTFIXOP                                 { unary_appl $loc (`Name $2) $1 }
 | block                                                        { block $1 }
-| QUERY block                                                  { make_query $loc None $2 }
-| QUERY LBRACKET exp RBRACKET block                            { make_query $loc (Some ($3, with_pos $loc (`Constant (`Int 0)))) $5 }
-| QUERY LBRACKET exp COMMA exp RBRACKET block                  { make_query $loc (Some ($3, $5)) $7 }
+| QUERY block                                                  { query $loc None $2 }
+| QUERY LBRACKET exp RBRACKET block                            { query $loc (Some ($3, with_pos $loc (`Constant (`Int 0)))) $5 }
+| QUERY LBRACKET exp COMMA exp RBRACKET block                  { query $loc (Some ($3, $5)) $7 }
 | postfix_expression arg_spec                                  { with_pos $loc (`FnAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (`Projection ($1, $3)) }
 
@@ -519,9 +519,9 @@ perhaps_exps:
 | loption(exps)                                                { $1 }
 
 unary_expression:
-| MINUS unary_expression                                       { make_unary_appl $loc `Minus      $2 }
-| MINUSDOT unary_expression                                    { make_unary_appl $loc `FloatMinus $2 }
-| PREFIXOP unary_expression                                    { make_unary_appl $loc (`Name $1)  $2 }
+| MINUS unary_expression                                       { unary_appl $loc `Minus      $2 }
+| MINUSDOT unary_expression                                    { unary_appl $loc `FloatMinus $2 }
+| PREFIXOP unary_expression                                    { unary_appl $loc (`Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
 | DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (`DoOperation ($2, $3, None)) }
 
@@ -529,104 +529,104 @@ unary_expression:
 infixr_9:
 | unary_expression                                             { $1 }
 | unary_expression INFIX9 unary_expression
-| unary_expression INFIXR9 infixr_9                            { make_infix_appl $loc $1 $2 $3 }
+| unary_expression INFIXR9 infixr_9                            { infix_appl $loc $1 $2 $3 }
 
 infixl_9:
 | infixr_9                                                     { $1 }
-| infixl_9 INFIXL9 infixr_9                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_9 INFIXL9 infixr_9                                    { infix_appl $loc $1 $2 $3 }
 
 infixr_8:
 | infixl_9                                                     { $1 }
 | infixl_9 INFIX8  infixl_9
-| infixl_9 INFIXR8 infixr_8                                    { make_infix_appl  $loc $1 $2    $3 }
-| infixl_9 COLONCOLON infixr_8                                 { make_infix_appl' $loc $1 `Cons $3 }
+| infixl_9 INFIXR8 infixr_8                                    { infix_appl  $loc $1 $2    $3 }
+| infixl_9 COLONCOLON infixr_8                                 { infix_appl' $loc $1 `Cons $3 }
 
 infixl_8:
 | infixr_8                                                     { $1 }
-| infixl_8 INFIXL8 infixr_8                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_8 INFIXL8 infixr_8                                    { infix_appl $loc $1 $2 $3 }
 
 infixr_7:
 | infixl_8                                                     { $1 }
 | infixl_8 INFIX7  infixl_8
-| infixl_8 INFIXR7 infixr_7                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_8 INFIXR7 infixr_7                                    { infix_appl $loc $1 $2 $3 }
 
 infixl_7:
 | infixr_7                                                     { $1 }
-| infixl_7 INFIXL7 infixr_7                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_7 INFIXL7 infixr_7                                    { infix_appl $loc $1 $2 $3 }
 
 infixr_6:
 | infixl_7                                                     { $1 }
 | infixl_7 INFIX6  infixl_7
-| infixl_7 INFIXR6 infixr_6                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_7 INFIXR6 infixr_6                                    { infix_appl $loc $1 $2 $3 }
 
 infixl_6:
 | infixr_6                                                     { $1 }
-| infixl_6 INFIXL6 infixr_6                                    { make_infix_appl  $loc $1 $2          $3 }
-| infixl_6 MINUS infixr_6                                      { make_infix_appl' $loc $1 `Minus      $3 }
-| infixl_6 MINUSDOT infixr_6                                   { make_infix_appl' $loc $1 `FloatMinus $3 }
+| infixl_6 INFIXL6 infixr_6                                    { infix_appl  $loc $1 $2          $3 }
+| infixl_6 MINUS infixr_6                                      { infix_appl' $loc $1 `Minus      $3 }
+| infixl_6 MINUSDOT infixr_6                                   { infix_appl' $loc $1 `FloatMinus $3 }
 /* HACK: the type variables should get inserted later... */
-| infixl_6 BANG infixr_6                                       { make_infix_appl  $loc $1 "!" $3         }
+| infixl_6 BANG infixr_6                                       { infix_appl  $loc $1 "!" $3         }
 
 infixr_5:
 | infixl_6                                                     { $1 }
 | infixl_6 INFIX5  infixl_6
-| infixl_6 INFIXR5 infixr_5                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_6 INFIXR5 infixr_5                                    { infix_appl $loc $1 $2 $3 }
 
 infixl_5:
 | infixr_5                                                     { $1 }
-| infixl_5 INFIXL5 infixr_5                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_5 INFIXL5 infixr_5                                    { infix_appl $loc $1 $2 $3 }
 
 infixr_4:
 | infixl_5                                                     { $1 }
 | infixl_5 INFIX4    infixl_5
-| infixl_5 INFIXR4   infixr_4                                  { make_infix_appl $loc $1 $2 $3 }
+| infixl_5 INFIXR4   infixr_4                                  { infix_appl $loc $1 $2 $3 }
 | infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in
-                                                                 make_infix_appl' $loc $1 (`RegexMatch flags) r }
+                                                                 infix_appl' $loc $1 (`RegexMatch flags) r }
 
 infixl_4:
 | infixr_4                                                     { $1 }
-| infixl_4 INFIXL4 infixr_4                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_4 INFIXL4 infixr_4                                    { infix_appl $loc $1 $2 $3 }
 
 infixr_3:
 | infixl_4                                                     { $1 }
 | infixl_4 INFIX3  infixl_4
-| infixl_4 INFIXR3 infixr_3                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_4 INFIXR3 infixr_3                                    { infix_appl $loc $1 $2 $3 }
 
 infixl_3:
 | infixr_3                                                     { $1 }
-| infixl_3 INFIXL3 infixr_3                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_3 INFIXL3 infixr_3                                    { infix_appl $loc $1 $2 $3 }
 
 infixr_2:
 | infixl_3                                                     { $1 }
 | infixl_3 INFIX2  infixl_3
-| infixl_3 INFIXR2 infixr_2                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_3 INFIXR2 infixr_2                                    { infix_appl $loc $1 $2 $3 }
 
 infixl_2:
 | infixr_2                                                     { $1 }
-| infixl_2 INFIXL2 infixr_2                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_2 INFIXL2 infixr_2                                    { infix_appl $loc $1 $2 $3 }
 
 infixr_1:
 | infixl_2                                                     { $1 }
 | infixl_2 INFIX1  infixl_2
-| infixl_2 INFIXR1 infixr_1                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_2 INFIXR1 infixr_1                                    { infix_appl $loc $1 $2 $3 }
 
 infixl_1:
 | infixr_1                                                     { $1 }
-| infixl_1 INFIXL1 infixr_1                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_1 INFIXL1 infixr_1                                    { infix_appl $loc $1 $2 $3 }
 
 infixr_0:
 | infixl_1                                                     { $1 }
 | infixl_1 INFIX0    infixl_1
-| infixl_1 INFIXR0   infixr_0                                  { make_infix_appl $loc $1 $2 $3 }
+| infixl_1 INFIXR0   infixr_0                                  { infix_appl $loc $1 $2 $3 }
 
 infixl_0:
 | infixr_0                                                     { $1 }
-| infixl_0 INFIXL0 infixr_0                                    { make_infix_appl $loc $1 $2 $3 }
+| infixl_0 INFIXL0 infixr_0                                    { infix_appl $loc $1 $2 $3 }
 
 logical_expression:
 | infixl_0                                                     { $1 }
-| logical_expression BARBAR infixl_0                           { make_infix_appl' $loc $1 `Or  $3 }
-| logical_expression AMPAMP infixl_0                           { make_infix_appl' $loc $1 `And $3 }
+| logical_expression BARBAR infixl_0                           { infix_appl' $loc $1 `Or  $3 }
+| logical_expression AMPAMP infixl_0                           { infix_appl' $loc $1 `And $3 }
 
 typed_expression:
 | logical_expression                                           { $1 }
@@ -658,8 +658,8 @@ attr_val_entry:
 | STRING                                                       { with_pos $loc (`Constant (`String $1)) }
 
 xml:
-| LXML attr_list block? SLASHRXML                              { make_xml $loc  None           $1 $2 $3 [] }
-| LXML attr_list block? RXML xml_contents* ENDTAG              { make_xml $loc (Some ($1, $6)) $1 $2 $3 $5 }
+| LXML attr_list block? SLASHRXML                              { xml $loc  None           $1 $2 $3 [] }
+| LXML attr_list block? RXML xml_contents* ENDTAG              { xml $loc (Some ($1, $6)) $1 $2 $3 $5 }
 
 xml_contents:
 | block                                                        { block $1 }
@@ -737,7 +737,7 @@ perhaps_where:
 
 perhaps_orderby:
 | /* empty */                                                  { None }
-| ORDERBY LPAREN exps RPAREN                                   { Some (make_tuple $loc($3) $3) }
+| ORDERBY LPAREN exps RPAREN                                   { Some (tuple $loc($3) $3) }
 
 escape_expression:
 | ESCAPE var IN postfix_expression                             { with_pos $loc (`Escape (make_untyped_binder $2, $4)) }
@@ -788,11 +788,11 @@ exp:
 | typed_expression                                             { $1 }
 
 database_expression:
-| INSERT exp VALUES LPAREN record_labels RPAREN exp            { make_db_insert $loc $2 $5 $7 None }
+| INSERT exp VALUES LPAREN record_labels RPAREN exp            { db_insert $loc $2 $5 $7 None }
 | INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
-  RPAREN RBRACKET preceded(RETURNING, var)?                    { make_db_insert $loc $2 (labels $6) (make_db_exps $loc($6) $6) $9  }
+  RPAREN RBRACKET preceded(RETURNING, var)?                    { db_insert $loc $2 (labels $6) (db_exps $loc($6) $6) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
-  RETURNING var                                                { make_db_insert $loc $2 $5 $7 (Some $9) }
+  RETURNING var                                                { db_insert $loc $2 $5 $7 (Some $9) }
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
@@ -826,11 +826,11 @@ links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { make_val_binding NoSig $loc (Pat $2, $4, `Unknown) }
+| VAR pattern EQ exp SEMICOLON                                 { val_binding NoSig $loc (Pat $2, $4, `Unknown) }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature linearity var arg_lists block                      { make_fun_binding (Sig $1) $loc ($2, $3, $4, `Unknown, $5) }
-| linearity var arg_lists block                                { make_fun_binding  NoSig   $loc ($1, $2, $3, `Unknown, $4) }
-| typed_handler_binding                                        { make_handler_binding NoSig $loc $1 }
+| signature linearity var arg_lists block                      { fun_binding (Sig $1) $loc ($2, $3, $4, `Unknown, $5) }
+| linearity var arg_lists block                                { fun_binding  NoSig   $loc ($1, $2, $3, `Unknown, $4) }
+| typed_handler_binding                                        { handler_binding NoSig $loc $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
 bindings:
@@ -845,10 +845,10 @@ block:
 
 block_contents:
 | bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (`Exp $2)],
-                                                                  make_record $loc []) }
+                                                                  record $loc []) }
 | bindings exp                                                 { ($1, $2) }
 | exp SEMICOLON                                                { ([with_pos $loc($1) (`Exp $1)],
-                                                                  make_record $loc []) }
+                                                                  record $loc []) }
 | exp                                                          { ([], $1) }
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }
 
@@ -878,10 +878,10 @@ squig_arrow_prefix:
 | TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 
 hear_arrow_prefix:
-| LBRACE COLON datatype COMMA efields RBRACE                   { make_hear_arrow_prefix $3 $5            }
-| LBRACE COLON datatype RBRACE                                 { make_hear_arrow_prefix $3 ([], `Closed) }
+| LBRACE COLON datatype COMMA efields RBRACE                   { hear_arrow_prefix $3 $5            }
+| LBRACE COLON datatype RBRACE                                 { hear_arrow_prefix $3 ([], `Closed) }
 | LBRACE COLON datatype VBAR nonrec_row_var RBRACE
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { make_hear_arrow_prefix $3 ([], $5)      }
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { hear_arrow_prefix $3 ([], $5)      }
 
 straight_arrow:
 | parenthesized_datatypes
@@ -1141,14 +1141,14 @@ parenthesized_pattern:
 | LPAREN RPAREN                                                { with_pos $loc (`Tuple []) }
 | LPAREN pattern RPAREN                                        { $2 }
 | LPAREN pattern COMMA patterns RPAREN                         { with_pos $loc (`Tuple ($2 :: $4)) }
-| LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (`Record ($2, $3)) }
+| LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (`Record ($2, $3))  }
 
 primary_pattern:
-| var                                                          { make_variable_pat $loc $1 }
-| UNDERSCORE                                                   { with_pos $loc `Any }
+| var                                                          { variable_pat $loc $1         }
+| UNDERSCORE                                                   { with_pos $loc `Any           }
 | constant                                                     { with_pos $loc (`Constant $1) }
-| LBRACKET RBRACKET                                            { with_pos $loc `Nil }
-| LBRACKET patterns RBRACKET                                   { with_pos $loc (`List $2) }
+| LBRACKET RBRACKET                                            { with_pos $loc `Nil           }
+| LBRACKET patterns RBRACKET                                   { with_pos $loc (`List $2)     }
 | parenthesized_pattern                                        { $1 }
 
 patterns:
