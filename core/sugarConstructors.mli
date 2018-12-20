@@ -103,3 +103,9 @@ end
 
 module SmartConstructors (Position : Pos)
        : (SmartConstructorsSig with type t := Position.t)
+
+module Make : (SmartConstructorsSig
+               with type t := (SourceCode.lexpos * SourceCode.lexpos *
+                               SourceCode.source_code option))
+
+module DummyMake : (SmartConstructorsSig with type t := unit)

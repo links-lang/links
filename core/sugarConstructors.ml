@@ -319,11 +319,20 @@ module SmartConstructors (Position : Pos)
 
 end
 
-(*
-module SmartConstructorsDefault : Pos = struct
+module SugartypesPosition
+       : Pos with type t = (SourceCode.lexpos * SourceCode.lexpos *
+                            SourceCode.source_code option) = struct
   type t = SourceCode.lexpos * SourceCode.lexpos * SourceCode.source_code option
   let pos    p = p
   let with_pos = Sugartypes.with_pos
 end
 
-*)
+module Make = SmartConstructors(SugartypesPosition)
+
+module DummyPosition : Pos with type t = unit = struct
+  type t          = unit
+  let pos ()      = Sugartypes.dummy_position
+  let with_pos () = Sugartypes.with_pos Sugartypes.dummy_position
+end
+
+module DummyMake = SmartConstructors(DummyPosition)
