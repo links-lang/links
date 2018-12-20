@@ -129,20 +129,20 @@ module Make = struct
 
   (** Bindings *)
   (* Create a function binding *)
-  let fun_binding sig_opt ppos (linearity, bndr, args, location, blk) =
+  let fun_binding ppos sig_opt (linearity, bndr, args, location, blk) =
     let datatype = datatype_opt_of_sig_opt sig_opt bndr.node in
     with_pos ppos (`Fun (make_untyped_binder bndr, linearity,
                          ([], (args, block blk)), location, datatype))
 
   (* Create a handler binding *)
-  let handler_binding sig_opt ppos (name, handlerlit) =
+  let handler_binding ppos sig_opt (name, handlerlit) =
     let datatype = datatype_opt_of_sig_opt sig_opt name.node in
     with_pos ppos (`Handler (make_untyped_binder name, handlerlit, datatype))
 
   (* Create a Val binding.  This function takes either a name for a variable
      pattern or an already constructed pattern.  In the latter case no signature
      should be passed.  *)
-  let val_binding sig_opt ppos (name_or_pat, phrase, location) =
+  let val_binding ppos sig_opt (name_or_pat, phrase, location) =
     let pat, datatype = match name_or_pat with
       | Name name ->
          let pat      = variable_pat ppos name in

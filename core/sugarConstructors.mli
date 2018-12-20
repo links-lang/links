@@ -56,15 +56,15 @@ module Make : sig
 
   (* Bindings *)
   val fun_binding
-      : signature -> ppos
+      : ppos -> signature
      -> (declared_linearity * name with_pos * pattern list list * location *
          block_body with_pos)
      -> binding
   val handler_binding
-      : signature -> ppos -> (name with_pos * handlerlit)
+      : ppos -> signature -> (name with_pos * handlerlit)
      -> binding
   val val_binding
-      : signature -> ppos -> (name_or_pat * phrase * location)
+      : ppos -> signature -> (name_or_pat * phrase * location)
      -> binding
 
   (* Database queries *)
