@@ -39,7 +39,7 @@ or Menhir it is no longer necessary.
 
 open Utility
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors
 
 module Links_core = (* See Note [Dune "wrapped" workaround] *)
 struct
@@ -48,6 +48,20 @@ struct
   module Types             = Types
   module Operators         = Operators
 end
+
+module ParserPosition : Pos = struct
+  (* parser position produced by Menhir *)
+  type t = SourceCode.lexpos * SourceCode.lexpos
+  (* Convert position produced by a parser to Sugartypes position *)
+  let pos (start_pos, end_pos) = (start_pos, end_pos, None)
+  (* Wrapper around Sugartypes.with_pos.  Accepts parser positions. *)
+  let with_pos p = Sugartypes.with_pos (pos p)
+end
+
+module ParserConstructors
+       : (SmartConstructorsSig with type t := ParserPosition.t) =
+  SmartConstructors(ParserPosition)
+open ParserConstructors
 
 let default_fixity = 9
 

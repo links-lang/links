@@ -1,11 +1,18 @@
 open Sugartypes
 open Operators
 
-module Make : sig
+module type Pos = sig
+  type t
+  val pos      : t -> Sugartypes.position
+  val with_pos : t -> 'a -> 'a Sugartypes.with_pos
+end
+
+module type SmartConstructorsSig = sig
+
   (* Positions *)
-  type ppos = SourceCode.lexpos * SourceCode.lexpos
-  val pos : ppos -> position
-  val with_pos : ppos -> 'a -> 'a with_pos
+  type t
+  val pos      : t -> Sugartypes.position
+  val with_pos : t -> 'a -> 'a with_pos
 
   (* Fresh type variables *)
   val fresh_type_variable           : unit -> datatypenode
@@ -28,10 +35,10 @@ module Make : sig
   (* Common stuff *)
   val block        : block_body with_pos -> phrase
   val datatype     : datatype -> datatype * 'a option
-  val cp_unit      : ppos -> cp_phrase
-  val record       : ppos -> (name * phrase) list -> phrase
-  val tuple        : ppos -> phrase list -> phrase
-  val variable_pat : ppos -> name with_pos -> pattern
+  val cp_unit      : t -> cp_phrase
+  val record       : t -> (name * phrase) list -> phrase
+  val tuple        : t -> phrase list -> phrase
+  val variable_pat : t -> name with_pos -> pattern
 
   (* Fieldspec *)
   val present : fieldspec
@@ -43,47 +50,47 @@ module Make : sig
 
   (* Various phrases *)
   val fun_lit
-      : ppos -> declared_linearity -> pattern list list -> block_body with_pos
+      : t -> declared_linearity -> pattern list list -> block_body with_pos
      -> phrase
   val hnlit_arg
       : [`Deep | `Shallow ] -> pattern -> clause list * pattern list list option
      -> handlerlit
   val handler_lit
-      : ppos -> handlerlit -> phrase
+      : t -> handlerlit -> phrase
   val spawn
-      : ppos -> spawn_kind -> given_spawn_location -> block_body with_pos
+      : t -> spawn_kind -> given_spawn_location -> block_body with_pos
      -> phrase
 
   (* Bindings *)
   val fun_binding
-      : ppos -> signature
+      : t -> signature
      -> (declared_linearity * name with_pos * pattern list list * location *
          block_body with_pos)
      -> binding
   val handler_binding
-      : ppos -> signature -> (name with_pos * handlerlit)
+      : t -> signature -> (name with_pos * handlerlit)
      -> binding
   val val_binding
-      : ppos -> signature -> (name_or_pat * phrase * location)
+      : t -> signature -> (name_or_pat * phrase * location)
      -> binding
 
   (* Database queries *)
   val db_exps
-      : ppos -> (name * phrase) list -> phrase
+      : t -> (name * phrase) list -> phrase
   val db_insert
-      : ppos -> phrase -> name list -> phrase -> string with_pos option
+      : t -> phrase -> name list -> phrase -> string with_pos option
      -> phrase
   val query
-      : ppos -> (phrase * phrase) option -> block_body with_pos -> phrase
+      : t -> (phrase * phrase) option -> block_body with_pos -> phrase
 
   (* Operator applications *)
-  val infix_appl' : ppos -> phrase -> binop    -> phrase -> phrase
-  val infix_appl  : ppos -> phrase -> string   -> phrase -> phrase
-  val unary_appl  : ppos ->           unary_op -> phrase -> phrase
+  val infix_appl' : t -> phrase -> binop    -> phrase -> phrase
+  val infix_appl  : t -> phrase -> string   -> phrase -> phrase
+  val unary_appl  : t ->           unary_op -> phrase -> phrase
 
   (* XML *)
   val xml
-      : ppos -> (string * string) option -> name
+      : t -> (string * string) option -> name
      -> (name * (phrase list)) list -> block_body with_pos option -> phrase list
      -> phrase
 
@@ -93,3 +100,6 @@ module Make : sig
      -> phrase -> clause list -> [`Deep | `Shallow]
      -> handler
 end
+
+module SmartConstructors (Position : Pos)
+       : (SmartConstructorsSig with type t := Position.t)
