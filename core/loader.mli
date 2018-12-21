@@ -5,6 +5,7 @@ type ext_dep = string
 
 type source = {
   program: Sugartypes.binding;
+  pos_context : SourceCode.source_code;
   external_dependencies: ext_dep list
 }
 

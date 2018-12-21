@@ -22,28 +22,52 @@ let print_simple rtype value =
         else
           "")
 
-let process_filearg prelude envs file =
-  let result = Driver.NonInteractive.run_file prelude envs file in
-  print_simple result.Driver.result_type result.Driver.result_value
+let prelude_evaluation_environment () =
+  let empty_eval_env = Evaluation_env.empty in
+  let lib_eval_env = {empty_eval_env with Evaluation_env.tyenv = Lib.typing_env} in
 
-let process_exprarg envs expr =
-  let result = Driver.NonInteractive.evaluate_string_in envs expr in
-  print_simple result.Driver.result_type result.Driver.result_value
+  let prelude_path = (Settings.get_value BS.prelude_file) in
+  let (prelude_eval_env, _, _) =
+    Driver.run_single_file false lib_eval_env prelude_path in
+
+  let patched_tyenv = Lib.patch_prelude_funs prelude_eval_env.Evaluation_env.tyenv in
+  let opened_tyenv =
+    (FrontendTypeEnv.import_module Lib.BuiltinModules.prelude ->-
+    FrontendTypeEnv.import_module Lib.BuiltinModules.lib) patched_tyenv in
+
+  {prelude_eval_env with Evaluation_env.tyenv = opened_tyenv}
+
+
+
+
+
+
+let process_arg_files arg_files eval_env : Evaluation_env.t =
+  Driver.run_files_and_dependencies false eval_env arg_files
+
+let process_arg_exprs exprs initial_env : Evaluation_env.t =
+  List.fold_left
+    (fun env expr ->
+    let result_env, result_value, result_type = Driver.run_string false env expr in
+    print_simple result_type result_value;
+    result_env)
+  initial_env
+  exprs
 
 
 
 let main () =
-  let prelude, envs = measure "prelude" Driver.NonInteractive.load_prelude () in
+  let prelude_eval_env = measure "prelude" prelude_evaluation_environment () in
 
-  for_each !to_evaluate (process_exprarg envs);
-    (* TBD: accumulate type/value environment so that "interact" has access *)
+  let argfiles_eval_env = process_arg_files !file_list prelude_eval_env in
 
-  for_each !file_list (process_filearg prelude envs);
+  let arg_expr_eval_env = process_arg_exprs !to_evaluate argfiles_eval_env in
+
   let should_start_repl = !to_evaluate = [] && !file_list = [] in
   if should_start_repl then
     begin
       print_endline (Settings.get_value BS.welcome_note);
-      Repl.interact envs
+      Repl.interact arg_expr_eval_env
     end
 
 

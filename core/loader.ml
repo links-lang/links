@@ -7,6 +7,7 @@ type ext_dep = string
 (* Result of loading a file *)
 type source = {
   program : Sugartypes.binding;
+  pos_context : SourceCode.source_code;
   external_dependencies: ext_dep list
 }
 
@@ -18,12 +19,13 @@ type simpl_module_t = ModT of simpl_module_t StringMap.t
 
 type module_env = simpl_module_t StringMap.t
 
-(* Used only internally withihn this module *)
+(* Used only internally within this module *)
 type toplevel_module_info = {
   (* The file AST as a single module binding *)
   tmi_ast : Sugartypes.binding;
   tmi_mod_type : simpl_module_t;
   tmi_ffi_files : ext_dep list;
+  tmi_pos_context : SourceCode.source_code;
 }
 
 let links_file_extension = ".links"
@@ -71,11 +73,11 @@ let rec find_module_refs
     resolve_external (* If false, will not resolve external files but only detects FFI dependencies *)
     toplevel_module_name
     toplevel_module_file_path =
-object(o)
+object(o : 'self_type)
   inherit SugarTraversals.fold as super
 
   (* The name of the currently processed toplevel module *)
-  val toplevel_module = toplevel_module_name
+  val toplevel_module_name = toplevel_module_name
 
 
   (* Path of the currently processed file*)
@@ -99,7 +101,7 @@ object(o)
 
 
   (* Updates the current object with info from an object that traversed other files *)
-  method update prev_o =
+  method update (prev_o : 'self_type) : 'self_type =
   {< dependency_graph = prev_o#get_dependency_graph ();
      file_env = prev_o#get_file_env ();
      toplevel_name_env = prev_o#get_toplevel_name_env () >}
@@ -113,8 +115,11 @@ object(o)
   method set_file_env file_env = {< file_env = file_env >}
   method get_env () = module_env
   method set_env env = {< module_env = env >}
-  method add_toplevel_module path mod_type ast ffi_files =
-    {< file_env = StringMap.add path { tmi_ast = ast; tmi_mod_type = mod_type; tmi_ffi_files = ffi_files } file_env >}
+  (*method add_toplevel_module path mod_type ast ffi_files pos_context =
+    {< file_env =
+      StringMap.add
+        path
+        { tmi_ast = ast; tmi_mod_type = mod_type; tmi_ffi_files = ffi_files; tmi_pos_context = pos_context } file_env >} *)
 
   method! program _ = disabled_method ()
   method! binding _ = disabled_method ()
@@ -150,7 +155,7 @@ object(o)
           o, module_type
         | None ->
           let filename = top_level_filename module_name in
-          let (filepath, (ast : Sugartypes.binding)) =
+          let (filepath, (ast : Sugartypes.binding), pos_context) =
             ModuleUtils.try_parse_file module_name filename in
           let o = o#add_module_dependency current_path filepath in
 
@@ -158,7 +163,7 @@ object(o)
           let other_file_o = other_file_o#update o in
 
           (* recurse into the module just loaded *)
-          let (other_file_o, mod_type) = other_file_o#toplevel_module ast in
+          let (other_file_o, mod_type) = other_file_o#toplevel_module ast pos_context in
 
           o#update other_file_o, mod_type
     else
@@ -255,7 +260,7 @@ object(o)
       | _ -> (super#bindingnode bn), None
 
 
-  method toplevel_module mod_binding =
+  method toplevel_module mod_binding pos_context : 'self_type * simpl_module_t =
     let (o, mod_type_opt) = o#bindingnode' (unpos mod_binding) in
     match mod_type_opt with
       | None -> failwith "bindingnode' on toplevel module must yield module type"
@@ -265,9 +270,10 @@ object(o)
             tmi_ast = mod_binding;
             tmi_mod_type = t;
             tmi_ffi_files = StringSet.fold (fun el l -> el :: l) (o#get_ffi_files  ()) [];
+            tmi_pos_context = pos_context;
           } in
         let extended_file_env = StringMap.add current_path entry_for_file (o#get_file_env ()) in
-        let extended_name_env = StringMap.add toplevel_module current_path (o#get_toplevel_name_env ()) in
+        let extended_name_env = StringMap.add toplevel_module_name current_path (o#get_toplevel_name_env ()) in
         let o = o#set_file_env extended_file_env in
         let o = o#set_toplevel_name_env extended_name_env in
         (o, t)
@@ -297,13 +303,14 @@ let read_program filename : (envs * program) =
 (* Parses a single file without resolving (i.e., loading) any of its dependenices (i.e., other files) *)
 let load_source_file file_path : source =
   if Sys.file_exists file_path then
-    let (plain_ast, _) = Parse.parse_file Parse.program file_path in
+    let (plain_ast, source_context) = Parse.parse_file Parse.program file_path in
     let module_name = module_name_of_file_path file_path in
     let modulified_ast = ModuleUtils.modulify_program module_name plain_ast in
     let ffi_finder = find_module_refs false module_name file_path in
-    let ffi_finder, _ = ffi_finder#toplevel_module modulified_ast in
+    let ffi_finder, _ = ffi_finder#toplevel_module modulified_ast source_context in
     {
       program = modulified_ast;
+      pos_context = source_context;
       external_dependencies = StringSet.fold (fun el l -> el :: l) (ffi_finder#get_ffi_files  ()) []
     }
   else
@@ -315,24 +322,27 @@ let load_source_file file_path : source =
    The only way the Prelude may ever end up in the returned list if it was part of the argument list *)
 let load_source_files_and_dependencies file_paths : source list =
   let load file =
-    let (plain_ast, _) = Parse.parse_file Parse.program file in
+    let (plain_ast, pos_context) = Parse.parse_file Parse.program file in
     let module_name = module_name_of_file_path file in
-    ModuleUtils.modulify_program module_name plain_ast in
+    ModuleUtils.modulify_program module_name plain_ast, pos_context in
 
   match file_paths with
     | [] -> []
     | f :: fs ->
       let first = find_module_refs true (module_name_of_file_path f) f in
-      let first_ast = load f in
-      let (first, _) = first#toplevel_module first_ast in
+      let first_ast, first_pos_context = load f in
+      let (first, _) = first#toplevel_module first_ast first_pos_context in
 
-      let o = List.fold_left
-        (fun o path ->
+      let (o : 'self_type), _ = List.fold_left
+        (fun (o, previous_path) path ->
           let this_file_o = find_module_refs true (module_name_of_file_path path) path in
-          let ast = load path in
-          let this_file_o = this_file_o#update o in
-          fst (this_file_o#toplevel_module ast))
-          first
+          let ast, pos_context = load path in
+          let this_file_o : 'self_type = this_file_o#update o in
+          let next_o : 'self_type = fst (this_file_o#toplevel_module ast pos_context) in
+          (* Enforces that the originally requested modules are processed in the order they were given *)
+          let next_o : 'self_type = next_o#add_module_dependency path previous_path in
+          next_o, path)
+          (first, f)
           fs in
 
       let file_env = o#get_file_env () in
@@ -345,6 +355,7 @@ let load_source_files_and_dependencies file_paths : source list =
           let file_env_entry = StringMap.find path file_env in
           {
             program = file_env_entry.tmi_ast;
+            pos_context = file_env_entry.tmi_pos_context;
             external_dependencies = file_env_entry.tmi_ffi_files;
           }) topo_sorted_paths in
       topo_sorted_results

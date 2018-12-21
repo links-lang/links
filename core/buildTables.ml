@@ -253,15 +253,19 @@ struct
     let _ = (new visitor tyenv bound_vars cont_vars)#computation e in ()
 end
 
-let bindings : IrTraversals.Transform.environment -> intset -> Ir.binding list -> unit =
-  fun tyenv bound_vars bs ->
+let bindings : IrTraversals.Transform.environment -> Ir.binding list -> unit =
+  fun tyenv bs ->
+    (* FIXME: Is it okay to use the domain of the typing env here insteaf
+       of passing the bound vars/"globals" as a separate parameter *)
+    let bound_vars = Env.Int.domain tyenv in
     FunDefs.bindings Tables.fun_defs bs;
     ScopesAndContDefs.primitives Tables.scopes;
     ScopesAndContDefs.bindings tyenv Tables.scopes Tables.cont_defs bs;
     ClosureTable.bindings tyenv bound_vars Tables.cont_vars bs
 
-let program : intset -> IrTraversals.Transform.environment -> Ir.program -> unit =
-  fun bound_vars tyenv program ->
+let program : IrTraversals.Transform.environment -> Ir.program -> unit =
+  fun tyenv program ->
+    let bound_vars = Env.Int.domain tyenv in
     FunDefs.program Tables.fun_defs program;
     ScopesAndContDefs.primitives Tables.scopes;
     ScopesAndContDefs.program tyenv Tables.scopes Tables.cont_defs program;

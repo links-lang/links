@@ -1,3 +1,5 @@
+open Utility
+
 (** Monadic IR *)
 
 open CommonTypes
@@ -110,6 +112,13 @@ let binding_scope : binding -> scope =
 
 let binder_of_fun_def (fb, _, _, _) = fb
 
+let binders_of_binding = function
+  | Let (b, _)
+  | Fun (b, _, _, _)
+  | Alien (b, _, _) -> [b]
+  | Rec fdefs -> List.fold_left (fun binders fdef -> binder_of_fun_def fdef :: binders ) [] fdefs
+  | Module _ -> assert false
+
 let tapp (v, tyargs) =
   match tyargs with
     | [] -> v
@@ -153,3 +162,7 @@ let string_of_program = show_program
 
 type eval_fun_def = var_info * (var list * computation) * Var.var option * location
   [@@deriving show]
+
+
+let program_of_bindings bs =
+  bs, Return (Extend (StringMap.empty, None))

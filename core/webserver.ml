@@ -10,6 +10,7 @@ let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
 let host_name = Basicsettings.Appserver.hostname
 let port = Basicsettings.Appserver.port
 
+
 module Trie =
 struct
   type ('a, 'b) t =
@@ -74,10 +75,7 @@ struct
 
   let rt : routing_table ref = ref Trie.empty
 
-  let env : (Value.env * Ir.var Env.String.t * FrontendTypeEnv.t) ref =
-    ref (Value.Env.empty, Env.String.empty, FrontendTypeEnv.empty_typing_environment)
-  let prelude : Ir.binding list ref = ref []
-  let globals : Ir.binding list ref = ref []
+  let env : Evaluation_env.t ref = ref Evaluation_env.empty
 
   (* Keeps track of whether websocket requests are allowed. *)
   let accepting_websocket_requests = ref false
@@ -88,16 +86,10 @@ struct
 
   let ws_url = Settings.get_value Basicsettings.websocket_url
 
-  let set_prelude bs =
-    prelude := bs
 
-  let external_files : (string list) ref = ref []
 
-  let init some_env some_globals some_external_files =
-    env := some_env;
-    globals := some_globals;
-    external_files := some_external_files;
-    ()
+  let set_context evaluation_env =
+    env := evaluation_env
 
 
   let add_route is_directory path thread_starter =
@@ -173,8 +165,8 @@ struct
       (* Precondition: valenv has been initialised with the correct request data *)
       let run_page (valenv, v) (error_valenv, error_v) () =
         let cid = RequestData.get_client_id (Value.Env.request_data valenv) in
-        let applier env vp =
-          Eval.apply (render_cont ()) env vp >>= fun (valenv, v) ->
+        let applier environment vp =
+          Eval.apply (render_cont ()) environment vp >>= fun (valenv, v) ->
           let open Page in
           let page =
             RealPage.page
@@ -182,9 +174,9 @@ struct
               (Lib.nenv, Lib.typing_env)
               (* hypothesis: local definitions shouldn't matter,
                * they should all end up in valenv... *)
-              (!prelude @ !globals)
+              (!env.Evaluation_env.globals)
               (valenv, v)
-              !external_files
+              !env.Evaluation_env.external_files
           in
           Lwt.return ("text/html", page) in
         try
@@ -200,9 +192,9 @@ struct
         RealPage.page
           ~wsconn_url:(if !accepting_websocket_requests then Some (ws_url) else None)
           (Lib.nenv, Lib.typing_env)
-          (!prelude @ !globals)
+          (!env.Evaluation_env.globals)
           (valenv, v)
-          !external_files in
+          !env.Evaluation_env.external_files in
 
       let serve_static base uri_path mime_types =
           let fname =
@@ -237,13 +229,12 @@ struct
              serve_static file_path (String.concat "/" remaining / "index.html") mime_types
           | ([], { as_page = Some (Right { request_handler = (valenv, v); error_handler = (error_valenv, error_v) }); _}) :: _, true
           | (_, { as_directory = Some (Right { request_handler = (valenv, v); error_handler = (error_valenv, error_v) }); _}) :: _, _ ->
-             let (_, nenv, tyenv) = !env in
              let cid = get_or_make_client_id cgi_args in
              let req_data = RequestData.new_request_data cgi_args cookies cid in
              let req_env = Value.Env.set_request_data (Value.Env.shadow tl_valenv ~by:valenv) req_data in
              let req_error_env = Value.Env.set_request_data (Value.Env.shadow tl_valenv ~by:error_valenv) req_data in
              Webif.do_request
-               (req_env, nenv, tyenv)
+               req_env
                cgi_args
                (run_page (req_env, v) (req_error_env, error_v))
                (render_cont ())
@@ -291,7 +282,8 @@ struct
     let start_server host port rt =
 
       let render_cont () =
-        let (_, nenv, {FrontendTypeEnv.tycon_env = tycon_env; _ }) = !env in
+        let nenv = !env.Evaluation_env.nenv in
+        let {FrontendTypeEnv.tycon_env = tycon_env; _ } = !env.Evaluation_env.tyenv in
         let _, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
         let render_page = Env.String.lookup nenv "renderPage" in
         let tail = Ir.Apply (Ir.Variable render_page, [Ir.Variable x]) in

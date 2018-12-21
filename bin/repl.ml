@@ -9,7 +9,6 @@ module BS = Basicsettings
 (** The prompt used for interactive mode *)
 let ps1 = "links> "
 
-type envs = Driver.evaluation_env
 
 
 (** Print a value (including its type if `printing_types' is [true]). *)
@@ -48,10 +47,10 @@ let print_value rtype value =
 (** Definition of the various repl directives *)
 let rec directives
     : (string
-     * ((envs ->  string list -> envs)
+     * ((Evaluation_env.t ->  string list -> Evaluation_env.t)
         * string)) list Lazy.t =
 
-  let ignore_envs fn (envs : envs) arg = let _ = fn arg in envs in lazy
+  let ignore_envs fn (envs : Evaluation_env.t) arg = let _ = fn arg in envs in lazy
   (* lazy so we can have applications on the rhs *)
 [
     "directives",
@@ -92,7 +91,8 @@ let rec directives
     (ignore_envs (fun _ -> exit 0), "exit the interpreter");
 
     "typeenv",
-    ((fun ((_, _, { FrontendTypeEnv.var_env = typeenv; _ }) as envs) _ ->
+    ((fun envs _ ->
+        let typeenv = envs.Evaluation_env.tyenv.FrontendTypeEnv.var_env in
         StringSet.iter
           (fun k ->
              let (_, t) = Env.String.lookup typeenv k in
@@ -104,7 +104,8 @@ let rec directives
      "display the current type environment");
 
     "tyconenv",
-    ((fun ((_, _, {FrontendTypeEnv.tycon_env = tycon_env; _ }) as envs) _ ->
+    ((fun envs _ ->
+        let tycon_env = envs.Evaluation_env.tyenv.FrontendTypeEnv.tycon_env in
         StringSet.iter (fun k ->
                           let s = Env.String.lookup tycon_env k in
                             Printf.fprintf stderr " %s = %s\n" k
@@ -114,7 +115,9 @@ let rec directives
      "display the current type alias environment");
 
     "env",
-    ((fun ((_valenv, nenv, tyenv) as envs) _ ->
+    ((fun envs _ ->
+        let tyenv = envs.Evaluation_env.tyenv in
+        let nenv = envs.Evaluation_env.nenv in
         Env.String.fold
           (fun name var () ->
             if not (Lib.is_primitive name) then
@@ -133,21 +136,16 @@ let rec directives
      "display the current value environment");
 
     "load",
-    ((fun (envs) args ->
+    ((fun envs args ->
         match args with
           | [filename] ->
-              let parse_and_desugar (nenv, tyenv) filename =
-                let source =
-                  Loader.load_file (nenv, tyenv) filename
-                in
-                  let open Loader in
-                  let (nenv, tyenv) = source.envs in
-                  let (globals, (locals, main), t) = source.program in
-                  let external_files = source.external_dependencies in
-                  ((globals @ locals, main), t), (nenv, tyenv), external_files in
-              let r = Driver.evaluate true parse_and_desugar envs filename in
-                print_value r.Driver.result_type r.Driver.result_value;
-                r.Driver.result_env
+            let result_env, result_value, result_type =
+              Driver.run_single_file
+                true
+                envs
+                filename in
+            print_value result_type result_value;
+            result_env
           | _ -> prerr_endline "syntax: @load \"filename\""; envs),
      "load in a Links source file, extending the current environment");
 
@@ -166,7 +164,9 @@ let rec directives
      "dynamically load in a Links extension");
 
     "withtype",
-    ((fun (_, _, {FrontendTypeEnv.var_env = tenv; FrontendTypeEnv.tycon_env = aliases; _} as envs) args ->
+    ((fun envs args ->
+        let tenv = envs.Evaluation_env.tyenv.FrontendTypeEnv.var_env in
+        let aliases = envs.Evaluation_env.tyenv.FrontendTypeEnv.tycon_env in
         match args with
           [] -> prerr_endline "syntax: @withtype type"; envs
           | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
@@ -186,27 +186,27 @@ let rec directives
 
   ]
 
-let execute_directive (name, args) (valenv, nenv, typingenv) =
-  let envs =
-    (try fst (assoc name (Lazy.force directives)) (valenv, nenv, typingenv) args;
+let execute_directive (name, args) (envs : Evaluation_env.t) =
+  let updated_envs =
+    (try fst (assoc name (Lazy.force directives)) envs args;
      with NotFound _ ->
        Printf.fprintf stderr "unknown directive : %s\n" name;
-       (valenv, nenv, typingenv))
+       envs)
   in
     flush stderr;
-    envs
+    updated_envs
 
 
 let evaluate_parse_result envs parse_result =
-  let _, nenv, tyenv = envs in
   match parse_result with
     | `Definitions (defs, nenv'), tyenv' ->
-        let valenv, _ =
-          Driver.process_program
+        let result_env, _ =
+          Driver.evaluate_ir
             true
             envs
-            (defs, Ir.Return (Ir.Extend (StringMap.empty, None)))
+            (Ir.program_of_bindings defs)
             [] in
+        let valenv = result_env.Evaluation_env.venv in
 
           Env.String.fold (* TBD: Make Env.String.foreach. *)
             (fun name spec () ->
@@ -242,63 +242,70 @@ let evaluate_parse_result envs parse_result =
                               ^" : "^Types.string_of_datatype t))
             nenv'
             ();
-
-          (valenv,
-            Env.String.extend nenv nenv',
-            FrontendTypeEnv.extend_typing_environment tyenv tyenv')
+          result_env
     | `Expression (e, t), _ ->
-        let valenv, v = Driver.process_program true envs e [] in
+        let result_env, v = Driver.evaluate_ir true envs e [] in
           print_value t v;
-          valenv, nenv, tyenv
+          result_env
     | `Directive directive, _ -> try execute_directive directive envs with _ -> envs
 
 
 (** Interactive loop *)
-let interact envs =
+let interact (envs : Evaluation_env.t) =
   (* Ensure we retain history *)
   let history_path = Basicsettings.Readline.readline_history_path () in
   ignore (LNoise.history_load ~filename:history_path);
   ignore (LNoise.history_set ~max_length:100);
-  let rec interact envs =
-    let evaluate_replitem parse envs =
-        Errors.display ~default:(fun _ -> envs)
-          (lazy (evaluate_parse_result envs (parse ())))
-    in
-      let use_linenoise = Settings.get_value Basicsettings.Readline.native_readline in
-      begin
-        if not use_linenoise then
-          (print_string ps1; flush stdout)
-        else ()
-      end;
-      let _, nenv, tyenv = envs in
+  let rec interact (envs : Evaluation_env.t) =
+    let use_linenoise = Settings.get_value Basicsettings.Readline.native_readline in
+    begin
+      if not use_linenoise then
+        (print_string ps1; flush stdout)
+      else ()
+    end;
+    let nenv = envs.Evaluation_env.nenv in
+    let tyenv = envs.Evaluation_env.tyenv in
 
-      let parse_and_desugar () =
-        let sugar, pos_context =
-          if use_linenoise then
-            Parse.parse_readline ps1 Parse.interactive
-          else
-            let make_dotter ps1 =
-              let dots = String.make (String.length ps1 - 1) '.' ^ " " in
-              fun _ -> print_string dots; flush stdout in
-            Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive (stdin, "<stdin>")
-          in
-        let sentence, t, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
-          (* FIXME: What's going on here? Why is this not part of
-             Frontend.Pipeline.interactive?*)
-        let sentence' = match sentence with
-          | Definitions defs ->
-              let tenv = Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env) in
-              let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.FrontendTypeEnv.effect_row) defs in
-                `Definitions (defs, nenv')
-          | Expression e     ->
-              let tenv = Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env) in
-              let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.FrontendTypeEnv.effect_row) e in
-                `Expression (e, t)
-          | Directive d      -> `Directive d
+    let parse_and_transform () =
+      let sugar, pos_context =
+        if use_linenoise then
+          Parse.parse_readline ps1 Parse.interactive
+        else
+          let make_dotter ps1 =
+            let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+            fun _ -> print_string dots; flush stdout in
+          Parse.parse_channel ~interactive:(make_dotter ps1) Parse.interactive (stdin, "<stdin>")
         in
-          sentence', tyenv'
+      let sentence, t, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
+      let sentence' = match sentence with
+        | Definitions defs ->
+            let tenv = Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env) in
+            let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.FrontendTypeEnv.effect_row) defs in
+            let post_backend_defs, _ =
+              Backend.transform_program
+                false
+                tenv
+                (Ir.program_of_bindings defs) in
+
+              `Definitions (post_backend_defs, nenv')
+        | Expression e     ->
+            let tenv = Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env) in
+            let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.FrontendTypeEnv.effect_row) e in
+            let post_backend_e =
+              Backend.transform_program
+                false
+                tenv
+                e in
+              `Expression (post_backend_e, t)
+        | Directive d      -> `Directive d
       in
-        interact (evaluate_replitem parse_and_desugar envs)
+        sentence', tyenv'
+    in
+      let next_env =
+        Errors.display
+          ~default:(fun _ -> envs)
+          (lazy (evaluate_parse_result envs (parse_and_transform ()))) in
+      interact next_env
   in
     Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
     interact envs

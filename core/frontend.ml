@@ -6,7 +6,7 @@ sig
     FrontendTypeEnv.t ->
     SourceCode.source_code ->
     Sugartypes.program ->
-    ((Sugartypes.program * Types.datatype * FrontendTypeEnv.t) * string list)
+    (Sugartypes.program * Types.datatype * FrontendTypeEnv.t)
   val interactive :
     FrontendTypeEnv.t ->
     SourceCode.source_code ->
@@ -40,13 +40,9 @@ struct
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
       let program = DesugarAlienBlocks.transform_alien_blocks program in
-      (* Module-y things *)
-      let (program, ffi_files) =
-        (program, [])
-      in
       let _program = CheckXmlQuasiquotes.checker#program program in
       let () = DesugarSessionExceptions.settings_check program in
-      ((( ExperimentalExtensions.check#program
+      (( ExperimentalExtensions.check#program
        ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
@@ -64,7 +60,7 @@ struct
        ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
        ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
-        program), ffi_files)
+        program)
 
 
 let program tyenv pos_context program =

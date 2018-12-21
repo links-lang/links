@@ -18,6 +18,15 @@
     tycon_env =  Env.String.empty;
     effect_row = Types.make_empty_closed_row ()  }
 
+
+  let import_module module_name env =
+    let _, imported_module = Env.String.lookup env.module_env module_name in
+    let orig_path = Some (QualifiedName.of_name module_name) in
+    let extend sm env = StringMap.fold (fun k v env -> Env.String.bind env (k,(orig_path,v))) sm env in
+    { env with
+        var_env = extend imported_module.Types.fields env.var_env;
+        module_env = extend imported_module.Types.modules env.module_env}
+
   let normalise_typing_environment env =
     let rec normalise_module_t mt =
     {
@@ -27,7 +36,6 @@
   { env with
       var_env = Env.String.map (fun (open_path,t) -> open_path, Types.normalise_datatype t) env.var_env;
       module_env = Env.String.map (fun (open_path, mt) -> open_path, normalise_module_t mt) env.module_env;
-      (* FIXME: normalise types in module types, too? *)
       (* what about tycon_env? *)
       effect_row = Types.normalise_row env.effect_row }
 

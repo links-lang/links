@@ -28,7 +28,7 @@ struct
     | EvalMain
 
 
-  let parse_remote_call (valenv, _, _) cgi_args =
+  let parse_remote_call valenv cgi_args =
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
     (* Debug.print ("args: " ^ Value.show (Json.parse_json args)); *)
@@ -59,10 +59,10 @@ struct
     mem_assoc "_k" args
 
   (** Extract continuation thunk from the CGI parameter _k *)
-  let parse_server_cont (valenv, _, _) params =
-    ServerCont (Value.unmarshal_value valenv (assoc "_k" params))
+  let parse_server_cont venv params =
+    ServerCont (Value.unmarshal_value venv (assoc "_k" params))
 
-  let parse_client_return (valenv, _, _) cgi_args =
+  let parse_client_return valenv cgi_args =
     let fixup_cont =
       (* At some point, '+' gets replaced with ' ' in our base64-encoded
          string. Here we put it back as it was. *)
@@ -158,8 +158,8 @@ struct
          Debug.print("Doing EvalMain");
          run ()
 
-  let do_request ((valenv, _, _) as env) cgi_args run render_cont render_servercont_cont response_printer =
-    let request = parse_request env cgi_args in
+  let do_request valenv cgi_args run render_cont render_servercont_cont response_printer =
+    let request = parse_request valenv cgi_args in
     let (>>=) f g = Lwt.bind f g in
     Lwt.catch
       (fun () -> perform_request valenv run render_cont render_servercont_cont request )

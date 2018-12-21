@@ -19,8 +19,8 @@ val value_env : primitive option Env.Int.t
 val type_env : FrontendTypeEnv.qual_var_environment
 val typing_env : FrontendTypeEnv.t
 val nenv : Var.var Env.String.t
-val prelude_tyenv : FrontendTypeEnv.t option ref
-val prelude_nenv : Var.var Env.String.t option ref
+(*val prelude_tyenv : FrontendTypeEnv.t option ref
+val prelude_nenv : Var.var Env.String.t option ref*)
 
 val primitive_vars : Utility.IntSet.t
 
