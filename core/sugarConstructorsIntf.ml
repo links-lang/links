@@ -18,6 +18,8 @@ module type Pos = sig
   val pos      : t -> Sugartypes.position
   (* Produce a syntax tree node with a position attached. *)
   val with_pos : t -> 'a -> 'a Sugartypes.with_pos
+  (* Default (dummy) position *)
+  val dp       : t
 end
 
 (* Various smart constructors for elements of Links AST.  Module implementing
@@ -30,8 +32,12 @@ module type SugarConstructorsSig = sig
   type t
   val pos      : t -> Sugartypes.position
   val with_pos : t -> 'a -> 'a with_pos
+  val dp       : t
 
-  (* Fresh type variables *)
+  (* Attach a dummy position to a node. *)
+  val with_dummy_pos : 'a -> 'a with_pos
+
+  (* Fresh type variables. *)
   val fresh_type_variable           : unit -> datatypenode
   val fresh_rigid_type_variable     : unit -> datatypenode
   val fresh_row_variable            : unit -> row_var
@@ -41,8 +47,8 @@ module type SugarConstructorsSig = sig
 
   (* Helper data types and functions for passing arguments to smart
      constructors.  *)
-  type name_or_pat = Name of name with_pos
-                   | Pat of pattern
+  type name_or_pat = Name of name
+                   | Pat  of pattern
 
   type signature   = Sig of (name with_pos * datatype') with_pos
                    | NoSig
@@ -50,14 +56,30 @@ module type SugarConstructorsSig = sig
   val sig_of_opt : (name with_pos * datatype') with_pos option -> signature
 
   (* Common stuff *)
-  val block        : block_body with_pos -> phrase
-  val datatype     : datatype -> datatype * 'a option
-  val cp_unit      : t -> cp_phrase
-  val record       : t -> (name * phrase) list -> phrase
-  val tuple        : t -> phrase list -> phrase
+  val var         : ?ppos:t -> name -> phrase
+  val block       : ?ppos:t -> block_body -> phrase
+  val block_node  :            block_body -> phrasenode
+  val datatype    : datatype -> datatype * 'a option
+  val cp_unit     : t -> cp_phrase
+  val record      : ?ppos:t -> ?exp:phrase -> (name * phrase) list -> phrase
+  val tuple       : ?ppos:t -> phrase list -> phrase
+  val list        :
+    ?ppos:t -> ?ty:Types.datatype -> phrase list -> phrase
+  val constructor :
+    ?ppos:t -> ?body:phrase -> ?ty:Types.datatype -> name -> phrase
+
+  (* Constants *)
+  val constant      : ?ppos:t -> constant -> phrase
+  val constant_str  : ?ppos:t -> string   -> phrase
+  val constant_char : ?ppos:t -> char     -> phrase
+
+  (* Binders *)
+  val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> binder
 
   (* Patterns *)
-  val variable_pat : t -> name with_pos -> pattern
+  val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> pattern
+  val tuple_pat    : ?ppos:t -> pattern list -> pattern
+  val any_pat      : t -> pattern
 
   (* Fieldspec *)
   val present : fieldspec
@@ -69,48 +91,62 @@ module type SugarConstructorsSig = sig
 
   (* Various phrases *)
   val fun_lit
-      : t -> declared_linearity -> pattern list list -> block_body with_pos
+      : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
+     -> ?location:location -> declared_linearity -> pattern list list -> phrase
      -> phrase
   val hnlit_arg
       : [`Deep | `Shallow ] -> pattern -> clause list * pattern list list option
      -> handlerlit
   val handler_lit
-      : t -> handlerlit -> phrase
+      : ?ppos:t -> handlerlit -> phrase
   val spawn
-      : t -> spawn_kind -> given_spawn_location -> block_body with_pos
+      : ?ppos:t
+     -> ?row:Types.row -> spawn_kind -> given_spawn_location -> phrase
      -> phrase
+  val fn_appl_node
+      : ?ppos:t -> name -> tyarg list -> phrase list -> phrasenode
+  val fn_appl
+      : ?ppos:t -> name -> tyarg list -> phrase list -> phrase
+  val fn_appl_var
+      : ?ppos:t -> name -> name -> phrase
 
   (* Bindings *)
   val fun_binding
-      : t -> signature
-     -> (declared_linearity * name with_pos * pattern list list * location *
-         block_body with_pos)
+      : ?ppos:t -> signature
+     -> (declared_linearity * name * pattern list list * location * phrase)
+     -> binding
+  val fun_binding'
+      : ?ppos:t -> ?linearity:declared_linearity -> ?tyvars:tyvar list
+     -> ?location:location -> ?annotation:datatype' -> binder -> funlit
      -> binding
   val handler_binding
-      : t -> signature -> (name with_pos * handlerlit)
+      : ?ppos:t -> signature -> (name * handlerlit)
+     -> binding
+  val val_binding'
+      : ?ppos:t -> signature -> (name_or_pat * phrase * location)
      -> binding
   val val_binding
-      : t -> signature -> (name_or_pat * phrase * location)
+      : ?ppos:t -> pattern -> phrase
      -> binding
 
   (* Database queries *)
   val db_exps
-      : t -> (name * phrase) list -> phrase
+      : ?ppos:t -> (name * phrase) list -> phrase
   val db_insert
-      : t -> phrase -> name list -> phrase -> string with_pos option
+      : ?ppos:t -> phrase -> name list -> phrase -> string option
      -> phrase
   val query
-      : t -> (phrase * phrase) option -> block_body with_pos -> phrase
+      : ?ppos:t -> (phrase * phrase) option -> phrase -> phrase
 
   (* Operator applications *)
-  val infix_appl' : t -> phrase -> binop    -> phrase -> phrase
-  val infix_appl  : t -> phrase -> string   -> phrase -> phrase
-  val unary_appl  : t ->           unary_op -> phrase -> phrase
+  val infix_appl' : ?ppos:t -> phrase -> binop    -> phrase -> phrase
+  val infix_appl  : ?ppos:t -> phrase -> string   -> phrase -> phrase
+  val unary_appl  : ?ppos:t ->           unary_op -> phrase -> phrase
 
   (* XML *)
   val xml
-      : t -> (string * string) option -> name
-     -> (name * (phrase list)) list -> block_body with_pos option -> phrase list
+      : ?ppos:t -> ?tags:(string * string) -> name
+     -> (name * (phrase list)) list -> phrase option -> phrase list
      -> phrase
 
   (* Handlers *)

@@ -1,6 +1,7 @@
 open Utility
 open Sugartypes
 open List
+open SugarConstructors.Make
 
 (* TODO:
 
@@ -13,14 +14,13 @@ let has_lattrs : phrasenode -> bool = function
   | `Xml (_, attrs, _, _) -> exists (fst ->- start_of ~is:"l:") attrs
   | _ -> false
 
-let apply name args : phrase = with_dummy_pos (`FnAppl (with_dummy_pos (`Var name), args))
+let apply name args : phrase = fn_appl name [] args
 
 let server_use name =
-  apply "assoc" [with_dummy_pos (`Constant (`String name));
-                 apply "environment" []]
+  apply "assoc" [constant_str name; apply "environment" []]
 
 let client_use id =
-  apply "getInputValue" [with_dummy_pos (`Constant (`String id))]
+  apply "getInputValue" [constant_str id]
 
 let fresh_names () =
   let id = gensym ~prefix:"_lnameid_" () in
@@ -33,9 +33,9 @@ let desugar_lhref : phrasenode -> phrasenode = function
       let attrs =
         match partition (fst ->- (=)"l:href") attrs with
           | [_,[target]], rest ->
-              (("href",
-                [with_dummy_pos (`Constant (`String "?_k="));
-                 apply "pickleCont" [with_dummy_pos (`FunLit (None, `Unl, ([[]], target), `Server))]]))
+              ("href",
+               [constant_str "?_k=";
+                apply "pickleCont" [fun_lit ~location:`Server `Unl [[]] target]])
               :: rest
           | _ -> assert false (* multiple l:hrefs, or an invalid rhs;
                                  NOTE: this is a user error and should
@@ -50,17 +50,14 @@ let desugar_laction : phrasenode -> phrasenode = function
       begin match partition (fst ->- (=)"l:action") attrs with
         | [_,[action_expr]], rest ->
             let hidden : phrase =
-              with_dummy_pos (
-               `Xml ("input",
-                    ["type",  [with_dummy_pos (`Constant (`String "hidden"))];
-                     "name",  [with_dummy_pos (`Constant (`String "_k"))];
-                     "value", [apply "pickleCont"
-                                     [with_dummy_pos (`FunLit(None,`Unl,([[]],action_expr), `Server))]]],
-                    None,
-                    []))
-            and action = ("action", [with_dummy_pos (`Constant (`String "#"))])
-            in
-              `Xml (form, action::rest, attrexp, hidden::children)
+              xml "input"
+                  ["type",  [constant_str "hidden"];
+                   "name",  [constant_str "_k"];
+                   "value", [apply "pickleCont"
+                                   [fun_lit ~location:`Server `Unl [[]] action_expr]]]
+                  None []
+            and action = ("action", [constant_str "#"])
+            in `Xml (form, action::rest, attrexp, hidden::children)
         | _ -> assert false (* multiple l:actions, or an invalid rhs;
                                NOTE: this is a user error and should
                                be reported as such --ez. *)
@@ -71,9 +68,8 @@ let desugar_lonevent : phrasenode -> phrasenode =
   let event_handler_pair = function
     | (name, [rhs]) ->
         let event_name = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
-          with_dummy_pos (`TupleLit [with_dummy_pos (`Constant (`String event_name));
-                                     with_dummy_pos (`FunLit (None, `Unl,
-                                  ([[with_dummy_pos (`Variable (make_untyped_binder (with_dummy_pos "event")))]], rhs), `Client))])
+          tuple [constant_str event_name;
+                 fun_lit ~location:`Client `Unl [[variable_pat "event"]] rhs]
     | _ -> assert false
   in function
     | `Xml (tag, attrs, attrexp, children)
@@ -82,25 +78,25 @@ let desugar_lonevent : phrasenode -> phrasenode =
         let idattr =
           ("key",
            [apply "registerEventHandlers"
-              [with_dummy_pos (`ListLit (List.map (event_handler_pair) lons, None))]]) in
+                  [list (List.map (event_handler_pair) lons)]]) in
           `Xml (tag, idattr::others, attrexp, children)
     | e -> e
 
-let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) StringMap.t =
+let desugar_lnames (p : phrasenode) : phrasenode * (string * string) StringMap.t =
   let lnames = ref StringMap.empty in
-  let add lname (id,name,pos) = lnames := StringMap.add lname (id,name,pos) !lnames in
+  let add lname (id,name) = lnames := StringMap.add lname (id,name) !lnames in
   let attr : string * phrase list -> (string * phrase list) list = function
-    | "l:name", [{node=`Constant (`String v); pos}] ->
+    | "l:name", [{node=`Constant (`String v); _}] ->
         let id, name = fresh_names () in
-          add v (id,name,pos);
-          [("name", [with_pos pos (`Constant (`String name))]);
-           ("id"  , [with_pos pos (`Constant (`String id  ))])]
+          add v (id,name);
+          [("name", [constant_str name]);
+           ("id"  , [constant_str id  ])]
     | "l:name", _ -> failwith ("Invalid l:name binding")
     | a -> [a] in
   let rec aux : phrasenode -> phrasenode  = function
     | `Xml (tag, attrs, attrexp, children) ->
         let attrs = concat_map attr attrs
-        and children = List.map (fun {node;pos} -> with_pos pos (aux node))
+        and children = List.map (fun {node;_} -> with_dummy_pos (aux node))
                                 children in
           `Xml (tag, attrs, attrexp, children)
     | p -> p
@@ -108,36 +104,32 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string * position) 
   let p' = aux p in
     p', !lnames
 
-let let_in pos name rhs body : phrase =
-  with_pos pos (`Block ([with_pos pos (`Val (
-   with_pos pos (`Variable (make_untyped_binder (with_pos pos name))),
-   ([], rhs)
-   , `Unknown, None))], body))
+let let_in name rhs body : phrase =
+  block ([val_binding' NoSig (Name name, rhs, `Unknown)], body)
 
 let bind_lname_vars lnames = function
   | "l:action" as attr, es ->
       attr, (List.map (StringMap.fold
-                         (fun var (_,name,pos) -> let_in pos var (server_use name))
+                         (fun var (_,name) -> let_in var (server_use name))
                          lnames)
                es)
   | attr, es when start_of attr ~is:"l:on" ->
     attr, (List.map (StringMap.fold
-                       (fun var (id,_,pos) -> let_in pos var (client_use id))
+                       (fun var (id,_) -> let_in var (client_use id))
                        lnames)
              es)
   | attr -> attr
 
 let desugar_form : phrasenode -> phrasenode = function
   | `Xml (("form"|"FORM") as form, attrs, attrexp, children) ->
-      let children, children_positions =
-        ListUtils.split_with tuple_of_with_pos children in
+      let children = List.map (fun {node;_} -> node) children in
       let children, lnames = List.split (List.map desugar_lnames children) in
       let lnames =
         try List.fold_left StringMap.union_disjoint StringMap.empty lnames
         with StringMap.Not_disjoint (item, _) ->
           raise (Errors.SugarError (dummy_position, "Duplicate l:name binding: " ^ item)) in
       let attrs = List.map (bind_lname_vars lnames) attrs in
-        `Xml (form, attrs, attrexp, ListUtils.zip_with' with_pos children_positions children)
+        `Xml (form, attrs, attrexp, List.map with_dummy_pos children)
   | e -> e
 
 let replace_lattrs : phrasenode -> phrasenode = desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent ->-

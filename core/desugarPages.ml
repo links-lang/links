@@ -1,4 +1,5 @@
 open Sugartypes
+open SugarConstructors.Make
 
 let rec is_raw phrase =
   match phrase.node with
@@ -22,17 +23,16 @@ let rec is_raw phrase =
      - the environment is unchanged after calling o#phrase formlet
 *)
 let rec desugar_page (o, page_type) =
-  let desugar_nodes pos : phrase list -> phrase =
+  let desugar_nodes : phrase list -> phrase =
     fun children ->
-      with_pos pos (`FnAppl (with_pos pos (`TAppl (with_pos pos (`Var "joinManyP"), [`Row (o#lookup_effects)])),
-                            [with_pos pos (`ListLit (List.map (desugar_page (o, page_type)) children, Some page_type))]))
+     fn_appl "joinManyP" [`Row (o#lookup_effects)]
+       [list ~ty:page_type (List.map (desugar_page (o, page_type)) children)]
   in
     fun ({node=e; pos} as phrase) ->
       match e with
         | _ when is_raw phrase ->
           (* TODO: check that e doesn't contain any formletplacements or page placements *)
-           with_pos pos (`FnAppl (with_pos pos (`TAppl (with_pos pos (`Var "bodyP"), [`Row (o#lookup_effects)])),
-                                 [with_pos pos e]))
+           fn_appl "bodyP" [`Row (o#lookup_effects)] [with_dummy_pos e]
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
             let formlet_type = Types.concrete_type formlet_type in
@@ -40,22 +40,18 @@ let rec desugar_page (o, page_type) =
             let b = Types.fresh_type_variable (`Any, `Any) in
             let _template = `Alias (("Formlet", [`Type a]), b) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
-              with_pos pos (`FnAppl (with_pos pos (`TAppl (with_pos pos (`Var "formP"), [`Type a; `Row (o#lookup_effects)])),
-                                    [formlet; handler; attributes]))
+              fn_appl "formP" [`Type a; `Row (o#lookup_effects)]
+                      [formlet; handler; attributes]
         | `PagePlacement (page) -> page
         | `Xml ("#", [], _, children) ->
-            desugar_nodes pos children
+            desugar_nodes children
         | `Xml (name, attrs, dynattrs, children) ->
             let x = Utility.gensym ~prefix:"xml" () in
-              with_pos pos (`FnAppl
-              (with_pos pos (`TAppl (with_pos pos (`Var "plugP"), [`Row (o#lookup_effects)])),
-               [with_pos pos (`FunLit
-                           (Some ([Types.make_tuple_type [Types.xml_type], o#lookup_effects]),
-                            `Unl,
-                            ([[with_pos pos (`Variable (make_binder x Types.xml_type pos))]],
-                               with_pos pos (`Xml (name, attrs, dynattrs,
-                                             [with_pos pos (`Block ([], with_pos pos (`Var x)))]))), `Unknown));
-                desugar_nodes pos children]))
+            fn_appl "plugP" [`Row (o#lookup_effects)]
+               [fun_lit ~args:[Types.make_tuple_type [Types.xml_type], o#lookup_effects]
+                        `Unl [[variable_pat ~ty:Types.xml_type x]]
+                        (xml name attrs dynattrs [block ([], var x)]);
+                desugar_nodes children]
         | _ ->
           raise (Errors.SugarError (pos, "Invalid element in page literal"))
 

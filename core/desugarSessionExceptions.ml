@@ -1,4 +1,5 @@
 open Sugartypes
+open SugarConstructors.Make
 
 (*
  try { M } as (pat) in { N } otherwise { N' }
@@ -17,10 +18,6 @@ module TyEnv = Env.String
 
 let failure_op_name = Value.session_exception_operation
 
-let dp = Sugartypes.dummy_position
-let mk_var_pat name : pattern = with_dummy_pos (`Variable (make_binder name `Not_typed dp))
-let dummy_pat () = mk_var_pat @@ Utility.gensym ~prefix:"dsh" ()
-
 class insert_toplevel_handlers env =
 object (o: 'self_type)
   inherit (TransformSugar.transform env) as super
@@ -28,9 +25,9 @@ object (o: 'self_type)
   method! phrasenode = function
     | (`Spawn (`Wait, _, _, _)) as sw ->
         super#phrasenode sw
-    | `Spawn (k, spawn_loc, {node=body; pos=body_loc}, Some inner_effects) ->
+    | `Spawn (k, spawn_loc, {node=body;_}, Some inner_effects) ->
         let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
-        let as_pat = mk_var_pat as_var in
+        let as_pat = variable_pat ~ty:`Not_typed as_var in
         let unit_phr = with_dummy_pos (`RecordLit ([], None)) in
 
         let (o, spawn_loc) = o#given_spawn_location spawn_loc in
@@ -40,10 +37,10 @@ object (o: 'self_type)
         let o = o#with_effects inner_effects in
         let (o, body, _) = o#phrasenode body in
         let body =
-          `TryInOtherwise (with_pos body_loc body, as_pat,
-                           (with_dummy_pos (`Var as_var)), unit_phr, (Some (Types.unit_type))) in
+          `TryInOtherwise (with_dummy_pos body, as_pat,
+                           var as_var, unit_phr, Some (Types.unit_type)) in
         let o = o#restore_envs envs in
-        (o, (`Spawn (k, spawn_loc, with_pos body_loc body, Some inner_effects)), process_type)
+        (o, (`Spawn (k, spawn_loc, with_dummy_pos body, Some inner_effects)), process_type)
     | e -> super#phrasenode e
 end
 
@@ -70,7 +67,7 @@ object (o : 'self_type)
          * we'll never use the continuation (and this is invoked after pattern
          * deanonymisation in desugarHandlers), generate a fresh name for the
          * continuation argument. *)
-        let cont_pat = dummy_pat () in
+        let cont_pat = variable_pat ~ty:`Not_typed (Utility.gensym ~prefix:"dsh" ()) in
 
         let otherwise_pat : Sugartypes.pattern =
           with_dummy_pos (`Effect (failure_op_name, [], cont_pat)) in
@@ -163,20 +160,20 @@ let wrap_linear_handlers prog =
     object
       inherit SugarTraversals.map as super
       method! phrase = function
-        | {node=`TryInOtherwise (l, x, m, n, dtopt); pos} ->
+        | {node=`TryInOtherwise (l, x, m, n, dtopt); _} ->
             let fresh_var = Utility.gensym ?prefix:(Some "try_x") () in
-            let fresh_pat = with_pos pos (`Variable (make_untyped_binder (with_pos pos fresh_var))) in
-            with_pos pos
+            let fresh_pat = variable_pat fresh_var in
+            with_dummy_pos
             (`Switch (
-              with_pos pos
+              with_dummy_pos
                (`TryInOtherwise
                 (super#phrase l,
                  fresh_pat,
-                 with_pos pos (`ConstructorLit ("Just", Some (with_pos pos (`Var fresh_var)), None)),
-                 with_pos pos (`ConstructorLit ("Nothing", None, None)), dtopt)),
+                 constructor ~body:(var fresh_var) "Just",
+                 constructor "Nothing", dtopt)),
               [
-                (with_pos pos (`Variant ("Just", (Some x))), super#phrase m);
-                (with_pos pos (`Variant ("Nothing", None)), super#phrase n)
+                (with_dummy_pos (`Variant ("Just", (Some x))), super#phrase m);
+                (with_dummy_pos (`Variant ("Nothing", None)), super#phrase n)
               ], None))
         | p -> super#phrase p
     end

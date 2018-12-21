@@ -13,6 +13,10 @@ module SugarConstructors (Position : Pos)
   (** Convenient aliases for functions operating on positions. *)
   let pos      = Position.pos
   let with_pos = Position.with_pos
+  let dp       = Position.dp
+
+  (** Attach a dummy position to a node. *)
+  let with_dummy_pos node = with_pos dp node
 
   (** Generation of fresh type variables. *)
 
@@ -48,7 +52,7 @@ module SugarConstructors (Position : Pos)
 
   (* Stores either a name of variable to be used in a binding pattern or the
      pattern itself.  Used for passing an argument to val_binding. *)
-  type name_or_pat = Name of name with_pos | Pat of pattern
+  type name_or_pat = Name of name | Pat of pattern
 
   (* Optionally stores a datatype signature.  Isomporphic to Option. *)
   type signature = Sig of (name with_pos * datatype') with_pos | NoSig
@@ -72,35 +76,61 @@ module SugarConstructors (Position : Pos)
 
   (** Common stuff *)
 
+  let var ?(ppos=dp) name = with_pos ppos (`Var name)
+
   (* Create a Block from block_body. *)
-  let block {node;pos} = Sugartypes.with_pos pos (`Block node)
+  let block_node       block_contents = `Block block_contents
+  let block ?(ppos=dp) block_contents =
+    with_pos ppos (block_node block_contents)
 
   let datatype d = (d, None)
-  let cp_unit ppos = with_pos ppos (`Unquote ([], with_pos ppos (`TupleLit [])))
 
   (* Create a record with a given list of labels. *)
-  let record ppos lbls = with_pos ppos (`RecordLit (lbls, None))
+  let record ?(ppos=dp) ?exp lbls = with_pos ppos (`RecordLit (lbls, exp))
 
   (* Creata a tuple.  Preserves 1-tuples. *)
-  let tuple pos = function
-    | [e] -> record pos [("1", e)]
-    | es  -> with_pos pos (`TupleLit es)
+  let tuple ?(ppos=dp) = function
+    | [e] -> record ~ppos [("1", e)]
+    | es  -> with_pos ppos (`TupleLit es)
+
+  let cp_unit ppos = with_pos ppos (`Unquote ([], tuple ~ppos []))
+
+  let list ?(ppos=dp) ?ty elems =
+    with_pos ppos (`ListLit (elems, ty))
+
+  let constructor ?(ppos=dp) ?body ?ty name =
+    with_pos ppos (`ConstructorLit (name, body, ty))
+
+
+  (** Constants **)
+
+  let constant      ?(ppos=dp) c = with_pos ppos (`Constant c)
+  let constant_str  ?(ppos=dp) s = with_pos ppos (`Constant (`String s))
+  let constant_char ?(ppos=dp) c = with_pos ppos (`Constant (`Char   c))
+
+
+  (** Binders **)
+
+  let binder ?(ppos=dp) ?ty name = with_pos ppos (name, ty)
 
 
   (** Patterns *)
 
   (* Create a variable pattern with a given name. *)
-  let variable_pat ppos name =
-    with_pos ppos (`Variable (make_untyped_binder name))
+  let variable_pat ?(ppos=dp) ?ty name =
+    with_pos ppos (`Variable (binder ~ppos ?ty name))
 
+  (* Create a tuple pattern. *)
+  let tuple_pat ?(ppos=dp) pats =
+    with_pos ppos (`Tuple pats)
+
+  let any_pat ppos = with_pos ppos `Any
 
   (** Fieldspec *)
 
-  let wild           = "wild"
-  let hear           = "hear"
-  let present        = `Present (with_dummy_pos `Unit)
-  let wild_present   = (wild, present)
-  let hear_present p = (hear, `Present p)
+  let present        = `Present (Sugartypes.with_dummy_pos `Unit)
+  let wild_present   = ("wild", present)
+  let hear_present p = ("hear", `Present p)
 
 
   (** Rows *)
@@ -115,53 +145,72 @@ module SugarConstructors (Position : Pos)
   (** Various phrases *)
 
   (* Create a FunLit. *)
-  let fun_lit ppos linearity pats blk =
-    with_pos ppos (`FunLit (None, linearity, (pats, block blk), `Unknown))
+  let fun_lit ?(ppos=dp) ?args ?(location=`Unknown) linearity pats blk =
+    with_pos ppos (`FunLit (args, linearity, (pats, blk), location))
 
   (* Create an argument used by Handler and HandlerLit. *)
   let hnlit_arg depth computation_param handler_param =
     (depth, computation_param, fst handler_param, snd handler_param)
 
   (* Create a HandlerLit. *)
-  let handler_lit ppos handlerlit = with_pos ppos (`HandlerLit handlerlit)
+  let handler_lit ?(ppos=dp) handlerlit =
+    with_pos ppos (`HandlerLit handlerlit)
 
   (* Create a Spawn. *)
-  let spawn ppos spawn_kind location blk =
-    with_pos ppos (`Spawn (spawn_kind, location, block blk, None))
+  let spawn ?(ppos=dp) ?row spawn_kind location blk =
+    with_pos ppos (`Spawn (spawn_kind, location, blk, row))
+
+  let fn_appl_node ?(ppos=dp) name tyvars vars =
+    `FnAppl (with_pos ppos (tappl (`Var name, tyvars)), vars)
+
+  let fn_appl ?(ppos=dp) name tyvars vars =
+    with_pos ppos (fn_appl_node ~ppos name tyvars vars)
+
+  let fn_appl_var ?(ppos=dp) var1 var2 =
+    fn_appl ~ppos var1 [] [var ~ppos var2]
 
 
   (** Bindings *)
   (* Create a function binding. *)
-  let fun_binding ppos sig_opt (linearity, bndr, args, location, blk) =
-    let datatype = datatype_opt_of_sig_opt sig_opt bndr.node in
-    with_pos ppos (`Fun (make_untyped_binder bndr, linearity,
-                         ([], (args, block blk)), location, datatype))
+  let fun_binding ?(ppos=dp) sig_opt (linearity, bndr, args, location, blk) =
+    let datatype = datatype_opt_of_sig_opt sig_opt bndr in
+    with_pos ppos (`Fun (binder bndr, linearity,
+                         ([], (args, blk)), location, datatype))
+
+  let fun_binding' ?(ppos=dp) ?(linearity=`Unl) ?(tyvars=[])
+        ?(location=`Unknown) ?annotation bndr fnlit =
+    with_pos ppos (`Fun (bndr, linearity, (tyvars, fnlit), location, annotation))
+
 
   (* Create a handler binding. *)
-  let handler_binding ppos sig_opt (name, handlerlit) =
-    let datatype = datatype_opt_of_sig_opt sig_opt name.node in
-    with_pos ppos (`Handler (make_untyped_binder name, handlerlit, datatype))
+  let handler_binding ?(ppos=dp) sig_opt (name, handlerlit) =
+    let datatype = datatype_opt_of_sig_opt sig_opt name in
+    with_pos ppos (`Handler (binder name, handlerlit, datatype))
 
   (* Create a Val binding.  This function takes either a name for a variable
      pattern or an already constructed pattern.  In the latter case no signature
      should be passed. *)
-  let val_binding ppos sig_opt (name_or_pat, phrase, location) =
+  let val_binding' ?(ppos=dp) sig_opt (name_or_pat, phrase, location) =
     let pat, datatype = match name_or_pat with
       | Name name ->
-         let pat      = variable_pat ppos name in
-         let datatype = datatype_opt_of_sig_opt sig_opt name.node in
+         let pat      = variable_pat ~ppos name in
+         let datatype = datatype_opt_of_sig_opt sig_opt name in
          (pat, datatype)
       | Pat pat ->
          assert (sig_opt = NoSig);
          (pat, None) in
     with_pos ppos (`Val (pat, ([], phrase), location, datatype))
 
+  (* A commonly used wrapper around val_binding *)
+  let val_binding ?(ppos=dp) pat phrase =
+    val_binding' ~ppos NoSig (Pat pat, phrase, `Unknown)
+
 
   (** Database queries *)
 
   (* Create a list of labeled database expressions. *)
-  let db_exps ppos exps =
-    with_pos ppos (`ListLit ([record ppos exps], None))
+  let db_exps ?(ppos=dp) exps =
+    list ~ppos [record ~ppos exps]
 
   (* Is the list of labeled database expressions empty? *)
   let is_empty_db_exps : phrase -> bool = function
@@ -171,46 +220,44 @@ module SugarConstructors (Position : Pos)
   (* Create a database insertion query.  Raises an exception when the list of
      labeled expression is empty and the returning variable has not been named.
      *)
-  let db_insert ppos ins_exp lbls exps var_opt =
+  let db_insert ?(ppos=dp) ins_exp lbls exps var_opt =
     if is_empty_db_exps exps && var_opt == None then
       raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^
           " a nonempty list of labeled expression or a return variable.",
            pos ppos));
-    with_pos ppos (`DBInsert (ins_exp, lbls, exps, opt_map
-       (fun {node; pos} -> Sugartypes.with_pos pos (`Constant (`String node)))
-       var_opt))
+    with_pos ppos (`DBInsert (ins_exp, lbls, exps,
+       opt_map (fun name -> constant_str ~ppos name) var_opt))
 
   (* Create a query. *)
-  let query ppos phrases_opt blk =
-    with_pos ppos (`Query (phrases_opt, block blk, None))
+  let query ?(ppos=dp) phrases_opt blk =
+    with_pos ppos (`Query (phrases_opt, blk, None))
 
 
   (** Operator applications *)
   (* Apply a binary infix operator. *)
-  let infix_appl' ppos arg1 op arg2 =
+  let infix_appl' ?(ppos=dp) arg1 op arg2 =
     with_pos ppos (`InfixAppl (([], op), arg1, arg2))
 
   (* Apply a binary infix operator with a specified name. *)
-  let infix_appl ppos arg1 op arg2 =
-    infix_appl' ppos arg1 (`Name op) arg2
+  let infix_appl ?(ppos=dp) arg1 op arg2 =
+    infix_appl' ~ppos arg1 (`Name op) arg2
 
   (* Apply an unary operator. *)
-  let unary_appl ppos op arg =
+  let unary_appl ?(ppos=dp) op arg =
     with_pos ppos (`UnaryAppl (([], op), arg))
 
   (** XML *)
   (* Create an XML tree.  Raise an exception if opening and closing tags don't
      match. *)
-  let xml ppos tags_opt name attr_list blk_opt contents =
-    let () = match tags_opt with
+  let xml ?(ppos=dp) ?tags name attr_list blk_opt contents =
+    let () = match tags with
       | Some (opening, closing) when opening = closing -> ()
       | Some (opening, closing) ->
          raise (ConcreteSyntaxError
                   ("Closing tag '" ^ closing ^ "' does not match start tag '"
                    ^ opening ^ "'.", pos ppos))
       | _ -> () in
-    let blk = opt_map (fun blk -> block blk) blk_opt in
-    with_pos ppos (`Xml (name, attr_list, blk, contents))
+    with_pos ppos (`Xml (name, attr_list, blk_opt, contents))
 
   (** Handlers *)
   let untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =
@@ -229,23 +276,18 @@ module SugarConstructors (Position : Pos)
 
 end
 
-(* A default type of positions. *)
-module SugartypesPosition
-       : Pos with type t = (SourceCode.lexpos * SourceCode.lexpos *
-                            SourceCode.source_code option) = struct
-  type t = SourceCode.lexpos * SourceCode.lexpos * SourceCode.source_code option
-  let pos    p = p
-  let with_pos = Sugartypes.with_pos
+(* A default positions module used inside the compiler.  This module is based on
+   dummy/unit positions, which prevents attaching any kind of meaningful
+   positions to nodes.  The motivation for this is that a positions store
+   locations of source code tokens and these can only be meaningfully
+   constructed by the parser.  So when we construct new nodes outside of the
+   parser, e.g. in desugar modules, we enforce that they contain empty
+   positions. *)
+module SugartypesPosition : Pos with type t = unit = struct
+  type t = unit
+  let pos ()           = Sugartypes.dummy_position
+  let with_pos () node = Sugartypes.with_pos Sugartypes.dummy_position node
+  let dp               = ()
 end
 
 module Make = SugarConstructors(SugartypesPosition)
-
-(* Dummy positions for nodes constructed during compilation (such nodes don't
-   have a corresponding position in the original program source code). *)
-module DummyPosition : Pos with type t = unit = struct
-  type t          = unit
-  let pos ()      = Sugartypes.dummy_position
-  let with_pos () = Sugartypes.with_pos Sugartypes.dummy_position
-end
-
-module DummyMake = SugarConstructors(DummyPosition)

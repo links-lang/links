@@ -58,6 +58,8 @@ module ParserPosition
   let pos (start_pos, end_pos) = (start_pos, end_pos, None)
   (* Wrapper around Sugartypes.with_pos.  Accepts parser positions. *)
   let with_pos p = Sugartypes.with_pos (pos p)
+  (* Default (dummy) parser position *)
+  let dp = (Lexing.dummy_pos, Lexing.dummy_pos)
 end
 
 (* Instantiate SugarConstructors functor and open it to avoid explicit name
@@ -164,6 +166,7 @@ let parseRegexFlags f =
               | 'g' -> `RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
+
 %}
 
 %token END
@@ -239,9 +242,9 @@ let parseRegexFlags f =
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.pattern> pattern
-%type <Sugartypes.declared_linearity * Sugartypes.name Sugartypes.with_pos *
+%type <Sugartypes.declared_linearity * Sugartypes.name *
        Sugartypes.pattern list list * Sugartypes.location *
-       Sugartypes.block_body Sugartypes.with_pos> tlfunbinding
+       Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
@@ -298,16 +301,17 @@ declaration:
 
 nofun_declaration:
 | alien_block                                                  { $1 }
-| ALIEN VARIABLE STRING var COLON datatype SEMICOLON           { with_pos $loc
-                                                                          (`Foreign (make_untyped_binder $4, $4.node, $2, $3, datatype $6)) }
+| ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { with_pos $loc
+                                                                          (`Foreign (binder ~ppos:$loc($4) $4,
+                                                                                     $4, $2, $3, datatype $6)) }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                  set assoc (from_option default_fixity $2) ($3.node);
                                                                  with_pos $loc `Infix }
-| signature? tlvarbinding SEMICOLON                            { val_binding $loc($2) (sig_of_opt $1) $2 }
+| signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
 alien_datatype:
-| var COLON datatype SEMICOLON                                 { (make_untyped_binder $1, datatype $3) }
+| VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
 
 alien_datatypes:
 | alien_datatype+                                              { $1 }
@@ -325,13 +329,13 @@ fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { fun_binding     $loc      NoSig   $1 }
-| typed_handler_binding                                        { handler_binding $loc      NoSig   $1 }
-| signature tlfunbinding                                       { fun_binding     $loc($2) (Sig $1) $2 }
-| signature typed_handler_binding                              { handler_binding $loc($2) (Sig $1) $2 }
+| tlfunbinding                                                 { fun_binding     ~ppos:$loc      NoSig   $1 }
+| typed_handler_binding                                        { handler_binding ~ppos:$loc      NoSig   $1 }
+| signature tlfunbinding                                       { fun_binding     ~ppos:$loc($2) (Sig $1) $2 }
+| signature typed_handler_binding                              { handler_binding ~ppos:$loc($2) (Sig $1) $2 }
 
 typed_handler_binding:
-| handler_depth optional_computation_parameter var
+| handler_depth optional_computation_parameter VARIABLE
                 handler_parameterization                       { ($3, hnlit_arg $1 $2 $4) }
 
 optional_computation_parameter:
@@ -341,24 +345,18 @@ optional_computation_parameter:
 perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
 
-prefixop:
-| PREFIXOP                                                     { with_pos $loc $1 }
-
-postfixop:
-| POSTFIXOP                                                    { with_pos $loc $1 }
-
 linearity:
 | FUN                                                          { `Unl }
 | LINFUN                                                       { `Lin }
 
 tlfunbinding:
-| linearity var arg_lists perhaps_location block               { ($1, $2, $3, $4, $5)           }
-| OP pattern op pattern perhaps_location block                 { (`Unl, $3, [[$2; $4]], $5, $6) }
-| OP prefixop pattern perhaps_location block                   { (`Unl, $2, [[$3]], $4, $5)     }
-| OP pattern postfixop perhaps_location block                  { (`Unl, $3, [[$2]], $4, $5)     }
+| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                }
+| OP pattern op pattern perhaps_location block                 { (`Unl, $3.node, [[$2; $4]], $5, $6) }
+| OP PREFIXOP pattern perhaps_location block                   { (`Unl, $2, [[$3]], $4, $5)          }
+| OP pattern POSTFIXOP perhaps_location block                  { (`Unl, $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
-| VAR var perhaps_location EQ exp                              { (Name $2, $5, $3) }
+| VAR VARIABLE perhaps_location EQ exp                         { (Name $2, $5, $3) }
 
 signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
@@ -428,7 +426,7 @@ and receive for session types. */
 | RECEIVE                                                      { with_pos $loc (`Var "receive") }
 
 cp_name:
-| var                                                          { make_untyped_binder $1 }
+| VARIABLE                                                     { binder ~ppos:$loc($1) $1 }
 
 cp_label:
 | CONSTRUCTOR                                                  { $1 }
@@ -460,13 +458,13 @@ cp_expression:
 
 primary_expression:
 | atomic_expression                                            { $1 }
-| LBRACKET perhaps_exps RBRACKET                               { with_pos $loc (`ListLit ($2, None)) }
+| LBRACKET perhaps_exps RBRACKET                               { list ~ppos:$loc $2 }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
 | xml                                                          { $1 }
-| linearity arg_lists block                                    { fun_lit $loc $1 $2 $3 }
+| linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
 | handler_depth optional_computation_parameter
-     handler_parameterization                                  { handler_lit $loc (hnlit_arg $1 $2 $3) }
+     handler_parameterization                                  { handler_lit ~ppos:$loc (hnlit_arg $1 $2 $3) }
 
 handler_parameterization:
 | arg_lists? handler_body                                      { ($2, $1) }
@@ -479,13 +477,13 @@ handler_body:
 | LBRACE cases RBRACE                                          { $2 }
 
 constructor_expression:
-| CONSTRUCTOR parenthesized_thing?                             { with_pos $loc (`ConstructorLit($1, $2, None)) }
+| CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { with_pos $loc (`Section $2)              }
 | LPAREN DOT record_label RPAREN                               { with_pos $loc (`Section (`Project $3))   }
-| LPAREN RPAREN                                                { record $loc []                           }
-| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { with_pos $loc (`RecordLit ($2, $3))      }
+| LPAREN RPAREN                                                { record ~ppos:$loc []                     }
+| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3             }
 | LPAREN exps RPAREN                                           { with_pos $loc (`TupleLit ($2))           }
 | LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (`With ($2, $4))           }
 
@@ -507,20 +505,20 @@ op:
 | INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
 
 spawn_expression:
-| SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn $loc `Demon (`ExplicitSpawnLocation $3) $5 }
-| SPAWN block                                                  { spawn $loc `Demon  `NoSpawnLocation           $2 }
-| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { spawn $loc `Angel (`ExplicitSpawnLocation $3) $5 }
-| SPAWNANGEL  block                                            { spawn $loc `Angel  `NoSpawnLocation           $2 }
-| SPAWNCLIENT block                                            { spawn $loc `Demon  `SpawnClient               $2 }
-| SPAWNWAIT   block                                            { spawn $loc `Wait   `NoSpawnLocation           $2 }
+| SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc `Demon (`ExplicitSpawnLocation $3) $5 }
+| SPAWN block                                                  { spawn ~ppos:$loc `Demon  `NoSpawnLocation           $2 }
+| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { spawn ~ppos:$loc `Angel (`ExplicitSpawnLocation $3) $5 }
+| SPAWNANGEL  block                                            { spawn ~ppos:$loc `Angel  `NoSpawnLocation           $2 }
+| SPAWNCLIENT block                                            { spawn ~ppos:$loc `Demon  `SpawnClient               $2 }
+| SPAWNWAIT   block                                            { spawn ~ppos:$loc `Wait   `NoSpawnLocation           $2 }
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
-| primary_expression POSTFIXOP                                 { unary_appl $loc (`Name $2) $1 }
-| block                                                        { block $1 }
-| QUERY block                                                  { query $loc None $2 }
-| QUERY LBRACKET exp RBRACKET block                            { query $loc (Some ($3, with_pos $loc (`Constant (`Int 0)))) $5 }
-| QUERY LBRACKET exp COMMA exp RBRACKET block                  { query $loc (Some ($3, $5)) $7 }
+| primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (`Name $2) $1 }
+| block                                                        { $1 }
+| QUERY block                                                  { query ~ppos:$loc None $2 }
+| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (`Constant (`Int 0)))) $5 }
+| QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
 | postfix_expression arg_spec                                  { with_pos $loc (`FnAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (`Projection ($1, $3)) }
 
@@ -535,9 +533,9 @@ perhaps_exps:
 | loption(exps)                                                { $1 }
 
 unary_expression:
-| MINUS unary_expression                                       { unary_appl $loc `Minus      $2 }
-| MINUSDOT unary_expression                                    { unary_appl $loc `FloatMinus $2 }
-| PREFIXOP unary_expression                                    { unary_appl $loc (`Name $1)  $2 }
+| MINUS unary_expression                                       { unary_appl ~ppos:$loc `Minus      $2 }
+| MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc `FloatMinus $2 }
+| PREFIXOP unary_expression                                    { unary_appl ~ppos:$loc (`Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
 | DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (`DoOperation ($2, $3, None)) }
 
@@ -545,104 +543,104 @@ unary_expression:
 infixr_9:
 | unary_expression                                             { $1 }
 | unary_expression INFIX9 unary_expression
-| unary_expression INFIXR9 infixr_9                            { infix_appl $loc $1 $2 $3 }
+| unary_expression INFIXR9 infixr_9                            { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixl_9:
 | infixr_9                                                     { $1 }
-| infixl_9 INFIXL9 infixr_9                                    { infix_appl $loc $1 $2 $3 }
+| infixl_9 INFIXL9 infixr_9                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixr_8:
 | infixl_9                                                     { $1 }
 | infixl_9 INFIX8  infixl_9
-| infixl_9 INFIXR8 infixr_8                                    { infix_appl  $loc $1 $2    $3 }
-| infixl_9 COLONCOLON infixr_8                                 { infix_appl' $loc $1 `Cons $3 }
+| infixl_9 INFIXR8 infixr_8                                    { infix_appl  ~ppos:$loc $1 $2    $3 }
+| infixl_9 COLONCOLON infixr_8                                 { infix_appl' ~ppos:$loc $1 `Cons $3 }
 
 infixl_8:
 | infixr_8                                                     { $1 }
-| infixl_8 INFIXL8 infixr_8                                    { infix_appl $loc $1 $2 $3 }
+| infixl_8 INFIXL8 infixr_8                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixr_7:
 | infixl_8                                                     { $1 }
 | infixl_8 INFIX7  infixl_8
-| infixl_8 INFIXR7 infixr_7                                    { infix_appl $loc $1 $2 $3 }
+| infixl_8 INFIXR7 infixr_7                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixl_7:
 | infixr_7                                                     { $1 }
-| infixl_7 INFIXL7 infixr_7                                    { infix_appl $loc $1 $2 $3 }
+| infixl_7 INFIXL7 infixr_7                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixr_6:
 | infixl_7                                                     { $1 }
 | infixl_7 INFIX6  infixl_7
-| infixl_7 INFIXR6 infixr_6                                    { infix_appl $loc $1 $2 $3 }
+| infixl_7 INFIXR6 infixr_6                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixl_6:
 | infixr_6                                                     { $1 }
-| infixl_6 INFIXL6 infixr_6                                    { infix_appl  $loc $1 $2          $3 }
-| infixl_6 MINUS infixr_6                                      { infix_appl' $loc $1 `Minus      $3 }
-| infixl_6 MINUSDOT infixr_6                                   { infix_appl' $loc $1 `FloatMinus $3 }
+| infixl_6 INFIXL6 infixr_6                                    { infix_appl  ~ppos:$loc $1 $2          $3 }
+| infixl_6 MINUS infixr_6                                      { infix_appl' ~ppos:$loc $1 `Minus      $3 }
+| infixl_6 MINUSDOT infixr_6                                   { infix_appl' ~ppos:$loc $1 `FloatMinus $3 }
 /* HACK: the type variables should get inserted later... */
-| infixl_6 BANG infixr_6                                       { infix_appl  $loc $1 "!" $3         }
+| infixl_6 BANG infixr_6                                       { infix_appl  ~ppos:$loc $1 "!" $3         }
 
 infixr_5:
 | infixl_6                                                     { $1 }
 | infixl_6 INFIX5  infixl_6
-| infixl_6 INFIXR5 infixr_5                                    { infix_appl $loc $1 $2 $3 }
+| infixl_6 INFIXR5 infixr_5                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixl_5:
 | infixr_5                                                     { $1 }
-| infixl_5 INFIXL5 infixr_5                                    { infix_appl $loc $1 $2 $3 }
+| infixl_5 INFIXL5 infixr_5                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixr_4:
 | infixl_5                                                     { $1 }
 | infixl_5 INFIX4    infixl_5
-| infixl_5 INFIXR4   infixr_4                                  { infix_appl $loc $1 $2 $3 }
+| infixl_5 INFIXR4   infixr_4                                  { infix_appl ~ppos:$loc $1 $2 $3 }
 | infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in
-                                                                 infix_appl' $loc $1 (`RegexMatch flags) r }
+                                                                 infix_appl' ~ppos:$loc $1 (`RegexMatch flags) r }
 
 infixl_4:
 | infixr_4                                                     { $1 }
-| infixl_4 INFIXL4 infixr_4                                    { infix_appl $loc $1 $2 $3 }
+| infixl_4 INFIXL4 infixr_4                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixr_3:
 | infixl_4                                                     { $1 }
 | infixl_4 INFIX3  infixl_4
-| infixl_4 INFIXR3 infixr_3                                    { infix_appl $loc $1 $2 $3 }
+| infixl_4 INFIXR3 infixr_3                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixl_3:
 | infixr_3                                                     { $1 }
-| infixl_3 INFIXL3 infixr_3                                    { infix_appl $loc $1 $2 $3 }
+| infixl_3 INFIXL3 infixr_3                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixr_2:
 | infixl_3                                                     { $1 }
 | infixl_3 INFIX2  infixl_3
-| infixl_3 INFIXR2 infixr_2                                    { infix_appl $loc $1 $2 $3 }
+| infixl_3 INFIXR2 infixr_2                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixl_2:
 | infixr_2                                                     { $1 }
-| infixl_2 INFIXL2 infixr_2                                    { infix_appl $loc $1 $2 $3 }
+| infixl_2 INFIXL2 infixr_2                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixr_1:
 | infixl_2                                                     { $1 }
 | infixl_2 INFIX1  infixl_2
-| infixl_2 INFIXR1 infixr_1                                    { infix_appl $loc $1 $2 $3 }
+| infixl_2 INFIXR1 infixr_1                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixl_1:
 | infixr_1                                                     { $1 }
-| infixl_1 INFIXL1 infixr_1                                    { infix_appl $loc $1 $2 $3 }
+| infixl_1 INFIXL1 infixr_1                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixr_0:
 | infixl_1                                                     { $1 }
 | infixl_1 INFIX0    infixl_1
-| infixl_1 INFIXR0   infixr_0                                  { infix_appl $loc $1 $2 $3 }
+| infixl_1 INFIXR0   infixr_0                                  { infix_appl ~ppos:$loc $1 $2 $3 }
 
 infixl_0:
 | infixr_0                                                     { $1 }
-| infixl_0 INFIXL0 infixr_0                                    { infix_appl $loc $1 $2 $3 }
+| infixl_0 INFIXL0 infixr_0                                    { infix_appl ~ppos:$loc $1 $2 $3 }
 
 logical_expression:
 | infixl_0                                                     { $1 }
-| logical_expression BARBAR infixl_0                           { infix_appl' $loc $1 `Or  $3 }
-| logical_expression AMPAMP infixl_0                           { infix_appl' $loc $1 `And $3 }
+| logical_expression BARBAR infixl_0                           { infix_appl' ~ppos:$loc $1 `Or  $3 }
+| logical_expression AMPAMP infixl_0                           { infix_appl' ~ppos:$loc $1 `And $3 }
 
 typed_expression:
 | logical_expression                                           { $1 }
@@ -664,21 +662,21 @@ attr_list:
 
 attr:
 | xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
-| xmlid EQ LQUOTE RQUOTE                                       { ($1, [with_pos $loc($3) (`Constant (`String ""))]) }
+| xmlid EQ LQUOTE RQUOTE                                       { ($1, [constant_str ~ppos:$loc($3) ""]) }
 
 attr_val:
 | attr_val_entry+                                              { $1 }
 
 attr_val_entry:
-| block                                                        { block $1 }
-| STRING                                                       { with_pos $loc (`Constant (`String $1)) }
+| block                                                        { $1 }
+| STRING                                                       { constant_str ~ppos:$loc $1 }
 
 xml:
-| LXML attr_list block? SLASHRXML                              { xml $loc  None           $1 $2 $3 [] }
-| LXML attr_list block? RXML xml_contents* ENDTAG              { xml $loc (Some ($1, $6)) $1 $2 $3 $5 }
+| LXML attr_list block? SLASHRXML                              { xml ~ppos:$loc $1 $2 $3 []                }
+| LXML attr_list block? RXML xml_contents* ENDTAG              { xml ~ppos:$loc $1 $2 $3 $5 ~tags:($1, $6) }
 
 xml_contents:
-| block                                                        { block $1 }
+| block                                                        { $1 }
 | formlet_binding | formlet_placement | page_placement
 | xml                                                          { $1 }
 | CDATA                                                        { with_pos $loc (`TextNode (Utility.xml_unescape $1)) }
@@ -689,7 +687,7 @@ formlet_binding:
 formlet_placement:
 | LBRACE logical_expression
          FATRARROW logical_expression RBRACE                   { with_pos $loc (`FormletPlacement ($2, $4,
-                                                                   with_pos $loc (`ListLit ([], None)))) }
+                                                                                                   list ~ppos:$loc [])) }
 | LBRACE logical_expression
          FATRARROW logical_expression
          WITH logical_expression RBRACE                        { with_pos $loc (`FormletPlacement ($2, $4, $6)) }
@@ -705,7 +703,7 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (`Conditional ($3, $5, $7)) }
 
 case:
-| CASE pattern RARROW block_contents                           { $2, block (with_pos $loc($4) $4) }
+| CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
 
 cases:
 | case+                                                        { $1 }
@@ -753,10 +751,10 @@ perhaps_where:
 
 perhaps_orderby:
 | /* empty */                                                  { None }
-| ORDERBY LPAREN exps RPAREN                                   { Some (tuple $loc($3) $3) }
+| ORDERBY LPAREN exps RPAREN                                   { Some (tuple ~ppos:$loc($3) $3) }
 
 escape_expression:
-| ESCAPE var IN postfix_expression                             { with_pos $loc (`Escape (make_untyped_binder $2, $4)) }
+| ESCAPE VARIABLE IN postfix_expression                        { with_pos $loc (`Escape (binder ~ppos:$loc($2) $2, $4)) }
 
 formlet_expression:
 | FORMLET xml YIELDS exp                                       { with_pos $loc (`Formlet ($2, $4)) }
@@ -764,7 +762,7 @@ formlet_expression:
 
 table_expression:
 | TABLE exp WITH datatype perhaps_table_constraints FROM exp   { with_pos $loc (`TableLit ($2, datatype $4, $5,
-                                                                                           with_pos $loc (`ListLit ([], None)), $7)) }
+                                                                                           list ~ppos:$loc [], $7)) }
 /* SAND */
 | TABLE exp WITH datatype perhaps_table_constraints
             TABLEKEYS exp FROM exp                             { with_pos $loc (`TableLit ($2, datatype $4, $5, $7, $9))}
@@ -804,11 +802,11 @@ exp:
 | typed_expression                                             { $1 }
 
 database_expression:
-| INSERT exp VALUES LPAREN record_labels RPAREN exp            { db_insert $loc $2 $5 $7 None }
+| INSERT exp VALUES LPAREN record_labels RPAREN exp            { db_insert ~ppos:$loc $2 $5 $7 None }
 | INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
-  RPAREN RBRACKET preceded(RETURNING, var)?                    { db_insert $loc $2 (labels $6) (db_exps $loc($6) $6) $9  }
+  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
-  RETURNING var                                                { db_insert $loc $2 $5 $7 (Some $9) }
+  RETURNING VARIABLE                                           { db_insert ~ppos:$loc $2 $5 $7 (Some $9) }
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
@@ -842,11 +840,11 @@ links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
 
 binding:
-| VAR pattern EQ exp SEMICOLON                                 { val_binding $loc NoSig (Pat $2, $4, `Unknown) }
+| VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature linearity var arg_lists block                      { fun_binding $loc (Sig $1) ($2, $3, $4, `Unknown, $5) }
-| linearity var arg_lists block                                { fun_binding $loc  NoSig   ($1, $2, $3, `Unknown, $4) }
-| typed_handler_binding                                        { handler_binding $loc NoSig $1 }
+| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, `Unknown, $5) }
+| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, `Unknown, $4) }
+| typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
 bindings:
@@ -857,14 +855,14 @@ moduleblock:
 | LBRACE declarations RBRACE                                   { $2 }
 
 block:
-| LBRACE block_contents RBRACE                                 { with_pos $loc $2 }
+| LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
 
 block_contents:
 | bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (`Exp $2)],
-                                                                  record $loc []) }
+                                                                  record ~ppos:$loc []) }
 | bindings exp                                                 { ($1, $2) }
 | exp SEMICOLON                                                { ([with_pos $loc($1) (`Exp $1)],
-                                                                  record $loc []) }
+                                                                  record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }
 
@@ -1104,7 +1102,7 @@ regex_flags_opt:
 regex_replace:
 | /* empty */                                                  { `Literal "" }
 | REGEXREPL                                                    { `Literal $1 }
-| block                                                        { `Splice (block $1) }
+| block                                                        { `Splice $1 }
 
 regex_pattern:
 | RANGE                                                        { `Range $1 }
@@ -1117,7 +1115,7 @@ regex_pattern:
 | regex_pattern STAR                                           { `Repeat (Regex.Star, $1) }
 | regex_pattern PLUS                                           { `Repeat (Regex.Plus, $1) }
 | regex_pattern QUESTION                                       { `Repeat (Regex.Question, $1) }
-| block                                                        { `Splice (block $1) }
+| block                                                        { `Splice $1 }
 
 regex_pattern_alternate:
 | regex_pattern_sequence                                       { `Seq $1 }
@@ -1135,7 +1133,7 @@ pattern:
 
 typed_pattern:
 | cons_pattern                                                 { $1 }
-| cons_pattern AS var                                          { with_pos $loc (`As (make_untyped_binder $3, $1)) }
+| cons_pattern AS VARIABLE                                     { with_pos $loc (`As (binder ~ppos:$loc($3) $3, $1)) }
 
 cons_pattern:
 | constructor_pattern                                          { $1 }
@@ -1160,8 +1158,8 @@ parenthesized_pattern:
 | LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (`Record ($2, $3))  }
 
 primary_pattern:
-| var                                                          { variable_pat $loc $1         }
-| UNDERSCORE                                                   { with_pos $loc `Any           }
+| VARIABLE                                                     { variable_pat ~ppos:$loc $1   }
+| UNDERSCORE                                                   { any_pat $loc                 }
 | constant                                                     { with_pos $loc (`Constant $1) }
 | LBRACKET RBRACKET                                            { with_pos $loc `Nil           }
 | LBRACKET patterns RBRACKET                                   { with_pos $loc (`List $2)     }

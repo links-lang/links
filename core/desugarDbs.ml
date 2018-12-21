@@ -1,4 +1,4 @@
-open Sugartypes
+open SugarConstructors.Make
 
 (*
   Desugaring database stuff
@@ -38,6 +38,9 @@ move insert into the IR
 *)
 
 
+let insert_rows      = "InsertRows"
+let insert_returning = "InsertReturning"
+
 class desugar_dbs env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
@@ -47,8 +50,8 @@ object (o : 'self_type)
       (* TODO: work out how to type this properly *)
         let eff = o#lookup_effects in
         let o, table, table_type = o#phrase table in
-        let read_type = TypeUtils.table_read_type table_type in
-        let write_type = TypeUtils.table_write_type table_type in
+        let read_type   = TypeUtils.table_read_type   table_type in
+        let write_type  = TypeUtils.table_write_type  table_type in
         let needed_type = TypeUtils.table_needed_type table_type in
 
         (* HACK
@@ -61,23 +64,16 @@ object (o : 'self_type)
            IR. *)
         let value_type = `Record (Types.make_empty_open_row (`Any, `Any)) in
         let o, rows, _ = o#phrase rows in
+        let tyvars = [`Type read_type; `Type write_type; `Type needed_type;
+                      `Type value_type; `Row eff] in
         let o, (e : Sugartypes.phrasenode) =
           match returning with
             | None ->
-                (o,
-                 `FnAppl
-                   (with_dummy_pos (`TAppl (with_dummy_pos (`Var "InsertRows"),
-                             [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff])),
-                    [table; rows]))
+                (o, fn_appl_node insert_rows tyvars [table; rows])
             | Some field ->
                 let o, field, _ = o#phrase field in
-                  (o,
-                   `FnAppl
-                     (with_dummy_pos (`TAppl (with_dummy_pos (`Var "InsertReturning"),
-                               [`Type read_type; `Type write_type; `Type needed_type; `Type value_type; `Row eff])),
-                      [table; rows; field]))
-        in
-          o, e, Types.unit_type
+                (o, fn_appl_node insert_returning tyvars [table; rows; field])
+        in (o, e, Types.unit_type)
     | e -> super#phrasenode e
 end
 
