@@ -49,6 +49,7 @@ struct
   module Operators         = Operators
 end
 
+(* Construction of nodes using positions produced by Menhir parser *)
 module ParserPosition
        : Pos with type t = (SourceCode.lexpos * SourceCode.lexpos) = struct
   (* parser position produced by Menhir *)
@@ -59,6 +60,8 @@ module ParserPosition
   let with_pos p = Sugartypes.with_pos (pos p)
 end
 
+(* Instatntiate SmartConstructors functor and open it to avoid explicit name
+   qualification. *)
 module ParserConstructors = SmartConstructors(ParserPosition)
 open ParserConstructors
 

@@ -1,9 +1,32 @@
+(* This module contains module signatures used by SmartConstructors module.
+   Putting them here allows to avoid repetition. *)
+
 open Sugartypes
 open Operators
 
+(* An abstract type of positions and operations on them.  The core type of
+   positions used in the compilation pipeline is Sugartypes.position, which
+   again is an alias to SourceCode.pos.  However, in several places we operate
+   on positions of a different type.  Most importantly, the parser produces a
+   positions in a different format.  What is important is that there needs to be
+   a way of converting such positions to Sugartypes.position and this is what
+   modules implementing this signature provide. *)
+module type Pos = sig
+  (* Type of positions *)
+  type t
+  (* Convert a position to Sugartypes.position *)
+  val pos      : t -> Sugartypes.position
+  (* Produce a syntax tree node with a position attached *)
+  val with_pos : t -> 'a -> 'a Sugartypes.with_pos
+end
+
+(* Various smart constructors for elements of Links AST.  Module implementing
+   this signature is actually a functor on a module of type Pos, defined
+   above. *)
 module type SmartConstructorsSig = sig
 
-  (* Positions *)
+  (* Positions and functions on them.  Repeated here to avoid need for name
+     qualification and additional module opens. *)
   type t
   val pos      : t -> Sugartypes.position
   val with_pos : t -> 'a -> 'a with_pos

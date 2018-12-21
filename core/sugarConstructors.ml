@@ -2,18 +2,15 @@ open Sugartypes
 open Operators
 open Utility.OptionUtils
 
-module type Pos = sig
-  type t
-  val pos      : t -> Sugartypes.position
-  val with_pos : t -> 'a -> 'a Sugartypes.with_pos
-end
-
+(* Import module signatures *)
+module type Pos                  = SmartConstructorsIntf.Pos
 module type SmartConstructorsSig = SmartConstructorsIntf.SmartConstructorsSig
 
+(* Actual implementation of smart constructors as a functor on a Pos module *)
 module SmartConstructors (Position : Pos)
        : (SmartConstructorsSig with type t := Position.t) = struct
 
-  (** Positions *)
+  (** Convenient aliases for functions operating on positions *)
   let pos      = Position.pos
   let with_pos = Position.with_pos
 
@@ -227,6 +224,7 @@ module SmartConstructors (Position : Pos)
 
 end
 
+(* A default type of positions *)
 module SugartypesPosition
        : Pos with type t = (SourceCode.lexpos * SourceCode.lexpos *
                             SourceCode.source_code option) = struct
@@ -237,6 +235,8 @@ end
 
 module Make = SmartConstructors(SugartypesPosition)
 
+(* Dummy positions for nodes constructed during compilation (such nodes don't
+   have a corresponding position in the original program source code). *)
 module DummyPosition : Pos with type t = unit = struct
   type t          = unit
   let pos ()      = Sugartypes.dummy_position
