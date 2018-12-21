@@ -2,19 +2,19 @@ open Sugartypes
 open Operators
 open Utility.OptionUtils
 
-(* Import module signatures *)
+(* Import module signatures. *)
 module type Pos                  = SugarConstructorsIntf.Pos
 module type SugarConstructorsSig = SugarConstructorsIntf.SugarConstructorsSig
 
-(* Actual implementation of smart constructors as a functor on a Pos module *)
+(* Actual implementation of smart constructors as a functor on a Pos module. *)
 module SugarConstructors (Position : Pos)
        : (SugarConstructorsSig with type t := Position.t) = struct
 
-  (** Convenient aliases for functions operating on positions *)
+  (** Convenient aliases for functions operating on positions. *)
   let pos      = Position.pos
   let with_pos = Position.with_pos
 
-  (** Generation of fresh type variables *)
+  (** Generation of fresh type variables. *)
 
   let type_variable_counter = ref 0
 
@@ -44,10 +44,10 @@ module SugarConstructors (Position : Pos)
 
 
   (** Helper data types and functions for passing arguments to smart
-      constructors *)
+      constructors. *)
 
   (* Stores either a name of variable to be used in a binding pattern or the
-     pattern itself.  Used for passing an argument to val_binding *)
+     pattern itself.  Used for passing an argument to val_binding. *)
   type name_or_pat = Name of name with_pos | Pat of pattern
 
   (* Optionally stores a datatype signature.  Isomporphic to Option. *)
@@ -61,7 +61,7 @@ module SugarConstructors (Position : Pos)
   let datatype_opt_of_sig_opt sig_opt name =
     match sig_opt with
     | Sig {node=({node=signame; _}, datatype); pos} ->
-       (* Ensure that name in a signature matches name in a declaration *)
+       (* Ensure that name in a signature matches name in a declaration. *)
        if signame <> name then
          raise (ConcreteSyntaxError
                ("Signature for `" ^ signame ^ "' should precede definition of `"
@@ -72,20 +72,24 @@ module SugarConstructors (Position : Pos)
 
   (** Common stuff *)
 
-  (* Create a Block from block_body *)
+  (* Create a Block from block_body. *)
   let block {node;pos} = Sugartypes.with_pos pos (`Block node)
+
   let datatype d = (d, None)
   let cp_unit ppos = with_pos ppos (`Unquote ([], with_pos ppos (`TupleLit [])))
 
-  (* Create a record with a given list of labels *)
+  (* Create a record with a given list of labels. *)
   let record ppos lbls = with_pos ppos (`RecordLit (lbls, None))
 
-  (* Creata a tuple.  Preserves 1-tuples *)
+  (* Creata a tuple.  Preserves 1-tuples. *)
   let tuple pos = function
     | [e] -> record pos [("1", e)]
     | es  -> with_pos pos (`TupleLit es)
 
-  (* Create a variable pattern with a given name *)
+
+  (** Patterns *)
+
+  (* Create a variable pattern with a given name. *)
   let variable_pat ppos name =
     with_pos ppos (`Variable (make_untyped_binder name))
 
@@ -110,37 +114,37 @@ module SugarConstructors (Position : Pos)
 
   (** Various phrases *)
 
-  (* Create a FunLit *)
+  (* Create a FunLit. *)
   let fun_lit ppos linearity pats blk =
     with_pos ppos (`FunLit (None, linearity, (pats, block blk), `Unknown))
 
-  (* Create an argument used by Handler and HandlerLit *)
+  (* Create an argument used by Handler and HandlerLit. *)
   let hnlit_arg depth computation_param handler_param =
     (depth, computation_param, fst handler_param, snd handler_param)
 
-  (* Create a HandlerLit *)
+  (* Create a HandlerLit. *)
   let handler_lit ppos handlerlit = with_pos ppos (`HandlerLit handlerlit)
 
-  (* Create a Spawn *)
+  (* Create a Spawn. *)
   let spawn ppos spawn_kind location blk =
     with_pos ppos (`Spawn (spawn_kind, location, block blk, None))
 
 
   (** Bindings *)
-  (* Create a function binding *)
+  (* Create a function binding. *)
   let fun_binding ppos sig_opt (linearity, bndr, args, location, blk) =
     let datatype = datatype_opt_of_sig_opt sig_opt bndr.node in
     with_pos ppos (`Fun (make_untyped_binder bndr, linearity,
                          ([], (args, block blk)), location, datatype))
 
-  (* Create a handler binding *)
+  (* Create a handler binding. *)
   let handler_binding ppos sig_opt (name, handlerlit) =
     let datatype = datatype_opt_of_sig_opt sig_opt name.node in
     with_pos ppos (`Handler (make_untyped_binder name, handlerlit, datatype))
 
   (* Create a Val binding.  This function takes either a name for a variable
      pattern or an already constructed pattern.  In the latter case no signature
-     should be passed.  *)
+     should be passed. *)
   let val_binding ppos sig_opt (name_or_pat, phrase, location) =
     let pat, datatype = match name_or_pat with
       | Name name ->
@@ -155,7 +159,7 @@ module SugarConstructors (Position : Pos)
 
   (** Database queries *)
 
-  (* Create a list of labeled database expressions *)
+  (* Create a list of labeled database expressions. *)
   let db_exps ppos exps =
     with_pos ppos (`ListLit ([record ppos exps], None))
 
@@ -165,7 +169,8 @@ module SugarConstructors (Position : Pos)
     | _                                                    -> false
 
   (* Create a database insertion query.  Raises an exception when the list of
-   labeled expression is empty and the returning variable has not been named.*)
+     labeled expression is empty and the returning variable has not been named.
+     *)
   let db_insert ppos ins_exp lbls exps var_opt =
     if is_empty_db_exps exps && var_opt == None then
       raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^
@@ -175,27 +180,27 @@ module SugarConstructors (Position : Pos)
        (fun {node; pos} -> Sugartypes.with_pos pos (`Constant (`String node)))
        var_opt))
 
-  (* Create a query *)
+  (* Create a query. *)
   let query ppos phrases_opt blk =
     with_pos ppos (`Query (phrases_opt, block blk, None))
 
 
   (** Operator applications *)
-  (* Apply a binary infix operator *)
+  (* Apply a binary infix operator. *)
   let infix_appl' ppos arg1 op arg2 =
     with_pos ppos (`InfixAppl (([], op), arg1, arg2))
 
-  (* Apply a binary infix operator with a specified name *)
+  (* Apply a binary infix operator with a specified name. *)
   let infix_appl ppos arg1 op arg2 =
     infix_appl' ppos arg1 (`Name op) arg2
 
-  (* Apply an unary operator *)
+  (* Apply an unary operator. *)
   let unary_appl ppos op arg =
     with_pos ppos (`UnaryAppl (([], op), arg))
 
   (** XML *)
   (* Create an XML tree.  Raise an exception if opening and closing tags don't
-   match. *)
+     match. *)
   let xml ppos tags_opt name attr_list blk_opt contents =
     let () = match tags_opt with
       | Some (opening, closing) when opening = closing -> ()
@@ -224,7 +229,7 @@ module SugarConstructors (Position : Pos)
 
 end
 
-(* A default type of positions *)
+(* A default type of positions. *)
 module SugartypesPosition
        : Pos with type t = (SourceCode.lexpos * SourceCode.lexpos *
                             SourceCode.source_code option) = struct

@@ -7,16 +7,16 @@ open Operators
 (* An abstract type of positions and operations on them.  The core type of
    positions used in the compilation pipeline is Sugartypes.position, which
    again is an alias to SourceCode.pos.  However, in several places we operate
-   on positions of a different type.  Most importantly, the parser produces a
+   on positions of a different type.  Most importantly, the parser produces
    positions in a different format.  What is important is that there needs to be
    a way of converting such positions to Sugartypes.position and this is what
    modules implementing this signature provide. *)
 module type Pos = sig
-  (* Type of positions *)
+  (* Type of positions. *)
   type t
-  (* Convert a position to Sugartypes.position *)
+  (* Convert a position to Sugartypes.position. *)
   val pos      : t -> Sugartypes.position
-  (* Produce a syntax tree node with a position attached *)
+  (* Produce a syntax tree node with a position attached. *)
   val with_pos : t -> 'a -> 'a Sugartypes.with_pos
 end
 
@@ -39,8 +39,8 @@ module type SugarConstructorsSig = sig
   val fresh_presence_variable       : unit -> fieldspec
   val fresh_rigid_presence_variable : unit -> fieldspec
 
-  (* Helper data types and functions for passing arguments to smart constructors
-     *)
+  (* Helper data types and functions for passing arguments to smart
+     constructors.  *)
   type name_or_pat = Name of name with_pos
                    | Pat of pattern
 
@@ -55,6 +55,8 @@ module type SugarConstructorsSig = sig
   val cp_unit      : t -> cp_phrase
   val record       : t -> (name * phrase) list -> phrase
   val tuple        : t -> phrase list -> phrase
+
+  (* Patterns *)
   val variable_pat : t -> name with_pos -> pattern
 
   (* Fieldspec *)

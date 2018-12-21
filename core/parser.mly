@@ -60,7 +60,7 @@ module ParserPosition
   let with_pos p = Sugartypes.with_pos (pos p)
 end
 
-(* Instatntiate SugarConstructors functor and open it to avoid explicit name
+(* Instantiate SugarConstructors functor and open it to avoid explicit name
    qualification. *)
 module ParserConstructors = SugarConstructors(ParserPosition)
 open ParserConstructors
