@@ -1,4 +1,4 @@
-(* This module contains module signatures used by SmartConstructors module.
+(* This module contains module signatures used by SugarConstructors module.
    Putting them here allows to avoid repetition. *)
 
 open Sugartypes
@@ -23,7 +23,7 @@ end
 (* Various smart constructors for elements of Links AST.  Module implementing
    this signature is actually a functor on a module of type Pos, defined
    above. *)
-module type SmartConstructorsSig = sig
+module type SugarConstructorsSig = sig
 
   (* Positions and functions on them.  Repeated here to avoid need for name
      qualification and additional module opens. *)

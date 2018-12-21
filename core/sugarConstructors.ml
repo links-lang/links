@@ -3,12 +3,12 @@ open Operators
 open Utility.OptionUtils
 
 (* Import module signatures *)
-module type Pos                  = SmartConstructorsIntf.Pos
-module type SmartConstructorsSig = SmartConstructorsIntf.SmartConstructorsSig
+module type Pos                  = SugarConstructorsIntf.Pos
+module type SugarConstructorsSig = SugarConstructorsIntf.SugarConstructorsSig
 
 (* Actual implementation of smart constructors as a functor on a Pos module *)
-module SmartConstructors (Position : Pos)
-       : (SmartConstructorsSig with type t := Position.t) = struct
+module SugarConstructors (Position : Pos)
+       : (SugarConstructorsSig with type t := Position.t) = struct
 
   (** Convenient aliases for functions operating on positions *)
   let pos      = Position.pos
@@ -233,7 +233,7 @@ module SugartypesPosition
   let with_pos = Sugartypes.with_pos
 end
 
-module Make = SmartConstructors(SugartypesPosition)
+module Make = SugarConstructors(SugartypesPosition)
 
 (* Dummy positions for nodes constructed during compilation (such nodes don't
    have a corresponding position in the original program source code). *)
@@ -243,4 +243,4 @@ module DummyPosition : Pos with type t = unit = struct
   let with_pos () = Sugartypes.with_pos Sugartypes.dummy_position
 end
 
-module DummyMake = SmartConstructors(DummyPosition)
+module DummyMake = SugarConstructors(DummyPosition)
