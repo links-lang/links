@@ -1,0 +1,18 @@
+#Tests a function where closure conversion only yields a type abstraction, but we need not provide an actual (term) variable closure environment
+
+fun poly(x) {
+  ()
+}
+
+sig outer : (b) ~> Int
+fun outer (x) {
+  fun inner() {
+    #force usage of type variable of outer function
+    var dummy = poly : (b) ~> ();
+    42
+  }
+  inner()
+}
+
+
+outer(7)
