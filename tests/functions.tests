@@ -94,3 +94,8 @@ Closure conversion: Test generalization of free type variables during hoisting
 ./tests/functions/nested-functions-polymorphic.links
 filemode : true
 stdout : 123 : Int
+
+Closure conversion: Test function with free type variables, but no free term variables
+./tests/functions/closure-conv-type-abstr-only.links
+filemode : true
+stdout : 42 : Int
