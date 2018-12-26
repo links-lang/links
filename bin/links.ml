@@ -24,7 +24,10 @@ let print_simple rtype value =
 
 let prelude_evaluation_environment () =
   let empty_eval_env = Evaluation_env.empty in
-  let lib_eval_env = {empty_eval_env with Evaluation_env.tyenv = Lib.typing_env} in
+  let lib_eval_env =
+    {empty_eval_env with
+      Evaluation_env.tyenv = Lib.typing_env;
+      Evaluation_env.nenv = Lib.nenv} in
 
   let prelude_path = (Settings.get_value BS.prelude_file) in
   let (prelude_eval_env, _, _) =

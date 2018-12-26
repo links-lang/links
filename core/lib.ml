@@ -1629,11 +1629,19 @@ let type_env : FrontendTypeEnv.qual_var_environment =
   let lib_id = Some (QualifiedName.of_name BuiltinModules.lib) in
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, (lib_id, t))) env Env.String.empty
 
+let module_env : FrontendTypeEnv.qual_module_environment =
+  let lib_module_fields =
+    List.fold_right (fun (n, (_,t,_)) fs -> StringMap.add n t fs) env StringMap.empty in
+  let lib_module =
+    { Types.modules = StringMap.empty;
+      Types.fields = lib_module_fields} in
+  Env.String.bind Env.String.empty (BuiltinModules.lib, (None, lib_module))
+
 
 let typing_env = {
-  FrontendTypeEnv.var_env = type_env;
+  FrontendTypeEnv.var_env = Env.String.empty;
   tycon_env = alias_env;
-  module_env = Env.String.empty;
+  module_env = module_env;
   effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
