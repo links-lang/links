@@ -26,7 +26,7 @@ let prelude_evaluation_environment () =
   let empty_eval_env = Evaluation_env.empty in
   let lib_eval_env =
     {empty_eval_env with
-      Evaluation_env.tyenv = Lib.typing_env;
+      Evaluation_env.tyenv = FrontendTypeEnv.import_module Lib.BuiltinModules.lib Lib.typing_env;
       Evaluation_env.nenv = Lib.nenv} in
 
   let prelude_path = (Settings.get_value BS.prelude_file) in
@@ -34,11 +34,9 @@ let prelude_evaluation_environment () =
     Driver.run_single_file false lib_eval_env prelude_path in
 
   let patched_tyenv = Lib.patch_prelude_funs prelude_eval_env.Evaluation_env.tyenv in
-  let opened_tyenv =
-    (FrontendTypeEnv.import_module Lib.BuiltinModules.prelude ->-
-    FrontendTypeEnv.import_module Lib.BuiltinModules.lib) patched_tyenv in
+  let prelude_opened_tyenv = FrontendTypeEnv.import_module Lib.BuiltinModules.prelude  patched_tyenv in
 
-  {prelude_eval_env with Evaluation_env.tyenv = opened_tyenv}
+  {prelude_eval_env with Evaluation_env.tyenv = prelude_opened_tyenv}
 
 
 
