@@ -133,14 +133,6 @@ let die_on_exception f x =
     updated_evaluation_env, post_backend_ir_bindings, typ
 
 
-(* just adds benchmarking and error handling around file_ast_to_ir *)
-let file_ast_to_ir  interacting envs source =
-  let benchmarked_file_ast_to_ir =
-    lazy (lazy (file_ast_to_ir  interacting envs source) |>measure_as<| "file_ast_to_ir") in
-  die_on_exception_unless_interacting interacting benchmarked_file_ast_to_ir
-
-
-
 
   (* Runs a single file  without trying to resolve external dependenices
      (i.e., without processing any additional files *)
