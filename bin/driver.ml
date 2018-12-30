@@ -29,13 +29,16 @@ let process_program
   let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
 
   let perform_optimisations = Settings.get_value BS.optimise && not interacting in
-  let (globals, _) = Backend.transform_program perform_optimisations tenv program in
+
+  let (globals, _main) as post_backend_pipeline_program =
+    Backend.transform_program perform_optimisations tenv program in
+
 
   (if Settings.get_value BS.typecheck_only then exit 0);
 
   Webserver.init (valenv, nenv, tyenv) globals external_files;
 
-  lazy (Eval.run_program valenv program) |>measure_as<| "run_program"
+  lazy (Eval.run_program valenv post_backend_pipeline_program) |>measure_as<| "run_program"
 
 
 let process_program  interacting envs program external_files =
