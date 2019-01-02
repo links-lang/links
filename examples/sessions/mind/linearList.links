@@ -1,0 +1,11 @@
+typename LinList(a) = [| LinNil | LinCons: (a, LinList(a)) |];
+
+# Maps a function over all channels
+sig linMap : ((s :: Session) ~e~> s, LinList(s)) ~e~> LinList(s)
+fun linMap(f, chans) {
+  switch(chans) {
+    case LinNil -> LinNil
+    case LinCons(ch, chs) -> LinCons(f(ch), (linMap(f, chs)))
+  }
+}
+
