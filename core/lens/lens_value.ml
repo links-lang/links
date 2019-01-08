@@ -48,7 +48,7 @@ let predicate (lens : t) =
   let sort = sort lens in
   Lens_sort.predicate sort
 
-let rec get_primary_key (lens : Value.t) =
+let rec get_primary_key lens =
   match lens with
   | `Lens (_a, sort) ->
     let fds = Lens_sort.fds sort in
@@ -66,7 +66,7 @@ let rec get_primary_key (lens : Value.t) =
   | _ -> failwith ("Unknown lens (get_primary_key) : " ^ (string_of_value lens))
 
 
-let rec database (lens : Value.t) =
+let rec database lens =
   match lens with
   | `Lens (((db, _), _, _, _), _) -> db
   | `LensDrop (l, _, _, _, _) -> database l
@@ -128,15 +128,11 @@ let rec generate_query lens =
       {tables = tables; cols = cols; predicate = Lens_sort.predicate sort; db = q1.db}
   | _ -> failwith "Unsupported lens for query"
 
-(** Benchmarking helpers *)
-let query_timer = ref 0
-let query_count = ref 0
-
 let get_query lens =
   let _ = Debug.print "getting tables" in
   let sort = sort lens in
   let database = database lens in
-  let cols = Lens_sort.cols sort in
+  let cols = Lens_sort.cols sort |> Lens_column.List.present in
   let query  = Lens_database.Select.of_sort database ~sort in
   let sql = Format.asprintf "%a" Lens_database.Select.fmt query in
   (* let _ = print_endline sql in *)
@@ -144,9 +140,8 @@ let get_query lens =
      let sql = construct_select_query query  in *)
   let field_types = List.map (fun c -> Lens_column.alias c, Lens_column.typ c) cols in
   let _ = Debug.print sql in
-  let res = Debug.debug_time_out
-      (fun () -> Lens_database.Select.execute query ~field_types ~database)
-      (fun time -> query_timer := !query_timer + time; query_count := !query_count + 1) in
+  let res = Lens_statistics.time_query
+      (fun () -> Lens_database.Select.execute query ~field_types ~database) in
   res
 
 let lens_get lens =
@@ -155,88 +150,20 @@ let lens_get lens =
   else
     get_query lens
 
-let lens_select lens phrase =
+let lens_select lens ~predicate =
   let sort = sort lens in
-  let sort = LensTypes.select_lens_sort sort phrase in
-  `LensSelect (lens, phrase, sort)
+  let sort = LensTypes.select_lens_sort sort predicate in
+  `LensSelect (lens, predicate , sort)
 
-let lens_get_select lens phrase =
-    lens_get (lens_select lens phrase)
+let lens_get_select lens ~predicate =
+  lens_get (lens_select lens ~predicate)
 
-let lens_get_select_opt lens phrase =
-    match phrase with
-    | None -> lens_get lens
-    | Some phrase  -> lens_get_select lens phrase
+let lens_get_select_opt lens ~predicate =
+  match predicate with
+  | None -> lens_get lens
+  | Some predicate -> lens_get_select lens ~predicate
 
-let join_lens_should_swap (sort1 : Types.lens_sort) (sort2 : Types.lens_sort) (on_columns : string list) =
-    let fds1 = Sort.fds sort1 in
-    let fds2 = Sort.fds sort2 in
-    let on_cols = Alias.Set.of_list on_columns in
-    let covers fds sort =
-        let fdcl = Fun_dep.Set.transitive_closure ~cols:on_cols fds in
-        let other = Sort.colset sort in
-        (* print_endline (ColSet.Show_t.show fdcl ^ " = " ^ ColSet.Show_t.show (other)); *)
-        Alias.Set.equal (Column.Set.alias_set other) fdcl in
-    if covers fds2 sort2 then
-        false
-    else if covers fds1 sort1 then
-        true
-    else
-        failwith "One of the tables needs to be defined by the join column set."
-
-let join_lens_sort (sort1 : Types.lens_sort) (sort2 : Types.lens_sort) (on_columns : string list) =
-    (* helper function to find new alias, e.g. for 'name' it will find 'name_1', 'name_2' etc. *)
-    let rec get_new_alias alias columns num =
-        let nal = alias ^ "_" ^ string_of_int num in
-        if Column.List.mem_alias ~alias:nal columns then
-            get_new_alias alias columns (num + 1)
-        else
-            nal in
-    (* verify both sorts have all columns in on_columns and that the types match *)
-    let on_match = List.for_all (fun onc ->
-        let c1 = Sort.find_col_alias ~alias:onc sort1 in
-        let c2 = Sort.find_col_alias ~alias:onc sort2 in
-        match c1, c2 with
-        | Some c1, Some c2 -> Column.typ c1 = Column.typ c2
-        | _ -> false) on_columns in
-    if not on_match then
-        failwith "The key does not match between the two lenses.";
-    (* join the two column lists while renaming columns and keeping track of renames *)
-    let union, join_renames = List.fold_left (fun (output, jrs) c ->
-        (* see if column c's alias already exists *)
-        if Column.List.mem_alias ~alias:(Column.alias c) output |> not then
-            (* if not, just add the column *)
-            c :: output, jrs
-        else
-            (* is the column a join column *)
-          let new_alias = get_new_alias (Lens_column.alias c) output 1 in
-            if List.mem (Column.alias c) on_columns then
-                (* then renamed column and hide it *)
-                (c |> Column.rename ~alias:new_alias |> Column.hide) :: output, (Lens_column.alias c, new_alias) :: jrs
-            else
-                (* otherwise just rename the column *)
-                (c |> Column.rename ~alias:new_alias) :: output, jrs
-    ) (Sort.cols sort1, []) (Sort.cols sort2) in
-    (* combine the predicates *)
-    let join_renames_m = Alias.Map.from_alist join_renames in
-    let pred = match Sort.predicate sort1, Sort.predicate sort2 with
-    | None, None -> None
-    | Some p1, None -> Some p1
-    | None, Some p2 -> Some (Phrase.rename_var p2 ~replace:join_renames_m)
-    | Some p1, Some p2 -> Some (Phrase.and' (Phrase.tuple_singleton p1) (Phrase.tuple_singleton (Phrase.rename_var p2 ~replace:join_renames_m))) in
-    let predicate = List.fold_left (fun pred (alias, newalias) ->
-        let jn = Phrase.equal (Phrase.var alias) (Phrase.var newalias) in
-        match pred with Some p -> Some (Phrase.and' p jn) | None -> Some jn
-    ) pred join_renames in
-    let fds = Fun_dep.Set.union (Sort.fds sort1) (Sort.fds sort2) in
-    (* determine the on column renames as a tuple (join, left, right) *)
-    let jrs = List.map (fun on ->
-        let left = on in
-        let (_, right) = List.find (fun (a,_) -> a = on) join_renames in
-        on, left, right) on_columns in
-    Sort.make ~fds ~predicate union, jrs
-
-let query_exists (lens : Value.t) phrase =
+let query_exists lens phrase =
   let sort = sort lens in
   let sort = LensTypes.select_lens_sort sort phrase in
   if is_memory_lens lens then
@@ -245,7 +172,6 @@ let query_exists (lens : Value.t) phrase =
   else
     let database = database lens in
     let query = Lens_database.Select.of_sort database ~sort in
-    let res = Debug.debug_time_out
-        (fun () -> Lens_database.Select.query_exists query ~database)
-        (fun time -> query_timer := !query_timer + time; query_count := !query_count + 1) in
+    let res = Lens_statistics.time_query
+        (fun () -> Lens_database.Select.query_exists query ~database) in
     res

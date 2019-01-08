@@ -25,6 +25,11 @@ let value v ~default =
   | None -> default
   | Some v -> v
 
+let value_exn v =
+  match v with
+  | None -> failwith "Tried to unpack option"
+  | Some v -> v
+
 let return v = Some v
 
 let is_some v =
@@ -33,3 +38,8 @@ let is_some v =
   | None -> false
 
 let is_none v = is_some v |> not
+
+let negate v ~value =
+  match v with
+  | None -> Some value
+  | Some _ -> None

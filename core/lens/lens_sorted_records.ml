@@ -15,6 +15,7 @@ module Simple_record = struct
     | `String i1 , `String i2 -> compare i1 i2
     | _, _ -> failwith "Unsupported comparison types."
 
+  let equal_val a b = compare_val a b = 0
 
   let rec compare a b =
     match a, b with
@@ -62,9 +63,10 @@ module Simple_record = struct
     let b,e = find_all_index rs ~record in
     Array.sub rs b (e + 1 - b)
 
-
   let to_value t ~columns =
     Value.box_record (List.combine columns t)
+
+  let equal v1 v2 = List.for_all2 equal_val v1 v2
 end
 
 type t = { columns: string list; plus_rows: Simple_record.t array; neg_rows: Simple_record.t array; }
@@ -82,26 +84,39 @@ module Inconsistent_columns_error = struct
       | _ -> None);;
 end
 
-let construct_cols ~cols ~records =
+let construct_cols ~columns ~records =
   let l = Value.unbox_list records in
   let recs = List.map Value.unbox_record l in
   let col_val a r = try
       let (_,v) = List.find (fun (k,_) -> k = a) r in
       v
-    with NotFound _ -> Inconsistent_columns_error.E (cols, List.map (fun (k,_) -> k) r) |> raise in
+    with NotFound _ -> Inconsistent_columns_error.E (columns, List.map (fun (k,_) -> k) r) |> raise in
   let simpl_rec r =
-    List.map2 (fun a (k,v) -> if a = k then v else col_val a r) cols r in
+    List.map2 (fun a (k,v) -> if a = k then v else col_val a r) columns r in
   let recs = Array.of_list (List.map simpl_rec recs) in
   Array.sort compare recs;
-  { columns = cols; plus_rows = recs; neg_rows = Array.of_list []; }
+  { columns; plus_rows = recs; neg_rows = Array.of_list []; }
 
 let construct ~records =
   let l = Value.unbox_list records in
   let recs = List.map Value.unbox_record l in
-  let cols = List.map (fun (k,_v) -> k) (List.hd recs) in
-  construct_cols ~cols ~records
+  let columns = List.map (fun (k,_v) -> k) (List.hd recs) in
+  construct_cols ~columns ~records
+
+let sort rs =
+  Array.sort Simple_record.compare rs.plus_rows;
+  Array.sort Simple_record.compare rs.neg_rows
+
+let construct_full ~columns ~plus ~neg =
+  let v = { columns; plus_rows = Array.of_list plus; neg_rows = Array.of_list neg } in
+  sort v;
+  v
 
 let columns t = t.columns
+
+let plus_rows t = t.plus_rows
+
+let neg_rows t = t.neg_rows
 
 let is_positive t =
   Array.length t.neg_rows = 0
@@ -109,19 +124,27 @@ let is_positive t =
 let total_size a =
   (Array.length a.plus_rows) + (Array.length a.neg_rows)
 
+let pp_value f v =
+  match v with
+  | `String s -> Format.fprintf f "\"%s\"" s
+  | `Int i -> Format.fprintf f "%d" i
+  | `Float v -> Format.fprintf f "%f" v
+  | _ -> Value.pp f v
+
 let pp b rs =
   let cols = rs.columns in
-  let pp_val b (k,v) = Format.fprintf b "%s: %a" k Value.pp v in
+  let pp_val b (k,v) = Format.fprintf b "%s: %a" k pp_value v in
   let pp_record b row = Format.fprintf b "(%a)" (Format.pp_comma_list pp_val) (List.combine cols row) in
   Format.fprintf b "%a" (Format.pp_newline_list pp_record) (rs.plus_rows |> Array.to_list)
 
 let pp_tabular f rs =
   let pp_sep f () = Format.pp_print_string f "| " in
   let pp_list pp f v = Format.pp_print_list ~pp_sep pp f v in
-  let pp_row f v = pp_list Value.pp f v in
+  let pp_val f v = Format.pp_padded ~length:8 pp_value f v in
+  let pp_row f v = pp_list pp_val f v in
   let pp_rows f v = Format.pp_newline_list pp_row f @@ Array.to_list v in
-  let pp_padded f v = Format.pp_padded_string ~length:8 f v in
-  let pp_header f v = pp_list pp_padded f v in
+  let pp_padded f v = Format.pp_padded ~length:8 f v in
+  let pp_header f v = pp_list (pp_padded Format.pp_print_string) f v in
   let pp_v_sep f () =
     let pp_sep f () = Format.pp_print_string f "--" in
     let pp_str f v = Format.pp_print_string f @@ String.make (String.length v) '-' in
@@ -161,10 +184,6 @@ let get_cols_map rs ~columns =
   let maps = List.filter_map ~f:(fun column -> get_col_map rs ~column) columns in
   fun r -> List.map (fun mp -> mp r) maps
 
-let sort rs =
-  Array.sort Simple_record.compare rs.plus_rows;
-  Array.sort Simple_record.compare rs.neg_rows
-
 let sort_uniq rs =
   let fn r = Array.of_list (List.sort_uniq compare (Array.to_list r)) in
   { rs with plus_rows = fn rs.plus_rows; neg_rows = fn rs.neg_rows }
@@ -181,6 +200,9 @@ let project_onto_set rs ~onto =
 
 let negate rs =
   { rs with plus_rows = rs.neg_rows; neg_rows = rs.plus_rows }
+
+let negative rs =
+  { rs with plus_rows = [| |]; }
 
 let minus rs1 rs2 =
   if is_positive rs2 |> not then
@@ -242,22 +264,24 @@ let merge rs1 rs2 =
   let (plus, neg) = zip_delta_merge plus neg in
   { columns = rs1.columns; plus_rows = Array.of_list plus; neg_rows = Array.of_list neg }
 
-let reorder_cols cols first =
+let reorder_cols cols ~first =
   if not (cols_contain cols first) then
     failwith "Columns do not contain all reorder keys.";
   let rest = List.filter (fun a -> not (List.mem a first)) cols in
   List.append first rest
 
+let reorder t ~first =
+  let columns = reorder_cols (columns t) ~first in
+  project_onto t ~columns
+
 let subtract_cols cols remove =
   List.filter (fun a -> not (List.mem a remove)) cols
 
 let join left right ~on =
-  let on_left, on_right, on_out = List.unzip3 on in
-  let right_cols = reorder_cols right.columns on_right in
+  let on_out, on_left, on_right = List.unzip3 on in
+  let right_cols = reorder_cols right.columns ~first:on_right in
   let right = project_onto right ~columns:right_cols in
   let lmap = get_cols_map left ~columns:on_left in
-  let rjoinmap_left = get_cols_map left ~columns:(subtract_cols left.columns on_left) in
-  let rjoinmap_left' = get_cols_map left ~columns:(subtract_cols left.columns on_left) in
   let rjoinmap_right = get_cols_map right ~columns:(subtract_cols right_cols on_right) in
   let rjoinmap_right' = get_cols_map right ~columns:(subtract_cols right_cols on_right) in
   let join_list l1 l2 =
@@ -265,7 +289,7 @@ let join left right ~on =
         let proj = lmap r1 in
         let matching = Simple_record.find_all_record l2 ~record:proj in
         let joined = List.map (fun r2 ->
-            List.flatten [rjoinmap_left r1; proj; rjoinmap_right r2])
+            List.flatten [r1; rjoinmap_right r2])
             (Array.to_list matching) in
         joined
       ) (Array.to_list l1) in
@@ -280,7 +304,9 @@ let join left right ~on =
     ] in
   let neg = List.sort compare neg in
   let (pos, neg) = zip_delta_merge pos neg in
-  let columns = List.flatten [rjoinmap_left' left.columns; on_out; rjoinmap_right' right_cols] in
+  let l_map = StringMap.from_alist (List.zip_nofail on_left on_out) in
+  let l_cols = List.map (fun v -> StringMap.find_opt v l_map |> Option.value ~default:v) left.columns in
+  let columns = List.flatten [l_cols; rjoinmap_right' right_cols] in
   { columns;
     plus_rows = Array.of_list pos;
     neg_rows = Array.of_list neg; }
@@ -300,3 +326,103 @@ let project_fun_dep ts ~fun_dep =
   let fdr_map = get_cols_map ts ~columns:cols_r in
   let map r = fdl_map r, fdr_map r in
   (cols_l, cols_r), Array.map map ts.plus_rows
+
+let calculate_fd_changelist data ~fun_deps =
+  (* get the key of the row for finding complements *)
+  let rec loop fds =
+    if Fun_dep.Set.is_empty fds then
+      []
+    else
+      let fun_dep = Fun_dep.Set.root_fd fds |> OptionUtils.val_of in
+      let cols, changeset = project_fun_dep data ~fun_dep in
+      let changeset = Array.to_list changeset in
+      (* remove duplicates and sort *)
+      let changeset = List.sort_uniq (fun (a,_) (a',_) -> Simple_record.compare a a') changeset in
+      let fds = Fun_dep.Set.remove fun_dep fds in
+      (cols, changeset) :: loop fds in
+  let res = loop fun_deps in
+  (* reverse the list, so that the FD roots appear first *)
+  List.rev res
+
+let relational_update t ~fun_deps ~update_with =
+  let changelist = calculate_fd_changelist ~fun_deps update_with in
+  let changes = List.map (fun ((cols_l,_cols_r),_l) ->
+      (* get a map from simp rec to col value *)
+      let col_maps = List.map (fun column -> get_col_map t ~column) cols_l in
+      let col_maps = List.flatten (List.map (fun mp -> match mp with None -> [] | Some a -> [a]) col_maps) in
+      (* get a function which compares column with change *)
+      let comp record change_key =
+        List.for_all2 (fun mp1 key -> mp1 record = key) col_maps change_key in
+      comp
+    ) changelist in
+  (* each entry in changelist is a functional dependency, and then the corresponding records *)
+  (* generate a function for every change list entry, which can replace the columns in the
+   * right side of the functional dependency of a record in res *)
+  let apply_changes = List.map (fun ((_cols_l, cols_r),_l) ->
+      (* upd cols returns a function which, given a record another record containing cols_r,
+       * replaces every column value in the first record from that in the second record if it
+       * matches *)
+      let rec upd cols =
+        match cols with
+        | [] -> fun _r _target -> []
+        | x :: xs ->
+          let fn = upd xs in
+          (* get a function which maps a row to the x's value *)
+          let map = get_col_map_list cols_r x in
+          match map with
+          | None -> (* the column does not have to be replaced *)
+            fun yl target -> (List.hd yl) :: fn (List.tl yl) target
+          | Some mp -> (* the column has been found, replace *)
+            fun yl target -> mp target :: fn (List.tl yl) target
+      in
+      columns t |> upd
+    ) changelist in
+  let update arr = Array.map (fun r ->
+      let r' = List.fold_left (fun r ((check, update),(_, changes)) ->
+          let upd = List.find_opt (fun (left, _right) -> check r left) changes in
+          match upd with
+          | None -> r
+          | Some (_left, right) -> update r right
+        ) r (List.combine (List.combine changes apply_changes) changelist) in
+      (r', r)
+    ) arr in
+  let res2 = update t.plus_rows in
+  let res2 = List.flatten (List.map (fun (r, r') -> if r = r' then [] else [r, r']) (Array.to_list res2)) in
+  let neg_rows = Array.of_list (List.map (fun (_,b) -> b) res2) in
+  let plus_rows = Array.of_list (List.map (fun (a,_) -> a) res2) in
+  let res = { t with neg_rows ; plus_rows ; } in
+  sort_uniq res
+
+let relational_extend t ~key ~by ~data ~default =
+  let colmap = get_cols_map t ~columns:[key] in
+  let relevant_value_map = Option.value_exn (get_col_map data ~column:by) in
+  let extend row =
+    let find = colmap row in
+    let rel = Simple_record.find_record t.plus_rows ~record:find in
+    let v = match rel with
+      | None -> default
+      | Some r -> relevant_value_map r in
+    List.append row [v] in
+  let plus_rows = Array.map extend t.plus_rows in
+  let neg_rows = Array.map extend t.neg_rows in
+  let columns = List.append t.columns [by] in
+  { columns; plus_rows; neg_rows }
+
+let all_values t =
+  let recs = List.append (Array.to_list t.plus_rows) (Array.to_list t.neg_rows) in
+  List.sort_uniq Simple_record.compare recs
+
+let to_diff t ~key =
+  let key_len = List.length key in
+  let data = reorder t ~first:key in
+  let (insert_vals, update_vals) = List.partition (fun row ->
+      let key_vals = List.take row ~n:key_len in
+      let row = Simple_record.find_index t.neg_rows ~record:key_vals in
+      Option.is_none row) (Array.to_list data.plus_rows) in
+  let delete_vals =
+    Array.to_list t.neg_rows
+    |> List.filter (fun row ->
+        let key_vals = List.take row ~n:key_len in
+        let row = Simple_record.find_index data.plus_rows ~record:key_vals in
+        Option.is_none row) in
+  columns data, (insert_vals, update_vals, delete_vals)

@@ -13,6 +13,9 @@ val combine : 'a t -> 'a t -> f:('a -> 'a -> 'a) -> 'a option
 (** Get the underlying value of an option type or return [default] *)
 val value : 'a t -> default:'a -> 'a
 
+(** Unpack the option value or throw an exception if it is [None]. *)
+val value_exn : 'a t -> 'a
+
 (** Return a constant value as a [Some]. *)
 val return : 'a -> 'a t
 
@@ -20,4 +23,6 @@ val return : 'a -> 'a t
 val is_some : 'a t -> bool
 
 (** Return true if the option value is none. *)
-val is_some : 'a t -> bool
+val is_none : 'a t -> bool
+
+val negate : 'b option -> value:'a -> 'a option

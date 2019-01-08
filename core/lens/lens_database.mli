@@ -24,10 +24,10 @@ module Select : sig
   type db = t
 
   type t = {
-      tables : (string * string) list;
-      cols : Lens_column.t list;
-      predicate: Lens_phrase.Option.t;
-      db : db;
+    tables : (string * string) list;
+    cols : Lens_column.t list;
+    predicate : Lens_phrase.Option.t;
+    db : db;
   }
 
   (** Construct a select query from a lens sort. *)
@@ -39,3 +39,42 @@ module Select : sig
 
   val query_exists : t -> database:db -> bool
 end
+
+module Delete : sig
+  type db = t
+
+  type t = {
+    table : string;
+    predicate : Lens_phrase.Option.t;
+    db : db;
+  }
+
+  val fmt : Format.formatter -> t -> unit
+end
+
+module Update : sig
+  type db = t
+
+  type t = {
+    table : string;
+    predicate : Lens_phrase.Option.t;
+    set : (string * Value.t) list;
+    db : db;
+  }
+
+  val fmt : Format.formatter -> t -> unit
+end
+
+module Insert : sig
+  type db = t
+
+  type t = {
+    table : string;
+    columns : string list;
+    values : Value.t list;
+    db : db;
+  }
+
+  val fmt : Format.formatter -> t -> unit
+  end
+

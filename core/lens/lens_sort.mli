@@ -35,3 +35,11 @@ val update_table_name : t -> table:string -> t
 
 (** Get the record type *)
 val record_type : t -> Types.typ
+
+(** Determines if the lenses should be swapped, because the right lens defines the left lens. *)
+val join_lens_should_swap : t -> t -> on:string list -> bool
+
+(** Create a sort as the join of two other sorts on the columns specified by [on] *)
+val join_lens_sort : t -> t -> on:string list -> t * (string * string * string) list
+
+val equal : t -> t -> bool

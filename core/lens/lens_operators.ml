@@ -12,7 +12,6 @@ type name = string [@@deriving show]
 module Unary = struct
   type t =
     | Minus
-    | FloatMinus
     | Not
     | Name of name
     [@@deriving show]
@@ -20,13 +19,13 @@ module Unary = struct
   let from_links v =
     match v with
     | `Minus -> Minus
-    | `FloatMinus -> FloatMinus
+    | `FloatMinus -> Minus
+    | `Not -> Not
     | `Name name -> Name name
 
   let to_string =
   function
     | Minus -> "-"
-    | FloatMinus -> ".-"
     | Name name -> name
     | Not -> "!"
 
@@ -42,8 +41,8 @@ module Logical_binop = struct
 
   let to_string =
     function
-    | And -> "&&"
-    | Or -> "||"
+    | And -> "AND"
+    | Or -> "OR"
 
   let fmt f v =
     Format.fprintf f "%s" (to_string v)
@@ -52,7 +51,7 @@ end
 module Binary = struct
   type t =
     | Minus
-    | FloatMinus
+    | Equal
     | Cons
     | Logical of Logical_binop.t
     | Name of name
@@ -61,28 +60,29 @@ module Binary = struct
   let from_links v =
     match v with
     | `Minus -> Minus
-    | `FloatMinus -> FloatMinus
+    | `FloatMinus -> Minus
     | `Cons -> Cons
     | `And -> Logical Logical_binop.And
     | `Or -> Logical Logical_binop.Or
+    | `Name "==" -> Equal
     | `Name name -> Name name
     | `RegexMatch _ -> failwith "Regex not supported in relational lenses."
 
   let to_string =
     function
     | Minus -> "-"
-    | FloatMinus -> ".-"
     | Cons -> "::"
+    | Equal -> "="
     | Name name -> name
     | Logical l -> Logical_binop.to_string l
 
   let of_string : string -> t =
     function
     | "-" -> Minus
-    | ".-" -> FloatMinus
     | "&&" -> Logical Logical_binop.And
     | "||" -> Logical Logical_binop.Or
     | "::" -> Cons
+    | "=" -> Equal
     | name -> Name name
 
   let fmt f v =

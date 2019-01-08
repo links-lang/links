@@ -1,6 +1,7 @@
 open Types
 open Utility
 open Lens_operators
+open Lens_utility
 
 module Constant = Lens_constant
 
@@ -51,9 +52,12 @@ let rec fmt_phrase ~db ~map f expr =
   | In (names, vals) ->
     let fmt_name f v = Format.fprintf f "%s" (map v) in
     let fmt_val f v = Format.fprintf f "(%a)" (Format.pp_print_list ~pp_sep Constant.fmt) v in
-    Format.fprintf f "(%a) IN (%a)"
-      (Format.pp_print_list ~pp_sep fmt_name) names
-      (Format.pp_print_list ~pp_sep fmt_val) vals
+    (match vals with
+     | [] -> Format.fprintf f "FALSE"
+     | _ ->
+       Format.fprintf f "(%a) IN (%a)"
+         (Format.pp_print_list ~pp_sep fmt_name) names
+         (Format.pp_print_list ~pp_sep fmt_val) vals)
   | Case (inp, cases, otherwise) ->
     if cases = [] then
       Format.fprintf f "%a" fmt otherwise
@@ -103,11 +107,12 @@ module Select = struct
     let map = fun a ->
       let col = List.find (fun c -> c.alias = a) v.cols in
       Format.sprintf "%s.%s" (db#quote_field col.table) (db#quote_field col.name) in
+    let cols = v.cols |> Lens_column.List.present in
     match v.predicate with
-    | None -> Format.fprintf f "SELECT %a FROM %a" (fmt_cols ~db) v.cols (fmt_tables ~db) v.tables
+    | None -> Format.fprintf f "SELECT %a FROM %a" (fmt_cols ~db) cols (fmt_tables ~db) v.tables
     | Some pred ->
       Format.fprintf f "SELECT %a FROM %a WHERE %a"
-        (fmt_cols ~db) v.cols
+        (fmt_cols ~db) cols
         (fmt_tables ~db) v.tables
         (fmt_phrase ~db ~map) pred
 
@@ -196,5 +201,86 @@ module Select = struct
     Value.unbox_bool v
 end
 
+module Delete = struct
+  type db = t
 
+  type t = {
+    table : string;
+    predicate: lens_phrase option;
+    db : db;
+  }
 
+  let fmt_table ~(db:db) f v =
+    Format.fprintf f "%s" @@ db#quote_field v
+
+  let fmt f v =
+    let db = v.db in
+    let map = fun col ->
+      Format.sprintf "%s" (db#quote_field col) in
+    match v.predicate with
+    | None -> Format.fprintf f "DELETE FROM %a" (fmt_table ~db) v.table
+    | Some pred ->
+      Format.fprintf f "DELETE FROM %a WHERE %a"
+        (fmt_table ~db) v.table
+        (fmt_phrase ~db ~map) pred
+end
+
+module Update = struct
+  type db = t
+
+  type t = {
+    table : string;
+    predicate : lens_phrase option;
+    set : (string * Value.t) list;
+    db : db;
+  }
+
+  let fmt_set_value ~(db:db) f (key, value) =
+    Format.fprintf f "%s = %a" (db#quote_field key) Constant.fmt (Constant.of_value value)
+
+  let fmt_set_values ~(db:db) f vs =
+    Format.pp_comma_list (fmt_set_value ~db) f vs
+
+  let fmt_table ~(db:db) f v =
+    Format.fprintf f "%s" @@ db#quote_field v
+
+  let fmt f v =
+    let db = v.db in
+    let map = fun col ->
+      Format.sprintf "%s" (db#quote_field col) in
+    match v.predicate with
+    | None -> Format.fprintf f "UPDATE %a SET %a" (fmt_table ~db) v.table (fmt_set_values ~db) v.set
+    | Some pred ->
+      Format.fprintf f "UPDATE %a SET %a WHERE %a"
+        (fmt_table ~db) v.table
+        (fmt_set_values ~db) v.set
+        (fmt_phrase ~db ~map) pred
+end
+
+module Insert = struct
+  type db = t
+
+  type t = {
+    table : string;
+    columns : string list;
+    values : Value.t list;
+    db : db;
+  }
+
+  let fmt_table ~(db:db) f v =
+    Format.fprintf f "%s" @@ db#quote_field v
+
+  let fmt_col ~(db:db) f v =
+    Format.pp_print_string f (db#quote_field v)
+
+  let fmt_val ~(db:db) f v =
+    Constant.fmt f (Constant.of_value v)
+
+  let fmt f v =
+    let db = v.db in
+    Format.fprintf f "INSERT INTO %a (%a) VALUES (%a)"
+      (fmt_table ~db) v.table
+      (fmt_col ~db |> Format.pp_comma_list) v.columns
+      (fmt_val ~db |> Format.pp_comma_list) v.values
+
+end
