@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 links = './links'
 
@@ -14,7 +14,7 @@ def FAIL(name, msg):
 def OK(name):
     global successes
     successes+=1
-    print ' SUCCESS: %s' % name
+    print(' SUCCESS: %s' % name)
 
 def parse(stream):
     """Read test information separated by blank lines.  The first line
@@ -31,7 +31,7 @@ def parse(stream):
         yield tests
     for test in tests():
         if not test:
-            print >> sys.stderr, 'WARNING: empty test'
+            print('WARNING: empty test', file=sys.stderr)
         else:
             name = str.strip(test.pop(0))
       	    code = str.strip(test.pop(0))
@@ -51,7 +51,7 @@ def check_expected(name, item, got, expected, errors):
             return False
         else:
             return True
-    elif expected <> got:
+    elif expected != got:
         errors.append(FAIL(name, "Unexpected %s: expected `%s'; got `%s'" % (item, expected, got)))
         return False
     else:
@@ -68,40 +68,40 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
         proc = Popen([links] +  flags.split(" ") + [code], stdout=PIPE, stderr=PIPE, env=env)
     passed = True
     errors = []
-    for i in xrange(0, TIMEOUT*100):
+    for i in range(0, TIMEOUT*100):
         rc = proc.poll()
-        if rc <> None:
+        if rc != None:
             passed &= check_expected(name, 'return code', str(rc), exit, errors)
             passed &= check_expected(name, 'stdout', file.read(proc.stdout), stdout, errors)
             passed &= check_expected(name, 'stderr', file.read(proc.stderr), stderr, errors)
             if passed:
                 OK(name)
             else:
-                if ignore <> None:
+                if ignore != None:
                     global ignored
                     ignored += 1
-                    print '?IGNORED: %s (%s)' % (name, ignore)
+                    print('?IGNORED: %s (%s)' % (name, ignore))
                 else:
                     global failures
                     failures += 1
-                    print '!FAILURE: %s' % name
+                    print('!FAILURE: %s' % name)
                     for i, j in errors:
-                        print i
-                        print j
+                        print(i)
+                        print(j)
             return
         else:
             time.sleep(0.01)
     failures += 1
-    print '!FAILURE: %s [TIMED OUT]' % name
+    print('!FAILURE: %s [TIMED OUT]' % name)
 
 def main():
     try:
         filename = sys.argv[1]
     except IndexError:
-        raise SystemExit, 'Usage: run <filename>'
+        raise SystemExit('Usage: run <filename>')
     for name, code, opts in parse(open(filename)):
         evaluate(name, code, **opts)
-    print "%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes)
+    print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
     if failures > 0:
         sys.exit(1)
     else:
