@@ -22,7 +22,7 @@ def parse(stream):
     are auxiliary options"""
     def tests():
         tests = []
-        for line in file.readlines(stream):
+        for line in stream.readlines():
             if not str.strip(line) and tests[-1]:
                 yield tests
                 tests = []
@@ -72,8 +72,8 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
         rc = proc.poll()
         if rc != None:
             passed &= check_expected(name, 'return code', str(rc), exit, errors)
-            passed &= check_expected(name, 'stdout', file.read(proc.stdout), stdout, errors)
-            passed &= check_expected(name, 'stderr', file.read(proc.stderr), stderr, errors)
+            passed &= check_expected(name, 'stdout', proc.stdout.read().decode('ascii'), stdout, errors)
+            passed &= check_expected(name, 'stderr', str(proc.stderr.read().decode('ascii')), stderr, errors)
             if passed:
                 OK(name)
             else:
@@ -99,7 +99,7 @@ def main():
         filename = sys.argv[1]
     except IndexError:
         raise SystemExit('Usage: run <filename>')
-    for name, code, opts in parse(open(filename)):
+    for name, code, opts in parse(open(filename, 'r')):
         evaluate(name, code, **opts)
     print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
     if failures > 0:
