@@ -855,3 +855,22 @@ examples/wine.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
+Typecheck example file examples/sessions/mind/mindServer.links
+examples/sessions/mind/mindServer.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config --path=examples/sessions/mind
+
+Typecheck example file examples/sessions/mind/linearList.links
+examples/sessions/mind/linearList.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
+Typecheck example file examples/sessions/mind/mindClient.links
+examples/sessions/mind/mindClient.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config --path=examples/sessions/mind
+
+Typecheck example file examples/sessions/mind/mindSessions.links
+examples/sessions/mind/mindSessions.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config --path=examples/sessions/mind
