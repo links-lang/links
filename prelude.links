@@ -181,10 +181,6 @@ fun uncurry(f) {
   fun (x, y) { f(x)(y) }
 }
 
-# Curried flip
-sig cflip : ((a::Any) -e-> (b::Any) -e-> c::Any) -> (b::Any) -> (a::Any) -e-> c::Any
-fun cflip(h) { curry(flip(uncurry(h))) }
-
 fun compose(f, g) {
   fun (x) { f(g(x)) }
 }
