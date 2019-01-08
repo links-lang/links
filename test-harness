@@ -34,7 +34,7 @@ def parse(stream):
             print('WARNING: empty test', file=sys.stderr)
         else:
             name = str.strip(test.pop(0))
-      	    code = str.strip(test.pop(0))
+            code = str.strip(test.pop(0))
             opts = dict([str.split(str.rstrip(line), ' : ', 1) for line in test])
             yield name, code, opts
 
