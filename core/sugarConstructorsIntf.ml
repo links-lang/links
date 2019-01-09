@@ -2,7 +2,6 @@
    Putting them here allows to avoid repetition. *)
 
 open Sugartypes
-open Operators
 
 (* An abstract type of positions and operations on them.  The core type of
    positions used in the compilation pipeline is Sugartypes.position, which
