@@ -1,5 +1,5 @@
 open Types
-open Utility
+open Lens_utility
 
 type t = Types.lens_col
 
@@ -66,7 +66,7 @@ module List = struct
     List.find_opt (fun c -> c.alias = alias) t
 
   let mem_alias t ~alias =
-    find_alias t ~alias |> OptionUtils.is_some
+    find_alias t ~alias |> Option.is_some
 
   let colset t = Set.of_list t
 
@@ -74,6 +74,6 @@ module List = struct
 
   let record_type t =
     let map = present t
-              |> List.fold_left (fun acc v -> StringMap.add v.alias (`Present v.typ) acc) StringMap.empty in
+              |> List.fold_left (fun acc v -> String.Map.add v.alias (`Present v.typ) acc) String.Map.empty in
     `Record (map, Unionfind.fresh `Closed, false)
 end

@@ -31,7 +31,7 @@ val of_phrase : phrase -> t
 val traverse : t -> (t -> t) -> t
 
 (** Get a list of variables in the expression *)
-val get_vars : t -> Utility.StringSet.t
+val get_vars : t -> Lens_alias.Set.t
 
 (** Calculate the vale of an expression given a lookup function for variables. *)
 val eval : t -> (string -> Value.t) -> Value.t

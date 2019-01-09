@@ -25,7 +25,7 @@ val rename : t -> alias:string -> t
 val equal : t -> t -> bool
 
 module Set : sig
-  include Set.S with type elt = t
+  include Lens_set.S with type elt = t
 
   (** Generate a dummy column with a given alias *)
   val dummy_alias : string -> elt

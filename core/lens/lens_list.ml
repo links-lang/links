@@ -2,6 +2,8 @@ open Utility
 
 include List
 
+module Seq = Lens_seq
+
 let rec filter_map t ~f =
   match t with
   | [] -> []

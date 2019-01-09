@@ -9,7 +9,7 @@ module Map : sig
 end
 
 module Set : sig
-  include module type of Utility.StringSet
+  include module type of Lens_utility.String.Set
 
   val pp_pretty : Format.formatter -> t -> unit
 end
