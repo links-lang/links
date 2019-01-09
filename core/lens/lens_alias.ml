@@ -7,10 +7,6 @@ module Map = struct
 
   let find t ~key =
     find_opt key t
-
-  let from_alist l =
-    List.to_seq l
-    |> of_seq
 end
 
 module Set = struct
