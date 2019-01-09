@@ -33,3 +33,8 @@ let rec zip_nofail l1 l2 =
   match l1, l2 with
   | x :: xs, y :: ys -> (x,y) :: zip_nofail xs ys
   | _, _ -> []
+
+let rec to_seq l () =
+  match l with
+  | [] -> Seq.Nil
+  | x :: xs -> Seq.Cons (x, to_seq xs)

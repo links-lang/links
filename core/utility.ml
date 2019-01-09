@@ -256,6 +256,8 @@ struct
       Format.pp_close_box formatter ()
 
     let show : t -> string = fun x  -> Format.asprintf "%a" pp x
+
+    let of_seq s = Seq.fold_left (fun set v -> add v set) empty s
   end
 end
 
