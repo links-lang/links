@@ -1,4 +1,4 @@
-include module type of Format
+include module type of Format with type formatter = Format.formatter
 
 type 'a fmt_fn = formatter -> 'a -> unit
 
