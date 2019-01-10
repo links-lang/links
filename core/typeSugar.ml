@@ -2403,7 +2403,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let lens = tc lens in
            let sort = Lens.Type.sort (typ lens) in
            let trowtype = Lens.Sort.record_type sort in
-           `LensGetLit (erase lens, Some trowtype), trowtype, merge_usages [usages lens]
+           `LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | `LensPutLit (lens, data, _) ->
            let make_tuple_type = Types.make_tuple_type in
            let lens = tc lens in
