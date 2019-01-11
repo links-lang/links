@@ -6,6 +6,9 @@ open Value
 
 module Sorted = Lens.Sorted_records
 
+let print_verbose_sorted test_ctx sorted =
+  LensTestHelpers.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular sorted)
+
 let test_data_1 = Sorted.construct_full ~columns:["a"; "b"; "str";]
     ~plus:[
       [box_bool true; box_int 5; box_string "abc"];
@@ -88,6 +91,14 @@ let test_data_7 = Sorted.construct_full ~columns:["B"; "D";]
     ];;
 
 let test_data_8 = Sorted.construct_full ~columns:["a"; "b"; "c"; "test"] ~plus:[] ~neg:[];;
+
+let test_data_6 = Sorted.construct_full ~columns:["B"; "A";]
+    ~plus:[
+      [box_int 2; box_string "24"];
+      [box_int 3; box_string "that"];
+      [box_int 99; box_string "luftballons"];
+    ]
+    ~neg:[];;
 
 Sorted.sort test_data_1;;
 Sorted.sort test_data_2;;
@@ -263,6 +274,21 @@ let test_join_neg_1 test_ctx =
       [box_int 14; box_string "9012"; box_string "exists"];
     ])
 
+let test_relational_update_1 test_ctx =
+  let data = test_data_4 in
+  let update_with = test_data_6 in
+  let fun_deps = LensTestHelpers.fundepset_of_string "B -> A" in
+  let updated = Sorted.relational_update data ~update_with ~fun_deps in
+  print_verbose_sorted test_ctx updated
+
+let test_relational_merge_1 test_ctx =
+  let data = test_data_4 in
+  let update_with = test_data_6 in
+  let fun_deps = LensTestHelpers.fundepset_of_string "B -> A" in
+  let updated = Sorted.relational_merge data ~update_with ~fun_deps in
+  print_verbose_sorted test_ctx updated
+
+
 let suite =
   "lens_set_operations">:::
   [
@@ -279,4 +305,6 @@ let suite =
     "find_all_1">:: test_find_all_1;
     "join_1">:: test_join_1;
     "join_neg_1">:: test_join_neg_1;
+    "relational_update_1">:: test_relational_update_1;
+    "relational_merge_1">:: test_relational_merge_1;
   ];;

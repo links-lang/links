@@ -11,7 +11,7 @@ let matches_change changes =
     Lens_phrase.Option.in_expr cols_l vals_l in
   List.map is_changed changes |> Lens_phrase.List.fold_or_opt
 
-let get_changes lens data =
+let delta_merge_affected lens data =
   let sort = Lens_value.sort lens in
   let fun_deps = Sort.fds sort in
   let changelist = Sorted.calculate_fd_changelist data ~fun_deps in
@@ -20,7 +20,8 @@ let get_changes lens data =
   let res = Lens_value.lens_get_select_opt lens ~predicate in
   let res = Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records:res in
   (* perform relational update *)
-  Lens_sorted_records.relational_update res ~update_with:data ~fun_deps
+  let rel_merge = Lens_sorted_records.relational_merge res ~update_with:data ~fun_deps in
+  Sorted.merge rel_merge (Sorted.negate res)
 
 let query_join_records lens set on =
   let proj = Sorted.project_onto set ~columns:on in
@@ -50,8 +51,8 @@ let lens_put_set_step lens delt (fn : Value.t -> Sorted.t -> unit) =
     let proj1 = Sorted.project_onto delt ~columns:(Sort.cols_present_aliases sort1) in
     let sort2 = Lens_value.sort l2 in
     let proj2 = Sorted.project_onto delt ~columns:(Sort.cols_present_aliases sort2) in
-    let delta_m0 = get_changes l1 proj1 in
-    let delta_n0 = get_changes l2 proj2 in
+    let delta_m0 = delta_merge_affected l1 proj1 in
+    let delta_n0 = delta_merge_affected l2 proj2 in
     let on' = List.map (fun a -> a,a,a) cols_simp in
     let delta_l =
       Sorted.merge
@@ -63,8 +64,6 @@ let lens_put_set_step lens delt (fn : Value.t -> Sorted.t -> unit) =
            )
         )
         (Sorted.negate delt) in
-    Format.eprintf "On: %a, delta l: %a%!\n"
-      Format.pp_comma_string_list cols_simp Format.pp_comma_string_list (Sorted.columns delta_l);
     let j = Sorted.project_onto (Sorted.merge (query_join_records lens delta_l cols_simp) (delt)) ~columns:cols_simp in
     let delta_l_l = Sorted.join delta_l j ~on:on' in
     let delta_l_a = Sorted.merge (delta_l) (Sorted.negate delta_l_l) in
@@ -77,7 +76,7 @@ let lens_put_set_step lens delt (fn : Value.t -> Sorted.t -> unit) =
     fn l1 delta_m;
     fn l2 delta_n
   | `LensSelect (l, predicate, _sort) ->
-    let delta_m1 = Sorted.merge (get_changes (Lens_value.lens_select l ~predicate:(Lens_phrase.not' predicate)) delt)
+    let delta_m1 = Sorted.merge (delta_merge_affected (Lens_value.lens_select l ~predicate:(Lens_phrase.not' predicate)) delt)
         (Sorted.negative delt) in
     let m1_cap_P = Sorted.filter delta_m1 ~predicate in
     let delta_nhash = Sorted.merge (m1_cap_P) (Sorted.negate delt) in

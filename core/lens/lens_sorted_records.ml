@@ -154,7 +154,7 @@ let pp_tabular f rs =
     pp_v_sep ()
     pp_rows rs.plus_rows
     pp_v_sep ()
-    pp_rows rs.plus_rows
+    pp_rows rs.neg_rows
 
 let find rs ~record =
   Simple_record.find_index rs.plus_rows ~record |> Option.is_some
@@ -388,10 +388,14 @@ let relational_update t ~fun_deps ~update_with =
     ) arr in
   let res2 = update t.plus_rows in
   let res2 = List.flatten (List.map (fun (r, r') -> if r = r' then [] else [r, r']) (Array.to_list res2)) in
-  let neg_rows = Array.of_list (List.map (fun (_,b) -> b) res2) in
+  let neg_rows = [| |] in
   let plus_rows = Array.of_list (List.map (fun (a,_) -> a) res2) in
   let res = { t with neg_rows ; plus_rows ; } in
   sort_uniq res
+
+let relational_merge t ~fun_deps ~update_with =
+  let updated = relational_update t ~fun_deps ~update_with in
+  merge updated update_with
 
 let relational_extend t ~key ~by ~data ~default =
   let colmap = get_cols_map t ~columns:[key] in

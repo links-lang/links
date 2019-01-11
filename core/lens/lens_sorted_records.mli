@@ -122,6 +122,12 @@ val relational_update :
   -> update_with:t
   -> t
 
+val relational_merge :
+  t
+  -> fun_deps:Lens_fun_dep.Set.t
+  -> update_with:t
+  -> t
+
 (** Extend the given set of sorted records by the column [by] and populate it using
     the relational data [data] containing the functional dependency [key] -> [by].
     Use the default value specified if no entry in [data] is found. *)
