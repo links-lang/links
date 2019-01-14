@@ -93,9 +93,9 @@ let construct_cols ~columns ~records =
     with NotFound _ -> Inconsistent_columns_error.E (columns, List.map (fun (k,_) -> k) r) |> raise in
   let simpl_rec r =
     List.map2 (fun a (k,v) -> if a = k then v else col_val a r) columns r in
-  let recs = Array.of_list (List.map simpl_rec recs) in
-  Array.sort compare recs;
-  { columns; plus_rows = recs; neg_rows = Array.of_list []; }
+  let plus_rows = Array.of_list (List.map simpl_rec recs) in
+  Array.sort compare plus_rows;
+  { columns; plus_rows; neg_rows = [| |]; }
 
 let construct ~records =
   let l = Value.unbox_list records in
@@ -188,31 +188,11 @@ let sort_uniq rs =
   let fn r = Array.of_list (List.sort_uniq compare (Array.to_list r)) in
   { rs with plus_rows = fn rs.plus_rows; neg_rows = fn rs.neg_rows }
 
-let project_onto rs ~columns =
-  let maps v = get_cols_map rs ~columns v in
-  let plus_rows = Array.map maps rs.plus_rows in
-  let neg_rows = Array.map maps rs.neg_rows in
-  let columns = maps rs.columns in
-  sort_uniq { columns; plus_rows; neg_rows }
-
-let project_onto_set rs ~onto =
-  project_onto rs ~columns:onto.columns
-
 let negate rs =
   { rs with plus_rows = rs.neg_rows; neg_rows = rs.plus_rows }
 
 let negative rs =
   { rs with plus_rows = [| |]; }
-
-let minus rs1 rs2 =
-  if is_positive rs2 |> not then
-    failwith "Cannot subtract from negative multiplicities"
-  else
-    let proj = project_onto_set rs2 ~onto:rs1 in
-    let map = get_cols_map rs1 ~columns:proj.columns in
-    let plus_rows = List.filter (fun r -> find proj ~record:(map r)) @@ Array.to_list rs1.plus_rows
-                    |> Array.of_list in
-    { rs1 with plus_rows; }
 
 (* filter out the records which don't satisfy pred *)
 let filter rs ~predicate =
@@ -255,6 +235,18 @@ let zip_delta_merge left right =
   let (left, right) = do_next left right in
   (List.sort_uniq compare left, List.sort_uniq compare right)
 
+let project_onto rs ~columns =
+  let maps v = get_cols_map rs ~columns v in
+  let plus_rows = Array.map maps rs.plus_rows |> Array.to_list in
+  let neg_rows = Array.map maps rs.neg_rows |> Array.to_list in
+  let columns = maps rs.columns in
+  let plus_rows, neg_rows = zip_delta_merge plus_rows neg_rows in
+  let plus_rows, neg_rows = Array.of_list plus_rows, Array.of_list neg_rows in
+  { columns; plus_rows; neg_rows }
+
+let project_onto_set rs ~onto =
+  project_onto rs ~columns:onto.columns
+
 let merge rs1 rs2 =
   let proj = project_onto_set rs2 ~onto:rs1 in
   let plus = List.append (Array.to_list rs1.plus_rows) (Array.to_list proj.plus_rows) in
@@ -263,6 +255,16 @@ let merge rs1 rs2 =
   let neg = List.sort compare neg in
   let (plus, neg) = zip_delta_merge plus neg in
   { columns = rs1.columns; plus_rows = Array.of_list plus; neg_rows = Array.of_list neg }
+
+let minus rs1 rs2 =
+  if is_positive rs2 |> not then
+    failwith "Cannot subtract from negative multiplicities"
+  else
+    let proj = project_onto_set rs2 ~onto:rs1 in
+    let map = get_cols_map rs1 ~columns:proj.columns in
+    let plus_rows = List.filter (fun r -> find proj ~record:(map r)) @@ Array.to_list rs1.plus_rows
+                    |> Array.of_list in
+    { rs1 with plus_rows; }
 
 let reorder_cols cols ~first =
   if not (cols_contain cols first) then
@@ -325,7 +327,7 @@ let project_fun_dep ts ~fun_dep =
   let fdl_map = get_cols_map ts ~columns:cols_l in
   let fdr_map = get_cols_map ts ~columns:cols_r in
   let map r = fdl_map r, fdr_map r in
-  (cols_l, cols_r), Array.map map ts.plus_rows
+  (cols_l, cols_r), Array.map map ts.plus_rows, Array.map map ts.neg_rows
 
 let calculate_fd_changelist data ~fun_deps =
   (* get the key of the row for finding complements *)
@@ -334,8 +336,8 @@ let calculate_fd_changelist data ~fun_deps =
       []
     else
       let fun_dep = Fun_dep.Set.root_fd fds |> OptionUtils.val_of in
-      let cols, changeset = project_fun_dep data ~fun_dep in
-      let changeset = Array.to_list changeset in
+      let cols, changeset_pos, _ = project_fun_dep data ~fun_dep in
+      let changeset = Array.to_list changeset_pos in
       (* remove duplicates and sort *)
       let changeset = List.sort_uniq (fun (a,_) (a',_) -> Simple_record.compare a a') changeset in
       let fds = Fun_dep.Set.remove fun_dep fds in
@@ -393,9 +395,14 @@ let relational_update t ~fun_deps ~update_with =
   let res = { t with neg_rows ; plus_rows ; } in
   sort_uniq res
 
+let abs t =
+  let plus_rows = t.plus_rows in
+  let columns = t.columns in
+  { plus_rows; columns; neg_rows = [| |] }
+
 let relational_merge t ~fun_deps ~update_with =
   let updated = relational_update t ~fun_deps ~update_with in
-  merge updated update_with
+  merge updated @@ abs update_with
 
 let relational_extend t ~key ~by ~data ~default =
   let colmap = get_cols_map t ~columns:[key] in

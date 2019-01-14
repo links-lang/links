@@ -6,7 +6,7 @@ open Value
 open UnitTestsLensCommon
 
 module Sorted = Lens.Sorted_records
-module Phrase=  Lens.Phrase
+module Phrase = Lens.Phrase
 
 (* define composition operator *)
 let (<<) f g x = f (g x)

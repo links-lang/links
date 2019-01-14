@@ -109,7 +109,7 @@ val to_value : t -> Value.t
 val project_fun_dep :
   t
   -> fun_dep:Lens_fun_dep.t
-  -> (string list * string list) * (Simple_record.t * Simple_record.t) array
+  -> (string list * string list) * (Simple_record.t * Simple_record.t) array * (Simple_record.t * Simple_record.t) array
 
 val calculate_fd_changelist :
   t
