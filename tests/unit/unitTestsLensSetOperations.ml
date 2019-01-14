@@ -92,7 +92,7 @@ let test_data_7 = Sorted.construct_full ~columns:["B"; "D";]
 
 let test_data_8 = Sorted.construct_full ~columns:["a"; "b"; "c"; "test"] ~plus:[] ~neg:[];;
 
-let test_data_6 = Sorted.construct_full ~columns:["B"; "A";]
+let test_data_9 = Sorted.construct_full ~columns:["B"; "A";]
     ~plus:[
       [box_int 2; box_string "24"];
       [box_int 3; box_string "that"];
