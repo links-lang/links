@@ -273,8 +273,6 @@ struct
 
   let nil = `Concat []
 
-
-
   let eval_error fmt =
     let error msg = raise (DbEvaluationError msg) in
       Printf.kprintf error fmt
@@ -329,6 +327,7 @@ struct
       | `Float f -> `Constant (`Float f)
       | `String s -> `Constant (`String s)
       | `Table t -> `Table t
+      | `Database db -> `Database db
       | `List vs ->
           `Concat (List.map (fun v -> `Singleton (expression_of_value v)) vs)
       | `Record fields ->
@@ -341,7 +340,15 @@ struct
       | `XML xmlitem -> `XML xmlitem
       | `FunctionPtr (f, fvs) ->
         (* Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure"); *)
-        find_fun (f, fvs)
+        (** WR: was find_fun (f, fvs), which in addition to the following checks whether the fun
+            is a primitive operation and ensures the location is `Server or `Unknown *)
+	  let (_finfo, (xs, body), z, _location) = Tables.find Tables.fun_defs f in
+          let env = 
+            match z, fvs with
+            | None, None	-> Value.Env.empty
+            | Some z, Some fvs	-> Value.Env.bind z (fvs, `Local) Value.Env.empty
+	    | _, _ 		-> assert false in
+            `Closure ((xs, body), env_of_value_env env)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
@@ -350,6 +357,7 @@ struct
   let bind (val_env, exp_env) (x, v) =
     (val_env, Env.Int.bind exp_env (x, v))
 
+  (** WR: the code checking for primitive operations and for the location is factorised in lookup_fun *)
   let lookup (val_env, exp_env) var =
     match lookup_fun (var, None) with
     | Some v -> v
@@ -365,6 +373,8 @@ struct
             | NotFound _ -> failwith ("Variable " ^ string_of_int var ^ " not found");
           end
       end
+
+  (** WR: lookup_lib_fun missing -- but it's probably dead code *)
 
   let eta_expand_var (x, field_types) =
     `Record
@@ -622,13 +632,27 @@ struct
     | `Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
     | `Special (`Query (None, e, _)) -> computation env e
+    | `Special (`Table (db, name, keys, (readtype, _, _))) as _s ->
+       (** WR: this case is because shredding needs to access the keys of tables
+           but can we avoid it (issue #432)? *)
+       (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
+       begin
+         match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
+         | `Database (db, params), name, keys, `Record row ->
+	    let unboxed_keys =
+	      List.map
+		(fun key ->
+		 List.map unbox_string (unbox_list key))
+		(unbox_list keys)
+	    in
+            `Table ((db, params), unbox_string name, unboxed_keys, row)
+         | _ -> eval_error "Error evaluating table handle"
+       end
     | `Special _s ->
       (* FIXME:
 
          There's no particular reason why we can't allow
-         table declarations in query blocks.
-
-         Same goes for database declarations. (However, we do still
+         database declarations in query blocks. (However, we do still
          have the problem that we currently have no way of enforcing
          that only one database be used inside a query block - see
          SML#.)  *)
