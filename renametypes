@@ -1,0 +1,33 @@
+#!/usr/bin/env python
+
+import subprocess
+
+first = subprocess.check_output(["grep", "-Ril", 'Types.', "./core"]).splitlines()
+second = subprocess.check_output(["grep", "-Ril", "open Types", "./core"]).splitlines()
+
+#print(sorted(first))
+#print()
+#print("then")
+#print()
+#print(sorted(second))
+#print()
+#print()
+#print(sorted(list(set(first) - set(second))))
+
+new = sorted(list(set(first) - set(second)))
+
+def prepend(f):
+    print("Prepending", f)
+    file = open(f, "r")
+    content = file.read()
+    linefeed = '\n'#file.newlines
+    print(content)
+    file.close()
+    file = open(f, "w")
+    print(linefeed)
+    file.write("module Types = Types" + linefeed + content)
+    file.flush()
+    file.close()
+
+for f in new:
+    prepend(f)

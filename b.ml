@@ -1,0 +1,1 @@
+let fac n = n

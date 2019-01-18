@@ -10,6 +10,22 @@ let interacting = Settings.add_bool ("interacting", true, `System)
 (** [true] if we're in web mode *)
 let web_mode = Settings.add_bool ("web_mode", false, `System)
 
+let load_prelude = Settings.add_bool ("load_prelude", true, `System)
+
+(* Dump lambda IR *)
+let show_lambda_ir = Settings.add_bool("show_lambda_ir", false, `User)
+let show_clambda_ir = Settings.add_bool("show_clambda_ir", false, `User)
+let show_compiled_ir = Settings.add_bool("show_anf_ir", false, `User) (* FIXME: Duplicate of Sugartoir.show_compiled_ir.*)               
+
+(* Compiling *)
+let compile_mode = Settings.add_bool("compile_mode", false, `System)
+let codegenerator = Settings.add_string("codegenerator", "native", `System)  
+let dry_run   = Settings.add_bool("dry_run", false, `System) (* Simulate compilation, but don't emit any code *)
+let output_file = Settings.add_string("output_file", "a.out", `System)
+let verbose     = Settings.add_bool("verbose", false, `System)
+
+
+
 (** If [true], then wait for all child processes to finish before
     terminating *)
 let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", false, `User)
@@ -80,6 +96,11 @@ let config_file_path = match Utility.getenv "LINKS_CONFIG" with
           with End_of_file ->
             None
 
+
+let prelude_file_compiler = 
+  let prelude_dir = Filename.dirname Sys.executable_name in
+  let prelude_src = "prelude_compiler.links" in
+  Settings.add_string ("prelude_compiler", Filename.concat prelude_dir prelude_src, `System)
 
 let default_db_driver_search_folders =
   let links_executable_folder = Filename.dirname Sys.argv.(0) in

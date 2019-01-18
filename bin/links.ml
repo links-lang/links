@@ -8,6 +8,7 @@ open List
 module BS = Basicsettings
 module Eval = Evalir.Eval(Webserver)
 module Webif = Webif.WebIf(Webserver)
+open Types
 
 (** Ensure the settings were parsed correctly *)
 let _ = ParseSettings.validate_settings ()
@@ -350,20 +351,26 @@ let invert_env env =
          IntMap.add var name env)
     env IntMap.empty
 
-let run_file prelude envs filename =
+let run_file prelude ((valenv,nenv,tyenv) as envs) filename =
   Settings.set_value BS.interacting false;
   Webserver.set_prelude prelude;
-  let parse_and_desugar (nenv, tyenv) filename =
-    let source =
-      Errors.display_fatal (Loader.load_file (nenv, tyenv)) filename
-    in
-      let open Loader in
-      let (nenv, tyenv) = source.envs in
+  let parse envs filename =
+    let parse_and_desugar ((nenv,tyenv) as envs) filename =
+      let source =
+  Errors.display_fatal (Loader.load_file envs) filename
+      in
+      let (nenv, tenv) = source.envs in
       let (globals, (locals, main), t) = source.program in
       let external_files = source.external_dependencies in
-      ((globals @ locals, main), t), (nenv, tyenv), external_files
+      let program = (globals @ locals, main) in
+      (program, t, tenv)
+    in
+    let ((bs,tc), _, tenv) = parse_and_desugar (nenv, tyenv) filename in
+      ((bs,tc), tenv)
   in
-    ignore (evaluate parse_and_desugar envs filename)
+  Compileir.compile (parse envs) filename
+
+
 
 
 let run_file prelude envs filename =
@@ -434,14 +441,9 @@ let main () =
 
 
 let _ =
-  if !ParseSettings.print_keywords
-  then (List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0);
-
 (* parse common cmdline arguments and settings *)
   begin match Utility.getenv "REQUEST_METHOD" with
     | Some _ -> Settings.set_value BS.web_mode true
     | None -> ()
   end;
-
-  main()
-
+   main ()

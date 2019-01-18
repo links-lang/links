@@ -1,0 +1,2 @@
+fun fac(n){n * fac(n-1)}
+fun fac2(n){n * fac2(n-1)}
