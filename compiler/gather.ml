@@ -1,14 +1,16 @@
 (*pp deriving *)
+
+open Links_core
 open Utility
 (*module Env = Env
 open Env	       *)
 
 type name_map = string intmap
 (*		deriving (Show)*)
-                
+
 module TraverseIr = struct
   (** TODO: Remove binders_map after the bug in the class below has been fixed. **)
-  let binders_map prog =    
+  let binders_map prog =
     let rec computation : (Ir.var * string) list -> Ir.computation -> (Ir.var * string) list =
       fun map (bs, tc) ->
       tail_computation (bindings map bs) tc
@@ -35,7 +37,7 @@ module TraverseIr = struct
              map @ (computation map c)) clauses map *)
       | _ -> map
     and bindings : (Ir.var * string) list -> Ir.binding list -> (Ir.var * string) list  =
-      fun map -> 
+      fun map ->
       function
       | b :: bs ->
 	 begin
@@ -45,7 +47,7 @@ module TraverseIr = struct
            | `Fun (b, (_, args, comp), _, _) ->
 	      let map = computation ((binder b :: (List.map binder args)) @ map) comp in
 	      bindings map bs
-           | `Rec ((b, (_, args, comp), _, _) :: rest) ->	      
+           | `Rec ((b, (_, args, comp), _, _) :: rest) ->
 	      let funs = List.map (fun f -> `Fun f) rest in
 	      let map = computation map comp in
 	      let map = bindings (binder b :: (List.map binder args) @ map) funs in
@@ -53,7 +55,7 @@ module TraverseIr = struct
 	   | _ -> assert false
 	 end
       | [] -> map
-    and binder : Ir.binder -> (Ir.var * string) =     
+    and binder : Ir.binder -> (Ir.var * string) =
       fun b ->
       match Var.name_of_binder b with
       | "" -> (Var.var_of_binder b, "_v")
@@ -62,7 +64,7 @@ module TraverseIr = struct
     let map = computation [] prog in
     (*    print_endline (Show_name_map.show map); *)
     IntMap.from_alist map
-  
+
   class gatherer =
   object ((o : 'self_type))
 
@@ -71,8 +73,8 @@ module TraverseIr = struct
       fun uid ->
       let pos = IntMap.size globals in
       {< globals = IntMap.add uid pos globals >}
-    method get_globals : int IntMap.t = globals    
-           
+    method get_globals : int IntMap.t = globals
+
     val name_map : string IntMap.t = IntMap.empty
     method add_binder : int -> string -> 'self_type =
       fun uid name ->
@@ -81,9 +83,9 @@ module TraverseIr = struct
 
     method get_name_map : string IntMap.t =
       name_map
-					 	
+
     val operations = StringSet.empty
-		       
+
     method add_operation : string -> 'self_type =
       fun name ->
       if String.compare name "Return" = 0 then
@@ -94,12 +96,12 @@ module TraverseIr = struct
     method get_operation_env : int StringMap.t  =
       let operations = StringSet.fold (fun s acc -> (s, Var.fresh_raw_var ()) :: acc) operations [] in
       StringMap.from_alist operations
-	   
+
     method computation : Ir.computation -> 'self_type =
       fun (bs,tc) ->
       let o = o#bindings bs in
       o#tail_computation tc
-					     
+
     method tail_computation : Ir.tail_computation -> 'self_type =
       function
       | `Case (v, clauses, default_clause) ->
@@ -134,7 +136,7 @@ module TraverseIr = struct
       | `DoOperation (name, args, _) ->
 	 o#add_operation name
       | _ -> o
-		    
+
     method value : Ir.value -> 'self_type =
       function
       | _ -> o
@@ -145,7 +147,7 @@ module TraverseIr = struct
       | [] -> o
 
 
-    method binding : Ir.binding -> 'self_type =      
+    method binding : Ir.binding -> 'self_type =
       function
       | `Let (b, (_, tc)) ->
          (o#binder b)#tail_computation tc
@@ -154,7 +156,7 @@ module TraverseIr = struct
          let o = o#binder b in
          let o = List.fold_left (fun o b -> o#binder b) o args in
          o#computation comp
-      | `Rec ((b, (_, args, comp), _, _) :: rest) ->	      
+      | `Rec ((b, (_, args, comp), _, _) :: rest) ->
 	 let funs = List.map (fun f -> `Fun f) rest in
 	 let o = o#computation comp in
          let o = o#binder b in
@@ -196,7 +198,7 @@ module TraverseIr = struct
       let var = Var.var_of_binder b in
       o#add_global var
   end
-    
+
   let gather ir =
     new gatherer#program ir
 end

@@ -1,6 +1,12 @@
 (* Compiler driver *)
+
+open Links_core
 open Irtolambda
 open Asmgen
+
+
+
+module Env =  Ocaml_common.Env
 
 let hello_world : unit -> Lambda.lambda =
   fun () ->
@@ -16,7 +22,7 @@ let hello_world : unit -> Lambda.lambda =
 			     env
       in*)
     let id = Ident.( { name = "Hello" ; flags = 1 ; stamp = 0 } ) in
-    let body = 
+    let body =
       LambdaDSL.lapply (transl_path Env.empty print_endline)
               ([Lconst (Const_immstring "Hello, world!")]
               )
@@ -24,15 +30,15 @@ let hello_world : unit -> Lambda.lambda =
     Lsequence (body, Lprim (Pmakeblock(0, Asttypes.Immutable, None), [], Location.none))
   )
 
-let hw : unit -> Lambda.lambda = 
+let hw : unit -> Lambda.lambda =
   fun () ->
   LambdaDSL.lprim (Psetglobal (Ident.create_persistent "Hw")) [LambdaDSL.lseq (LambdaDSL.lapply (LambdaDSL.lprim (LambdaDSL.field 29) [ LambdaDSL.lgetglobal "Pervasives" ]) [LambdaDSL.lstring "hello_world\n"]) (LambdaDSL.lprim LambdaDSL.box [])]
 
 let empty : unit -> Lambda.lambda =
-  fun () -> 
-  LambdaDSL.lprim LambdaDSL.box []  
+  fun () ->
+  LambdaDSL.lprim LambdaDSL.box []
 
-let two : unit -> Lambda.lambda = 
+let two : unit -> Lambda.lambda =
     fun () ->
     Lprim ((Psetglobal (Ident.create_persistent "Const2" )), [(LambdaDSL.lseq (LambdaDSL.linteger 2) (LambdaDSL.lprim LambdaDSL.box []))], Location.none)
 
@@ -42,7 +48,7 @@ let module_ident =  Ident.create_persistent "const2"
 
 let emptyprog : Lambda.program = {module_ident = module_ident ; main_module_block_size = 0; required_globals = Ident.Set.empty ; code = empty () }
 
-let makeprog : Lambda.lambda -> Lambda.program = 
+let makeprog : Lambda.lambda -> Lambda.program =
   fun lam ->
   {module_ident = module_ident ; main_module_block_size = 0; required_globals = Ident.Set.empty ; code = lam }
 
@@ -69,7 +75,7 @@ let run p arg =
   let dry_run = Settings.get_value Basicsettings.dry_run in
   if dry_run then arg
   else p arg
-    
+
 let print_if : 'a. bool -> string -> 'a -> 'a
   = fun cond msg forward ->
     let verbose = Settings.get_value Basicsettings.verbose in
@@ -85,11 +91,11 @@ let print_verbose : 'a. string -> 'a -> 'a =
   fun msg forward ->
     let verbose = Settings.get_value Basicsettings.verbose in
     print_if verbose msg forward
-    
+
 let dependencies () =
   let linkslib  = "LINKS_LIB" in
   let serverlib_subdir = "../../install/default/lib/links" in
-  let serverlib_dir =  
+  let serverlib_dir =
   try Filename.concat (Sys.getenv linkslib) serverlib_subdir with
   | Not_found ->
      let guess = Filename.concat (Filename.dirname Sys.executable_name) (Filename.concat "lib" serverlib_subdir) in
@@ -116,7 +122,7 @@ let dependencies () =
   in
   let _ = print_verbose ("Unix module: " ^ unix_cmxa) () in
   List.map CompilationUnit.make_linkable_unit [unix_cmxa ; builtins_cmx]
-    
+
 let initialize_ocaml_backend () =
   let dependencies = dependencies () in
   let dep_include_dirs =
@@ -137,7 +143,7 @@ let initialize_ocaml_backend () =
   Ident.reinit ();
   dependencies
 
-    
+
 let dump_lambda lam =
   if Settings.get_value Basicsettings.show_lambda_ir
   then Format.fprintf Format.err_formatter "%a@\n@." Printlambda.lambda lam
@@ -179,7 +185,7 @@ let nativecomp name lambda_program =
   ()(*
   Clflags.dump_clambda := true;
   Clflags.dump_cmm := true;
-  let cmxfile = module_name ^ ".cmx" in  
+  let cmxfile = module_name ^ ".cmx" in
   Compmisc.init_path true;
   (* Proc.init (); *)
   (* Reg.reset (); *)
@@ -193,12 +199,12 @@ let nativecomp name lambda_program =
 
 (*let remove_links_extension filename =
   Filename.chop_suffix filename ".links"*)
-   
+
 let assemble_executable linkables target =
   print_verbose ("assembling executable " ^ target) ();
   run (fun _ -> Asmlink.link  Format.std_formatter linkables target) ()
 
-   
+
 (*let compile parse_and_desugar envs prelude filename =
   let _ = setup_options () in
   let ((bs,tc) as program, tenv) = parse_and_desugar envs filename in
@@ -213,7 +219,7 @@ let assemble_executable linkables target =
       (bs,tc)
   in
   let module_name = remove_links_extension filename in
-  let lam = lambda_of_ir (envs,tenv) module_name program in  
+  let lam = lambda_of_ir (envs,tenv) module_name program in
   dump_lambda lam;
   if Settings.get_value Basicsettings.dry_run
   then ()
@@ -226,7 +232,7 @@ let lambda_of_links_ir ir source =
   let open FileInfo in
   let printq_lambda lam = (Format.fprintf Format.std_formatter "Dumping lambda@\n%a@\n@." Printlambda.lambda lam; lam) in
   let dump_lambda lam =
-    if !Clflags.dump_lambda 
+    if !Clflags.dump_lambda
     then (Format.fprintf Format.std_formatter "Dumping lambda@\n%a@\n@." Printlambda.lambda lam; lam)
     else lam
   in
@@ -249,20 +255,20 @@ let lambda_of_links_ir ir source =
   |> dump_basic_unit
 
 module NC = CompilationUnit.Native_Compilation_Unit
-      
+
 let clean_up comp_unit =
   let files = List.map FileInfo.filename (NC.temporary_files comp_unit) in
   List.fold_left (fun _ f -> Misc.remove_file f) () files
-  
+
 let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native_comp_unit
-  = fun basic_comp_unit -> 
+  = fun basic_comp_unit ->
     let open FileInfo in
     let open NC in
     let ppf = Format.std_formatter in
     let dump_comp_unit txt comp_unit = print_verbose (txt ^ "\n" ^ (NC.string_of_native_unit comp_unit) ^ "\n") comp_unit in
     let num_globals = CompilationUnit.Basic_Compilation_Unit.count_globals basic_comp_unit in
     let initialize_environment comp_unit =
-      let module_name = module_name comp_unit in 
+      let module_name = module_name comp_unit in
       Env.set_unit_name module_name;
       Compilenv.reset ?packname:!Clflags.for_package module_name;
       comp_unit
@@ -291,7 +297,7 @@ let nativecomp : 'a CompilationUnit.basic_comp_unit -> 'a CompilationUnit.native
       comp_unit
   |> dump_comp_unit "+ Compilation unit"
   (*    let module_ident = Ident.create_persistent modulename in*)
-  |> initialize_environment 
+  |> initialize_environment
   |> make_cmi_file
   |> dump_comp_unit "+ Compilation unit after cmi generation"
   |> run asm_compile
@@ -304,9 +310,9 @@ let modularize comp_unit =
   let cmxfile = CompilationUnit.Native_Compilation_Unit.cmx_file comp_unit |> FileInfo.filename in
   CompilationUnit.make_linkable_unit cmxfile
 
-let cmp2 modname prog = 
+let cmp2 modname prog =
   LambdatoNative.compile (Ident.create_persistent (Misc.chop_extensions modname))  prog  "a.out"
-  
+
 let compile parse_and_desugar filename =
   let ((bs,tc) as program, tenv) = parse_and_desugar filename in
   let () = print_endline (Ir.show_program program)

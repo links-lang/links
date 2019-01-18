@@ -1,10 +1,12 @@
 (*pp deriving *)
 (* Translation of Links IR into OCaml Lambda IR *)
+
+open Links_core
 open Utility
 
 
 let ocaml_function module_name function_name = (module_name, function_name)
-	         	   
+
 let ocaml_of_links_function f =
   let stdlib = "Pervasives" in
   let listlib = "List" in
@@ -23,9 +25,9 @@ let ocaml_of_links_function f =
                ; "explode", ("Builtins", "explode")
                ; "implode", ("Builtins", "implode")
 	     ]
-       
+
 let arith_ops =
-  [ "+" 
+  [ "+"
   ; "-"
   ; "*"
   ; "/"
@@ -40,7 +42,7 @@ let arith_ops =
 
 (*let string_ops =
   ["^^"] *)
-    
+
 let rel_ops =
   [ "=="
   ; "<>"
@@ -54,10 +56,10 @@ let logical_ops =
   [ "&&"
   ; "||"
   ]
-    
+
 let is_arithmetic_operation : string -> bool =
   fun op -> List.mem op arith_ops
-		     
+
 let is_relational_operation : string -> bool =
   fun op -> List.mem op rel_ops
 
@@ -67,15 +69,15 @@ let is_logical_operation : string -> bool =
 let primop   : string -> Lambda.primitive option =
   fun op ->
   let open Lambda in
-  try 
+  try
     Some (
       if is_arithmetic_operation op then
-	match op with       
+	match op with
 	| "+" -> Paddint
 	| "-" -> Psubint
 	| "*" -> Pmulint
 	| "/" -> Pdivint Unsafe
-	| "mod" -> Pmodint Unsafe	 
+	| "mod" -> Pmodint Unsafe
 	| "+." -> Paddfloat
 	| "-." -> Psubfloat
 	| "*." -> Pmulfloat
@@ -111,7 +113,7 @@ let primop   : string -> Lambda.primitive option =
     )
   with
   | Not_found -> None
-	       
+
 let is_primitive   : Var.var -> bool = Lib.is_primitive_var
 let primitive_name : Var.var -> string option =
   fun var ->
@@ -119,7 +121,7 @@ let primitive_name : Var.var -> string option =
     Some (Lib.primitive_name var)
   with
   | Not_found -> None
-(*       
+(*
 let translate (op_map,name_map) module_name ir =
   let open Lambda in
   let open LambdaDSL in
@@ -130,7 +132,7 @@ let translate (op_map,name_map) module_name ir =
       (StringMap.fold
          (fun opname uid (pos,op_map) -> (pos+1,StringMap.add opname (uid,pos) op_map))
          op_map (0, StringMap.empty))
-  in    
+  in
   let lookup_op label =
     try
       Some (StringMap.find label op_map)
@@ -198,7 +200,7 @@ let translate (op_map,name_map) module_name ir =
   and tail_computation : tail_computation -> lambda =
     function
     | `Return v -> value v
-    | `Special s -> special s       
+    | `Special s -> special s
     | `Apply (f, args) ->
        let args' =
 	 if List.length args > 0 then
@@ -210,7 +212,7 @@ let translate (op_map,name_map) module_name ir =
        begin
 	 match is_primitive_function f with
 	 | None     -> lapply (value f) args'
-	 | Some uid ->	    
+	 | Some uid ->
 	    (* Next, figure out which type of primitive f is *)
 	    let fname =
 	      match primitive_name uid with
@@ -220,14 +222,14 @@ let translate (op_map,name_map) module_name ir =
 	    begin
 	      match primop fname with
 	      | Some instr -> lprim instr args'
-	      | _ -> 
+	      | _ ->
 		 begin
 		   match fname with
 		   | "Cons" -> lcons (List.hd args') (List.tl args') (*lprim box args'*)
                    | "Concat" -> let concat = pervasives "@" in
                                  lapply concat args'
                    | "^" -> failwith "Exponentiation is not supported"
-                                                        
+
 (*		   | "random" ->
 		      let random = lookup "Random" "float" in
 		      lapply random [lfloat 1.0]*)
@@ -263,12 +265,12 @@ let translate (op_map,name_map) module_name ir =
        in
        switch_expr
 	 (StringMap.fold
-	    (fun v' (b,c) matchfail ->	     
-	      lif (neq (lvar v'') (polyvariant v' None)) 
+	    (fun v' (b,c) matchfail ->
+	      lif (neq (lvar v'') (polyvariant v' None))
 		matchfail
             (llet (ident_of_binder b) (lproject 1 v) (computation c))
 	    ) clauses default
-	 )    
+	 )
     | _ -> assert false
   and special : special -> lambda =
     function
@@ -279,7 +281,7 @@ let translate (op_map,name_map) module_name ir =
          | Some pos -> pos
          | _ -> error ("Could not find unique location identifier for operation " ^ label)
        in
-       let perform label args =	 
+       let perform label args =
 	 lperform (lprim (field pos)
 		     [ getglobal ])
            [ make_record_from_list value args ]
@@ -289,7 +291,7 @@ let translate (op_map,name_map) module_name ir =
 	 match get_op_uid label with
 	 | Some id -> id
 	 | None    -> error ("Cannot not find identifier for operation name " ^ label)
-       in	 
+       in
     (*       lperform (ident (label, id)) (List.map value args) *)
 (*       Lambda.(lprim (Pperform)
 		     [ lprim (field 0)
@@ -304,7 +306,7 @@ let translate (op_map,name_map) module_name ir =
 	 lfun [ident_of_binder b] (computation comp)
        in
        let exn_handler =
-	 let exn = ident ("exn", Var.fresh_raw_var ()) in	 
+	 let exn = ident ("exn", Var.fresh_raw_var ()) in
 	 lfun [exn] (lraise Lambda.Raise_reraise (lvar exn))
        in
        let eff_handler =
@@ -352,7 +354,7 @@ let translate (op_map,name_map) module_name ir =
 		         k
 		         body
                     else
-                       body)                       
+                       body)
 	       in
 	       let effname = lproject 0 (lvar eff) in
                let clauselabel =
@@ -429,7 +431,7 @@ let translate (op_map,name_map) module_name ir =
        let record = make_record value map in
        begin
          match row with
-         | Some rho -> record (value rho)             
+         | Some rho -> record (value rho)
          | None -> record lproj_error
        end
 (*       begin
@@ -439,7 +441,7 @@ let translate (op_map,name_map) module_name ir =
             lfun [l'] (switcher rest_row)
          | None -> lfun [l'] (switcher lerror)
          end*)
-               
+
 (*       let vs = StringMap.to_list (fun k v -> value v) map in
        begin
        match row with
@@ -495,7 +497,7 @@ let translate (op_map,name_map) module_name ir =
   and is_primitive_function : value -> int option =
     function
     | `Variable var -> if is_primitive var then Some var else None
-    | `TAbs (_,v) 
+    | `TAbs (_,v)
     | `TApp (v,_) -> is_primitive_function v
     | v -> error ("Unknown, possibly primitive, node:\n " ^ (Show_value.show v))
   and program : program -> lambda =
@@ -518,7 +520,7 @@ let translate (op_map,name_map) module_name ir =
     in
 (*    let ops = StringMap.fold
 		(fun label (_,pos) xs -> (label,pos) :: xs) op_map []
-		
+
     in*)
     let random_init k =
       (*let init = lookup "Random" "self_init" in
@@ -534,7 +536,7 @@ let translate (op_map,name_map) module_name ir =
 
 
 let transform tenv ir =
-  let transformer = 
+  let transformer =
 object (o)
   inherit Ir.Transform.visitor(tenv) as super
   method value =
@@ -545,22 +547,22 @@ object (o)
          | Some (">" as name) ->
             begin
               print_endline name;
-              failwith (Types.string_of_datatype (o#lookup_type var))               
+              failwith (Types.string_of_datatype (o#lookup_type var))
             end
          | Some _   -> super#value (`Variable var)
          | None -> failwith "ERROR"
        else
          super#value (`Variable var)
-    | v -> super#value v 
+    | v -> super#value v
 end
   in
   transformer#program ir
 
-*)    
+*)
 let lambda_of_ir module_name prog =
   let (openv, nenv, globals) =
     let gather = Gather.TraverseIr.gather prog in
-    gather#get_operation_env, gather#get_name_map, gather#get_globals                                                     
+    gather#get_operation_env, gather#get_name_map, gather#get_globals
   (*    (gather#get_operation_env, Gather.TraverseIr.binders_map prog)*)
   in
   let nenv = StringMap.fold (fun k v nenv -> IntMap.add v k nenv) openv nenv in
@@ -571,7 +573,7 @@ let lambda_of_ir module_name prog =
   in
   (*  let _ = transform tenv prog in*)
   (*  translate maps module_name prog*)
-  
+
 (*  let ir_translator = new translator (invert env) in
   ir_translator#program "Helloworld" prog*)
   let llambda = Irtollambda.ir_llambda module_name globals nenv openv prog in

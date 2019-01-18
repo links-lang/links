@@ -368,7 +368,7 @@ let run_file prelude ((valenv,nenv,tyenv) as envs) filename =
     let ((bs,tc), _, tenv) = parse_and_desugar (nenv, tyenv) filename in
       ((bs,tc), tenv)
   in
-  Compileir.compile (parse envs) filename
+  Links_compiler.Compileir.compile (parse envs) filename
 
 
 

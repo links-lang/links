@@ -1,7 +1,9 @@
 (** Translate Links-Lambda to Lambda **)
 
+open Links_core
+
 type globalenv = int Utility.intmap
-type effenv    = int Utility.stringmap                     
+type effenv    = int Utility.stringmap
 
 let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambda.lambda =
   fun module_name (globals,effenv) prog ->
@@ -47,7 +49,7 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
        let row   = translate row in
        let project = builtin "project" in
        lapply project [ label ; row ]
-    | `Extend (fields, record) ->       
+    | `Extend (fields, record) ->
        let fields = StringMap.to_alist fields in
        let pairs  = List.map (fun (k,v) -> make_pair k (translate v)) fields in
        let record =
@@ -79,7 +81,7 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
 	 (StringMap.fold
 	    (fun label (b,c) matchfail ->
 	      let label = linteger (hash_label label) in
-	      lif (neq vlabel label) 
+	      lif (neq vlabel label)
 		matchfail
                 (llet (identifier b)
                       (lproject 1 v)
@@ -120,7 +122,7 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
          lfun [ident] comp
        in
        let exn_handler =
-         let exn = fresh_identifier "_exn" in	 
+         let exn = fresh_identifier "_exn" in
 	 lfun [exn] (lraise Lambda.Raise_reraise (lvar exn))
        in
        let eff_handler =
@@ -137,7 +139,7 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
          in
          let one_shot_k k_ident =
            let param = fresh_identifier "_param" in
-	   lfun [param]                      
+	   lfun [param]
 		(lapply (pervasives "continue") [lvar k_ident ; lvar param]) (* One-shot continuation *)
          in
          let bind_k scope =
@@ -217,12 +219,12 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
          | _         -> let f = builtin name in
                         lapply f args
        end
-    | `Print args -> 
+    | `Print args ->
         let args = List.map translate args in
         lapply lprint args
     | `BinOp (binop, args) ->
        let args = List.map translate args in
-       let prim = 
+       let prim =
          match binop with
          | `Plus, Some `Int  -> Paddint
          | `Minus, Some `Int -> Psubint
@@ -261,7 +263,7 @@ let lambda_of_llambda : string -> globalenv * effenv -> LLambda.program -> Lambd
     | `Bool true  -> tt
     | `Bool false -> ff
     | `Char c     -> const_base char c
-    | c -> error ("Unimplemented feature:\n" )  
+    | c -> error ("Unimplemented feature:\n" )
   in
   let exit_success = lconst ff in (* in this context "lconst ff" represents the exit code 0 *)
   translate prog

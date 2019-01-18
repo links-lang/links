@@ -1,3 +1,4 @@
+module Env =   Ocaml_common.Env
 
 (* Initialises the OCaml backend *)
 let initialise ?(includes=[]) () =

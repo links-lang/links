@@ -1,6 +1,8 @@
 (*pp deriving *)
 (** PRIMitive Elaborated IR **)
 
+open Links_core
+
 type identifier = { name : string
                   ; uid  : int
                   }
