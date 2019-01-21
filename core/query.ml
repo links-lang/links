@@ -340,15 +340,7 @@ struct
       | `XML xmlitem -> `XML xmlitem
       | `FunctionPtr (f, fvs) ->
         (* Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure"); *)
-        (** WR: was find_fun (f, fvs), which in addition to the following checks whether the fun
-            is a primitive operation and ensures the location is `Server or `Unknown *)
-	  let (_finfo, (xs, body), z, _location) = Tables.find Tables.fun_defs f in
-          let env = 
-            match z, fvs with
-            | None, None	-> Value.Env.empty
-            | Some z, Some fvs	-> Value.Env.bind z (fvs, `Local) Value.Env.empty
-	    | _, _ 		-> assert false in
-            `Closure ((xs, body), env_of_value_env env)
+        find_fun (f, fvs)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
@@ -357,7 +349,6 @@ struct
   let bind (val_env, exp_env) (x, v) =
     (val_env, Env.Int.bind exp_env (x, v))
 
-  (** WR: the code checking for primitive operations and for the location is factorised in lookup_fun *)
   let lookup (val_env, exp_env) var =
     match lookup_fun (var, None) with
     | Some v -> v
@@ -373,8 +364,6 @@ struct
             | NotFound _ -> failwith ("Variable " ^ string_of_int var ^ " not found");
           end
       end
-
-  (** WR: lookup_lib_fun missing -- but it's probably dead code *)
 
   let eta_expand_var (x, field_types) =
     `Record
@@ -457,7 +446,7 @@ struct
           | `Var (x, field_types) ->
             assert (StringMap.mem label field_types);
             `Project (`Var (x, field_types), label)
-          | _ -> eval_error "Error projecting from record"
+          | _ -> eval_error ("Error projecting from record: %s") (string_of_t r)
       in
         project (value env r, label)
     | `Erase (labels, r) ->

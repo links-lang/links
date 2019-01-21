@@ -450,6 +450,44 @@ struct
   let (++) (venv, eenv) (venv', eenv') =
     Value.Env.shadow venv ~by:venv', Env.Int.extend eenv eenv'
 
+  let lookup_fun (f, fvs) =
+    match Tables.lookup Tables.fun_defs f with
+    | Some (finfo, (xs, body), z, location) ->
+      Some
+      begin
+        match Var.name_of_binder (f, finfo) with
+        | "concatMap" ->
+          `Primitive "ConcatMap"
+        | "map" ->
+          `Primitive "Map"
+        | "empty" ->
+          `Primitive "Empty"
+        | "sortByBase" ->
+          `Primitive "SortBy"
+        | _ ->
+          begin
+            match location with
+            | `Server | `Unknown ->
+                let env =
+                  match z, fvs with
+                  | None, None       -> Value.Env.empty
+                  | Some z, Some fvs -> Value.Env.bind z (fvs, `Local) Value.Env.empty
+                  | _, _ -> assert false in
+                `Closure ((xs, body), env_of_value_env env)
+            | `Client ->
+              failwith ("Attempt to use client function: " ^ Js.var_name_binder (f, finfo) ^ " in query")
+            | `Native ->
+              failwith ("Attempt to use native function: " ^ Var.show_binder (f, finfo) ^ " in query")
+          end
+      end
+    | None -> None
+
+  let find_fun (f, fvs) =
+    match lookup_fun (f, fvs) with
+    | Some v -> v
+    | None ->
+      failwith ("Attempt to find undefined function: " ^ string_of_int f)
+
   let rec expression_of_value : Value.t -> t =
     function
       | `Bool b -> `Constant (`Bool b)
@@ -471,13 +509,7 @@ struct
       | `XML xmlitem -> `XML xmlitem
       | `FunctionPtr (f, fvs) ->
         (* Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure"); *)
-        let (_finfo, (xs, body), z, _location) = Tables.find Tables.fun_defs f in
-        let env =
-          match z, fvs with
-          | None, None       -> Value.Env.empty
-          | Some z, Some fvs -> Value.Env.bind z (fvs, `Local) Value.Env.empty
-          | _, _             -> assert false in
-        `Closure ((xs, body), env_of_value_env env)
+        find_fun (f, fvs)
       | `PrimitiveFunction (f,_) -> `Primitive f
           (*     | `ClientFunction f ->  *)
           (*     | `Continuation cont ->  *)
@@ -487,30 +519,8 @@ struct
     (val_env, Env.Int.bind exp_env (x, v))
 
   let lookup (val_env, exp_env) var =
-    match Tables.lookup Tables.fun_defs var with
-    | Some (finfo, (xs, body), None, location) ->
-      begin
-        match Var.name_of_binder (var, finfo) with
-        | "concatMap" ->
-          `Primitive "ConcatMap"
-        | "map" ->
-          `Primitive "Map"
-        | "empty" ->
-          `Primitive "Empty"
-        | "sortByBase" ->
-          `Primitive "SortBy"
-        | _ ->
-          begin
-            match location with
-            | `Server | `Unknown ->
-              (* Debug.print ("looked up function: "^Var.show_binder (var, finfo)); *)
-              `Closure ((xs, body), env_of_value_env Value.Env.empty)
-            | `Client ->
-              failwith ("Attempt to use client function: " ^ Js.var_name_binder (var, finfo) ^ " in query")
-            | `Native ->
-              failwith ("Attempt to use native function: " ^ Var.show_binder (var, finfo) ^ " in query")
-          end
-      end
+    match lookup_fun (var, None) with
+    | Some v -> v
     | None ->
       begin
         match Value.Env.lookup var val_env, Env.Int.find exp_env var with
@@ -523,12 +533,13 @@ struct
             | NotFound _ -> failwith ("Variable " ^ string_of_int var ^ " not found");
           end
       end
-    | _ -> assert false
 
+  (* looks like dead code
   let lookup_lib_fun (val_env, _exp_env) var =
     match Value.Env.lookup var val_env with
       | Some v -> expression_of_value v
       | None -> expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
+  *)
 
   let eta_expand_var (x, field_types) =
     `Record
