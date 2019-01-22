@@ -931,18 +931,24 @@ forall_datatype:
      Parenthesised versions take priority over non-parenthesised versions.
 */
 session_datatype:
-| BANG datatype DOT datatype                                   { `Output ($2, $4) }
-| QUESTION datatype DOT datatype                               { `Input  ($2, $4) }
+| BANG primary_datatype_loc DOT datatype                                   { `Output ($2, $4) }
+| QUESTION primary_datatype_loc DOT datatype                               { `Input  ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
 | TILDE datatype                                               { `Dual $2         }
 | END                                                          { `End             }
-| primary_datatype                                             { $1               }
+| qualified_or_primary_datatype                                { $1               }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
-| LPAREN qualified_type_name RPAREN                            { [with_pos $loc (`QualifiedTypeApplication ($2, []))] }
+/*| LPAREN qualified_type_name RPAREN                            { [with_pos $loc (`QualifiedTypeApplication ($2, []))] }*/
 | LPAREN datatypes RPAREN                                      { $2 }
+
+qualified_or_primary_datatype:
+| LPAREN qualified_type_name RPAREN                            { `QualifiedTypeApplication ($2, []) }
+
+primary_datatype_loc:
+primary_datatype                                           { with_pos $loc $1 }
 
 primary_datatype:
 | parenthesized_datatypes                                      { match $1 with
