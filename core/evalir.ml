@@ -693,7 +693,7 @@ struct
          end
        else (* shredding disabled *)
          begin
-           match Query.compile env (range, e) with
+           match Queryplain.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
                let (fieldMap, _, _), _ =
@@ -719,7 +719,7 @@ struct
                                         | _ -> assert false) fields)
           | _ -> assert false in
       let update_query =
-        Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
+        Queryplain.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
         apply_cont cont env (`Record [])
     | `Delete ((xb, source), where) ->
@@ -731,7 +731,7 @@ struct
                                         | _ -> assert false) fields)
           | _ -> assert false in
       let delete_query =
-        Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
+        Queryplain.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
     | `CallCC f ->

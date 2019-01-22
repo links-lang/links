@@ -1,5 +1,24 @@
 open Utility;;
 
+type tag = int
+  [@@deriving show]
+
+type t =
+    [ `For of tag option * (Var.var * t) list * t list * t
+    | `If of t * t * t
+    | `Table of Value.table
+    | `Database of (Value.database * string)
+    | `Singleton of t | `Concat of t list
+    | `Record of t StringMap.t | `Project of t * string | `Erase of t * StringSet.t
+    | `Variant of string * t
+    | `XML of Value.xmlitem
+    | `Apply of string * t list
+    | `Closure of (Ir.var list * Ir.computation) * env
+    | `Primitive of string
+    | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.constant ]
+and env = Value.env * t Env.Int.t
+  [@@deriving show]
+
 val unbox_xml : [> `XML of 'a ] -> 'a
     ;;
 val unbox_pair : [> `Record of 'a Utility.StringMap.t ] -> 'a * 'a
@@ -13,6 +32,14 @@ val unbox_string : [> `Concat of [> `Concat of 'a
             | `Singleton of 'b ] ->
 		string
 ;;
+
+val used_database : t -> Value.database option
+    ;;
+
+val string_of_t : t -> string
+
+val type_of_expression : t -> Types.datatype
+    ;;
 
 val default_of_base_type : [> `Bool | `Char | `Float | `Int | `String ] ->
            [> `Constant of
@@ -46,10 +73,33 @@ val is_list : [> `Concat of 'a
             | `Singleton of 'f
             | `Table of 'g ] -> bool;;
 
-val compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * string * Types.datatype) option;;
+module Eval :
+sig
+  (* val nil : unit *)
+  (* val eval_error : unit *)
+  val env_of_value_env : 'a -> 'a * 'b Env.Int.t 
+  (* val (++) : unit *)
+  (* val lookup_fun : unit *)
+  (* val find_fun : unit *)
+  (* val expression_of_value : unit *)
+  val bind : 'a * 'b Env.Int.t -> Env.Int.name * 'b -> 'a * 'b Env.Int.t
+  (* val lookup : unit *)
+  val eta_expand_var : Var.var * Types.datatype StringMap.t -> t
+  (* val eta_expand_list : unit *)
+  (* val value : unit *)
+  (* val apply : unit *)
+  val computation : Value.t Value.Env.t * t Env.Int.t -> Ir.computation -> t 
+  (* val tail_computation : unit *)
+  (* val reduce_concat : unit *)
+  (* val reduce_for_source : unit *)
+  (* val reduce_for_body : unit *)
+  (* val reduce_if_condition : unit *)
+  val reduce_where_then : t * t -> t
+  (* val reduce_if_body : unit *)
+  val reduce_and : t * t -> t
+  (* val reduce_or : unit *)
+  (* val reduce_not : unit *)
+  (* val reduce_eq : unit *)
+  val eval : Value.t Value.Env.t -> Ir.computation -> t 
+end
 
-val compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string;;
-
-val compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string;;
