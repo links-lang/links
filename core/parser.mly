@@ -938,8 +938,8 @@ forall_datatype:
    among several nonterminals.
 */
 session_datatype:
-| BANG primary_datatype_loc DOT datatype                                   { `Output ($2, $4) }
-| QUESTION primary_datatype_loc DOT datatype                               { `Input  ($2, $4) }
+| BANG primary_datatype_loc DOT datatype                       { `Output ($2, $4) }
+| QUESTION primary_datatype_loc DOT datatype                   { `Input  ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
 | END                                                          { `End             }
