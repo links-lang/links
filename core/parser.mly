@@ -931,7 +931,7 @@ forall_datatype:
      Parenthesised versions take priority over non-parenthesised versions.
 
    jcheney: Modified grammar to allow unparenthesized qualified type names
-   in most places, but specifically forbid in ? . or ! . 
+   in most places, but specifically forbid in ? . or ! .
    This also requires moving the TILDE production into primary_datatype
    since otherwise, ? ~M.x . y is ambiguous.
    This is not ideal since it spreads the session-related constructs
