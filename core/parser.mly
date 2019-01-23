@@ -929,6 +929,13 @@ forall_datatype:
      S = !(ModuleA.ModuleB.Type).S
 
      Parenthesised versions take priority over non-parenthesised versions.
+
+   jcheney: Modified grammar to allow unparenthesized qualified type names
+   in most places, but specifically forbid in ? . or ! . 
+   This also requires moving the TILDE production into primary_datatype
+   since otherwise, ? ~M.x . y is ambiguous.
+   This is not ideal since it spreads the session-related constructs
+   among several nonterminals.
 */
 session_datatype:
 | BANG primary_datatype_loc DOT datatype                                   { `Output ($2, $4) }
@@ -936,16 +943,12 @@ session_datatype:
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
 | END                                                          { `End             }
-| qualified_or_primary_datatype                                { $1               }
+| primary_datatype                                             { $1               }
+| qualified_type_name                                          { `QualifiedTypeApplication ($1, []) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
-/*| LPAREN qualified_type_name RPAREN                            { [with_pos $loc (`QualifiedTypeApplication ($2, []))] }*/
 | LPAREN datatypes RPAREN                                      { $2 }
-
-qualified_or_primary_datatype:
-| qualified_type_name                                          { `QualifiedTypeApplication ($1, []) }
-| primary_datatype                                             { $1 }
 
 primary_datatype_loc:
 | primary_datatype                                             { with_pos $loc $1 }
