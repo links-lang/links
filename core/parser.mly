@@ -935,7 +935,6 @@ session_datatype:
 | QUESTION primary_datatype_loc DOT datatype                               { `Input  ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
-| TILDE datatype                                               { `Dual $2         }
 | END                                                          { `End             }
 | qualified_or_primary_datatype                                { $1               }
 
@@ -945,12 +944,14 @@ parenthesized_datatypes:
 | LPAREN datatypes RPAREN                                      { $2 }
 
 qualified_or_primary_datatype:
-| LPAREN qualified_type_name RPAREN                            { `QualifiedTypeApplication ($2, []) }
+| qualified_type_name                                          { `QualifiedTypeApplication ($1, []) }
+| primary_datatype                                             { $1 }
 
 primary_datatype_loc:
-primary_datatype                                           { with_pos $loc $1 }
+| primary_datatype                                             { with_pos $loc $1 }
 
 primary_datatype:
+| TILDE primary_datatype_loc                                   { `Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> `Unit
                                                                    | [{node;_}] -> node
