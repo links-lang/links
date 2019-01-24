@@ -1,0 +1,119 @@
+module AssocList {
+  sig lookup : (a, [(a, b)]) ~> Maybe(b)
+  fun lookup(x, ys) {
+    switch(ys) {
+      case [] -> Nothing
+      case (k, v) :: ys ->
+        if (k == x) {
+          Just(v)
+        } else {
+          lookup(x, ys)
+        }
+    }
+  }
+
+  sig contains : (a, [(a, b)]) ~> Bool
+  fun contains(x, ys) {
+    switch (lookup(x, ys)) {
+      case Just(_) -> true
+      case Nothing -> false
+    }
+  }
+}
+
+module List {
+  sig contains : (a, [a]) ~> Bool
+  fun contains(x, ys) {
+    switch(ys) {
+      case [] -> false
+      case y :: ys ->
+        if (x == y) {
+          true
+        } else {
+          contains(x, ys)
+        }
+    }
+  }
+}
+
+typename LinList(a) = [| LinNil | LinCons: (a, LinList(a)) |];
+
+
+module AssocLinList {
+
+  sig contains : (String, LinList((String, b))) ~> (Bool, LinList((String, b)))
+  fun contains(k, xs) {
+    switch(xs) {
+      case LinNil -> (false, LinNil)
+      case LinCons((kComp, v), ys) ->
+        if (kComp == k) {
+          (true, LinCons((kComp, v), ys))
+        } else {
+          var (result, rest) = contains(k, ys);
+          (result, LinCons((kComp, v), rest))
+        }
+    }
+  }
+
+  fun keys(xs) {
+    switch(xs) {
+      case LinNil -> ([], LinNil)
+      case LinCons((k, v), xs) ->
+        var (keys, xs) = keys(xs);
+        (k :: keys, LinCons((k, v), xs))
+    }
+  }
+
+# Maps a function over all channels
+ # sig map : ((a) ~e~> b, LinList((String, a))) ~e~>
+ #   LinList((String, b))
+  fun map(f, xs) {
+    switch(xs) {
+      case LinNil -> LinNil
+      case LinCons((k, x), xs) ->
+        LinCons((k, f(x)), (map(f, xs)))
+    }
+  }
+  # Finds an entry in a linear association list.
+  # Either returns (Nothing, Original List), or
+  # (Just(k, v), Original list without (k, v))
+  #sig find : (String, LinList((String, a))) ~>
+  #  (Maybe((String, a)), LinList((String, a)))
+  fun find(k, xs) {
+    switch(xs) {
+      case LinNil -> (Nothing, LinNil)
+      case LinCons((kComp, s), xs) ->
+        if (k == kComp) {
+          (Just(s), xs)
+        } else {
+          var (result, xs) = find(k, xs);
+          (result, LinCons((kComp, s), xs))
+        }
+    }
+  }
+
+  fun contains(k, xs) {
+    switch(xs) {
+      case LinNil -> (false, LinNil)
+      case LinCons((kComp, s), xs) ->
+        if (k == kComp) {
+          (true, LinCons((kComp, s), xs))
+        } else {
+          var (result, xs) = contains(k, xs);
+          (result, LinCons((kComp, s), xs))
+        }
+    }
+  }
+
+  fun isEmpty(xs) {
+    switch(xs) {
+      case LinNil -> (true, LinNil)
+      case LinCons(x, xs) -> (false, LinCons(x, xs))
+    }
+  }
+
+}
+
+
+
+

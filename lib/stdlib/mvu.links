@@ -1,0 +1,129 @@
+### VDOM STUFF ###
+open MvuAttrs;
+open MvuEvents;
+open MvuHTML;
+open MvuSubscriptions;
+
+# Needed to ensure that virtual-dom is open
+module VirtualDom {
+  alien javascript "/lib/virtual-dom.js" {
+    dummy : ();
+  }
+}
+
+# Loads the "vdom.js" file, exposes runDom and updateDom.
+module VDom {
+  alien javascript "/lib/vdom.js" {
+    runDom : forall a :: Type(Any, Any) .
+      (String, HTML(a), AP(?a.End), Sub(a)) ~%~> ();
+    updateDom : forall a :: Type(Any, Any) . (HTML(a), Sub(a)) ~%~> ();
+  }
+}
+
+######
+
+# TODO: Put into a module
+typename Command(a :: Type(Any, Any)) =
+  [| NoCommand | Spawn: (() {}~> a) | SpawnLinear: (() {}~@ a) |];
+
+sig applySpawn: forall a :: Type(Any, Any) . (() {}~> a) {}~> a
+fun applySpawn(f) { f() }
+
+sig applySpawnLinear : forall a :: Type(Any, Any) . (() {}~@ a) {}~> a
+fun applySpawnLinear(f) { f() }
+
+# TODO: Generalise to monoidal interface
+sig processCommand :
+  forall msg :: Type(Any, Any) . (Command(msg), AP(?msg.End)) ~> ()
+fun processCommand(cmd, ap) {
+  switch(cmd) {
+    case NoCommand -> ()
+    case Spawn(f) ->
+      ignore(
+        spawn {
+          var _ = send(applySpawn(f), request(ap));
+          ()
+        })
+    case SpawnLinear(f) ->
+      ignore(
+        spawn {
+          var _ = send(applySpawnLinear(f), request(ap));
+          ()
+        })
+  }
+}
+
+# Main event loop
+sig evtLoop :
+ forall msg :: Type(Any, Any),
+        model :: Type(Any, Any),
+        unrModel :: Type(Unl, Any) .
+  (AP(?msg.End),
+   model,
+   (unrModel) ~%~> HTML(msg),
+   (msg, model) ~%~> (model, Command(msg)),
+   (unrModel) ~%~> Sub(msg),
+   (model) ~%~> (model, unrModel),
+   Sub(msg)) ~%~> ()
+fun evtLoop(ap, model, view, updt, subscriptionsFn, extract, prevSubscriptions) {
+  var (message, _) = receive(accept(ap));
+  var (model, cmd) = updt(message, model);
+  processCommand(cmd, ap);
+  # Update DOM
+  var (model, unrModel) = extract(model);
+  # Get new subscriptions
+  var newSubscriptions = subscriptionsFn(unrModel);
+  # Update DOM
+  VDom.updateDom(view(unrModel), newSubscriptions);
+  # Loop with new subscriptions
+  evtLoop(ap, model, view, updt, subscriptionsFn, extract, newSubscriptions)
+}
+
+sig runLinear:
+  forall
+    msg::Type(Any, Any), model::Type(Any, Any),
+    unrModel::Type(Unl, Any) .
+  (String,
+   model,
+   (unrModel) ~%~> HTML(msg),
+   (msg, model) ~%~> (model, Command(msg)),
+   (unrModel) ~%~> Sub(msg),
+   (model) ~%~> (model, unrModel)
+   ) ~%~> ()
+fun runLinear(placeholder, model, view, updt, subscriptions, extract) {
+  var (model, unrModel) = extract(model);
+  var evtHandler = spawnClient {
+    var ap = new();
+    VDom.runDom(placeholder, view(unrModel), ap, subscriptions(unrModel));
+    evtLoop(ap, model, view, updt, subscriptions, extract, subscriptions(unrModel))
+  };
+  ()
+}
+
+# User-facing function (assuming an unrestricted model)
+sig run:
+  forall
+    msg :: Type(Any, Any),
+    model :: Type(Unl, Any) .
+  (String,
+    model,
+    (model) ~%~> HTML(msg),
+    (msg, model) ~%~> (model, Command(msg)),
+    (model) ~%~> Sub(msg)) ~%~> ()
+fun run(placeholder, model, view, updt, subscriptions) {
+  runLinear(placeholder, model, view, updt, subscriptions, fun(x) { (x, x) })
+}
+
+sig runSimple :
+  forall
+    msg :: Type(Any, Any),
+    model :: Type(Unl, Any) .
+  (String,
+    model,
+    (model) ~%~> HTML(msg),
+    (msg, model) ~%~> model) ~%~> ()
+fun runSimple(placeholder, model, view, updt) {
+  run(placeholder, model, view,
+    fun(msg, model) { (updt(msg, model), NoCommand)},
+    fun(_) { SubEmpty } )
+}

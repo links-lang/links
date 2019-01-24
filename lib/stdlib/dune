@@ -1,5 +1,11 @@
 (install
   (section lib)
   (files (binaryTree.links as stdlib/binaryTree.links)
-         (comparators.links as stdlib/comparators.links))
+         (comparators.links as stdlib/comparators.links)
+         (mvuAttrs.links as stdlib/mvuAttrs.links)
+         (mvuEvents.links as stdlib/mvuEvents.links)
+         (mvuHTML.links as stdlib/mvuHTML.links)
+         (mvu.links as stdlib/mvu.links)
+         (mvuSubscriptions.links as stdlib/mvuSubscriptions.links)
+  )
   (package links))

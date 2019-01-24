@@ -1,0 +1,495 @@
+open ChatSessions;
+open ChatClient;
+open Utility;
+
+#helper functions:
+fun member(elem , l) {
+  switch(l) {
+    case [] -> false
+    case (x::xs) -> x == elem || member(elem, xs)
+  }
+}
+
+typename RoomJoinResponse =
+  [| UsernameTaken
+     | InvalidRoom
+     | Joined: (Topic, [Nickname], ClientReceive)
+     | JoinedAsModerator:
+        (Topic, [Nickname], ClientReceive, ModeratorSend) |];
+# Messages sent from workers and the room manager to
+# a room. Note that is *not* exposed to clients directly.
+# It is, however, the union of both the messages sent by
+# client workers and the room manager.
+# In future, I wonder whether some form of input-guarded choice-style
+# operator on APs could make this more modular.
+typename RoomReceive =
+  [&|
+      # Messages sent from client worker
+      Chat: ?(Nickname, Message).End,
+      NewTopic: ?Topic          .End,
+      Leave: ?Nickname          .End,
+      # Messages sent from moderator worker
+      KickUser: ?Nickname       .End,
+      MuteUser: ?Nickname       .End,
+      MakeModerator: ?Nickname  .End,
+      # Messages sent from room manager
+      JoinRequest: ?Nickname.!RoomJoinResponse.End,
+      Kill: End
+  |&];
+
+typename RoomHandle = AP(RoomReceive);
+
+
+typename RoomJoinResult =
+  [| UsernameTaken
+   | InvalidRoom
+   | Joined: (Topic, [Nickname], ClientReceive, RoomHandle)
+   | JoinedAsModerator: (Topic, [Nickname], ClientReceive, ModeratorSend, RoomHandle) |];
+
+
+module Moderator {
+  sig create : (RoomHandle) ~> ModeratorSend
+  fun create(roomAp) {
+    fun loop(s) {
+      offer(s) {
+        case KickUser(s) ->
+          var (nick, s) = receive(s);
+          # Mutually-recursive modules don't work, so we will
+          # need to send the messages manually.
+          ignore(send(nick, select KickUser (request(roomAp))));
+          loop(s)
+        case MuteUser(s) ->
+          var (nick, s) = receive(s);
+          ignore(send(nick, select MuteUser (request(roomAp))));
+          loop(s)
+        case MakeModerator(s) ->
+          var (nick, s) = receive(s);
+          ignore(send(nick, select MakeModerator (request(roomAp))));
+          loop(s)
+      }
+    }
+    fork(loop)
+  }
+}
+
+module Room {
+
+  typename RoomState =
+    (name:String,
+     topic:String,
+     ap:RoomHandle);
+
+  typename ClientInfo = (name:String, isMod:Bool, isMuted:Bool);
+  typename ClientMap = LinList((String, (RoomSend, ClientInfo)));
+
+  # Gets us a pair of (RoomSend, ~RoomSend) endpoints.
+  # Perhaps this should be in the standard library.
+  sig createRoomSend : () ~> (RoomSend, ~RoomSend)
+  fun createRoomSend() {
+    var transit = new();
+    var (ap: AP(RoomSend)) = new();
+    var _ = spawn {
+      var ep2 = request(ap);
+      ignore(send(ep2, request(transit)))
+    };
+    var ep1 = accept(ap);
+    var (ep2, _) = receive(accept(transit));
+    (ep1, ep2)
+  }
+
+  sig loop : (RoomState, ClientMap) ~> ()
+  fun loop(state, clients) {
+
+    sig broadcastJoined : (Nickname, ClientMap) ~> ClientMap
+    fun broadcastJoined(nick, clients) {
+      AssocLinList.map(fun((s, info)) {
+        var s = select NewUser s;
+        var s = send(nick, s);
+        (s, info)
+      }, clients)
+    }
+
+    var s = accept(state.ap);
+
+    fun kickUser(nick, clients) {
+      switch(AssocLinList.find(nick, clients)) {
+        case (Just((s, info)), clients) ->
+          var _ = select Kick s;
+          clients
+        case (Nothing, clients) -> clients
+      }
+    }
+
+    fun muteUser(nick, clients) {
+      switch(AssocLinList.find(nick, clients)) {
+        case (Just((s, info)), clients) ->
+          var newMuted = not (info.isMuted);
+          var info = (info with isMuted=newMuted);
+          # Broadcast to clients
+          AssocLinList.map(fun((s, info)) {
+            var s =
+              if (newMuted) {
+                select UserMuted s
+              } else {
+                select UserUnmuted s
+              };
+            var s = send(nick, s);
+            (s, info)
+          }, LinCons((nick, (s, info)), clients))
+        case (Nothing, clients) -> clients
+      }
+    }
+
+    fun makeModerator(nick, clients) {
+      switch(AssocLinList.find(nick, clients)) {
+        case (Just((s, info)), clients) ->
+          # If the user is a moderator already, nothing doing
+          if (info.isMod) {
+            LinCons((nick, (s, info)), clients)
+          } else {
+            # Otherwise, create a moderator channel + handler, and
+            # relay the channel to the client
+            var modSend = Moderator.create(state.ap);
+            var s = select BecomeModerator s;
+            var s = send(modSend, s);
+            LinCons((nick, (s, info)), clients)
+          }
+        case (Nothing, clients) -> clients
+      }
+    }
+
+    fun newClient(nick, chan, isMod) {
+      (chan, (name=nick, isMod=isMod, isMuted=false))
+    }
+
+    offer(s) {
+      case JoinRequest(s) ->
+        var (nick, s) = receive(s);
+        # If username is already taken, let the client know
+        var (nickTaken, clients) =
+          AssocLinList.contains(nick, clients);
+        if (nickTaken) {
+          var _ = send(UsernameTaken, s);
+          loop(state, clients)
+        } else {
+          # Otherwise, check if the user is the only one in the room.
+          # If so, make them moderator
+          var (isEmpty, clients) = AssocLinList.isEmpty(clients);
+          if (isEmpty) {
+            var (roomSend, clientReceive) = createRoomSend();
+            var (nicks, clients) = AssocLinList.keys(clients);
+            var moderatorSend = Moderator.create(state.ap);
+            var clients = LinCons((nick, newClient(nick, roomSend, true)), clients);
+            var clients = broadcastJoined(nick, clients);
+            var _ =
+              send(JoinedAsModerator(state.topic, nicks,
+                clientReceive, moderatorSend), s);
+
+            loop(state, clients)
+          } else {
+            var (roomSend, clientReceive) = createRoomSend();
+            var (nicks, clients) = AssocLinList.keys(clients);
+            var clients = LinCons((nick, newClient(nick, roomSend, false)), clients);
+            var clients = broadcastJoined(nick, clients);
+            var _ = send(Joined(state.topic, nicks, clientReceive), s);
+            loop(state, clients)
+          }
+        }
+      case Chat(s) ->
+        var ((nick, msg), _) = receive(s);
+        # First, check to see whether the user is muted.
+        var (maybeRes, clients) = AssocLinList.find(nick, clients);
+        switch(maybeRes) {
+          case Just((s, info)) ->
+            # Check whether the user is muted.
+            if (info.isMuted) {
+              # If so, we ain't broadcasting the message.
+              var s = select IncomingChatMessage s;
+              var s = send(("System Message", "Not sending message as you are muted."), s);
+              loop(state, LinCons((nick, (s, info)), clients))
+            } else {
+              var clients = AssocLinList.map(fun((s, info)) {
+                var s = select IncomingChatMessage s;
+                var s = send ((nick, msg), s);
+                (s, info)
+              }, LinCons((nick, (s, info)), clients));
+              loop(state, clients)
+            }
+          case Nothing ->
+            # User doesn't exist -- no-op.
+            loop(state, clients)
+        }
+      case NewTopic(s) ->
+        var (newTopic, _) = receive(s);
+        var clients = AssocLinList.map(fun((s, info)) {
+          var s = select NewTopic s;
+          var s = send(newTopic, s);
+          (s, info)
+        }, clients);
+        loop((state with topic=newTopic), clients)
+      case Leave(s) ->
+        var (name, _) = receive(s);
+        var clients =
+          switch(AssocLinList.find(name, clients)) {
+            case (Just(c, info), clients) ->
+              cancel(c);
+              clients
+            case (Nothing, clients) -> clients
+          };
+        var clients = AssocLinList.map(fun((s, info)) {
+          var s = select UserLeft s;
+          var s = send(name, s);
+          (s, info)
+        }, clients);
+        loop(state, clients)
+      case KickUser(s) ->
+        var (name, _) = receive(s);
+        var clients = kickUser(name, clients);
+        loop(state, clients)
+      case MuteUser(s) ->
+        var (name, _) = receive(s);
+        var clients = muteUser(name, clients);
+        loop(state, clients)
+      case MakeModerator(s) ->
+        var (name, _) = receive(s);
+        var clients = makeModerator(name, clients);
+        loop(state, clients)
+      case Kill(s) ->
+        # Since after selecting Kick, all elements will be of type End
+        # (and therefore unrestricted), we can dispose of `clients`.
+        var _ = AssocLinList.map(fun((s, info)) {
+          var s = select Kick s;
+          (s, info)
+        }, clients);
+        () # Stop evaluating
+    }
+  }
+
+  sig join : (RoomHandle, Nickname) ~> RoomJoinResponse
+  fun join(ap, nick) {
+    var s = request(ap);
+    var s = select JoinRequest s;
+    var s = send(nick, s);
+    var (res, _) = receive(s);
+    res
+  }
+
+  sig create : (RoomName) ~> RoomHandle
+  fun create(roomName) {
+    var (ap: RoomHandle) = new();
+    var (state: RoomState) =
+      (name=roomName, topic="Hello, world!", ap=ap);
+    var _ = spawn { loop(state, LinNil) };
+    ap
+  }
+
+  sig kill : (RoomHandle) ~> ()
+  fun kill(ap) {
+    ignore(select Kill request(ap))
+  }
+
+  sig chatMessage : (RoomHandle, Nickname, Message) ~> ()
+  fun chatMessage(ap, nick, msg) {
+    var s = request(ap);
+    var s = select Chat s;
+    ignore(send((nick, msg), s))
+  }
+
+  sig newTopic : (RoomHandle, Topic) ~> ()
+  fun newTopic(ap, topic) {
+    var s = request(ap);
+    var s = select NewTopic s;
+    ignore(send(topic, s))
+  }
+
+  sig leave : (RoomHandle, Nickname) ~> ()
+  fun leave(ap, nick) {
+    var s = request(ap);
+    var s = select Leave s;
+    ignore(send(nick, s))
+  }
+
+}
+
+
+module RoomManager {
+
+  # Messages sent from the client to add / remove
+  # / list / join rooms
+  typename RoomManager =
+    [&|
+      RemoveRoom: ?RoomName.End,
+      ListRooms: ![RoomName].End,
+      ConnectToRoom: ?(Nickname, RoomName).!RoomJoinResult.End
+    |&];
+
+
+  sig managerAP : AP(RoomManager)
+  var managerAP = new();
+
+
+  fun roomExists(roomName, rooms) {
+    AssocList.contains(roomName, rooms)
+  }
+
+  fun lookupRoom(roomName, rooms) {
+    AssocList.lookup(roomName, rooms)
+  }
+
+  fun deleteRoom(roomName, rooms) {
+    filter(fun((name, roomHandle)) {
+      if (name == roomName) {
+        Room.kill(roomHandle);
+        false
+      } else {
+        true
+      }
+    }, rooms)
+  }
+
+  # Main loop for the room manager
+  fun init() {
+
+    fun getJoinResult(roomAp, nick) {
+      switch(Room.join(roomAp, nick)) {
+        case UsernameTaken -> UsernameTaken
+        case InvalidRoom -> InvalidRoom
+        case Joined(topic, nicks, cr) -> Joined(topic, nicks, cr, roomAp)
+        case JoinedAsModerator(topic, nicks, cr, ms) ->
+          JoinedAsModerator(topic, nicks, cr, ms, roomAp)
+      }
+    }
+
+    fun loop(rooms) {
+      var s = accept(managerAP);
+      offer(s) {
+        case RemoveRoom(s) ->
+          var (roomName, _) = receive(s);
+          loop(deleteRoom(roomName, rooms))
+        case ListRooms(s) ->
+          var _ = send(map(fun((name, _)) { name }, rooms), s);
+          loop(rooms)
+        case ConnectToRoom(s) ->
+          var ((nick, roomName), s) = receive(s);
+          switch(lookupRoom(roomName, rooms)) {
+            case Just(roomAp) ->
+              var _ = send(getJoinResult(roomAp, nick), s);
+              loop(rooms)
+            case Nothing ->
+              var roomAp = Room.create(roomName);
+              var _ = send(getJoinResult(roomAp, nick), s);
+              loop(rooms ++ [(roomName, roomAp)])
+          }
+      }
+    }
+    # Spawn the room manager loop
+    ignore(spawn { loop([]) })
+  }
+
+
+  fun removeRoom(name) {
+    var s = request(managerAP);
+    var s = select RemoveRoom s;
+    ignore(send(name, s))
+  }
+
+  fun listRooms() {
+    var s = request(managerAP);
+    var s = select ListRooms s;
+    var (rooms, _) = receive(s);
+    rooms
+  }
+
+  fun connectToRoom(name, roomName) {
+    var s = request(managerAP);
+    var s = select ConnectToRoom s;
+    var s = send((name, roomName), s);
+    var (res, _) = receive(s);
+    res
+  }
+}
+
+# Send all existing rooms to the client
+# The client then either picks one of the existing rooms or creates a new one,
+# and sends its choice back to the client.
+# The server then allocates a handle for that particular room, for client
+# to operate on
+typename WorkerResult = [| SameRoom:ClientSend | LeftRoom |];
+
+sig acceptAndWork : (ServerAccept) ~> ()
+fun acceptAndWork(s) server {
+
+  # Main loop: offers on WorkerReceive channel, communicates
+  # with room
+  sig workerLoop : (Nickname, RoomHandle, WorkerReceive) ~> ()
+  fun workerLoop(nick, roomHandle, s) {
+    try {
+      offer(s) {
+        case ChatMessage(s) ->
+          var (msg, s) = receive(s);
+          debug("worker loop for " ^^ nick ^^ ": sending message " ^^ msg);
+          Room.chatMessage(roomHandle, nick, msg);
+          SameRoom(s)
+        case ChangeTopic(s) ->
+          var (topic, s) = receive(s);
+          Room.newTopic(roomHandle, topic);
+          SameRoom(s)
+        case Leaving(_) ->
+          Room.leave(roomHandle, nick);
+          LeftRoom
+      }
+    } as (result) in {
+      switch(result) {
+        case SameRoom(s) -> workerLoop(nick, roomHandle, s)
+        case LeftRoom -> ()
+      }
+    } otherwise {
+      Room.leave(roomHandle, nick)
+    }
+  }
+
+  # Get all available rooms from the room manager
+  var rooms = RoomManager.listRooms();
+  # send the rooms to the client.
+  var s = send(rooms, s);
+  # get the room selection from the client
+  var ((room, nick), s) = receive(s);
+  var joinResult = RoomManager.connectToRoom(nick, room);
+  switch(joinResult) {
+    case UsernameTaken ->
+      var s = select Nope s;
+      ignore(send(NameInUse, s))
+    case InvalidRoom ->
+      var s = select Nope s;
+      ignore(send(BadRoom, s))
+    case Joined(topic, nicks, clientReceive, roomAP) ->
+      var s = select JoinedOK s;
+      var s = send((topic, nicks, clientReceive), s);
+      workerLoop(nick, roomAP, s)
+    case JoinedAsModerator(topic, nicks, clientReceive, moderatorSend, roomAP) ->
+      var s = select JoinedOKAsModerator s;
+      var s = send((topic, nicks, clientReceive, moderatorSend), s);
+      workerLoop(nick, roomAP, s)
+  }
+}
+
+sig acceptor : () ~> ()
+fun acceptor() server {
+  # Accept a new client from worker AP (defined in ChatSessions)
+  var s = accept(wap);
+  var _ = spawn { acceptAndWork(s) };
+  acceptor()
+}
+
+
+fun main() {
+  var clientAP = new();
+  RoomManager.init();
+  var _ = spawn { acceptor() };
+  addRoute("/", fun (_) { ChatClient.mainPage() } );
+  addStaticRoute("/css", "css", [("css", "text/css")]);
+  serveWebsockets();
+  servePages()
+}
+
+main()

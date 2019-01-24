@@ -1,0 +1,53 @@
+# ChatSessions module -- contains the session types for chat interactions
+
+typename Nickname = String;
+typename Message = String;
+typename Topic = String;
+typename RoomName = String;
+
+typename ConnectError = [| NameInUse | BadRoom |];
+
+
+typename ModeratorSend  =
+  [+| KickUser : !(Nickname) . ModeratorSend,
+      MuteUser : !(Nickname) . ModeratorSend,
+      MakeModerator : !(Nickname) . ModeratorSend |+];
+
+typename ModeratorReceive = ~ModeratorSend;
+
+
+
+# Messages received by a connected client
+typename ClientReceive =
+  [&| IncomingChatMessage : ?(Nickname, Message) . ClientReceive,
+      NewUser : ?(Nickname) . ClientReceive,
+      NewTopic : ?(Topic) . ClientReceive,
+      UserLeft : ?(Nickname) . ClientReceive,
+      UserMuted : ?(Nickname) . ClientReceive,
+      UserUnmuted : ?(Nickname) . ClientReceive,
+      BecomeModerator : ?ModeratorSend . ClientReceive,
+      Kick : End
+  |&];
+
+typename ClientSend =
+  [+| ChatMessage : !(Message) . ClientSend,
+      ChangeTopic : !(Topic). ClientSend,
+      Leaving : End |+];
+
+typename ClientSelect =
+    !(RoomName, Nickname).
+      [&| JoinedOK: ?(Topic, [Nickname], ClientReceive) . ClientSend,
+          JoinedOKAsModerator: ?(Topic, [Nickname], ClientReceive, ModeratorSend). ClientSend,
+          Nope: ?ConnectError.End
+      |&];
+
+typename ClientConnect = ?([RoomName]).ClientSelect;
+
+typename ServerAccept = ~ClientConnect;
+typename RoomSend = ~ClientReceive;
+typename WorkerReceive = ~ClientSend;
+
+
+# Access point for communication between workers on server and clients
+sig wap : AP(ServerAccept)
+var wap = new();
