@@ -1,6 +1,6 @@
 open Utility
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 module TyEnv = Env.String
 

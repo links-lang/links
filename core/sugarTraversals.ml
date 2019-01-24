@@ -11,6 +11,7 @@
 open Operators
 open CommonTypes
 open Sugartypes
+open SugarConstructors.SugartypesPositions
 
 class map =
   object ((o : 'self_type))

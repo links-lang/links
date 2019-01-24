@@ -2,7 +2,7 @@ open Utility
 open CommonTypes
 open Sugartypes
 open List
-open SugarConstructors.Make
+open SugarConstructors.SugartypesPositions
 
 (* TODO:
 
@@ -36,7 +36,8 @@ let desugar_lhref : phrasenode -> phrasenode = function
           | [_,[target]], rest ->
               ("href",
                [constant_str "?_k=";
-                apply "pickleCont" [fun_lit ~location:loc_server dl_unl [[]] target]])
+                apply "pickleCont" [fun_lit ~location:loc_server dl_unl [[]]
+                                            target]])
               :: rest
           | _ -> assert false (* multiple l:hrefs, or an invalid rhs;
                                  NOTE: this is a user error and should
@@ -54,7 +55,8 @@ let desugar_laction : phrasenode -> phrasenode = function
                   ["type",  [constant_str "hidden"];
                    "name",  [constant_str "_k"];
                    "value", [apply "pickleCont"
-                                   [fun_lit ~location:loc_server dl_unl [[]] action_expr]]]
+                                   [fun_lit ~location:loc_server dl_unl [[]]
+                                            action_expr]]]
                   None []
             and action = ("action", [constant_str "#"])
             in Xml (form, action::rest, attrexp, hidden::children)
@@ -67,9 +69,11 @@ let desugar_laction : phrasenode -> phrasenode = function
 let desugar_lonevent : phrasenode -> phrasenode =
   let event_handler_pair = function
     | (name, [rhs]) ->
-        let event_name = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
+        let event_name = StringLabels.sub ~pos:4 ~len:(String.length name - 4)
+                                          name in
           tuple [constant_str event_name;
-                 fun_lit ~location:loc_client dl_unl [[variable_pat "event"]] rhs]
+                 fun_lit ~location:loc_client dl_unl [[variable_pat "event"]]
+                         rhs]
     | _ -> assert false
   in function
     | Xml (tag, attrs, attrexp, children)
@@ -95,9 +99,9 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string) StringMap.t
     | a -> [a] in
   let rec aux : phrasenode -> phrasenode  = function
     | Xml (tag, attrs, attrexp, children) ->
-        let attrs = concat_map attr attrs
-        and children = List.map (fun {node;_} -> with_dummy_pos (aux node))
-                                children in
+        let attrs = concat_map attr attrs in
+        let children =
+          List.map (fun {node;pos} -> with_pos pos (aux node)) children in
           Xml (tag, attrs, attrexp, children)
     | p -> p
   in
@@ -122,22 +126,25 @@ let bind_lname_vars lnames = function
 
 let desugar_form : phrasenode -> phrasenode = function
   | Xml (("form"|"FORM") as form, attrs, attrexp, children) ->
-      let children = List.map (fun {node;_} -> node) children in
-      let children, lnames = List.split (List.map desugar_lnames children) in
+      let children, poss   = List.split (List.map tuple_of_with_pos children) in
+      let children, lnames = List.split (List.map desugar_lnames    children) in
       let lnames =
         try List.fold_left StringMap.union_disjoint StringMap.empty lnames
         with StringMap.Not_disjoint (item, _) ->
-          raise (Errors.SugarError (dummy_position, "Duplicate l:name binding: " ^ item)) in
+          raise (Errors.SugarError (dummy_position, "Duplicate l:name binding: "
+                                                    ^ item)) in
       let attrs = List.map (bind_lname_vars lnames) attrs in
-        Xml (form, attrs, attrexp, List.map with_dummy_pos children)
+        Xml (form, attrs, attrexp, Utility.zip_with with_pos poss children)
   | e -> e
 
-let replace_lattrs : phrasenode -> phrasenode = desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent ->-
+let replace_lattrs : phrasenode -> phrasenode =
+  desugar_form ->- desugar_laction ->- desugar_lhref ->- desugar_lonevent ->-
   (fun (xml) ->
      if (has_lattrs xml) then
        match xml with
          | Xml (_tag, _attributes, _, _) ->
-             raise (Errors.SugarError (dummy_position, "Illegal l: attribute in XML node"))
+             raise (Errors.SugarError (dummy_position,
+                                       "Illegal l: attribute in XML node"))
          | _ -> assert false
      else
        xml)

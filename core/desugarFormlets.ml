@@ -1,7 +1,7 @@
 open CommonTypes
 open Utility
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 let rec is_raw phrase =
   match phrase.node with

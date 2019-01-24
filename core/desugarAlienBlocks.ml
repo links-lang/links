@@ -12,7 +12,7 @@
 
 open Utility
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 let rec flatten_simple = fun () ->
 object(self)

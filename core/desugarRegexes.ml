@@ -1,6 +1,6 @@
 open Operators
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 (* String constants used in regular expressions.  These should probably be
    reused in linksregexes.ml *)

@@ -2,7 +2,7 @@ open Utility
 open CommonTypes
 open Operators
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 (*
 
@@ -178,7 +178,7 @@ let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
     let m    = deanonymize m in
     let comp = with_dummy_pos (FnAppl (phrase_of_pattern m, [])) in
     let cases = parameterize cases params in
-    let hndlr = SugarConstructors.Make.untyped_handler comp cases depth in
+    let hndlr = SugarConstructors.DummyPositions.untyped_handler comp cases depth in
     let handle = block ([], (with_dummy_pos (Handle hndlr))) in
     let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =

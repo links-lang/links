@@ -59,8 +59,8 @@ module ParserPosition
   type t = SourceCode.lexpos * SourceCode.lexpos
   (* Convert position produced by a parser to Sugartypes position *)
   let pos (start_pos, end_pos) = (start_pos, end_pos, None)
-  (* Wrapper around Sugartypes.with_pos.  Accepts parser positions. *)
-  let with_pos p = Sugartypes.with_pos (pos p)
+  (* Construct a node by converting parsers position. *)
+  let with_pos p node = {node; pos = pos p}
   (* Default (dummy) parser position *)
   let dp = (Lexing.dummy_pos, Lexing.dummy_pos)
 end
