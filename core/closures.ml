@@ -470,15 +470,17 @@ struct
               ([], o) in
           (* back up the previous context *)
           let parents', parent_env', cvars' = parents, parent_env, cvars in
-          let zs = (IntMap.find f fenv).termvars in
+          let fenv_entry = IntMap.find f fenv in
+          let zs = fenv_entry.termvars in
+          let type_zs = fenv_entry.typevars in
           let cvars = List.fold_left (fun cvars (z, _) -> IntSet.add z cvars) IntSet.empty zs in
 
           (* HACK: this function and the type annotation (o : 'self)
              work around an as yet undiagnosed bug in OCaml 4.07.0 *)
           let binder_hack x = o#binder x in
           let zb, (o : 'self) =
-            match zs with
-            | [] -> None, o
+            match zs, type_zs with
+            | [], [] -> None, o
             | _ ->
               let zt =
                 Types.make_record_type
@@ -535,11 +537,13 @@ struct
 
                    (* back up the previous context *)
                    let parents', parent_env', cvars' = parents, parent_env, cvars in
-                   let zs = (IntMap.find f fenv).termvars in
+                   let fenv_entry = IntMap.find f fenv in
+                   let zs = fenv_entry.termvars in
+                   let type_zs = fenv_entry.typevars in
                    let cvars = List.fold_left (fun cvars (z, _) -> IntSet.add z cvars) IntSet.empty zs in
                    let zb, o =
-                     match zs with
-                     | [] -> None, o
+                     match zs, type_zs with
+                     | [], [] -> None, o
                      | _ ->
                        let zt =
                          Types.make_record_type

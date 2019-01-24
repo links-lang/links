@@ -1,5 +1,6 @@
 open Utility
 open Sugartypes
+open SugarConstructors.Make
 
 (*
     fun f[qs](xs1)...(xsk) {e}
@@ -29,12 +30,10 @@ open Sugartypes
 *)
 
 
-let dp = Sugartypes.dummy_position
-
 (* unwrap a curried function definition as
    a collection of nested functions
 *)
-let unwrap_def ({node=f, ft; pos=fpos}, lin, (tyvars, lam), location, t) =
+let unwrap_def ({node=f, ft; _}, linearity, (tyvars, lam), location, t) =
   let ft = val_of ft in
   let rt = TypeUtils.return_type ft in
   let lam =
@@ -44,20 +43,13 @@ let unwrap_def ({node=f, ft; pos=fpos}, lin, (tyvars, lam), location, t) =
         | (ps::pss, body) ->
             let g = gensym ~prefix:"_fun_" () in
             let rt = TypeUtils.return_type t in
-              ([ps], with_dummy_pos
-                 (`Block
-                  ([with_dummy_pos
-                      (`Fun (make_binder g t dp,
-                             lin,
-                             ([], make_lam rt (pss, body)),
-                             location,
-                             None))],
-                   (with_dummy_pos (`Var g)))))
+              ([ps], block
+                  ([fun_binding' ~linearity ~location (binder ~ty:t g)
+                                 (make_lam rt (pss, body))],
+                   var g))
         | _, _ -> assert false
-    in
-    make_lam rt lam
-  in
-    (make_binder f ft fpos, lin, (tyvars, lam), location, t)
+    in make_lam rt lam
+  in (binder ~ty:ft f, linearity, (tyvars, lam), location, t)
 
 (*
   unwrap a curried function definition
@@ -84,10 +76,10 @@ object (o : 'self_type)
             rt in
         let f = gensym ~prefix:"_fun_" () in
         let e =
-          `Block
-            ([with_dummy_pos (`Fun (unwrap_def ( make_binder f ft dp, lin, ([], lam)
+          block_node
+            ([with_dummy_pos (`Fun (unwrap_def ( binder ~ty:ft f, lin, ([], lam)
                                                , location, None)))],
-             (with_dummy_pos (`Var f)))
+             var f)
         in
           (o, e, ft)
     | `Section (`Project name) ->
@@ -102,15 +94,13 @@ object (o : 'self_type)
         let ft : Types.datatype = `ForAll (Types.box_quantifiers [ab; rhob;  effb],
                                            `Function (Types.make_tuple_type [r], eff, a)) in
 
-        let pss = [[with_dummy_pos (`Variable (make_binder x r dp))]] in
-        let body = with_dummy_pos (`Projection (with_dummy_pos (`Var x), name)) in
+        let pss = [[variable_pat ~ty:r x]] in
+        let body = with_dummy_pos (`Projection (var x, name)) in
         let e : phrasenode =
-          `Block
-            ([with_dummy_pos (`Fun ( make_binder f ft dp, `Unl
-                                   , ([ab; rhob; effb], (pss, body)), `Unknown, None))],
-             (with_dummy_pos (`Var f)))
-        in
-          (o, e, ft)
+          block_node
+            ([fun_binding' ~tyvars:[ab; rhob; effb] (binder ~ty:ft f) (pss, body)],
+             var f)
+        in (o, e, ft)
     | e -> super#phrasenode e
 
   method! bindingnode = function

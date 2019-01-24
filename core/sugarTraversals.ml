@@ -661,12 +661,12 @@ class map =
 
     method bindingnode : bindingnode -> bindingnode =
       function
-      | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let _x_i1 = o#pattern _x_i1 in
+      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          let _x    = o#pattern _x in
           let _x_i2 = o#phrase _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
+          in `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
       | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i2 = o#funlit _x_i2 in
@@ -1327,9 +1327,9 @@ class fold =
 
     method bindingnode : bindingnode -> 'self_type =
       function
-      | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let o = o#list (fun o -> o#tyvar) _x in
-          let o = o#pattern _x_i1 in
+      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          let o = o#pattern _x in
+          let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
@@ -2120,12 +2120,12 @@ class fold_map =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-      | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let (o, _x_i1) = o#pattern _x_i1 in
+      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          let (o, _x   ) = o#pattern _x in
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
+          in (o, (`Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
       | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i2) = o#funlit _x_i2 in

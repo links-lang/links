@@ -26,8 +26,6 @@ let name_of_binder     {node=(n,_ );_} = n
 let type_of_binder     {node=(_,ty);_} = ty
 let type_of_binder_exn {node=(_,ty);_} =
   OptionUtils.val_of ty (* raises exception when ty = None *)
-let make_binder         n ty pos                 = with_pos pos (n   , Some ty)
-let make_untyped_binder {node;pos}               = with_pos pos (node, None   )
 let set_binder_name   {node=(_   ,ty); pos} name = with_pos pos (name, ty     )
 let set_binder_type   {node=(name,_ ); pos} ty   = with_pos pos (name, Some ty)
 let erase_binder_type {node=(name,_ ); pos}      = with_pos pos (name, None   )
@@ -222,7 +220,7 @@ and phrasenode = [
 | `Escape           of binder * phrase
 | `Section          of sec
 | `Conditional      of phrase * phrase * phrase
-| `Block            of binding list * phrase
+| `Block            of block_body
 | `InfixAppl        of (tyarg list * binop) * phrase * phrase
 | `Regex            of regex
 | `UnaryAppl        of (tyarg list * unary_op) * phrase
@@ -274,14 +272,7 @@ and phrasenode = [
 ]
 and phrase = phrasenode with_pos
 and bindingnode = [
-(*
-   TODO: (aesthetic change)
-     change `Val constructor to:
-       `Val of pattern * (tyvar list * phrase) * location * datatype' option
-     which corresponds to
-       let p=/\X.e in ...
-*)
-| `Val     of tyvar list * pattern * phrase * location * datatype' option
+| `Val     of pattern * (tyvar list * phrase) * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Handler of binder * handlerlit * datatype' option
@@ -294,6 +285,7 @@ and bindingnode = [
 | `AlienBlock of (name * name * ((binder * datatype') list))
 ]
 and binding = bindingnode with_pos
+and block_body = binding list * phrase
 and directive = string * string list
 and sentence = [
 | `Definitions of binding list
@@ -313,26 +305,6 @@ and cp_phrase = cp_phrasenode with_pos
 
 type program = binding list * phrase option
   [@@deriving show]
-
-
-let make_untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =
-  let shd_params =
-    match parameters with
-    | None -> None
-    | Some pps ->
-       Some { shp_bindings = pps;
-              shp_types = [] }
-  in
-  { sh_expr = expr;
-    sh_effect_cases = eff_cases;
-    sh_value_cases = val_cases;
-    sh_descr = {
-        shd_depth = depth;
-        shd_types = (Types.make_empty_closed_row (), `Not_typed, Types.make_empty_closed_row (), `Not_typed);
-        shd_raw_row = Types.make_empty_closed_row ();
-        shd_params = shd_params
-      };
-  }
 
 (* Why does ConcreteSyntaxError take an
    unresolved position and yet
@@ -503,7 +475,7 @@ struct
   and binding ({node = binding; _}: binding) : StringSet.t (* vars bound in the pattern *)
                                              * StringSet.t (* free vars in the rhs *) =
     match binding with
-    | `Val (_, pat, rhs, _, _) -> pattern pat, phrase rhs
+    | `Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
     | `Handler (bndr, hnlit, _) ->
        let name = singleton (name_of_binder bndr) in
        name, (diff (handlerlit hnlit) name)

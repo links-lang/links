@@ -1066,7 +1066,7 @@ struct
         | { Sugartypes.node = b; _ }::bs ->
             begin
               match b with
-                | `Val (_, {Sugartypes.node=`Variable bndr; _}, body, _, _)
+                | `Val ({Sugartypes.node=`Variable bndr; _}, (_, body), _, _)
                      when Sugartypes.binder_has_type bndr ->
                     let x  = Sugartypes.name_of_binder bndr in
                     let xt = Sugartypes.type_of_binder_exn bndr in
@@ -1076,7 +1076,7 @@ struct
                          ec body,
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | `Val (_, p, body, _, _) ->
+                | `Val (p, (_, body), _, _) ->
                     let p, penv = CompilePatterns.desugar_pattern scope p in
                     let env' = env ++ penv in
                     let s = ev body in

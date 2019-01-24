@@ -763,14 +763,14 @@ class transform (env : Types.typing_environment) =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-      | `Val (tyvars, p, e, location, t) ->
+      | `Val (p, (tyvars, e), location, t) ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
          let (o, e, _) = o#phrase e in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, p) = o#pattern p in
          let (o, t) = optionu o (fun o -> o#datatype') t in
-         (o, `Val (tyvars, p, e, location, t))
+         (o, `Val (p, (tyvars, e), location, t))
       | `Fun (bndr, lin, (tyvars, lam), location, t) when binder_has_type bndr ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in

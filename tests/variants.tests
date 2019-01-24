@@ -91,3 +91,11 @@ stdout : @\[C *\(A\), C *\(B\)\] : .*
 Type annotations
 fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])} increment
 stdout : @fun : \(mu ([a-z]+) \. \[|Succ:\\1 | Zero|]\) -> \[|Succ:mu ([a-z]+) . \[|Succ:\\2 | Zero|\]|\]
+
+Closure at top-level (issue #422) [1]
+(switch(Foo(id)) { case Foo(id) -> fun(x) { id(x) } })(2)
+stdout : 2 : Int
+
+Closure at top-level (issue #422) [2]
+switch(Foo(fun(x) { x })) { case Foo(id) -> fun(x) { id(x) } }
+stdout : fun : (a::Any) -> a::Any
