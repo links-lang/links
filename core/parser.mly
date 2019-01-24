@@ -1139,7 +1139,7 @@ regex_pattern_sequence:
  */
 pattern:
 | typed_pattern                                                { $1 }
-| typed_pattern COLON primary_datatype                         { with_pos $loc (`HasType ($1, datatype (with_pos $loc($3) $3))) }
+| typed_pattern COLON primary_datatype_pos                         { with_pos $loc (`HasType ($1, datatype $3)) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }
