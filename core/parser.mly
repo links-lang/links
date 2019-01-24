@@ -929,22 +929,32 @@ forall_datatype:
      S = !(ModuleA.ModuleB.Type).S
 
      Parenthesised versions take priority over non-parenthesised versions.
+
+   24.1.19: Modified grammar to allow unparenthesized qualified type names
+   in most places, but specifically forbid in ? . or ! .
+   This also requires moving the TILDE production into primary_datatype
+   since otherwise, ? ~M.x . y is ambiguous.
+   This is not ideal since it spreads the session-related constructs
+   among several nonterminals.
 */
 session_datatype:
-| BANG datatype DOT datatype                                   { `Output ($2, $4) }
-| QUESTION datatype DOT datatype                               { `Input  ($2, $4) }
+| BANG primary_datatype_pos DOT datatype                       { `Output ($2, $4) }
+| QUESTION primary_datatype_pos DOT datatype                   { `Input  ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
-| TILDE datatype                                               { `Dual $2         }
 | END                                                          { `End             }
 | primary_datatype                                             { $1               }
+| qualified_type_name                                          { `QualifiedTypeApplication ($1, []) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
-| LPAREN qualified_type_name RPAREN                            { [with_pos $loc (`QualifiedTypeApplication ($2, []))] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
+primary_datatype_pos:
+| primary_datatype                                             { with_pos $loc $1 }
+
 primary_datatype:
+| TILDE primary_datatype_pos                                   { `Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> `Unit
                                                                    | [{node;_}] -> node
@@ -1129,7 +1139,7 @@ regex_pattern_sequence:
  */
 pattern:
 | typed_pattern                                                { $1 }
-| typed_pattern COLON primary_datatype                         { with_pos $loc (`HasType ($1, datatype (with_pos $loc($3) $3))) }
+| typed_pattern COLON primary_datatype_pos                         { with_pos $loc (`HasType ($1, datatype $3)) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }
