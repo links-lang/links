@@ -212,7 +212,9 @@ and perform_renaming module_table path term_ht type_ht =
           (self, `Module (n, bs))
       | `AlienBlock ab ->
           (self, `AlienBlock ab)
-      | `Foreign f -> (self, `Foreign f)
+      | `Foreign (bnd, raw, lang, ext, ty) ->
+          let (o, ty) = self#datatype' ty in
+          (o, `Foreign (bnd, raw, lang, ext, ty))
       | `Type (n, tvs, dt) ->
           (* Add type binding *)
           let fqn = make_path_string path n in
