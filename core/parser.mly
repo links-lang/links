@@ -845,7 +845,8 @@ binding:
 | signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, `Unknown, $5) }
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, `Unknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
-| typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
+| typedecl SEMICOLON | links_module | alien_block
+| links_open SEMICOLON                                         { $1 }
 
 bindings:
 | binding                                                      { [$1]      }
