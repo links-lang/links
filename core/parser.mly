@@ -930,7 +930,7 @@ forall_datatype:
 
      Parenthesised versions take priority over non-parenthesised versions.
 
-   jcheney: Modified grammar to allow unparenthesized qualified type names
+   24.1.19: Modified grammar to allow unparenthesized qualified type names
    in most places, but specifically forbid in ? . or ! .
    This also requires moving the TILDE production into primary_datatype
    since otherwise, ? ~M.x . y is ambiguous.
@@ -938,8 +938,8 @@ forall_datatype:
    among several nonterminals.
 */
 session_datatype:
-| BANG primary_datatype_loc DOT datatype                       { `Output ($2, $4) }
-| QUESTION primary_datatype_loc DOT datatype                   { `Input  ($2, $4) }
+| BANG primary_datatype_pos DOT datatype                       { `Output ($2, $4) }
+| QUESTION primary_datatype_pos DOT datatype                   { `Input  ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
 | END                                                          { `End             }
@@ -950,11 +950,11 @@ parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
 | LPAREN datatypes RPAREN                                      { $2 }
 
-primary_datatype_loc:
+primary_datatype_pos:
 | primary_datatype                                             { with_pos $loc $1 }
 
 primary_datatype:
-| TILDE primary_datatype_loc                                   { `Dual $2 }
+| TILDE primary_datatype_pos                                   { `Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> `Unit
                                                                    | [{node;_}] -> node
