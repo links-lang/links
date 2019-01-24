@@ -2745,3 +2745,7 @@ let pp_row : Format.formatter -> row -> unit = fun fmt t ->
     pp_row fmt (DecycleTypes.row t)
 let pp_lens_sort : Format.formatter -> lens_sort -> unit = fun fmt ls ->
   pp_lens_sort fmt (DecycleTypes.lens_sort ls)
+
+let unwrap_list_type = function
+  | `Application ({Abstype.id = "List"; _}, [`Type t]) -> t
+  | _ -> assert false

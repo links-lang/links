@@ -147,7 +147,8 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
     match v with
       | `Concat (v::_) -> te v
       | `For (_, _, _os, body) -> te body
-      | `Singleton (`Record fields) -> record fields
+      | `Singleton t -> Types.make_list_type (te t)
+      | `Record fields -> record fields
       | `If (_, t, _) -> te t
       | `Table (_, _, _, row) -> `Record row
       | `Constant (`Bool   _) -> Types.bool_type

@@ -679,7 +679,7 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
       match Q.used_database v with
         | None -> None
         | Some db ->
-            let t = Q.type_of_expression v in
+            let t = Types.unwrap_list_type (Q.type_of_expression v) in
             let q = Sql.ordered_query db range v in
               Debug.print ("Generated query: "^q);
               Some (db, q, t)

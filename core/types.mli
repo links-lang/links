@@ -330,6 +330,7 @@ Also returns the outermost `Recursive that was unwrapped if it exists,
 or None otherwise.
 *)
 val unwrap_row : row -> (row * row_var option)
+val unwrap_list_type : typ -> typ
 
 val extract_tuple : row -> datatype list
 
@@ -423,3 +424,4 @@ end
 
 module Transform : TYPE_VISITOR
 module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR
+
