@@ -1,5 +1,6 @@
 open Utility
 open Sugartypes
+open Operators
 
 (* Helper function: add a group to a list of groups *)
 let add group groups = match group with
@@ -65,7 +66,7 @@ let refine_bindings : binding list -> binding list =
                  (StringSet.inter (Freevars.funlit body) names))
             defs in
       (* refine a group of function bindings *)
-    let groupFuns pos (funs : binding list) : binding list =
+    let groupFuns (funs : binding list) : binding list =
       (* Unwrap from the bindingnode type *)
       let unFun = function
         | {node = Fun (b, lin, (_, funlit), location, dt); pos} ->
@@ -87,7 +88,7 @@ let refine_bindings : binding list -> binding list =
                      when not (StringSet.mem (name_of_binder bndr)
                                              (Freevars.funlit body)) ->
                     with_pos pos (Fun (bndr, lin, (tyvars, body), location, dt))
-                 | _ -> with_pos pos (Funs (funs)))
+                 | _ -> with_dummy_pos (Funs (funs)))
 
           sccs
     in
@@ -98,7 +99,7 @@ let refine_bindings : binding list -> binding list =
            Compute the position corresponding to the whole collection
            of functions.
         *)
-      | {node=Fun _; _}::_ as funs -> groupFuns (Lexing.dummy_pos, Lexing.dummy_pos, None) funs
+      | {node=Fun _; _}::_ as funs -> groupFuns funs
       | binds -> binds in
     concat_map groupBindings initial_groups
 
@@ -389,11 +390,9 @@ module RefineTypeBindings = struct
       type_name list ->
       binding list =
     fun ri ht sccs ->
-      let getPos name =
-        thd3 (Hashtbl.find ri name) in
       List.map (fun name ->
         let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
-        with_pos (getPos name) (Type res)
+        with_dummy_pos (Type res)
       ) sccs
 
   let isTypeGroup : binding list -> bool = function

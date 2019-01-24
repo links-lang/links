@@ -998,7 +998,7 @@ struct
                 opt_map
                   (fun where -> eval env' where)
                   where in
-              let body = eval env' (with_dummy_pos (RecordLit (fields, None))) in
+              let body = eval env' (with_pos pos (RecordLit (fields, None))) in
                 I.db_update env (p, source, where, body)
           | DBDelete (p, source, where) ->
               let p, penv = CompilePatterns.desugar_pattern `Local p in

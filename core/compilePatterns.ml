@@ -11,6 +11,7 @@
 open CommonTypes
 open Utility
 open Ir
+open SugarConstructors.Make
 
 type pattern = [
 | `Any
@@ -76,7 +77,7 @@ let lookup_name name (nenv, _tenv, _eff, _penv) =
 let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 
 let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> pattern * raw_env =
-  fun scope {Sugartypes.node=p; Sugartypes.pos} ->
+  fun scope {Sugartypes.node=p; _} ->
     let desugar_pat = desugar_pattern scope in
     let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
@@ -95,10 +96,10 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> pattern * r
             let p, env = desugar_pat p in
             let ps, env' = desugar_pat ps in
               `Cons (p, ps), env ++ env'
-        | List [] -> desugar_pat (Sugartypes.with_pos pos Nil)
+        | List [] -> desugar_pat (with_dummy_pos Nil)
         | List (p::ps) ->
             let p, env = desugar_pat p in
-            let ps, env' = desugar_pat (Sugartypes.with_pos pos (List ps)) in
+            let ps, env' = desugar_pat (with_dummy_pos (List ps)) in
               `Cons (p, ps), env ++ env'
         | Variant (name, None) -> `Variant (name, `Any), empty
         | Variant (name, Some p) ->
@@ -133,7 +134,7 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> pattern * r
               `Record (bs, p), env
         | Tuple ps ->
             let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
-              desugar_pat (Sugartypes.with_pos pos (Record (bs, None)))
+              desugar_pat (with_dummy_pos (Record (bs, None)))
         | Constant constant ->
             `Constant constant, empty
         | Variable b ->

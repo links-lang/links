@@ -15,9 +15,8 @@ let pp_position : Format.formatter -> position -> unit =
 type 'a with_pos = { node : 'a
                    ; pos  : position }
                      [@@deriving show]
-
-let with_pos           pos node   = { node; pos }
-let with_dummy_pos     node       = { node; pos = dummy_position }
+let with_pos   pos node = { node; pos }
+let with_dummy_pos node = { node; pos = dummy_position }
 
 (* A type alias to be used inside modules that define a node t and a with_pos
    type, which is a node with attached position.  Alias is required due to

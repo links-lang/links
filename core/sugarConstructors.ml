@@ -287,7 +287,7 @@ end
 module SugartypesPosition : Pos with type t = unit = struct
   type t = unit
   let pos ()           = Sugartypes.dummy_position
-  let with_pos () node = Sugartypes.with_pos Sugartypes.dummy_position node
+  let with_pos () node = {node; pos = Sugartypes.dummy_position}
   let dp               = ()
 end
 
