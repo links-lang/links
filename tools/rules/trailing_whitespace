@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Checks whether source files contain trailing script.
+# Checks whether any textual files contain trailing whitespace.
 #
 # By passing the argument "strip" the script attempts to automatically
 # strip trailing white space.
