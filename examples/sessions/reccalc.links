@@ -16,7 +16,7 @@ fun calc(s) {
       var s = send(x*y,s);
       calc(s)
     case Done(s) ->
-      ()
+      close(s)
   }
 }
 
@@ -26,7 +26,7 @@ fun user(s) {
   var (v, s) = receive(send(6,send(7,s)));
   var s = select Add s;
   var (v, s) = receive(send(v,send(v,s)));
-  var _ = select Done s;
+  close(select Done s);
   v
 }
 
