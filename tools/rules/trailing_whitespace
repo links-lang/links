@@ -18,21 +18,38 @@ DIRS=("core" "bin" "tests" "examples")
 ERRORS=0
 
 for dir in ${DIRS[@]}; do
-    for file in $(find "$dir"  -type f -not -name "*.pdf" -exec egrep -l " +$" {} \;); do
-        echo -n "$file"
-        if [[ $STRIP -eq 1 ]]; then
-            echo -n "..."
-            sed -i 's/[ \t]*$//' $file
-            if [[ $? -eq 0 ]]; then
-                echo " CLEANED."
-            else
-                echo " FAILED."
-                ERRORS=$((ERRORS+1))
-            fi
-        else
-            echo ""
-            ERRORS=$((ERRORS+1))
-        fi
+    for file in $(find "$dir" -type f \
+        \( -name "*.ml" -o \
+           -name "*.mli" -o \
+           -name "*.mly" -o \
+           -name "*.mll" -o \
+           -name "*.py" -o \
+           -name "*.pl" -o \
+           -name "*.html" -o \
+           -name "*.js" -o \
+           -name "*.txt" -o \
+           -name "*.links" -o \
+           -name "*.css" -o \
+           -name "*.sh" -o \
+           -name "*.el" -o \
+           -name "*.vim" -o \
+           -name "*.opam" -o \
+           -name "dune-project" -o \
+           -name "dune" \) -exec egrep -l " +$" {} \;); do
+          echo -n "$file"
+          if [[ $STRIP -eq 1 ]]; then
+              echo -n "..."
+              sed -i 's/[ \t]*$//' $file
+              if [[ $? -eq 0 ]]; then
+                  echo " CLEANED."
+              else
+                  echo " FAILED."
+                  ERRORS=$((ERRORS+1))
+              fi
+          else
+              echo ""
+              ERRORS=$((ERRORS+1))
+          fi
     done
 done
 
