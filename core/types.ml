@@ -720,7 +720,7 @@ let rec type_can_be_unl : var_set * var_set -> typ -> bool =
     | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
     | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
     | `Dual s -> type_can_be_unl vars s
-    | `End -> true
+    | `End -> false
     | #session_type -> false
 and field_can_be_unl vars =
   function
