@@ -5,7 +5,7 @@ open SugarConstructors.Make
 module TyEnv = Env.String
 
 let accept_str    = "accept"
-let close_str     = "close"
+let close_str     = "closeBang"
 let link_sync_str = "linkSync"
 let new_str       = "new"
 let receive_str   = "receive"
