@@ -102,4 +102,3 @@ sig
   (* val reduce_eq : unit *)
   val eval : Value.t Value.Env.t -> Ir.computation -> t 
 end
-
