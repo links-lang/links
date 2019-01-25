@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Runs a series of scripts that each check whether some code invariant
 # is respected.
