@@ -77,7 +77,7 @@ module Eval :
 sig
   (* val nil : unit *)
   (* val eval_error : unit *)
-  val env_of_value_env : 'a -> 'a * 'b Env.Int.t 
+  val env_of_value_env : 'a -> 'a * 'b Env.Int.t
   (* val (++) : unit *)
   (* val lookup_fun : unit *)
   (* val find_fun : unit *)
@@ -88,7 +88,7 @@ sig
   (* val eta_expand_list : unit *)
   (* val value : unit *)
   (* val apply : unit *)
-  val computation : Value.t Value.Env.t * t Env.Int.t -> Ir.computation -> t 
+  val computation : Value.t Value.Env.t * t Env.Int.t -> Ir.computation -> t
   (* val tail_computation : unit *)
   (* val reduce_concat : unit *)
   (* val reduce_for_source : unit *)
@@ -100,5 +100,5 @@ sig
   (* val reduce_or : unit *)
   (* val reduce_not : unit *)
   (* val reduce_eq : unit *)
-  val eval : Value.t Value.Env.t -> Ir.computation -> t 
+  val eval : Value.t Value.Env.t -> Ir.computation -> t
 end
