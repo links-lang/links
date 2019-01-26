@@ -14,7 +14,7 @@ fun atm(balance, c) {
   if(check(card, pin)) {
     menu(card, balance, select Accept c)
   } else {
-    ignore(send(card, select Reject c))
+    close(send(card, select Reject c))
   }
 }
 
@@ -24,12 +24,12 @@ fun menu(card, balance, c) {
     case Withdraw(c) ->
       var (amount, c) = receive(c);
       if(amount <= balance) {
-        ignore(send(amount, send(card, select Accept c)))
+        close(send(amount, send(card, select Accept c)))
       } else {
-        ignore(send(card, select Reject c))
+        close(send(card, select Reject c))
       }
     case Balance(c) ->
-      ignore(send(card, send(balance, c)))
+      close(send(card, send(balance, c)))
   }
 }
 
@@ -44,11 +44,15 @@ fun user1(c) {
     case Accept(c) ->
       offer (send (16, select Withdraw c)) {
         case Accept(c) -> var (card, c) = receive(c);
-                          var (cash, c) = receive(c); cash
-        case Reject(c) -> var (card, c) = receive(c); 0
+                          var (cash, c) = receive(c);
+                          close(c);
+                          cash
+        case Reject(c) -> var (card, c) = receive(c);
+                          close(c);
+                          0
       }
     case Reject(c) ->
-      var (card, c) = receive(c); 0
+      var (card, c) = receive(c); close(c); 0
   }
 }
 
@@ -58,11 +62,14 @@ fun user2(c) {
     case Accept(c) ->
       offer (send (16, select Withdraw c)) {
         case Accept(c) -> var (card, c) = receive(c);
-                          var (cash, c) = receive(c); cash
-        case Reject(c) -> var (card, c) = receive(c); 0
+                          var (cash, c) = receive(c);
+                          close(c);
+                          cash
+        case Reject(c) -> var (card, c) = receive(c);
+                          close(c); 0
       }
     case Reject(c) ->
-      var (card, c) = receive(c); 0
+      var (card, c) = receive(c); close(c); 0
   }
 }
 
@@ -71,9 +78,9 @@ fun user3(c) {
   offer (send(1024, send(16777216, c))) {
     case Accept(c) ->
       var (balance, c) = receive(select Balance c);
-      var (card, c) = receive(c); Just(balance)
+      var (card, c) = receive(c); close(c); Just(balance)
     case Reject(c) ->
-      var (card, c) = receive(c); Nothing
+      var (card, c) = receive(c); close(c); Nothing
   }
 }
 

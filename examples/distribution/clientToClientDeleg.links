@@ -5,9 +5,9 @@ module Client1 {
 
   fun go(ap) {
     debug("Got send end of delegation channel");
-    var recvEnd = fork(fun(s) { var s = send(2, send(1, s)); sleep(2000); ignore(send(3, s)) });
+    var recvEnd = fork(fun(s) { var s = send(2, send(1, s)); sleep(2000); close(send(3, s)) });
     var delegSess = request(ap);
-    var _ = send(recvEnd, delegSess);
+    close(send(recvEnd, delegSess));
     debug("Delegated receive end of session to server")
   }
 
@@ -24,13 +24,15 @@ module Client2 {
   fun go(ap) {
     var delegS = accept(ap);
     debug("Got receive end of delegation channel");
-    var (s, _) = receive(delegS);
+    var (s, t) = receive(delegS);
+    close(t);
     debug("Got delegated channel");
     var (x1, s) = receive(s);
     debug (intToString(x1));
     var (x2, s) = receive(s);
     debug (intToString(x2));
     var (x3, s) = receive(s);
+    close(s);
     debug (intToString(x3));
     go(ap)
   }

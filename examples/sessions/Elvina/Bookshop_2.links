@@ -21,7 +21,7 @@ fun waitForClient(s) client
 			appendChildren(stringToXml("card number received: " ^^ intToString(card)), getNodeById("items"));
 			var (address, s) = receive(s);
 			appendChildren(stringToXml(", address received: " ^^ address), getNodeById("items"));
-			()
+			close(s)
 	}
 }
 
@@ -29,8 +29,7 @@ sig waitForSon : (SonSelect) ~> ()
 fun waitForSon(c) client
 {
 	offer(c) {
-		case Choice(c) -> var c = send("Children's Book", c);
-				  ()
+		case Choice(c) -> close(send("Children's Book", c));
 	}
 }
 
@@ -38,6 +37,7 @@ sig getSonBook : (SonOffer) ~> (String)
 fun getSonBook(s) client
 {
 	var (choice, s) = receive(select Choice s);
+  close(s);
 	choice
 }
 
@@ -52,8 +52,7 @@ fun orderBooks(c) client
 
 	# Add son's choice.
 	var c = send(choice, select Add c);
-	var _ = send("Summerhall Square", send(8753, select Checkout c));
-    ()
+	close(send("Summerhall Square", send(8753, select Checkout c)))
 }
 
 sig main : () ~> ()
