@@ -1,0 +1,45 @@
+# ChatSessions module -- contains the session types for chat interactions
+
+# base types
+typename Nickname = String;
+typename Message = String;
+
+# Messages received by a connected client
+typename ClientReceive =
+  [&|Join     : ?(Nickname, Int)    .ClientReceive,
+     Chat     : ?(Nickname, Message).ClientReceive,
+     Play     : ?(Nickname, Int)    .ClientReceive,
+     Leave    : ?Nickname           .ClientReceive|&];
+
+# Messages sent by a connected client
+typename ClientSend =
+  [+|Chat     : !Message  .ClientSend,
+     Play     : !Int.?Bool.ClientSend|+];
+
+# The chat client first sends a nickname.
+#
+# * If that nickname is not already in use then the client receives a
+#   Join message and then a four-tuple of:
+#
+#     1) The number of players required for a game
+#     2) A hand of cards
+#     3) The list of players already connected
+#     4) A channel for receiving messages from the server.
+#
+#    The endpoint then behaves as ClientSend.
+#
+# * If the chosen nickname is already in use then the server refuses to
+#   allow the connection with a Nope message.
+typename ChatClient = !Nickname.[&|Join:?(Int, [Int], [(Nickname, Int)], ClientReceive).ClientSend,
+                                   Nope:End|&];
+
+# Server endpoints
+typename ChatServer = ~ChatClient;
+typename WorkerSend = ~ClientReceive;
+typename WorkerReceive = ~ClientSend;
+
+
+# worker access point (for communication between workers on the server
+# and clients)
+sig wap : AP(ChatServer)
+var wap = new();

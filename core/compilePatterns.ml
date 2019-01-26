@@ -75,16 +75,16 @@ let lookup_name name (nenv, _tenv, _eff, _penv) =
 let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 
 let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
-  fun scope (p, pos) ->
+  fun scope {Sugartypes.node=p; Sugartypes.pos} ->
     let pp = desugar_pattern scope in
     let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (`Any, `Any)) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
-    let fresh_binder (nenv, tenv, eff) =
-      function
-        | (name, Some t, _) ->
-            let xb, x = Var.fresh_var (t, name, scope) in
-              xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
-        | _ -> assert false
+    let fresh_binder (nenv, tenv, eff) bndr =
+      assert (Sugartypes.binder_has_type bndr);
+      let name = Sugartypes.name_of_binder bndr in
+      let t = Sugartypes.type_of_binder_exn bndr in
+      let xb, x = Var.fresh_var (t, name, scope) in
+      xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
     in
       match p with
         | `Any -> `Any, empty
@@ -93,10 +93,10 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
             let p, env = pp p in
             let ps, env' = pp ps in
               `Cons (p, ps), env ++ env'
-        | `List [] -> pp (`Nil, pos)
+        | `List [] -> pp (Sugartypes.with_pos pos `Nil)
         | `List (p::ps) ->
             let p, env = pp p in
-            let ps, env' = pp (`List ps, pos) in
+            let ps, env' = pp (Sugartypes.with_pos pos (`List ps)) in
               `Cons (p, ps), env ++ env'
         | `Variant (name, None) -> `Variant (name, `Any), empty
         | `Variant (name, Some p) ->
@@ -130,8 +130,8 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
             in
               `Record (bs, p), env
         | `Tuple ps ->
-            let bs = mapIndex (fun (p, pos) i -> (string_of_int (i+1), (p, pos))) ps in
-              pp (`Record (bs, None), pos)
+            let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
+              pp (Sugartypes.with_pos pos (`Record (bs, None)))
         | `Constant constant ->
             `Constant constant, empty
         | `Variable b ->

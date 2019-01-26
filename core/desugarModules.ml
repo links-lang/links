@@ -62,9 +62,9 @@ object(self)
   method get_bindings = List.rev bindings
 
   method! binding = function
-    | (`Module (_, bindings), _) ->
+    | {node = `Module (_, bindings); _} ->
         self#list (fun o -> o#binding) bindings
-    | (`QualifiedImport _, _) -> self
+    | {node = `QualifiedImport _; _} -> self
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
   method! program = function
@@ -93,7 +93,7 @@ let group_bindings : binding list -> binding list list = fun bindings ->
   let rec group_bindings_inner acc ret = function
     | [] when acc = [] -> List.rev ret
     | [] -> List.rev ((List.rev acc) :: ret)
-    | ((`Fun (_, _, _, _, _), _) as bnd) :: bs ->
+    | ({node=`Fun (_, _, _, _, _); _} as bnd) :: bs ->
         group_bindings_inner (bnd :: acc) ret bs
     | b :: bs ->
         (* End block of functions, need to start a new scope *)
@@ -126,9 +126,10 @@ let rec rename_binders_get_shadow_tbl module_table
         {< term_shadow_table = term_ht; type_shadow_table = type_ht >}
 
     method! binder = function
-      | (n, dt_opt, pos) ->
-          let fqn = make_path_string path n in
-          (self#bind_shadow_term n fqn, (fqn, dt_opt, pos))
+      | bndr ->
+         let n = name_of_binder bndr in
+         let fqn = make_path_string path n in
+         (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
 
     method! bindingnode = function
       | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
@@ -185,9 +186,10 @@ and perform_renaming module_table path term_ht type_ht =
         {< type_shadow_table = shadow_binding name fqn type_shadow_table >}
 
     method! binder = function
-      | (n, dt_opt, pos) ->
-          let fqn = make_path_string path n in
-          (self#bind_shadow_term n fqn, (fqn, dt_opt, pos))
+      | bndr ->
+         let n = name_of_binder bndr in
+         let fqn = make_path_string path n in
+         (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
 
     method! patternnode = function
       | `Variant (n, p_opt) ->
@@ -217,11 +219,11 @@ and perform_renaming module_table path term_ht type_ht =
           let o = self#bind_shadow_type n fqn in
           let (o, dt') = o#datatype' dt in
           (o, `Type (fqn, tvs, dt'))
-      | `Val (tvs, pat, phr, loc, dt_opt) ->
+      | `Val (pat, (tvs, phr), loc, dt_opt) ->
           let (_, phr') = self#phrase phr in
           let (o, pat') = self#pattern pat in
           let (o, dt_opt') = o#option (fun o -> o#datatype') dt_opt in
-          (o, `Val (tvs, pat', phr', loc, dt_opt'))
+          (o, `Val (pat', (tvs, phr'), loc, dt_opt'))
       | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           (* Binder will have been changed. We need to add the funlit pattern
            * to the env. *)
@@ -273,7 +275,7 @@ and perform_renaming module_table path term_ht type_ht =
           (self, `Var fqn)
       | phr -> super#phrasenode phr
 
-    method! datatype = function
+    method! datatypenode = function
       | `Function (dts, row, dt) ->
           let (_, dts') = self#list (fun o -> o#datatype) dts in
           let (_, dt') = self#datatype dt in
@@ -298,7 +300,7 @@ and perform_renaming module_table path term_ht type_ht =
               (o, (fqn, fspec'))) xs in
           let (o, rv') = o#row_var rv in
           (o, `Variant (xs', rv'))
-      | dt -> super#datatype dt
+      | dt -> super#datatypenode dt
 
   end
 

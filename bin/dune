@@ -4,4 +4,4 @@
   (package links)
   (modes native)
   (link_flags -linkall)
-  (libraries threads dynlink links))
+  (libraries threads dynlink links.core))

@@ -58,6 +58,7 @@ class map :
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
     method datatype        : datatype -> datatype
+    method datatypenode    : datatypenode -> datatypenode
     method datatype'       : datatype' -> datatype'
     method type_arg        : type_arg -> type_arg
     method constant        : constant -> constant
@@ -130,6 +131,7 @@ class fold :
     method directive       : directive -> 'self
     method tyvar           : tyvar -> 'self
     method datatype        : datatype -> 'self
+    method datatypenode    : datatypenode -> 'self
     method datatype'       : datatype' -> 'self
     method type_arg        : type_arg -> 'self
     method constant        : constant -> 'self
@@ -163,6 +165,7 @@ object ('self)
   method char            : char -> 'self * char
   method constant        : constant -> 'self * constant
   method datatype        : datatype -> 'self * datatype
+  method datatypenode    : datatypenode -> 'self * datatypenode
   method datatype'       : datatype' -> 'self * datatype'
   method directive       : directive -> 'self * directive
   method fieldconstraint : fieldconstraint -> 'self * fieldconstraint

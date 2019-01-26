@@ -1,5 +1,4 @@
 open Utility
-open LensUtility
 
 [@@@ocaml.warning "-32"] (** disable warnings about unused functions in this module**)
 
@@ -145,7 +144,7 @@ type lens_phrase =
   | `Case      of lens_phrase option * (lens_phrase * lens_phrase) list * lens_phrase
   | `TupleLit  of lens_phrase list
   ]
-      [@@deriving show]
+  [@@deriving show]
 
 (* End of Lenses *)
 
@@ -164,7 +163,7 @@ type typ =
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
-and lens_sort     = fundepset * lens_phrase option * (lens_col list)
+and lens_sort     = LensUtility.fundepset * lens_phrase option * (lens_col list)
 and lens_col      = {
   table : string;
   name : string;
@@ -195,7 +194,7 @@ let is_present =
   | `Present _           -> true
   | (`Absent | `Var _) -> false
 
-type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t]
+type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t] [@@deriving show]
 
 let unbox_quantifiers = (!)
 let box_quantifiers = ref
@@ -206,10 +205,14 @@ let fresh_raw_variable : unit -> int =
   function () ->
     incr type_variable_counter; !type_variable_counter
 
-module type TRANSFORM =
+module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
+
+    method remove_rec_row_binding : int -> 'self_type
+    method remove_rec_type_binding : int ->'self_type
+
     method primitive : primitive -> (primitive * 'self_type)
     method lens_col : lens_col -> (lens_col * 'self_type)
     method lens_sort : lens_sort -> (lens_sort * 'self_type)
@@ -229,12 +232,21 @@ end
 
 
 
-module Transform : TRANSFORM =
+module Transform : TYPE_VISITOR =
 struct
   class visitor  =
   object ((o : 'self_type))
 
-    val var_subst = IntMap.empty
+    val rec_vars : (meta_type_var) IntMap.t * (meta_row_var) IntMap.t = (IntMap.empty, IntMap.empty)
+    method remove_rec_type_binding id =
+      let (rec_types, rec_rows) = rec_vars in
+      {< rec_vars = (IntMap.remove id rec_types, rec_rows) >}
+
+    method remove_rec_row_binding id =
+      let (rec_types, rec_rows) = rec_vars in
+      {< rec_vars = (rec_types, IntMap.remove id rec_rows) >}
+
+
 
     method primitive p = (p,o)
     method row :  row -> (row * 'self_type) = fun (fsp, rv, d) ->
@@ -244,39 +256,43 @@ struct
 
 
     method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) = fun point ->
-      let (newContent, o) =
-        begin match Unionfind.find point with
-        | `Recursive (id, t) ->
-           let fresh_id = fresh_raw_variable () in
-           let o = {< var_subst = IntMap.add id fresh_id var_subst >} in
-           let (t', o) = o#typ t in
-           `Recursive (fresh_id, t'), o
+      match Unionfind.find point with
+        | `Recursive (var, t) ->
+          let (rec_types, rec_rows) = rec_vars in
+          if IntMap.mem var rec_types then
+            (IntMap.find var rec_types), o
+          else
+            let var' = fresh_raw_variable () in
+            let point' : meta_type_var = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
+            let rec_types' : (meta_type_var) IntMap.t = IntMap.add var point' rec_types in
+            let o_extended_rec_env = {< rec_vars = (rec_types', rec_rows) >} in
+            let (t', o') = o_extended_rec_env#typ t in
+            let o'_reduced_rec_env = o'#remove_rec_type_binding var in
+            Unionfind.change point' (`Recursive (var', t'));
+            (point', o'_reduced_rec_env)
         | `Body t ->
-           let (t', o) = o#typ t in `Body t', o
-        | `Var (id, sk, fd) as original ->
-           match IntMap.find_opt id var_subst with
-           | Some id' -> `Var (id', sk, fd), o
-           | None -> original, o
-        end in
-      (Unionfind.fresh newContent, o)
+            let (t', o) = o#typ t in Unionfind.fresh (`Body t'), o
+        | `Var _  -> point, o
 
     method meta_row_var : meta_row_var -> (meta_row_var * 'self_type) = fun point ->
-      let (newContent, o) =
-        begin match Unionfind.find point with
-        | `Closed -> `Closed, o
-        | `Recursive (id, r) ->
-           let fresh_id = fresh_raw_variable () in
-           let o = {< var_subst = IntMap.add id fresh_id var_subst >} in
-           let (r', o) = o#row r in
-           `Recursive (fresh_id, r'), o
+      match Unionfind.find point with
+        | `Closed -> point, o
+        | `Recursive (var, r) ->
+          let (rec_types, rec_rows) = rec_vars in
+          if IntMap.mem var rec_rows then
+            (IntMap.find var rec_rows), o
+          else
+            let var' = fresh_raw_variable () in
+            let point' = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
+            let rec_rows' = IntMap.add var point' rec_rows in
+            let o_extended_rec_env = {< rec_vars = (rec_types, rec_rows') >} in
+            let (r', o') = o_extended_rec_env#row r in
+            let o'_reduced_rec_env = o'#remove_rec_row_binding var in
+            Unionfind.change point' (`Recursive (var', r'));
+            (point', o'_reduced_rec_env)
         | `Body r ->
-           let (r', o) = o#row r in `Body r', o
-        | `Var (id, sk, fd) as original ->
-           match IntMap.find_opt id var_subst with
-           | Some id' -> `Var (id', sk, fd), o
-           | None -> original, o
-        end in
-      Unionfind.fresh newContent, o
+            let (t', o) = o#row r in Unionfind.fresh (`Body t'), o
+        | `Var _  -> point, o
 
     method row_var : row_var -> (row_var * 'self_type) = o#meta_row_var
 
@@ -407,6 +423,63 @@ struct
 
   end
 end
+
+
+module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR =
+struct
+  class visitor =
+      object (o)
+        inherit Transform.visitor as super
+
+
+        val mu_vars =  Utility.IntSet.empty
+
+        method! meta_type_var point = match Unionfind.find point with
+          | `Recursive (id, t) ->
+             if Utility.IntSet.mem id mu_vars then
+               let newvar = `Var (id, (`Any, `Any), `Rigid) in
+               (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
+               (Unionfind.fresh newvar, o)
+             else
+               let new_mu_vars = Utility.IntSet.add id mu_vars in
+               let o' =  {< mu_vars=new_mu_vars >} in
+               (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
+               let (t', _) = o'#typ t in (Unionfind.fresh (`Recursive (id, t')), o)
+          | _ -> super#meta_type_var point
+
+        method! meta_row_var point = match Unionfind.find point with
+          | `Recursive (id, t) ->
+             if Utility.IntSet.mem id mu_vars then
+               let newvar = `Var (id, (`Any, `Any), `Rigid) in
+               (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
+               (Unionfind.fresh newvar, o)
+             else
+               let new_mu_vars = Utility.IntSet.add id mu_vars in
+               let o' =  {< mu_vars=new_mu_vars >} in
+               (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
+               let (t', _) = o'#row t in (Unionfind.fresh (`Recursive (id, t')), o)
+          | _ -> super#meta_row_var point
+
+
+      end
+end
+
+
+
+module DecycleTypes  =
+struct
+  let elim_recursive_type_cycles_visitor = new ElimRecursiveTypeCyclesTransform.visitor
+
+  let datatype t = fst (elim_recursive_type_cycles_visitor#typ t)
+  let row r = fst (elim_recursive_type_cycles_visitor#row r)
+  let field_spec p = fst (elim_recursive_type_cycles_visitor#field_spec p)
+  let type_arg ta = fst (elim_recursive_type_cycles_visitor#type_arg ta)
+  let row_var rv = fst (elim_recursive_type_cycles_visitor#row_var rv)
+  let quantifier q = fst (elim_recursive_type_cycles_visitor#quantifier q)
+  let lens_sort ls = fst (elim_recursive_type_cycles_visitor#lens_sort ls)
+
+end
+
 
 
 (* TODO: consider abstracting some of this subkind manipulation code *)
@@ -647,7 +720,7 @@ let rec type_can_be_unl : var_set * var_set -> typ -> bool =
     | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
     | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
     | `Dual s -> type_can_be_unl vars s
-    | `End -> true
+    | `End -> false
     | #session_type -> false
 and field_can_be_unl vars =
   function
@@ -823,13 +896,13 @@ type datatype = typ [@@deriving show]
 (* useful for debugging: types tend to be too big to read *)
 (*
 *)
-let pp_datatype = fun f _ -> Utility.format_omission f
+(*let pp_datatype = fun f _ -> Utility.format_omission f
 let pp_field_spec = fun f _ -> Utility.format_omission f
 let pp_field_spec_map = fun f _ -> Utility.format_omission f
 let pp_row_var = fun f _ -> Utility.format_omission f
 let pp_row = fun f _ -> Utility.format_omission f
 let pp_meta_type_var = fun f _ -> Utility.format_omission f
-let pp_meta_row_var = fun f _ -> Utility.format_omission f
+let pp_meta_row_var = fun f _ -> Utility.format_omission f*)
 
 let type_var_number = var_of_quantifier
 
@@ -1706,6 +1779,10 @@ struct
       | `Row row -> free_bound_row_type_vars ~include_aliases bound_vars row
       | `Presence f -> free_bound_field_spec_type_vars ~include_aliases bound_vars f
 
+  let free_bound_quantifier_vars quant =
+    let var, spec = varspec_of_tyvar quant in
+    [(var, spec)]
+
   let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =
     match tycon_spec with
       | `Alias (tyvars, body) ->
@@ -2237,7 +2314,7 @@ let free_bound_row_type_vars ?(include_aliases=true) = Vars.free_bound_row_type_
 let free_bound_field_spec_type_vars ?(include_aliases=true) = Vars.free_bound_field_spec_type_vars ~include_aliases TypeVarSet.empty
 let free_bound_type_arg_type_vars ?(include_aliases=true) = Vars.free_bound_tyarg_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_var_vars ?(include_aliases=true) = Vars.free_bound_row_var_vars ~include_aliases TypeVarSet.empty
-
+let free_bound_quantifier_vars = Vars.free_bound_quantifier_vars
 let free_bound_tycon_type_vars ?(include_aliases=true) = Vars.free_bound_tycon_vars ~include_aliases TypeVarSet.empty
 
 (** Generates new variable names for things in the list, adding them to already
@@ -2278,15 +2355,23 @@ See Note [Variable names in error messages].
 (* string conversions *)
 let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (t : datatype) =
-  let policy = policy () in
-  let t = if policy.Print.quantifiers then t
-          else Print.strip_quantifiers t in
-  if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
-  Print.datatype TypeVarSet.empty (policy, Vars.tyvar_name_map) t
+  if Settings.get_value Basicsettings.print_types_pretty then
+    let policy = policy () in
+    let t = if policy.Print.quantifiers then t
+            else Print.strip_quantifiers t in
+    if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
+    Print.datatype TypeVarSet.empty (policy, Vars.tyvar_name_map) t
+  else
+    show_datatype (DecycleTypes.datatype t)
 
 let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
-  if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
-  Print.row "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row
+  if Settings.get_value Basicsettings.print_types_pretty then
+    begin
+    if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
+    Print.row "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row
+    end
+  else
+    show_row (DecycleTypes.row row)
 
 let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
@@ -2315,9 +2400,11 @@ let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
 let string_of_primary_kind primary_kind =
   Print.primary_kind primary_kind
 
-let pp_datatype fmt a = Format.pp_print_string fmt (string_of_datatype a)
+let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
+  if refresh_tyvar_names then
+    build_tyvar_names (fun x -> free_bound_quantifier_vars x) [quant];
+  Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
-let pp_tycon_spec fmt a = Format.pp_print_string fmt (string_of_tycon_spec a)
 
 type environment       = datatype Env.t
 and tycon_environment  = tycon_spec Env.t
@@ -2582,12 +2669,21 @@ let make_tuple_type (ts : datatype list) : datatype =
 let make_list_type t = `Application (list, [`Type t])
 let make_process_type r = `Application (process, [`Row r])
 
-let extend_row fields (fields', row_var, dual) =
-  (FieldEnv.fold
-     (fun name t fields -> FieldEnv.add name (`Present t) fields)
-     fields
-     fields',
-   row_var, dual)
+let extend_row_check_duplicates fields (fields', row_var, dual) =
+  let (unified_fields, has_duplicates) =
+    FieldEnv.fold
+      (fun name t (fields, has_duplicates) ->
+        (FieldEnv.add name (`Present t) fields), has_duplicates && FieldEnv.mem name fields)
+      fields
+      (fields', false) in
+  (unified_fields,row_var, dual), has_duplicates
+
+let extend_row_safe fields row =
+  match extend_row_check_duplicates fields row with
+  | (_, true) -> None
+  | (row', false) -> Some row'
+let extend_row fields row =
+  fst (extend_row_check_duplicates fields row)
 
 let make_closed_row : datatype field_env -> row = fun fields ->
   (FieldEnv.map (fun t -> `Present t) fields), closed_row_var, false
@@ -2608,3 +2704,44 @@ let make_pure_function_type : datatype list -> datatype -> datatype
 let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->
   make_function_type [] effs rtype
+
+
+
+(* We replace some of the generated printing functions here such that
+   they may use our own printing functions instead. If the generated functions are
+   to be used, we remove potential cycles arising from recursive types/rows first.
+   They are here because they are needed
+   by the generated code for printing the IR, do not call them yourself.
+   Use string_of_* instead *)
+let pp_datatype : Format.formatter -> datatype -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_datatype t)
+  else
+    pp_datatype fmt (DecycleTypes.datatype t)
+let pp_quantifier : Format.formatter -> quantifier -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_quantifier t)
+  else
+    pp_quantifier fmt (DecycleTypes.quantifier t)
+let show_quantifier : quantifier -> string = (fun x -> Format.asprintf "%a" pp_quantifier x)
+let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_type_arg t)
+  else
+    pp_type_arg fmt (DecycleTypes.type_arg t)
+let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
+  let decycle_tycon_spec = function
+    | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
+    | other -> other in
+
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_tycon_spec t)
+  else
+    pp_tycon_spec fmt (decycle_tycon_spec t)
+let pp_row : Format.formatter -> row -> unit = fun fmt t ->
+  if Settings.get_value Basicsettings.print_types_pretty then
+    Format.pp_print_string fmt (string_of_row t)
+  else
+    pp_row fmt (DecycleTypes.row t)
+let pp_lens_sort : Format.formatter -> lens_sort -> unit = fun fmt ls ->
+  pp_lens_sort fmt (DecycleTypes.lens_sort ls)

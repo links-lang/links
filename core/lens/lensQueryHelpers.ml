@@ -38,18 +38,18 @@ let translate_op_to_sql = function
     | a -> a
 
 let name_of_var (expr: phrase) =
-    let expr,_ = expr in
-    match expr with
+    match expr.node with
     | `Var n -> n
     | _ -> failwith "Expected var."
 
-let rec lens_phrase_of_phrase : phrase -> lens_phrase = function
-    | `Constant c, _ -> `Constant c
-    | `Var v, _ -> `Var v
-    | `UnaryAppl ((_, op), phrase),_ -> `UnaryAppl (op, lens_phrase_of_phrase phrase)
-    | `InfixAppl ((_, op), phrase1, phrase2),_ -> `InfixAppl (op, lens_phrase_of_phrase phrase1, lens_phrase_of_phrase phrase2)
-    | `TupleLit l, _ -> `TupleLit (List.map lens_phrase_of_phrase l)
-    | `FnAppl (fn, arg), _ ->
+let rec lens_phrase_of_phrase : phrase -> lens_phrase = fun p ->
+    match p.node with
+    | `Constant c -> `Constant c
+    | `Var v -> `Var v
+    | `UnaryAppl ((_, op), phrase) -> `UnaryAppl (op, lens_phrase_of_phrase phrase)
+    | `InfixAppl ((_, op), phrase1, phrase2) -> `InfixAppl (op, lens_phrase_of_phrase phrase1, lens_phrase_of_phrase phrase2)
+    | `TupleLit l -> `TupleLit (List.map lens_phrase_of_phrase l)
+    | `FnAppl (fn, arg) ->
         begin
             match name_of_var fn with
             | "not" -> `UnaryAppl ((`Name "!"), lens_phrase_of_phrase (List.hd arg))
@@ -412,7 +412,7 @@ let value_of_db_string (value:string) t =
     | `Primitive `Float -> (if value = "" then Value.box_float 0.00      (* HACK HACK *)
                             else Value.box_float (float_of_string value))
     | t -> failwith ("value_of_db_string: unsupported datatype: '" ^
-                        Types.show_typ t(*string_of_datatype t*)^"'")
+                        Types.string_of_datatype t(*string_of_datatype t*)^"'")
 
 let result_signature field_types result =
     let n = result#nfields in

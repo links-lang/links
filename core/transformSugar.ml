@@ -355,7 +355,7 @@ class transform (env : Types.typing_environment) =
           let (o, e, t) = o#phrase e in
           let o = o#restore_quantifiers outer_tyvars in
           let t = Types.for_all (qs, t) in
-            (o, tabstr (qs, fst e), t)
+            (o, tabstr (qs, e.node), t)
       | `TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
             check_type_application
@@ -619,8 +619,9 @@ class transform (env : Types.typing_environment) =
       | e -> failwith ("oops: "^show_phrasenode  e)
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
-      fun (e, pos) ->
-        let (o, e, t) = o#phrasenode e in (o, (e, pos), t)
+      fun {node; pos} ->
+        let (o, node, t) = o#phrasenode node in
+        (o, {node;pos}, t)
 
     method patternnode : patternnode -> ('self_type * patternnode) =
       function
@@ -658,8 +659,8 @@ class transform (env : Types.typing_environment) =
           let (o, p) = o#pattern p in (o, (`HasType (p, t)))
 
     method pattern : pattern -> ('self_type * pattern) =
-      fun (p, pos) ->
-        let (o, p) = o#patternnode p in (o, (p, pos))
+      fun {node; pos} ->
+        let (o, node) = o#patternnode node in (o, {node; pos})
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function
@@ -750,12 +751,11 @@ class transform (env : Types.typing_environment) =
     method rec_activate_inner_bindings :
       (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
       'self_type =
-      let bt (name, _, pos) t = (name, Some t, pos) in
       let rec list o =
         function
           | [] -> o
           | (f, _, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
-              let (o, _) = o#binder (bt f inner) in
+              let (o, _) = o#binder (set_binder_type f inner) in
                 list o defs
           | _ :: _ -> assert false
       in
@@ -763,23 +763,23 @@ class transform (env : Types.typing_environment) =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-      | `Val (tyvars, p, e, location, t) ->
+      | `Val (p, (tyvars, e), location, t) ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
          let (o, e, _) = o#phrase e in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, p) = o#pattern p in
          let (o, t) = optionu o (fun o -> o#datatype') t in
-         (o, `Val (tyvars, p, e, location, t))
-      | `Fun ((_, Some ft, _) as f, lin, (tyvars, lam), location, t) ->
+         (o, `Val (p, (tyvars, e), location, t))
+      | `Fun (bndr, lin, (tyvars, lam), location, t) when binder_has_type bndr ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let inner_effects = fun_effects ft (fst lam) in
+         let inner_effects = fun_effects (type_of_binder_exn bndr) (fst lam) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in
-         let (o, f) = o#binder f in
+         let (o, bndr) = o#binder bndr in
          let (o, t) = optionu o (fun o -> o#datatype') t in
-         (o, `Fun (f, lin, (tyvars, lam), location, t))
+         (o, `Fun (bndr, lin, (tyvars, lam), location, t))
       | `Fun _ -> failwith "Unannotated non-recursive function binding"
       | `Funs defs ->
          (* put the inner bindings in the environment *)
@@ -806,20 +806,19 @@ class transform (env : Types.typing_environment) =
       | `QualifiedImport _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
-      fun (b, pos) ->
-        let (o, b) = o#bindingnode b in (o, (b, pos))
+      fun {node; pos} ->
+        let (o, node) = o#bindingnode node in (o, {node; pos})
 
     method binder : binder -> ('self_type * binder) =
-      function
-      | (name, Some t, pos) ->
-         let var_env = TyEnv.bind var_env (name, t) in
-         ({< var_env=var_env >}, (name, Some t, pos))
-      | _ -> assert false
+      fun bndr ->
+      assert (binder_has_type bndr);
+      let var_env = TyEnv.bind var_env (name_of_binder bndr, type_of_binder_exn bndr) in
+      ({< var_env=var_env >}, bndr)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
-      fun (p, pos) ->
-      let (o, p, t) = o#cp_phrasenode p in
-      (o, (p, pos), t)
+      fun {node; pos} ->
+      let (o, node, t) = o#cp_phrasenode node in
+      (o, {node; pos}, t)
 
     (* TODO: should really invoke o#datatype on type annotations! *)
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
@@ -873,12 +872,12 @@ class transform (env : Types.typing_environment) =
            | _ -> assert false
          end
       | `Link (c, d) -> o, `Link (c, d), Types.unit_type
-      | `Comp ((c, Some s, _ as cbind), left, right) ->
+      | `Comp ({node = c, Some s; _} as bndr, left, right) ->
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
-         o, `Comp (cbind, left, right), t
+         o, `Comp (bndr, left, right), t
       | `Comp _ -> assert false
   end

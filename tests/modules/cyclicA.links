@@ -1,4 +1,4 @@
-open CyclicB
+open CyclicB;
 
 fun bar() {
   ()

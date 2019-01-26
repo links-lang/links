@@ -12,6 +12,7 @@
 
 open Utility
 open Sugartypes
+open SugarConstructors.Make
 
 let rec flatten_simple = fun () ->
 object(self)
@@ -36,16 +37,16 @@ object(self)
   method get_bindings = List.rev bindings
 
   method! binding = function
-    | (`AlienBlock (lang, lib, decls), _) ->
+    | {node=`AlienBlock (lang, lib, decls); _} ->
         self#list (fun o ((bnd, dt)) ->
-          let (name, _, pos) = bnd in
-          o#add_binding (`Foreign (bnd, name, lang, lib, dt), pos)) decls
-    | (`Module (name, bindings), pos) ->
+          let name = name_of_binder bnd in
+          o#add_binding (with_dummy_pos (`Foreign (bnd, name, lang, lib, dt)))) decls
+    | {node=`Module (name, bindings); _} ->
         let flattened_bindings =
           List.concat (
             List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bindings
           ) in
-        self#add_binding (`Module (name, flattened_bindings), pos)
+        self#add_binding (with_dummy_pos (`Module (name, flattened_bindings)))
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
   method! program = function

@@ -1,4 +1,6 @@
 open OUnit2
+
+open Links_core
 open LensHelpers
 open LensQueryHelpers
 open LensRecordHelpers

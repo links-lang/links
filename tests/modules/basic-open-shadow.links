@@ -13,5 +13,5 @@ module A {
 fun foo() {
   "greetings"
 }
-open A
+open A;
 foo()

@@ -1,6 +1,6 @@
-open ChatSessions
-open ChatClient
-open LinearList
+open ChatSessions;
+open ChatClient;
+open LinearList;
 
 typename ServerState = (Topic, [Nickname]);
 
@@ -23,7 +23,8 @@ fun supervisor(topic, nicks, cs) {
   var s = accept(sap);
   offer(s) {
     case Join(s) ->
-      var (d, _) = receive(s);
+      var (d, s) = receive(s);
+      close(s);
       var (name, d) = receive(d);
       switch (filter(fun (nick) {nick == name}, nicks)) {
         case [] ->
@@ -40,11 +41,12 @@ fun supervisor(topic, nicks, cs) {
             }, cs);
           supervisor(topic, name :: nicks, LinCons(workerSend, cs))
         case _ ->
-          ignore(select Nope d);
+          close(select Nope d);
           supervisor(topic, nicks, cs)
       }
     case Chat(s) ->
-      var ((nick, msg), _) = receive(s);
+      var ((nick, msg), s) = receive(s);
+      close(s);
       var cs = linMap(
         fun(c) {
           var c = select Chat c;
@@ -52,7 +54,8 @@ fun supervisor(topic, nicks, cs) {
         }, cs);
       supervisor(topic, nicks, cs)
     case NewTopic(s) ->
-      var (newTopic, _) = receive(s);
+      var (newTopic, s) = receive(s);
+      close(s);
       var cs = linMap(
         fun(c) {
           var c = select NewTopic c;
@@ -60,7 +63,8 @@ fun supervisor(topic, nicks, cs) {
         }, cs);
       supervisor(newTopic, nicks, cs)
     case Leave(s) ->
-      var (nick, _) = receive(s);
+      var (nick, s) = receive(s);
+      close(s);
       var (nicks, cs) = disconnect(nick, nicks, cs);
       var cs = linMap(
         fun(c) {
@@ -113,22 +117,22 @@ fun disconnect(nick, ns, cs) {
 
 sig join : (ChatServer) ~> ()
 fun join(c) {
-  ignore(send(c, select Join request(sap)))
+  close(send(c, select Join request(sap)))
 }
 
 sig chat : (Nickname, Message) ~> ()
 fun chat(nick, msg) {
-  ignore(send((nick, msg), select Chat request(sap)))
+  close(send((nick, msg), select Chat request(sap)))
 }
 
 sig newTopic : (Topic) ~> ()
 fun newTopic(newTopic) {
-  ignore(send(newTopic, select NewTopic request(sap)))
+  close(send(newTopic, select NewTopic request(sap)))
 }
 
 sig leave : (Nickname) ~> ()
 fun leave(nick) {
-  ignore(send(nick, select Leave request(sap)))
+  close(send(nick, select Leave request(sap)))
 }
 
 sig acceptor : () ~> ()

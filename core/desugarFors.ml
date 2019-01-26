@@ -1,5 +1,6 @@
 open Utility
 open Sugartypes
+open SugarConstructors.Make
 
 (*
   Desugaring n-ary for comprehensions with conditions and orderby
@@ -43,8 +44,6 @@ open Sugartypes
     (q; qs)_v = (q_v, qs_v)
 *)
 
-let dp = Sugartypes.dummy_position
-
 (**
   This function generates the code to extract the results.
   It roughly corresponds to [[qs]].
@@ -55,7 +54,7 @@ let results :  Types.row ->
     (* let results_type = Types.make_tuple_type ts in *)
     let rec results =
       function
-        | ([], [], []) -> `ListLit ([`TupleLit [], dp], Some Types.unit_type), dp
+        | ([], [], []) -> list ~ty:Types.unit_type [tuple []]
         | ([e], [_x], [_t]) -> e
         | (e::es, x::xs, t::ts) ->
             let r = results (es, xs, ts) in
@@ -64,38 +63,28 @@ let results :  Types.row ->
 
             let ((qsb, qs) : Sugartypes.pattern list * Sugartypes.phrase list) =
               List.split
-                (List.map2 (fun x t ->
-                              (`Variable (x, Some t, dp), dp), ((`Var x), dp)) xs ts) in
-            let qb, q = (`Variable (x, Some t, dp), dp), ((`Var x), dp) in
+                (List.map2 (fun x t -> (variable_pat ~ty:t x, var x)) xs ts) in
+            let qb, q = (variable_pat ~ty:t x, var x) in
 
             let inner : Sugartypes.phrase =
               let ps =
                 match qsb with
                   | [p] -> [p]
-                  | _ -> [`Tuple qsb, dp] in
+                  | _ -> [tuple_pat qsb] in
               let a =
                 match ts with
                   | [t] -> Types.make_tuple_type [t]
                   | ts -> Types.make_tuple_type [Types.make_tuple_type ts]
               in
-                `FunLit
-                  (Some [a, eff], `Unl,
-                   ([ps], (`TupleLit (q::qs), dp)), `Unknown), dp in
+              fun_lit ~args:[a, eff] `Unl [ps] (tuple (q::qs)) in
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
-                `FunLit
-                  (Some [Types.make_tuple_type [t], eff],
-                   `Unl,
-                   ([[qb]],
-                    (`FnAppl
-                       ((`TAppl ((`Var "map", dp), [a; `Row eff; b]), dp),
-                        [inner; r]), dp)), `Unknown), dp in
+                fun_lit ~args:[Types.make_tuple_type [t], eff] `Unl [[qb]]
+                  (fn_appl "map" [a; `Row eff; b] [inner; r]) in
             let a = `Type qt in
             let b = `Type (Types.make_tuple_type (t :: ts)) in
-              `FnAppl
-                ((`TAppl ((`Var "concatMap", dp), [a; `Row eff; b]), dp),
-                 [outer; e]), dp
+            fn_appl "concatMap" [a; `Row eff; b] [outer; e]
         | _, _, _ -> assert false
     in
       results (es, xs, ts)
@@ -125,8 +114,8 @@ object (o : 'self_type)
                    let element_type = TypeUtils.element_type t in
 
                    let var = Utility.gensym ~prefix:"_for_" () in
-                   let (xb, x) = (var, Some t, dp), var in
-                     o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, element_type::ts)
+                   let xb = binder ~ty:t var in
+                     o, (e::es, with_dummy_pos (`As (xb, p))::ps, var::xs, element_type::ts)
                | `Table (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
@@ -138,11 +127,10 @@ object (o : 'self_type)
                    let n = `Type (TypeUtils.table_needed_type t) in
                    let eff = `Row (o#lookup_effects) in
 
-                   let e = `FnAppl ((`TAppl ((`Var ("AsList"), dp),
-                                             [r; w; n; eff]), dp), [e]), dp in
+                   let e = fn_appl "AsList" [r; w; n; eff] [e] in
                    let var = Utility.gensym ~prefix:"_for_" () in
-                   let (xb, x) = (var, Some t, dp), var in
-                     o, (e::es, ((`As (xb, p)), dp)::ps, x::xs, element_type::ts))
+                   let xb = binder ~ty:t var in
+                     o, (e::es, with_dummy_pos (`As (xb, p))::ps, var::xs, element_type::ts))
           (o, ([], [], [], []))
           qs
       in
@@ -163,24 +151,20 @@ object (o : 'self_type)
           match filter with
             | None -> body
             | Some condition ->
-                `Conditional (condition, body, (`ListLit ([], Some elem_type), dp)), dp in
+                with_dummy_pos (`Conditional (condition, body, list ~ty:elem_type [])) in
 
         let arg =
           match ps with
             | [p] -> [p]
-            | ps -> [`Tuple ps, dp] in
+            | ps -> [tuple_pat ps] in
 
         let arg_type =
           match ts with
             | [t] -> t
             | ts -> Types.make_tuple_type ts in
 
-        let f : phrase =
-          `FunLit
-            (Some [Types.make_tuple_type [arg_type], eff],
-             `Unl,
-             ([arg], body),
-             `Unknown), dp in
+        let f : phrase = fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
+                                 `Unl [arg] body in
 
         let results = results eff (es, xs, ts) in
         let results =
@@ -191,21 +175,16 @@ object (o : 'self_type)
                   "sortByBase", `Row (TypeUtils.extract_row sort_type) in
 
                 let g : phrase =
-                  `FunLit
-                    (Some [Types.make_tuple_type [arg_type], eff],
-                     `Unl,
-                     ([arg], sort),
-                     `Unknown), dp
+                  fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
+                          `Unl [arg] sort
                 in
-                  `FnAppl
-                    ((`TAppl ((`Var sort_by, dp), [`Type arg_type; `Row eff; sort_type_arg]), dp),
-                     [g; results]), dp
+                fn_appl sort_by [`Type arg_type; `Row eff; sort_type_arg]
+                        [g; results]
             | _, _ -> assert false in
 
         let e : phrasenode =
-          `FnAppl
-            ((`TAppl ((`Var "concatMap", dp), [`Type arg_type; `Row eff; `Type elem_type]), dp),
-             [f; results]) in
+          fn_appl_node "concatMap" [`Type arg_type; `Row eff; `Type elem_type]
+                       [f; results] in
         (o, e, body_type)
     | e -> super#phrasenode e
 end

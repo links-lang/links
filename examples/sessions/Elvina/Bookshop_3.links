@@ -55,8 +55,7 @@ case Checkout(s) ->
 	var (addressFull, s) = shipper(s);	# Contact shipper, send it the channel to receive address.
 
 	var summary = summariseOrder(card, addressFull, orderedProducts, removedProducts);
-	var _ = send(summary, s);
-	()
+	close(send(summary, s));
 	}
 }
 
@@ -115,8 +114,7 @@ sig waitForSon : (SonSelect) ~> ()
 fun waitForSon(c) client
 {
 	offer(c) {
-		case Choice(c) -> var c = send(Gadget("LED Water Speakers"), c);
-		()
+		case Choice(c) -> close(send(Gadget("LED Water Speakers"), c))
 	}
 }
 
@@ -125,6 +123,7 @@ sig getSonBook : (SonOffer) ~> (Product)
 fun getSonBook(s) client
 {
 	var (choice, s) = receive(select Choice s);
+  close(s);
 	choice
 }
 
@@ -150,6 +149,7 @@ fun orderBooks(c) client
 
 	var c = send(myAddress, send(8753, select Checkout c));
 	var (summary, c) = receive(c);
+  close(c);
 	summary
 }
 

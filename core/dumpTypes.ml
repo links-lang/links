@@ -30,14 +30,14 @@ let program =
         Env.String.lookup env x
 
       method! binder =
-        fun (x, t, pos) ->
+        fun {Sugartypes.node=x,t; Sugartypes.pos} ->
           o#option
             (fun o t -> o#bind (x, t, pos))
             t
 
       method! phrase =
         function
-          | `Var x, pos when o#bound x ->
+          | {Sugartypes.node=`Var x; Sugartypes.pos} when o#bound x ->
               o#use (x, o#lookup x, pos)
           | e -> super#phrase e
     end in

@@ -7,7 +7,7 @@ open Ir
     that also constructs the type as it goes along (using type
     annotations on binders).
 *)
-module type TRANSFORM =
+module type IR_VISITOR =
 sig
   type environment = Types.datatype Env.Int.t
 
@@ -59,9 +59,10 @@ end
 module type PROGTRANSFORM =
 sig
    val program : Types.datatype Env.Int.t -> program -> program
+   val bindings : Types.datatype Env.Int.t -> binding list -> binding list
 end
 
-module Transform : TRANSFORM =
+module Transform : IR_VISITOR =
 struct
   open Types
   open TypeUtils
@@ -225,7 +226,7 @@ struct
             let (f, ft, o) = o#value f in
             let (args, _, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyPure (f, args), deconstruct return_type ft, o
+              `ApplyPure (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
 
         | `Closure (f, tyargs, z) ->
             let (f, t, o) = o#var f in
@@ -254,7 +255,7 @@ struct
             let f, ft, o = o#value f in
             let args, _, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `Apply (f, args), deconstruct return_type ft, o
+              `Apply (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
         (* | `ApplyClosure (f, args) -> *)
         (*     let f, ft, o = o#value f in *)
         (*     let args, arg_types, o = o#list (fun o -> o#value) args in *)
@@ -346,7 +347,7 @@ struct
               `Delete ((x, source), where), Types.unit_type, o
         | `CallCC v ->
             let v, t, o = o#value v in
-              `CallCC v, deconstruct return_type t, o
+              `CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t, o
         | `Select (l, v) ->
            let v, t, o = o#value v in
            `Select (l, v), t, o
@@ -539,6 +540,9 @@ struct
 
   let program typing_env p =
     fst3 ((inliner typing_env IntMap.empty)#computation p)
+
+  let bindings typing_env p =
+    fst ((inliner typing_env IntMap.empty)#bindings p)
 end
 
 (*
@@ -763,14 +767,17 @@ struct
         | [] -> [], o
   end
 
-  let count tyenv p =
-    let _, _, o = (counter tyenv)#computation p in
-      o#get_envs()
-
   let program tyenv p =
-    let envs = count tyenv p in
+    let _, _, o = (counter tyenv)#computation p in
+    let envs = o#get_envs () in
     let p, _, _ = (eliminator tyenv envs)#computation p in
       p
+
+  let bindings tyenv bs =
+    let _, o = (counter tyenv)#bindings bs in
+    let envs = o#get_envs () in
+    let bs, _ = (eliminator tyenv envs)#bindings bs in
+      bs
 end
 
 (** Applies a type visitor to all types occuring in an IR program**)
@@ -821,7 +828,6 @@ let ir_type_mod_visitor tyenv type_visitor =
   end
 
 
-
 (* Debugging traversal that checks if we have eliminated all cyclic recursive types *)
 module CheckForCycles =
   struct
@@ -862,9 +868,41 @@ module CheckForCycles =
       let p, _, _ = (ir_type_mod_visitor tyenv check_cycles)#program p in
       p
 
+    let bindings tyenv bs =
+      let bs, _ = (ir_type_mod_visitor tyenv check_cycles)#bindings bs in
+      bs
+
   end
 
 
+module ElimBodiesFromMetaTypeVars =
+  struct
+
+    let elim_bodies =
+      object (o)
+        inherit Types.Transform.visitor as super
+
+        method! typ = function
+          | `MetaTypeVar point ->
+          begin
+            match Unionfind.find point with
+              | `Body t ->
+                  o#typ t
+              | _ -> `MetaTypeVar point, o
+          end
+          | other -> super#typ other
+      end
+
+
+    let program tyenv p =
+      let p, _, _ = (ir_type_mod_visitor tyenv elim_bodies)#program p in
+      p
+
+    let bindings tyenv bs =
+      let bs, _ = (ir_type_mod_visitor tyenv elim_bodies)#bindings bs in
+      bs
+
+  end
 
 module ElimTypeAliases =
   struct
@@ -883,6 +921,10 @@ module ElimTypeAliases =
     let program tyenv p =
       let p, _, _ = (ir_type_mod_visitor tyenv elim_type_aliases)#program p in
       p
+
+    let bindings tyenv bs =
+      let bs, _ = (ir_type_mod_visitor tyenv elim_type_aliases)#bindings bs in
+      bs
 
   end
 

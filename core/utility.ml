@@ -484,12 +484,28 @@ struct
     | _, [] -> []
     | x :: xs, y :: ys -> (x, y) :: zip xs ys
 
+  let rec zip_with f xs ys =
+    match xs, ys with
+    | [], _
+    | _, [] -> []
+    | x :: xs, y :: ys -> f x y :: zip_with f xs ys
+
+  let split_with : ('a -> 'b * 'c) -> 'a list -> 'b list * 'c list = fun f xs ->
+    List.fold_right (fun a (bs, cs) -> let (b, c) = f a in (b::bs, c::cs))
+                    xs ([], [])
+
   exception Lists_length_mismatch
 
   let rec zip' xs ys =
     match xs, ys with
     | [], [] -> []
     | x :: xs, y :: ys -> (x, y) :: zip' xs ys
+    | _, _ -> raise Lists_length_mismatch
+
+  let rec zip_with' f xs ys =
+    match xs, ys with
+    | [], [] -> []
+    | x :: xs, y :: ys -> f x y :: zip_with' f xs ys
     | _, _ -> raise Lists_length_mismatch
 
   let rec transpose : 'a list list -> 'a list list = function

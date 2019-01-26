@@ -15,7 +15,7 @@ fun calc(s) client {
       var s = send(x*y,s);
       calc(s)
     case Stop(s) ->
-      ()
+      close(s)
   }
 }
 
@@ -24,7 +24,7 @@ fun user(s) client {
   var (x, s) = receive(send(6,send(7,select Mul s)));
   var (y, s) = receive(send(6,send(7,select Mul s)));
   var (z, s) = receive(send(x,send(y,select Add s)));
-  var _ = select Stop s;
+  close(select Stop s);
   z
 }
 

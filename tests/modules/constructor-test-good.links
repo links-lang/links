@@ -2,7 +2,7 @@ module A {
     typename DT = [| Foo: (Int, Int) | Bar: String |];
 }
 
-open A
+open A;
 
 sig foo : (DT) -> Int
 fun foo(x) {

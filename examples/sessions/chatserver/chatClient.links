@@ -1,4 +1,4 @@
-open ChatSessions
+open ChatSessions;
 
 # DOM stuff #
 var nameBoxId = "name_box";
@@ -86,7 +86,8 @@ fun outgoingLoop(ap, s) {
 
   fun receiveMsg() {
     var msgChan = accept(ap);
-    var (msg, _) = receive(msgChan);
+    var (msg, s) = receive(msgChan);
+    close(s);
     msg
   }
 
@@ -112,7 +113,7 @@ fun beginChat(topic, nicks, incoming, outgoing) {
   ignore(spawn {incomingLoop(incoming)});
 
   fun chat() {
-    ignore(send(getInputContents(chatBoxId), request(ap)));
+    close(send(getInputContents(chatBoxId), request(ap)));
     clearInput(chatBoxId)
   }
 
@@ -141,7 +142,8 @@ fun connect() {
     debug("sent nick");
     offer(s) {
       case Nope(s) ->
-        println("Nickname '" ^^ nick ^^ "' already taken")
+        println("Nickname '" ^^ nick ^^ "' already taken");
+        close(s)
       case Join(s) ->
         var ((topic, nicks, incoming), s) = receive(s);
         debug("received data");

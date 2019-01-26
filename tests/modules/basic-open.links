@@ -6,5 +6,5 @@ module A {
 
 fun bar() { () }
 
-open A
+open A;
 foo()

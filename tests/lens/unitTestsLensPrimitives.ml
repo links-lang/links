@@ -1,9 +1,12 @@
 open OUnitTest
+
+open Links_core
 open LensHelpers
 open LensQueryHelpers
 open LensSetOperations
-open UnitTestsLensCommon
 open Value
+
+open UnitTestsLensCommon
 
 (* define composition operator *)
 let (<<) f g x = f (g x)
@@ -248,7 +251,7 @@ let test_put_delta test_ctx =
     ) in
     let table = match l1 with `Lens (t,_) -> t | _ -> assert false in
     let run = if classic_opt then
-        let cols = Lens.cols_present_aliases l1 in
+        let cols = Lens.Helpers.Lens'.cols_present_aliases l1 in
         let data = SortedRecords.construct_cols cols res in
         let run () = LensHelpersClassic.apply_table_data table data in
         run

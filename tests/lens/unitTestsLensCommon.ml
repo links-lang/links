@@ -1,5 +1,8 @@
 open OUnit2
-open Pg_database
+
+open Links_postgresql.Pg_database
+
+open Links_core
 open Types
 open Value
 open Utility
@@ -8,7 +11,7 @@ open LensHelpers
 open LensSetOperations
 
 (* ensure links configuration is loaded *)
-let _ = OptionUtils.opt_iter (Settings.load_file false) Basicsettings.config_file_path
+let _ = OptionUtils.opt_iter (Links_core.Settings.load_file false) Links_core.Basicsettings.config_file_path
 
 let display_table_query_opt = Conf.make_bool "display_table_query" false "Show queries to take and manipulate tables."
 let leave_tables_opt = Conf.make_bool "leave_tables" false "Do not delete tables after run."
@@ -85,20 +88,20 @@ module LensTestHelpers = struct
         mem_lens (fundepset_of_string fds) name data
 
     let join_lens_dl l1 l2 on =
-        let sort, on = join_lens_sort (Lens.sort l1) (Lens.sort l2) on in
+        let sort, on = join_lens_sort (Lens.Helpers.Lens'.sort l1) (Lens.Helpers.Lens'.sort l2) on in
         `LensJoin (l1, l2, on, `Constant (`Bool true), `Constant (`Bool false), sort)
 
     let join_lens_dr l1 l2 on =
-        let sort, on = join_lens_sort (Lens.sort l1) (Lens.sort l2) on in
+        let sort, on = join_lens_sort (Lens.Helpers.Lens'.sort l1) (Lens.Helpers.Lens'.sort l2) on in
         `LensJoin (l1, l2, on, `Constant (`Bool false), `Constant (`Bool true), sort)
 
     let select_lens l phrase =
-        let sort = Lens.sort l in
+        let sort = Lens.Helpers.Lens'.sort l in
         let sort = LensTypes.select_lens_sort sort phrase in
         `LensSelect (l, phrase, sort)
 
     let drop_lens l drop key default =
-        let sort = Lens.sort l in
+        let sort = Lens.Helpers.Lens'.sort l in
         let (fds, cond, r) = sort in
         let fds = FunDepSet.remove_defines fds (ColSet.singleton drop) in
         let r = LensRecordHelpers.remove_record_type_column drop r in

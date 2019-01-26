@@ -2,6 +2,8 @@
 
 open UnitTestsLensCommon
 open OUnit2
+
+open Links_core
 open Types
 open Value
 open Utility
@@ -110,7 +112,7 @@ let construct_join_lens (fd_set : fundepset) (name : string) data =
     l1
 
 let construct_join_lens_2 l1 l2 on =
-    let sort, on = join_lens_sort (Lens.sort l1) (Lens.sort l2) on in
+    let sort, on = join_lens_sort (Lens.Helpers.Lens'.sort l1) (Lens.Helpers.Lens'.sort l2) on in
     `LensJoin (l1, l2, on, `Constant (`Bool true), `Constant (`Bool false), sort)
 
 let cat_tex cols name delta =

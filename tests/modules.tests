@@ -123,5 +123,11 @@ Constructor out of scope
 ./tests/modules/constructor-test-bad.links
 filemode : args
 args : -m --path=tests/modules
-stderr : *** Fatal error : Unbound type constructor DT
+stderr : ./tests/modules/constructor-test-bad.links:5: Unbound type constructor DT
 exit : 1
+
+Qualified names allowed without parentheses
+./tests/modules/qualified-type-names.links
+filemode : args
+args : -m --path=tests/modules
+stdout : () : ()

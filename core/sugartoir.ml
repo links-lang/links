@@ -46,8 +46,6 @@ open Ir
 
 let show_compiled_ir = Basicsettings.Sugartoir.show_compiled_ir
 
-let dp = Sugartypes.dummy_position
-
 type datatype = Types.datatype
 
 module NEnv = Env.String
@@ -623,7 +621,7 @@ struct
     let body =
       List.fold_left2
         (fun body p (xb : binder) ->
-           let x = Var.var_of_binder xb in
+           let x  = Var.var_of_binder  xb in
            let xt = Var.type_of_binder xb in
              CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
         (reify body)
@@ -654,7 +652,7 @@ struct
              let body_type = sem_type body in
                List.fold_left2
                  (fun body p xb ->
-                    let x = Var.var_of_binder xb in
+                    let x  = Var.var_of_binder  xb in
                     let xt = Var.type_of_binder xb in
                       CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
                  (reify body)
@@ -725,7 +723,8 @@ struct
   let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff')
 
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
-    fun env (e, pos) ->
+    fun env {Sugartypes.node=e; Sugartypes.pos} ->
+      let with_pos = Sugartypes.with_pos in
       let lookup_var name =
         let x, xt = lookup_name_and_type name env in
           I.var (x, xt) in
@@ -744,8 +743,8 @@ struct
                       prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
                       failwith "fatal internal error" in
 
-      let rec is_pure_primitive (e, _) =
-        match e with
+      let rec is_pure_primitive e =
+        match e.Sugartypes.node with
           | `TAbstr (_, e)
           | `TAppl (e, _) -> is_pure_primitive e
           | `Var f when Lib.is_pure_primitive f -> true
@@ -765,9 +764,12 @@ struct
           | `ListLit ([], Some t) ->
               cofv (instantiate "Nil" [`Type t])
           | `ListLit (e::es, Some t) ->
-              cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff], [ev e; ev ((`ListLit (es, Some t)), pos)]))
-          | `Escape ((k, Some kt, _), body) ->
-              I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
+              cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff],
+                                 [ev e; ev (with_pos pos (`ListLit (es, Some t)))]))
+          | `Escape (bndr, body) when Sugartypes.binder_has_type bndr ->
+             let k  = Sugartypes.name_of_binder bndr in
+             let kt = Sugartypes.type_of_binder_exn bndr in
+             I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | `Section (`Minus) -> cofv (lookup_var "-")
           | `Section (`FloatMinus) -> cofv (lookup_var "-.")
           | `Section (`Name name) -> cofv (lookup_var name)
@@ -804,9 +806,10 @@ struct
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | `UnaryAppl ((tyargs, `Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
-          | `FnAppl ((`Var f, _), es) when Lib.is_pure_primitive f ->
+          | `FnAppl ({Sugartypes.node=`Var f; _}, es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
-          | `FnAppl ((`TAppl ((`Var f, _), tyargs), _), es) when Lib.is_pure_primitive f ->
+          | `FnAppl ({Sugartypes.node=`TAppl ({Sugartypes.node=`Var f; _}, tyargs); _}, es)
+               when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (instantiate f tyargs, evs es))
           | `FnAppl (e, es) when is_pure_primitive e ->
               cofv (I.apply_pure (ev e, evs es))
@@ -903,43 +906,38 @@ struct
               in
                 I.switch env (ev e, cases, t)
           | `DatabaseLit (name, (None, _)) ->
-              I.database (ev (`RecordLit ([("name", name)],
-                                          Some (`FnAppl ((`Var "getDatabaseConfig", pos), []), pos)), pos))
+              I.database (ev (with_pos pos (`RecordLit ([("name", name)],
+                                          Some (with_pos pos (`FnAppl (with_pos pos (`Var "getDatabaseConfig"), [])))))))
           | `DatabaseLit (name, (Some driver, args)) ->
               let args =
                 match args with
-                  | None -> `Constant (`String ""), pos
+                  | None -> with_pos pos (`Constant (`String ""))
                   | Some args -> args
               in
                 I.database
-                  (ev (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None), pos))
+                  (ev (with_pos pos (`RecordLit ([("name", name); ("driver", driver); ("args", args)], None))))
           | `LensLit (table, Some t) ->
               let table = ev table in
                 I.lens_handle (table, t)
           | `LensDropLit (lens, drop, key, default, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
               let default = ev default in
                 I.lens_drop_handle (lens, drop, key, default, t)
           | `LensSelectLit (lens, pred, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
-              let pred = LensQueryHelpers.lens_phrase_of_phrase pred in
+              let pred = Lens.Helpers.Query.lens_phrase_of_phrase pred in
                 I.lens_select_handle (lens, pred, t)
           | `LensJoinLit (lens1, lens2, on, left, right, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
-              let on = LensTypes.cols_of_phrase on in
-              let left = LensQueryHelpers.lens_phrase_of_phrase left in
-              let right = LensQueryHelpers.lens_phrase_of_phrase right in
+              let on = Lens.Types.cols_of_phrase on in
+              let left = Lens.Helpers.Query.lens_phrase_of_phrase left in
+              let right = Lens.Helpers.Query.lens_phrase_of_phrase right in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
           | `LensGetLit (lens, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
                 I.lens_get (lens, t)
           | `LensPutLit (lens, data, Some t) ->
-              let _ = LensHelpers.ensure_lenses_enabled () in
               let lens = ev lens in
               let data = ev data in
                 I.lens_put (lens, data, t)
@@ -984,7 +982,7 @@ struct
           | `TextNode name ->
               cofv
                 (I.apply_pure
-                   (instantiate_mb "stringToXml", [ev (`Constant (`String name), pos)]))
+                   (instantiate_mb "stringToXml", [ev (with_pos pos (`Constant (`String name)))]))
           | `Block (bs, e) -> eval_bindings `Local env bs e
           | `Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
@@ -997,7 +995,7 @@ struct
                 opt_map
                   (fun where -> eval env' where)
                   where in
-              let body = eval env' (`RecordLit (fields, None), dp) in
+              let body = eval env' (Sugartypes.with_dummy_pos (`RecordLit (fields, None))) in
                 I.db_update env (p, source, where, body)
           | `DBDelete (p, source, where) ->
               let p, penv = CompilePatterns.desugar_pattern `Local p in
@@ -1065,23 +1063,29 @@ struct
     let ev = evalv env in
       match bs' with
         | [] -> ec e
-        | (b,_)::bs ->
+        | { Sugartypes.node = b; _ }::bs ->
             begin
               match b with
-                | `Val (_, (`Variable (x, Some xt, _xpos), _), body, _, _) ->
+                | `Val ({Sugartypes.node=`Variable bndr; _}, (_, body), _, _)
+                     when Sugartypes.binder_has_type bndr ->
+                    let x  = Sugartypes.name_of_binder bndr in
+                    let xt = Sugartypes.type_of_binder_exn bndr in
                     let x_info = (xt, x, scope) in
                       I.letvar
                         (x_info,
                          ec body,
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | `Val (_, p, body, _, _) ->
+                | `Val (p, (_, body), _, _) ->
                     let p, penv = CompilePatterns.desugar_pattern scope p in
                     let env' = env ++ penv in
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
-                | `Fun ((f, Some ft, _), _, (tyvars, ([ps], body)), location, _) ->
+                | `Fun (bndr, _, (tyvars, ([ps], body)), location, _)
+                     when Sugartypes.binder_has_type bndr ->
+                    let f  = Sugartypes.name_of_binder bndr in
+                    let ft = Sugartypes.type_of_binder_exn bndr in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
@@ -1099,7 +1103,9 @@ struct
                 | `Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
-                        (fun ((f, outer_opt, _), _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                        (fun (bndr, _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                          let f          = Sugartypes.name_of_binder     bndr in
+                          let outer_opt  = Sugartypes.type_of_binder bndr in
                           let outer      = OptionUtils.val_of outer_opt in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
@@ -1107,10 +1113,12 @@ struct
                         ([], [], []) in
                     let defs =
                       List.map
-                        (fun ((f, ft_opt, _), _, ((tyvars, _), (pss, body)), location, _, _) ->
+                        (fun (bndr, _, ((tyvars, _), (pss, body)), location, _, _) ->
                           assert (List.length pss = 1);
-                          let ft = OptionUtils.val_of ft_opt in
-                          let ps = List.hd pss in
+                          let f      = Sugartypes.name_of_binder     bndr in
+                          let ft_opt = Sugartypes.type_of_binder bndr in
+                          let ft     = OptionUtils.val_of ft_opt in
+                          let ps     = List.hd pss in
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
@@ -1123,7 +1131,10 @@ struct
                         defs
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
-                | `Foreign ((x, Some xt, _), raw_name, language, _file, _) ->
+                | `Foreign (bndr, raw_name, language, _file, _)
+                     when Sugartypes.binder_has_type bndr ->
+                    let x  = Sugartypes.name_of_binder bndr in
+                    let xt = Sugartypes.type_of_binder_exn bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | `Type _
                 | `Infix ->
@@ -1186,17 +1197,18 @@ struct
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in
       globals, (locals, main), nenv
 
+
   let compile env (bindings, body) =
     Debug.print ("compiling to IR");
 (*     Debug.print (Sugartypes.show_program (bindings, body)); *)
     let body =
       match body with
-        | None -> (`RecordLit ([], None), dp)
+        | None -> Sugartypes.with_dummy_pos (`RecordLit ([], None))
         | Some body -> body in
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
-          Debug.if_set show_compiled_ir (fun () -> Ir.show_program r);
+          Debug.if_set show_compiled_ir (fun () -> Ir.string_of_program r);
           r, I.sem_type s
 end
 

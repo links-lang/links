@@ -34,10 +34,10 @@ object (o : 'self_type)
     {< extra_env = StringMap.remove f extra_env >}
 
   method! phrasenode = function
-    | `TAppl (((`Var name), pos), tyargs) when StringMap.mem name extra_env ->
+    | `TAppl ({node=`Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`TAppl (((`Var name), pos), tyargs))
+          super#phrasenode (`TAppl (phn, tyargs))
     | `InfixAppl ((tyargs, `Name name), e1, e2) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
@@ -76,9 +76,9 @@ object (o : 'self_type)
         (* put the extras in the environment *)
         let o =
           List.fold_left
-            (fun o ((f, _, _), _, ((_tyvars, dt_opt), _), _, _, _) ->
+            (fun o (bndr, _, ((_tyvars, dt_opt), _), _, _, _) ->
                match dt_opt with
-                 | Some (_, extras) -> o#bind f extras
+                 | Some (_, extras) -> o#bind (name_of_binder bndr) extras
                  | None -> assert false
             )
             o defs in
@@ -88,7 +88,7 @@ object (o : 'self_type)
           let rec list o =
             function
               | [] -> (o, [])
-              | ((_, Some outer, _) as f, lin, ((tyvars, Some (_inner, extras)), lam), location, t, pos)::defs ->
+              | ({node=_, Some outer; _} as f, lin, ((tyvars, Some (_inner, extras)), lam), location, t, pos)::defs ->
                   let (o, defs) = list o defs in
                   let extras = List.map (fun _ -> None) extras in
                     (o, (f, lin, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
@@ -109,18 +109,18 @@ object (o : 'self_type)
         (* remove the extras from the environment *)
         let o =
           List.fold_left
-            (fun o ((f, _, _), _, ((_tyvars, _), _), _, _, _) ->
-               o#unbind f)
+            (fun o (bndr, _, ((_tyvars, _), _), _, _, _) ->
+               o#unbind (name_of_binder bndr))
             o defs
         in
           (o, (`Funs defs))
     | b -> super#bindingnode b
 
   method! binder : binder -> ('self_type * binder) = function
-      | (_, None, _) -> assert false
-      | (name, Some t, pos) ->
-          let var_env = Env.String.bind var_env (name, t) in
-            ({< var_env=var_env; extra_env=extra_env >}, (name, Some t, pos))
+      | {node=_, None; _} -> assert false
+      | bndr ->
+         let var_env = Env.String.bind var_env (name_of_binder bndr, type_of_binder_exn bndr) in
+         ({< var_env=var_env; extra_env=extra_env >}, bndr)
 end
 
 let desugar_inners env = ((new desugar_inners env) : desugar_inners :> TransformSugar.transform)

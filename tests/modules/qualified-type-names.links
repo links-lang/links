@@ -1,0 +1,10 @@
+module One {
+  typename One = Int;
+}
+
+typename Two = One.One;
+
+sig foo : (One.One) ~> One.One
+fun foo (a) {
+  a
+}

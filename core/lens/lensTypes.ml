@@ -3,6 +3,7 @@ open Utility
 open LensUtility
 open LensQueryHelpers
 open LensRecordHelpers
+open Sugartypes
 
 let unpack_field_spec (typ : Types.field_spec) =
     match typ with
@@ -36,13 +37,13 @@ let sort_cols_of_table (tableName : string) (t : Types.typ) =
     let rt = extract_record_type t in
     sort_cols_of_record tableName rt
 
-let var_name (var, _pos : Sugartypes.phrase) =
-    match var with
+let var_name (var : phrase) =
+    match var.node with
     | `Var name -> name
     | _ -> failwith "Expected a `Var type"
 
-let cols_of_phrase (key, _pos : Sugartypes.phrase) : string list =
-    match key with
+let cols_of_phrase (key : phrase) : string list =
+    match key.node with
     | `TupleLit keys -> List.map var_name keys
     | `Var name -> [name]
     | _ -> failwith "Expected a tuple or a variable."

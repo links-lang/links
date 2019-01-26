@@ -37,14 +37,6 @@ and row_values db = function
                      | `Record fields -> map (value_as_string db -<- snd) fields
                      | _ -> failwith "Internal error: forming query from non-row") records)
   | r -> failwith ("Internal error: forming query from non-row (row_values): "^ Value.string_of_value r)
-(* and delete_condition db = function *)
-(*   | `List(rows) -> "("^ (String.concat " OR " (map (single_match db) rows)) ^")" *)
-(*   | r -> failwith ("Internal error: forming query from non-row (delete_condition): "^string_of_value r) *)
-(* and updates db : Value.t -> string = function *)
-(*   | `Record fields ->  *)
-(*       let field (k, v) = (k ^" = "^ value_as_string db v) in *)
-(*         (String.concat ", " (map field fields)) *)
-(*   | r -> failwith ("Internal error: forming query from non-row: "^string_of_value r)  *)
 
 type primitive =
 [ Value.t
@@ -455,6 +447,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "cancel",
   (`PFun (fun _ -> assert false),
    datatype "forall s::Type(Any, Session).(s) ~> ()",
+   IMPURE);
+
+  "close",
+  (`PFun (fun _ -> assert false),
+   datatype "(End) ~> ()",
    IMPURE);
 
   (* Lists and collections *)
@@ -1118,40 +1115,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
               | _ -> failwith "Internal error: insert row into non-database")),
    datatype "(TableHandle(r, w, n), [s], String) ~> Int",
   IMPURE);
-
-(*   "UpdateRows",  *)
-(*   (`Server *)
-(*      (p2 (fun table rows -> *)
-(*             match table, rows with *)
-(*               | (_:Value.t), (`List []:Value.t) -> `Record [] *)
-(*               | `Table ((db, params), table_name, _), `List rows -> *)
-(*                   List.iter (fun row -> *)
-(*                                let query_string = *)
-(*                                  "update " ^ table_name *)
-(*                                  ^ " set " ^ updates db (snd (Value.unbox_pair row)) *)
-(*                                  ^ " where " ^ single_match db (fst (Value.unbox_pair row)) *)
-(*                                in *)
-(*                                  prerr_endline("RUNNING UPDATE QUERY:\n" ^ query_string); *)
-(*                                  ignore (Database.execute_command query_string db)) *)
-(*                     rows; *)
-(*                   `Record [])), *)
-(*    datatype "(TableHandle(r, w, n), [(r, w)]) ~> ()", *)
-(*   IMPURE); *)
-
-(*   "DeleteRows",  *)
-(*   (`Server *)
-(*      (p2 (fun table rows -> *)
-(*             match table, rows with *)
-(*               | `Table _, `List [] -> `Record [] *)
-(*               | `Table ((db, params), table_name, _), _  -> *)
-(*                   let condition = delete_condition db rows in *)
-(*                   let query_string = "delete from " ^ table_name ^ " where " ^ condition *)
-(*                   in *)
-(*                     prerr_endline("RUNNING DELETE QUERY:\n" ^ query_string); *)
-(*                     (Database.execute_command query_string db) *)
-(*               | _ -> failwith "Internal error: delete row from non-database")), *)
-(*    datatype "(TableHandle(r, w, n), [r]) ~> ()", *)
-(*   IMPURE); *)
 
   "getDatabaseConfig",
   (`PFun

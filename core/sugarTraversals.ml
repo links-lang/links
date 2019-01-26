@@ -47,10 +47,11 @@ class map =
       fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
 
     method binder : binder -> binder =
-      fun (_x, _x_i1, _x_i2) ->
-        let _x = o#name _x in
-        let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
-        let _x_i2 = o#position _x_i2 in (_x, _x_i1, _x_i2)
+      fun bndr ->
+        let name = o#name (name_of_binder bndr) in
+        let ty  = o#option (fun o -> o#unknown) (type_of_binder bndr) in
+        let pos = o#position bndr.pos in
+        {node=(name,ty); pos}
 
     method sentence : sentence -> sentence =
       function
@@ -434,9 +435,10 @@ class map =
 
 
     method phrase : phrase -> phrase =
-      fun (_x, _x_i1) ->
-        let _x = o#phrasenode _x in
-        let _x_i1 = o#position _x_i1 in (_x, _x_i1)
+      fun {node; pos} ->
+        let node = o#phrasenode node in
+        let pos  = o#position pos in
+        {node; pos}
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
@@ -450,7 +452,7 @@ class map =
       | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
-      fun (p, pos) -> (o#cp_phrasenode p, o#position pos)
+      fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
 
     method patternnode : patternnode -> patternnode =
       function
@@ -492,9 +494,9 @@ class map =
           let _x_i1 = o#datatype' _x_i1 in `HasType ((_x, _x_i1))
 
     method pattern : pattern -> pattern =
-      fun (_x, _x_i1) ->
-        let _x = o#patternnode _x in
-        let _x_i1 = o#position _x_i1 in (_x, _x_i1)
+      fun {node; pos} ->
+        let node = o#patternnode node in
+        let pos = o#position pos in {node; pos}
 
     method operator : operator -> operator =
       function
@@ -568,7 +570,7 @@ class map =
         let _x = o#string _x in
         let _x_i1 = o#list (fun o -> o#string) _x_i1 in (_x, _x_i1)
 
-    method datatype : datatype -> datatype =
+    method datatypenode : datatypenode -> datatypenode =
       function
       | `TypeVar _x ->
           let _x = o#known_type_variable _x in `TypeVar _x
@@ -624,6 +626,12 @@ class map =
         let _x = o#datatype _x in `Dual _x
       | `End -> `End
 
+    method datatype : datatype -> datatype =
+      fun {node; pos} ->
+        let node = o#datatypenode node in
+        let pos  = o#position pos in
+        {node; pos}
+
     method type_arg : type_arg -> type_arg =
       function
       | `Type _x -> let _x = o#datatype _x in `Type _x
@@ -653,12 +661,12 @@ class map =
 
     method bindingnode : bindingnode -> bindingnode =
       function
-      | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let _x_i1 = o#pattern _x_i1 in
+      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          let _x    = o#pattern _x in
           let _x_i2 = o#phrase _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
+          in `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
       | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i2 = o#funlit _x_i2 in
@@ -718,9 +726,10 @@ class map =
           `AlienBlock (lang, lib, dts)
 
     method binding : binding -> binding =
-      fun (_x, _x_i1) ->
-        let _x = o#bindingnode _x in
-        let _x_i1 = o#position _x_i1 in (_x, _x_i1)
+      fun {node; pos} ->
+        let node = o#bindingnode node in
+        let pos  = o#position    pos  in
+        {node; pos}
 
     method program : program -> program =
       fun (bindings, phrase) ->
@@ -764,10 +773,10 @@ class fold =
       fun (_x, _x_i1) -> o#unary_op _x_i1
 
     method binder : binder -> 'self_type =
-      fun (_x, _x_i1, _x_i2) ->
-        let o = o#name _x in
-        let o = o#option (fun o -> o#unknown) _x_i1 in
-        let o = o#position _x_i2 in o
+      fun bndr ->
+        let o = o#name (name_of_binder bndr) in
+        let o = o#option (fun o -> o#unknown) (type_of_binder bndr) in
+        let o = o#position bndr.pos in o
 
     method sentence : sentence -> 'self_type =
       function
@@ -1113,8 +1122,8 @@ class fold =
       | `Raise -> o
 
     method phrase : phrase -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#phrasenode _x in let o = o#position _x_i1 in o
+      fun {node; pos} ->
+        let o = o#phrasenode node in let o = o#position pos in o
 
     method cp_phrasenode : cp_phrasenode -> 'self_type =
       function
@@ -1128,7 +1137,7 @@ class fold =
       | `Comp (_c, p, q) -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
-      fun (p, pos) -> (o#cp_phrasenode p)#position pos
+      fun {node; pos} -> (o#cp_phrasenode node)#position pos
 
     method patternnode : patternnode -> 'self_type =
       function
@@ -1163,8 +1172,10 @@ class fold =
           let o = o#pattern _x in let o = o#datatype' _x_i1 in o
 
     method pattern : pattern -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#patternnode _x in let o = o#position _x_i1 in o
+      fun {node; pos} ->
+        let o = o#patternnode node in
+        let o = o#position pos in
+        o
 
     method operator : operator -> 'self_type =
       function
@@ -1233,7 +1244,7 @@ class fold =
 
     method tyvar : tyvar -> 'self_type = fun _ -> o
 
-    method datatype : datatype -> 'self_type =
+    method datatypenode : datatypenode -> 'self_type =
       function
       | `TypeVar _x ->
           let o = o#known_type_variable _x in o
@@ -1282,6 +1293,12 @@ class fold =
         let o = o#datatype _x in o
       | `End -> o
 
+    method datatype : datatype -> 'self_type =
+      fun {node; pos} ->
+        let o = o#datatypenode node in
+        let o = o#position pos in
+        o
+
     method type_arg : type_arg -> 'self_type =
       function
       | `Type _x -> let o = o#datatype _x in o
@@ -1310,9 +1327,9 @@ class fold =
 
     method bindingnode : bindingnode -> 'self_type =
       function
-      | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let o = o#list (fun o -> o#tyvar) _x in
-          let o = o#pattern _x_i1 in
+      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          let o = o#pattern _x in
+          let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
@@ -1372,15 +1389,16 @@ class fold =
           o
 
     method binding : binding -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#bindingnode _x in let o = o#position _x_i1 in o
+      fun {node; pos} ->
+        let o = o#bindingnode node in
+        let o = o#position    pos  in
+        o
 
     method program : program -> 'self_type =
       fun (bindings, phrase) ->
         let o = o#list (fun o -> o#binding) bindings in
         let o = o#option (fun o -> o#phrase) phrase in
-          o
-
+        o
 
     method unknown : 'a. 'a -> 'self_type = fun _ -> o
   end
@@ -1838,9 +1856,10 @@ class fold_map =
       | `Raise -> (o, `Raise)
 
     method phrase : phrase -> ('self_type * phrase) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#phrasenode _x in
-        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      fun {node; pos} ->
+        let (o, node) = o#phrasenode node in
+        let (o, pos ) = o#position   pos  in
+        (o, {node; pos})
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
       function
@@ -1874,10 +1893,10 @@ class fold_map =
          o, `Comp (c, p, q)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
-      fun (p, pos) ->
-      let o, p = o#cp_phrasenode p in
-      let o, pos = o#position pos in
-      o, (p, pos)
+      fun {node; pos} ->
+      let o, node = o#cp_phrasenode node in
+      let o, pos  = o#position pos in
+      o, {node; pos}
 
     method patternnode : patternnode -> ('self_type * patternnode) =
       function
@@ -1920,9 +1939,10 @@ class fold_map =
           let (o, _x_i1) = o#datatype' _x_i1 in (o, (`HasType ((_x, _x_i1))))
 
     method pattern : pattern -> ('self_type * pattern) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#patternnode _x in
-        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      fun {node; pos} ->
+        let (o, node) = o#patternnode node in
+        let (o, pos ) = o#position pos in
+        (o, {node; pos})
 
     method operator : operator -> ('self_type * operator) =
       function
@@ -2003,7 +2023,7 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
         in (o, (_x, _x_i1))
 
-    method datatype : datatype -> ('self_type * datatype) =
+    method datatypenode : datatypenode -> ('self_type * datatypenode) =
       function
       | `TypeVar _x ->
           let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
@@ -2064,6 +2084,11 @@ class fold_map =
         let (o, _x) = o#datatype _x in (o, `Dual _x)
       | `End -> (o, `End)
 
+    method datatype : datatype -> ('self_type * datatype) =
+      fun {node; pos} ->
+        let (o, node) = o#datatypenode node in
+        let (o, pos) = o#position pos in (o, {node; pos})
+
     method type_arg : type_arg -> ('self_type * type_arg) =
       function
       | `Type _x -> let (o, _x) = o#datatype _x in (o, `Type _x)
@@ -2095,12 +2120,12 @@ class fold_map =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-      | `Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let (o, _x_i1) = o#pattern _x_i1 in
+      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          let (o, _x   ) = o#pattern _x in
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Val ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
+          in (o, (`Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
       | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i2) = o#funlit _x_i2 in
@@ -2162,15 +2187,17 @@ class fold_map =
           (o, (`AlienBlock (lang, lib, dts)))
 
     method binding : binding -> ('self_type * binding) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#bindingnode _x in
-        let (o, _x_i1) = o#position _x_i1 in (o, (_x, _x_i1))
+      fun {node; pos} ->
+        let (o, node) = o#bindingnode node in
+        let (o, pos ) = o#position    pos  in
+        (o, {node; pos})
 
     method binder : binder -> ('self_type * binder) =
-      fun (_x, _x_i1, _x_i2) ->
-        let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
-        let (o, _x_i2) = o#position _x_i2 in (o, (_x, _x_i1, _x_i2))
+      fun bndr ->
+        let (o, name) = o#name (name_of_binder bndr) in
+        let (o, ty  ) = o#option (fun o -> o#unknown) (type_of_binder bndr) in
+        let (o, pos ) = o#position bndr.pos in
+        (o, {node=name,ty;pos})
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
   end

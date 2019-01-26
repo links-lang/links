@@ -93,8 +93,7 @@ fun sendBody(c, message) {
     case []    ->
       var c = send(message.subject, select DATA c);
       var c = send(message.body, c);
-      var c = select QUIT c;
-      ()
+      close(select QUIT c)
     case x::xs ->
       var c = send(x, select RCPT c);
       println("C: RCPT TO:<" ^^ x ^^ ">");
@@ -127,7 +126,7 @@ fun smtpServer(s) {
       } else {
         smtpServer(select REJECT s)
       }
-    case QUIT(s) -> quit(socket)
+    case QUIT(s) -> close(s); quit(socket)
   }
 }
 
@@ -144,7 +143,7 @@ fun receiveMail(s, socket) {
         receiveMail(select REJECT s, socket)
       }
 
-    case QUIT(s) -> quit(socket)
+    case QUIT(s) -> close(s); quit(socket)
   }
 }
 
@@ -160,7 +159,7 @@ fun receiveRecipient(s, socket) {
       } else {
         receiveRecipient(select REJECT s, socket)
       }
-    case QUIT(s) -> quit(socket)
+    case QUIT(s) -> close(s); quit(socket)
   }
 }
 
@@ -189,7 +188,7 @@ fun receiveBody(s, socket) {
       println("C: .");
       var acceptMessage = read(socket);
       receiveMail(s, socket)
-    case QUIT(s) -> quit(socket)
+    case QUIT(s) -> close(s); quit(socket)
   }
 }
 

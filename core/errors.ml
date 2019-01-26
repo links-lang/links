@@ -12,6 +12,7 @@ exception MultiplyDefinedToplevelNames of ((SourceCode.pos list) stringmap)
 exception RichSyntaxError of synerrspec
 exception SugarError of (SourceCode.pos * string)
 exception Runtime_error of string
+exception UnboundTyCon of (SourceCode.pos * string)
 
 let show_pos : SourceCode.pos -> string =
   fun ((pos : Lexing.position), _, _) ->
@@ -36,6 +37,10 @@ let format_exception = function
       let (pos, _, expr) = SourceCode.resolve_pos pos in
         Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n"
           pos.pos_fname pos.pos_lnum s expr
+  | UnboundTyCon (pos, tycon) ->
+     let (pos,_,_) = SourceCode.resolve_pos pos in
+     Printf.sprintf "%s:%d: Unbound type constructor %s\n"
+                    pos.pos_fname pos.pos_lnum tycon
   | Runtime_error s -> "*** Runtime error: " ^ s
   | SourceCode.ASTSyntaxError (pos, s) ->
       let (pos,_,expr) = SourceCode.resolve_pos pos in
@@ -80,6 +85,10 @@ let format_exception_html = function
       let (pos,_,expr) = SourceCode.resolve_pos pos in
         Printf.sprintf ("<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>%s</p><p>In expression:</p>\n<pre>%s</pre>\n")
           pos.pos_fname pos.pos_lnum s (xml_escape expr)
+  | UnboundTyCon (pos, tycon) ->
+      let (pos,_,_) = SourceCode.resolve_pos pos in
+        Printf.sprintf ("<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>Unbound type constructor:</p>\n<pre>%s</pre>\n")
+          pos.pos_fname pos.pos_lnum tycon
   | MultiplyDefinedToplevelNames duplicates ->
       let show_pos : SourceCode.pos -> string = fun ((pos : Lexing.position), _, _) ->
         Printf.sprintf "file <code>%s</code>, line %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
@@ -118,16 +127,3 @@ let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
     output_string stream (format_exception exc ^ "\n");
     flush stream;
     default exc
-
-(* Display fatal used to default to exiting.
- * Now, we exit only if Links is not running in interactive mode. *)
-let display_fatal ?(stream=stderr) f a =
-  display ~default:(fun e ->
-		    if Settings.get_value Basicsettings.interacting then
-		      raise e
-		    else
-		      exit 1
-		   ) ~stream:stream (lazy (f a))
-
-let display_fatal_l ?(stream=stderr) e =
-  display ~default:(fun _ -> exit 1) ~stream:stream e

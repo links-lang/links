@@ -36,7 +36,7 @@ module ClientCommon {
 }
 
 module Pinger {
-  open ClientCommon
+  open ClientCommon;
 
   sig commThread : (AP(PingPong)) ~%e~> ()
   fun commThread(ap) {
@@ -72,7 +72,7 @@ module Pinger {
 }
 
 module Ponger {
-  open ClientCommon
+  open ClientCommon;
 
   sig commThread : (AP(PingPong)) ~%e~> ()
   fun commThread(ap) {

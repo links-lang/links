@@ -181,10 +181,6 @@ fun uncurry(f) {
   fun (x, y) { f(x)(y) }
 }
 
-# Curried flip
-sig cflip : ((a::Any) -e-> (b::Any) -e-> c::Any) -> (b::Any) -> (a::Any) -e-> c::Any
-fun cflip(h) { curry(flip(uncurry(h))) }
-
 fun compose(f, g) {
   fun (x) { f(g(x)) }
 }
@@ -1204,12 +1200,13 @@ typename EndQuery = ?().End;
 
 sig wait : (EndQuery) ~> ()
 fun wait(s) {
-  ignore(receive(s))
+  var (_, s) = receive(s);
+  close(s)
 }
 
-sig close : (EndBang) ~> ()
-fun close(s) {
-  ignore(send((), s))
+sig closeBang : (EndBang) ~> ()
+fun closeBang(s) {
+  close(send((), s))
 }
 
 sig makeEndBang : () ~> EndBang
@@ -1230,7 +1227,7 @@ fun forkSync(f) {
   var _ = spawn {
     var c = accept(ap);
     var c = f(c);
-    close(c)
+    closeBang(c)
   };
   request(ap)
 }
@@ -1241,7 +1238,7 @@ fun linForkSync(f) {
   var _ = spawn {
     var c = accept(ap);
     var c = f(c);
-    close(c)
+    closeBang(c)
   };
   request(ap)
 }

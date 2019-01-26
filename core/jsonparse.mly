@@ -1,7 +1,14 @@
+(* See Note [Debugging grammar conflicts] in parser.mly *)
+
 %{
 open Utility
 open ProcessTypes
 open WebsocketMessages
+
+module Links_core = (* See Note [Dune "wrapped" workaround] in parser.mly *)
+struct
+  module Value = Value
+end
 
 (* let unparse_label = function *)
 (*   | `Char c -> String.make 1 c *)
@@ -81,8 +88,8 @@ let websocket_req assoc_list =
     | _ -> failwith "Invalid opcode in websocket message"
 %}
 
-%token LBRACE RBRACE LBRACKET RBRACKET LPAREN RPAREN
-%token COLON COMMA UNDERSCORE TRUE FALSE NULL
+%token LBRACE RBRACE LBRACKET RBRACKET
+%token COLON COMMA TRUE FALSE NULL
 %token <string> STRING
 %token <int> INT
 %token <float> FLOAT
