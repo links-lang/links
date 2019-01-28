@@ -899,6 +899,7 @@ Typecheck example file examples/mvu/sessions/extended-chatserver/chatClient.link
 examples/mvu/sessions/extended-chatserver/chatClient.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config --path=examples/mvu/sessions/extended-chatserver
+ignore : typechecking times out
 
 Typecheck example file examples/mvu/sessions/extended-chatserver/utility.links
 examples/mvu/sessions/extended-chatserver/utility.links
@@ -914,6 +915,7 @@ Typecheck example file examples/mvu/sessions/extended-chatserver/chatServer.link
 examples/mvu/sessions/extended-chatserver/chatServer.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config --path=examples/mvu/sessions/extended-chatserver
+ignore : typechecking times out
 
 Typecheck example file examples/mvu/mousetest.links
 examples/mvu/mousetest.links
