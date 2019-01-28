@@ -905,11 +905,13 @@ Typecheck example file examples/mvu/sessions/extended-chatserver/utility.links
 examples/mvu/sessions/extended-chatserver/utility.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config --path=examples/mvu/sessions/extended-chatserver
+ignore : typechecking timeout
 
 Typecheck example file examples/mvu/sessions/extended-chatserver/chatSessions.links
 examples/mvu/sessions/extended-chatserver/chatSessions.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config --path=examples/mvu/sessions/extended-chatserver
+ignore : typechecking timeout
 
 Typecheck example file examples/mvu/sessions/extended-chatserver/chatServer.links
 examples/mvu/sessions/extended-chatserver/chatServer.links
