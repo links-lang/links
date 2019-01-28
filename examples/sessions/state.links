@@ -3,29 +3,32 @@ typename State(a) = AP (!a.End);
 sig newCell : forall a::Any.(a) ~> State(a)
 fun newCell(v) {
   var x = new();
-  var _ = spawn {send(v, accept(x))};
+  var _ = spawn {close(send(v, accept(x)))};
   x
 }
 
 sig put : (State(a), a) ~> ()
 fun put(x, v) {
-  var _ = receive(request(x)).1;
-  var _ = spawn {send(v, accept(x))};
+  var (_, s) = receive(request(x));
+  close(s);
+  var _ = spawn {close(send(v, accept(x)))};
   ()
 }
 
 sig get : (State(a)) ~> a
 fun get(x) {
-  var v = receive(request(x)).1;
-  var _ = spawn {send(v, accept(x))};
+  var (v, s) = receive(request(x));
+  close(s);
+  var _ = spawn {close(send(v, accept(x)))};
   v
 }
 
 # an atomic swap operation
 sig swap : forall a::Any.(State(a), a) ~> a
 fun swap(x, w) {
-  var v = receive(request(x)).1;
-  var _ = spawn {send(w, accept(x))};
+  var (v, s) = receive(request(x));
+  close(s);
+  var _ = spawn {close(send(w, accept(x)))};
   v
 }
 

@@ -9,7 +9,7 @@ fun giver(x, y, a, b) client {
   var s = request(a);
   var z = receive(send(y,send(x,s))).1;
   var t = accept(b);
-  ignore(send(z, t));
+  close(send(z, t));
 }
 
 fun main() client {
@@ -19,8 +19,10 @@ fun main() client {
   var c = new ();
   var _ = spawn { giver(6, 7, a, b) };
   var _ = spawn { giver(8, 9, a, c) };
-  var x = receive(request(b)).1;
-  var y = receive(request(c)).1;
+  var (x, s) = receive(request(b));
+  close(s);
+  var (y, s) = receive(request(c));
+  close(s);
 
   page
     <html><body>

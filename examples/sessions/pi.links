@@ -11,13 +11,15 @@ fun newChannel(p)() {
 
 sig sendChannel : (Channel, Channel, (Channel, Channel) {}~> Proc) {}~> Proc
 fun sendChannel(c, d, p)() {
-  ignore(send(c, accept(d)));
+  close(send(c, accept(d)));
   p(c, d)()
 }
 
 sig receiveChannel : (Channel, (Channel, Channel) {}~> Proc) {}~> Proc
 fun receiveChannel(d, p)() {
-  p(d, receive(request(d)).1)()
+  var (x, s) = receive(request(d));
+  close(s);
+  p(d, x)()
 }
 
 sig par : (Proc, Proc) {}~> Proc
@@ -41,7 +43,10 @@ fun repeat(p)() {
 sig repeatReceive : (Channel, (Channel, Channel) {}~> Proc) {}~> Proc
 fun repeatReceive(d, p)() {
   var s = request(d);
-  var _ = spawn {p(d, receive(s).1)()};
+  var _ = spawn {
+    var (x, s) = receive(s);
+    close(s);
+    p(d, x)()};
   repeatReceive(d, p)()
 }
 

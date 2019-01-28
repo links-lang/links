@@ -483,6 +483,9 @@ struct
     | `PrimitiveFunction ("cancel", _), [chan] ->
         Session.cancel (Value.unbox_channel chan) >>= fun _ ->
         apply_cont cont env (`Record [])
+    | `PrimitiveFunction ("close", _), [chan] ->
+        Session.close (Value.unbox_channel chan);
+        apply_cont cont env (`Record [])
     (* end of session stuff *)
     | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler; error_handler] ->
        let path = Value.unbox_string pathv in
