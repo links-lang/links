@@ -38,21 +38,10 @@ val string_of_t : t -> string
 
 val type_of_expression : t -> Types.datatype
 
-val default_of_base_type : [> `Bool | `Char | `Float | `Int | `String ] ->
-           [> `Constant of
-                [> `Bool of bool
-                 | `Char of char
-                 | `Float of float
-                 | `Int of int
-                 | `String of string ] ]
+val default_of_base_type : Types.base_type -> [> `Constant of Types.base_type ]
 
 val value_of_expression : ([> `Concat of [> `Singleton of 'a ] list
-             | `Constant of
-                 [> `Bool of bool
-                  | `Char of char
-                  | `Float of float
-                  | `Int of int
-                  | `String of string ]
+             | `Constant of Types.base_type
              | `Record of 'a Utility.StringMap.t
              | `Table of Value.table
              | `Variant of string * 'a

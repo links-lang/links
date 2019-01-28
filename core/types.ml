@@ -15,6 +15,8 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point [@@deriving show]
 
+type base_type = [ `Bool | `Char | `Float | `Int | `String ]
+
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
     [@@deriving show]
 
