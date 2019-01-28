@@ -162,7 +162,9 @@ fun updt(msg, model) {
         case BecomeModerator(cr) ->
           var (ms, cr) = receive(cr);
           SessionBecomeModerator(ms, cr)
-        case Kick(_) -> SessionKick
+        case Kick(s) ->
+          close(s);
+          SessionKick
       }
     }
     SpawnLinear(linfun() { clientReceive(cr) })
@@ -231,7 +233,8 @@ fun updt(msg, model) {
                subscribeClient(cr))
             case Nope(cs) ->
               # Grab error to display
-              var (err, _) = receive(cs);
+              var (err, s) = receive(cs);
+              close(s);
               var displayErr =
                 switch(err) {
                   case NameInUse -> ErrNameInUse

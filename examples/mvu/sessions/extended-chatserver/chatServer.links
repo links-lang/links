@@ -56,15 +56,15 @@ module Moderator {
           var (nick, s) = receive(s);
           # Mutually-recursive modules don't work, so we will
           # need to send the messages manually.
-          ignore(send(nick, select KickUser (request(roomAp))));
+          close(send(nick, select KickUser (request(roomAp))));
           loop(s)
         case MuteUser(s) ->
           var (nick, s) = receive(s);
-          ignore(send(nick, select MuteUser (request(roomAp))));
+          close(send(nick, select MuteUser (request(roomAp))));
           loop(s)
         case MakeModerator(s) ->
           var (nick, s) = receive(s);
-          ignore(send(nick, select MakeModerator (request(roomAp))));
+          close(send(nick, select MakeModerator (request(roomAp))));
           loop(s)
       }
     }
@@ -90,10 +90,11 @@ module Room {
     var (ap: AP(RoomSend)) = new();
     var _ = spawn {
       var ep2 = request(ap);
-      ignore(send(ep2, request(transit)))
+      close(send(ep2, request(transit)))
     };
     var ep1 = accept(ap);
-    var (ep2, _) = receive(accept(transit));
+    var (ep2, s) = receive(accept(transit));
+    close(s);
     (ep1, ep2)
   }
 
@@ -114,7 +115,7 @@ module Room {
     fun kickUser(nick, clients) {
       switch(AssocLinList.find(nick, clients)) {
         case (Just((s, info)), clients) ->
-          var _ = select Kick s;
+          close(select Kick s);
           clients
         case (Nothing, clients) -> clients
       }
@@ -169,34 +170,31 @@ module Room {
         var (nickTaken, clients) =
           AssocLinList.contains(nick, clients);
         if (nickTaken) {
-          var _ = send(UsernameTaken, s);
+          close(send(UsernameTaken, s));
           loop(state, clients)
         } else {
           # Otherwise, check if the user is the only one in the room.
           # If so, make them moderator
           var (isEmpty, clients) = AssocLinList.isEmpty(clients);
-          if (isEmpty) {
             var (roomSend, clientReceive) = createRoomSend();
             var (nicks, clients) = AssocLinList.keys(clients);
-            var moderatorSend = Moderator.create(state.ap);
-            var clients = LinCons((nick, newClient(nick, roomSend, true)), clients);
+            var clients = LinCons((nick, newClient(nick, roomSend, isEmpty)), clients);
             var clients = broadcastJoined(nick, clients);
-            var _ =
+          if (isEmpty) {
+            var moderatorSend = Moderator.create(state.ap);
+            close(
               send(JoinedAsModerator(state.topic, nicks,
-                clientReceive, moderatorSend), s);
+                clientReceive, moderatorSend), s));
 
             loop(state, clients)
           } else {
-            var (roomSend, clientReceive) = createRoomSend();
-            var (nicks, clients) = AssocLinList.keys(clients);
-            var clients = LinCons((nick, newClient(nick, roomSend, false)), clients);
-            var clients = broadcastJoined(nick, clients);
-            var _ = send(Joined(state.topic, nicks, clientReceive), s);
+            close(send(Joined(state.topic, nicks, clientReceive), s));
             loop(state, clients)
           }
         }
       case Chat(s) ->
-        var ((nick, msg), _) = receive(s);
+        var ((nick, msg), s) = receive(s);
+        close(s);
         # First, check to see whether the user is muted.
         var (maybeRes, clients) = AssocLinList.find(nick, clients);
         switch(maybeRes) {
@@ -220,7 +218,8 @@ module Room {
             loop(state, clients)
         }
       case NewTopic(s) ->
-        var (newTopic, _) = receive(s);
+        var (newTopic, s) = receive(s);
+        close(s);
         var clients = AssocLinList.map(fun((s, info)) {
           var s = select NewTopic s;
           var s = send(newTopic, s);
@@ -228,7 +227,8 @@ module Room {
         }, clients);
         loop((state with topic=newTopic), clients)
       case Leave(s) ->
-        var (name, _) = receive(s);
+        var (name, s) = receive(s);
+        close(s);
         var clients =
           switch(AssocLinList.find(name, clients)) {
             case (Just(c, info), clients) ->
@@ -243,23 +243,26 @@ module Room {
         }, clients);
         loop(state, clients)
       case KickUser(s) ->
-        var (name, _) = receive(s);
+        var (name, s) = receive(s);
+        close(s);
         var clients = kickUser(name, clients);
         loop(state, clients)
       case MuteUser(s) ->
-        var (name, _) = receive(s);
+        var (name, s) = receive(s);
+        close(s);
         var clients = muteUser(name, clients);
         loop(state, clients)
       case MakeModerator(s) ->
-        var (name, _) = receive(s);
+        var (name, s) = receive(s);
+        close(s);
         var clients = makeModerator(name, clients);
         loop(state, clients)
       case Kill(s) ->
-        # Since after selecting Kick, all elements will be of type End
-        # (and therefore unrestricted), we can dispose of `clients`.
-        var _ = AssocLinList.map(fun((s, info)) {
-          var s = select Kick s;
-          (s, info)
+        # As we're closing everything inside xs, we have an unrestricted
+        # list which we can then discard.
+        close(s);
+        var xs = AssocLinList.map(fun((s, info)) {
+          close(select Kick s)
         }, clients);
         () # Stop evaluating
     }
@@ -270,7 +273,8 @@ module Room {
     var s = request(ap);
     var s = select JoinRequest s;
     var s = send(nick, s);
-    var (res, _) = receive(s);
+    var (res, s) = receive(s);
+    close(s);
     res
   }
 
@@ -285,28 +289,28 @@ module Room {
 
   sig kill : (RoomHandle) ~> ()
   fun kill(ap) {
-    ignore(select Kill request(ap))
+    close(select Kill request(ap))
   }
 
   sig chatMessage : (RoomHandle, Nickname, Message) ~> ()
   fun chatMessage(ap, nick, msg) {
     var s = request(ap);
     var s = select Chat s;
-    ignore(send((nick, msg), s))
+    close(send((nick, msg), s))
   }
 
   sig newTopic : (RoomHandle, Topic) ~> ()
   fun newTopic(ap, topic) {
     var s = request(ap);
     var s = select NewTopic s;
-    ignore(send(topic, s))
+    close(send(topic, s))
   }
 
   sig leave : (RoomHandle, Nickname) ~> ()
   fun leave(ap, nick) {
     var s = request(ap);
     var s = select Leave s;
-    ignore(send(nick, s))
+    close(send(nick, s))
   }
 
 }
@@ -364,20 +368,21 @@ module RoomManager {
       var s = accept(managerAP);
       offer(s) {
         case RemoveRoom(s) ->
-          var (roomName, _) = receive(s);
+          var (roomName, s) = receive(s);
+          close(s);
           loop(deleteRoom(roomName, rooms))
         case ListRooms(s) ->
-          var _ = send(map(fun((name, _)) { name }, rooms), s);
+          close(send(map(fun((name, _)) { name }, rooms), s));
           loop(rooms)
         case ConnectToRoom(s) ->
           var ((nick, roomName), s) = receive(s);
           switch(lookupRoom(roomName, rooms)) {
             case Just(roomAp) ->
-              var _ = send(getJoinResult(roomAp, nick), s);
+              close(send(getJoinResult(roomAp, nick), s));
               loop(rooms)
             case Nothing ->
               var roomAp = Room.create(roomName);
-              var _ = send(getJoinResult(roomAp, nick), s);
+              close(send(getJoinResult(roomAp, nick), s));
               loop(rooms ++ [(roomName, roomAp)])
           }
       }
@@ -390,13 +395,14 @@ module RoomManager {
   fun removeRoom(name) {
     var s = request(managerAP);
     var s = select RemoveRoom s;
-    ignore(send(name, s))
+    close(send(name, s))
   }
 
   fun listRooms() {
     var s = request(managerAP);
     var s = select ListRooms s;
-    var (rooms, _) = receive(s);
+    var (rooms, s) = receive(s);
+    close(s);
     rooms
   }
 
@@ -404,7 +410,8 @@ module RoomManager {
     var s = request(managerAP);
     var s = select ConnectToRoom s;
     var s = send((name, roomName), s);
-    var (res, _) = receive(s);
+    var (res, s) = receive(s);
+    close(s);
     res
   }
 }
@@ -434,7 +441,8 @@ fun acceptAndWork(s) server {
           var (topic, s) = receive(s);
           Room.newTopic(roomHandle, topic);
           SameRoom(s)
-        case Leaving(_) ->
+        case Leaving(s) ->
+          close(s);
           Room.leave(roomHandle, nick);
           LeftRoom
       }
@@ -458,10 +466,10 @@ fun acceptAndWork(s) server {
   switch(joinResult) {
     case UsernameTaken ->
       var s = select Nope s;
-      ignore(send(NameInUse, s))
+      close(send(NameInUse, s))
     case InvalidRoom ->
       var s = select Nope s;
-      ignore(send(BadRoom, s))
+      close(send(BadRoom, s))
     case Joined(topic, nicks, clientReceive, roomAP) ->
       var s = select JoinedOK s;
       var s = send((topic, nicks, clientReceive), s);
