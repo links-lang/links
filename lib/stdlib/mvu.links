@@ -41,14 +41,12 @@ fun processCommand(cmd, ap) {
     case Spawn(f) ->
       ignore(
         spawn {
-          var _ = send(applySpawn(f), request(ap));
-          ()
+          close(send(applySpawn(f), request(ap)))
         })
     case SpawnLinear(f) ->
       ignore(
         spawn {
-          var _ = send(applySpawnLinear(f), request(ap));
-          ()
+          close(send(applySpawnLinear(f), request(ap)))
         })
   }
 }
@@ -66,7 +64,8 @@ sig evtLoop :
    (model) ~%~> (model, unrModel),
    Sub(msg)) ~%~> ()
 fun evtLoop(ap, model, view, updt, subscriptionsFn, extract, prevSubscriptions) {
-  var (message, _) = receive(accept(ap));
+  var (message, s) = receive(accept(ap));
+  close(s);
   var (model, cmd) = updt(message, model);
   processCommand(cmd, ap);
   # Update DOM
