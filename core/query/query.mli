@@ -1,5 +1,7 @@
 open Utility
 
+type base_type = [ `Bool | `Char | `Float | `Int | `String ]
+
 type tag = int
   [@@deriving show]
 
