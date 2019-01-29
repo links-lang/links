@@ -14,10 +14,14 @@ fun textNode(str) {
   HTMLText(str)
 }
 
+sig tag : forall a :: Type(Any, Any) .
+  (String, Attr(a), HTML(a)) -> HTML(a)
 fun tag(nameOfTag, attrs, children) {
   HTMLTag((tagName=nameOfTag, attrs=attrs, children=children))
 }
 
+sig append : forall a :: Type(Any, Any) .
+  (HTML(a), HTML(a)) -> HTML(a)
 fun append(h1, h2) {
 # Take advantage of monoid laws. If either is empty, return the other.
   switch ((h1, h2)) {
@@ -27,6 +31,7 @@ fun append(h1, h2) {
   }
 }
 
+sig +* : forall a :: Type(Any, Any) . (HTML(a), HTML(a)) -> HTML(a)
 op a1 +* a2 { append(a1, a2) }
 
 fun concat(nodes) {
