@@ -672,7 +672,7 @@ struct
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
        if Settings.get_value Basicsettings.Shredding.shredding then
          begin
-           match Queryshredding.compile_shredded env (range, e) with
+           match EvalNestedQuery.compile_shredded env (range, e) with
            | None -> computation env cont e
            | Some (db, p) ->
              begin
@@ -687,16 +687,16 @@ struct
                let execute_shredded_raw (q, t) =
                  Database.execute_select_result (get_fields t) q db, t in
                let raw_results =
-                 Queryshredding.Shred.pmap execute_shredded_raw p in
+                 EvalNestedQuery.Shred.pmap execute_shredded_raw p in
                let mapped_results =
-                 Queryshredding.Shred.pmap Queryshredding.Stitch.build_stitch_map raw_results in
+                 EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
                  apply_cont cont env
-                 (Queryshredding.Stitch.stitch_mapped_query mapped_results)
+                 (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
              end
          end
        else (* shredding disabled *)
          begin
-           match Query.compile env (range, e) with
+           match EvalQuery.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
                let (fieldMap, _, _), _ =
@@ -722,7 +722,7 @@ struct
                                         | _ -> assert false) fields)
           | _ -> assert false in
       let update_query =
-        Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
+        EvalQuery.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
         apply_cont cont env (`Record [])
     | `Delete ((xb, source), where) ->
@@ -734,7 +734,7 @@ struct
                                         | _ -> assert false) fields)
           | _ -> assert false in
       let delete_query =
-        Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
+        EvalQuery.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
     | `CallCC f ->
