@@ -611,9 +611,23 @@ let phrase alias_env p =
   let tvars = (typevars#phrase p)#tyvar_list in
     (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#phrase p
 
-let binding alias_env b =
-  let tvars = (typevars#binding b)#tyvar_list in
-    (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#binding b
+let rec binding  alias_env b =
+  match node b with
+    | Module (name, typ, (mb :: mbs)) ->
+      let o, mb = binding alias_env mb in
+
+      let (o, _alias_env, mbs) =
+      List.fold_left
+        (fun (_o, alias_env, bnds) bnd ->
+          let o, bnd = binding alias_env bnd in
+            (o, o#aliases, bnd::bnds))
+        (o, alias_env, [])
+        mbs in
+      let mbs = List.rev mbs in
+      o, make ~pos:(pos b) (Module (name, typ, mb :: mbs))
+    | _ ->
+      let tvars = (typevars#binding b)#tyvar_list in
+      (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#binding b
 
 let toplevel_bindings alias_env bs =
   let alias_env, bnds =
