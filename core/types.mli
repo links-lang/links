@@ -424,4 +424,3 @@ end
 
 module Transform : TYPE_VISITOR
 module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR
-
