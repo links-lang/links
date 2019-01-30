@@ -727,15 +727,15 @@ struct
       | `Ident name -> I.project (value, name)
       | `Dot (module_name, remainder) -> rqn (I.project (value, module_name)) remainder in
     match qname with
-      | `Ident x -> I.var (lookup_name_and_type x env)
+      | `Ident x -> I.var (lookup_variable_name_and_type x env)
       | `Dot (module_name, remainder) when module_name = Lib.BuiltinModules.lib ->
         let x = QualifiedName.unqualify remainder in
         (* We turn usages of lib.ml functions Lib.foo into plain foo. There is no actual module corresponding to
            Lib. We rely here on the fact that lib.ml functions are kept in the type environment and the evaluator/
            irtojs take care of them *)
-        I.var (lookup_name_and_type x env)
+        I.var (lookup_variable_name_and_type x env)
       | `Dot (module_name, remainder) ->
-        let module_record_var, module_record_type  = lookup_record_for_module module_name env in
+        let module_record_var, module_record_type  = lookup_module_name_and_type module_name env in
         rqn (I.var (module_record_var, module_record_type)) remainder
 
   let rec ir_type_of_module_type module_type =
@@ -752,10 +752,10 @@ struct
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
     fun env {node=e; pos} ->
       let lookup_var name =
-        let x, xt = lookup_name_and_type name env in
+        let x, xt = lookup_variable_name_and_type name env in
           I.var (x, xt) in
       let instantiate name tyargs =
-        let x, xt = lookup_name_and_type name env in
+        let x, xt = lookup_variable_name_and_type name env in
           match tyargs with
             | [] -> I.var (x, xt)
             | _ ->
@@ -831,7 +831,7 @@ struct
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
           | FnAppl ({node=Var f; _}, es) when Lib.is_pure_primitive (QualifiedName.unqualify f) ->
-              cofv (I.apply_pure (I.var (lookup_name_and_type (QualifiedName.unqualify f) env), evs es))
+              cofv (I.apply_pure (I.var (lookup_variable_name_and_type (QualifiedName.unqualify f) env), evs es))
           | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
                when Lib.is_pure_primitive (QualifiedName.unqualify f) ->
               cofv (I.apply_pure (instantiate (QualifiedName.unqualify f) tyargs, evs es))
@@ -1159,11 +1159,11 @@ struct
                     end in
                   let module_cont env =
                     let module_record_fields1 = StringMap.fold (fun field _ list ->
-                        let x, xt = lookup_name_and_type field env in
+                        let x, xt = lookup_variable_name_and_type field env in
                         let field_value = I.var (x, xt) in
                         (field, field_value) :: list  ) module_interface.Types.fields [] in
                     let module_record_fields2 = StringMap.fold (fun module_name _ list ->
-                      let x, xt = lookup_record_for_module module_name env in
+                      let x, xt = lookup_module_name_and_type module_name env in
                       let module_value = I.var (x, xt) in
                       (module_name, module_value) :: list  ) module_interface.Types.modules module_record_fields1 in
                     I.comp_of_value (I.record (module_record_fields2, None)) in
@@ -1173,7 +1173,8 @@ struct
                     (x_info,
                       eval_bindings scope env module_bindings module_cont,
                       fun v ->
-                        eval_bindings scope (extend_module name v module_type env) bs cont)
+                        let extended_env = bind_module_name_and_type name v module_type env in
+                        eval_bindings scope extended_env bs cont)
 
                 | Import _ -> eval_bindings scope env bs cont
                 | Handler _ | Fun _ | Foreign _ | AlienBlock _ -> assert false
@@ -1263,7 +1264,6 @@ type env = nenv * tenv * Types.row
 let external_env_to_internal_env (nenv, tenv, row) : SugarToIrEnv.env = {
   sugar_to_ir_names = nenv ;
   ir_type_env = tenv;
-  module_to_record = NEnv.empty ;
   effects = row
 }
 

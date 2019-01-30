@@ -91,7 +91,7 @@ let lookup_type var (renv, _penv) =
   TEnv.lookup renv.SugarToIrEnv.ir_type_env var
 
 let lookup_name name (renv, _penv) =
-  SugarToIrEnv.lookup_name name renv
+  SugarToIrEnv.lookup_variable_name name renv
 
 let lookup_effects (renv, _penv) = renv.SugarToIrEnv.effects
 
@@ -104,7 +104,7 @@ let rec desugar_pattern : Sugartypes.Pattern.with_pos -> Pattern.t * raw_env =
       let name = Sugartypes.Binder.to_name bndr in
       let t = Sugartypes.Binder.to_type_exn bndr in
       let xb, x = Var.fresh_var (t, name, Scope.Local) in
-      xb, SugarToIrEnv.bind_name_and_type name x t renv
+      xb, SugarToIrEnv.bind_variable_name_and_type name x t renv
     in
       let open Sugartypes.Pattern in
       match p with
@@ -179,7 +179,7 @@ end
   =
 struct
 
-  let lookup_name = SugarToIrEnv.lookup_name
+  let lookup_name = SugarToIrEnv.lookup_variable_name
   let lookup_effects = SugarToIrEnv.lookup_effects
 
   let nil env t : value =
@@ -210,7 +210,7 @@ sig
 end
   =
 struct
-  let lookup_name = SugarToIrEnv.lookup_name
+  let lookup_name = SugarToIrEnv.lookup_variable_name
   let lookup_effects = SugarToIrEnv.lookup_effects
 
   let eq env t : value -> value -> value = fun v1 v2 ->
