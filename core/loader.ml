@@ -197,10 +197,13 @@ object(o : 'self_type)
 
 
   method resolve_qualified_var_or_type_name qn =
-    let qn_head = QualifiedName.head qn in
-    match StringMap.find_opt qn_head module_env with
-      | Some _ -> o
-      | None -> fst (o#resolve_toplevel_module qn_head)
+    if QualifiedName.is_qualified qn then
+      let qn_head = QualifiedName.head qn in
+      match StringMap.find_opt qn_head module_env with
+        | Some _ -> o
+        | None -> fst (o#resolve_toplevel_module qn_head)
+    else
+      o
 
 
   method handle_scoped_phrase bindings phrase =
