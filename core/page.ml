@@ -49,7 +49,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
         (fun name v venv -> VEnv.bind venv (v, name))
         nenv
         VEnv.empty in
-    let tenv = Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env) in
+    let tenv = SugarToIrEnv.varify_env (nenv, tyenv) in
     (nenv, venv, tenv)
 
   let script_tag body =

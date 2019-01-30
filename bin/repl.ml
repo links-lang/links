@@ -279,7 +279,7 @@ let interact (envs : Evaluation_env.t) =
       let sentence, t, tyenv' = Frontend.Pipeline.interactive tyenv pos_context sugar in
       let sentence' = match sentence with
         | Definitions defs ->
-            let tenv = Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env) in
+            let tenv = SugarToIrEnv.varify_env (nenv, tyenv) in
             let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.FrontendTypeEnv.effect_row) defs in
             let post_backend_defs, _ =
               Backend.transform_program
@@ -289,7 +289,7 @@ let interact (envs : Evaluation_env.t) =
 
               `Definitions (post_backend_defs, nenv')
         | Expression e     ->
-            let tenv = Var.varify_env (nenv, tyenv.FrontendTypeEnv.var_env) in
+            let tenv = SugarToIrEnv.varify_env (nenv, tyenv) in
             let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.FrontendTypeEnv.effect_row) e in
             let post_backend_e =
               Backend.transform_program

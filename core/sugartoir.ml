@@ -738,16 +738,7 @@ struct
         let module_record_var, module_record_type  = lookup_module_name_and_type module_name env in
         rqn (I.var (module_record_var, module_record_type)) remainder
 
-  let rec ir_type_of_module_type module_type =
-    let field_env = StringMap.fold (fun field t fenv ->
-        StringMap.add field  t fenv
-      ) module_type.Types.fields StringMap.empty in
 
-    let module_env = StringMap.fold (fun module_name mt fenv ->
-        StringMap.add module_name (ir_type_of_module_type mt) fenv
-      ) module_type.Types.modules field_env in
-    let record_row = Types.make_closed_row module_env in
-    `Record record_row
 
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
     fun env {node=e; pos} ->
@@ -1168,7 +1159,7 @@ struct
                       (module_name, module_value) :: list  ) module_interface.Types.modules module_record_fields1 in
                     I.comp_of_value (I.record (module_record_fields2, None)) in
                   let module_type = ir_type_of_module_type module_interface in
-                  let x_info = (module_type, name, scope) in
+                  let x_info = (module_type, variable_name_of_module_name name, scope) in
                   I.letvar
                     (x_info,
                       eval_bindings scope env module_bindings module_cont,

@@ -74,7 +74,7 @@ let sugar_program_to_ir
       sugar_program in
 
   let tyenv = envs.Evaluation_env.tyenv in
-  let varified_tenv = Var.varify_env (envs.Evaluation_env.nenv, tyenv.FrontendTypeEnv.var_env) in
+  let varified_tenv = SugarToIrEnv.varify_env (envs.Evaluation_env.nenv, tyenv) in
 
   let globals, (locals, main), new_nenv =
     Sugartoir.desugar_program

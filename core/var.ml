@@ -68,12 +68,3 @@ let type_of_binder (_, (t, _, _) : binder) = t
 let name_of_binder (_, (_, name, _) : binder) = name
 let scope_of_binder (_, (_, _, scope) : binder) = scope
 
-(** Create a copy of a type environment mapping vars (= ints) to types
-    instead of strings to types
-*)
-let varify_env (nenv, (tenv : FrontendTypeEnv.qual_var_environment)) : Types.datatype Env.Int.t =
-  Env.String.fold
-    (fun name (_, t) tenv ->
-       Env.Int.bind tenv (Env.String.lookup nenv name, t))
-    tenv
-    Env.Int.empty
