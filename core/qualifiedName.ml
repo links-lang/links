@@ -5,7 +5,7 @@
 
 
   (* A.B.C.D == (A.(B.(C.D))) *)
-  let rec of_path = function
+  let rec of_path : string list -> t = function
     | []  -> assert false
     | [x] -> `Ident x
     | x :: xs -> `Dot (x, of_path xs)

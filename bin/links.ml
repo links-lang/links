@@ -14,7 +14,7 @@ let to_evaluate : string list ref = ParseSettings.to_evaluate
 let file_list : string list ref = ParseSettings.file_list
 
 
-let print_simple rtype value =
+let print_simple (value, rtype) =
   print_string (Value.string_of_value value);
   print_endline
     (if Settings.get_value (BS.printing_types) then
@@ -44,13 +44,16 @@ let prelude_evaluation_environment () =
 
 
 let process_arg_files arg_files eval_env : Evaluation_env.t =
-  Driver.run_files_and_dependencies false eval_env arg_files
+  let result_env, results =
+    Driver.run_files_and_dependencies false eval_env arg_files in
+  List.iter print_simple results;
+  result_env
 
 let process_arg_exprs exprs initial_env : Evaluation_env.t =
   List.fold_left
     (fun env expr ->
     let result_env, result_value, result_type = Driver.run_string false env expr in
-    print_simple result_type result_value;
+    print_simple (result_value, result_type);
     result_env)
   initial_env
   exprs

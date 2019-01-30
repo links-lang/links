@@ -1,12 +1,13 @@
 open Utility
-
+open SugarConstructors.SugartypesPositions
+open Sugartypes
 
 (* Filename of an external dependency *)
 type ext_dep = string
 
 (* Result of loading a file *)
 type source = {
-  program : Sugartypes.binding;
+  program : Sugartypes.program;
   pos_context : SourceCode.source_code;
   external_dependencies: ext_dep list
 }
@@ -22,7 +23,7 @@ type module_env = simpl_module_t StringMap.t
 (* Used only internally within this module *)
 type toplevel_module_info = {
   (* The file AST as a single module binding *)
-  tmi_ast : Sugartypes.binding;
+  tmi_ast : Sugartypes.program;
   tmi_mod_type : simpl_module_t;
   tmi_ffi_files : ext_dep list;
   tmi_pos_context : SourceCode.source_code;
@@ -34,6 +35,78 @@ let module_name_regex = Str.regexp "[A-Z][a-zA-Z_0-9]*"
 (* Given top-level module name, get expected filename *)
 let top_level_filename module_name =
   (String.uncapitalize_ascii module_name) ^ links_file_extension
+
+
+let path_sep = ":"
+
+
+
+
+
+(* Turns a program corresponding to a file into a module by binding the potential expression to a variable.
+    If*)
+let modulify_program
+    toplevel_module_name
+    program
+      : Sugartypes.program =
+  let (bindings, phraseopt) = program in
+  let open CommonTypes in
+  match phraseopt with
+    | None ->
+      let themodule = with_dummy_pos (Module (toplevel_module_name, None, bindings)) in
+      [themodule], None
+    | Some phrase ->
+      let phrase_var_name = "#thephrase" in
+      let phrase_binder = with_dummy_pos (phrase_var_name, None) in
+      let phrase_pattern_node : Pattern.with_pos = with_dummy_pos (Pattern.Variable phrase_binder) in
+      let phrase_binding : Sugartypes.binding =
+        with_dummy_pos
+          (Val (phrase_pattern_node, ([], phrase), Location.Unknown, None)) in
+      let combined_bindings = bindings @ [phrase_binding] in
+      let themodule : Sugartypes.binding = with_dummy_pos (Module (toplevel_module_name, None, combined_bindings)) in
+      let varnode : Sugartypes.phrasenode = (Var (QualifiedName.of_path [toplevel_module_name; phrase_var_name])) in
+      let phrase_var_usage : Sugartypes.phrase = with_dummy_pos varnode in
+      [themodule], Some phrase_var_usage
+
+
+let try_parse_file module_name filename : string * Sugartypes.program * SourceCode.source_code =
+  (* First, get the list of directories, with trailing slashes stripped *)
+  let check_n_chop path =
+    let dir_sep = Filename.dir_sep in
+    if Filename.check_suffix path dir_sep then
+      Filename.chop_suffix path dir_sep else path in
+
+  let poss_stdlib_dir =
+    let stdlib_path = Settings.get_value Basicsettings.StdLib.stdlib_path in
+    if Settings.get_value Basicsettings.StdLib.use_stdlib then
+      if stdlib_path <> "" then
+        [check_n_chop stdlib_path]
+      else
+        (* Otherwise, follow the same logic as for the prelude.
+         * Firstly, check the current directory.
+         * Secondly, check OPAM *)
+        let chopped_path = check_n_chop @@ Basicsettings.locate_file "stdlib" in
+        [Filename.concat chopped_path "stdlib"]
+    else [] in
+
+  let poss_dirs =
+    let path_setting = Settings.get_value Basicsettings.links_file_paths in
+    let split_dirs = Str.split (Str.regexp path_sep) path_setting in
+    "" :: "." :: poss_stdlib_dir @ (List.map (check_n_chop) split_dirs) in
+
+  (* Loop through, trying to open the module with each path *)
+  let rec loop = (function
+    | [] -> failwith ("Could not find file " ^ filename)
+    | x :: xs ->
+        let candidate_filename =
+          if x = "" then filename else (x ^ Filename.dir_sep ^ filename) in
+        if Sys.file_exists candidate_filename then
+          let program, pos_context = Parse.parse_file Parse.program candidate_filename in
+          (candidate_filename, modulify_program module_name program, pos_context)
+        else
+          loop xs) in
+  loop poss_dirs
+
 
 (* File path to module name *)
 let module_name_of_file_path path =
@@ -154,9 +227,10 @@ object(o : 'self_type)
           let {tmi_mod_type = module_type;_} = StringMap.find filepath file_env in
           o, module_type
         | None ->
+          print_endline ("trying to resolve "^ module_name);
           let filename = top_level_filename module_name in
-          let (filepath, (ast : Sugartypes.binding), pos_context) =
-            ModuleUtils.try_parse_file module_name filename in
+          let (filepath, (ast : Sugartypes.program), pos_context) =
+            try_parse_file module_name filename in
           let o = o#add_module_dependency current_path filepath in
 
           let other_file_o = find_module_refs true module_name filepath in
@@ -263,23 +337,27 @@ object(o : 'self_type)
       | _ -> (super#bindingnode bn), None
 
 
-  method toplevel_module mod_binding pos_context : 'self_type * simpl_module_t =
-    let (o, mod_type_opt) = o#bindingnode' (unpos mod_binding) in
-    match mod_type_opt with
-      | None -> failwith "bindingnode' on toplevel module must yield module type"
-      | Some (_, t) ->
-        let entry_for_file =
-          {
-            tmi_ast = mod_binding;
-            tmi_mod_type = t;
-            tmi_ffi_files = StringSet.fold (fun el l -> el :: l) (o#get_ffi_files  ()) [];
-            tmi_pos_context = pos_context;
-          } in
-        let extended_file_env = StringMap.add current_path entry_for_file (o#get_file_env ()) in
-        let extended_name_env = StringMap.add toplevel_module_name current_path (o#get_toplevel_name_env ()) in
-        let o = o#set_file_env extended_file_env in
-        let o = o#set_toplevel_name_env extended_name_env in
-        (o, t)
+  method toplevel_module (mod_program : Sugartypes.program) pos_context : 'self_type * simpl_module_t =
+    match mod_program with
+      | [mod_binding], _ ->
+        let (o, mod_type_opt) = o#bindingnode' (unpos mod_binding) in
+        begin match mod_type_opt with
+          | None -> failwith "bindingnode' on toplevel module must yield module type"
+          | Some (_, t) ->
+            let entry_for_file =
+              {
+                tmi_ast = mod_program;
+                tmi_mod_type = t;
+                tmi_ffi_files = StringSet.fold (fun el l -> el :: l) (o#get_ffi_files  ()) [];
+                tmi_pos_context = pos_context;
+              } in
+            let extended_file_env = StringMap.add current_path entry_for_file (o#get_file_env ()) in
+            let extended_name_env = StringMap.add toplevel_module_name current_path (o#get_toplevel_name_env ()) in
+            let o = o#set_file_env extended_file_env in
+            let o = o#set_toplevel_name_env extended_name_env in
+            (o, t)
+        end
+      | _ -> failwith "Toplevel program must contain a single binding"
 
 end
 
@@ -308,7 +386,7 @@ let load_source_file file_path : source =
   if Sys.file_exists file_path then
     let (plain_ast, source_context) = Parse.parse_file Parse.program file_path in
     let module_name = module_name_of_file_path file_path in
-    let modulified_ast = ModuleUtils.modulify_program module_name plain_ast in
+    let modulified_ast = modulify_program module_name plain_ast in
     let ffi_finder = find_module_refs false module_name file_path in
     let ffi_finder, _ = ffi_finder#toplevel_module modulified_ast source_context in
     {
@@ -327,7 +405,7 @@ let load_source_files_and_dependencies file_paths : source list =
   let load file =
     let (plain_ast, pos_context) = Parse.parse_file Parse.program file in
     let module_name = module_name_of_file_path file in
-    ModuleUtils.modulify_program module_name plain_ast, pos_context in
+    modulify_program module_name plain_ast, pos_context in
 
   match file_paths with
     | [] -> []

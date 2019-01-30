@@ -112,10 +112,8 @@ let sugar_program_to_ir
       (interacting : bool)
       (envs : Evaluation_env.t)
       (source : Loader.source)
-        : Evaluation_env.t * Ir.binding list * Types.datatype =
-    let toplevel_module_binding = source.Loader.program in
-
-    let sugar_program = [toplevel_module_binding], None in
+        : Evaluation_env.t * Ir.program * Types.datatype =
+    let sugar_program = source.Loader.program in
 
 
     let updated_evaluation_env, post_backend_ir_program, typ =
@@ -128,9 +126,8 @@ let sugar_program_to_ir
 let die_on_exception f x =
   Errors.display ~default:(fun _ -> exit 1) (lazy (f x))
 
-    let post_backend_ir_bindings, _ = post_backend_ir_program in
 
-    updated_evaluation_env, post_backend_ir_bindings, typ
+    updated_evaluation_env, post_backend_ir_program, typ
 
 
 
@@ -143,13 +140,12 @@ let run_single_file
       : Evaluation_env.t * Value.t * Types.datatype =
   let source = Loader.load_source_file path in
 
-  let (new_envs, ir_bindings, typ) =
+  let (new_envs, ir_program, typ) =
     file_ast_to_ir
       interacting
       envs
       source in
 
-  let ir_program = Ir.program_of_bindings ir_bindings in
 
   let result_env, result_value =
     (evaluate_ir : bool -> Evaluation_env.t -> Ir.program -> string list -> (Evaluation_env.t * Value.t))
@@ -176,40 +172,41 @@ let run_files_and_dependencies
   interacting
   (envs : Evaluation_env.t)
   paths
-    : Evaluation_env.t  =
+    : Evaluation_env.t * (Value.t * Types.datatype) list =
 
 
   let sources_and_dependencies =
     Loader.load_source_files_and_dependencies paths in
 
   (* First, we perform the processing from source to ir on each file *)
-  let updated_envs, (ir_bindings_rev : (Ir.binding list * Loader.source) list) =
+  let updated_envs, (ir_progs_rev : (Ir.program * Loader.source * Types.datatype) list) =
     List.fold_left
       (fun (cur_env, bss) source ->
-        let (new_env, ir_bindings, _typ) =
+        let (new_env, ir_program, typ) =
           file_ast_to_ir
             interacting
             cur_env
             source in
-        new_env, ((ir_bindings, source) :: bss))
+        new_env, ((ir_program, source, typ) :: bss))
       (envs, [])
       sources_and_dependencies in
-  let ir_bindings = List.rev ir_bindings_rev in
+  let ir_progs = List.rev ir_progs_rev in
 
   (* Then we evaluate everything in the necessary order *)
-  List.fold_left
-    (fun env (ir_bindings, source) ->
-      let ir_program =  Ir.program_of_bindings ir_bindings in
-      let (new_env, _) =
-        evaluate_ir
-          interacting
-          env
-          ir_program
-          source.Loader.external_dependencies in
-      new_env
-      )
-    updated_envs
-    ir_bindings
+  let (after_eval_envs, results_rev) =
+    List.fold_left
+      (fun (env, results) (ir_program, source, typ) ->
+        let (new_env, result_value) =
+          evaluate_ir
+            interacting
+            env
+            ir_program
+            source.Loader.external_dependencies in
+        (new_env, (result_value, typ) :: results))
+      (updated_envs, [])
+      ir_progs in
+
+  after_eval_envs, List.rev results_rev
 
 
 (* just adds benchmarking and error handling around run_files_and_dependencies *)
