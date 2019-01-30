@@ -1200,12 +1200,13 @@ typename EndQuery = ?().End;
 
 sig wait : (EndQuery) ~> ()
 fun wait(s) {
-  ignore(receive(s))
+  var (_, s) = receive(s);
+  close(s)
 }
 
-sig close : (EndBang) ~> ()
-fun close(s) {
-  ignore(send((), s))
+sig closeBang : (EndBang) ~> ()
+fun closeBang(s) {
+  close(send((), s))
 }
 
 sig makeEndBang : () ~> EndBang
@@ -1226,7 +1227,7 @@ fun forkSync(f) {
   var _ = spawn {
     var c = accept(ap);
     var c = f(c);
-    close(c)
+    closeBang(c)
   };
   request(ap)
 }
@@ -1237,7 +1238,7 @@ fun linForkSync(f) {
   var _ = spawn {
     var c = accept(ap);
     var c = f(c);
-    close(c)
+    closeBang(c)
   };
   request(ap)
 }

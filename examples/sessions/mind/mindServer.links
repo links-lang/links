@@ -55,14 +55,15 @@ fun supervisor(st, cs) {
   var s = accept(sap);
   offer(s) {
     case Join(s) ->
-      var (d, _) = receive(s);
+      var (d, s) = receive(s);
+      close(s);
       var (name, d) = receive(d);
       switch (filter(fun ((nick, _)) {nick == name}, st.players)) {
         case [] ->
           if (st.mode <> Waiting || length(st.players) >= numPlayers || length(st.pack) < level) {
             debug("full quota of players");
             # full quota of players / no more cards
-            ignore(select Nope d);
+            close(select Nope d);
             supervisor(st, cs)
           } else {
             var hand = sortBy(id, take(level, st.pack));
@@ -85,11 +86,12 @@ fun supervisor(st, cs) {
           }
         case _ ->
           # nickname already registered
-          ignore(select Nope d);
+          close(select Nope d);
           supervisor(st, cs)
       }
     case Chat(s) ->
-      var ((nick, msg), _) = receive(s);
+      var ((nick, msg), s) = receive(s);
+      close(s);
       var cs = linMap(
         fun(c) {
           var c = select Chat c;
@@ -100,7 +102,7 @@ fun supervisor(st, cs) {
       var ((nick, card), s) = receive(s);
       var hand = assoc(nick, st.players);
       if (st.mode == Playing && elem(card, hand)) {
-        ignore(send(true, s));
+        close(send(true, s));
         var newHand = filter (fun (i) {i <> card}, hand);
         var players = map (fun ((name, hand)) {
                              if (nick == name) {(nick, newHand)}
@@ -114,11 +116,12 @@ fun supervisor(st, cs) {
         var mode = if (st.lastCard >= card) {Done} else {Playing};
         supervisor((st with lastCard=card, mode=mode, players=players), cs)
       } else {
-        ignore(send(false, s));
+        close(send(false, s));
         supervisor(st, cs)
       }
     case Leave(s) ->
-      var (nick, _) = receive(s);
+      var (nick, s) = receive(s);
+      close(s);
       var (_, cs) = disconnect(nick, st.players, cs);
       var st = if (empty(assoc(nick, st.players))) {
                  st
@@ -175,23 +178,24 @@ fun disconnect(nick, players, cs) {
 
 sig join : (ChatServer) ~> ()
 fun join(c) {
-  ignore(send(c, select Join request(sap)))
+  close(send(c, select Join request(sap)))
 }
 
 sig chat : (Nickname, Message) ~> ()
 fun chat(nick, msg) {
-  ignore(send((nick, msg), select Chat request(sap)))
+  close(send((nick, msg), select Chat request(sap)))
 }
 
 sig play : (Nickname, Int) ~> Bool
 fun play(nick, card) {
-  var (status, _) = receive(send((nick, card), select Play request(sap)));
+  var (status, s) = receive(send((nick, card), select Play request(sap)));
+  close(s);
   status
 }
 
 sig leave : (Nickname) ~> ()
 fun leave(nick) {
-  ignore(send(nick, select Leave request(sap)))
+  close(send(nick, select Leave request(sap)))
 }
 
 sig acceptor : () ~> ()

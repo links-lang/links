@@ -168,12 +168,14 @@ sig outgoingLoop : (AP(Outgoing), ClientSend) ~> ()
 fun outgoingLoop(ap, s) {
   offer(accept(ap)) {
     case Chat(c) ->
-      var (msg, _) = receive(c);
+      var (msg, c) = receive(c);
+      close(c);
       var s = select Chat s;
       var s = send(msg, s);
       outgoingLoop(ap, s)
     case Play(c) ->
-      var(card, _) = receive(c);
+      var (card, c) = receive(c);
+      close(c);
       var s = send(card, select Play s);
       var (status, s) = receive(s);
       # ignore the status (we will be informed if the play actually
@@ -193,12 +195,12 @@ fun beginChat(st, incoming, outgoing) {
   ignore(spawn {incomingLoop(st, incoming)});
 
   fun chat() {
-    ignore(send(getInputContents(chatBoxId), select Chat (request(ap))));
+    close(send(getInputContents(chatBoxId), select Chat (request(ap))));
     clearInput(chatBoxId)
   }
 
   fun play(card) {
-    ignore(send(card, select Play (request(ap))))
+    close(send(card, select Play (request(ap))))
   }
 
   fun playButton(card) {
@@ -239,7 +241,8 @@ fun connect() {
     debug("sent nick");
     offer(s) {
       case Nope(s) ->
-        println("Nickname '" ^^ nick ^^ "' already taken")
+        println("Nickname '" ^^ nick ^^ "' already taken");
+        close(s)
       case Join(s) ->
         var ((numPlayers, cards, players, incoming), s) = receive(s);
         debug("received data");
