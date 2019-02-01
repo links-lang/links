@@ -882,7 +882,7 @@ struct
             let fields = string_of_fields fields in
               "select * from (select " ^ fields ^ ") as " ^ fresh_dummy_var () ^ " where " ^ sb condition
         | `Select (fields, tables, condition, os) ->
-            let tables = mapstrcat "," (fun (t, x) -> t ^ " as " ^ (string_of_table_var x)) tables in
+            let tables = mapstrcat "," (fun (t, x) -> db#quote_field t ^ " as " ^ (string_of_table_var x)) tables in
             let fields = string_of_fields fields in
             let orderby =
               match os with
@@ -911,7 +911,7 @@ struct
         | `Case (c, t, e) ->
             "case when " ^ sb c ^ " then " ^sb t ^ " else "^ sb e ^ " end"
         | `Constant c -> Constant.string_of_constant c
-        | `Project (var, label) -> string_of_projection db one_table (var, label)
+        | `Project (_var, _label as p) -> string_of_projection db one_table p
         | `Apply (op, [l; r]) when Arithmetic.is op
             -> Arithmetic.gen (sb l, op, sb r)
         | `Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString"
