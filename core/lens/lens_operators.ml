@@ -57,7 +57,7 @@ module Binary = struct
     | Name of name
     [@@deriving show]
 
-  let from_links v =
+  let of_supertype_operator v =
     match v with
     | `Minus -> Minus
     | `FloatMinus -> Minus
