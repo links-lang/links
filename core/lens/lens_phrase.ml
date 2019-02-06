@@ -33,7 +33,7 @@ let of_phrase p =
     | `Constant c -> Constant c
     | `Var v -> Var v
     | `UnaryAppl ((_, op), phrase) -> UnaryAppl (Unary.from_links op, f phrase)
-    | `InfixAppl ((_, op), phrase1, phrase2) -> InfixAppl (Binary.from_links op, f phrase1, f phrase2)
+    | `InfixAppl ((_, op), phrase1, phrase2) -> InfixAppl (Binary.of_supertype_operator op, f phrase1, f phrase2)
     | `TupleLit l -> TupleLit (List.map f l)
     | `FnAppl (fn, arg) ->
       begin
