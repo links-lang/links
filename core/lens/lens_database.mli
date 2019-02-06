@@ -76,5 +76,5 @@ module Insert : sig
   }
 
   val fmt : Format.formatter -> t -> unit
-  end
+end
 
