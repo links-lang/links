@@ -28,7 +28,7 @@ val tuple_singleton : t -> t
 val of_phrase : phrase -> t
 
 (** Traverse a lens phrase, applying [dosth] to each nod and then replacing the result *)
-val traverse : t -> (t -> t) -> t
+val traverse : t -> f:(t -> t) -> t
 
 (** Get a list of variables in the expression *)
 val get_vars : t -> Lens_alias.Set.t

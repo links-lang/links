@@ -45,8 +45,8 @@ let of_phrase p =
   in
   f p
 
-let rec traverse (expr : lens_phrase) dosth =
-  let fn expr' = traverse expr' dosth in
+let rec traverse expr ~f =
+  let fn expr' = traverse expr' ~f in
   let expr = match expr with
     | Constant _ -> expr
     | Var _ -> expr
@@ -66,18 +66,18 @@ let rec traverse (expr : lens_phrase) dosth =
       let otherwise = fn otherwise in
       Case (phr, cases, otherwise)
     | _ -> failwith "Unknown operation" in
-  dosth expr
+  f expr
 
 let get_vars expr =
   let cols = ref Alias.Set.empty in
-  let _ = traverse expr (fun expr ->
+  let _ = traverse expr ~f:(fun expr ->
       match expr with
       | Var n -> cols := Alias.Set.add n (!cols); expr
       | _ -> expr) in
   !cols
 
 let rename_var expr ~replace =
-  traverse expr (fun expr ->
+  traverse expr ~f:(fun expr ->
       match expr with
       | Var key ->
         Alias.Map.find ~key replace
@@ -97,7 +97,7 @@ module Constant = struct
 end
 
 let replace_var expr ~replace =
-  traverse expr (fun expr ->
+  traverse expr ~f:(fun expr ->
       match expr with
       | Var key ->
         Alias.Map.find ~key replace
