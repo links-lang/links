@@ -273,7 +273,7 @@ module Insert = struct
   let fmt_col ~(db:db) f v =
     Format.pp_print_string f (db#quote_field v)
 
-  let fmt_val ~(db:db) f v =
+  let fmt_val ~db:_ f v =
     Constant.fmt f (Constant.of_value v)
 
   let fmt f v =

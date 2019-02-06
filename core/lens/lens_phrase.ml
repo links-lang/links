@@ -112,8 +112,7 @@ let rec eval expr get_val =
   | Constant c -> Lens_constant.to_value c
   | Var v ->
     begin
-      try
-        get_val v
+      try get_val v
       with NotFound _ -> failwith ("Could not find column " ^ v ^ ".")
     end
   | InfixAppl (op, a1, a2) ->
@@ -121,7 +120,12 @@ let rec eval expr get_val =
     let a2 = eval a2 get_val in
     begin
       match op with
-      | Binary.Equal -> box_bool ( match a1 with `Bool b -> b == unbox_bool a2 | `Int i -> i == unbox_int a2 | `String s -> s = unbox_string a2 | _ -> failwith "Unsupported equality constant.")
+      | Binary.Equal -> box_bool (
+          match a1 with
+          | `Bool b -> b == unbox_bool a2
+          | `Int i -> i == unbox_int a2
+          | `String s -> s = unbox_string a2
+          | _ -> failwith "Unsupported equality constant.")
       | Binary.Logical Logical_binop.And -> box_bool (unbox_bool a1 && unbox_bool a2)
       | Binary.Name "+" -> box_int ((unbox_int a1) + (unbox_int a2))
       | Binary.Name "*" -> box_int (unbox_int a1 * unbox_int a2)

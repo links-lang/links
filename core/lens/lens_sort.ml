@@ -55,12 +55,9 @@ let join_lens_should_swap sort1 sort2 ~on:on_columns =
     let other = colset sort in
     (* print_endline (ColSet.Show_t.show fdcl ^ " = " ^ ColSet.Show_t.show (other)); *)
     Alias.Set.equal (Column.Set.alias_set other) fdcl in
-  if covers fds2 sort2 then
-    false
-  else if covers fds1 sort1 then
-    true
-  else
-    failwith "One of the tables needs to be defined by the join column set."
+  if covers fds2 sort2 then false
+  else if covers fds1 sort1 then true
+  else failwith "One of the tables needs to be defined by the join column set."
 
 let join_lens_sort sort1 sort2 ~on =
   (* helper function to find new alias, e.g. for 'name' it will find 'name_1', 'name_2' etc. *)

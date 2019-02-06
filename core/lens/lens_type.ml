@@ -1,8 +1,8 @@
 type t = Types.typ
 
-let sort (v : t) =
+let sort v =
   match v with
-  | `Lens (sort) -> sort
+  | `Lens sort -> sort
   | _e -> failwith "Type is not a lens (LensType.sort)."
 
 let equal t1 t2 =

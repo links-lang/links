@@ -1,5 +1,4 @@
 open Value
-open Utility
 open Lens_types
 open Lens_utility
 

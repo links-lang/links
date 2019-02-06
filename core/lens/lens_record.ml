@@ -11,4 +11,4 @@ let set t ~key ~value =
   |> Value.box_record
 
 let match_on t1 t2 ~on =
-  List.for_all (fun key -> get t1 = get t2) on
+  List.for_all (fun key -> get t1 ~key = get t2 ~key) on
