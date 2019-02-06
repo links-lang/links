@@ -111,7 +111,7 @@ let rec skip (l : 'a list) (n : int) =
   | _ -> skip (List.tl l) (n - 1)
 
 let apply_delta t data =
-  let show_query = false in
+  let show_query = Settings.get_value Basicsettings.RelationalLenses.debug in
   let (db, _), table, keys, _ = t in
   let exec cmd =
     Lens_statistics.time_query (fun () -> db#exec cmd) in
@@ -129,7 +129,7 @@ let apply_delta t data =
     Lens_database.Delete.fmt f delete in
   let fmt_update f row =
     let predicate = prepare_where row in
-    let set = List.combine columns row |> List.skip ~n:(List.length key) in
+    let set = List.combine columns row |> List.drop ~n:(List.length key) in
     let update = { Lens_database.Update. table; predicate; db; set; } in
     Lens_database.Update.fmt f update in
   let fmt_insert f values =

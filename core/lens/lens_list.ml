@@ -25,10 +25,10 @@ let rec take l ~n =
   | _, 0 -> []
   | x :: xs, n -> x :: take xs ~n:(n-1)
 
-let rec skip l ~n =
+let rec drop l ~n =
   match l, n with
   | l, 0 -> l
-  | _ :: xs, n -> skip xs ~n:(n-1)
+  | _ :: xs, n -> drop xs ~n:(n-1)
   | [], _ -> []
 
 let rec zip_nofail l1 l2 =
