@@ -1,6 +1,7 @@
 (** Monadic IR *)
 
 [@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
+[@@@ocaml.warning "-3"] (** disables deprecation warnings **)
 
 type scope = Var.scope
   [@@deriving show]
