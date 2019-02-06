@@ -1,9 +1,9 @@
 type t = Types.lens_col
 
-(** Return the name of the column as it would be accessible in links. *)
+(** Return the name of the column as the column would be bound in the user program. *)
 val alias : t -> string
 
-(** Return the name of the column correspending to the name in the database table. *)
+(** Return the name of the column corresponding to the name in the database table. *)
 val name : t -> string
 
 (** Return the name of the database table. *)
@@ -27,10 +27,10 @@ val equal : t -> t -> bool
 module Set : sig
   include Lens_set.S with type elt = t
 
-  (** Generate a dummy column with a given alias *)
+  (** Generate a dummy column with a given alias. *)
   val dummy_alias : string -> elt
 
-  (** Determine if there is a column with the specified alias *)
+  (** Determine if there is a column with the specified alias. *)
   val mem_alias : t -> alias:string -> bool
 
   (** Convert to an alias set. *)
@@ -47,28 +47,28 @@ module List : sig
   type elt = t
   type t = elt list
 
-  (** filter out all non present columns **)
+  (** Filter out all non present columns. *)
   val present : t -> t
 
-  (** get a list of column aliases **)
+  (** Get a list of column aliases. *)
   val aliases : t -> string list
 
-  (** get the aliases of all present columns **)
+  (** Get the aliases of all present columns. *)
   val present_aliases : t -> string list
 
-  (** determine if the calumn [alias] is present *)
+  (** determine if the calumn [alias] is present. *)
   val mem_alias : t -> alias:string -> bool
 
-  (** Convert the list of columns into a set *)
+  (** Convert the list of columns into a set. *)
   val colset : t -> Set.t
 
-  (** Convetr the list of columns into a map from the alias to the column *)
+  (** Convert the list of columns into a map from the alias to the column. *)
   val colmap : t -> elt Lens_alias.Map.t
 
-  (** find the column with [alias] *)
+  (** Find the column with [alias]. *)
   val find_alias : t -> alias:string -> elt option
 
-  (** Convert a list of records to a links type *)
+  (** Convert a list of records to a Links type. *)
   val record_type : t -> Types.typ
 end
 

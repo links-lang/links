@@ -2,16 +2,16 @@ type t = Value.database
 
 val fmt_col : db:t -> Format.formatter -> Lens_column.t -> unit
 
-(** Format a pair of table and alias values *)
+(** Format a pair of table and alias values. *)
 val fmt_table : db:t -> Format.formatter -> string * string -> unit
 
-(** Format a list table and alias pairs *)
+(** Format a list table and alias pairs. *)
 val fmt_tables : db:t -> Format.formatter -> (string * string) list -> unit
 
-(** Format a list of columns *)
+(** Format a list of columns. *)
 val fmt_cols : db:t -> Format.formatter -> Lens_column.t list -> unit
 
-(** Format a phrase *)
+(** Format a phrase. *)
 val fmt_phrase : db:t -> map:(string -> string) -> Format.formatter -> Lens_phrase.t -> unit
 
 (** Formats a phrase using a dummy db driver. This should only be used for debugging. *)
