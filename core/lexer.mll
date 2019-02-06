@@ -295,6 +295,7 @@ rule lex ctxt nl = parse
   | "|>"                                { RIGHTTRIANGLE }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML id }
+  | "<!--"                              { xmlcomment_lex ctxt nl lexbuf }
   | "[|"                                { LBRACKETBAR }
   | "|]"                                { BARRBRACKET }
   | '['                                 { LBRACKET }
@@ -353,8 +354,15 @@ and starttag ctxt nl = parse
   | '\n'                                { nl () ; bump_lines lexbuf 1; starttag ctxt nl lexbuf }
   | def_blank                           { starttag ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and xmlcomment_lex ctxt nl = parse
+  | "-->"                               { ctxt#next_lexer lexbuf }
+  | '\n'                                { nl() ; bump_lines lexbuf 1; xmlcomment_lex ctxt nl lexbuf }
+  | eof                                 { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+  | "--"                                { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+  | _                                   { xmlcomment_lex ctxt nl lexbuf }
 and xmllex ctxt nl = parse
   | eof                                 { END }
+  | "<!--"                              { xmlcomment_lex ctxt nl lexbuf }
   | "{{"                                { CDATA "{" }
   | "}}"                                { CDATA "}" }
   | "}"                                 { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }

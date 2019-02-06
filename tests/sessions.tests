@@ -37,6 +37,11 @@ fun (c) {ignore(send(42, c))}
 stdout : fun : (!(Int)._::(Unl,Session)) ~> ()
 exit : 0
 
+Linear end
+ignore(request((new(): AP(End))))
+stderr : @..*
+exit : 1
+
 Non-linear generalisation (1)
 {var x = A; ()}
 stdout : () : ()

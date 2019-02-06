@@ -722,7 +722,7 @@ let rec type_can_be_unl : var_set * var_set -> typ -> bool =
     | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
     | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
     | `Dual s -> type_can_be_unl vars s
-    | `End -> true
+    | `End -> false
     | #session_type -> false
 and field_can_be_unl vars =
   function
@@ -2748,3 +2748,7 @@ let pp_row : Format.formatter -> row -> unit = fun fmt t ->
     pp_row fmt (DecycleTypes.row t)
 let pp_lens_sort : Format.formatter -> lens_sort -> unit = fun fmt ls ->
   pp_lens_sort fmt (DecycleTypes.lens_sort ls)
+
+let unwrap_list_type = function
+  | `Application ({Abstype.id = "List"; _}, [`Type t]) -> t
+  | _ -> assert false
