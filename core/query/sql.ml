@@ -124,6 +124,20 @@ let rec string_of_query db ignore_fields q =
               "(" ^ sb b ^ ") as "^ db#quote_field l) (* string_of_label l) *)
             fields
   in
+  let string_of_select fields tables condition os =
+    let tables = String.concat "," tables in
+    let fields = string_of_fields fields in
+    let orderby =
+      match os with
+        | [] -> ""
+        | _ -> " order by " ^ mapstrcat "," sb os in
+    let where =
+      match condition with
+        | `Constant (`Bool true) -> ""
+        | _ ->  " where " ^ sb condition
+    in
+      "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
+  in  
     match q with
       | `UnionAll ([], _) -> assert false
       | `UnionAll ([q], n) -> sq q ^ order_by_clause n
@@ -136,28 +150,17 @@ let rec string_of_query db ignore_fields q =
           let fields = string_of_fields fields in
             "select * from (select " ^ fields ^ ") as " ^ fresh_dummy_var () ^ " where " ^ sb condition
       | `Select (fields, tables, condition, os) ->
-          let tables = mapstrcat "," (fun (t, x) -> db#quote_field t ^ " as " ^ (string_of_table_var x)) tables in
-          let fields = string_of_fields fields in
-          let orderby =
-            match os with
-              | [] -> ""
-              | _ -> " order by " ^ mapstrcat "," sb os in
-          let where =
-            match condition with
-              | `Constant (`Bool true) -> ""
-              | _ ->  " where " ^ sb condition
-          in
-            "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
+          (* using quote_field assumes tables contains table names (not nested queries) *)
+          let tables = List.map (fun (t, x) -> db#quote_field t ^ " as " ^ (string_of_table_var x)) tables
+          in string_of_select fields tables condition os
       | `With (_, q, z, q') ->
-          let q' =
-            (* Inline the query *)
-            match q' with
-            | `Select (fields, tables, condition, os) ->
-                `Select (fields, ("(" ^ sq q ^ ")", z) :: tables, condition, os)
-            | _ -> assert false
-          in
-          sq q'
-
+          match q' with
+          | `Select (fields, tables, condition, os) ->
+              (* Inline the query *)
+              let tables = List.map (fun (t, x) -> db#quote_field t ^ " as " ^ (string_of_table_var x)) tables in
+              let q = "(" ^ sq q ^ ") as " ^ string_of_table_var z in
+              string_of_select fields (q::tables) condition os
+          | _ -> assert false
 
 and string_of_base db one_table b =
   let sb = string_of_base db one_table in
@@ -250,9 +253,7 @@ let extract_gens =
     | `For (_, gs, _, _) -> gs
     | _ -> assert false
 
-(* WR: this is originally from FlattenRecords and LetInsertion *)
 type let_clause = Var.var * Q.t * Var.var * Q.t
-(* WR: this was query, also from FlattenRecords and LetInsertion *)
 type let_query = let_clause list
 
 let rec let_clause : Value.database -> let_clause -> query =
@@ -436,7 +437,6 @@ and query : Value.database -> let_query -> query =
 
 let update db ((_, table), where, body) =
   reset_dummy_counter ();
-  (* WR: added empty list as dummy index *)
   let base = (base db []) ->- (string_of_base db true) in
   let where =
     match where with
@@ -456,7 +456,6 @@ let update db ((_, table), where, body) =
 
 let delete db ((_, table), where) =
   reset_dummy_counter ();
-  (* WR: added empty list as dummy index *)
   let base = base db [] ->- (string_of_base db true) in
   let where =
     match where with

@@ -287,7 +287,6 @@ let ordered_query db range v =
   S.reset_dummy_counter ();
   let vs, n = Order.ordered_query v in
   (* Debug.print ("concat vs: "^Q.string_of_t (`Concat vs)); *)
-  (* WR: added empty list as dummy index, and false as unit_query *)
   let q = `UnionAll (List.map (S.clause db [] false) vs, n) in
     S.string_of_query db range q
 
