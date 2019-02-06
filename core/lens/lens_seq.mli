@@ -1,4 +1,4 @@
-(** This is the lazy evaluated sequence module for ocaml 4.06 compatability. The signatures are based on the standard Ocaml library. *)
+(** This is the lazy evaluated sequence module for OCaml 4.06 compatability. The signatures and comments are based on the standard OCaml library. *)
 
 type 'a t = unit -> 'a node
 and 'a node =
