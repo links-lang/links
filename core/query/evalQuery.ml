@@ -287,7 +287,7 @@ let ordered_query db range v =
   S.reset_dummy_counter ();
   let vs, n = Order.ordered_query v in
   (* Debug.print ("concat vs: "^Q.string_of_t (`Concat vs)); *)
-  let q = `UnionAll (List.map (S.clause db [] false) vs, n) in
+  let q = `UnionAll (List.map (Q.clause db [] false) vs, n) in
     S.string_of_query db range q
 
 let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * string * Types.datatype) option =
@@ -302,24 +302,3 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
             let q = ordered_query db range v in
               Debug.print ("Generated query: "^q);
               Some (db, q, t)
-
-let compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
-  fun db env ((x, table, field_types), where, body) ->
-    let env = Q.Eval.bind (Q.Eval.env_of_value_env env) (x, `Var (x, field_types)) in
-(*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
-    let where = opt_map (Q.Eval.computation env) where in
-(*       Debug.print ("body: "^Ir.show_computation body); *)
-    let body = Q.Eval.computation env body in
-    let q = S.update db ((x, table), where, body) in
-      Debug.print ("Generated update query: "^q);
-      q
-
-let compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
-  fun db env ((x, table, field_types), where) ->
-    let env = Q.Eval.bind (Q.Eval.env_of_value_env env) (x, `Var (x, field_types)) in
-    let where = opt_map (Q.Eval.computation env) where in
-    let q = S.delete db ((x, table), where) in
-      Debug.print ("Generated update query: "^q);
-      q

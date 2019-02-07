@@ -760,7 +760,7 @@ let unordered_query_package db (range: (int * int) option) t v =
   let shredded_w = Shred.shred_query tagged_w t in
   let lins_w = Shred.pmap (LetInsertion.lins_query) shredded_w in
   let flat_w = Shred.pmap (FlattenRecords.flatten_query) lins_w in
-  let query_package = Shred.pmap ((S.string_of_query db range) -<- (S.query db)) flat_w in
+  let query_package = Shred.pmap ((S.string_of_query db range) -<- (Q.query db)) flat_w in
 
   let shredded_t = Shred.shred_query_type t in
   let query_type_package = Shred.pmap (FlattenRecords.flatten_query_type) shredded_t in
