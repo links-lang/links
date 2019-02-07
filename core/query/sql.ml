@@ -137,7 +137,7 @@ let rec string_of_query db ignore_fields q =
         | _ ->  " where " ^ sb condition
     in
       "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
-  in  
+  in
     match q with
       | `UnionAll ([], _) -> assert false
       | `UnionAll ([q], n) -> sq q ^ order_by_clause n
