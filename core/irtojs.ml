@@ -1169,7 +1169,6 @@ end = functor (K : CONTINUATION) -> struct
        body,
        location)
   and generate_cancel_stub env (action: code -> code) (kappa: K.t)  =
-    let open Pervasives in
     (* Compile a thunk to be invoked if the operation fails *)
     let cancellation_thunk_name =
       gensym ~prefix:"cancellation_thunk" () in
