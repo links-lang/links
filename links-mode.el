@@ -2,10 +2,11 @@
 ;;;                  (Horribly broken, for sure.)
 ;;; by Ezra Cooper 2007
 ;;; updated by Stefan Fehrenbach 2015
+;;; updated by Jan Stolarek 2019
 ;;; Many bits copped from caml.el by Leroy et al.
 ;;;
 ;;; Things that work:
-;;;    * some syntax highlighting
+;;;    * highlighting of keywords, base types and built-in functions
 ;;;    * (un)comment-region
 ;;;
 ;;; Things that don't work:
@@ -28,6 +29,7 @@
   "Command line arguments (as a string) passed to links."
   :type '(string))
 
+;; Syntax table for links-mode
 (defvar links-mode-syntax-table
   (let ((st (make-syntax-table)))
     (modify-syntax-entry ?\  " " st)
@@ -47,65 +49,63 @@
 ;; Can be generated with `links --print-keywords`.
 ;; TODO We should do that automatically as part of the build process somehow.
 (defconst links-keywords
-  '(
-    "alien"
-    "as"
-    "case"
-    "client"
-    "database"
-    "default"
-    "delete"
-    "do"
-    "else"
-    "escape"
-    "false"
-    "for"
-    "forall"
-    "from"
-    "fun"
-    "formlet"
-    "handle"
-    "handler"
-    "if"
-    "in"
-    "open"
-    "yields"
-    "insert"
-    "linfun"
-    "module"
-    "mu"
-    "native"
-    "nu"
-    "offer"
-    "orderby"
-    "op"
-    "page"
-    "query"
-    "readonly"
-    "receive"
-    "returning"
-    "select"
-    "server"
-    "set"
-    "shallowhandle"
-    "shallowhandler"
-    "sig"
-    "spawn"
-    "spawnAngel"
-    "spawnClient"
-    "spawnDemon"
-    "spawnWait"
-    "switch"
-    "table"
-    "TableHandle"
-    "true"
-    "typename"
-    "update"
-    "values"
-    "var"
-    "where"
-    "with"
-    ))
+  '("shallowhandler" "shallowhandle" "spawnAngelAt" "delete_left" "spawnClient"
+    "TableHandle" "determined" "lensselect" "spawnAngel" "otherwise" "returning"
+    "spawnWait" "tablekeys" "database" "lensdrop" "lensjoin" "readonly"
+    "typename" "default" "formlet" "handler" "lensget" "lensput" "orderby"
+    "receive" "spawnAt" "client" "delete" "escape" "forall" "handle" "yields"
+    "insert" "linfun" "module" "native" "select" "server" "switch" "update"
+    "values" "alien" "false" "offer" "query" "raise" "spawn" "table" "where"
+    "case" "else" "from" "lens" "open" "page" "true" "with" "for" "fun" "set"
+    "sig" "try" "var" "as" "by" "do" "if" "in" "mu" "nu" "on" "op" ))
+
+;; list of Links primitive types generated from primary_datatype profuction in
+;; the parser
+(defconst links-primitive-types
+  '("Database" "XmlItem" "String" "Float" "Bool" "Char" "Int"))
+
+;; list of Links built-in functions generated using @builtins directive in REPL
+;; (excluding operators)
+(defconst links-builtins
+  '("domRemoveAttributeFromRef" "jsRequestAnimationFrame" "domGetAttributeFromRef"
+    "domGetNodeValueFromRef" "domGetStyleAttrFromRef" "domSetAttributeFromRef"
+    "domSetStyleAttrFromRef" "serverTimeMilliseconds" "domGetChildrenFromRef"
+    "domGetPropertyFromRef" "domSetPropertyFromRef" "registerEventHandlers"
+    "domGetTagNameFromRef" "domInsertBeforeRef" "domReplaceChildren"
+    "jsLoadGlobalObject" "jsSaveGlobalObject" "domAppendChildRef"
+    "getDatabaseConfig" "getTargetElement" "unsafePickleCont" "variantToXmlItem"
+    "xmlItemToVariant" "InsertReturning" "debugChromiumGC" "domHasAttribute"
+    "getDocumentNode" "replaceDocument" "serveWebsockets" "addStaticRoute"
+    "appendChildren" "getFromElement" "getTargetValue" "getTextContent"
+    "jsCanvasHeight" "jsGetContext2D" "jsSetFillColor" "jsSetOnKeyDown"
+    "readFromSocket" "unsafeAddRoute" "addAttributes" "connectSocket"
+    "debugGetStats" "floatToString" "getAttributes" "getChildNodes"
+    "getInputValue" "isElementNode" "jsCanvasWidth" "jsSetInterval"
+    "jsStrokeStyle" "stringToFloat" "writeToSocket" "domSetAnchor"
+    "getAttribute" "getNamespace" "getToElement" "hasAttribute" "insertBefore"
+    "jsCanvasFont" "jsFillCircle" "jsSaveCanvas" "jsSetOnEvent" "spawnAngelAt"
+    "variantToXml" "xmlToVariant" "closeSocket" "environment" "getCharCode"
+    "getNodeById" "intToString" "jsBeginPath" "jsClearRect" "jsClosePath"
+    "jsDrawImage" "jsLineWidth" "jsSetOnLoad" "jsTranslate" "newClientAP"
+    "newServerAP" "nextSibling" "replaceNode" "spawnClient" "strContains"
+    "stringToInt" "stringToXml" "strunescape" "textContent" "unsafe_cast"
+    "InsertRows" "childNodes" "clientTime" "firstChild" "floatNotEq"
+    "floatToInt" "floatToXml" "getTagName" "intToFloat" "javascript"
+    "jsFillRect" "jsFillText" "objectType" "parentNode" "removeNode"
+    "servePages" "serverTime" "spawnAngel" "spawnWait'" "attribute" "cloneNode"
+    "dateToInt" "dumpTypes" "getCookie" "getTarget" "intToDate" "jsRestore"
+    "setCookie" "spawnWait" "strescape" "swapNodes" "debugObj" "getPageX"
+    "getPageY" "getValue" "haveMail" "intToXml" "isXDigit" "jsLineTo" "jsMoveTo"
+    "jsStroke" "objectEq" "parseXml" "redirect" "stringEq" "ceiling" "explode"
+    "floatEq" "getTime" "implode" "isAlnum" "isAlpha" "isBlank" "isDigit"
+    "isLower" "isUpper" "jsScale" "makeXml" "negatef" "receive" "request"
+    "spawnAt" "sysexit" "toLower" "toUpper" "AsList" "Concat" "accept" "cancel"
+    "charAt" "gensym" "isNull" "jsFill" "jsSave" "length" "ltilde" "negate"
+    "random" "stilde" "strlen" "strsub" "verify" "close" "crypt" "debug" "error"
+    "event" "floor" "intEq" "jsArc" "newAP" "print" "sleep" "spawn" "there"
+    "tilde" "Cons" "Send" "drop" "dump" "exit" "here" "link" "recv" "self"
+    "send" "show" "sqrt" "take" "Nil" "chr" "cos" "log" "max" "min" "mod" "new"
+    "not" "ord" "sin" "tan" "hd" "tl"))
 
 (defconst links-font-lock-keywords
   (list
@@ -117,10 +117,14 @@
    '("</?[a-z][^>]*>" 0 font-lock-xml-face t)
    ;; XML escapes (attributes)
    '("\"{[^}]*}\"" 0 font-lock-normal-face t)
-   ;; special operations
+   ;; keywords
    `(,(regexp-opt links-keywords 'words) . font-lock-keyword-face)
+   ;; builtins
+   `(,(regexp-opt links-builtins 'words) . font-lock-function-name-face)
    ;; types & variant tags
    '("\\<[A-Z][A-Za-z0-9_]*\\>" . font-lock-type-face)
+   ;; primitive types
+   `(,(regexp-opt links-primitive-types 'words) . font-lock-type-face)
    ;; variable names
    '("\\<\\(var\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
      (1 font-lock-keyword-face)
