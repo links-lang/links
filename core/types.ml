@@ -131,7 +131,10 @@ type lens_phrase =
 
 (* End of Lenses *)
 
-type typ =
+(* Type groups *)
+type tygroup_ref = ((quantifier list * typ) StringMap.t) ref
+
+and typ =
     [ `Not_typed
     | `Primitive of Primitive.t
     | `Function of (typ * row * typ)
@@ -143,6 +146,7 @@ type typ =
     | `Lens of lens_sort
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
+    | `RecursiveApplication of (string * type_arg list * tygroup_ref)
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
@@ -181,7 +185,31 @@ let is_present =
   | `Present _           -> true
   | (`Absent | `Var _) -> false
 
-type tycon_spec = [`Alias of quantifier list * typ | `Abstract of Abstype.t] [@@deriving show]
+type alias_type = quantifier list * typ [@@deriving show]
+
+type tycon_spec = [
+  | `Alias of alias_type
+  | `Abstract of Abstype.t
+  | `Mutual of (quantifier list * tygroup_ref) (* Type in same recursive group *)
+] [@@deriving show]
+
+(* To allow shadowing, each group of recursive types has a unique
+ * identifier.
+ * Since type aliases cannot be abstract, and `Mutual bindings are
+ * only used when desugaring recursive groups, it makes sense that
+ * we need only store the alias types.
+ * Within each group, we have a map from type alias names to alias
+ * types, which can be used during unification. *)
+type recty_environment = alias_type StringMap.t [@@deriving show]
+type tygroup_environment = recty_environment IntMap.t [@@deriving show]
+
+(* Generation of fresh tygroup names *)
+(*
+let tygroup_counter = ref 0
+let fresh_tygroup_name : unit -> tygroup_id =
+  function () ->
+    incr tygroup_counter; !tygroup_counter
+    *)
 
 let unbox_quantifiers = (!)
 let box_quantifiers = ref
@@ -377,6 +405,12 @@ struct
             (arg' :: acc_args, o)
           ) args ([], o) in
           (`Application (abst, args'), o)
+     | `RecursiveApplication (name, args, tg_ref) ->
+        let (args', o) = List.fold_right (fun arg (acc_args, o) ->
+            let (arg', o) = o#type_arg arg in
+            (arg' :: acc_args, o)
+          ) args ([], o) in
+          (`RecursiveApplication (name, args', tg_ref), o)
      | `MetaTypeVar mtv ->
         let (mtv', o) = o#meta_type_var mtv in
           (`MetaTypeVar mtv', o)
@@ -656,6 +690,14 @@ let rec is_unl_type : (var_set * var_set) -> typ -> bool =
          but we'd need to replace hd and tl with a split operation. *)
       (* | `Application ({Abstype.id="List"}, [`Type t]) -> is_unl_type (rec_vars, quant_vars) t  *)
       | `Application _ -> true (* TODO: change this if we add linear abstract types *)
+      | `RecursiveApplication (_, _, _) ->
+          (* An application is linear if the type it refers to is
+           * also linear. We don't have this information. What we will
+           * need to do is a pass to check whether each application (recursive
+           * applications notwithstanding) is linear. For now, we are saying that all recursive
+           * applications can be unrestricted. This is incorrect and unsound, and *must* be fixed
+           * before considering a merge. *)
+          true
       | `MetaTypeVar point -> is_unl_point is_unl_type (rec_vars, quant_vars) point
       | `ForAll (qs, t) -> is_unl_type (rec_vars, add_quantified_vars !qs quant_vars) t
       | `Dual s -> is_unl_type (rec_vars, quant_vars) s
@@ -706,6 +748,7 @@ let rec type_can_be_unl : var_set * var_set -> typ -> bool =
          but we'd need to replace hd and tl with a split operation. *)
     (* | `Application ({Abstype.id="List"}, [`Type t]) -> tcu t *)
     | `Application _ -> true (* TODO: change this if we add linear abstract types *)
+    | `RecursiveApplication _ -> true (* FIXME: This *must* be fixed before merging. *)
     | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
     | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
     | `Dual s -> type_can_be_unl vars s
@@ -1115,7 +1158,9 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
       | `Lens _          -> S.empty
       | `Alias ((_, ts), datatype) ->
           S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
-      | `Application (_, datatypes) -> S.union_all (List.map (free_tyarg_vars' rec_vars) datatypes)
+      | `Application (_, tyargs) -> S.union_all (List.map (free_tyarg_vars' rec_vars) tyargs)
+      | `RecursiveApplication (_, tyargs, _) ->
+          S.union_all (List.map (free_tyarg_vars' rec_vars) tyargs)
       | `ForAll (tvars, body)    -> S.diff (free_type_vars' rec_vars body)
                                            (List.fold_right (S.add -<- type_var_number) (unbox_quantifiers tvars) S.empty)
       | `MetaTypeVar point       ->
@@ -1327,6 +1372,8 @@ and subst_dual_type : var_map -> datatype -> datatype =
         (* TODO: we could do a check to see if we can preserve aliases here *)
         | `Alias (_, t) -> sdt t
         | `Application (abs, ts) -> `Application (abs, List.map (subst_dual_type_arg rec_points) ts)
+        | `RecursiveApplication (name, args, tygroup_ref) ->
+            `RecursiveApplication (name, List.map (subst_dual_type_arg rec_points) args, tygroup_ref)
         | `ForAll (qs, body) -> `ForAll (qs, sdt body)
         | `MetaTypeVar point ->
           begin
@@ -1470,8 +1517,10 @@ let rec normalise_datatype rec_names t =
           `Lens sort
       | `Alias ((name, ts), datatype) ->
           `Alias ((name, ts), nt datatype)
-      | `Application (abs, datatypes) ->
-          `Application (abs, List.map (normalise_type_arg rec_names) datatypes)
+      | `Application (abs, tyargs) ->
+          `Application (abs, List.map (normalise_type_arg rec_names) tyargs)
+      | `RecursiveApplication (name, tyargs, tygroup_ref) ->
+          `RecursiveApplication (name, List.map (normalise_type_arg rec_names) tyargs, tygroup_ref)
       | `ForAll (qs, body)    ->
           begin
             match unbox_quantifiers qs with
@@ -1725,7 +1774,10 @@ struct
             List.concat
               (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) ts) @ (fbtv d)
         | `Alias (_, d) -> fbtv d
-        | `Application (_, datatypes) -> List.concat (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) datatypes)
+        | `Application (_, tyargs) ->
+            List.concat (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) tyargs)
+        | `RecursiveApplication (_, tyargs, _) ->
+            List.concat (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) tyargs)
         | `Input (t, s)
         | `Output (t, s) ->
            free_bound_type_vars ~include_aliases bound_vars t @ free_bound_type_vars ~include_aliases bound_vars s
@@ -1774,15 +1826,19 @@ struct
     [(var, spec)]
 
   let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =
+    let split_vars tyvars =
+      let bound_vars, vars =
+        List.fold_left
+          (fun (bound_vars, vars) tyvar ->
+             let var, spec = varspec_of_tyvar tyvar in
+               (TypeVarSet.add var bound_vars, (var, spec)::vars)) (bound_vars, []) tyvars in
+        (bound_vars, List.rev vars) in
+
     match tycon_spec with
       | `Alias (tyvars, body) ->
-          let bound_vars, vars =
-            List.fold_left
-              (fun (bound_vars, vars) tyvar ->
-                 let var, spec = varspec_of_tyvar tyvar in
-                   (TypeVarSet.add var bound_vars, (var, spec)::vars)) (bound_vars, []) tyvars
-          in
-            (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
+          let (bound_vars, vars) = split_vars tyvars in
+          vars @ (free_bound_type_vars ~include_aliases bound_vars body)
+      | `Mutual (tyvars, _) -> snd @@ split_vars tyvars
       | `Abstract _ -> []
 
   let init (flavour, kind, scope) name =
@@ -2094,7 +2150,12 @@ struct
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg bound_vars p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
-          | `Application (s, ts) -> Abstype.name s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
+          | `Application (s, ts) ->
+              let vars = String.concat "," (List.map (type_arg bound_vars p) ts) in
+              Printf.sprintf "%s (%s)" (Abstype.name s) vars
+          | `RecursiveApplication (name, [], _) -> name
+          | `RecursiveApplication (name, ts, _) ->
+              name ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
 
   and presence bound_vars ((policy, vars) as p) =
     function
@@ -2170,19 +2231,27 @@ struct
       | `Presence f -> "::Presence (" ^ presence bound_vars p f ^ ")"
 
   let tycon_spec bound_vars p =
+    let bound_vars tyvars =
+      List.fold_left
+        (fun bound_vars tyvar ->
+           TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
+        bound_vars tyvars in
+
     function
       | `Alias (tyvars, body) ->
-          let bound_vars =
-            List.fold_left
-              (fun bound_vars tyvar ->
-                 TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
-              bound_vars tyvars
-          in
-            begin
-              match tyvars with
-                | [] -> datatype bound_vars p body
-                | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
-            end
+          let bvs = bound_vars tyvars in
+          begin
+            match tyvars with
+              | [] -> datatype bvs p body
+              | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ datatype bvs p body
+          end
+      | `Mutual (tyvars, _) ->
+          begin
+            match tyvars with
+              | [] -> "mutual "
+              | _ ->
+                  mapstrcat "," (quantifier p) tyvars ^ ". mutual "
+          end
       | `Abstract _ -> "abstract"
 
   let strip_quantifiers =
@@ -2234,8 +2303,10 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
       | `Alias ((_name, ts), d) ->
           TypeVarMap.union_all
             ((ftv d)::(List.map (tyarg_flexible_type_vars bound_vars) ts))
-      | `Application (_name, datatypes) ->
-          TypeVarMap.union_all (List.map (tyarg_flexible_type_vars bound_vars) datatypes)
+      | `Application (_name, tyargs) ->
+          TypeVarMap.union_all (List.map (tyarg_flexible_type_vars bound_vars) tyargs)
+      | `RecursiveApplication (name, tyargs, _) ->
+          TypeVarMap.union_all (List.map (tyarg_flexible_type_vars bound_vars) tyargs)
       | `Input (t, s)
       | `Output (t, s) -> TypeVarMap.union_all [flexible_type_vars bound_vars t; flexible_type_vars bound_vars s]
       | `Select row
@@ -2379,10 +2450,9 @@ let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
 
 type environment       = datatype Env.t
 and tycon_environment  = tycon_spec Env.t
-and typing_environment = { var_env    : environment
-                         ; tycon_env  : tycon_environment
-                         ; effect_row : row }
-     [@@deriving show]
+and typing_environment = { var_env   : environment ;
+                           tycon_env : tycon_environment ;
+                           effect_row : row} [@@deriving show]
 
 let empty_typing_environment = { var_env = Env.empty; tycon_env =  Env.empty; effect_row = make_empty_closed_row ()  }
 
@@ -2396,7 +2466,9 @@ let normalise_typing_environment env =
 let extend_typing_environment
     {var_env = l ; tycon_env = al ; effect_row = _  }
     {var_env = r ; tycon_env = ar ; effect_row = er } : typing_environment =
-  {var_env = Env.extend l r ; tycon_env = Env.extend al ar ; effect_row = er }
+  { var_env = Env.extend l r;
+    tycon_env = Env.extend al ar;
+    effect_row = er }
 
 let string_of_environment = show_environment
 
@@ -2423,6 +2495,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Lens _                  -> empties
       | `Alias ((_name, ts), d)  -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
+      | `RecursiveApplication (_, ds, _) -> union (List.map (make_env_ta boundvars) ds)
       | `ForAll (qs, t)          ->
           make_env
             (List.fold_right

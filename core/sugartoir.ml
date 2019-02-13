@@ -1123,13 +1123,13 @@ struct
                     let x  = Binder.to_name bndr in
                     let xt = Binder.to_type_exn bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | Type _
+                | Typenames _
                 | Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | Handler _ | QualifiedImport _ | Fun _ | Foreign _
-                | AlienBlock _ | Module _ -> assert false
+                | AlienBlock _ | Module _ | SugarFuns _ -> assert false
             end
 
   and evalv env e =

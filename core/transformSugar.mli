@@ -45,6 +45,8 @@ object ('self)
   method with_var_env     : Types.environment -> 'self
   method with_formlet_env : Types.environment -> 'self
 
+  method bind_tycon      : string -> Types.tycon_spec -> 'self
+
   method lookup_type     : name -> Types.datatype
   method lookup_effects  : Types.row
   method with_effects    : Types.row -> 'self

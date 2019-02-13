@@ -161,6 +161,7 @@ let count_newlines = StringUtils.count '\n'
 
 let keywords = [
  "alien"    , ALIEN;
+ "and"      , AND;
  "as"       , AS;
  "by"       , BY;
  "case"     , CASE;

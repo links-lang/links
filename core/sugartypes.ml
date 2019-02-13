@@ -141,6 +141,7 @@ type fn_dep = string * string
 type handler_depth = Deep | Shallow
     [@@deriving show]
 
+<<<<<<< HEAD
 type replace_rhs =
   | Literal     of string
   | SpliceExpr  of phrase
@@ -274,10 +275,11 @@ and bindingnode =
                    (Types.datatype * Types.quantifier option list) option)
                    * funlit) * Location.t * datatype' option * Position.t) list
   | Handler of Binder.with_pos * handlerlit * datatype' option
+  | SugarFuns of binding list
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
-  | Type    of name * (quantifier * tyvar option) list * datatype'
+  | Typenames of name * (quantifier * tyvar option) list * datatype'
   | Infix
   | Exp     of phrase
   | Module  of name * binding list
@@ -483,6 +485,22 @@ struct
     | Fun (bndr, _, (_, fn), _, _) ->
        let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
+    | SugarFuns bnds ->
+        (* Traverse, get names and RHSes *)
+        let names, fnlits, hlits =
+          List.fold_right
+            (fun b (names, fnlits, handlerlits) ->
+              match b with
+                | {node=(`Fun (bndr, _, (_, rhs), _, _)); _ } ->
+                   (add (name_of_binder bndr) names, rhs::fnlits, handlerlits)
+                | {node=(`Handler (bndr, hl, _)); _ } ->
+                   (add (name_of_binder bndr) names, fnlits, hl::handlerlits)
+                | _ -> (names, fnlits, handlerlits))
+            bnds (empty, [], []) in
+        let fnlit_fvs = union_map (fun fnlit -> funlit fnlit) fnlits in
+        let hlit_fvs = union_map (fun hlit -> handlerlit hlit) hlits in
+        let fvs = union fnlit_fvs hlit_fvs in
+        names, diff fvs names
     | Funs funs ->
         let names, rhss =
           List.fold_right

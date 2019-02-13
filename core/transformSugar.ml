@@ -149,6 +149,9 @@ class transform (env : Types.typing_environment) =
     method with_formlet_env formlet_env =
       {< formlet_env = formlet_env >}
 
+    method bind_tycon name tycon =
+      {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
+
     method lookup_type : name -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
 
@@ -808,15 +811,23 @@ class transform (env : Types.typing_environment) =
       | Foreign (f, raw_name, language, file, t) ->
          let (o, f) = o#binder f in
          (o, Foreign (f, raw_name, language, file, t))
-      | Type (name, vars, (_, Some dt)) as e ->
-         let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
-         {< tycon_env=tycon_env >}, e
-      | Type _ -> failwith "Unannotated type alias"
+      | Typenames ts ->
+          let (o, _) = listu o (fun o (name, vars, (x, dt')) ->
+            begin
+              match dt' with
+                | Some dt ->
+                   let o = o#bind_tycon name
+                     (`Alias (List.map (snd ->- val_of) vars, dt)) in
+                   (o, (name, vars, (x, dt')))
+                | None -> failwith "transformSugar.ml: Unannotated type alias"
+            end) ts in
+          (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
       | AlienBlock _ -> assert false
       | Module _ -> assert false
       | QualifiedImport _ -> assert false
+      | SugarFuns _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
       WithPos.traverse_map

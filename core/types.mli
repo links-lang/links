@@ -87,7 +87,12 @@ type lens_phrase =
 
 (* End Lenses *)
 
-type typ =
+(* Type groups *)
+type tygroup_ref = ((quantifier list * typ) stringmap) ref
+
+(* Types *)
+
+and typ =
     [ `Not_typed
     | `Primitive of Primitive.t
     | `Function of (typ * row * typ)
@@ -99,6 +104,7 @@ type typ =
     | `Lens of lens_sort
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
+    | `RecursiveApplication of (string * type_arg list * tygroup_ref)
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
@@ -168,14 +174,26 @@ val dual_row : row -> row
 val dual_type : datatype -> datatype
 
 val type_var_number : quantifier -> int
+type alias_type = quantifier list * typ [@@deriving show]
 
-type tycon_spec = [`Alias of quantifier list * datatype | `Abstract of Abstype.t]
+type tycon_spec = [
+  | `Alias of alias_type
+  | `Abstract of Abstype.t
+  | `Mutual of (quantifier list * tygroup_ref) (* Type in same recursive group *)
+]
+(*
+val tygroup_counter : tygroup_id ref
+val fresh_tygroup_name : unit -> tygroup_id
+*)
+
+type recty_environment = alias_type Utility.StringMap.t
+type tygroup_environment = recty_environment Utility.IntMap.t
 
 type environment        = datatype Env.String.t
  and tycon_environment  = tycon_spec Env.String.t
  and typing_environment = { var_env   : environment ;
                             tycon_env : tycon_environment ;
-                            effect_row : row }
+                            effect_row : row}
 
 val empty_typing_environment : typing_environment
 

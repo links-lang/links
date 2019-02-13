@@ -137,7 +137,7 @@ let rec rename_binders_get_shadow_tbl module_table
       | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           let (o, bnd') = self#binder bnd in
           (o, Fun (bnd', lin, (tvs, fnlit), loc, dt_opt))
-      | (Type _) as ty -> (self, ty)
+      | (Types _) as ty -> (self, ty)
       | (Val  _) as v  -> (self, v )
       | Exp b -> (self, Exp b)
       | Foreign (bnd, raw_name, lang, ext_file, dt) ->
@@ -210,6 +210,7 @@ and perform_renaming module_table path term_ht type_ht =
           (self, (xs', rv'))
 
     method! bindingnode = function
+<<<<<<< HEAD
       | (Module     _) as m  -> (self, m )
       | (AlienBlock _) as ab -> (self, ab)
       | (Foreign    _) as f  -> (self, f )
@@ -220,6 +221,23 @@ and perform_renaming module_table path term_ht type_ht =
           let (o, dt') = o#datatype' dt in
           (o, Type (fqn, tvs, dt'))
       | Val (pat, (tvs, phr), loc, dt_opt) ->
+=======
+      | `Module (n, bs) ->
+          (self, `Module (n, bs))
+      | `AlienBlock ab ->
+          (self, `AlienBlock ab)
+      | `Foreign f -> (self, `Foreign f)
+      | `Types ts ->
+          (* Add all type bindings *)
+          let (o, ts_rev) =
+            List.fold_left (fun (o, ts_rev) (n, tvs, dt) ->
+              let fqn = make_path_string path n in
+              let o = o#bind_shadow_type n fqn in
+              let (o, dt') = o#datatype' dt in
+              (o, (fqn, tvs, dt') :: ts_rev)) (self, []) ts in
+          (o, `Types (List.rev ts_rev))
+      | `Val (pat, (tvs, phr), loc, dt_opt) ->
+>>>>>>> [WIP] Explicit SugarFuns block, move `Type to `Types
           let (_, phr') = self#phrase phr in
           let (o, pat') = self#pattern pat in
           let (o, dt_opt') = o#option (fun o -> o#datatype') dt_opt in
