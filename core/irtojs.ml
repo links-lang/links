@@ -1169,11 +1169,9 @@ end = functor (K : CONTINUATION) -> struct
        body,
        location)
   and generate_cancel_stub env (action: code -> code) (kappa: K.t)  =
-    let open Pervasives in
     (* Compile a thunk to be invoked if the operation fails *)
     let cancellation_thunk_name =
       gensym ~prefix:"cancellation_thunk" () in
-    let () = Debug.print ("Kappa in GCS: " ^ K.to_string kappa) in
     (* Grab affected variables from the continuation *)
     let affected_vars_name = gensym ~prefix:"affected_vars" () in
     let fresh_var = Var.fresh_raw_var () in
