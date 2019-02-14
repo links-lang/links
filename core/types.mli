@@ -398,12 +398,7 @@ val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
-val pp_lens_sort : Format.formatter  -> lens_sort -> unit
 val pp_datatype : Format.formatter -> datatype -> unit
-val pp_quantifier : Format.formatter -> quantifier -> unit
-val pp_type_arg :  Format.formatter -> type_arg -> unit
-val show_quantifier : quantifier -> string
-val pp_row : Format.formatter -> row -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
 
 module type TYPE_VISITOR =
