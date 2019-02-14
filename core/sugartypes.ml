@@ -24,8 +24,6 @@ type logical_binop = [`And | `Or ]
     [@@deriving show]
 type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name ]
     [@@deriving show]
-type operator = [ unary_op | binop | `Project of name ]
-    [@@deriving show]
 
 let string_of_unary_op =
   function

@@ -493,12 +493,6 @@ class map =
         let node = o#patternnode node in
         let pos = o#position pos in {node; pos}
 
-    method operator : operator -> operator =
-      function
-      | (#unary_op as x) -> (o#unary_op x :> operator)
-      | (#binop as x) -> (o#binop x :> operator)
-      | `Project _x -> let _x = o#name _x in `Project _x
-
     method name : name -> name = o#string
 
     method logical_binop : logical_binop -> logical_binop =
@@ -1167,12 +1161,6 @@ class fold =
         let o = o#patternnode node in
         let o = o#position pos in
         o
-
-    method operator : operator -> 'self_type =
-      function
-      | (#unary_op as x) -> o#unary_op x
-      | (#binop as x) -> o#binop x
-      | `Project _x -> let o = o#name _x in o
 
     method name : name -> 'self_type = o#string
 
@@ -1930,12 +1918,6 @@ class fold_map =
         let (o, node) = o#patternnode node in
         let (o, pos ) = o#position pos in
         (o, {node; pos})
-
-    method operator : operator -> ('self_type * operator) =
-      function
-      | (#unary_op as x) -> (o#unary_op x :> 'self_type * operator)
-      | (#binop as x) -> (o#binop x :> 'self_type * operator)
-      | `Project _x -> let (o, _x) = o#name _x in (o, (`Project _x))
 
     method name : name -> ('self_type * name) = o#string
 
