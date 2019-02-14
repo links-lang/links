@@ -441,14 +441,14 @@ class map =
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
-      | `Unquote (bs, e) -> `Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
-      | `Grab (c, x, p) -> `Grab (c, x, o#cp_phrase p)
-      | `Give (c, e, p) -> `Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
-      | `GiveNothing c -> `GiveNothing (o#binder c)
-      | `Select (c, l, p) -> `Select (c, l, o#cp_phrase p)
-      | `Offer (c, bs) -> `Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
-      | `Link (c, d) -> `Link (c, d)
-      | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
+      | Unquote (bs, e)  -> Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
+      | Grab (c, x, p)   -> Grab (c, x, o#cp_phrase p)
+      | Give (c, e, p)   -> Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
+      | GiveNothing c    -> GiveNothing (o#binder c)
+      | Select (c, l, p) -> Select (c, l, o#cp_phrase p)
+      | Offer (c, bs)    -> Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
+      | Link (c, d)      -> Link (c, d)
+      | Comp (c, p, q)   -> Comp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
       fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
@@ -1126,14 +1126,14 @@ class fold =
 
     method cp_phrasenode : cp_phrasenode -> 'self_type =
       function
-      | `Unquote (bs, e) -> (o#list (fun o -> o#binding) bs)#phrase e
-      | `Grab (_c, _x, p) -> o#cp_phrase p
-      | `Give (_c, e, p) -> (o#option (fun o -> o#phrase) e)#cp_phrase p
-      | `GiveNothing c -> o#binder c
-      | `Select (_c, _l, p) -> o#cp_phrase p
-      | `Offer (_c, bs) -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
-      | `Link (_c, _d) -> o
-      | `Comp (_c, p, q) -> (o#cp_phrase p)#cp_phrase q
+      | Unquote (bs, e)    -> (o#list (fun o -> o#binding) bs)#phrase e
+      | Grab (_c, _x, p)   -> o#cp_phrase p
+      | Give (_c, e, p)    -> (o#option (fun o -> o#phrase) e)#cp_phrase p
+      | GiveNothing c      -> o#binder c
+      | Select (_c, _l, p) -> o#cp_phrase p
+      | Offer (_c, bs)     -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
+      | Link (_c, _d)      -> o
+      | Comp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
       fun {node; pos} -> (o#cp_phrasenode node)#position pos
@@ -1862,34 +1862,34 @@ class fold_map =
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
       function
-      | `Unquote (bs, e) ->
+      | Unquote (bs, e) ->
          let o, bs = o#list (fun o -> o#binding) bs in
          let o, e = o#phrase e in
-         o, `Unquote (bs, e)
-      | `Grab (c, x, p) ->
+         o, Unquote (bs, e)
+      | Grab (c, x, p) ->
          let o, p = o#cp_phrase p in
-         o, `Grab (c, x, p)
-      | `Give (c, e, p) ->
+         o, Grab (c, x, p)
+      | Give (c, e, p) ->
          let o, e = o#option (fun o -> o#phrase) e in
          let o, p = o#cp_phrase p in
-         o, `Give (c, e, p)
-      | `GiveNothing c ->
+         o, Give (c, e, p)
+      | GiveNothing c ->
          let o, c = o#binder c in
-         o, `GiveNothing c
-      | `Select (c, l, p) ->
+         o, GiveNothing c
+      | Select (c, l, p) ->
          let o, p = o#cp_phrase p in
-         o, `Select (c, l, p)
-      | `Offer (c, bs) ->
+         o, Select (c, l, p)
+      | Offer (c, bs) ->
          let o, bs = o#list (fun o (l, p) ->
                              let o, p = o#cp_phrase p in
                              o, (l, p)) bs in
-         o, `Offer (c, bs)
-      | `Link (c, d) ->
-         o, `Link (c, d)
-      | `Comp (c, p, q) ->
+         o, Offer (c, bs)
+      | Link (c, d) ->
+         o, Link (c, d)
+      | Comp (c, p, q) ->
          let o, p = o#cp_phrase p in
          let o, q = o#cp_phrase q in
-         o, `Comp (c, p, q)
+         o, Comp (c, p, q)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
       fun {node; pos} ->
