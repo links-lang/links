@@ -21,3 +21,4 @@
 
 ;; Make Lens modules available.
 (copy_files# lens/*.ml)
+(copy_files# lens/*.mli)

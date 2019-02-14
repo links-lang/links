@@ -9,7 +9,6 @@
 *)
 
 open Sugartypes
-open Operators
 
 class map =
   object ((o : 'self_type))
