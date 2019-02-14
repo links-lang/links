@@ -18,7 +18,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `Spawn (`Wait, spawn_loc, body, Some inner_eff) ->
+    | `Spawn (Wait, spawn_loc, body, Some inner_eff) ->
         assert (spawn_loc = NoSpawnLocation);
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
@@ -52,9 +52,9 @@ object (o : 'self_type)
 
         let spawn_fun =
           match k with
-          | `Demon  -> "spawnAt"
-          | `Angel  -> "spawnAngelAt"
-          | `Wait   -> assert false in
+          | Demon  -> "spawnAt"
+          | Angel  -> "spawnAngelAt"
+          | Wait   -> assert false in
 
         (* At this point, the location in the funlit doesn't matter -- we'll have an explicit
          * location in the form of spawn_loc_phr. It was useless before anyway, given that it

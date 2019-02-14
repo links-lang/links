@@ -244,7 +244,7 @@ class transform (env : Types.typing_environment) =
           in
             (o, `FunLit (Some argss, lin, lam, location), t)
       | `HandlerLit _ -> assert false
-      | `Spawn (`Wait, loc, body, Some inner_effects) ->
+      | `Spawn (Wait, loc, body, Some inner_effects) ->
           assert (loc = NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -253,7 +253,7 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `Spawn (`Wait, loc, body, Some inner_effects), body_type)
+            (o, `Spawn (Wait, loc, body, Some inner_effects), body_type)
       | `Spawn (k, spawn_loc, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)

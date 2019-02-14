@@ -94,7 +94,7 @@ object (o : 'self_type)
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in
             let o = o#restore_envs envs in
             let left_block =
-                spawn `Angel NoSpawnLocation (block (
+                spawn Angel NoSpawnLocation (block (
                     [ val_binding (variable_pat ~ty:s c) (fn_appl_var accept_str c);
                       val_binding (variable_pat ~ty:Types.make_endbang_type c)
                                   (with_dummy_pos left)],

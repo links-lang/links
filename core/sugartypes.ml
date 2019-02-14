@@ -197,7 +197,7 @@ type patternnode = [
 and pattern = patternnode with_pos
     [@@deriving show]
 
-type spawn_kind = [ `Angel | `Demon | `Wait ]
+type spawn_kind = Angel | Demon | Wait
     [@@deriving show]
 
 type replace_rhs = [

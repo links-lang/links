@@ -2602,7 +2602,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
             `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | `Spawn (`Wait, l, p, _) ->
+        | `Spawn (Wait, l, p, _) ->
             assert (l = NoSpawnLocation);
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
@@ -2616,7 +2616,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
-              `Spawn (`Wait, l, erase p, Some inner_effects), return_type, usages p
+              `Spawn (Wait, l, erase p, Some inner_effects), return_type, usages p
         | `Spawn (k, given_loc, p, _) ->
             (* Location -> (() -e-> _) -> Process (e) *)
             (match given_loc with

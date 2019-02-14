@@ -23,7 +23,7 @@ object (o: 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode = function
-    | (`Spawn (`Wait, _, _, _)) as sw ->
+    | (`Spawn (Wait, _, _, _)) as sw ->
         super#phrasenode sw
     | `Spawn (k, spawn_loc, {node=body;_}, Some inner_effects) ->
         let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
