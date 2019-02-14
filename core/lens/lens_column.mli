@@ -15,9 +15,6 @@ val typ : t -> Types.typ
 (** Determine if the column is present. *)
 val present : t -> bool
 
-(** Get the table name *)
-val table : t -> string
-
 val hide : t -> t
 
 val rename : t -> alias:string -> t
