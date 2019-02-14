@@ -54,10 +54,10 @@ class map =
 
     method sentence : sentence -> sentence =
       function
-      | `Definitions _x ->
-          let _x = o#list (fun o -> o#binding) _x in `Definitions _x
-      | `Expression _x -> let _x = o#phrase _x in `Expression _x
-      | `Directive _x -> let _x = o#directive _x in `Directive _x
+      | Definitions _x ->
+          let _x = o#list (fun o -> o#binding) _x in Definitions _x
+      | Expression _x -> let _x = o#phrase _x in Expression _x
+      | Directive _x -> let _x = o#directive _x in Directive _x
 
     method sec : sec -> sec =
       function
@@ -109,34 +109,30 @@ class map =
       | `Splice _x -> let _x = o#phrase _x in `Splice _x
 
     method regexflag : regexflag -> regexflag =
-      function
-      | `RegexList -> `RegexList
-      | `RegexNative -> `RegexNative
-      | `RegexGlobal -> `RegexGlobal
-      | `RegexReplace -> `RegexReplace
+      fun flag -> flag
 
     method regex : regex -> regex =
       function
-      | `Range ((_x, _x_i1)) ->
+      | Range ((_x, _x_i1)) ->
           let _x = o#char _x in
-          let _x_i1 = o#char _x_i1 in `Range ((_x, _x_i1))
-      | `Simply _x -> let _x = o#string _x in `Simply _x
-      | `Quote _x -> let _x = o#regex _x in `Quote _x
-      | `Any -> `Any
-      | `StartAnchor -> `StartAnchor
-      | `EndAnchor -> `EndAnchor
-      | `Seq _x -> let _x = o#list (fun o -> o#regex) _x in `Seq _x
-      | `Alternate ((_x, _x_i1)) ->
+          let _x_i1 = o#char _x_i1 in Range ((_x, _x_i1))
+      | Simply _x -> let _x = o#string _x in Simply _x
+      | Quote _x -> let _x = o#regex _x in Quote _x
+      | Any -> Any
+      | StartAnchor -> StartAnchor
+      | EndAnchor -> EndAnchor
+      | Seq _x -> let _x = o#list (fun o -> o#regex) _x in Seq _x
+      | Alternate ((_x, _x_i1)) ->
           let _x = o#regex _x in
-          let _x_i1 = o#regex _x_i1 in `Alternate ((_x, _x_i1))
-      | `Group _x -> let _x = o#regex _x in `Group _x
-      | `Repeat ((_x, _x_i1)) ->
+          let _x_i1 = o#regex _x_i1 in Alternate ((_x, _x_i1))
+      | Group _x -> let _x = o#regex _x in Group _x
+      | Repeat ((_x, _x_i1)) ->
           let _x = o#unknown _x in
-          let _x_i1 = o#regex _x_i1 in `Repeat ((_x, _x_i1))
-      | `Splice _x -> let _x = o#phrase _x in `Splice _x
-      | `Replace ((_x, _x_i1)) ->
+          let _x_i1 = o#regex _x_i1 in Repeat ((_x, _x_i1))
+      | Splice _x -> let _x = o#phrase _x in Splice _x
+      | Replace ((_x, _x_i1)) ->
           let _x = o#regex _x in
-          let _x_i1 = o#replace_rhs _x_i1 in `Replace ((_x, _x_i1))
+          let _x_i1 = o#replace_rhs _x_i1 in Replace ((_x, _x_i1))
 
     method position : position -> position =
       fun (_x, _x_i1, _x_i2) ->
@@ -152,7 +148,7 @@ class map =
 
     method given_spawn_location : given_spawn_location -> given_spawn_location =
       function
-        | `ExplicitSpawnLocation p -> `ExplicitSpawnLocation (o#phrase p)
+        | ExplicitSpawnLocation p -> ExplicitSpawnLocation (o#phrase p)
         | l -> l
 
     method phrasenode : phrasenode -> phrasenode =
@@ -441,14 +437,14 @@ class map =
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
-      | `Unquote (bs, e) -> `Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
-      | `Grab (c, x, p) -> `Grab (c, x, o#cp_phrase p)
-      | `Give (c, e, p) -> `Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
-      | `GiveNothing c -> `GiveNothing (o#binder c)
-      | `Select (c, l, p) -> `Select (c, l, o#cp_phrase p)
-      | `Offer (c, bs) -> `Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
-      | `Link (c, d) -> `Link (c, d)
-      | `Comp (c, p, q) -> `Comp (c, o#cp_phrase p, o#cp_phrase q)
+      | Unquote (bs, e)  -> Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
+      | Grab (c, x, p)   -> Grab (c, x, o#cp_phrase p)
+      | Give (c, e, p)   -> Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
+      | GiveNothing c    -> GiveNothing (o#binder c)
+      | Select (c, l, p) -> Select (c, l, o#cp_phrase p)
+      | Offer (c, bs)    -> Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
+      | Link (c, d)      -> Link (c, d)
+      | Comp (c, p, q)   -> Comp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
       fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
@@ -496,12 +492,6 @@ class map =
       fun {node; pos} ->
         let node = o#patternnode node in
         let pos = o#position pos in {node; pos}
-
-    method operator : operator -> operator =
-      function
-      | (#unary_op as x) -> (o#unary_op x :> operator)
-      | (#binop as x) -> (o#binop x :> operator)
-      | `Project _x -> let _x = o#name _x in `Project _x
 
     method name : name -> name = o#string
 
@@ -562,7 +552,7 @@ class map =
       | `Var _x -> let _x = o#known_type_variable _x in `Var _x
 
     method fieldconstraint : fieldconstraint -> fieldconstraint =
-      function | `Readonly -> `Readonly | `Default -> `Default
+      fun fc -> fc
 
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -779,9 +769,9 @@ class fold =
 
     method sentence : sentence -> 'self_type =
       function
-      | `Definitions _x -> let o = o#list (fun o -> o#binding) _x in o
-      | `Expression _x -> let o = o#phrase _x in o
-      | `Directive _x -> let o = o#directive _x in o
+      | Definitions _x -> let o = o#list (fun o -> o#binding) _x in o
+      | Expression _x -> let o = o#phrase _x in o
+      | Directive _x -> let o = o#directive _x in o
 
     method sec : sec -> 'self_type =
       function
@@ -831,29 +821,25 @@ class fold =
       | `Splice _x -> let o = o#phrase _x in o
 
     method regexflag : regexflag -> 'self_type =
-      function
-      | `RegexList -> o
-      | `RegexNative -> o
-      | `RegexGlobal -> o
-      | `RegexReplace -> o
+      fun _ -> o
 
     method regex : regex -> 'self_type =
       function
-      | `Range ((_x, _x_i1)) ->
+      | Range ((_x, _x_i1)) ->
           let o = o#char _x in let o = o#char _x_i1 in o
-      | `Simply _x -> let o = o#string _x in o
-      | `Quote _x -> let o = o#regex _x in o
-      | `Any -> o
-      | `StartAnchor -> o
-      | `EndAnchor -> o
-      | `Seq _x -> let o = o#list (fun o -> o#regex) _x in o
-      | `Alternate ((_x, _x_i1)) ->
+      | Simply _x -> let o = o#string _x in o
+      | Quote _x -> let o = o#regex _x in o
+      | Any -> o
+      | StartAnchor -> o
+      | EndAnchor -> o
+      | Seq _x -> let o = o#list (fun o -> o#regex) _x in o
+      | Alternate ((_x, _x_i1)) ->
           let o = o#regex _x in let o = o#regex _x_i1 in o
-      | `Group _x -> let o = o#regex _x in o
-      | `Repeat ((_x, _x_i1)) ->
+      | Group _x -> let o = o#regex _x in o
+      | Repeat ((_x, _x_i1)) ->
           let o = o#unknown _x in let o = o#regex _x_i1 in o
-      | `Splice _x -> let o = o#phrase _x in o
-      | `Replace ((_x, _x_i1)) ->
+      | Splice _x -> let o = o#phrase _x in o
+      | Replace ((_x, _x_i1)) ->
           let o = o#regex _x in let o = o#replace_rhs _x_i1 in o
 
     method position : position -> 'self_type =
@@ -869,7 +855,7 @@ class fold =
           o
 
     method given_spawn_location : given_spawn_location -> 'self_type = function
-      | `ExplicitSpawnLocation p -> let o = o#phrase p in o
+      | ExplicitSpawnLocation p -> let o = o#phrase p in o
       | _ -> o
 
     method phrasenode : phrasenode -> 'self_type =
@@ -1126,14 +1112,14 @@ class fold =
 
     method cp_phrasenode : cp_phrasenode -> 'self_type =
       function
-      | `Unquote (bs, e) -> (o#list (fun o -> o#binding) bs)#phrase e
-      | `Grab (_c, _x, p) -> o#cp_phrase p
-      | `Give (_c, e, p) -> (o#option (fun o -> o#phrase) e)#cp_phrase p
-      | `GiveNothing c -> o#binder c
-      | `Select (_c, _l, p) -> o#cp_phrase p
-      | `Offer (_c, bs) -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
-      | `Link (_c, _d) -> o
-      | `Comp (_c, p, q) -> (o#cp_phrase p)#cp_phrase q
+      | Unquote (bs, e)    -> (o#list (fun o -> o#binding) bs)#phrase e
+      | Grab (_c, _x, p)   -> o#cp_phrase p
+      | Give (_c, e, p)    -> (o#option (fun o -> o#phrase) e)#cp_phrase p
+      | GiveNothing c      -> o#binder c
+      | Select (_c, _l, p) -> o#cp_phrase p
+      | Offer (_c, bs)     -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
+      | Link (_c, _d)      -> o
+      | Comp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
       fun {node; pos} -> (o#cp_phrasenode node)#position pos
@@ -1175,12 +1161,6 @@ class fold =
         let o = o#patternnode node in
         let o = o#position pos in
         o
-
-    method operator : operator -> 'self_type =
-      function
-      | (#unary_op as x) -> o#unary_op x
-      | (#binop as x) -> o#binop x
-      | `Project _x -> let o = o#name _x in o
 
     method name : name -> 'self_type = o#string
 
@@ -1235,7 +1215,7 @@ class fold =
       | `Var _x -> let o = o#known_type_variable _x in o
 
     method fieldconstraint : fieldconstraint -> 'self_type =
-      function | `Readonly -> o | `Default -> o
+      fun _ -> o
 
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
@@ -1453,11 +1433,11 @@ class fold_map =
 
     method sentence : sentence -> ('self_type * sentence) =
       function
-      | `Definitions _x ->
+      | Definitions _x ->
           let (o, _x) = o#list (fun o -> o#binding) _x
-          in (o, (`Definitions _x))
-      | `Expression _x -> let (o, _x) = o#phrase _x in (o, (`Expression _x))
-      | `Directive _x -> let (o, _x) = o#directive _x in (o, (`Directive _x))
+          in (o, Definitions _x)
+      | Expression _x -> let (o, _x) = o#phrase _x in (o, Expression _x)
+      | Directive _x -> let (o, _x) = o#directive _x in (o, Directive _x)
 
     method sec : sec -> ('self_type * sec) =
       function
@@ -1509,36 +1489,32 @@ class fold_map =
       | `Splice _x -> let (o, _x) = o#phrase _x in (o, (`Splice _x))
 
     method regexflag : regexflag -> ('self_type * regexflag) =
-      function
-      | `RegexList -> (o, `RegexList)
-      | `RegexNative -> (o, `RegexNative)
-      | `RegexGlobal -> (o, `RegexGlobal)
-      | `RegexReplace -> (o, `RegexReplace)
+      fun flag -> (o, flag)
 
     method regex : regex -> ('self_type * regex) =
       function
-      | `Range ((_x, _x_i1)) ->
+      | Range ((_x, _x_i1)) ->
           let (o, _x) = o#char _x in
-          let (o, _x_i1) = o#char _x_i1 in (o, (`Range ((_x, _x_i1))))
-      | `Simply _x -> let (o, _x) = o#string _x in (o, (`Simply _x))
-      | `Quote _x -> let (o, _x) = o#regex _x in (o, (`Quote _x))
-      | `Any -> (o, `Any)
-      | `StartAnchor -> (o, `StartAnchor)
-      | `EndAnchor -> (o, `EndAnchor)
-      | `Seq _x ->
-          let (o, _x) = o#list (fun o -> o#regex) _x in (o, (`Seq _x))
-      | `Alternate ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#char _x_i1 in (o, (Range ((_x, _x_i1))))
+      | Simply _x -> let (o, _x) = o#string _x in (o, (Simply _x))
+      | Quote _x -> let (o, _x) = o#regex _x in (o, (Quote _x))
+      | Any -> (o, Any)
+      | StartAnchor -> (o, StartAnchor)
+      | EndAnchor -> (o, EndAnchor)
+      | Seq _x ->
+          let (o, _x) = o#list (fun o -> o#regex) _x in (o, (Seq _x))
+      | Alternate ((_x, _x_i1)) ->
           let (o, _x) = o#regex _x in
-          let (o, _x_i1) = o#regex _x_i1 in (o, (`Alternate ((_x, _x_i1))))
-      | `Group _x -> let (o, _x) = o#regex _x in (o, (`Group _x))
-      | `Repeat ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#regex _x_i1 in (o, (Alternate ((_x, _x_i1))))
+      | Group _x -> let (o, _x) = o#regex _x in (o, (Group _x))
+      | Repeat ((_x, _x_i1)) ->
           let (o, _x) = o#unknown _x in
-          let (o, _x_i1) = o#regex _x_i1 in (o, (`Repeat ((_x, _x_i1))))
-      | `Splice _x -> let (o, _x) = o#phrase _x in (o, (`Splice _x))
-      | `Replace ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#regex _x_i1 in (o, (Repeat ((_x, _x_i1))))
+      | Splice _x -> let (o, _x) = o#phrase _x in (o, (Splice _x))
+      | Replace ((_x, _x_i1)) ->
           let (o, _x) = o#regex _x in
           let (o, _x_i1) = o#replace_rhs _x_i1
-          in (o, (`Replace ((_x, _x_i1))))
+          in (o, (Replace ((_x, _x_i1))))
 
     method program : program -> ('self_type * program) =
       fun (_x, _x_i1) ->
@@ -1554,7 +1530,7 @@ class fold_map =
         in (o, (_x, _x_i1, _x_i2))
 
     method given_spawn_location : given_spawn_location -> ('self_type * given_spawn_location) = function
-      | `ExplicitSpawnLocation _p -> let (o, _p) = o#phrase _p in (o, `ExplicitSpawnLocation _p)
+      | ExplicitSpawnLocation _p -> let (o, _p) = o#phrase _p in (o, ExplicitSpawnLocation _p)
       | l -> (o, l)
 
     method phrasenode : phrasenode -> ('self_type * phrasenode) =
@@ -1862,34 +1838,34 @@ class fold_map =
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
       function
-      | `Unquote (bs, e) ->
+      | Unquote (bs, e) ->
          let o, bs = o#list (fun o -> o#binding) bs in
          let o, e = o#phrase e in
-         o, `Unquote (bs, e)
-      | `Grab (c, x, p) ->
+         o, Unquote (bs, e)
+      | Grab (c, x, p) ->
          let o, p = o#cp_phrase p in
-         o, `Grab (c, x, p)
-      | `Give (c, e, p) ->
+         o, Grab (c, x, p)
+      | Give (c, e, p) ->
          let o, e = o#option (fun o -> o#phrase) e in
          let o, p = o#cp_phrase p in
-         o, `Give (c, e, p)
-      | `GiveNothing c ->
+         o, Give (c, e, p)
+      | GiveNothing c ->
          let o, c = o#binder c in
-         o, `GiveNothing c
-      | `Select (c, l, p) ->
+         o, GiveNothing c
+      | Select (c, l, p) ->
          let o, p = o#cp_phrase p in
-         o, `Select (c, l, p)
-      | `Offer (c, bs) ->
+         o, Select (c, l, p)
+      | Offer (c, bs) ->
          let o, bs = o#list (fun o (l, p) ->
                              let o, p = o#cp_phrase p in
                              o, (l, p)) bs in
-         o, `Offer (c, bs)
-      | `Link (c, d) ->
-         o, `Link (c, d)
-      | `Comp (c, p, q) ->
+         o, Offer (c, bs)
+      | Link (c, d) ->
+         o, Link (c, d)
+      | Comp (c, p, q) ->
          let o, p = o#cp_phrase p in
          let o, q = o#cp_phrase q in
-         o, `Comp (c, p, q)
+         o, Comp (c, p, q)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
       fun {node; pos} ->
@@ -1942,12 +1918,6 @@ class fold_map =
         let (o, node) = o#patternnode node in
         let (o, pos ) = o#position pos in
         (o, {node; pos})
-
-    method operator : operator -> ('self_type * operator) =
-      function
-      | (#unary_op as x) -> (o#unary_op x :> 'self_type * operator)
-      | (#binop as x) -> (o#binop x :> 'self_type * operator)
-      | `Project _x -> let (o, _x) = o#name _x in (o, (`Project _x))
 
     method name : name -> ('self_type * name) = o#string
 
@@ -2007,9 +1977,8 @@ class fold_map =
       | `Absent -> (o, `Absent)
       | `Var _x -> let (o, _x) = o#known_type_variable _x in (o, `Var _x)
 
-    method fieldconstraint :
-      fieldconstraint -> ('self_type * fieldconstraint) =
-      function | `Readonly -> (o, `Readonly) | `Default -> (o, `Default)
+    method fieldconstraint : fieldconstraint -> ('self_type * fieldconstraint) =
+      fun fc -> (o, fc)
 
     method directive : directive -> ('self_type * directive) =
       fun (_x, _x_i1) ->

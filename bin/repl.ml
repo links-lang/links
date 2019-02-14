@@ -1,6 +1,7 @@
 open Links_core
 open Utility
 open List
+open Sugartypes
 
 module BS = Basicsettings
 
@@ -283,15 +284,15 @@ let interact envs =
           (* FIXME: What's going on here? Why is this not part of
              Frontend.Pipeline.interactive?*)
         let sentence' = match sentence with
-          | `Definitions defs ->
+          | Definitions defs ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
               let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.Types.effect_row) defs in
                 `Definitions (defs, nenv')
-          | `Expression e     ->
+          | Expression e     ->
               let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
               let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.Types.effect_row) e in
                 `Expression (e, t)
-          | `Directive d      -> `Directive d
+          | Directive d      -> `Directive d
         in
           sentence', tyenv'
       in
