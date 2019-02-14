@@ -558,7 +558,7 @@ class map =
       | `Var _x -> let _x = o#known_type_variable _x in `Var _x
 
     method fieldconstraint : fieldconstraint -> fieldconstraint =
-      function | `Readonly -> `Readonly | `Default -> `Default
+      fun fc -> fc
 
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -1227,7 +1227,7 @@ class fold =
       | `Var _x -> let o = o#known_type_variable _x in o
 
     method fieldconstraint : fieldconstraint -> 'self_type =
-      function | `Readonly -> o | `Default -> o
+      fun _ -> o
 
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
@@ -1995,9 +1995,8 @@ class fold_map =
       | `Absent -> (o, `Absent)
       | `Var _x -> let (o, _x) = o#known_type_variable _x in (o, `Var _x)
 
-    method fieldconstraint :
-      fieldconstraint -> ('self_type * fieldconstraint) =
-      function | `Readonly -> (o, `Readonly) | `Default -> (o, `Default)
+    method fieldconstraint : fieldconstraint -> ('self_type * fieldconstraint) =
+      fun fc -> (o, fc)
 
     method directive : directive -> ('self_type * directive) =
       fun (_x, _x_i1) ->

@@ -777,8 +777,8 @@ field_constraints:
 | field_constraint+                                            { $1 }
 
 field_constraint:
-| READONLY                                                     { `Readonly }
-| DEFAULT                                                      { `Default  }
+| READONLY                                                     { Readonly }
+| DEFAULT                                                      { Default  }
 
 perhaps_db_args:
 | atomic_expression?                                           { $1 }

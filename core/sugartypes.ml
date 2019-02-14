@@ -130,7 +130,7 @@ type quantifier = type_variable
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
-type fieldconstraint = [ `Readonly | `Default ]
+type fieldconstraint = Readonly | Default
     [@@deriving show]
 
 type datatypenode =

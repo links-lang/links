@@ -417,7 +417,7 @@ struct
              (fun label t (write, needed) ->
               match lookup label constraints with
               | Some cs ->
-                 if List.exists ((=) `Readonly) cs then
+                 if List.exists ((=) Readonly) cs then
                    (write, needed)
                  else (* if List.exists ((=) `Default) cs then *)
                    (Types.row_with (label, t) write, needed)
