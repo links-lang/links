@@ -223,7 +223,8 @@ and regex =
 | Replace   of (regex * replace_rhs)
 and clause = pattern * phrase
 and funlit = pattern list list * phrase
-and handlerlit = [`Deep | `Shallow] * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
+and handler_depth = Deep | Shallow
+and handlerlit = handler_depth * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
 and handler = {
   sh_expr: phrase;
   sh_effect_cases: clause list;
@@ -231,7 +232,7 @@ and handler = {
   sh_descr: handler_descriptor
 }
 and handler_descriptor = {
-  shd_depth: [`Deep | `Shallow];
+  shd_depth: handler_depth;
   shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
   shd_raw_row: Types.row;
   shd_params: handler_parameterisation option

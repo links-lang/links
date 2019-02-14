@@ -469,8 +469,8 @@ handler_parameterization:
 | arg_lists? handler_body                                      { ($2, $1) }
 
 handler_depth:
-| HANDLER                                                      { `Deep }
-| SHALLOWHANDLER                                               { `Shallow }
+| HANDLER                                                      { Deep    }
+| SHALLOWHANDLER                                               { Shallow }
 
 handler_body:
 | LBRACE cases RBRACE                                          { $2 }
@@ -713,11 +713,11 @@ perhaps_cases:
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Switch ($3, $6, None)) }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (`Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (`Handle (untyped_handler $3 $6 `Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Handle (untyped_handler $3 $6 `Deep   )) }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (`Handle (untyped_handler $3 $6 Shallow)) }
+| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Handle (untyped_handler $3 $6 Deep   )) }
 | HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE perhaps_cases RBRACE
                                                                { with_pos $loc (`Handle (untyped_handler ~parameters:(List.rev $6)
-                                                                                         $3 $9 `Deep)) }
+                                                                                         $3 $9 Deep)) }
 | RAISE                                                        { with_pos $loc (`Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (`TryInOtherwise ($2, $4, $6, $8, None)) }
 

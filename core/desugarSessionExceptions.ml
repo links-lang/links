@@ -96,7 +96,7 @@ object (o : 'self_type)
            Types.make_empty_closed_row (), otherwise_dt) in
 
         let hndl_desc = {
-          shd_depth = `Deep;
+          shd_depth = Deep;
           shd_types = types;
           shd_raw_row = raw_row;
           shd_params = None;

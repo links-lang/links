@@ -3281,7 +3281,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                        | [] -> raise Not_found
                      in
                      match descr.shd_params with
-                     | Some params when descr.shd_depth = `Deep ->
+                     | Some params when descr.shd_depth = Deep ->
                         let handler_params = params.shp_types in
                         begin match kpat.node with
                         | `Any ->
@@ -3370,13 +3370,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      let (_,_,pos') = SourceCode.resolve_pos @@ (fst3 kpat).pos in
                      let kt = TypeUtils.return_type (pattern_typ kpat) in
                      match descr.shd_depth with
-                     | `Deep ->
+                     | Deep ->
                         let eff = context.effect_row in
                         unify ~handle:Gripers.deep_resumption
                           ((pos', kt), no_pos bt);
                         unify ~handle:Gripers.deep_resumption_effects
                           ((pos', `Effect eff), no_pos (`Effect outer_eff))
-                     | `Shallow ->
+                     | Shallow ->
                         let eff = TypeUtils.effect_row (pattern_typ kpat) in
                         unify ~handle:Gripers.shallow_resumption
                           ((pos', kt), no_pos rt);
