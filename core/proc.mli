@@ -163,6 +163,8 @@ sig
 
   val get_buffer : channel_id -> (Value.t list) option
 
+  val close : chan -> unit
+
 end
 
 module rec Websockets : WEBSOCKETS

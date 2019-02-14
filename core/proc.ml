@@ -421,6 +421,8 @@ sig
   val register_server_channel : chan -> unit
 
   val get_buffer : channel_id -> (Value.t list) option
+
+  val close : chan -> unit
 end
 
 module rec Websockets : WEBSOCKETS =
@@ -998,7 +1000,6 @@ and Session : SESSION = struct
           res
       | None -> []
 
-
   (* Returns: channel to be returned, whether to block this thread.
    * Side effects: if an accept happens successfully (i.e. blocked is false), then
    * the other end of the channel will be unblocked -- in the case of a server request, then
@@ -1404,6 +1405,14 @@ and Session : SESSION = struct
     let contained_channels = Value.get_contained_channels msg in
     let is_chan_ready (_, recv_ep) = Hashtbl.mem buffers recv_ep in
     List.for_all (is_chan_ready) contained_channels
+
+  (* Closing a channel endpoint results in its queue in the buffers hashtable
+   * being deleted. *)
+  let close chan =
+    let p = find_active (receive_port chan) in
+    match lookup_endpoint p with
+      | Local -> Hashtbl.remove buffers p
+      | _ -> ()
 
   let receive chan =
       let recv_port = receive_port chan in

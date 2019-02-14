@@ -3,6 +3,7 @@
 open Utility
 
 [@@@ocaml.warning "-39"] (** disables warnings about unused rec flags in this module **)
+[@@@ocaml.warning "-3"] (** disables warnings about deprecation in this module **)
 
 type scope = [ `Local | `Global ]
   [@@deriving show]

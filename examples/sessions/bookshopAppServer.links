@@ -14,15 +14,15 @@ fun waitForClient(s) client {
       appendChildren(stringToXml(", card number received: " ^^ intToString(card)), getNodeById("items"));
       var (address, s) = receive(s);
       appendChildren(stringToXml(", address received: " ^^ address), getNodeById("items"));
-      ()
+      close(s)
   }
 }
 
 sig orderBooks : (~Shop) ~> ()
 fun orderBooks(c) client {
   var c = send("Alice in Wonderland", select Add c);
-  var _ = send("Summerhall Square", send(8753, select Checkout c));
-  ()
+  var c = send("Summerhall Square", send(8753, select Checkout c));
+  close(c)
 }
 
 fun mainPage(_, clientLoc) {

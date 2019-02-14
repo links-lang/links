@@ -7,35 +7,32 @@ fun calc(s) client {
     case Add(s) ->
       var (x,s) = receive(s);
       var (y,s) = receive(s);
-      var _ = send(x+y,s);
-      ()
+      close(send(x+y,s));
     case Mul(s) ->
       var (x,s) = receive(s);
       var (y,s) = receive(s);
-      var _ = send(x*y,s);
-      ()
+      close(send(x*y,s));
 
     case Sub(s) ->
       var (x,s) = receive(s);
       var (y,s) = receive(s);
-      var _ = send(y-x,s);
-      ()
+      close(send(y-x,s))
     case Div(s) ->
       var (x,s) = receive(s);
       var (y,s) = receive(s);
-      var _ = send(y/x,s);
-      ()
+      close(send(y/x,s))
   }
 }
 
 sig user : (CalcSelect, Int, Int, String) ~> Int
 fun user(s, op1, op2, operation) client {
+  fun recvAndClose(s) { var (x, s) = receive(s); close(s); x}
 
 	switch(operation) {
-		case "add" ->  { var s = select Add s; receive(send(op1,send(op2,s))).1 }
-		case "mult" -> { var s = select Mul s; receive(send(op1,send(op2,s))).1 }
-		case "sub" -> { var s = select Sub s; receive(send(op1,send(op2,s))).1 }
-		case "div" -> { var s = select Div s; receive(send(op1,send(op2,s))).1 }
+		case "add" ->  { var s = select Add s; recvAndClose(send(op1,send(op2,s))) }
+		case "mult" -> { var s = select Mul s; recvAndClose(send(op1,send(op2,s))) }
+		case "sub" -> { var s = select Sub s; recvAndClose(send(op1,send(op2,s))) }
+		case "div" -> { var s = select Div s; recvAndClose(send(op1,send(op2,s))) }
 	}
 }
 
