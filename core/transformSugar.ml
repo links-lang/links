@@ -221,9 +221,9 @@ class transform (env : Types.typing_environment) =
     method given_spawn_location :
       given_spawn_location ->
       ('self_type * given_spawn_location) = function
-        | `ExplicitSpawnLocation p ->
+        | ExplicitSpawnLocation p ->
             let (o, phr, _phr_ty) = o#phrase p in
-            (o, `ExplicitSpawnLocation phr)
+            (o, ExplicitSpawnLocation phr)
         | l -> (o, l)
 
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
@@ -245,7 +245,7 @@ class transform (env : Types.typing_environment) =
             (o, `FunLit (Some argss, lin, lam, location), t)
       | `HandlerLit _ -> assert false
       | `Spawn (`Wait, loc, body, Some inner_effects) ->
-          assert (loc = `NoSpawnLocation);
+          assert (loc = NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in

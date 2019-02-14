@@ -504,12 +504,12 @@ op:
 | INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
 
 spawn_expression:
-| SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc `Demon (`ExplicitSpawnLocation $3) $5 }
-| SPAWN block                                                  { spawn ~ppos:$loc `Demon  `NoSpawnLocation           $2 }
-| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { spawn ~ppos:$loc `Angel (`ExplicitSpawnLocation $3) $5 }
-| SPAWNANGEL  block                                            { spawn ~ppos:$loc `Angel  `NoSpawnLocation           $2 }
-| SPAWNCLIENT block                                            { spawn ~ppos:$loc `Demon  `SpawnClient               $2 }
-| SPAWNWAIT   block                                            { spawn ~ppos:$loc `Wait   `NoSpawnLocation           $2 }
+| SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc `Demon (ExplicitSpawnLocation $3) $5 }
+| SPAWN block                                                  { spawn ~ppos:$loc `Demon  NoSpawnLocation           $2 }
+| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { spawn ~ppos:$loc `Angel (ExplicitSpawnLocation $3) $5 }
+| SPAWNANGEL  block                                            { spawn ~ppos:$loc `Angel  NoSpawnLocation           $2 }
+| SPAWNCLIENT block                                            { spawn ~ppos:$loc `Demon  SpawnClient               $2 }
+| SPAWNWAIT   block                                            { spawn ~ppos:$loc `Wait   NoSpawnLocation           $2 }
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }

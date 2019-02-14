@@ -2603,7 +2603,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
         | `Spawn (`Wait, l, p, _) ->
-            assert (l = `NoSpawnLocation);
+            assert (l = NoSpawnLocation);
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             (* TODO: check if pid_type is actually needed somewhere *)
@@ -2620,7 +2620,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `Spawn (k, given_loc, p, _) ->
             (* Location -> (() -e-> _) -> Process (e) *)
             (match given_loc with
-              | `ExplicitSpawnLocation loc_phr ->
+              | ExplicitSpawnLocation loc_phr ->
                   let target_ty = `Application (Types.spawn_location, []) in
                   let t = tc loc_phr in
                   let _ = unify ~handle:Gripers.spawn_location (pos_and_typ t, no_pos target_ty) in ()

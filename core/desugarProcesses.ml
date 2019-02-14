@@ -19,7 +19,7 @@ object (o : 'self_type)
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | `Spawn (`Wait, spawn_loc, body, Some inner_eff) ->
-        assert (spawn_loc = `NoSpawnLocation);
+        assert (spawn_loc = NoSpawnLocation);
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
 
@@ -46,9 +46,9 @@ object (o : 'self_type)
 
         let spawn_loc_phr =
           match spawn_loc with
-            | `ExplicitSpawnLocation phr -> phr
-            | `SpawnClient -> fn_appl "there" [] [tuple []]
-            | `NoSpawnLocation -> fn_appl "here" [] [tuple []] in
+            | ExplicitSpawnLocation phr -> phr
+            | SpawnClient -> fn_appl "there" [] [tuple []]
+            | NoSpawnLocation -> fn_appl "here" [] [tuple []] in
 
         let spawn_fun =
           match k with

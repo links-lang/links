@@ -152,7 +152,7 @@ class map =
 
     method given_spawn_location : given_spawn_location -> given_spawn_location =
       function
-        | `ExplicitSpawnLocation p -> `ExplicitSpawnLocation (o#phrase p)
+        | ExplicitSpawnLocation p -> ExplicitSpawnLocation (o#phrase p)
         | l -> l
 
     method phrasenode : phrasenode -> phrasenode =
@@ -869,7 +869,7 @@ class fold =
           o
 
     method given_spawn_location : given_spawn_location -> 'self_type = function
-      | `ExplicitSpawnLocation p -> let o = o#phrase p in o
+      | ExplicitSpawnLocation p -> let o = o#phrase p in o
       | _ -> o
 
     method phrasenode : phrasenode -> 'self_type =
@@ -1554,7 +1554,7 @@ class fold_map =
         in (o, (_x, _x_i1, _x_i2))
 
     method given_spawn_location : given_spawn_location -> ('self_type * given_spawn_location) = function
-      | `ExplicitSpawnLocation _p -> let (o, _p) = o#phrase _p in (o, `ExplicitSpawnLocation _p)
+      | ExplicitSpawnLocation _p -> let (o, _p) = o#phrase _p in (o, ExplicitSpawnLocation _p)
       | l -> (o, l)
 
     method phrasenode : phrasenode -> ('self_type * phrasenode) =

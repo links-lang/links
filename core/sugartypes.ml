@@ -204,11 +204,10 @@ type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
 ]
-and given_spawn_location = [
-  | `ExplicitSpawnLocation of phrase (* spawnAt function *)
-  | `SpawnClient (* spawnClient function *)
-  | `NoSpawnLocation (* spawn function *)
-]
+and given_spawn_location =
+| ExplicitSpawnLocation of phrase (* spawnAt function *)
+| SpawnClient (* spawnClient function *)
+| NoSpawnLocation (* spawn function *)
 and regex = [
 | `Range     of char * char
 | `Simply    of string
