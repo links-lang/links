@@ -262,12 +262,12 @@ let parseRegexFlags f =
 | x = X           { [x] }
 
 interactive:
-| nofun_declaration                                            { `Definitions [$1] }
-| fun_declarations SEMICOLON                                   { `Definitions $1   }
-| SEMICOLON                                                    { `Definitions []   }
-| exp SEMICOLON                                                { `Expression $1    }
-| directive                                                    { `Directive $1     }
-| END                                                          { `Directive ("quit", []) (* rather hackish *) }
+| nofun_declaration                                            { Definitions [$1] }
+| fun_declarations SEMICOLON                                   { Definitions $1   }
+| SEMICOLON                                                    { Definitions []   }
+| exp SEMICOLON                                                { Expression $1    }
+| directive                                                    { Directive $1     }
+| END                                                          { Directive ("quit", []) (* rather hackish *) }
 
 file:
 | declarations exp? END                                        { ($1, $2     ) }

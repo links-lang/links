@@ -333,10 +333,10 @@ and bindingnode = [
 and binding = bindingnode with_pos
 and block_body = binding list * phrase
 and directive = string * string list
-and sentence = [
-| `Definitions of binding list
-| `Expression  of phrase
-| `Directive   of directive ]
+and sentence =
+| Definitions of binding list
+| Expression  of phrase
+| Directive   of directive
 and cp_phrasenode =
 | Unquote     of (binding list * phrase)
 | Grab        of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase

@@ -4083,13 +4083,13 @@ struct
       (fun () ->
          "before type checking: \n"^ show_sentence sentence);
     match sentence with
-      | `Definitions bindings ->
+      | Definitions bindings ->
           let tyenv', bindings, _ = type_bindings tyenv bindings in
           let tyenv' = Types.normalise_typing_environment tyenv' in
-            `Definitions bindings, Types.unit_type, tyenv'
-      | `Expression body ->
+            Definitions bindings, Types.unit_type, tyenv'
+      | Expression body ->
           let body, t, _ = (type_check tyenv body) in
           let t = Types.normalise_datatype t in
-            `Expression body, t, tyenv
-      | `Directive d -> `Directive d, Types.unit_type, tyenv
+            Expression body, t, tyenv
+      | Directive d -> Directive d, Types.unit_type, tyenv
 end

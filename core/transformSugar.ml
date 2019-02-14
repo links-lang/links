@@ -184,11 +184,11 @@ class transform (env : Types.typing_environment) =
 
     method sentence : sentence -> ('self_type * sentence) =
       function
-      | `Definitions defs ->
+      | Definitions defs ->
           let (o, defs) = listu o (fun o -> o#binding) defs
-          in (o, `Definitions defs)
-      | `Expression e -> let (o, e, _) = o#phrase e in (o, `Expression e)
-      | `Directive d -> (o, `Directive d)
+          in (o, Definitions defs)
+      | Expression e -> let (o, e, _) = o#phrase e in (o, Expression e)
+      | Directive d -> (o, Directive d)
 
     method regex : regex -> ('self_type * regex) =
       function

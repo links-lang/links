@@ -54,10 +54,10 @@ class map =
 
     method sentence : sentence -> sentence =
       function
-      | `Definitions _x ->
-          let _x = o#list (fun o -> o#binding) _x in `Definitions _x
-      | `Expression _x -> let _x = o#phrase _x in `Expression _x
-      | `Directive _x -> let _x = o#directive _x in `Directive _x
+      | Definitions _x ->
+          let _x = o#list (fun o -> o#binding) _x in Definitions _x
+      | Expression _x -> let _x = o#phrase _x in Expression _x
+      | Directive _x -> let _x = o#directive _x in Directive _x
 
     method sec : sec -> sec =
       function
@@ -779,9 +779,9 @@ class fold =
 
     method sentence : sentence -> 'self_type =
       function
-      | `Definitions _x -> let o = o#list (fun o -> o#binding) _x in o
-      | `Expression _x -> let o = o#phrase _x in o
-      | `Directive _x -> let o = o#directive _x in o
+      | Definitions _x -> let o = o#list (fun o -> o#binding) _x in o
+      | Expression _x -> let o = o#phrase _x in o
+      | Directive _x -> let o = o#directive _x in o
 
     method sec : sec -> 'self_type =
       function
@@ -1453,11 +1453,11 @@ class fold_map =
 
     method sentence : sentence -> ('self_type * sentence) =
       function
-      | `Definitions _x ->
+      | Definitions _x ->
           let (o, _x) = o#list (fun o -> o#binding) _x
-          in (o, (`Definitions _x))
-      | `Expression _x -> let (o, _x) = o#phrase _x in (o, (`Expression _x))
-      | `Directive _x -> let (o, _x) = o#directive _x in (o, (`Directive _x))
+          in (o, Definitions _x)
+      | Expression _x -> let (o, _x) = o#phrase _x in (o, Expression _x)
+      | Directive _x -> let (o, _x) = o#directive _x in (o, Directive _x)
 
     method sec : sec -> ('self_type * sec) =
       function

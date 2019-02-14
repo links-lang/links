@@ -558,12 +558,12 @@ let program alias_env (bindings, p : Sugartypes.program) : Sugartypes.program =
     (bindings, opt_map (phrase alias_env ->- snd) p)
 
 let sentence typing_env = function
-  | `Definitions bs ->
+  | Definitions bs ->
       let alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
-        {typing_env with tycon_env = alias_env}, `Definitions bs'
-  | `Expression  p  -> let o, p = phrase typing_env.tycon_env p in
-      {typing_env with tycon_env = o#aliases}, `Expression p
-  | `Directive   d  -> typing_env, `Directive d
+        {typing_env with tycon_env = alias_env}, Definitions bs'
+  | Expression  p  -> let o, p = phrase typing_env.tycon_env p in
+      {typing_env with tycon_env = o#aliases}, Expression p
+  | Directive   d  -> typing_env, Directive d
 
 let read ~aliases s =
   let dt, _ = Parse.parse_string ~in_context:(Parse.fresh_context ()) Parse.datatype s in
