@@ -30,6 +30,7 @@ let query_join_records lens set on =
   Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records
 
 let query_project_records lens set key drop =
+  let set = Sorted.force_positive set in
   let proj = Sorted.project_onto set ~columns:key in
   let recs = Sorted.all_values proj in
   let predicate = Lens_phrase.Option.in_expr key recs in

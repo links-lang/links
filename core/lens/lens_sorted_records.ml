@@ -386,12 +386,10 @@ let relational_update t ~fun_deps ~update_with =
           | None -> r
           | Some (_left, right) -> update r right
         ) r (List.combine (List.combine changes apply_changes) changelist) in
-      (r', r)
+      r'
     ) arr in
-  let res2 = update t.plus_rows in
-  let res2 = List.flatten (List.map (fun (r, r') -> if r = r' then [] else [r, r']) (Array.to_list res2)) in
+  let plus_rows = update t.plus_rows in
   let neg_rows = [| |] in
-  let plus_rows = Array.of_list (List.map (fun (a,_) -> a) res2) in
   let res = { t with neg_rows ; plus_rows ; } in
   sort_uniq res
 
@@ -406,10 +404,11 @@ let relational_merge t ~fun_deps ~update_with =
 
 let relational_extend t ~key ~by ~data ~default =
   let colmap = get_cols_map t ~columns:[key] in
+  let data = reorder data ~first:[key] in
   let relevant_value_map = Option.value_exn (get_col_map data ~column:by) in
   let extend row =
     let find = colmap row in
-    let rel = Simple_record.find_record t.plus_rows ~record:find in
+    let rel = Simple_record.find_record data.plus_rows ~record:find in
     let v = match rel with
       | None -> default
       | Some r -> relevant_value_map r in
@@ -425,15 +424,19 @@ let all_values t =
 
 let to_diff t ~key =
   let key_len = List.length key in
-  let data = reorder t ~first:key in
+  let t = reorder t ~first:key in
   let (insert_vals, update_vals) = List.partition (fun row ->
       let key_vals = List.take row ~n:key_len in
       let row = Simple_record.find_index t.neg_rows ~record:key_vals in
-      Option.is_none row) (Array.to_list data.plus_rows) in
+      Option.is_none row) (Array.to_list t.plus_rows) in
   let delete_vals =
     Array.to_list t.neg_rows
     |> List.filter (fun row ->
         let key_vals = List.take row ~n:key_len in
-        let row = Simple_record.find_index data.plus_rows ~record:key_vals in
+        let row = Simple_record.find_index t.plus_rows ~record:key_vals in
         Option.is_none row) in
-  columns data, (insert_vals, update_vals, delete_vals)
+  columns t, (insert_vals, update_vals, delete_vals)
+
+let force_positive t =
+  let t = { t with plus_rows = Array.append t.plus_rows t.neg_rows; neg_rows = [||] } in
+  sort_uniq t

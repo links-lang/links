@@ -10,6 +10,8 @@ type t = lens_phrase
 
 let var n = Var n
 
+let infix op v1 v2 = InfixAppl (op, v1, v2)
+
 let and' v1 v2 = InfixAppl (Binary.Logical Logical_binop.And, v1, v2)
 
 let or' v1 v2 = InfixAppl (Binary.Logical Logical_binop.Or, v1, v2)

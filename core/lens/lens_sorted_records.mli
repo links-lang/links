@@ -146,3 +146,5 @@ val to_diff :
   t
   -> key:string list
   -> string list * (Simple_record.t list * Simple_record.t list * Simple_record.t list)
+
+val force_positive : t -> t

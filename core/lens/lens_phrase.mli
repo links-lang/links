@@ -3,43 +3,46 @@ open Sugartypes
 
 type t = lens_phrase
 
-(** Create a variable phrase *)
+(** Create a variable phrase. *)
 val var : string -> t
 
-(** Create a logical and between two phrases *)
+(** Any infix operator application. *)
+val infix : Lens_operators.Binary.t -> t -> t -> t
+
+(** Create a logical and between two phrases. *)
 val and' : t -> t -> t
 
-(** Create a logical or between two phrases *)
+(** Create a logical or between two phrases. *)
 val or' : t -> t -> t
 
-(** Create an equality comparison of two phrases *)
+(** Create an equality comparison of two phrases. *)
 val equal : t -> t -> t
 
-(** Logical not of a phrase *)
+(** Logical not of a phrase. *)
 val not' : t -> t
 
-(** Create a tuple of a list of phrases *)
+(** Create a tuple of a list of phrases. *)
 val tuple : t list -> t
 
-(** Create a tuple of a single phrase *)
+(** Create a tuple of a single phrase. *)
 val tuple_singleton : t -> t
 
 (** Convert a links syntax phrase into a lens phrase. *)
 val of_phrase : phrase -> t
 
-(** Traverse a lens phrase, applying [dosth] to each nod and then replacing the result *)
+(** Traverse a lens phrase, applying [dosth] to each nod and then replacing the result. *)
 val traverse : t -> f:(t -> t) -> t
 
-(** Get a list of variables in the expression *)
+(** Get a list of variables in the expression. *)
 val get_vars : t -> Lens_alias.Set.t
 
 (** Calculate the vale of an expression given a lookup function for variables. *)
 val eval : t -> (string -> Value.t) -> Value.t
 
-(** Rename all variables with an entry in the given map *)
+(** Rename all variables with an entry in the given map. *)
 val rename_var : t -> replace:string Lens_alias.Map.t -> t
 
-(** Replace all variable nodes with nodes by the given map *)
+(** Replace all variable nodes with nodes by the given map. *)
 val replace_var : t -> replace:Value.t Lens_alias.Map.t -> t
 
 module Constant : sig
