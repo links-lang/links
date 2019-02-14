@@ -160,9 +160,9 @@ let parseRegexFlags f =
     else
       asList f (i+1) ((String.get f i)::l) in
     List.map (function
-                'l' -> `RegexList
-              | 'n' -> `RegexNative
-              | 'g' -> `RegexGlobal
+                'l' -> RegexList
+              | 'n' -> RegexNative
+              | 'g' -> RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
 
@@ -1102,7 +1102,7 @@ regex:
 | SLASH regex_flags_opt                                        { with_pos $loc (`Regex (Simply "")), $2 }
 | SSLASH regex_pattern_alternate SLASH regex_replace
     regex_flags_opt                                            { with_pos $loc (`Regex (Replace ($2, $4))),
-                                                                 `RegexReplace :: $5 }
+                                                                 RegexReplace :: $5 }
 
 regex_flags_opt:
 | SLASH                                                        { [] }

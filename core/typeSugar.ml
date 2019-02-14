@@ -1414,9 +1414,9 @@ let type_binary_op ctxt =
   | `Minus        -> add_empty_usages (Utils.instantiate ctxt.var_env "-")
   | `FloatMinus   -> add_empty_usages (Utils.instantiate ctxt.var_env "-.")
   | `RegexMatch flags ->
-      let nativep  = List.exists ((=) `RegexNative)  flags
-      and listp    = List.exists ((=) `RegexList)    flags
-      and replacep = List.exists ((=) `RegexReplace) flags in
+      let nativep  = List.exists ((=) RegexNative)  flags
+      and listp    = List.exists ((=) RegexList)    flags
+      and replacep = List.exists ((=) RegexReplace) flags in
         begin
           match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) add_empty_usages (datatype "(String, Regex) -> String")

@@ -28,9 +28,9 @@ let type_binary_op env tycon_env =
   | `Minus        -> TyEnv.lookup env "-"
   | `FloatMinus   -> TyEnv.lookup env "-."
   | `RegexMatch flags ->
-      let nativep  = List.exists ((=) `RegexNative)  flags
-      and listp    = List.exists ((=) `RegexList)    flags
-      and replacep = List.exists ((=) `RegexReplace) flags in
+      let nativep  = List.exists ((=) RegexNative)  flags
+      and listp    = List.exists ((=) RegexList)    flags
+      and replacep = List.exists ((=) RegexReplace) flags in
         (match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) datatype "(String, Regex) -> String"
            | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> [String]"

@@ -18,7 +18,7 @@ type unary_op = [
 | `FloatMinus
 | `Name of name
 ]
-and regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
+and regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
     [@@deriving show]
 type logical_binop = [`And | `Or ]
     [@@deriving show]

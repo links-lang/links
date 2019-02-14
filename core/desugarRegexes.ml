@@ -73,14 +73,14 @@ object(self)
   method! phrase ({node=p; pos} as ph) = match p with
     | `InfixAppl ((tyargs, `RegexMatch flags), e1, {node=`Regex((Replace(_,_) as r)); _}) ->
         let libfn =
-          if List.exists ((=)`RegexNative) flags
+          if List.exists ((=)RegexNative) flags
           then "sntilde"
           else "stilde" in
           self#phrase (fn_appl libfn tyargs
                             [e1; desugar_regex self#phrase regex_type r])
     | `InfixAppl ((tyargs, `RegexMatch flags), e1, {node=`Regex r; _}) ->
-        let nativep = List.exists ((=) `RegexNative) flags
-        and listp   = List.exists ((=) `RegexList)   flags in
+        let nativep = List.exists ((=) RegexNative) flags
+        and listp   = List.exists ((=) RegexList)   flags in
         let libfn = match listp, nativep with
           | true, true   -> "lntilde"
           | true, false  -> "ltilde"

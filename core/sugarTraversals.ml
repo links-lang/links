@@ -109,11 +109,7 @@ class map =
       | `Splice _x -> let _x = o#phrase _x in `Splice _x
 
     method regexflag : regexflag -> regexflag =
-      function
-      | `RegexList -> `RegexList
-      | `RegexNative -> `RegexNative
-      | `RegexGlobal -> `RegexGlobal
-      | `RegexReplace -> `RegexReplace
+      fun flag -> flag
 
     method regex : regex -> regex =
       function
@@ -831,11 +827,7 @@ class fold =
       | `Splice _x -> let o = o#phrase _x in o
 
     method regexflag : regexflag -> 'self_type =
-      function
-      | `RegexList -> o
-      | `RegexNative -> o
-      | `RegexGlobal -> o
-      | `RegexReplace -> o
+      fun _ -> o
 
     method regex : regex -> 'self_type =
       function
@@ -1509,11 +1501,7 @@ class fold_map =
       | `Splice _x -> let (o, _x) = o#phrase _x in (o, (`Splice _x))
 
     method regexflag : regexflag -> ('self_type * regexflag) =
-      function
-      | `RegexList -> (o, `RegexList)
-      | `RegexNative -> (o, `RegexNative)
-      | `RegexGlobal -> (o, `RegexGlobal)
-      | `RegexReplace -> (o, `RegexReplace)
+      fun flag -> (o, flag)
 
     method regex : regex -> ('self_type * regex) =
       function
