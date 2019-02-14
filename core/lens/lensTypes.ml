@@ -1,9 +1,9 @@
 open Types
 open Utility
-open LensUtility
-open LensQueryHelpers
-open LensRecordHelpers
+open Lens_types
 open Sugartypes
+
+module Phrase = Lens_phrase
 
 let unpack_field_spec (typ : Types.field_spec) =
     match typ with
@@ -48,15 +48,16 @@ let cols_of_phrase (key : phrase) : string list =
     | `Var name -> [name]
     | _ -> failwith "Expected a tuple or a variable."
 
-let select_lens_sort (sort : Types.lens_sort) (pred : lens_phrase) : Types.lens_sort =
-    let oldPred = LensSort.predicate sort in
-    let pred = Phrase.combine_and oldPred (Some pred) in
-    (LensSort.fundeps sort, pred, LensSort.cols sort)
+let select_lens_sort (sort : Lens_sort.t) (pred : lens_phrase) : Lens_sort.t =
+    let oldPred = Lens_sort.predicate sort in
+    let predicate = Phrase.Option.combine_and oldPred (Some pred) in
+    Lens_sort.update_predicate sort ~predicate
 
-let drop_lens_sort (sort : Types.lens_sort) (drop : ColSet.t) (key : ColSet.t) =
+let drop_lens_sort (sort : Types.lens_sort) (drop : Alias.Set.t) (cols : Alias.Set.t) =
     (* Verify that the functional dependencies contain X \to A *)
-    if ColSet.subset drop (FunDepSet.transitive_closure key (LensSort.fundeps sort)) |> not then
+    if Alias.Set.subset drop (Fun_dep.Set.transitive_closure ~cols (Lens_sort.fds sort)) |> not then
         failwith "The dropped columns must be defined by the key";
-    let fds = FunDepSet.remove_defines (LensSort.fundeps sort) drop in
-    let domain = List.map (fun c -> if ColSet.mem (LensCol.alias c) drop then LensCol.hide c else c) (LensSort.cols sort) in
-    LensSort.make fds (LensSort.predicate sort) domain
+    let fds = Fun_dep.Set.remove_defines (Sort.fds sort) ~cols:drop in
+    let cols = List.map (fun c -> if Alias.Set.mem (Lens_column.alias c) drop then Lens_column.hide c else c) (Lens_sort.cols sort) in
+    let predicate = Lens_sort.predicate sort in
+    Lens_sort.make ~fds ~predicate cols

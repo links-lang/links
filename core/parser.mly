@@ -46,7 +46,6 @@ struct
   module Sugartypes        = Sugartypes
   module SugarConstructors = SugarConstructors
   module Types             = Types
-  module Operators         = Operators
 end
 
 (* Construction of nodes using positions produced by Menhir parser *)

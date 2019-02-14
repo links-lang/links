@@ -1,5 +1,4 @@
 open Sugartypes
-open Operators
 open Utility.OptionUtils
 
 (* Import module signatures. *)
