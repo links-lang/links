@@ -64,7 +64,6 @@ type 'a with_pos = { node : 'a
 
 let with_pos           pos node   = { node; pos }
 let with_dummy_pos     node       = { node; pos = dummy_position }
-let tuple_of_with_pos {node; pos} = (node, pos)
 
 type binder = (name * Types.datatype option) with_pos
     [@@deriving show]
