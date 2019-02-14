@@ -192,25 +192,25 @@ class transform (env : Types.typing_environment) =
 
     method regex : regex -> ('self_type * regex) =
       function
-        | (`Range _ | `Simply _ | `Any  | `StartAnchor | `EndAnchor) as r -> (o, r)
-        | `Quote r -> let (o, r) = o#regex r in (o, `Quote r)
-        | `Seq rs ->
-            let (o, rs) = listu o (fun o -> o#regex) rs in (o, `Seq rs)
-        | `Alternate (r1, r2) ->
+        | (Range _ | Simply _ | Any  | StartAnchor | EndAnchor) as r -> (o, r)
+        | Quote r -> let (o, r) = o#regex r in (o, Quote r)
+        | Seq rs ->
+            let (o, rs) = listu o (fun o -> o#regex) rs in (o, Seq rs)
+        | Alternate (r1, r2) ->
             let (o, r1) = o#regex r1 in
             let (o, r2) = o#regex r2 in
-              (o, `Alternate (r1, r2))
-        | `Group r -> let (o, r) = o#regex r in (o, `Group r)
-        | `Repeat (repeat, r) ->
-            let (o, r) = o#regex r in (o, `Repeat (repeat, r))
-        | `Splice e -> let (o, e, _) = o#phrase e in (o, `Splice e)
-        | `Replace (r, `Literal s) ->
+              (o, Alternate (r1, r2))
+        | Group r -> let (o, r) = o#regex r in (o, Group r)
+        | Repeat (repeat, r) ->
+            let (o, r) = o#regex r in (o, Repeat (repeat, r))
+        | Splice e -> let (o, e, _) = o#phrase e in (o, Splice e)
+        | Replace (r, `Literal s) ->
             let (o, r) = o#regex r in
-              (o, `Replace (r, `Literal s))
-        | `Replace (r, `Splice e) ->
+              (o, Replace (r, `Literal s))
+        | Replace (r, `Splice e) ->
             let (o, r) = o#regex r in
             let (o, e, _) = o#phrase e in
-              (o, `Replace (r, `Splice e))
+              (o, Replace (r, `Splice e))
 
     method program : program -> ('self_type * program * Types.datatype option) =
       fun (bs, e) ->

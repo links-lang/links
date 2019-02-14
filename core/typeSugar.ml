@@ -140,19 +140,19 @@ struct
   and is_pure_regex = function
       (* don't check whether it can fail; just check whether it
          contains non-generilisable sub-expressions *)
-    | `Range _
-    | `Simply _
-    | `Any
-    | `StartAnchor
-    | `EndAnchor -> true
-    | `Group r
-    | `Repeat (_, r)
-    | `Quote r -> is_pure_regex r
-    | `Seq rs -> List.for_all is_pure_regex rs
-    | `Alternate (r1, r2) -> is_pure_regex r1 && is_pure_regex r2
-    | `Splice p -> is_pure p
-    | `Replace (r, `Literal _) -> is_pure_regex r
-    | `Replace (r, `Splice p) -> is_pure_regex r && is_pure p
+    | Range _
+    | Simply _
+    | Any
+    | StartAnchor
+    | EndAnchor -> true
+    | Group r
+    | Repeat (_, r)
+    | Quote r -> is_pure_regex r
+    | Seq rs -> List.for_all is_pure_regex rs
+    | Alternate (r1, r2) -> is_pure_regex r1 && is_pure_regex r2
+    | Splice p -> is_pure p
+    | Replace (r, `Literal _) -> is_pure_regex r
+    | Replace (r, `Splice p) -> is_pure_regex r && is_pure p
 
   let is_generalisable = is_pure
 end
@@ -3869,21 +3869,20 @@ and type_regex typing_env : regex -> regex =
     let no_pos t = ("<unknown>", t) in
     let tr = type_regex typing_env in
       match m with
-        | (`Range _ | `Simply _ | `Any  | `StartAnchor | `EndAnchor) as r -> r
-        | `Quote r -> `Quote (tr r)
-        | `Seq rs -> `Seq (List.map tr rs)
-        | `Alternate (r1, r2) -> `Alternate (tr r1, tr r2)
-        | `Group r -> `Group (tr r)
-        | `Repeat (repeat, r) -> `Repeat (repeat, tr r)
-        | `Splice e ->
-            let pos = e.pos in
-            let e = type_check typing_env e in
-            let () = unify_or_raise ~pos:pos ~handle:Gripers.splice_exp
-              (no_pos (typ e), no_pos Types.string_type)
-            in
-              `Splice (erase e)
-        | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
-        | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
+        | (Range _ | Simply _ | Any  | StartAnchor | EndAnchor) as r -> r
+        | Quote r -> Quote (tr r)
+        | Seq rs -> Seq (List.map tr rs)
+        | Alternate (r1, r2) -> Alternate (tr r1, tr r2)
+        | Group r -> Group (tr r)
+        | Repeat (repeat, r) -> Repeat (repeat, tr r)
+        | Splice e ->
+           let pos = e.pos in
+           let e = type_check typing_env e in
+           let () = unify_or_raise ~pos:pos ~handle:Gripers.splice_exp
+                      (no_pos (typ e), no_pos Types.string_type)
+           in Splice (erase e)
+        | Replace (r, `Literal s) -> Replace (tr r, `Literal s)
+        | Replace (r, `Splice e)  -> Replace (tr r, `Splice (erase (type_check typing_env e)))
 and type_bindings (globals : context)  bindings =
   let tyenv, (bindings, uinf) =
     List.fold_left

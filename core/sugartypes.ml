@@ -208,20 +208,19 @@ and given_spawn_location =
 | ExplicitSpawnLocation of phrase (* spawnAt function *)
 | SpawnClient (* spawnClient function *)
 | NoSpawnLocation (* spawn function *)
-and regex = [
-| `Range     of char * char
-| `Simply    of string
-| `Quote     of regex
-| `Any
-| `StartAnchor
-| `EndAnchor
-| `Seq       of regex list
-| `Alternate of regex * regex
-| `Group     of regex
-| `Repeat    of Regex.repeat * regex
-| `Splice    of phrase
-| `Replace   of regex * replace_rhs
-]
+and regex =
+| Range     of (char * char)
+| Simply    of string
+| Quote     of regex
+| Any
+| StartAnchor
+| EndAnchor
+| Seq       of regex list
+| Alternate of (regex * regex)
+| Group     of regex
+| Repeat    of (Regex.repeat * regex)
+| Splice    of phrase
+| Replace   of (regex * replace_rhs)
 and clause = pattern * phrase
 and funlit = pattern list list * phrase
 and handlerlit = [`Deep | `Shallow] * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
@@ -559,19 +558,19 @@ struct
               union exprfree (diff bodyfree patbound))
   and case (pat, body) : StringSet.t = diff (phrase body) (pattern pat)
   and regex = function
-    | `Range _
-    | `Simply _
-    | `Any
-    | `StartAnchor
-    | `EndAnchor
-    | `Quote _ -> empty
-    | `Seq rs -> union_map regex rs
-    | `Alternate (r1, r2) -> union (regex r1) (regex r2)
-    | `Group r
-    | `Repeat (_, r) -> regex r
-    | `Splice p -> phrase p
-    | `Replace (r, `Literal _) -> regex r
-    | `Replace (r, `Splice p) -> union (regex r) (phrase p)
+    | Range _
+    | Simply _
+    | Any
+    | StartAnchor
+    | EndAnchor
+    | Quote _ -> empty
+    | Seq rs -> union_map regex rs
+    | Alternate (r1, r2) -> union (regex r1) (regex r2)
+    | Group r
+    | Repeat (_, r) -> regex r
+    | Splice p -> phrase p
+    | Replace (r, `Literal _) -> regex r
+    | Replace (r, `Splice p) -> union (regex r) (phrase p)
   and cp_phrase {node = p; _ } = match p with
     | Unquote e -> block e
     | Grab ((c, _t), Some bndr, p) ->

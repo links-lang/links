@@ -117,26 +117,26 @@ class map =
 
     method regex : regex -> regex =
       function
-      | `Range ((_x, _x_i1)) ->
+      | Range ((_x, _x_i1)) ->
           let _x = o#char _x in
-          let _x_i1 = o#char _x_i1 in `Range ((_x, _x_i1))
-      | `Simply _x -> let _x = o#string _x in `Simply _x
-      | `Quote _x -> let _x = o#regex _x in `Quote _x
-      | `Any -> `Any
-      | `StartAnchor -> `StartAnchor
-      | `EndAnchor -> `EndAnchor
-      | `Seq _x -> let _x = o#list (fun o -> o#regex) _x in `Seq _x
-      | `Alternate ((_x, _x_i1)) ->
+          let _x_i1 = o#char _x_i1 in Range ((_x, _x_i1))
+      | Simply _x -> let _x = o#string _x in Simply _x
+      | Quote _x -> let _x = o#regex _x in Quote _x
+      | Any -> Any
+      | StartAnchor -> StartAnchor
+      | EndAnchor -> EndAnchor
+      | Seq _x -> let _x = o#list (fun o -> o#regex) _x in Seq _x
+      | Alternate ((_x, _x_i1)) ->
           let _x = o#regex _x in
-          let _x_i1 = o#regex _x_i1 in `Alternate ((_x, _x_i1))
-      | `Group _x -> let _x = o#regex _x in `Group _x
-      | `Repeat ((_x, _x_i1)) ->
+          let _x_i1 = o#regex _x_i1 in Alternate ((_x, _x_i1))
+      | Group _x -> let _x = o#regex _x in Group _x
+      | Repeat ((_x, _x_i1)) ->
           let _x = o#unknown _x in
-          let _x_i1 = o#regex _x_i1 in `Repeat ((_x, _x_i1))
-      | `Splice _x -> let _x = o#phrase _x in `Splice _x
-      | `Replace ((_x, _x_i1)) ->
+          let _x_i1 = o#regex _x_i1 in Repeat ((_x, _x_i1))
+      | Splice _x -> let _x = o#phrase _x in Splice _x
+      | Replace ((_x, _x_i1)) ->
           let _x = o#regex _x in
-          let _x_i1 = o#replace_rhs _x_i1 in `Replace ((_x, _x_i1))
+          let _x_i1 = o#replace_rhs _x_i1 in Replace ((_x, _x_i1))
 
     method position : position -> position =
       fun (_x, _x_i1, _x_i2) ->
@@ -839,21 +839,21 @@ class fold =
 
     method regex : regex -> 'self_type =
       function
-      | `Range ((_x, _x_i1)) ->
+      | Range ((_x, _x_i1)) ->
           let o = o#char _x in let o = o#char _x_i1 in o
-      | `Simply _x -> let o = o#string _x in o
-      | `Quote _x -> let o = o#regex _x in o
-      | `Any -> o
-      | `StartAnchor -> o
-      | `EndAnchor -> o
-      | `Seq _x -> let o = o#list (fun o -> o#regex) _x in o
-      | `Alternate ((_x, _x_i1)) ->
+      | Simply _x -> let o = o#string _x in o
+      | Quote _x -> let o = o#regex _x in o
+      | Any -> o
+      | StartAnchor -> o
+      | EndAnchor -> o
+      | Seq _x -> let o = o#list (fun o -> o#regex) _x in o
+      | Alternate ((_x, _x_i1)) ->
           let o = o#regex _x in let o = o#regex _x_i1 in o
-      | `Group _x -> let o = o#regex _x in o
-      | `Repeat ((_x, _x_i1)) ->
+      | Group _x -> let o = o#regex _x in o
+      | Repeat ((_x, _x_i1)) ->
           let o = o#unknown _x in let o = o#regex _x_i1 in o
-      | `Splice _x -> let o = o#phrase _x in o
-      | `Replace ((_x, _x_i1)) ->
+      | Splice _x -> let o = o#phrase _x in o
+      | Replace ((_x, _x_i1)) ->
           let o = o#regex _x in let o = o#replace_rhs _x_i1 in o
 
     method position : position -> 'self_type =
@@ -1517,28 +1517,28 @@ class fold_map =
 
     method regex : regex -> ('self_type * regex) =
       function
-      | `Range ((_x, _x_i1)) ->
+      | Range ((_x, _x_i1)) ->
           let (o, _x) = o#char _x in
-          let (o, _x_i1) = o#char _x_i1 in (o, (`Range ((_x, _x_i1))))
-      | `Simply _x -> let (o, _x) = o#string _x in (o, (`Simply _x))
-      | `Quote _x -> let (o, _x) = o#regex _x in (o, (`Quote _x))
-      | `Any -> (o, `Any)
-      | `StartAnchor -> (o, `StartAnchor)
-      | `EndAnchor -> (o, `EndAnchor)
-      | `Seq _x ->
-          let (o, _x) = o#list (fun o -> o#regex) _x in (o, (`Seq _x))
-      | `Alternate ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#char _x_i1 in (o, (Range ((_x, _x_i1))))
+      | Simply _x -> let (o, _x) = o#string _x in (o, (Simply _x))
+      | Quote _x -> let (o, _x) = o#regex _x in (o, (Quote _x))
+      | Any -> (o, Any)
+      | StartAnchor -> (o, StartAnchor)
+      | EndAnchor -> (o, EndAnchor)
+      | Seq _x ->
+          let (o, _x) = o#list (fun o -> o#regex) _x in (o, (Seq _x))
+      | Alternate ((_x, _x_i1)) ->
           let (o, _x) = o#regex _x in
-          let (o, _x_i1) = o#regex _x_i1 in (o, (`Alternate ((_x, _x_i1))))
-      | `Group _x -> let (o, _x) = o#regex _x in (o, (`Group _x))
-      | `Repeat ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#regex _x_i1 in (o, (Alternate ((_x, _x_i1))))
+      | Group _x -> let (o, _x) = o#regex _x in (o, (Group _x))
+      | Repeat ((_x, _x_i1)) ->
           let (o, _x) = o#unknown _x in
-          let (o, _x_i1) = o#regex _x_i1 in (o, (`Repeat ((_x, _x_i1))))
-      | `Splice _x -> let (o, _x) = o#phrase _x in (o, (`Splice _x))
-      | `Replace ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#regex _x_i1 in (o, (Repeat ((_x, _x_i1))))
+      | Splice _x -> let (o, _x) = o#phrase _x in (o, (Splice _x))
+      | Replace ((_x, _x_i1)) ->
           let (o, _x) = o#regex _x in
           let (o, _x_i1) = o#replace_rhs _x_i1
-          in (o, (`Replace ((_x, _x_i1))))
+          in (o, (Replace ((_x, _x_i1))))
 
     method program : program -> ('self_type * program) =
       fun (_x, _x_i1) ->

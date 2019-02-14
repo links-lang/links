@@ -1099,9 +1099,9 @@ kinded_row_var:
  */
 regex:
 | SLASH regex_pattern_alternate regex_flags_opt                { with_pos $loc($2) (`Regex $2), $3 }
-| SLASH regex_flags_opt                                        { with_pos $loc (`Regex (`Simply "")), $2 }
+| SLASH regex_flags_opt                                        { with_pos $loc (`Regex (Simply "")), $2 }
 | SSLASH regex_pattern_alternate SLASH regex_replace
-    regex_flags_opt                                            { with_pos $loc (`Regex (`Replace ($2, $4))),
+    regex_flags_opt                                            { with_pos $loc (`Regex (Replace ($2, $4))),
                                                                  `RegexReplace :: $5 }
 
 regex_flags_opt:
@@ -1114,21 +1114,21 @@ regex_replace:
 | block                                                        { `Splice $1 }
 
 regex_pattern:
-| RANGE                                                        { `Range $1 }
-| STRING                                                       { `Simply $1 }
-| QUOTEDMETA                                                   { `Quote (`Simply $1) }
-| DOT                                                          { `Any }
-| CARET                                                        { `StartAnchor }
-| DOLLAR                                                       { `EndAnchor }
-| LPAREN regex_pattern_alternate RPAREN                        { `Group $2 }
-| regex_pattern STAR                                           { `Repeat (Regex.Star, $1) }
-| regex_pattern PLUS                                           { `Repeat (Regex.Plus, $1) }
-| regex_pattern QUESTION                                       { `Repeat (Regex.Question, $1) }
-| block                                                        { `Splice $1 }
+| RANGE                                                        { Range $1 }
+| STRING                                                       { Simply $1 }
+| QUOTEDMETA                                                   { Quote (Simply $1) }
+| DOT                                                          { Any }
+| CARET                                                        { StartAnchor }
+| DOLLAR                                                       { EndAnchor }
+| LPAREN regex_pattern_alternate RPAREN                        { Group $2 }
+| regex_pattern STAR                                           { Repeat (Regex.Star, $1) }
+| regex_pattern PLUS                                           { Repeat (Regex.Plus, $1) }
+| regex_pattern QUESTION                                       { Repeat (Regex.Question, $1) }
+| block                                                        { Splice $1 }
 
 regex_pattern_alternate:
-| regex_pattern_sequence                                       { `Seq $1 }
-| regex_pattern_sequence ALTERNATE regex_pattern_alternate     { `Alternate (`Seq $1, $3) }
+| regex_pattern_sequence                                       { Seq $1 }
+| regex_pattern_sequence ALTERNATE regex_pattern_alternate     { Alternate (Seq $1, $3) }
 
 regex_pattern_sequence:
 | regex_pattern+                                               { $1 }
