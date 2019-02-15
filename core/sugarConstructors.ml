@@ -87,7 +87,7 @@ module SugarConstructors (Position : Pos)
   (* Create a record with a given list of labels. *)
   let record ?(ppos=dp) ?exp lbls = with_pos ppos (`RecordLit (lbls, exp))
 
-  (* Creata a tuple.  Preserves 1-tuples. *)
+  (* Create a tuple.  Preserves 1-tuples. *)
   let tuple ?(ppos=dp) = function
     | [e] -> record ~ppos [("1", e)]
     | es  -> with_pos ppos (`TupleLit es)
