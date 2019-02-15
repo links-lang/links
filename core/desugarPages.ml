@@ -38,7 +38,6 @@ let rec desugar_page (o, page_type) =
             let formlet_type = Types.concrete_type formlet_type in
             let a = Types.fresh_type_variable (`Any, `Any) in
             let b = Types.fresh_type_variable (`Any, `Any) in
-            let _template = `Alias (("Formlet", [`Type a]), b) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
               fn_appl "formP" [`Type a; `Row (o#lookup_effects)]
                       [formlet; handler; attributes]
