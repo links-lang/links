@@ -32,9 +32,8 @@ fun test() {
 
   # filter out all tracks named "Trust" and change Lullaby's rating to 4.
   var newTracks = [
-    (album = "Wish", quantity = 5, rating = 4, track = "Trust"),
-    (album = "Paris", quantity = 4, rating = 5, track = "Lovesong"),
-    (album = "Show", quantity = 3, rating = 3, track = "Lullaby")
+    (album = "Disintegration", quantity = 4, rating = 5, track = "Lovesong"),
+    (album = "Show", quantity = 3, rating = 5, track = "Lullaby")
   ];
 
   lensput filteredLens with newTracks;
