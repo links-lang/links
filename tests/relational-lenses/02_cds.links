@@ -17,7 +17,7 @@ var tracksLens = lens tracksTable with { track -> date rating };
 
 var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
 
-fun test() { 
+fun test() {
   var old = lensget joinedLens;
 
   var newTracks = [
@@ -50,7 +50,7 @@ fun test() {
     (album = "Galore", date = 1989, rating = 3, track = "Lullaby")
   ]);
 
-  lensput joinedLens with old; 
+  lensput joinedLens with old;
   assertEq(lensget joinedLens, old);
 }
 
