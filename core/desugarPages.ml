@@ -32,13 +32,12 @@ let rec desugar_page (o, page_type) =
       match e with
         | _ when is_raw phrase ->
           (* TODO: check that e doesn't contain any formletplacements or page placements *)
-           fn_appl "bodyP" [`Row (o#lookup_effects)] [with_dummy_pos e]
+           fn_appl "bodyP" [`Row (o#lookup_effects)] [phrase]
         | `FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
             let formlet_type = Types.concrete_type formlet_type in
             let a = Types.fresh_type_variable (`Any, `Any) in
             let b = Types.fresh_type_variable (`Any, `Any) in
-            let _template = `Alias (("Formlet", [`Type a]), b) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
               fn_appl "formP" [`Type a; `Row (o#lookup_effects)]
                       [formlet; handler; attributes]

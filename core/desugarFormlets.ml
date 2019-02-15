@@ -53,10 +53,9 @@ object (o : 'self_type)
             let ps, vs, ts =
               List.fold_left
                 (fun (ps, vs, ts) e ->
-                   let ps', vs', ts' = o#formlet_patterns e in
-                     match ps', vs', ts' with
+                     match o#formlet_patterns e with
                        | [p], [v], [t] -> p::ps, v::vs, t::ts
-                       | _ ->
+                       | ps', vs', ts' ->
                            (tuple_pat ps')::ps, (tuple vs')::vs, (Types.make_tuple_type ts')::ts)
                 ([], [], []) contents
             in
@@ -89,15 +88,14 @@ object (o : 'self_type)
                 let pss, vs, ts =
                   List.fold_left
                     (fun (pss, vs, ts) node ->
-                       let ps', vs', ts' = o#formlet_patterns node in
-                         match ps', vs', ts' with
+                         match o#formlet_patterns node with
                            | [p], [v], [t] ->
                                (* grrr... n-ary arguments are messy!
                                   this type has to be a 1-tuple!
                                *)
                                [p]::pss, v::vs, t::ts
-                           | _ ->
-                               [(tuple_pat ps')]::pss, tuple vs'::vs, (Types.make_tuple_type ts')::ts)
+                           | ps', vs', ts' ->
+                               [tuple_pat ps']::pss, tuple vs'::vs, (Types.make_tuple_type ts')::ts)
                     ([], [], []) contents
                 in
                   List.rev pss, List.rev vs, List.rev ts in
