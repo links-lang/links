@@ -65,7 +65,6 @@ let desugar_regex phrase regex_type regex : phrase =
 
 let desugar_regexes env =
 object(self)
-  (*  inherit SugarTraversals.map as super*)
   inherit (TransformSugar.transform env) as super
 
   val regex_type = Instantiate.alias "Regex" [] env.Types.tycon_env
