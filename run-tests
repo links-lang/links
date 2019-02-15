@@ -7,7 +7,7 @@
 
 DATABASE_TEST_DIR=tests/database   # Location of database tests
 SHREDDING_TEST_DIR=tests/shredding # Location of database tests
-RELATIONAL_LENSES_TEST_DIR=tests/relational_lenses # Location of database tests
+RELATIONAL_LENSES_TEST_DIR=tests/relational-lenses # Location of database tests
 ret=0                              # Return code. If <> 0 then some tests failed
 STARTCOLOR="\e[31m"                # Control sequence to enable red text
 ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
