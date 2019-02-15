@@ -32,8 +32,8 @@ fun test() {
 
   # filter out all tracks named "Trust" and change Lullaby's rating to 4.
   var newTracks = [
-    (album = "Disintegration", quantity = 7, rating = 5, track = "Lovesong"),
-    (album = "Show", quantity = 3, rating = 5, track = "Lullaby")
+    (album = "Show", quantity = 3, rating = 4, track = "Lullaby"),
+    (album = "Disintegration", quantity = 7, rating = 5, track = "Lovesong")
   ];
 
   lensput filteredLens with newTracks;
@@ -42,21 +42,20 @@ fun test() {
   assertEq(new, newTracks);
 
   assertEq(lensget tracksLens, [
-    (album = "Paris", date = 1989, rating = 5, track = "Lovesong"),
-    (album = "Galore", date = 1989, rating = 5, track = "Lovesong"),
     (album = "Show", date = 1989, rating = 4, track = "Lullaby"),
-    (album = "Galore", date = 1989, rating = 4, track = "Lullaby")
+    (album = "Galore", date = 1989, rating = 4, track = "Lullaby"),
+    (album = "Disintegration", date = 1989, rating = 5, track = "Lovesong"),
+    (album = "Galore", date = 1989, rating = 5, track = "Lovesong")
   ]);
   assertEq(lensget albumsLens, [
+    (album = "Disintegration", quantity = 7),
     (album = "Wish", quantity = 5),
     (album = "Paris", quantity = 4),
     (album = "Galore", quantity = 1),
-    (album = "Show", quantity = 3),
-    (album = "Disintegration", quantity = 7)
+    (album = "Show", quantity = 3)
   ]);
 
   lensput filteredLens with filtered;
-  assertEq(lensget filteredLens, filtered);
 }
 
 test()
