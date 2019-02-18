@@ -48,15 +48,12 @@ object (o : 'self_type)
           super#phrasenode (`UnaryAppl ((tyargs, `Name name), e))
             (* HACK: manage the lexical scope of extras *)
     | `Spawn _ as e ->
-        let extra_env = extra_env in
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
     | `Escape _ as e ->
-        let extra_env = extra_env in
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
     | `Block _ as e ->
-        let extra_env = extra_env in
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e
@@ -64,7 +61,6 @@ object (o : 'self_type)
   method! funlit =
     (* HACK: manage the lexical scope of extras *)
     fun inner_mb lam ->
-      let extra_env = extra_env in
       let (o, lam, t) = super#funlit inner_mb lam in
         (o#with_extra_env extra_env, lam, t)
 
