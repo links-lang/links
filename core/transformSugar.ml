@@ -622,42 +622,43 @@ class transform (env : Types.typing_environment) =
         let (o, node, t) = o#phrasenode node in
         (o, {node;pos}, t)
 
-    method patternnode : patternnode -> ('self_type * patternnode) =
+    method patternnode : Pattern.node -> ('self_type * Pattern.node) =
+      let open Pattern in
       function
-      | `Any -> (o, `Any)
-      | `Nil -> (o, `Nil)
-      | `Cons (p, ps) ->
+      | Any -> (o, Any)
+      | Nil -> (o, Nil)
+      | Cons (p, ps) ->
           let (o, p) = o#pattern p in
-          let (o, ps) = o#pattern ps in (o, `Cons (p, ps))
-      | `List p ->
-          let (o, p) = listu o (fun o -> o#pattern) p in (o, `List p)
-      | `Variant (name, p) ->
+          let (o, ps) = o#pattern ps in (o, Cons (p, ps))
+      | List p ->
+          let (o, p) = listu o (fun o -> o#pattern) p in (o, List p)
+      | Variant (name, p) ->
           let (o, p) = optionu o (fun o -> o#pattern) p
-          in (o, `Variant (name, p))
-      | `Effect (name, ps, k) ->
+          in (o, Variant (name, p))
+      | Effect (name, ps, k) ->
          let (o, ps) = listu o (fun o -> o#pattern) ps in
          let (o, k)  = o#pattern k in
-         (o, `Effect (name, ps, k))
-      | `Negative name -> (o, `Negative name)
-      | `Record (fields, rest) ->
+         (o, Effect (name, ps, k))
+      | Negative name -> (o, Negative name)
+      | Record (fields, rest) ->
           let (o, fields) =
             listu o
               (fun o (name, p) ->
                  let (o, p) = o#pattern p in (o, (name, p)))
               fields in
           let (o, rest) = optionu o (fun o -> o#pattern) rest
-          in (o, `Record (fields, rest))
-      | `Tuple ps ->
-          let (o, ps) = listu o (fun o -> o#pattern) ps in (o, `Tuple ps)
-      | `Constant c -> let (o, c, _) = o#constant c in (o, `Constant c)
-      | `Variable x -> let (o, x) = o#binder x in (o, `Variable x)
-      | `As (x, p) ->
+          in (o, Record (fields, rest))
+      | Tuple ps ->
+          let (o, ps) = listu o (fun o -> o#pattern) ps in (o, Tuple ps)
+      | Constant c -> let (o, c, _) = o#constant c in (o, Constant c)
+      | Variable x -> let (o, x) = o#binder x in (o, Variable x)
+      | As (x, p) ->
           let (o, x) = o#binder x in
-          let (o, p) = o#pattern p in (o, (`As (x, p)))
-      | `HasType (p, t) ->
-          let (o, p) = o#pattern p in (o, (`HasType (p, t)))
+          let (o, p) = o#pattern p in (o, (As (x, p)))
+      | HasType (p, t) ->
+          let (o, p) = o#pattern p in (o, (HasType (p, t)))
 
-    method pattern : pattern -> ('self_type * pattern) =
+    method pattern : Pattern.t -> ('self_type * Pattern.t) =
       fun {node; pos} ->
         let (o, node) = o#patternnode node in (o, {node; pos})
 

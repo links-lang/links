@@ -94,13 +94,14 @@ let get_pat_vars () =
     method get_bindings = bindings (* Order doesn't matter *)
 
     method! patternnode = function
-      | `Variant (_n, p_opt) ->
-           self#option (fun o p -> o#pattern p) p_opt
+      | Pattern.Variant (_n, p_opt) ->
+         self#option (fun o p -> o#pattern p) p_opt
       (* | `Negative ns -> self#list (fun o p -> o#add_binding p) ns *)
-      | `Record (ls, p_opt) ->
-          let o1 = self#list (fun o (_, p) -> o#pattern p) ls in
-          o1#option (fun o p -> o#pattern p) p_opt
-      | `Variable bndr -> self#add_binding (Sugartypes.name_of_binder bndr)
+      | Pattern.Record (ls, p_opt) ->
+         let o1 = self#list (fun o (_, p) -> o#pattern p) ls in
+         o1#option (fun o p -> o#pattern p) p_opt
+      | Pattern.Variable bndr ->
+         self#add_binding (Sugartypes.name_of_binder bndr)
       | p -> super#patternnode p
   end
 

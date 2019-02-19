@@ -445,9 +445,9 @@ object (self)
   val alias_env = initial_alias_env
 
   method! patternnode = function
-    | `HasType (pat, dt) ->
+    | Pattern.HasType (pat, dt) ->
         let o, pat = self#pattern pat in
-          o, `HasType (pat, Desugar.datatype' map alias_env dt)
+          o, Pattern.HasType (pat, Desugar.datatype' map alias_env dt)
     | p -> super#patternnode p
 
 

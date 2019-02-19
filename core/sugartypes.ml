@@ -177,23 +177,25 @@ type datatype' = datatype * Types.datatype option
 type constant = Constant.constant
     [@@deriving show]
 
-type patternnode = [
-| `Any
-| `Nil
-| `Cons     of pattern * pattern
-| `List     of pattern list
-| `Variant  of name * pattern option
-| `Effect   of name * pattern list * pattern
-| `Negative of name list
-| `Record   of (name * pattern) list * pattern option
-| `Tuple    of pattern list
-| `Constant of constant
-| `Variable of binder
-| `As       of binder * pattern
-| `HasType  of pattern * datatype'
-]
-and pattern = patternnode with_pos
-    [@@deriving show]
+module Pattern = struct
+  type node =
+  | Any
+  | Nil
+  | Cons     of t * t
+  | List     of t list
+  | Variant  of name * t option
+  | Effect   of name * t list * t
+  | Negative of name list
+  | Record   of (name * t) list * t option
+  | Tuple    of t list
+  | Constant of constant
+  | Variable of binder
+  | As       of binder * t
+  | HasType  of t * datatype'
+   [@@deriving show]
+  and t = node with_pos
+   [@@deriving show]
+end
 
 type spawn_kind = Angel | Demon | Wait
     [@@deriving show]
@@ -231,9 +233,9 @@ and regex =
 | Repeat    of (Regex.repeat * regex)
 | Splice    of phrase
 | Replace   of (regex * replace_rhs)
-and clause = pattern * phrase
-and funlit = pattern list list * phrase
-and handlerlit = handler_depth * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
+and clause = Pattern.t * phrase
+and funlit = Pattern.t list list * phrase
+and handlerlit = handler_depth * Pattern.t * clause list * Pattern.t list list option (* computation arg, cases, parameters *)
 and handler = {
   sh_expr: phrase;
   sh_effect_cases: clause list;
@@ -247,12 +249,12 @@ and handler_descriptor = {
   shd_params: handler_parameterisation option
 }
 and handler_parameterisation = {
-  shp_bindings: (phrase * pattern) list;
+  shp_bindings: (phrase * Pattern.t) list;
   shp_types: Types.datatype list
 }
 and iterpatt = [
-| `List of pattern * phrase
-| `Table of pattern * phrase
+| `List of Pattern.t * phrase
+| `Table of Pattern.t * phrase
 ]
 and phrasenode = [
 | `Constant         of constant
@@ -287,14 +289,14 @@ and phrasenode = [
 | `ConstructorLit   of name * phrase option * Types.datatype option
 | `DoOperation      of name * phrase list * Types.datatype option
 | `Handle           of handler
-| `Switch           of phrase * (pattern * phrase) list * Types.datatype option
-| `Receive          of (pattern * phrase) list * Types.datatype option
+| `Switch           of phrase * (Pattern.t * phrase) list * Types.datatype option
+| `Receive          of (Pattern.t * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
 (* | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase *)
 | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
-| `DBDelete         of pattern * phrase * phrase option
+| `DBDelete         of Pattern.t * phrase * phrase option
 | `DBInsert         of phrase * name list * phrase * phrase option
-| `DBUpdate         of pattern * phrase * phrase option * (name * phrase) list
+| `DBUpdate         of Pattern.t * phrase * phrase option * (name * phrase) list
 | `LensLit          of phrase * Types.lens_sort option
 (* the lens keys lit is a literal that takes an expression and is converted into a LensLit
    with the corresponding table keys marked in the lens_sort *)
@@ -311,19 +313,19 @@ and phrasenode = [
 | `Page             of phrase
 | `FormletPlacement of phrase * phrase * phrase
 | `PagePlacement    of phrase
-| `FormBinding      of phrase * pattern
+| `FormBinding      of phrase * Pattern.t
 (* choose *)
 | `Select           of name * phrase
 (* choice *)
-| `Offer            of phrase * (pattern * phrase) list * Types.datatype option
+| `Offer            of phrase * (Pattern.t * phrase) list * Types.datatype option
 (* | `Fork             of binder * phrase *)
 | `CP               of cp_phrase
-| `TryInOtherwise   of (phrase * pattern * phrase * phrase * Types.datatype option)
+| `TryInOtherwise   of (phrase * Pattern.t * phrase * phrase * Types.datatype option)
 | `Raise
 ]
 and phrase = phrasenode with_pos
 and bindingnode = [
-| `Val     of pattern * (tyvar list * phrase) * location * datatype' option
+| `Val     of Pattern.t * (tyvar list * phrase) * location * datatype' option
 | `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
 | `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
 | `Handler of binder * handlerlit * datatype' option
@@ -389,22 +391,24 @@ struct
   let union_map f = union_all -<- List.map f
   let option_map f = opt_app f empty
 
-  let rec pattern ({node; _} : pattern) : StringSet.t = match node with
-    | `Any
-    | `Nil
-    | `Constant _
-    | `Negative _            -> empty
-    | `Tuple ps
-    | `List ps               -> union_map pattern ps
-    | `Cons (p1, p2)         -> union (pattern p1) (pattern p2)
-    | `Variant (_, popt)     -> option_map pattern popt
-    | `Effect (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
-    | `Record (fields, popt) ->
-        union (option_map pattern popt)
-          (union_map (snd ->- pattern) fields)
-    | `Variable bndr         -> singleton (name_of_binder bndr)
-    | `As (bndr, pat)        -> add (name_of_binder bndr) (pattern pat)
-    | `HasType (pat, _)      -> pattern pat
+  let rec pattern ({node; _} : Pattern.t) : StringSet.t =
+    let open Pattern in
+    match node with
+    | Any
+    | Nil
+    | Constant _
+    | Negative _            -> empty
+    | Tuple ps
+    | List ps               -> union_map pattern ps
+    | Cons (p1, p2)         -> union (pattern p1) (pattern p2)
+    | Variant (_, popt)     -> option_map pattern popt
+    | Effect (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
+    | Record (fields, popt) ->
+       union (option_map pattern popt)
+         (union_map (snd ->- pattern) fields)
+    | Variable bndr         -> singleton (name_of_binder bndr)
+    | As (bndr, pat)        -> add (name_of_binder bndr) (pattern pat)
+    | HasType (pat, _)      -> pattern pat
 
 
   let rec formlet_bound ({node; _} : phrase) : StringSet.t = match node with

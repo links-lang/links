@@ -1066,7 +1066,7 @@ struct
         | { Sugartypes.node = b; _ }::bs ->
             begin
               match b with
-                | `Val ({Sugartypes.node=`Variable bndr; _}, (_, body), _, _)
+                | `Val ({Sugartypes.node=Sugartypes.Pattern.Variable bndr; _}, (_, body), _, _)
                      when Sugartypes.binder_has_type bndr ->
                     let x  = Sugartypes.name_of_binder bndr in
                     let xt = Sugartypes.type_of_binder_exn bndr in

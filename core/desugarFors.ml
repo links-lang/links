@@ -61,7 +61,7 @@ let results :  Types.row ->
             let qt = t in
             let qst = Types.make_tuple_type ts in
 
-            let ((qsb, qs) : Sugartypes.pattern list * Sugartypes.phrase list) =
+            let ((qsb, qs) : Sugartypes.Pattern.t list * Sugartypes.phrase list) =
               List.split
                 (List.map2 (fun x t -> (variable_pat ~ty:t x, var x)) xs ts) in
             let qb, q = (variable_pat ~ty:t x, var x) in
@@ -100,7 +100,7 @@ object (o : 'self_type)
   *)
   method qualifiers : Sugartypes.iterpatt list ->
     'self_type *
-      (Sugartypes.phrase list * Sugartypes.pattern list * Sugartypes.name list *
+      (Sugartypes.phrase list * Sugartypes.Pattern.t list * Sugartypes.name list *
          Types.datatype list) =
     fun qs ->
       let o, (es, ps, xs, ts) =
@@ -115,7 +115,8 @@ object (o : 'self_type)
 
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let xb = binder ~ty:t var in
-                     o, (e::es, with_dummy_pos (`As (xb, p))::ps, var::xs, element_type::ts)
+                     o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
+                         var::xs, element_type::ts)
                | `Table (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
@@ -130,7 +131,8 @@ object (o : 'self_type)
                    let e = fn_appl "AsList" [r; w; n; eff] [e] in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let xb = binder ~ty:t var in
-                     o, (e::es, with_dummy_pos (`As (xb, p))::ps, var::xs, element_type::ts))
+                     o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
+                         var::xs, element_type::ts))
           (o, ([], [], [], []))
           qs
       in

@@ -449,27 +449,28 @@ class map =
     method cp_phrase : cp_phrase -> cp_phrase =
       fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
 
-    method patternnode : patternnode -> patternnode =
+    method patternnode : Pattern.node -> Pattern.node =
+      let open Pattern in
       function
-      | `Any -> `Any
-      | `Nil -> `Nil
-      | `Cons ((_x, _x_i1)) ->
+      | Any -> Any
+      | Nil -> Nil
+      | Cons ((_x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#pattern _x_i1 in `Cons ((_x, _x_i1))
-      | `List _x -> let _x = o#list (fun o -> o#pattern) _x in `List _x
-      | `Variant ((_x, _x_i1)) ->
+          let _x_i1 = o#pattern _x_i1 in Cons ((_x, _x_i1))
+      | List _x -> let _x = o#list (fun o -> o#pattern) _x in List _x
+      | Variant ((_x, _x_i1)) ->
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
-          in `Variant ((_x, _x_i1))
-      | `Effect (name, ps, k) ->
+          in Variant ((_x, _x_i1))
+      | Effect (name, ps, k) ->
          let name = o#name name in
          let ps = o#list (fun o -> o#pattern) ps in
          let k  = o#pattern k in
-         `Effect (name, ps, k)
-      | `Negative _x ->
+         Effect (name, ps, k)
+      | Negative _x ->
           let _x = o#list (fun o -> o#name) _x
-          in `Negative _x
-      | `Record ((_x, _x_i1)) ->
+          in Negative _x
+      | Record ((_x, _x_i1)) ->
           let _x =
             o#list
               (fun o (_x, _x_i1) ->
@@ -477,18 +478,18 @@ class map =
                  let _x_i1 = o#pattern _x_i1 in (_x, _x_i1))
               _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
-          in `Record ((_x, _x_i1))
-      | `Tuple _x -> let _x = o#list (fun o -> o#pattern) _x in `Tuple _x
-      | `Constant _x -> let _x = o#constant _x in `Constant _x
-      | `Variable _x -> let _x = o#binder _x in `Variable _x
-      | `As ((_x, _x_i1)) ->
+          in Record ((_x, _x_i1))
+      | Tuple _x -> let _x = o#list (fun o -> o#pattern) _x in Tuple _x
+      | Constant _x -> let _x = o#constant _x in Constant _x
+      | Variable _x -> let _x = o#binder _x in Variable _x
+      | As ((_x, _x_i1)) ->
           let _x = o#binder _x in
-          let _x_i1 = o#pattern _x_i1 in `As ((_x, _x_i1))
-      | `HasType ((_x, _x_i1)) ->
+          let _x_i1 = o#pattern _x_i1 in As ((_x, _x_i1))
+      | HasType ((_x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#datatype' _x_i1 in `HasType ((_x, _x_i1))
+          let _x_i1 = o#datatype' _x_i1 in HasType ((_x, _x_i1))
 
-    method pattern : pattern -> pattern =
+    method pattern : Pattern.t -> Pattern.t =
       fun {node; pos} ->
         let node = o#patternnode node in
         let pos = o#position pos in {node; pos}
@@ -1124,39 +1125,40 @@ class fold =
     method cp_phrase : cp_phrase -> 'self_node =
       fun {node; pos} -> (o#cp_phrasenode node)#position pos
 
-    method patternnode : patternnode -> 'self_type =
+    method patternnode : Pattern.node -> 'self_type =
+      let open Pattern in
       function
-      | `Any -> o
-      | `Nil -> o
-      | `Cons ((_x, _x_i1)) ->
+      | Any -> o
+      | Nil -> o
+      | Cons ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#pattern _x_i1 in o
-      | `List _x -> let o = o#list (fun o -> o#pattern) _x in o
-      | `Variant ((_x, _x_i1)) ->
+      | List _x -> let o = o#list (fun o -> o#pattern) _x in o
+      | Variant ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
-      | `Effect (name, ps, k) ->
+      | Effect (name, ps, k) ->
          let o = o#name name in
          let o = o#list (fun o -> o#pattern) ps in
          let o = o#pattern k in
          o
-      | `Negative _x ->
+      | Negative _x ->
           let o = o#list (fun o -> o#name) _x in o
-      | `Record ((_x, _x_i1)) ->
+      | Record ((_x, _x_i1)) ->
           let o =
             o#list
               (fun o (_x, _x_i1) ->
                  let o = o#name _x in let o = o#pattern _x_i1 in o)
               _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
-      | `Tuple _x -> let o = o#list (fun o -> o#pattern) _x in o
-      | `Constant _x -> let o = o#constant _x in o
-      | `Variable _x -> let o = o#binder _x in o
-      | `As ((_x, _x_i1)) ->
+      | Tuple _x -> let o = o#list (fun o -> o#pattern) _x in o
+      | Constant _x -> let o = o#constant _x in o
+      | Variable _x -> let o = o#binder _x in o
+      | As ((_x, _x_i1)) ->
           let o = o#binder _x in let o = o#pattern _x_i1 in o
-      | `HasType ((_x, _x_i1)) ->
+      | HasType ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#datatype' _x_i1 in o
 
-    method pattern : pattern -> 'self_type =
+    method pattern : Pattern.t -> 'self_type =
       fun {node; pos} ->
         let o = o#patternnode node in
         let o = o#position pos in
@@ -1873,27 +1875,28 @@ class fold_map =
       let o, pos  = o#position pos in
       o, {node; pos}
 
-    method patternnode : patternnode -> ('self_type * patternnode) =
+    method patternnode : Pattern.node -> ('self_type * Pattern.node) =
+      let open Pattern in
       function
-      | `Any -> (o, `Any)
-      | `Nil -> (o, `Nil)
-      | `Cons ((_x, _x_i1)) ->
+      | Any -> (o, Any)
+      | Nil -> (o, Nil)
+      | Cons ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#pattern _x_i1 in (o, (`Cons ((_x, _x_i1))))
-      | `List _x ->
-          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (`List _x))
-      | `Variant ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#pattern _x_i1 in (o, (Cons ((_x, _x_i1))))
+      | List _x ->
+          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (List _x))
+      | Variant ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
-          in (o, (`Variant ((_x, _x_i1))))
-      | `Effect (name, ps, k) ->
+          in (o, (Variant ((_x, _x_i1))))
+      | Effect (name, ps, k) ->
          let (o, name) = o#name name in
          let (o, ps) = o#list (fun o -> o#pattern) ps in
          let (o, k) = o#pattern k in
-         (o, `Effect (name, ps, k))
-      | `Negative _x ->
-          let (o, _x) = o#list (fun o -> o#name) _x in (o, (`Negative _x))
-      | `Record ((_x, _x_i1)) ->
+         (o, Effect (name, ps, k))
+      | Negative _x ->
+          let (o, _x) = o#list (fun o -> o#name) _x in (o, (Negative _x))
+      | Record ((_x, _x_i1)) ->
           let (o, _x) =
             o#list
               (fun o (_x, _x_i1) ->
@@ -1901,19 +1904,19 @@ class fold_map =
                  let (o, _x_i1) = o#pattern _x_i1 in (o, (_x, _x_i1)))
               _x in
           let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
-          in (o, (`Record ((_x, _x_i1))))
-      | `Tuple _x ->
-          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (`Tuple _x))
-      | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
-      | `Variable _x -> let (o, _x) = o#binder _x in (o, (`Variable _x))
-      | `As ((_x, _x_i1)) ->
+          in (o, (Record ((_x, _x_i1))))
+      | Tuple _x ->
+          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (Tuple _x))
+      | Constant _x -> let (o, _x) = o#constant _x in (o, (Constant _x))
+      | Variable _x -> let (o, _x) = o#binder _x in (o, (Variable _x))
+      | As ((_x, _x_i1)) ->
           let (o, _x) = o#binder _x in
-          let (o, _x_i1) = o#pattern _x_i1 in (o, (`As ((_x, _x_i1))))
-      | `HasType ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#pattern _x_i1 in (o, (As ((_x, _x_i1))))
+      | HasType ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#datatype' _x_i1 in (o, (`HasType ((_x, _x_i1))))
+          let (o, _x_i1) = o#datatype' _x_i1 in (o, (HasType ((_x, _x_i1))))
 
-    method pattern : pattern -> ('self_type * pattern) =
+    method pattern : Pattern.t -> ('self_type * Pattern.t) =
       fun {node; pos} ->
         let (o, node) = o#patternnode node in
         let (o, pos ) = o#position pos in

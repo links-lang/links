@@ -33,7 +33,7 @@ object (o : 'self_type)
 
     (this roughly corresponds to the dagger transformation)
   *)
-  method formlet_patterns : Sugartypes.phrase -> (Sugartypes.pattern list * Sugartypes.phrase list * Types.datatype list) =
+  method formlet_patterns : Sugartypes.phrase -> (Sugartypes.Pattern.t list * Sugartypes.phrase list * Types.datatype list) =
     fun ph ->
       match ph.node with
         | _ when is_raw ph ->
@@ -46,7 +46,7 @@ object (o : 'self_type)
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
             let name = Utility.gensym ~prefix:"_formlet_" () in
             let (xb, x) = (binder name ~ty:t, var name) in
-              [with_dummy_pos (`As (xb, p))], [x], [t]
+              [with_dummy_pos (Pattern.As (xb, p))], [x], [t]
         | `Xml (_, _, _, [node]) ->
             o#formlet_patterns node
         | `Xml (_, _, _, contents) ->

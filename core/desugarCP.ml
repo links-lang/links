@@ -41,8 +41,9 @@ object (o : 'self_type)
             let (o, e, t) = desugar_cp o p in
             let o = o#restore_envs envs in
             o, block_node
-                ([val_binding (with_dummy_pos (`Record ([("1", variable_pat ~ty:u x);
-                                                         ("2", variable_pat ~ty:s c)], None)))
+                 ([val_binding (with_dummy_pos (
+                                    Pattern.Record ([("1", variable_pat ~ty:u x);
+                                                     ("2", variable_pat ~ty:s c)], None)))
                                (fn_appl receive_str grab_tyargs [var c])],
                  with_dummy_pos e), t
          | Give ((c, _), None, p) ->
@@ -76,7 +77,7 @@ object (o : 'self_type)
               let envs = o#backup_envs in
               let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.choice_at label s) >} in
               let (o, p, t) = desugar_cp o p in
-              let pat : pattern = with_dummy_pos (`Variant (label,
+              let pat : Pattern.t = with_dummy_pos (Pattern.Variant (label,
                       Some (variable_pat ~ty:(TypeUtils.choice_at label s) c))) in
               o#restore_envs envs, ((pat, with_dummy_pos p), t) :: cases in
             let (o, cases) = List.fold_right desugar_branch cases (o, []) in

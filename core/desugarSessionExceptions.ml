@@ -69,8 +69,8 @@ object (o : 'self_type)
          * continuation argument. *)
         let cont_pat = variable_pat ~ty:`Not_typed (Utility.gensym ~prefix:"dsh" ()) in
 
-        let otherwise_pat : Sugartypes.pattern =
-          with_dummy_pos (`Effect (failure_op_name, [], cont_pat)) in
+        let otherwise_pat : Sugartypes.Pattern.t =
+          with_dummy_pos (Pattern.Effect (failure_op_name, [], cont_pat)) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 
@@ -172,8 +172,8 @@ let wrap_linear_handlers prog =
                  constructor ~body:(var fresh_var) "Just",
                  constructor "Nothing", dtopt)),
               [
-                (with_dummy_pos (`Variant ("Just", (Some x))), super#phrase m);
-                (with_dummy_pos (`Variant ("Nothing", None)), super#phrase n)
+                (with_dummy_pos (Pattern.Variant ("Just", (Some x))), super#phrase m);
+                (with_dummy_pos (Pattern.Variant ("Nothing", None)), super#phrase n)
               ], None))
         | p -> super#phrase p
     end

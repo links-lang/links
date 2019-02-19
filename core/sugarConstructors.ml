@@ -51,7 +51,7 @@ module SugarConstructors (Position : Pos)
 
   (* Stores either a name of variable to be used in a binding pattern or the
      pattern itself.  Used for passing an argument to val_binding. *)
-  type name_or_pat = Name of name | Pat of pattern
+  type name_or_pat = Name of name | Pat of Pattern.t
 
   (* Optionally stores a datatype signature.  Isomporphic to Option. *)
   type signature = Sig of (name with_pos * datatype') with_pos | NoSig
@@ -117,13 +117,13 @@ module SugarConstructors (Position : Pos)
 
   (* Create a variable pattern with a given name. *)
   let variable_pat ?(ppos=dp) ?ty name =
-    with_pos ppos (`Variable (binder ~ppos ?ty name))
+    with_pos ppos (Pattern.Variable (binder ~ppos ?ty name))
 
   (* Create a tuple pattern. *)
   let tuple_pat ?(ppos=dp) pats =
-    with_pos ppos (`Tuple pats)
+    with_pos ppos (Pattern.Tuple pats)
 
-  let any_pat ppos = with_pos ppos `Any
+  let any_pat ppos = with_pos ppos Pattern.Any
 
   (** Fieldspec *)
 

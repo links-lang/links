@@ -240,9 +240,9 @@ let parseRegexFlags f =
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
-%type <Sugartypes.pattern> pattern
+%type <Sugartypes.Pattern.t> pattern
 %type <Sugartypes.declared_linearity * Sugartypes.name *
-       Sugartypes.pattern list list * Sugartypes.location *
+       Sugartypes.Pattern.t list list * Sugartypes.location *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
@@ -338,7 +338,7 @@ typed_handler_binding:
                 handler_parameterization                       { ($3, hnlit_arg $1 $2 $4) }
 
 optional_computation_parameter:
-| /* empty */                                                  { with_pos $sloc `Any }
+| /* empty */                                                  { with_pos $sloc Pattern.Any }
 | LBRACKET pattern RBRACKET                                    { $2 }
 
 perhaps_uinteger:
@@ -1139,40 +1139,40 @@ regex_pattern_sequence:
  */
 pattern:
 | typed_pattern                                                { $1 }
-| typed_pattern COLON primary_datatype_pos                         { with_pos $loc (`HasType ($1, datatype $3)) }
+| typed_pattern COLON primary_datatype_pos                     { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }
-| cons_pattern AS VARIABLE                                     { with_pos $loc (`As (binder ~ppos:$loc($3) $3, $1)) }
+| cons_pattern AS VARIABLE                                     { with_pos $loc (Pattern.As (binder ~ppos:$loc($3) $3, $1)) }
 
 cons_pattern:
 | constructor_pattern                                          { $1 }
-| constructor_pattern COLONCOLON cons_pattern                  { with_pos $loc (`Cons ($1, $3)) }
+| constructor_pattern COLONCOLON cons_pattern                  { with_pos $loc (Pattern.Cons ($1, $3)) }
 
 constructor_pattern:
 | negative_pattern                                             { $1 }
-| CONSTRUCTOR parenthesized_pattern?                           { with_pos $loc (`Variant ($1, $2)) }
+| CONSTRUCTOR parenthesized_pattern?                           { with_pos $loc (Pattern.Variant ($1, $2)) }
 
 constructors:
 | separated_nonempty_list(COMMA, CONSTRUCTOR)                  { $1 }
 
 negative_pattern:
 | primary_pattern                                              { $1 }
-| MINUS CONSTRUCTOR                                            { with_pos $loc (`Negative [$2]) }
-| MINUS LPAREN constructors RPAREN                             { with_pos $loc (`Negative $3)   }
+| MINUS CONSTRUCTOR                                            { with_pos $loc (Pattern.Negative [$2]) }
+| MINUS LPAREN constructors RPAREN                             { with_pos $loc (Pattern.Negative $3)   }
 
 parenthesized_pattern:
-| LPAREN RPAREN                                                { with_pos $loc (`Tuple []) }
+| LPAREN RPAREN                                                { with_pos $loc (Pattern.Tuple []) }
 | LPAREN pattern RPAREN                                        { $2 }
-| LPAREN pattern COMMA patterns RPAREN                         { with_pos $loc (`Tuple ($2 :: $4)) }
-| LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (`Record ($2, $3))  }
+| LPAREN pattern COMMA patterns RPAREN                         { with_pos $loc (Pattern.Tuple ($2 :: $4)) }
+| LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (Pattern.Record ($2, $3))  }
 
 primary_pattern:
 | VARIABLE                                                     { variable_pat ~ppos:$loc $1   }
 | UNDERSCORE                                                   { any_pat $loc                 }
-| constant                                                     { with_pos $loc (`Constant $1) }
-| LBRACKET RBRACKET                                            { with_pos $loc `Nil           }
-| LBRACKET patterns RBRACKET                                   { with_pos $loc (`List $2)     }
+| constant                                                     { with_pos $loc (Pattern.Constant $1) }
+| LBRACKET RBRACKET                                            { with_pos $loc Pattern.Nil           }
+| LBRACKET patterns RBRACKET                                   { with_pos $loc (Pattern.List $2)     }
 | parenthesized_pattern                                        { $1 }
 
 patterns:

@@ -192,10 +192,10 @@ and perform_renaming module_table path term_ht type_ht =
          (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
 
     method! patternnode = function
-      | `Variant (n, p_opt) ->
+      | Pattern.Variant (n, p_opt) ->
           let fqn = resolve n term_shadow_table in
           let (o, p_opt') = self#option (fun o -> o#pattern) p_opt in
-          (o, `Variant (fqn, p_opt'))
+          (o, Pattern.Variant (fqn, p_opt'))
       | p -> super#patternnode p
 
     method! row = function
