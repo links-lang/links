@@ -944,6 +944,7 @@ session_datatype:
 | END                                                          { `End             }
 | primary_datatype                                             { $1               }
 | qualified_type_name                                          { `QualifiedTypeApplication ($1, []) }
+| qualified_type_name LPAREN type_arg_list RPAREN              { `QualifiedTypeApplication ($1, $3) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
