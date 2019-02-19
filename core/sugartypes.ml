@@ -198,6 +198,18 @@ and pattern = patternnode with_pos
 type spawn_kind = Angel | Demon | Wait
     [@@deriving show]
 
+type sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
+    [@@deriving show]
+
+type declared_linearity = [ `Lin | `Unl ]
+    [@@deriving show]
+
+type fn_dep = string * string
+    [@@deriving show]
+
+type handler_depth = Deep | Shallow
+    [@@deriving show]
+
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
@@ -221,7 +233,6 @@ and regex =
 | Replace   of (regex * replace_rhs)
 and clause = pattern * phrase
 and funlit = pattern list list * phrase
-and handler_depth = Deep | Shallow
 and handlerlit = handler_depth * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
 and handler = {
   sh_expr: phrase;
@@ -243,9 +254,6 @@ and iterpatt = [
 | `List of pattern * phrase
 | `Table of pattern * phrase
 ]
-and sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
-and declared_linearity = [ `Lin | `Unl ]
-and fn_dep = string * string
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
@@ -329,11 +337,6 @@ and bindingnode = [
 ]
 and binding = bindingnode with_pos
 and block_body = binding list * phrase
-and directive = string * string list
-and sentence =
-| Definitions of binding list
-| Expression  of phrase
-| Directive   of directive
 and cp_phrasenode =
 | Unquote     of (binding list * phrase)
 | Grab        of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
@@ -344,6 +347,15 @@ and cp_phrasenode =
 | Link        of (binder * binder)
 | Comp        of (binder * cp_phrase * cp_phrase)
 and cp_phrase = cp_phrasenode with_pos
+    [@@deriving show]
+
+type directive = string * string list
+    [@@deriving show]
+
+type sentence =
+| Definitions of binding list
+| Expression  of phrase
+| Directive   of directive
     [@@deriving show]
 
 type program = binding list * phrase option
