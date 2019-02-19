@@ -36,7 +36,7 @@ type language = string
 type constant = Constant.constant
   [@@deriving show]
 
-type location = Sugartypes.location
+type location = CommonTypes.Location.t
   [@@deriving show]
 
 type value =

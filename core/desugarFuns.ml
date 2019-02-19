@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Sugartypes
 open SugarConstructors.Make
@@ -65,7 +66,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `FunLit (Some argss, lin, lam, location) ->
+    | FunLit (Some argss, lin, lam, location) ->
         let inner_mb = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("!"^s))) in
         let (o, lam, rt) = o#funlit inner_mb lam in
         let ft =
@@ -77,15 +78,15 @@ object (o : 'self_type)
         let f = gensym ~prefix:"_fun_" () in
         let e =
           block_node
-            ([with_dummy_pos (`Fun (unwrap_def ( binder ~ty:ft f, lin, ([], lam)
-                                               , location, None)))],
+            ([with_dummy_pos (Fun (unwrap_def ( binder ~ty:ft f, lin, ([], lam)
+                                              , location, None)))],
              var f)
         in
           (o, e, ft)
-    | `Section (`Project name) ->
-        let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
-        let effb, eff = Types.fresh_row_quantifier (`Any, `Any) in
+    | Section (Section.Project name) ->
+        let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
+        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
+        let effb, eff = Types.fresh_row_quantifier (lin_any, res_any) in
 
         let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
 
@@ -95,7 +96,7 @@ object (o : 'self_type)
                                            `Function (Types.make_tuple_type [r], eff, a)) in
 
         let pss = [[variable_pat ~ty:r x]] in
-        let body = with_dummy_pos (`Projection (var x, name)) in
+        let body = with_dummy_pos (Projection (var x, name)) in
         let e : phrasenode =
           block_node
             ([fun_binding' ~tyvars:[ab; rhob; effb] (binder ~ty:ft f) (pss, body)],
@@ -104,18 +105,18 @@ object (o : 'self_type)
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | `Fun _ as b ->
+    | Fun _ as b ->
         let (o, b) = super#bindingnode b in
           begin
             match b with
-              | `Fun r -> (o, `Fun (unwrap_def r))
+              | Fun r -> (o, Fun (unwrap_def r))
               | _ -> assert false
           end
-    | `Funs _ as b ->
+    | Funs _ as b ->
         let (o, b) = super#bindingnode b in
           begin
             match b with
-              | `Funs defs -> (o, `Funs (List.map unwrap_def_dp defs))
+              | Funs defs -> (o, Funs (List.map unwrap_def_dp defs))
               | _ -> assert false
           end
     | b -> super#bindingnode b
@@ -131,14 +132,14 @@ object
   method satisfied = has_no_funs
 
   method! phrasenode = function
-    | `FunLit _ -> {< has_no_funs = false >}
+    | FunLit _ -> {< has_no_funs = false >}
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | `Fun (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t) as b ->
+    | Fun (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t) as b ->
         super#bindingnode b
-    | `Fun _ -> {< has_no_funs = false >}
-    | `Funs defs as b ->
+    | Fun _ -> {< has_no_funs = false >}
+    | Funs defs as b ->
         if
           List.exists
             (function

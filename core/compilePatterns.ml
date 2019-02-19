@@ -8,6 +8,7 @@
   to adjust our intermediate language.
 *)
 
+open CommonTypes
 open Utility
 open Ir
 
@@ -74,10 +75,10 @@ let lookup_name name (nenv, _tenv, _eff, _penv) =
 
 let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 
-let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
+let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> pattern * raw_env =
   fun scope {Sugartypes.node=p; Sugartypes.pos} ->
-    let pp = desugar_pattern scope in
-    let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (`Any, `Any)) in
+    let desugar_pat = desugar_pattern scope in
+    let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
     let fresh_binder (nenv, tenv, eff) bndr =
       assert (Sugartypes.binder_has_type bndr);
@@ -86,38 +87,39 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
       let xb, x = Var.fresh_var (t, name, scope) in
       xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
     in
+      let open Sugartypes.Pattern in
       match p with
-        | `Any -> `Any, empty
-        | `Nil -> `Nil, empty
-        | `Cons (p, ps) ->
-            let p, env = pp p in
-            let ps, env' = pp ps in
+        | Any -> `Any, empty
+        | Nil -> `Nil, empty
+        | Cons (p, ps) ->
+            let p, env = desugar_pat p in
+            let ps, env' = desugar_pat ps in
               `Cons (p, ps), env ++ env'
-        | `List [] -> pp (Sugartypes.with_pos pos `Nil)
-        | `List (p::ps) ->
-            let p, env = pp p in
-            let ps, env' = pp (Sugartypes.with_pos pos (`List ps)) in
+        | List [] -> desugar_pat (Sugartypes.with_pos pos Nil)
+        | List (p::ps) ->
+            let p, env = desugar_pat p in
+            let ps, env' = desugar_pat (Sugartypes.with_pos pos (List ps)) in
               `Cons (p, ps), env ++ env'
-        | `Variant (name, None) -> `Variant (name, `Any), empty
-        | `Variant (name, Some p) ->
-            let p, env = pp p in
+        | Variant (name, None) -> `Variant (name, `Any), empty
+        | Variant (name, Some p) ->
+            let p, env = desugar_pat p in
             `Variant (name, p), env
-        | `Effect (name, ps, k) ->
+        | Effect (name, ps, k) ->
            let ps, env =
              List.fold_right
                (fun p (ps, env) ->
-                 let p', env' = pp p in
+                 let p', env' = desugar_pat p in
                  (p' :: ps, env ++ env'))
                ps ([], empty)
            in
-           let k, env' = pp k in
+           let k, env' = desugar_pat k in
            `Effect (name, ps, k), env ++ env'
-        | `Negative names -> `Negative (StringSet.from_list names), empty
-        | `Record (bs, p) ->
+        | Negative names -> `Negative (StringSet.from_list names), empty
+        | Record (bs, p) ->
             let bs, env =
               List.fold_right
                 (fun (name, p) (bs, env) ->
-                   let p, env' = pp p in
+                   let p, env' = desugar_pat p in
                      StringMap.add name p bs, env ++ env')
                 bs
                 (StringMap.empty, empty) in
@@ -125,26 +127,26 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.pattern -> pattern * raw_env =
               match p with
                 | None -> None, env
                 | Some p ->
-                    let p, env' = pp p in
+                    let p, env' = desugar_pat p in
                       Some p, env ++ env'
             in
               `Record (bs, p), env
-        | `Tuple ps ->
+        | Tuple ps ->
             let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
-              pp (Sugartypes.with_pos pos (`Record (bs, None)))
-        | `Constant constant ->
+              desugar_pat (Sugartypes.with_pos pos (Record (bs, None)))
+        | Constant constant ->
             `Constant constant, empty
-        | `Variable b ->
+        | Variable b ->
             let xb, env = fresh_binder empty b in
               `Variable xb, env
-        | `As (b, p) ->
+        | As (b, p) ->
             let xb, env = fresh_binder empty b in
-            let p, env' = pp p in
+            let p, env' = desugar_pat p in
               `As (xb, p), env ++ env'
-        | `HasType (p, (_, Some t)) ->
-            let p, env = pp p in
+        | HasType (p, (_, Some t)) ->
+            let p, env = desugar_pat p in
               `HasType (p, t), env
-        | `HasType (_, (_, None)) -> assert false
+        | HasType (_, (_, None)) -> assert false
 
 type raw_bound_computation = raw_env -> computation
 type bound_computation = env -> computation

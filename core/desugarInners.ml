@@ -1,4 +1,5 @@
 open Utility
+open Operators
 open Sugartypes
 
 (* Recursive functions must be used monomorphically inside their
@@ -34,26 +35,26 @@ object (o : 'self_type)
     {< extra_env = StringMap.remove f extra_env >}
 
   method! phrasenode = function
-    | `TAppl ({node=`Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
+    | TAppl ({node=Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`TAppl (phn, tyargs))
-    | `InfixAppl ((tyargs, `Name name), e1, e2) when StringMap.mem name extra_env ->
+          super#phrasenode (TAppl (phn, tyargs))
+    | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`InfixAppl ((tyargs, `Name name), e1, e2))
-    | `UnaryAppl ((tyargs, `Name name), e) when StringMap.mem name extra_env ->
+          super#phrasenode (InfixAppl ((tyargs, BinaryOp.Name name), e1, e2))
+    | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`UnaryAppl ((tyargs, `Name name), e))
+          super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
             (* HACK: manage the lexical scope of extras *)
-    | `Spawn _ as e ->
+    | Spawn _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
-    | `Escape _ as e ->
+    | Escape _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
-    | `Block _ as e ->
+    | Block _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e
@@ -65,7 +66,7 @@ object (o : 'self_type)
         (o#with_extra_env extra_env, lam, t)
 
   method! bindingnode = function
-    | `Funs defs ->
+    | Funs defs ->
         (* put the outer bindings in the environment *)
         let o, defs = o#rec_activate_outer_bindings defs in
 
@@ -109,7 +110,7 @@ object (o : 'self_type)
                o#unbind (name_of_binder bndr))
             o defs
         in
-          (o, (`Funs defs))
+          (o, (Funs defs))
     | b -> super#bindingnode b
 
   method! binder : binder -> ('self_type * binder) = function
@@ -129,7 +130,7 @@ object
   method satisfied = has_no_inners
 
   method! bindingnode = function
-    | `Funs defs ->
+    | Funs defs ->
         {< has_no_inners =
             List.for_all
               (fun (_f, _, ((_tyvars, dt_opt), _), _, _, _) ->

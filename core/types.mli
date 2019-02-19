@@ -1,4 +1,5 @@
 (** Core types *)
+open CommonTypes
 
 (* field environments *)
 type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
@@ -14,21 +15,13 @@ type 'a point = 'a Unionfind.point
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     [@@deriving show]
 
-type restriction = [ `Any | `Base | `Session | `Effect ]
-    [@@deriving eq,show]
-type linearity   = [ `Any | `Unl ]
-    [@@deriving eq,show]
-
-type subkind = linearity * restriction
+type subkind = Linearity.t * Restriction.t
     [@@deriving eq,show]
 
 type freedom = [`Rigid | `Flexible]
     [@@deriving eq,show]
 
-type primary_kind = [ `Type | `Row | `Presence ]
-    [@@deriving eq,show]
-
-type kind = primary_kind * subkind
+type kind = PrimaryKind.t * subkind
     [@@deriving eq,show]
 
 type 't meta_type_var_non_rec_basis =
@@ -57,7 +50,7 @@ end
 
 module Vars : sig
   type flavour = [`Rigid | `Flexible | `Recursive]
-  type kind    = primary_kind
+  type kind    = PrimaryKind.t
   type scope   = [`Free | `Bound]
   type vars_list = (int * (flavour * kind * scope)) list
 end
@@ -233,14 +226,14 @@ val free_bound_type_vars     : ?include_aliases:bool -> typ -> Vars.vars_list
 val free_bound_row_type_vars : ?include_aliases:bool -> row -> Vars.vars_list
 
 val var_of_quantifier : quantifier -> int
-val primary_kind_of_quantifier : quantifier -> primary_kind
+val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
 val kind_of_quantifier : quantifier -> kind
 val subkind_of_quantifier : quantifier -> subkind
 val type_arg_of_quantifier : quantifier -> type_arg
 val freshen_quantifier : quantifier -> quantifier * type_arg
 val freshen_quantifier_flexible : quantifier -> quantifier * type_arg
 
-val primary_kind_of_type_arg : type_arg -> primary_kind
+val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
 val quantifiers_of_type_args : type_arg list -> quantifier list
 
@@ -263,7 +256,7 @@ val fresh_rigid_type_variable : subkind -> datatype
 val fresh_row_variable : subkind -> row_var
 val fresh_rigid_row_variable : subkind -> row_var
 
-val fresh_session_variable : linearity -> datatype
+val fresh_session_variable : CommonTypes.Linearity.t -> datatype
 
 val fresh_presence_variable : subkind -> field_spec
 val fresh_rigid_presence_variable : subkind -> field_spec
@@ -382,7 +375,6 @@ val string_of_row_var    : ?policy:(unit -> Print.policy)
                         -> ?refresh_tyvar_names:bool -> row_var    -> string
 val string_of_tycon_spec : ?policy:(unit -> Print.policy)
                         -> ?refresh_tyvar_names:bool -> tycon_spec -> string
-val string_of_primary_kind : primary_kind -> string
 val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
 

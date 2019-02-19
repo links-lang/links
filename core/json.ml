@@ -1,5 +1,6 @@
 (* Side-effect-free JSON operations. *)
 open ProcessTypes
+open CommonTypes
 open Utility
 
 (* Setting *)
@@ -58,10 +59,10 @@ let js_dq_escape_char =
   | ch -> String.make 1 ch
 
 let jsonize_location : Ir.location -> string = function
-  | `Client  -> "client"
-  | `Server  -> "server"
-  | `Native  -> "native"
-  | `Unknown -> "unknown"
+  | Location.Client  -> "client"
+  | Location.Server  -> "server"
+  | Location.Native  -> "native"
+  | Location.Unknown -> "unknown"
 
 let rec string_listify : string list -> string = function
   | [] -> nil_literal

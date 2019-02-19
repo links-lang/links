@@ -1,3 +1,4 @@
+open Operators
 open Sugartypes
 open SugarConstructors.Make
 
@@ -55,9 +56,9 @@ let desugar_regex phrase regex_type regex : phrase =
         constructor' repeat_str ~body:(tuple [desugar_repeat rep; aux r])
       | Splice e ->
         constructor' quote_str ~body:(constructor' ~body:(expr e) simply_str)
-      | Replace (re, (`Literal tmpl)) ->
+      | Replace (re, (Literal tmpl)) ->
         constructor' replace_str ~body:(tuple [aux re; constant_str tmpl])
-      | Replace (re, (`Splice e)) ->
+      | Replace (re, (SpliceExpr e)) ->
          constructor' replace_str ~body:(tuple [aux re; expr e])
   in block (List.map (fun (v, e1, t) ->
                 val_binding (variable_pat ~ty:t v) e1) !exprs,
@@ -70,14 +71,14 @@ object(self)
   val regex_type = Instantiate.alias "Regex" [] env.Types.tycon_env
 
   method! phrase ({node=p; pos} as ph) = match p with
-    | `InfixAppl ((tyargs, `RegexMatch flags), e1, {node=`Regex((Replace(_,_) as r)); _}) ->
+    | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex((Replace(_,_) as r)); _}) ->
         let libfn =
           if List.exists ((=)RegexNative) flags
           then "sntilde"
           else "stilde" in
           self#phrase (fn_appl libfn tyargs
                             [e1; desugar_regex self#phrase regex_type r])
-    | `InfixAppl ((tyargs, `RegexMatch flags), e1, {node=`Regex r; _}) ->
+    | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex r; _}) ->
         let nativep = List.exists ((=) RegexNative) flags
         and listp   = List.exists ((=) RegexList)   flags in
         let libfn = match listp, nativep with
@@ -87,7 +88,7 @@ object(self)
           | false, true  -> "ntilde" in
           self#phrase (fn_appl libfn tyargs
                             [e1; desugar_regex self#phrase regex_type r])
-    | `InfixAppl ((_tyargs, `RegexMatch _), _, _) ->
+    | InfixAppl ((_tyargs, BinaryOp.RegexMatch _), _, _) ->
         raise (Errors.SugarError (pos, "Internal error: unexpected rhs of regex operator"))
     | _ -> super#phrase ph
 end

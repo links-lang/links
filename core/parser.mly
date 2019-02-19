@@ -37,15 +37,19 @@ or Menhir it is no longer necessary.
 
 %{
 
+open CommonTypes
 open Utility
+open Operators
 open Sugartypes
 open SugarConstructors
 
 module Links_core = (* See Note [Dune "wrapped" workaround] *)
 struct
+  module CommonTypes       = CommonTypes
   module Sugartypes        = Sugartypes
   module SugarConstructors = SugarConstructors
   module Types             = Types
+  module Operators         = Operators
 end
 
 (* Construction of nodes using positions produced by Menhir parser *)
@@ -70,24 +74,24 @@ let default_fixity = 9
 
 let primary_kind_of_string p =
   function
-  | "Type"     -> `Type
-  | "Row"      -> `Row
-  | "Presence" -> `Presence
+  | "Type"     -> pk_type
+  | "Row"      -> pk_row
+  | "Presence" -> pk_presence
   | pk         ->
      raise (ConcreteSyntaxError ("Invalid primary kind: " ^ pk, pos p))
 
 let linearity_of_string p =
   function
-  | "Any" -> `Any
-  | "Unl" -> `Unl
+  | "Any" -> lin_any
+  | "Unl" -> lin_unl
   | lin   ->
      raise (ConcreteSyntaxError ("Invalid kind linearity: " ^ lin, pos p))
 
 let restriction_of_string p =
   function
-  | "Any"     -> `Any
-  | "Base"    -> `Base
-  | "Session" -> `Session
+  | "Any"     -> res_any
+  | "Base"    -> res_base
+  | "Session" -> res_session
   | rest      ->
      raise (ConcreteSyntaxError ("Invalid kind restriction: " ^ rest, pos p))
 
@@ -104,33 +108,33 @@ let full_subkind_of pos lin rest =
 
 (* In kind and subkind abbreviations, we aim to provide the most
 common case. For everything except session types, the default
-linearity is `Unl and the default restriction is `Any. For session
-types the default linearity is `Any. *)
+linearity is Unl and the default restriction is Any. For session
+types the default linearity is Any. *)
 
-(* Currently "Any" means `Any,`Any, but it is probably advisable to
+(* Currently "Any" means Any,Any, but it is probably advisable to
 change "Any" to something more evocative of linearity - "Lin"
 perhaps. *)
 
 let kind_of p =
   function
   (* primary kind abbreviation  *)
-  | "Type"     -> (`Type, None)
-  | "Row"      -> (`Row, None)
-  | "Presence" -> (`Presence, None)
+  | "Type"     -> (pk_type, None)
+  | "Row"      -> (pk_row, None)
+  | "Presence" -> (pk_presence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (`Type, Some (`Any, `Any))
-  | "Base"     -> (`Type, Some (`Unl, `Base))
-  | "Session"  -> (`Type, Some (`Any, `Session))
-  | "Eff"      -> (`Row, Some (`Unl, `Effect))
+  | "Any"      -> (pk_type, Some (lin_any, res_any))
+  | "Base"     -> (pk_type, Some (lin_unl, res_base))
+  | "Session"  -> (pk_type, Some (lin_any, res_session))
+  | "Eff"      -> (pk_row , Some (lin_unl, res_effect))
   | k          -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
 
 let subkind_of p =
   function
   (* subkind abbreviations *)
-  | "Any"     -> Some (`Any, `Any)
-  | "Base"    -> Some (`Unl, `Base)
-  | "Session" -> Some (`Any, `Session)
-  | "Eff"     -> Some (`Unl, `Effect)
+  | "Any"     -> Some (lin_any, res_any)
+  | "Base"    -> Some (lin_unl, res_base)
+  | "Session" -> Some (lin_any, res_session)
+  | "Eff"     -> Some (lin_unl, res_effect)
   | sk        -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos p))
 
 let attach_kind (t, k) = (t, k, `Rigid)
@@ -140,14 +144,14 @@ let attach_subkind_helper update sk = update sk
 let attach_subkind (t, subkind) =
   let update sk =
     match t with
-    | `TypeVar (x, _, freedom) -> `TypeVar (x, sk, freedom)
+    | Datatype.TypeVar (x, _, freedom) -> Datatype.TypeVar (x, sk, freedom)
     | _ -> assert false
   in attach_subkind_helper update subkind
 
 let attach_row_subkind (r, subkind) =
   let update sk =
     match r with
-    | `Open (x, _, freedom) -> `Open (x, sk, freedom)
+    | Datatype.Open (x, _, freedom) -> Datatype.Open (x, sk, freedom)
     | _ -> assert false
   in attach_subkind_helper update subkind
 
@@ -213,7 +217,7 @@ let parseRegexFlags f =
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
-%token <[`Left|`Right|`None|`Pre|`Post] -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
+%token <Operators.Associativity.t -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
 %token TYPE ROW PRESENCE
 %token TRY OTHERWISE RAISE
@@ -234,15 +238,15 @@ let parseRegexFlags f =
 %start file
 
 %type <Sugartypes.binding list * Sugartypes.phrase option> file
-%type <Sugartypes.datatype> datatype
-%type <Sugartypes.datatype> just_datatype
+%type <Sugartypes.Datatype.with_pos> datatype
+%type <Sugartypes.Datatype.with_pos> just_datatype
 %type <Sugartypes.sentence> interactive
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
-%type <Sugartypes.pattern> pattern
-%type <Sugartypes.declared_linearity * Sugartypes.name *
-       Sugartypes.pattern list list * Sugartypes.location *
+%type <Sugartypes.Pattern.with_pos> pattern
+%type <DeclaredLinearity.t * Sugartypes.name *
+       Sugartypes.Pattern.with_pos list list * Location.t *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
@@ -301,11 +305,11 @@ declaration:
 nofun_declaration:
 | alien_block                                                  { $1 }
 | ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { with_pos $loc
-                                                                          (`Foreign (binder ~ppos:$loc($4) $4,
+                                                                          (Foreign (binder ~ppos:$loc($4) $4,
                                                                                      $4, $2, $3, datatype $6)) }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                  set assoc (from_option default_fixity $2) ($3.node);
-                                                                 with_pos $loc `Infix }
+                                                                 with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
@@ -316,10 +320,10 @@ alien_datatypes:
 | alien_datatype+                                              { $1 }
 
 links_module:
-| MODULE module_name moduleblock                               { with_pos $loc($2) (`Module ($2, $3)) }
+| MODULE module_name moduleblock                               { with_pos $loc($2) (Module ($2, $3)) }
 
 alien_block:
-| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (`AlienBlock ($2, $3, $5)) }
+| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (AlienBlock ($2, $3, $5)) }
 
 module_name:
 | CONSTRUCTOR                                                  { $1 }
@@ -338,31 +342,31 @@ typed_handler_binding:
                 handler_parameterization                       { ($3, hnlit_arg $1 $2 $4) }
 
 optional_computation_parameter:
-| /* empty */                                                  { with_pos $sloc `Any }
+| /* empty */                                                  { with_pos $sloc Pattern.Any }
 | LBRACKET pattern RBRACKET                                    { $2 }
 
 perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
 
 linearity:
-| FUN                                                          { `Unl }
-| LINFUN                                                       { `Lin }
+| FUN                                                          { dl_unl }
+| LINFUN                                                       { dl_lin }
 
 tlfunbinding:
-| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                }
-| OP pattern op pattern perhaps_location block                 { (`Unl, $3.node, [[$2; $4]], $5, $6) }
-| OP PREFIXOP pattern perhaps_location block                   { (`Unl, $2, [[$3]], $4, $5)          }
-| OP pattern POSTFIXOP perhaps_location block                  { (`Unl, $3, [[$2]], $4, $5)          }
+| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                 }
+| OP pattern op pattern perhaps_location block                 { (dl_unl, $3.node, [[$2; $4]], $5, $6) }
+| OP PREFIXOP pattern perhaps_location block                   { (dl_unl, $2, [[$3]], $4, $5)          }
+| OP pattern POSTFIXOP perhaps_location block                  { (dl_unl, $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
-| VAR VARIABLE perhaps_location EQ exp                         { (Name $2, $5, $3) }
+| VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
 
 signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
 | SIG op COLON datatype                                        { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (`Type ($2, $3, datatype $5)) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Type ($2, $3, datatype $5)) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -378,24 +382,24 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (($1, (`Type, None), `Rigid), None) }
+| VARIABLE                                                     { (($1, (PrimaryKind.Type, None), `Rigid), None) }
 | VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
 
 varlist:
 | separated_nonempty_list(COMMA, typearg)                      { $1 }
 
 fixity:
-| INFIX                                                        { (`None , $1) }
-| INFIXL                                                       { (`Left , $1) }
-| INFIXR                                                       { (`Right, $1) }
-| PREFIX                                                       { (`Pre  , $1) }
-| POSTFIX                                                      { (`Post , $1) }
+| INFIX                                                        { (Associativity.None , $1) }
+| INFIXL                                                       { (Associativity.Left , $1) }
+| INFIXR                                                       { (Associativity.Right, $1) }
+| PREFIX                                                       { (Associativity.Pre  , $1) }
+| POSTFIX                                                      { (Associativity.Post , $1) }
 
 perhaps_location:
-| SERVER                                                       { `Server  }
-| CLIENT                                                       { `Client  }
-| NATIVE                                                       { `Native  }
-| /* empty */                                                  { `Unknown }
+| SERVER                                                       { loc_server  }
+| CLIENT                                                       { loc_client  }
+| NATIVE                                                       { loc_native  }
+| /* empty */                                                  { loc_unknown }
 
 constant:
 | UINTEGER                                                     { `Int    $1  }
@@ -416,13 +420,13 @@ qualified_type_name:
 | CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
 
 atomic_expression:
-| qualified_name                                               { with_pos $loc (`QualifiedVar $1) }
-| VARIABLE                                                     { with_pos $loc (`Var          $1) }
-| constant                                                     { with_pos $loc (`Constant     $1) }
+| qualified_name                                               { with_pos $loc (QualifiedVar $1) }
+| VARIABLE                                                     { with_pos $loc (Var          $1) }
+| constant                                                     { with_pos $loc (Constant     $1) }
 | parenthesized_thing                                          { $1 }
 /* HACK: allows us to support both mailbox receive syntax
 and receive for session types. */
-| RECEIVE                                                      { with_pos $loc (`Var "receive") }
+| RECEIVE                                                      { with_pos $loc (Var "receive") }
 
 cp_name:
 | VARIABLE                                                     { binder ~ppos:$loc($1) $1 }
@@ -443,25 +447,25 @@ perhaps_name:
 | cp_name?                                                     { $1 }
 
 cp_expression:
-| LBRACE block_contents RBRACE                                 { with_pos $loc (Unquote $2) }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (Grab ((name_of_binder $1, None), $3, $6)) }
-| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (Grab ((name_of_binder $1, None), $3, cp_unit $loc)) }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (Give ((name_of_binder $1, None), Some $3, $6)) }
-| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (Give ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
-| cp_name LBRACKET RBRACKET                                    { with_pos $loc (GiveNothing $1) }
-| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (Offer ($2, $4)) }
-| cp_label cp_name DOT cp_expression                           { with_pos $loc (Select ($2, $1, $4)) }
-| cp_label cp_name                                             { with_pos $loc (Select ($2, $1, cp_unit $loc)) }
-| cp_name LRARROW cp_name                                      { with_pos $loc (Link ($1, $3)) }
-| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (Comp ($2, $5, $7)) }
+| LBRACE block_contents RBRACE                                 { with_pos $loc (CPUnquote $2) }
+| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (CPGrab ((name_of_binder $1, None), $3, $6)) }
+| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (CPGrab ((name_of_binder $1, None), $3, cp_unit $loc)) }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (CPGive ((name_of_binder $1, None), Some $3, $6)) }
+| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (CPGive ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
+| cp_name LBRACKET RBRACKET                                    { with_pos $loc (CPGiveNothing $1) }
+| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (CPOffer ($2, $4)) }
+| cp_label cp_name DOT cp_expression                           { with_pos $loc (CPSelect ($2, $1, $4)) }
+| cp_label cp_name                                             { with_pos $loc (CPSelect ($2, $1, cp_unit $loc)) }
+| cp_name LRARROW cp_name                                      { with_pos $loc (CPLink ($1, $3)) }
+| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (CPComp ($2, $5, $7)) }
 
 primary_expression:
 | atomic_expression                                            { $1 }
 | LBRACKET perhaps_exps RBRACKET                               { list ~ppos:$loc $2 }
-| LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
+| LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
-| LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
+| LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | handler_depth optional_computation_parameter
      handler_parameterization                                  { handler_lit ~ppos:$loc (hnlit_arg $1 $2 $3) }
 
@@ -479,17 +483,17 @@ constructor_expression:
 | CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
 
 parenthesized_thing:
-| LPAREN binop RPAREN                                          { with_pos $loc (`Section $2)              }
-| LPAREN DOT record_label RPAREN                               { with_pos $loc (`Section (`Project $3))   }
-| LPAREN RPAREN                                                { record ~ppos:$loc []                     }
-| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3             }
-| LPAREN exps RPAREN                                           { with_pos $loc (`TupleLit ($2))           }
-| LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (`With ($2, $4))           }
+| LPAREN binop_section RPAREN                                  { with_pos $loc (Section $2)                   }
+| LPAREN DOT record_label RPAREN                               { with_pos $loc (Section (Section.Project $3)) }
+| LPAREN RPAREN                                                { record ~ppos:$loc []                         }
+| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3                 }
+| LPAREN exps RPAREN                                           { with_pos $loc (TupleLit ($2))                }
+| LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (With ($2, $4))                }
 
-binop:
-| MINUS                                                        { `Minus          }
-| MINUSDOT                                                     { `FloatMinus     }
-| op                                                           { `Name ($1.node) }
+binop_section:
+| MINUS                                                        { Section.Minus          }
+| MINUSDOT                                                     { Section.FloatMinus     }
+| op                                                           { Section.Name ($1.node) }
 
 op:
 | INFIX0 | INFIXL0 | INFIXR0
@@ -513,13 +517,13 @@ spawn_expression:
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
-| primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (`Name $2) $1 }
+| primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 }
 | block                                                        { $1 }
 | QUERY block                                                  { query ~ppos:$loc None $2 }
-| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (`Constant (`Int 0)))) $5 }
+| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (`Int 0)))) $5 }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
-| postfix_expression arg_spec                                  { with_pos $loc (`FnAppl ($1, $2)) }
-| postfix_expression DOT record_label                          { with_pos $loc (`Projection ($1, $3)) }
+| postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
+| postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
 
 
 arg_spec:
@@ -532,11 +536,11 @@ perhaps_exps:
 | loption(exps)                                                { $1 }
 
 unary_expression:
-| MINUS unary_expression                                       { unary_appl ~ppos:$loc `Minus      $2 }
-| MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc `FloatMinus $2 }
-| PREFIXOP unary_expression                                    { unary_appl ~ppos:$loc (`Name $1)  $2 }
+| MINUS unary_expression                                       { unary_appl ~ppos:$loc UnaryOp.Minus      $2 }
+| MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
+| PREFIXOP unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (`DoOperation ($2, $3, None)) }
+| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None)) }
 
 
 infixr_9:
@@ -551,8 +555,8 @@ infixl_9:
 infixr_8:
 | infixl_9                                                     { $1 }
 | infixl_9 INFIX8  infixl_9
-| infixl_9 INFIXR8 infixr_8                                    { infix_appl  ~ppos:$loc $1 $2    $3 }
-| infixl_9 COLONCOLON infixr_8                                 { infix_appl' ~ppos:$loc $1 `Cons $3 }
+| infixl_9 INFIXR8 infixr_8                                    { infix_appl  ~ppos:$loc $1 $2            $3 }
+| infixl_9 COLONCOLON infixr_8                                 { infix_appl' ~ppos:$loc $1 BinaryOp.Cons $3 }
 
 infixl_8:
 | infixr_8                                                     { $1 }
@@ -574,9 +578,9 @@ infixr_6:
 
 infixl_6:
 | infixr_6                                                     { $1 }
-| infixl_6 INFIXL6 infixr_6                                    { infix_appl  ~ppos:$loc $1 $2          $3 }
-| infixl_6 MINUS infixr_6                                      { infix_appl' ~ppos:$loc $1 `Minus      $3 }
-| infixl_6 MINUSDOT infixr_6                                   { infix_appl' ~ppos:$loc $1 `FloatMinus $3 }
+| infixl_6 INFIXL6 infixr_6                                    { infix_appl  ~ppos:$loc $1 $2                  $3 }
+| infixl_6 MINUS infixr_6                                      { infix_appl' ~ppos:$loc $1 BinaryOp.Minus      $3 }
+| infixl_6 MINUSDOT infixr_6                                   { infix_appl' ~ppos:$loc $1 BinaryOp.FloatMinus $3 }
 /* HACK: the type variables should get inserted later... */
 | infixl_6 BANG infixr_6                                       { infix_appl  ~ppos:$loc $1 "!" $3         }
 
@@ -594,7 +598,7 @@ infixr_4:
 | infixl_5 INFIX4    infixl_5
 | infixl_5 INFIXR4   infixr_4                                  { infix_appl ~ppos:$loc $1 $2 $3 }
 | infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in
-                                                                 infix_appl' ~ppos:$loc $1 (`RegexMatch flags) r }
+                                                                 infix_appl' ~ppos:$loc $1 (BinaryOp.RegexMatch flags) r }
 
 infixl_4:
 | infixr_4                                                     { $1 }
@@ -638,19 +642,19 @@ infixl_0:
 
 logical_expression:
 | infixl_0                                                     { $1 }
-| logical_expression BARBAR infixl_0                           { infix_appl' ~ppos:$loc $1 `Or  $3 }
-| logical_expression AMPAMP infixl_0                           { infix_appl' ~ppos:$loc $1 `And $3 }
+| logical_expression BARBAR infixl_0                           { infix_appl' ~ppos:$loc $1 BinaryOp.Or  $3 }
+| logical_expression AMPAMP infixl_0                           { infix_appl' ~ppos:$loc $1 BinaryOp.And $3 }
 
 typed_expression:
 | logical_expression                                           { $1 }
-| typed_expression COLON datatype                              { with_pos $loc (`TypeAnnotation ($1, datatype $3)) }
-| typed_expression COLON datatype LARROW datatype              { with_pos $loc (`Upcast ($1, datatype $3, datatype $5)) }
+| typed_expression COLON datatype                              { with_pos $loc (TypeAnnotation ($1, datatype $3)) }
+| typed_expression COLON datatype LARROW datatype              { with_pos $loc (Upcast ($1, datatype $3, datatype $5)) }
 
 db_expression:
-| DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in with_pos $loc (`DBDelete (pat, phrase, $5)) }
+| DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in with_pos $loc (DBDelete (pat, phrase, $5)) }
 | UPDATE LPAREN table_generator RPAREN
          perhaps_where
-         SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in with_pos $loc (`DBUpdate(pat, phrase, $5, $8)) }
+         SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in with_pos $loc (DBUpdate(pat, phrase, $5, $8)) }
 
 /* XML */
 xmlid:
@@ -678,28 +682,28 @@ xml_contents:
 | block                                                        { $1 }
 | formlet_binding | formlet_placement | page_placement
 | xml                                                          { $1 }
-| CDATA                                                        { with_pos $loc (`TextNode (Utility.xml_unescape $1)) }
+| CDATA                                                        { with_pos $loc (TextNode (Utility.xml_unescape $1)) }
 
 formlet_binding:
-| LBRACE logical_expression RARROW pattern RBRACE              { with_pos $loc (`FormBinding($2, $4)) }
+| LBRACE logical_expression RARROW pattern RBRACE              { with_pos $loc (FormBinding($2, $4)) }
 
 formlet_placement:
 | LBRACE logical_expression
-         FATRARROW logical_expression RBRACE                   { with_pos $loc (`FormletPlacement ($2, $4,
+         FATRARROW logical_expression RBRACE                   { with_pos $loc (FormletPlacement ($2, $4,
                                                                                                    list ~ppos:$loc [])) }
 | LBRACE logical_expression
          FATRARROW logical_expression
-         WITH logical_expression RBRACE                        { with_pos $loc (`FormletPlacement ($2, $4, $6)) }
+         WITH logical_expression RBRACE                        { with_pos $loc (FormletPlacement ($2, $4, $6)) }
 
 page_placement:
-| LBRACEBAR exp BARRBRACE                                      { with_pos $loc($2) (`PagePlacement $2) }
+| LBRACEBAR exp BARRBRACE                                      { with_pos $loc($2) (PagePlacement $2) }
 
 session_expression:
-| SELECT field_label exp                                       { with_pos $loc (`Select ($2, $3))      }
-| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { with_pos $loc (`Offer ($3, $6, None)) }
+| SELECT field_label exp                                       { with_pos $loc (Select ($2, $3))      }
+| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { with_pos $loc (Offer ($3, $6, None)) }
 
 conditional_expression:
-| IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (`Conditional ($3, $5, $7)) }
+| IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
 case:
 | CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
@@ -711,15 +715,15 @@ perhaps_cases:
 | case*                                                        { $1 }
 
 case_expression:
-| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Switch ($3, $6, None)) }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (`Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (`Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Handle (untyped_handler $3 $6 Deep   )) }
+| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Switch ($3, $6, None)) }
+| RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (Receive ($3, None)) }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
+| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
 | HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE perhaps_cases RBRACE
-                                                               { with_pos $loc (`Handle (untyped_handler ~parameters:(List.rev $6)
+                                                               { with_pos $loc (Handle (untyped_handler ~parameters:(List.rev $6)
                                                                                          $3 $9 Deep)) }
-| RAISE                                                        { with_pos $loc (`Raise) }
-| TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (`TryInOtherwise ($2, $4, $6, $8, None)) }
+| RAISE                                                        { with_pos $loc (Raise) }
+| TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
 
 handle_params:
 | rev(separated_nonempty_list(COMMA,
@@ -729,14 +733,14 @@ iteration_expression:
 | FOR LPAREN perhaps_generators RPAREN
       perhaps_where
       perhaps_orderby
-      exp                                                      { with_pos $loc (`Iteration ($3, $7, $5, $6)) }
+      exp                                                      { with_pos $loc (Iteration ($3, $7, $5, $6)) }
 
 perhaps_generators:
 | separated_list(COMMA, generator)                             { $1 }
 
 generator:
-| list_generator                                               { `List $1  }
-| table_generator                                              { `Table $1 }
+| list_generator                                               { List $1  }
+| table_generator                                              { Table $1 }
 
 list_generator:
 | pattern LARROW exp                                           { ($1, $3) }
@@ -753,18 +757,18 @@ perhaps_orderby:
 | ORDERBY LPAREN exps RPAREN                                   { Some (tuple ~ppos:$loc($3) $3) }
 
 escape_expression:
-| ESCAPE VARIABLE IN postfix_expression                        { with_pos $loc (`Escape (binder ~ppos:$loc($2) $2, $4)) }
+| ESCAPE VARIABLE IN postfix_expression                        { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
 
 formlet_expression:
-| FORMLET xml YIELDS exp                                       { with_pos $loc (`Formlet ($2, $4)) }
-| PAGE xml                                                     { with_pos $loc (`Page $2)          }
+| FORMLET xml YIELDS exp                                       { with_pos $loc (Formlet ($2, $4)) }
+| PAGE xml                                                     { with_pos $loc (Page $2)          }
 
 table_expression:
-| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { with_pos $loc (`TableLit ($2, datatype $4, $5,
-                                                                                           list ~ppos:$loc [], $7)) }
+| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { with_pos $loc (TableLit ($2, datatype $4, $5,
+                                                                                          list ~ppos:$loc [], $7)) }
 /* SAND */
 | TABLE exp WITH datatype perhaps_table_constraints
-            TABLEKEYS exp FROM exp                             { with_pos $loc (`TableLit ($2, datatype $4, $5, $7, $9))}
+            TABLEKEYS exp FROM exp                             { with_pos $loc (TableLit ($2, datatype $4, $5, $7, $9))}
 
 perhaps_table_constraints:
 | loption(preceded(WHERE, table_constraints))                  { $1 }
@@ -806,7 +810,7 @@ database_expression:
   RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
   RETURNING VARIABLE                                           { db_insert ~ppos:$loc $2 $5 $7 (Some $9) }
-| DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3))           }
+| DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
 | VARIABLE+                                                    { $1 }
@@ -818,31 +822,31 @@ fn_deps:
 | separated_nonempty_list(COMMA, fn_dep)                       { $1 }
 
 lens_expression:
-| LENS exp DEFAULT                                             { with_pos $loc (`LensLit ($2, None))}
-| LENS exp TABLEKEYS exp                                       { with_pos $loc (`LensKeysLit ($2, $4, None))}
-| LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (`LensFunDepsLit ($2, $5, None))}
+| LENS exp DEFAULT                                             { with_pos $loc (LensLit ($2, None))}
+| LENS exp TABLEKEYS exp                                       { with_pos $loc (LensKeysLit ($2, $4, None))}
+| LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (LensFunDepsLit ($2, $5, None))}
 | LENSDROP VARIABLE DETERMINED BY
-  VARIABLE DEFAULT exp FROM exp                                { with_pos $loc (`LensDropLit ($9, $2, $5, $7, None)) }
-| LENSSELECT FROM exp BY exp                                   { with_pos $loc (`LensSelectLit ($3, $5, None)) }
-| LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { with_pos $loc (`LensJoinLit ($2, $4, $6, $9, $11, None)) }
-| LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { with_pos $loc (`LensJoinLit ($2, $4, $6,
-                                                                                       with_pos $loc (`Constant (`Bool true )),
-                                                                                       with_pos $loc (`Constant (`Bool false)), None)) }
-| LENSGET exp                                                  { with_pos $loc (`LensGetLit ($2, None)) }
-| LENSPUT exp WITH exp                                         { with_pos $loc (`LensPutLit ($2, $4, None)) }
+  VARIABLE DEFAULT exp FROM exp                                { with_pos $loc (LensDropLit ($9, $2, $5, $7, None)) }
+| LENSSELECT FROM exp BY exp                                   { with_pos $loc (LensSelectLit ($3, $5, None)) }
+| LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { with_pos $loc (LensJoinLit ($2, $4, $6, $9, $11, None)) }
+| LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { with_pos $loc (LensJoinLit ($2, $4, $6,
+                                                                                       with_pos $loc (Constant (`Bool true )),
+                                                                                       with_pos $loc (Constant (`Bool false)), None)) }
+| LENSGET exp                                                  { with_pos $loc (LensGetLit ($2, None)) }
+| LENSPUT exp WITH exp                                         { with_pos $loc (LensPutLit ($2, $4, None)) }
 
 
 record_labels:
 | separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
-| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
+| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (QualifiedImport $2) }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
-| exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
-| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, `Unknown, $5) }
-| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, `Unknown, $4) }
+| exp SEMICOLON                                                { with_pos $loc (Exp $1) }
+| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
+| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 
@@ -857,13 +861,13 @@ block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
 
 block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (`Exp $2)],
+| bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
                                                                   record ~ppos:$loc []) }
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([with_pos $loc($1) (`Exp $1)],
+| exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
                                                                   record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
-| SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }
+| SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exps:
 | separated_nonempty_list(COMMA,
@@ -879,7 +883,7 @@ datatype:
 | mu_datatype | straight_arrow | squiggly_arrow                { with_pos $loc $1 }
 
 arrow_prefix:
-| LBRACE RBRACE                                                { ([], `Closed) }
+| LBRACE RBRACE                                                { ([], Datatype.Closed) }
 | LBRACE efields RBRACE                                        { $2            }
 
 straight_arrow_prefix:
@@ -891,33 +895,33 @@ squig_arrow_prefix:
 | TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 
 hear_arrow_prefix:
-| LBRACE COLON datatype COMMA efields RBRACE                   { hear_arrow_prefix $3 $5            }
-| LBRACE COLON datatype RBRACE                                 { hear_arrow_prefix $3 ([], `Closed) }
+| LBRACE COLON datatype COMMA efields RBRACE                   { hear_arrow_prefix $3 $5                    }
+| LBRACE COLON datatype RBRACE                                 { hear_arrow_prefix $3 ([], Datatype.Closed) }
 | LBRACE COLON datatype VBAR nonrec_row_var RBRACE
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { hear_arrow_prefix $3 ([], $5)      }
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { hear_arrow_prefix $3 ([], $5)              }
 
 straight_arrow:
 | parenthesized_datatypes
-  straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
+  straight_arrow_prefix RARROW datatype                        { Datatype.Function ($1, $2, $4) }
 | parenthesized_datatypes
-  straight_arrow_prefix LOLLI datatype                         { `Lolli    ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { `Function ($1, fresh_row (), $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli    ($1, fresh_row (), $3) }
+  straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
+| parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_row (), $3) }
+| parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_row (), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with_wp $2, $4) }
+  squig_arrow_prefix SQUIGRARROW datatype                      { Datatype.Function ($1, row_with_wp $2, $4) }
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with_wp $2, $4) }
-| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, row_with_wp (fresh_row ()), $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, row_with_wp (fresh_row ()), $3) }
+  squig_arrow_prefix SQUIGLOLLI datatype                       { Datatype.Lolli    ($1, row_with_wp $2, $4) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp (fresh_row ()), $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp (fresh_row ()), $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                  { `Mu ($2, with_pos $loc($4) $4) }
+| MU VARIABLE DOT mu_datatype                                  { Datatype.Mu ($2, with_pos $loc($4) $4) }
 | forall_datatype                                              { $1 }
 
 forall_datatype:
-| FORALL varlist DOT datatype                                  { `Forall (labels $2, $4) }
+| FORALL varlist DOT datatype                                  { Datatype.Forall (labels $2, $4) }
 | session_datatype                                             { $1 }
 
 /* Parenthesised dts disambiguate between sending qualified types and recursion variables.
@@ -937,14 +941,14 @@ forall_datatype:
    among several nonterminals.
 */
 session_datatype:
-| BANG primary_datatype_pos DOT datatype                       { `Output ($2, $4) }
-| QUESTION primary_datatype_pos DOT datatype                   { `Input  ($2, $4) }
-| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
-| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
-| END                                                          { `End             }
-| primary_datatype                                             { $1               }
-| qualified_type_name                                          { `QualifiedTypeApplication ($1, []) }
-| qualified_type_name LPAREN type_arg_list RPAREN              { `QualifiedTypeApplication ($1, $3) }
+| BANG primary_datatype_pos DOT datatype                       { Datatype.Output ($2, $4) }
+| QUESTION primary_datatype_pos DOT datatype                   { Datatype.Input  ($2, $4) }
+| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { Datatype.Select $2       }
+| LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
+| END                                                          { Datatype.End             }
+| primary_datatype                                             { $1                       }
+| qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
+| qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
@@ -954,33 +958,34 @@ primary_datatype_pos:
 | primary_datatype                                             { with_pos $loc $1 }
 
 primary_datatype:
-| TILDE primary_datatype_pos                                   { `Dual $2 }
+| TILDE primary_datatype_pos                                   { Datatype.Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
-                                                                   | [] -> `Unit
+                                                                   | [] -> Datatype.Unit
                                                                    | [{node;_}] -> node
-                                                                   | ts  -> `Tuple ts }
-| LPAREN rfields RPAREN                                        { `Record $2 }
+                                                                   | ts  -> Datatype.Tuple ts }
+| LPAREN rfields RPAREN                                        { Datatype.Record $2 }
 | TABLEHANDLE
-     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
-| LBRACKETBAR vrow BARRBRACKET                                 { `Variant $2 }
-| LBRACKET datatype RBRACKET                                   { `List $2 }
+     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { Datatype.Table ($3, $5, $7) }
+| LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
+| LBRACKET datatype RBRACKET                                   { Datatype.List $2 }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
-| CONSTRUCTOR                                                  { match $1 with
-                                                                   | "Bool"    -> `Primitive `Bool
-                                                                   | "Int"     -> `Primitive `Int
-                                                                   | "Char"    -> `Primitive `Char
-                                                                   | "Float"   -> `Primitive `Float
-                                                                   | "XmlItem" -> `Primitive `XmlItem
-                                                                   | "String"  -> `Primitive `String
-                                                                   | "Database"-> `DB
-                                                                   | t         -> `TypeApplication (t, [])
+| CONSTRUCTOR                                                  { let open Datatype in
+                                                                 match $1 with
+                                                                   | "Bool"    -> Primitive `Bool
+                                                                   | "Int"     -> Primitive `Int
+                                                                   | "Char"    -> Primitive `Char
+                                                                   | "Float"   -> Primitive `Float
+                                                                   | "XmlItem" -> Primitive `XmlItem
+                                                                   | "String"  -> Primitive `String
+                                                                   | "Database"-> DB
+                                                                   | t         -> TypeApplication (t, [])
                                                                }
-| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
 
 type_var:
-| VARIABLE                                                     { `TypeVar ($1, None, `Rigid)    }
-| PERCENTVAR                                                   { `TypeVar ($1, None, `Flexible) }
+| VARIABLE                                                     { Datatype.TypeVar ($1, None, `Rigid)    }
+| PERCENTVAR                                                   { Datatype.TypeVar ($1, None, `Flexible) }
 | UNDERSCORE                                                   { fresh_rigid_type_variable ()   }
 | PERCENT                                                      { fresh_type_variable ()         }
 
@@ -994,27 +999,27 @@ type_arg_list:
    (TYPE, ROW, and PRESENCE are no longer tokens...)
 */
 type_arg:
-| datatype                                                     { `Type $1     }
-| TYPE LPAREN datatype RPAREN                                  { `Type $3     }
-| ROW LPAREN row RPAREN                                        { `Row $3      }
-| PRESENCE LPAREN fieldspec RPAREN                             { `Presence $3 }
-| LBRACE row RBRACE                                            { `Row $2      }
+| datatype                                                     { Datatype.Type $1     }
+| TYPE LPAREN datatype RPAREN                                  { Datatype.Type $3     }
+| ROW LPAREN row RPAREN                                        { Datatype.Row $3      }
+| PRESENCE LPAREN fieldspec RPAREN                             { Datatype.Presence $3 }
+| LBRACE row RBRACE                                            { Datatype.Row $2      }
 
 datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }
 
 vrow:
-| vfields                                                      { $1            }
-| /* empty */                                                  { ([], `Closed) }
+| vfields                                                      { $1                    }
+| /* empty */                                                  { ([], Datatype.Closed) }
 
 row:
-| fields                                                       { $1            }
-| /* empty */                                                  { ([], `Closed) }
+| fields                                                       { $1                    }
+| /* empty */                                                  { ([], Datatype.Closed) }
 
 fields_def(field_prod, row_var_prod, kinded_row_var_prod):
-| field_prod                                                   { ([$1]       , `Closed) }
-| soption(field_prod) VBAR row_var_prod                        { ( $1        , $3     ) }
-| soption(field_prod) VBAR kinded_row_var_prod                 { ( $1        , $3     ) }
+| field_prod                                                   { ([$1], Datatype.Closed) }
+| soption(field_prod) VBAR row_var_prod                        { ( $1 , $3             ) }
+| soption(field_prod) VBAR kinded_row_var_prod                 { ( $1 , $3             ) }
 | field_prod COMMA
     fields_def(field_prod, row_var_prod, kinded_row_var_prod)  { ( $1::fst $3, snd $3 ) }
 
@@ -1045,10 +1050,10 @@ record_label:
 | field_label                                                  { $1 }
 
 vfields:
-| vfield                                                       { ([$1]      , `Closed) }
-| row_var                                                      { ([]        , $1     ) }
-| kinded_row_var                                               { ([]        , $1     ) }
-| vfield VBAR vfields                                          { ($1::fst $3, snd $3 ) }
+| vfield                                                       { ([$1], Datatype.Closed) }
+| row_var                                                      { ([]  , $1             ) }
+| kinded_row_var                                               { ([]  , $1             ) }
+| vfield VBAR vfields                                          { ($1::fst $3, snd $3   ) }
 
 vfield:
 | CONSTRUCTOR                                                  { ($1, present) }
@@ -1066,18 +1071,18 @@ effect_label:
 | VARIABLE                                                     { $1 }
 
 fieldspec:
-| COLON datatype                                               { `Present $2 }
-| LBRACE COLON datatype RBRACE                                 { `Present $3 }
-| MINUS                                                        { `Absent }
-| LBRACE MINUS RBRACE                                          { `Absent }
-| LBRACE VARIABLE RBRACE                                       { `Var ($2, None, `Rigid) }
-| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, None, `Flexible) }
+| COLON datatype                                               { Datatype.Present $2 }
+| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
+| MINUS                                                        { Datatype.Absent }
+| LBRACE MINUS RBRACE                                          { Datatype.Absent }
+| LBRACE VARIABLE RBRACE                                       { Datatype.Var ($2, None, `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { Datatype.Var ($2, None, `Flexible) }
 | LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
 | LBRACE PERCENT RBRACE                                        { fresh_presence_variable ()       }
 
 nonrec_row_var:
-| VARIABLE                                                     { `Open ($1, None, `Rigid   ) }
-| PERCENTVAR                                                   { `Open ($1, None, `Flexible) }
+| VARIABLE                                                     { Datatype.Open ($1, None, `Rigid   ) }
+| PERCENTVAR                                                   { Datatype.Open ($1, None, `Flexible) }
 | UNDERSCORE                                                   { fresh_rigid_row_variable () }
 | PERCENT                                                      { fresh_row_variable ()       }
 
@@ -1087,7 +1092,7 @@ nonrec_row_var:
  */
 row_var:
 | nonrec_row_var                                               { $1 }
-| LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
+| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive ($3, $5) }
 
 kinded_nonrec_row_var:
 | nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }
@@ -1099,10 +1104,10 @@ kinded_row_var:
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_alternate regex_flags_opt                { with_pos $loc($2) (`Regex $2), $3 }
-| SLASH regex_flags_opt                                        { with_pos $loc (`Regex (Simply "")), $2 }
+| SLASH regex_pattern_alternate regex_flags_opt                { with_pos $loc($2) (Regex $2), $3 }
+| SLASH regex_flags_opt                                        { with_pos $loc (Regex (Simply "")), $2 }
 | SSLASH regex_pattern_alternate SLASH regex_replace
-    regex_flags_opt                                            { with_pos $loc (`Regex (Replace ($2, $4))),
+    regex_flags_opt                                            { with_pos $loc (Regex (Replace ($2, $4))),
                                                                  RegexReplace :: $5 }
 
 regex_flags_opt:
@@ -1110,9 +1115,9 @@ regex_flags_opt:
 | SLASHFLAGS                                                   { parseRegexFlags $1 }
 
 regex_replace:
-| /* empty */                                                  { `Literal "" }
-| REGEXREPL                                                    { `Literal $1 }
-| block                                                        { `Splice $1 }
+| /* empty */                                                  { Literal "" }
+| REGEXREPL                                                    { Literal $1 }
+| block                                                        { SpliceExpr $1 }
 
 regex_pattern:
 | RANGE                                                        { Range $1 }
@@ -1139,40 +1144,40 @@ regex_pattern_sequence:
  */
 pattern:
 | typed_pattern                                                { $1 }
-| typed_pattern COLON primary_datatype_pos                         { with_pos $loc (`HasType ($1, datatype $3)) }
+| typed_pattern COLON primary_datatype_pos                     { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }
-| cons_pattern AS VARIABLE                                     { with_pos $loc (`As (binder ~ppos:$loc($3) $3, $1)) }
+| cons_pattern AS VARIABLE                                     { with_pos $loc (Pattern.As (binder ~ppos:$loc($3) $3, $1)) }
 
 cons_pattern:
 | constructor_pattern                                          { $1 }
-| constructor_pattern COLONCOLON cons_pattern                  { with_pos $loc (`Cons ($1, $3)) }
+| constructor_pattern COLONCOLON cons_pattern                  { with_pos $loc (Pattern.Cons ($1, $3)) }
 
 constructor_pattern:
 | negative_pattern                                             { $1 }
-| CONSTRUCTOR parenthesized_pattern?                           { with_pos $loc (`Variant ($1, $2)) }
+| CONSTRUCTOR parenthesized_pattern?                           { with_pos $loc (Pattern.Variant ($1, $2)) }
 
 constructors:
 | separated_nonempty_list(COMMA, CONSTRUCTOR)                  { $1 }
 
 negative_pattern:
 | primary_pattern                                              { $1 }
-| MINUS CONSTRUCTOR                                            { with_pos $loc (`Negative [$2]) }
-| MINUS LPAREN constructors RPAREN                             { with_pos $loc (`Negative $3)   }
+| MINUS CONSTRUCTOR                                            { with_pos $loc (Pattern.Negative [$2]) }
+| MINUS LPAREN constructors RPAREN                             { with_pos $loc (Pattern.Negative $3)   }
 
 parenthesized_pattern:
-| LPAREN RPAREN                                                { with_pos $loc (`Tuple []) }
+| LPAREN RPAREN                                                { with_pos $loc (Pattern.Tuple []) }
 | LPAREN pattern RPAREN                                        { $2 }
-| LPAREN pattern COMMA patterns RPAREN                         { with_pos $loc (`Tuple ($2 :: $4)) }
-| LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (`Record ($2, $3))  }
+| LPAREN pattern COMMA patterns RPAREN                         { with_pos $loc (Pattern.Tuple ($2 :: $4)) }
+| LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (Pattern.Record ($2, $3))  }
 
 primary_pattern:
 | VARIABLE                                                     { variable_pat ~ppos:$loc $1   }
 | UNDERSCORE                                                   { any_pat $loc                 }
-| constant                                                     { with_pos $loc (`Constant $1) }
-| LBRACKET RBRACKET                                            { with_pos $loc `Nil           }
-| LBRACKET patterns RBRACKET                                   { with_pos $loc (`List $2)     }
+| constant                                                     { with_pos $loc (Pattern.Constant $1) }
+| LBRACKET RBRACKET                                            { with_pos $loc Pattern.Nil           }
+| LBRACKET patterns RBRACKET                                   { with_pos $loc (Pattern.List $2)     }
 | parenthesized_pattern                                        { $1 }
 
 patterns:

@@ -1,3 +1,5 @@
+open Operators
+open CommonTypes
 open Sugartypes
 
 (*
@@ -49,7 +51,7 @@ object ('self)
   method binder          : binder -> 'self * binder
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
-  method binop           : binop -> 'self * binop * Types.datatype
+  method binop           : BinaryOp.t -> 'self * BinaryOp.t * Types.datatype
   method constant        : constant -> 'self * constant * Types.datatype
   method funlit          : Types.row -> funlit -> 'self * funlit * Types.datatype
   method handlerlit      : Types.datatype -> handlerlit -> 'self * handlerlit * Types.datatype
@@ -60,25 +62,25 @@ object ('self)
   method restore_quantifiers : Utility.IntSet.t -> 'self
 
   method rec_bodies :
-    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
     ('self *
-       (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)
+       (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list)
   method rec_activate_outer_bindings :
-    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
     ('self *
-       (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)
+       (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list)
   method rec_activate_inner_bindings :
-    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
     'self
 
-  method sugar_datatype   : datatype -> 'self * datatype
+  method sugar_datatype   : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatype         : Types.datatype -> 'self * Types.datatype
   method datatype'        : datatype' -> 'self * datatype'
   method lens_sort        : Types.lens_sort -> 'self * Types.lens_sort
   method row              : Types.row -> 'self * Types.row
 
-  method patternnode     : patternnode -> 'self * patternnode
-  method pattern         : pattern -> 'self * pattern
+  method patternnode     : Pattern.t -> 'self * Pattern.t
+  method pattern         : Pattern.with_pos -> 'self * Pattern.with_pos
   method phrase          : phrase -> 'self * phrase * Types.datatype
   method given_spawn_location : given_spawn_location -> 'self * given_spawn_location
   method phrasenode      : phrasenode -> 'self * phrasenode * Types.datatype
@@ -86,13 +88,13 @@ object ('self)
   method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode * Types.datatype
   method program         : program -> 'self * program * Types.datatype option
   method regex           : regex -> 'self * regex
-  method sec             : sec -> 'self * sec * Types.datatype
+  method section         : Section.t -> 'self * Section.t * Types.datatype
   method sentence        : sentence -> 'self * sentence
 (*
   method sentence'       : sentence' -> 'self * sentence'
   method directive       : directive -> 'self * directive
 *)
-  method unary_op        : unary_op -> 'self * unary_op * Types.datatype
+  method unary_op        : UnaryOp.t -> 'self * UnaryOp.t * Types.datatype
 end
 
-val fun_effects : Types.datatype -> Sugartypes.pattern list list -> Types.row
+val fun_effects : Types.datatype -> Sugartypes.Pattern.with_pos list list -> Types.row

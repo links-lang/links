@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 open Sugartypes
 open SugarConstructors.Make
 
@@ -61,7 +62,7 @@ let results :  Types.row ->
             let qt = t in
             let qst = Types.make_tuple_type ts in
 
-            let ((qsb, qs) : Sugartypes.pattern list * Sugartypes.phrase list) =
+            let ((qsb, qs) : Sugartypes.Pattern.with_pos list * Sugartypes.phrase list) =
               List.split
                 (List.map2 (fun x t -> (variable_pat ~ty:t x, var x)) xs ts) in
             let qb, q = (variable_pat ~ty:t x, var x) in
@@ -76,12 +77,13 @@ let results :  Types.row ->
                   | [t] -> Types.make_tuple_type [t]
                   | ts -> Types.make_tuple_type [Types.make_tuple_type ts]
               in
-              fun_lit ~args:[a, eff] `Unl [ps] (tuple (q::qs)) in
+              fun_lit ~args:[a, eff] dl_unl [ps] (tuple (q::qs)) in
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
-                fun_lit ~args:[Types.make_tuple_type [t], eff] `Unl [[qb]]
-                  (fn_appl "map" [a; `Row eff; b] [inner; r]) in
+                fun_lit ~args:[Types.make_tuple_type [t], eff]
+                        dl_unl [[qb]]
+                        (fn_appl "map" [a; `Row eff; b] [inner; r]) in
             let a = `Type qt in
             let b = `Type (Types.make_tuple_type (t :: ts)) in
             fn_appl "concatMap" [a; `Row eff; b] [outer; e]
@@ -100,14 +102,14 @@ object (o : 'self_type)
   *)
   method qualifiers : Sugartypes.iterpatt list ->
     'self_type *
-      (Sugartypes.phrase list * Sugartypes.pattern list * Sugartypes.name list *
+      (Sugartypes.phrase list * Sugartypes.Pattern.with_pos list * Sugartypes.name list *
          Types.datatype list) =
     fun qs ->
       let o, (es, ps, xs, ts) =
         List.fold_left
           (fun (o, (es, ps, xs, ts)) q ->
              match q with
-               | `List (p, e) ->
+               | List (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
 
@@ -115,8 +117,9 @@ object (o : 'self_type)
 
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let xb = binder ~ty:t var in
-                     o, (e::es, with_dummy_pos (`As (xb, p))::ps, var::xs, element_type::ts)
-               | `Table (p, e) ->
+                     o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
+                         var::xs, element_type::ts)
+               | Table (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
 
@@ -130,7 +133,8 @@ object (o : 'self_type)
                    let e = fn_appl "AsList" [r; w; n; eff] [e] in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let xb = binder ~ty:t var in
-                     o, (e::es, with_dummy_pos (`As (xb, p))::ps, var::xs, element_type::ts))
+                     o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
+                         var::xs, element_type::ts))
           (o, ([], [], [], []))
           qs
       in
@@ -139,7 +143,7 @@ object (o : 'self_type)
   method! phrasenode : Sugartypes.phrasenode ->
     ('self_type * Sugartypes.phrasenode * Types.datatype) =
     function
-    | `Iteration (generators, body, filter, sort) ->
+    | Iteration (generators, body, filter, sort) ->
         let eff = o#lookup_effects in
         let o, (es, ps, xs, ts) = o#qualifiers generators in
         let o, body, body_type = o#phrase body in
@@ -151,7 +155,7 @@ object (o : 'self_type)
           match filter with
             | None -> body
             | Some condition ->
-                with_dummy_pos (`Conditional (condition, body, list ~ty:elem_type [])) in
+                with_dummy_pos (Conditional (condition, body, list ~ty:elem_type [])) in
 
         let arg =
           match ps with
@@ -164,7 +168,7 @@ object (o : 'self_type)
             | ts -> Types.make_tuple_type ts in
 
         let f : phrase = fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
-                                 `Unl [arg] body in
+                                 dl_unl [arg] body in
 
         let results = results eff (es, xs, ts) in
         let results =
@@ -176,7 +180,7 @@ object (o : 'self_type)
 
                 let g : phrase =
                   fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
-                          `Unl [arg] sort
+                          dl_unl [arg] sort
                 in
                 fn_appl sort_by [`Type arg_type; `Row eff; sort_type_arg]
                         [g; results]
@@ -200,6 +204,6 @@ object
   method satisfied = has_no_fors
 
   method! phrasenode = function
-    | `Iteration _ -> {< has_no_fors = false >}
+    | Iteration _ -> {< has_no_fors = false >}
     | e -> super#phrasenode e
 end

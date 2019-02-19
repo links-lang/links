@@ -1,6 +1,7 @@
 
 (** JavaScript generation *)
 open Utility
+open CommonTypes
 
 let _ = ParseSettings.config_file
 
@@ -690,7 +691,7 @@ end = functor (K : CONTINUATION) -> struct
               | _ ->
                  if Lib.is_primitive f_name
                    && not (List.mem f_name cps_prims)
-                   && Lib.primitive_location f_name <> `Server
+                   && not (Location.is_server (Lib.primitive_location f_name))
                  then
                    Call (Var ("_" ^ f_name), List.map gv vs)
                  else
@@ -743,7 +744,7 @@ end = functor (K : CONTINUATION) -> struct
          advantage of dynamic scoping *)
 
         match location with
-        | `Client | `Native | `Unknown ->
+        | Location.Client | Location.Native | Location.Unknown ->
            let xs_names'' = xs_names'@[__kappa] in
            LetFun ((Js.var_name_binder fb,
                     xs_names'',
@@ -751,7 +752,7 @@ end = functor (K : CONTINUATION) -> struct
                           List.map (fun x -> Var x) xs_names''),
                     location),
                    code)
-        | `Server ->
+        | Location.Server ->
            LetFun ((Js.var_name_binder fb,
                     xs_names'@[__kappa],
                     generate_remote_call f_var xs_names env,
@@ -786,7 +787,7 @@ end = functor (K : CONTINUATION) -> struct
           (Env.Int.fold
              (fun var _v funcs ->
                let name = Lib.primitive_name var in
-               if Lib.primitive_location name = `Server then
+               if Location.is_server (Lib.primitive_location name) then
                  (name, var)::funcs
                else
                  funcs)
@@ -811,7 +812,7 @@ end = functor (K : CONTINUATION) -> struct
             ((name,
               args @ [__kappa],
               body,
-              `Server),
+              loc_server),
              code))
         prim_server_calls
         code
@@ -843,7 +844,7 @@ end = functor (K : CONTINUATION) -> struct
                 | _ ->
                    if Lib.is_primitive f_name
                      && not (List.mem f_name cps_prims)
-                     && Lib.primitive_location f_name <> `Server
+                     && not (Location.is_server (Lib.primitive_location f_name))
                    then
                      let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
                      K.apply ~strategy:`Direct kappa arg
@@ -1159,10 +1160,10 @@ end = functor (K : CONTINUATION) -> struct
       let body_env = List.fold_left VEnv.bind env (fs @ bs) in
       let body =
         match location with
-        | `Client | `Unknown ->
+        | Location.Client | Location.Unknown ->
            snd (generate_computation body_env body (K.reflect (Var __kappa)))
-        | `Server -> generate_remote_call f xs_names (Dict [])
-        | `Native -> failwith ("Not implemented native calls yet")
+        | Location.Server -> generate_remote_call f xs_names (Dict [])
+        | Location.Native -> failwith ("Not implemented native calls yet")
       in
       (f_name,
        xs_names @ [__kappa],

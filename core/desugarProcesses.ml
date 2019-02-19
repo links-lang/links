@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 open Sugartypes
 open SugarConstructors.Make
 
@@ -18,7 +19,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `Spawn (Wait, spawn_loc, body, Some inner_eff) ->
+    | Spawn (Wait, spawn_loc, body, Some inner_eff) ->
         assert (spawn_loc = NoSpawnLocation);
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
@@ -30,10 +31,10 @@ object (o : 'self_type)
 
         let e : phrasenode =
           fn_appl_node "spawnWait" [`Row inner_eff; `Type body_type; `Row outer_eff]
-            [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] `Unl [[]] body]
+            [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_unl [[]] body]
         in
           (o, e, body_type)
-    | `Spawn (k, spawn_loc, body, Some inner_eff) ->
+    | Spawn (k, spawn_loc, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
         let process_type = `Application (Types.process, [`Row inner_eff]) in
@@ -62,20 +63,20 @@ object (o : 'self_type)
 
         let e : phrasenode =
           fn_appl_node spawn_fun [`Row inner_eff; `Type body_type; `Row outer_eff]
-             [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] `Unl [[]] body;
+             [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_unl [[]] body;
               spawn_loc_phr]
         in
           (o, e, process_type)
-    | `Receive (cases, Some t) ->
+    | Receive (cases, Some t) ->
         let fields, row_var, _ = o#lookup_effects in
         let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var, false in
           begin
             match StringMap.find "hear" fields with
               | (`Present mbt) ->
                   o#phrasenode
-                    (`Switch (fn_appl "recv" [`Type mbt; `Row other_effects] [],
-                              cases,
-                              Some t))
+                    (Switch (fn_appl "recv" [`Type mbt; `Row other_effects] [],
+                             cases,
+                             Some t))
               | _ -> assert false
         end
     | e -> super#phrasenode e
@@ -91,7 +92,7 @@ object
   method satisfied = has_no_processes
 
   method! phrasenode = function
-    | `Spawn _
-    | `Receive _ -> {< has_no_processes = false >}
+    | Spawn _
+    | Receive _ -> {< has_no_processes = false >}
     | e -> super#phrasenode e
 end

@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Ir
 
@@ -164,7 +165,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
               begin match t2 with
                 `MetaTypeVar rpoint ->
                 begin match lpoint_cont, Unionfind.find rpoint with
-                | `Var lv, `Var rv ->  handle_variable `Type lv rv context
+                | `Var lv, `Var rv ->  handle_variable pk_type lv rv context
                 | `Body _, `Body _ -> failwith "Should have  removed `Body by now"
                 | _ -> (context, false)
                 end
@@ -281,7 +282,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `Var lpoint, `Var rpoint -> begin match Unionfind.find lpoint, Unionfind.find rpoint with
                                     | `Body _,  _
                                     | _, `Body _ -> failwith "should have removed all `Body variants by now"
-                                    |  `Var lv, `Var rv -> handle_variable `Presence lv rv context
+                                    |  `Var lv, `Var rv -> handle_variable pk_presence lv rv context
                                     end
       | _, _ -> (context, false)
     and eq_field_envs  (context, lfield_env, rfield_env) =
@@ -295,7 +296,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
     and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | `Closed, `Closed ->  (context, true)
-      | `Var lv, `Var rv ->   handle_variable `Row lv rv context
+      | `Var lv, `Var rv ->   handle_variable pk_row lv rv context
       | `Recursive _, _
       | _, `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; (context, true)
       | _ ->  (context, false)

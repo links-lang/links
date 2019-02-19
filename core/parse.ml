@@ -115,7 +115,7 @@ let reader_of_readline ps1 =
 
 let interactive : Sugartypes.sentence grammar = Parser.interactive
 let program : (Sugartypes.binding list * Sugartypes.phrase option) grammar = Parser.file
-let datatype : Sugartypes.datatype grammar = Parser.just_datatype
+let datatype : Sugartypes.Datatype.with_pos grammar = Parser.just_datatype
 
 let normalize_pp = function
   | "" -> None

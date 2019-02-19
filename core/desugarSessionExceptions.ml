@@ -23,12 +23,12 @@ object (o: 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode = function
-    | (`Spawn (Wait, _, _, _)) as sw ->
+    | (Spawn (Wait, _, _, _)) as sw ->
         super#phrasenode sw
-    | `Spawn (k, spawn_loc, {node=body;_}, Some inner_effects) ->
+    | Spawn (k, spawn_loc, {node=body;_}, Some inner_effects) ->
         let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
         let as_pat = variable_pat ~ty:`Not_typed as_var in
-        let unit_phr = with_dummy_pos (`RecordLit ([], None)) in
+        let unit_phr = with_dummy_pos (RecordLit ([], None)) in
 
         let (o, spawn_loc) = o#given_spawn_location spawn_loc in
         let envs = o#backup_envs in
@@ -37,10 +37,10 @@ object (o: 'self_type)
         let o = o#with_effects inner_effects in
         let (o, body, _) = o#phrasenode body in
         let body =
-          `TryInOtherwise (with_dummy_pos body, as_pat,
-                           var as_var, unit_phr, Some (Types.unit_type)) in
+          TryInOtherwise (with_dummy_pos body, as_pat,
+                          var as_var, unit_phr, Some (Types.unit_type)) in
         let o = o#restore_envs envs in
-        (o, (`Spawn (k, spawn_loc, with_dummy_pos body, Some inner_effects)), process_type)
+        (o, Spawn (k, spawn_loc, with_dummy_pos body, Some inner_effects), process_type)
     | e -> super#phrasenode e
 end
 
@@ -50,10 +50,10 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode = function
-    | `Raise ->
-        (o, `DoOperation (failure_op_name, [], Some `Not_typed), `Not_typed)
-    | `TryInOtherwise (_, _, _, _, None) -> assert false
-    | `TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
+    | Raise ->
+        (o, DoOperation (failure_op_name, [], Some `Not_typed), `Not_typed)
+    | TryInOtherwise (_, _, _, _, None) -> assert false
+    | TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
         let (o, try_phr, try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
@@ -69,8 +69,8 @@ object (o : 'self_type)
          * continuation argument. *)
         let cont_pat = variable_pat ~ty:`Not_typed (Utility.gensym ~prefix:"dsh" ()) in
 
-        let otherwise_pat : Sugartypes.pattern =
-          with_dummy_pos (`Effect (failure_op_name, [], cont_pat)) in
+        let otherwise_pat : Sugartypes.Pattern.with_pos =
+          with_dummy_pos (Pattern.Effect (failure_op_name, [], cont_pat)) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 
@@ -107,7 +107,7 @@ object (o : 'self_type)
           sh_effect_cases = effect_cases;
           sh_value_cases = value_cases;
           sh_descr = hndl_desc
-        } in (o, `Handle hndlr, dt)
+        } in (o, Handle hndlr, dt)
     | e -> super#phrasenode e
 end
 
@@ -120,8 +120,8 @@ let contains_session_exceptions prog =
       method satisfied = has_exceptions
 
       method! phrasenode = function
-        | `TryInOtherwise _
-        | `Raise -> {< has_exceptions = true >}
+        | TryInOtherwise _
+        | Raise -> {< has_exceptions = true >}
         | p -> super#phrasenode p
     end in
   (o#program prog)#satisfied
@@ -160,20 +160,20 @@ let wrap_linear_handlers prog =
     object
       inherit SugarTraversals.map as super
       method! phrase = function
-        | {node=`TryInOtherwise (l, x, m, n, dtopt); _} ->
+        | {node=TryInOtherwise (l, x, m, n, dtopt); _} ->
             let fresh_var = Utility.gensym ?prefix:(Some "try_x") () in
             let fresh_pat = variable_pat fresh_var in
             with_dummy_pos
-            (`Switch (
+            (Switch (
               with_dummy_pos
-               (`TryInOtherwise
+               (TryInOtherwise
                 (super#phrase l,
                  fresh_pat,
                  constructor ~body:(var fresh_var) "Just",
                  constructor "Nothing", dtopt)),
               [
-                (with_dummy_pos (`Variant ("Just", (Some x))), super#phrase m);
-                (with_dummy_pos (`Variant ("Nothing", None)), super#phrase n)
+                (with_dummy_pos (Pattern.Variant ("Just", (Some x))), super#phrase m);
+                (with_dummy_pos (Pattern.Variant ("Nothing", None)), super#phrase n)
               ], None))
         | p -> super#phrase p
     end

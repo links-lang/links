@@ -1,3 +1,4 @@
+open CommonTypes
 open List
 
 (*open Value*)
@@ -71,7 +72,7 @@ let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = f
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (fun _ x -> conversion_op' ~unbox:unbox ~conv:conv ~box:box x) : located_primitive),
-   (let q, r = Types.fresh_row_quantifier (`Any, `Any) in
+   (let q, r = Types.fresh_row_quantifier (lin_any, res_any) in
       (`ForAll (Types.box_quantifiers [q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
    pure)
 
@@ -1655,9 +1656,9 @@ let primitive_name = Env.Int.lookup venv
 
 let primitive_location (name:string) =
   match fst3 (List.assoc name env) with
-    | `Client ->  `Client
-    | `Server _ -> `Server
-    | #primitive -> `Unknown
+    | `Client    -> Location.Client
+    | `Server _  -> Location.Server
+    | #primitive -> Location.Unknown
 
 let rec function_arity =
   function

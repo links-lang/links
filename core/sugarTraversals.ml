@@ -8,6 +8,8 @@
    generate all this automatically instead of maintaining this file.
 *)
 
+open Operators
+open CommonTypes
 open Sugartypes
 
 class map =
@@ -36,13 +38,13 @@ class map =
 
     method bool : bool -> bool = function | false -> false | true -> true
 
-    method unary_op : unary_op -> unary_op =
-      function
-      | `Minus -> `Minus
-      | `FloatMinus -> `FloatMinus
-      | `Name _x -> let _x = o#name _x in `Name _x
+    method unary_op : UnaryOp.t -> UnaryOp.t =
+      let open UnaryOp in function
+      | Minus -> Minus
+      | FloatMinus -> FloatMinus
+      | Name _x -> let _x = o#name _x in Name _x
 
-    method tyunary_op : tyarg list * unary_op -> tyarg list * unary_op =
+    method tyunary_op : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t =
       fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
 
     method binder : binder -> binder =
@@ -59,12 +61,12 @@ class map =
       | Expression _x -> let _x = o#phrase _x in Expression _x
       | Directive _x -> let _x = o#directive _x in Directive _x
 
-    method sec : sec -> sec =
-      function
-      | `Minus -> `Minus
-      | `FloatMinus -> `FloatMinus
-      | `Project _x -> let _x = o#name _x in `Project _x
-      | `Name _x -> let _x = o#name _x in `Name _x
+    method section : Section.t -> Section.t =
+      let open Section in function
+      | Minus -> Minus
+      | FloatMinus -> FloatMinus
+      | Project _x -> let _x = o#name _x in Project _x
+      | Name _x -> let _x = o#name _x in Name _x
 
     method subkind : subkind -> subkind = fun x -> x
 
@@ -84,16 +86,17 @@ class map =
         let _x_i1 = o#option (fun o -> o#subkind) _x_i1 in
         let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
 
-    method row_var : row_var -> row_var =
+    method row_var : Datatype.row_var -> Datatype.row_var =
+      let open Datatype in
       function
-      | `Closed -> `Closed
-      | `Open _x ->
-          let _x = o#known_type_variable _x in `Open _x
-      | `Recursive ((_x, _x_i1)) ->
+      | Closed -> Closed
+      | Open _x ->
+          let _x = o#known_type_variable _x in Open _x
+      | Recursive ((_x, _x_i1)) ->
           let _x = o#name _x in
-          let _x_i1 = o#row _x_i1 in `Recursive ((_x, _x_i1))
+          let _x_i1 = o#row _x_i1 in Recursive ((_x, _x_i1))
 
-    method row : row -> row =
+    method row : Datatype.row -> Datatype.row =
       fun (_x, _x_i1) ->
         let _x =
           o#list
@@ -105,8 +108,8 @@ class map =
 
     method replace_rhs : replace_rhs -> replace_rhs =
       function
-      | `Literal _x -> let _x = o#string _x in `Literal _x
-      | `Splice _x -> let _x = o#phrase _x in `Splice _x
+      | Literal    _x -> let _x = o#string _x in Literal    _x
+      | SpliceExpr _x -> let _x = o#phrase _x in SpliceExpr _x
 
     method regexflag : regexflag -> regexflag =
       fun flag -> flag
@@ -153,68 +156,68 @@ class map =
 
     method phrasenode : phrasenode -> phrasenode =
       function
-      | `Constant _x -> let _x = o#constant _x in `Constant _x
-      | `Var _x -> let _x = o#name _x in `Var _x
-      | `QualifiedVar _xs ->
-          let _xs = o#list (fun o -> o#name) _xs in `QualifiedVar _xs
-      | `FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
-                                           let _x_i2 = o#location _x_i2 in `FunLit (_x, _x1, _x_i1, _x_i2)
-      | `HandlerLit hnlit ->
+      | Constant _x -> let _x = o#constant _x in Constant _x
+      | Var _x -> let _x = o#name _x in Var _x
+      | QualifiedVar _xs ->
+          let _xs = o#list (fun o -> o#name) _xs in QualifiedVar _xs
+      | FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
+                                           let _x_i2 = o#location _x_i2 in FunLit (_x, _x1, _x_i1, _x_i2)
+      | HandlerLit hnlit ->
 	 let hnlit = o#handlerlit hnlit in
-	 `HandlerLit hnlit
-      | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
+	 HandlerLit hnlit
+      | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let _given_spawn_location = o#given_spawn_location _given_spawn_location in
           let _block_phr = o#phrase _block_phr in
-          `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)
-      | `Query (_x, _x_i1, _x_i2) ->
+          Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)
+      | Query (_x, _x_i1, _x_i2) ->
           let _x =
             o#option
               (fun o (_x, _x_i1) ->
                  let _x = o#phrase _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x in
-          let _x_i1 = o#phrase _x_i1 in `Query (_x, _x_i1, _x_i2)
-      | `ListLit (_x, _x_i1) ->
-          let _x = o#list (fun o -> o#phrase) _x in `ListLit (_x, _x_i1)
-      | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let _x_i1 = o#phrase _x_i1 in Query (_x, _x_i1, _x_i2)
+      | ListLit (_x, _x_i1) ->
+          let _x = o#list (fun o -> o#phrase) _x in ListLit (_x, _x_i1)
+      | Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#list (fun o -> o#iterpatt) _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in
           let _x_i3 = o#option (fun o -> o#phrase) _x_i3
-          in `Iteration ((_x, _x_i1, _x_i2, _x_i3))
-      | `Escape ((_x, _x_i1)) ->
+          in Iteration ((_x, _x_i1, _x_i2, _x_i3))
+      | Escape ((_x, _x_i1)) ->
           let _x = o#binder _x in
-          let _x_i1 = o#phrase _x_i1 in `Escape ((_x, _x_i1))
-      | `Section _x -> let _x = o#sec _x in `Section _x
-      | `Conditional ((_x, _x_i1, _x_i2)) ->
+          let _x_i1 = o#phrase _x_i1 in Escape ((_x, _x_i1))
+      | Section _x -> let _x = o#section _x in Section _x
+      | Conditional ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#phrase _x_i1 in
-          let _x_i2 = o#phrase _x_i2 in `Conditional ((_x, _x_i1, _x_i2))
-      | `Block ((_x, _x_i1)) ->
+          let _x_i2 = o#phrase _x_i2 in Conditional ((_x, _x_i1, _x_i2))
+      | Block ((_x, _x_i1)) ->
           let _x = o#list (fun o -> o#binding) _x in
-          let _x_i1 = o#phrase _x_i1 in `Block ((_x, _x_i1))
-      | `InfixAppl ((_x, _x_i1, _x_i2)) ->
+          let _x_i1 = o#phrase _x_i1 in Block ((_x, _x_i1))
+      | InfixAppl ((_x, _x_i1, _x_i2)) ->
           let _x = o#tybinop _x in
           let _x_i1 = o#phrase _x_i1 in
-          let _x_i2 = o#phrase _x_i2 in `InfixAppl ((_x, _x_i1, _x_i2))
-      | `RangeLit ((_x_i1, _x_i2)) ->
+          let _x_i2 = o#phrase _x_i2 in InfixAppl ((_x, _x_i1, _x_i2))
+      | RangeLit ((_x_i1, _x_i2)) ->
           let _x_i1 = o#phrase _x_i1 in
-          let _x_i2 = o#phrase _x_i2 in `RangeLit ((_x_i1, _x_i2))
-      | `Regex _x -> let _x = o#regex _x in `Regex _x
-      | `UnaryAppl ((_x, _x_i1)) ->
+          let _x_i2 = o#phrase _x_i2 in RangeLit ((_x_i1, _x_i2))
+      | Regex _x -> let _x = o#regex _x in Regex _x
+      | UnaryAppl ((_x, _x_i1)) ->
           let _x = o#tyunary_op _x in
-          let _x_i1 = o#phrase _x_i1 in `UnaryAppl ((_x, _x_i1))
-      | `FnAppl ((_x, _x_i1)) ->
+          let _x_i1 = o#phrase _x_i1 in UnaryAppl ((_x, _x_i1))
+      | FnAppl ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#list (fun o -> o#phrase) _x_i1
-          in `FnAppl ((_x, _x_i1))
-      | `TAbstr ((_x, _x_i1)) ->
-          let _x_i1 = o#phrase _x_i1 in `TAbstr ((_x, _x_i1))
-      | `TAppl ((_x, _x_i1)) ->
-          let _x = o#phrase _x in `TAppl ((_x, _x_i1))
-      | `TupleLit _x ->
-          let _x = o#list (fun o -> o#phrase) _x in `TupleLit _x
-      | `RecordLit ((_x, _x_i1)) ->
+          in FnAppl ((_x, _x_i1))
+      | TAbstr ((_x, _x_i1)) ->
+          let _x_i1 = o#phrase _x_i1 in TAbstr ((_x, _x_i1))
+      | TAppl ((_x, _x_i1)) ->
+          let _x = o#phrase _x in TAppl ((_x, _x_i1))
+      | TupleLit _x ->
+          let _x = o#list (fun o -> o#phrase) _x in TupleLit _x
+      | RecordLit ((_x, _x_i1)) ->
           let _x =
             o#list
               (fun o (_x, _x_i1) ->
@@ -222,11 +225,11 @@ class map =
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x in
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
-          in `RecordLit ((_x, _x_i1))
-      | `Projection ((_x, _x_i1)) ->
+          in RecordLit ((_x, _x_i1))
+      | Projection ((_x, _x_i1)) ->
           let _x = o#phrase _x in
-          let _x_i1 = o#name _x_i1 in `Projection ((_x, _x_i1))
-      | `With ((_x, _x_i1)) ->
+          let _x_i1 = o#name _x_i1 in Projection ((_x, _x_i1))
+      | With ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
             o#list
@@ -234,23 +237,23 @@ class map =
                  let _x = o#name _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i1
-          in `With ((_x, _x_i1))
-      | `TypeAnnotation ((_x, _x_i1)) ->
+          in With ((_x, _x_i1))
+      | TypeAnnotation ((_x, _x_i1)) ->
           let _x = o#phrase _x in
-          let _x_i1 = o#datatype' _x_i1 in `TypeAnnotation ((_x, _x_i1))
-      | `Upcast ((_x, _x_i1, _x_i2)) ->
+          let _x_i1 = o#datatype' _x_i1 in TypeAnnotation ((_x, _x_i1))
+      | Upcast ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#datatype' _x_i1 in
-          let _x_i2 = o#datatype' _x_i2 in `Upcast ((_x, _x_i1, _x_i2))
-      | `ConstructorLit ((_x, _x_i1, _x_i2)) ->
+          let _x_i2 = o#datatype' _x_i2 in Upcast ((_x, _x_i1, _x_i2))
+      | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
-          in `ConstructorLit ((_x, _x_i1, _x_i2))
-      | `DoOperation (name, ps, t) ->
+          in ConstructorLit ((_x, _x_i1, _x_i2))
+      | DoOperation (name, ps, t) ->
           let ps  = o#list (fun o -> o#phrase) ps in
           let t   = o#option (fun o -> o#unknown) t in
-          `DoOperation (name, ps, t)
-      | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+          DoOperation (name, ps, t)
+      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let m = o#phrase sh_expr in
          let params =
             o#option (fun o -> o#handle_params) sh_descr.shd_params
@@ -271,8 +274,8 @@ class map =
 	     )
              sh_value_cases
 	 in
-         `Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }
-      | `Switch ((_x, _x_i1, _x_i2)) ->
+         Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }
+      | Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
             o#list
@@ -281,8 +284,8 @@ class map =
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2
-          in `Switch ((_x, _x_i1, _x_i2))
-      | `Receive ((_x, _x_i1)) ->
+          in Switch ((_x, _x_i1, _x_i2))
+      | Receive ((_x, _x_i1)) ->
           let _x =
             o#list
               (fun o (_x, _x_i1) ->
@@ -290,15 +293,15 @@ class map =
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1
-          in `Receive (_x, _x_i1)
-      (* | `Link ((_x, _x_i1)) -> *)
+          in Receive (_x, _x_i1)
+      (* | Link ((_x, _x_i1)) -> *)
       (*     let _x = o#phrase _x in *)
-      (*     let _x_i1 = o#phrase _x_i1 in `Link ((_x, _x_i1)) *)
-      | `Select ((_x, _x_i1)) ->
+      (*     let _x_i1 = o#phrase _x_i1 in Link ((_x, _x_i1)) *)
+      | Select ((_x, _x_i1)) ->
           let _x = o#name _x in
           let _x_i1 = o#phrase _x_i1
-          in `Select (_x, _x_i1)
-      | `Offer ((_x, _x_i1, _x_i2)) ->
+          in Select (_x, _x_i1)
+      | Offer ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
             o#list
@@ -307,17 +310,17 @@ class map =
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2
-          in `Offer (_x, _x_i1, _x_i2)
-      | `CP p -> `CP (o#cp_phrase p)
-      | `DatabaseLit ((_x, _x_i1)) ->
+          in Offer (_x, _x_i1, _x_i2)
+      | CP p -> CP (o#cp_phrase p)
+      | DatabaseLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
             (fun (_x, _x_i1) ->
                let _x = o#option (fun o -> o#phrase) _x in
                let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in (_x, _x_i1))
               _x_i1
-          in `DatabaseLit ((_x, _x_i1))
-      | `TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4)) ->
+          in DatabaseLit ((_x, _x_i1))
+      | TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4)) ->
           let _x = o#phrase _x in
           let y = o#datatype y in
           let z = o#option
@@ -332,59 +335,59 @@ class map =
                  in (_x, _x_i1))
               _x_i2 in
           let _x_i3 = o#phrase _x_i3 in
-	  let _x_i4 = o#phrase _x_i4 in `TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4))
-      | `LensLit ((_x, _x_i1)) ->
+	  let _x_i4 = o#phrase _x_i4 in TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4))
+      | LensLit ((_x, _x_i1)) ->
               let _x = o#phrase _x in
               let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
-              `LensLit (_x, _x_i1)
-      | `LensKeysLit ((_x, _x_i1, _x_i2)) ->
+              LensLit (_x, _x_i1)
+      | LensKeysLit ((_x, _x_i1, _x_i2)) ->
               let _x = o#phrase _x in
               let _x_i1 = o#phrase _x_i1 in
               let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
-              `LensKeysLit (_x, _x_i1, _x_i2)
-      | `LensFunDepsLit ((_x, _x_i1, _x_i2)) ->
+              LensKeysLit (_x, _x_i1, _x_i2)
+      | LensFunDepsLit ((_x, _x_i1, _x_i2)) ->
               let _x = o#phrase _x in
               let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
-              `LensFunDepsLit (_x, _x_i1, _x_i2)
-      | `LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+              LensFunDepsLit (_x, _x_i1, _x_i2)
+      | LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#string _x_i1 in
           let _x_i2 = o#string _x_i2 in
           let _x_i3 = o#phrase _x_i3 in
           let _x_i4 = o#option (fun o -> o#unknown) _x_i4 in
-          `LensDropLit((_x, _x_i1, _x_i2, _x_i3, _x_i4))
-      | `LensSelectLit ((_x, _x_i1, _x_i2)) ->
+          LensDropLit((_x, _x_i1, _x_i2, _x_i3, _x_i4))
+      | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           (* let _x_i1 = o#phrase _x_i1 in *)
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
-            `LensSelectLit ((_x, _x_i1, _x_i2))
-      | `LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
+            LensSelectLit ((_x, _x_i1, _x_i2))
+      | LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#phrase _x_i2 in
           (* _x_i3 and _x_i4 are both phrases which are left unchanged *)
           let _x_i5 = o#option (fun o -> o#unknown) _x_i5 in
-            `LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5))
-      | `LensGetLit ((_x, _x_i1)) ->
+            LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5))
+      | LensGetLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
-            `LensGetLit ((_x, _x_i1))
-      | `LensPutLit ((_x, _x_i1, _x_i2)) ->
+            LensGetLit ((_x, _x_i1))
+      | LensPutLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
-            `LensPutLit ((_x, _x_i1, _x_i2))
-      | `DBDelete ((_x, _x_i1, _x_i2)) ->
+            LensPutLit ((_x, _x_i1, _x_i2))
+      | DBDelete ((_x, _x_i1, _x_i2)) ->
           let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2
-          in `DBDelete ((_x, _x_i1, _x_i2))
-      | `DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
+          in DBDelete ((_x, _x_i1, _x_i2))
+      | DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#list (fun o -> o#name) _x_i1 in
           let _x_i2 = o#phrase _x_i2 in
-          let _x_i3 = o#option (fun o -> o#phrase) _x_i3 in `DBInsert ((_x, _x_i1, _x_i2, _x_i3))
-      | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
+          let _x_i3 = o#option (fun o -> o#phrase) _x_i3 in DBInsert ((_x, _x_i1, _x_i2, _x_i3))
+      | DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in
@@ -394,8 +397,8 @@ class map =
                  let _x = o#name _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i3
-          in `DBUpdate ((_x, _x_i1, _x_i2, _x_i3))
-      | `Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
+          in DBUpdate ((_x, _x_i1, _x_i2, _x_i3))
+      | Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#name _x in
           let _x_i1 =
             o#list
@@ -405,28 +408,28 @@ class map =
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in
           let _x_i3 = o#list (fun o -> o#phrase) _x_i3
-          in `Xml ((_x, _x_i1, _x_i2, _x_i3))
-      | `TextNode _x -> let _x = o#string _x in `TextNode _x
-      | `Formlet ((_x, _x_i1)) ->
+          in Xml ((_x, _x_i1, _x_i2, _x_i3))
+      | TextNode _x -> let _x = o#string _x in TextNode _x
+      | Formlet ((_x, _x_i1)) ->
           let _x = o#phrase _x in
-          let _x_i1 = o#phrase _x_i1 in `Formlet ((_x, _x_i1))
-      | `Page _x -> let _x = o#phrase _x in `Page _x
-      | `FormletPlacement ((_x, _x_i1, _x_i2)) ->
+          let _x_i1 = o#phrase _x_i1 in Formlet ((_x, _x_i1))
+      | Page _x -> let _x = o#phrase _x in Page _x
+      | FormletPlacement ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#phrase _x_i2
-          in `FormletPlacement ((_x, _x_i1, _x_i2))
-      | `PagePlacement _x -> let _x = o#phrase _x in `PagePlacement _x
-      | `FormBinding ((_x, _x_i1)) ->
+          in FormletPlacement ((_x, _x_i1, _x_i2))
+      | PagePlacement _x -> let _x = o#phrase _x in PagePlacement _x
+      | FormBinding ((_x, _x_i1)) ->
           let _x = o#phrase _x in
-          let _x_i1 = o#pattern _x_i1 in `FormBinding ((_x, _x_i1))
-      | `TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
+          let _x_i1 = o#pattern _x_i1 in FormBinding ((_x, _x_i1))
+      | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
           let _p1 = o#phrase _p1 in
           let _pat = o#pattern _pat in
           let _p2 = o#phrase _p2 in
           let _p3 = o#phrase _p3 in
-          `TryInOtherwise (_p1, _pat, _p2, _p3, _ty)
-      | `Raise -> `Raise
+          TryInOtherwise (_p1, _pat, _p2, _p3, _ty)
+      | Raise -> Raise
 
 
     method phrase : phrase -> phrase =
@@ -437,39 +440,40 @@ class map =
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
-      | Unquote (bs, e)  -> Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
-      | Grab (c, x, p)   -> Grab (c, x, o#cp_phrase p)
-      | Give (c, e, p)   -> Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
-      | GiveNothing c    -> GiveNothing (o#binder c)
-      | Select (c, l, p) -> Select (c, l, o#cp_phrase p)
-      | Offer (c, bs)    -> Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
-      | Link (c, d)      -> Link (c, d)
-      | Comp (c, p, q)   -> Comp (c, o#cp_phrase p, o#cp_phrase q)
+      | CPUnquote (bs, e)  -> CPUnquote (o#list (fun o -> o#binding) bs, o#phrase e)
+      | CPGrab (c, x, p)   -> CPGrab (c, x, o#cp_phrase p)
+      | CPGive (c, e, p)   -> CPGive (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
+      | CPGiveNothing c    -> CPGiveNothing (o#binder c)
+      | CPSelect (c, l, p) -> CPSelect (c, l, o#cp_phrase p)
+      | CPOffer (c, bs)    -> CPOffer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
+      | CPLink (c, d)      -> CPLink (c, d)
+      | CPComp (c, p, q)   -> CPComp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
       fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
 
-    method patternnode : patternnode -> patternnode =
+    method patternnode : Pattern.t -> Pattern.t =
+      let open Pattern in
       function
-      | `Any -> `Any
-      | `Nil -> `Nil
-      | `Cons ((_x, _x_i1)) ->
+      | Any -> Any
+      | Nil -> Nil
+      | Cons ((_x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#pattern _x_i1 in `Cons ((_x, _x_i1))
-      | `List _x -> let _x = o#list (fun o -> o#pattern) _x in `List _x
-      | `Variant ((_x, _x_i1)) ->
+          let _x_i1 = o#pattern _x_i1 in Cons ((_x, _x_i1))
+      | List _x -> let _x = o#list (fun o -> o#pattern) _x in List _x
+      | Variant ((_x, _x_i1)) ->
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
-          in `Variant ((_x, _x_i1))
-      | `Effect (name, ps, k) ->
+          in Variant ((_x, _x_i1))
+      | Effect (name, ps, k) ->
          let name = o#name name in
          let ps = o#list (fun o -> o#pattern) ps in
          let k  = o#pattern k in
-         `Effect (name, ps, k)
-      | `Negative _x ->
+         Effect (name, ps, k)
+      | Negative _x ->
           let _x = o#list (fun o -> o#name) _x
-          in `Negative _x
-      | `Record ((_x, _x_i1)) ->
+          in Negative _x
+      | Record ((_x, _x_i1)) ->
           let _x =
             o#list
               (fun o (_x, _x_i1) ->
@@ -477,37 +481,34 @@ class map =
                  let _x_i1 = o#pattern _x_i1 in (_x, _x_i1))
               _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
-          in `Record ((_x, _x_i1))
-      | `Tuple _x -> let _x = o#list (fun o -> o#pattern) _x in `Tuple _x
-      | `Constant _x -> let _x = o#constant _x in `Constant _x
-      | `Variable _x -> let _x = o#binder _x in `Variable _x
-      | `As ((_x, _x_i1)) ->
+          in Record ((_x, _x_i1))
+      | Tuple _x -> let _x = o#list (fun o -> o#pattern) _x in Tuple _x
+      | Constant _x -> let _x = o#constant _x in Constant _x
+      | Variable _x -> let _x = o#binder _x in Variable _x
+      | As ((_x, _x_i1)) ->
           let _x = o#binder _x in
-          let _x_i1 = o#pattern _x_i1 in `As ((_x, _x_i1))
-      | `HasType ((_x, _x_i1)) ->
+          let _x_i1 = o#pattern _x_i1 in As ((_x, _x_i1))
+      | HasType ((_x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#datatype' _x_i1 in `HasType ((_x, _x_i1))
+          let _x_i1 = o#datatype' _x_i1 in HasType ((_x, _x_i1))
 
-    method pattern : pattern -> pattern =
+    method pattern : Pattern.with_pos -> Pattern.with_pos =
       fun {node; pos} ->
         let node = o#patternnode node in
         let pos = o#position pos in {node; pos}
 
     method name : name -> name = o#string
 
-    method logical_binop : logical_binop -> logical_binop =
-      function | `And -> `And | `Or -> `Or
-
-    method location : location -> location = o#unknown
+    method location : Location.t -> Location.t = o#unknown
 
     method iterpatt : iterpatt -> iterpatt =
       function
-      | `List ((_x, _x_i1)) ->
+      | List ((_x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in `List ((_x, _x_i1))
-      | `Table ((_x, _x_i1)) ->
+          let _x_i1 = o#phrase _x_i1 in List ((_x, _x_i1))
+      | Table ((_x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in `Table ((_x, _x_i1))
+          let _x_i1 = o#phrase _x_i1 in Table ((_x, _x_i1))
 
     method funlit : funlit -> funlit =
       fun (_x, _x_i1) ->
@@ -545,11 +546,11 @@ class map =
         in
         { params with shp_bindings = bindings }
 
-    method fieldspec : fieldspec -> fieldspec =
-      function
-      | `Present _x -> let _x = o#datatype _x in `Present _x
-      | `Absent -> `Absent
-      | `Var _x -> let _x = o#known_type_variable _x in `Var _x
+    method fieldspec : Datatype.fieldspec -> Datatype.fieldspec =
+      let open Datatype in function
+      | Present _x -> let _x = o#datatype _x in Present _x
+      | Absent -> Absent
+      | Var _x -> let _x = o#known_type_variable _x in Var _x
 
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       fun fc -> fc
@@ -559,73 +560,73 @@ class map =
         let _x = o#string _x in
         let _x_i1 = o#list (fun o -> o#string) _x_i1 in (_x, _x_i1)
 
-    method datatypenode : datatypenode -> datatypenode =
+    method datatypenode : Datatype.t -> Datatype.t =
+      let open Datatype in
       function
-      | `TypeVar _x ->
-          let _x = o#known_type_variable _x in `TypeVar _x
-      | `QualifiedTypeApplication (ns, args) ->
+      | TypeVar _x ->
+          let _x = o#known_type_variable _x in TypeVar _x
+      | QualifiedTypeApplication (ns, args) ->
           let ns = o#list (fun o -> o#name) ns in
           let args = o#list (fun o -> o#type_arg) args in
-          `QualifiedTypeApplication (ns, args)
-      | `Function (_x, _x_i1, _x_i2) ->
+          QualifiedTypeApplication (ns, args)
+      | Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in `Function (_x, _x_i1, _x_i2)
-      | `Lolli (_x, _x_i1, _x_i2) ->
+          let _x_i2 = o#datatype _x_i2 in Function (_x, _x_i1, _x_i2)
+      | Lolli (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in `Lolli (_x, _x_i1, _x_i2)
-      | `Mu (_x, _x_i1) ->
+          let _x_i2 = o#datatype _x_i2 in Lolli (_x, _x_i1, _x_i2)
+      | Mu (_x, _x_i1) ->
           let _x = o#name _x in
-          let _x_i1 = o#datatype _x_i1 in `Mu (_x, _x_i1)
-      | `Forall (_x, _x_i1) ->
-          let _x = _x in (*o#list (fun o -> o#quantifier) _x in*)
-          let _x_i1 = o#datatype _x_i1 in `Forall (_x, _x_i1)
-      | `Unit -> `Unit
-      | `Tuple _x ->
-          let _x = o#list (fun o -> o#datatype) _x in `Tuple _x
-      | `Record _x -> let _x = o#row _x in `Record _x
-      | `Variant _x -> let _x = o#row _x in `Variant _x
-      | `Effect r -> let r = o#row r in `Effect r
-      | `Table (_x, _x_i1, _x_i2) ->
+          let _x_i1 = o#datatype _x_i1 in Mu (_x, _x_i1)
+      | Forall (_x, _x_i1) ->
+          let _x_i1 = o#datatype _x_i1 in Forall (_x, _x_i1)
+      | Unit -> Unit
+      | Tuple _x ->
+          let _x = o#list (fun o -> o#datatype) _x in Tuple _x
+      | Record _x -> let _x = o#row _x in Record _x
+      | Variant _x -> let _x = o#row _x in Variant _x
+      | Effect r -> let r = o#row r in Effect r
+      | Table (_x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
-         let _x_i2 = o#datatype _x_i2 in `Table (_x, _x_i1, _x_i2)
-      | `List _x -> let _x = o#datatype _x in `List _x
-      | `TypeApplication _x ->
+         let _x_i2 = o#datatype _x_i2 in Table (_x, _x_i1, _x_i2)
+      | List _x -> let _x = o#datatype _x in List _x
+      | TypeApplication _x ->
           let _x =
             (fun (_x, _x_i1) ->
                let _x = o#name _x in
                let _x_i1 = o#list (fun o -> o#type_arg) _x_i1 in (_x, _x_i1))
               _x
-          in `TypeApplication _x
-      | `Primitive _x -> let _x = o#unknown _x in `Primitive _x
-      | `DB -> `DB
-      | `Input (_x, _x_i1) ->
+          in TypeApplication _x
+      | Primitive _x -> let _x = o#unknown _x in Primitive _x
+      | DB -> DB
+      | Input (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#datatype _x_i1 in `Input (_x, _x_i1)
-      | `Output (_x, _x_i1) ->
+        let _x_i1 = o#datatype _x_i1 in Input (_x, _x_i1)
+      | Output (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#datatype _x_i1 in `Output (_x, _x_i1)
-      | `Select _x ->
-        let _x = o#row _x in `Select _x
-      | `Choice _x ->
-        let _x = o#row _x in `Choice _x
-      | `Dual _x ->
-        let _x = o#datatype _x in `Dual _x
-      | `End -> `End
+        let _x_i1 = o#datatype _x_i1 in Output (_x, _x_i1)
+      | Select _x ->
+        let _x = o#row _x in Select _x
+      | Choice _x ->
+        let _x = o#row _x in Choice _x
+      | Dual _x ->
+        let _x = o#datatype _x in Dual _x
+      | End -> End
 
-    method datatype : datatype -> datatype =
+    method datatype : Datatype.with_pos -> Datatype.with_pos =
       fun {node; pos} ->
         let node = o#datatypenode node in
         let pos  = o#position pos in
         {node; pos}
 
-    method type_arg : type_arg -> type_arg =
-      function
-      | `Type _x -> let _x = o#datatype _x in `Type _x
-      | `Row _x -> let _x = o#row _x in `Row _x
-      | `Presence _x -> let _x = o#fieldspec _x in `Presence _x
+    method type_arg : Datatype.type_arg -> Datatype.type_arg =
+      let open Datatype in function
+      | Type _x -> let _x = o#datatype _x in Type _x
+      | Row _x -> let _x = o#row _x in Row _x
+      | Presence _x -> let _x = o#fieldspec _x in Presence _x
 
     method constant : constant -> constant =
       function
@@ -635,34 +636,35 @@ class map =
       | `Bool _x -> let _x = o#bool _x in `Bool _x
       | `Char _x -> let _x = o#char _x in `Char _x
 
-    method binop : binop -> binop =
-      function
-      | `Minus -> `Minus
-      | `FloatMinus -> `FloatMinus
-      | `RegexMatch _x ->
-          let _x = o#list (fun o -> o#regexflag) _x in `RegexMatch _x
-      | (#logical_binop as x) -> (o#logical_binop x :> binop)
-      | `Cons -> `Cons
-      | `Name _x -> let _x = o#name _x in `Name _x
+    method binop : BinaryOp.t -> BinaryOp.t =
+      let open BinaryOp in function
+      | Minus -> Minus
+      | FloatMinus -> FloatMinus
+      | RegexMatch _x ->
+          let _x = o#list (fun o -> o#regexflag) _x in RegexMatch _x
+      | And -> And
+      | Or -> Or
+      | Cons -> Cons
+      | Name _x -> let _x = o#name _x in Name _x
 
-    method tybinop : tyarg list * binop -> tyarg list * binop =
+    method tybinop : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t =
       fun (_x, _x_i1) -> (_x, o#binop _x_i1)
 
     method bindingnode : bindingnode -> bindingnode =
       function
-      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x    = o#pattern _x in
           let _x_i2 = o#phrase _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
-      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          in Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
+      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i2 = o#funlit _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))
-      | `Funs _x ->
+          in Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))
+      | Funs _x ->
           let _x =
             o#list
               (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
@@ -673,23 +675,23 @@ class map =
                  let _x_i5 = o#position _x_i5
                  in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
-          in `Funs _x
-      | `Handler (b, hnlit, t) ->
+          in Funs _x
+      | Handler (b, hnlit, t) ->
           let b = o#binder b in
           let hnlit = o#handlerlit hnlit in
           let t     = o#option (fun o -> o#unknown) t in
-          `Handler (b, hnlit, t)
-      | `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+          Handler (b, hnlit, t)
+      | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#name _x_i2 in
           let _x_i3 = o#name _x_i3 in
           let _x_i4 = o#datatype' _x_i4 in
-          `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
-      | `QualifiedImport _xs ->
+          Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
+      | QualifiedImport _xs ->
           let _xs = o#list (fun o -> o#name) _xs in
-          `QualifiedImport _xs
-      | `Type ((_x, _x_i1, _x_i2)) ->
+          QualifiedImport _xs
+      | Type ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 =
             o#list
@@ -698,21 +700,21 @@ class map =
                  let _x_i1 = o#unknown _x_i1
                  in (_x, _x_i1))
               _x_i1
-          in let _x_i2 = o#datatype' _x_i2 in `Type ((_x, _x_i1, _x_i2))
-      | `Infix -> `Infix
-      | `Exp _x -> let _x = o#phrase _x in `Exp _x
-      | `Module (n, bs) ->
+          in let _x_i2 = o#datatype' _x_i2 in Type ((_x, _x_i1, _x_i2))
+      | Infix -> Infix
+      | Exp _x -> let _x = o#phrase _x in Exp _x
+      | Module (n, bs) ->
           let n = o#name n in
           let bs = o#list (fun o -> o#binding) bs in
-          `Module (n, bs)
-      | `AlienBlock (lang, lib, dts) ->
+          Module (n, bs)
+      | AlienBlock (lang, lib, dts) ->
           let lang = o#name lang in
           let lib = o#name lib in
           let dts = o#list (fun o (b, dt) ->
             let b = o#binder b in
             let dt = o#datatype' dt in
             (b, dt)) dts in
-          `AlienBlock (lang, lib, dts)
+          AlienBlock (lang, lib, dts)
 
     method binding : binding -> binding =
       fun {node; pos} ->
@@ -752,13 +754,13 @@ class fold =
 
     method bool : bool -> 'self_type = function | false -> o | true -> o
 
-    method unary_op : unary_op -> 'self_type =
-      function
-      | `Minus -> o
-      | `FloatMinus -> o
-      | `Name _x -> let o = o#name _x in o
+    method unary_op : UnaryOp.t -> 'self_type =
+      let open UnaryOp in function
+      | Minus -> o
+      | FloatMinus -> o
+      | Name _x -> let o = o#name _x in o
 
-    method tyunary_op : tyarg list * unary_op -> 'self_type =
+    method tyunary_op : tyarg list * UnaryOp.t -> 'self_type =
       fun (_x, _x_i1) -> o#unary_op _x_i1
 
     method binder : binder -> 'self_type =
@@ -773,12 +775,12 @@ class fold =
       | Expression _x -> let o = o#phrase _x in o
       | Directive _x -> let o = o#directive _x in o
 
-    method sec : sec -> 'self_type =
-      function
-      | `Minus -> o
-      | `FloatMinus -> o
-      | `Project _x -> let o = o#name _x in o
-      | `Name _x -> let o = o#name _x in o
+    method section : Section.t -> 'self_type =
+      let open Section in function
+      | Minus -> o
+      | FloatMinus -> o
+      | Project _x -> let o = o#name _x in o
+      | Name _x -> let o = o#name _x in o
 
     method subkind : subkind -> 'self_type = fun _ -> o
 
@@ -798,15 +800,15 @@ class fold =
         let o = o#option (fun o -> o#subkind) _x_i1 in
         let o = o#freedom _x_i2 in o
 
-    method row_var : row_var -> 'self_type =
-      function
-      | `Closed -> o
-      | `Open _x ->
+    method row_var : Datatype.row_var -> 'self_type =
+      let open Datatype in function
+      | Closed -> o
+      | Open _x ->
           let o = o#known_type_variable _x in o
-      | `Recursive ((_x, _x_i1)) ->
+      | Recursive ((_x, _x_i1)) ->
           let o = o#name _x in let o = o#row _x_i1 in o
 
-    method row : row -> 'self_type =
+    method row : Datatype.row -> 'self_type =
       fun (_x, _x_i1) ->
         let o =
           o#list
@@ -817,8 +819,8 @@ class fold =
 
     method replace_rhs : replace_rhs -> 'self_type =
       function
-      | `Literal _x -> let o = o#string _x in o
-      | `Splice _x -> let o = o#phrase _x in o
+      | Literal    _x -> let o = o#string _x in o
+      | SpliceExpr _x -> let o = o#phrase _x in o
 
     method regexflag : regexflag -> 'self_type =
       fun _ -> o
@@ -860,18 +862,18 @@ class fold =
 
     method phrasenode : phrasenode -> 'self_type =
       function
-      | `Constant _x -> let o = o#constant _x in o
-      | `Var _x -> let o = o#name _x in o
-      | `QualifiedVar _xs ->
+      | Constant _x -> let o = o#constant _x in o
+      | Var _x -> let o = o#name _x in o
+      | QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
-      | `FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
-      | `HandlerLit hnlit ->
+      | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
+      | HandlerLit hnlit ->
 	 let o = o#handlerlit hnlit in o
-      | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
+      | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let o = o#given_spawn_location _given_spawn_location in
           let o = o#phrase _block_phr in
           o
-      | `Query (_x, _x_i1, _x_i2) ->
+      | Query (_x, _x_i1, _x_i2) ->
           let o =
             o#option
               (fun o (_x, _x_i1) ->
@@ -879,48 +881,48 @@ class fold =
                  let o = o#phrase _x_i1 in o)
               _x in
           let o = o#phrase _x_i1 in o
-      | `ListLit (_x, _x_i1) -> let o = o#list (fun o -> o#phrase) _x in o
-      | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
+      | ListLit (_x, _x_i1) -> let o = o#list (fun o -> o#phrase) _x in o
+      | Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#list (fun o -> o#iterpatt) _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#phrase) _x_i2 in
           let o = o#option (fun o -> o#phrase) _x_i3 in o
-      | `Escape ((_x, _x_i1)) ->
+      | Escape ((_x, _x_i1)) ->
           let o = o#binder _x in let o = o#phrase _x_i1 in o
-      | `Section _x -> let o = o#sec _x in o
-      | `Conditional ((_x, _x_i1, _x_i2)) ->
+      | Section _x -> let o = o#section _x in o
+      | Conditional ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
-      | `Block ((_x, _x_i1)) ->
+      | Block ((_x, _x_i1)) ->
           let o = o#list (fun o -> o#binding) _x in
           let o = o#phrase _x_i1 in o
-      | `InfixAppl ((_x, _x_i1, _x_i2)) ->
+      | InfixAppl ((_x, _x_i1, _x_i2)) ->
           let o = o#tybinop _x in
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
-      | `RangeLit ((_x_i1, _x_i2)) ->
+      | RangeLit ((_x_i1, _x_i2)) ->
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
-      | `Regex _x -> let o = o#regex _x in o
-      | `UnaryAppl ((_x, _x_i1)) ->
+      | Regex _x -> let o = o#regex _x in o
+      | UnaryAppl ((_x, _x_i1)) ->
           let o = o#tyunary_op _x in let o = o#phrase _x_i1 in o
-      | `FnAppl ((_x, _x_i1)) ->
+      | FnAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#list (fun o -> o#phrase) _x_i1 in o
-      | `TAbstr ((_x, _x_i1)) ->
+      | TAbstr ((_x, _x_i1)) ->
           let o = o#list (fun o -> o#tyvar) (Types.unbox_quantifiers _x) in
           let o = o#phrase _x_i1 in o
-      | `TAppl ((_x, _x_i1)) ->
+      | TAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in o
-      | `TupleLit _x -> let o = o#list (fun o -> o#phrase) _x in o
-      | `RecordLit ((_x, _x_i1)) ->
+      | TupleLit _x -> let o = o#list (fun o -> o#phrase) _x in o
+      | RecordLit ((_x, _x_i1)) ->
           let o =
             o#list
               (fun o (_x, _x_i1) ->
                  let o = o#name _x in let o = o#phrase _x_i1 in o)
               _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | `Projection ((_x, _x_i1)) ->
+      | Projection ((_x, _x_i1)) ->
           let o = o#phrase _x in let o = o#name _x_i1 in o
-      | `With ((_x, _x_i1)) ->
+      | With ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o =
             o#list
@@ -928,19 +930,19 @@ class fold =
                  let o = o#name _x in let o = o#phrase _x_i1 in o)
               _x_i1
           in o
-      | `TypeAnnotation ((_x, _x_i1)) ->
+      | TypeAnnotation ((_x, _x_i1)) ->
           let o = o#phrase _x in let o = o#datatype' _x_i1 in o
-      | `Upcast ((_x, _x_i1, _x_i2)) ->
+      | Upcast ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#datatype' _x_i1 in let o = o#datatype' _x_i2 in o
-      | `ConstructorLit ((_x, _x_i1, _x_i2)) ->
+      | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | `DoOperation (name,ps,t) ->
+      | DoOperation (name,ps,t) ->
          let o = o#name name in
 	 let o = o#option (fun o -> o#unknown) t in
 	 let o = o#list (fun o -> o#phrase) ps in o
-      | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let o = o#phrase sh_expr in
          let o =
            o#option (fun o -> o#handle_params) sh_descr.shd_params
@@ -961,7 +963,7 @@ class fold =
 	     )
              sh_value_cases
 	 in o
-      | `Switch ((_x, _x_i1, _x_i2)) ->
+      | Switch ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
             o#list
@@ -970,7 +972,7 @@ class fold =
               _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
-      | `Receive ((_x, _x_i1)) ->
+      | Receive ((_x, _x_i1)) ->
           let o =
             o#list
               (fun o (_x, _x_i1) ->
@@ -978,15 +980,15 @@ class fold =
               _x in
           let o = o#option (fun o -> o#unknown) _x_i1
           in o
-      (* | `Link ((_x, _x_i1)) -> *)
+      (* | Link ((_x, _x_i1)) -> *)
       (*     let o = o#phrase _x in *)
       (*     let o = o#phrase _x_i1 *)
       (*     in o *)
-      | `Select ((_x, _x_i1)) ->
+      | Select ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#phrase _x_i1
           in o
-      | `Offer ((_x, _x_i1, _x_i2)) ->
+      | Offer ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
             o#list
@@ -995,8 +997,8 @@ class fold =
               _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
-      | `CP p -> o#cp_phrase p
-      | `DatabaseLit ((_x, _x_i1)) ->
+      | CP p -> o#cp_phrase p
+      | DatabaseLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o =
             (fun (_x, _x_i1) ->
@@ -1004,7 +1006,7 @@ class fold =
                let o = o#option (fun o -> o#phrase) _x_i1 in o)
               _x_i1
           in o
-      | `TableLit ((_x, (y,z), _x_i2, _x_i3, _x_i4)) ->
+      | TableLit ((_x, (y,z), _x_i2, _x_i3, _x_i4)) ->
           let o = o#phrase _x in
           let o = o#datatype y in
           let o = o#option
@@ -1020,55 +1022,55 @@ class fold =
           let o = o#phrase _x_i3 in
 	  let o = o#phrase _x_i4 in
 	    o
-      | `LensLit ((_x, _x_i1)) ->
+      | LensLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#option (fun o -> o#unknown) _x_i1 in
             o
-      | `LensKeysLit ((_x, _x_i1, _x_i2)) ->
+      | LensKeysLit ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
-      | `LensFunDepsLit ((_x, _x_i1, _x_i2)) ->
+      | LensFunDepsLit ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
-      | `LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+      | LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let o = o#phrase _x in
           let o = o#string _x_i1 in
           let o = o#string _x_i2 in
           let o = o#phrase _x_i3 in
           let o = o#option (fun o -> o#unknown) _x_i4 in
             o
-      | `LensSelectLit ((_x, _x_i1, _x_i2)) ->
+      | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           (* let o = o#phrase _x_i1 in *)
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
-      | `LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
+      | LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
           let o = o#phrase _x in
           let o = o#phrase _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#option (fun o -> o#unknown) _x_i5 in
             o
-      | `LensGetLit ((_x, _x_i1)) ->
+      | LensGetLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#option (fun o -> o#unknown) _x_i1 in
             o
-      | `LensPutLit ((_x, _x_i1, _x_i2)) ->
+      | LensPutLit ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
-      | `DBDelete ((_x, _x_i1, _x_i2)) ->
+      | DBDelete ((_x, _x_i1, _x_i2)) ->
           let o = o#pattern _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#phrase) _x_i2 in o
-      | `DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
+      | DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#phrase _x in
           let o = o#list (fun o -> o#name) _x_i1 in
           let o = o#phrase _x_i2 in let o = o#option (fun o -> o#phrase) _x_i3 in o
-      | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
+      | DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#pattern _x in
           let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#phrase) _x_i2 in
@@ -1078,7 +1080,7 @@ class fold =
                  let o = o#name _x in let o = o#phrase _x_i1 in o)
               _x_i3
           in o
-      | `Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
+      | Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#name _x in
           let o =
             o#list
@@ -1088,23 +1090,23 @@ class fold =
               _x_i1 in
           let o = o#option (fun o -> o#phrase) _x_i2 in
           let o = o#list (fun o -> o#phrase) _x_i3 in o
-      | `TextNode _x -> let o = o#string _x in o
-      | `Formlet ((_x, _x_i1)) ->
+      | TextNode _x -> let o = o#string _x in o
+      | Formlet ((_x, _x_i1)) ->
           let o = o#phrase _x in let o = o#phrase _x_i1 in o
-      | `Page _x -> let o = o#phrase _x in o
-      | `FormletPlacement ((_x, _x_i1, _x_i2)) ->
+      | Page _x -> let o = o#phrase _x in o
+      | FormletPlacement ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
-      | `PagePlacement _x -> let o = o#phrase _x in o
-      | `FormBinding ((_x, _x_i1)) ->
+      | PagePlacement _x -> let o = o#phrase _x in o
+      | FormBinding ((_x, _x_i1)) ->
           let o = o#phrase _x in let o = o#pattern _x_i1 in o
-      | `TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
+      | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
           let o = o#phrase _p1 in
           let o = o#pattern _pat in
           let o = o#phrase _p2 in
           let o = o#phrase _p3 in
           o
-      | `Raise -> o
+      | Raise -> o
 
     method phrase : phrase -> 'self_type =
       fun {node; pos} ->
@@ -1112,51 +1114,52 @@ class fold =
 
     method cp_phrasenode : cp_phrasenode -> 'self_type =
       function
-      | Unquote (bs, e)    -> (o#list (fun o -> o#binding) bs)#phrase e
-      | Grab (_c, _x, p)   -> o#cp_phrase p
-      | Give (_c, e, p)    -> (o#option (fun o -> o#phrase) e)#cp_phrase p
-      | GiveNothing c      -> o#binder c
-      | Select (_c, _l, p) -> o#cp_phrase p
-      | Offer (_c, bs)     -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
-      | Link (_c, _d)      -> o
-      | Comp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
+      | CPUnquote (bs, e)    -> (o#list (fun o -> o#binding) bs)#phrase e
+      | CPGrab (_c, _x, p)   -> o#cp_phrase p
+      | CPGive (_c, e, p)    -> (o#option (fun o -> o#phrase) e)#cp_phrase p
+      | CPGiveNothing c      -> o#binder c
+      | CPSelect (_c, _l, p) -> o#cp_phrase p
+      | CPOffer (_c, bs)     -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
+      | CPLink (_c, _d)      -> o
+      | CPComp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
       fun {node; pos} -> (o#cp_phrasenode node)#position pos
 
-    method patternnode : patternnode -> 'self_type =
+    method patternnode : Pattern.t -> 'self_type =
+      let open Pattern in
       function
-      | `Any -> o
-      | `Nil -> o
-      | `Cons ((_x, _x_i1)) ->
+      | Any -> o
+      | Nil -> o
+      | Cons ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#pattern _x_i1 in o
-      | `List _x -> let o = o#list (fun o -> o#pattern) _x in o
-      | `Variant ((_x, _x_i1)) ->
+      | List _x -> let o = o#list (fun o -> o#pattern) _x in o
+      | Variant ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
-      | `Effect (name, ps, k) ->
+      | Effect (name, ps, k) ->
          let o = o#name name in
          let o = o#list (fun o -> o#pattern) ps in
          let o = o#pattern k in
          o
-      | `Negative _x ->
+      | Negative _x ->
           let o = o#list (fun o -> o#name) _x in o
-      | `Record ((_x, _x_i1)) ->
+      | Record ((_x, _x_i1)) ->
           let o =
             o#list
               (fun o (_x, _x_i1) ->
                  let o = o#name _x in let o = o#pattern _x_i1 in o)
               _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
-      | `Tuple _x -> let o = o#list (fun o -> o#pattern) _x in o
-      | `Constant _x -> let o = o#constant _x in o
-      | `Variable _x -> let o = o#binder _x in o
-      | `As ((_x, _x_i1)) ->
+      | Tuple _x -> let o = o#list (fun o -> o#pattern) _x in o
+      | Constant _x -> let o = o#constant _x in o
+      | Variable _x -> let o = o#binder _x in o
+      | As ((_x, _x_i1)) ->
           let o = o#binder _x in let o = o#pattern _x_i1 in o
-      | `HasType ((_x, _x_i1)) ->
+      | HasType ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#datatype' _x_i1 in o
 
-    method pattern : pattern -> 'self_type =
+    method pattern : Pattern.with_pos -> 'self_type =
       fun {node; pos} ->
         let o = o#patternnode node in
         let o = o#position pos in
@@ -1164,16 +1167,13 @@ class fold =
 
     method name : name -> 'self_type = o#string
 
-    method logical_binop : logical_binop -> 'self_type =
-      function | `And -> o | `Or -> o
-
-    method location : location -> 'self_type = o#unknown
+    method location : Location.t -> 'self_type = o#unknown
 
     method iterpatt : iterpatt -> 'self_type =
       function
-      | `List ((_x, _x_i1)) ->
+      | List ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#phrase _x_i1 in o
-      | `Table ((_x, _x_i1)) ->
+      | Table ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#phrase _x_i1 in o
 
     method funlit : funlit -> 'self_type =
@@ -1208,11 +1208,11 @@ class fold =
             o#pattern pat)
           params.shp_bindings
 
-    method fieldspec : fieldspec -> 'self_type =
-      function
-      | `Present _x -> let o = o#datatype _x in o
-      | `Absent -> o
-      | `Var _x -> let o = o#known_type_variable _x in o
+    method fieldspec : Datatype.fieldspec -> 'self_type =
+      let open Datatype in function
+      | Present _x -> let o = o#datatype _x in o
+      | Absent -> o
+      | Var _x -> let o = o#known_type_variable _x in o
 
     method fieldconstraint : fieldconstraint -> 'self_type =
       fun _ -> o
@@ -1223,66 +1223,67 @@ class fold =
 
     method tyvar : tyvar -> 'self_type = fun _ -> o
 
-    method datatypenode : datatypenode -> 'self_type =
+    method datatypenode : Datatype.t -> 'self_type =
+      let open Datatype in
       function
-      | `TypeVar _x ->
+      | TypeVar _x ->
           let o = o#known_type_variable _x in o
-      | `QualifiedTypeApplication (ns, args) ->
+      | QualifiedTypeApplication (ns, args) ->
           let o = o#list (fun o -> o#name) ns in
           let o = o#list (fun o -> o#type_arg) args in
           o
-      | `Function (_x, _x_i1, _x_i2) ->
+      | Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | `Lolli (_x, _x_i1, _x_i2) ->
+      | Lolli (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | `Mu (_x, _x_i1) ->
+      | Mu (_x, _x_i1) ->
           let o = o#name _x in let o = o#datatype _x_i1 in o
-      | `Forall (_x, _x_i1) ->
-          let o = o (*o#list (fun o -> o#quantifier) _x*) in let o = o#datatype _x_i1 in o
-      | `Unit -> o
-      | `Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
-      | `Record _x -> let o = o#row _x in o
-      | `Variant _x -> let o = o#row _x in o
-      | `Effect r -> let o = o#row r in o
-      | `Table (_x, _x_i1, _x_i2) ->
+      | Forall (_x, _x_i1) ->
+          let o = o#datatype _x_i1 in o
+      | Unit -> o
+      | Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
+      | Record _x -> let o = o#row _x in o
+      | Variant _x -> let o = o#row _x in o
+      | Effect r -> let o = o#row r in o
+      | Table (_x, _x_i1, _x_i2) ->
           let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
-      | `List _x -> let o = o#datatype _x in o
-      | `TypeApplication _x ->
+      | List _x -> let o = o#datatype _x in o
+      | TypeApplication _x ->
           let o =
             (fun (_x, _x_i1) ->
                let o = o#name _x in
                let o = o#list (fun o -> o#type_arg) _x_i1 in o)
               _x
           in o
-      | `Primitive _x -> let o = o#unknown _x in o
-      | `DB -> o
-      | `Input (_x, _x_i1) ->
+      | Primitive _x -> let o = o#unknown _x in o
+      | DB -> o
+      | Input (_x, _x_i1) ->
         let o = o#datatype _x in
         let o = o#datatype _x_i1 in o
-      | `Output (_x, _x_i1) ->
+      | Output (_x, _x_i1) ->
         let o = o#datatype _x in
         let o = o#datatype _x_i1 in o
-      | `Select _x ->
+      | Select _x ->
         let o = o#row _x in o
-      | `Choice _x ->
+      | Choice _x ->
         let o = o#row _x in o
-      | `Dual _x ->
+      | Dual _x ->
         let o = o#datatype _x in o
-      | `End -> o
+      | End -> o
 
-    method datatype : datatype -> 'self_type =
+    method datatype : Datatype.with_pos -> 'self_type =
       fun {node; pos} ->
         let o = o#datatypenode node in
         let o = o#position pos in
         o
 
-    method type_arg : type_arg -> 'self_type =
-      function
-      | `Type _x -> let o = o#datatype _x in o
-      | `Row _x -> let o = o#row _x in o
-      | `Presence _x -> let o = o#fieldspec _x in o
+    method type_arg : Datatype.type_arg -> 'self_type =
+      let open Datatype in function
+      | Type _x -> let o = o#datatype _x in o
+      | Row _x -> let o = o#row _x in o
+      | Presence _x -> let o = o#fieldspec _x in o
 
     method constant : constant -> 'self_type =
       function
@@ -1292,33 +1293,34 @@ class fold =
       | `Bool _x -> let o = o#bool _x in o
       | `Char _x -> let o = o#char _x in o
 
-    method binop : binop -> 'self_type =
-      function
-      | `Minus -> o
-      | `FloatMinus -> o
-      | `RegexMatch _x -> let o = o#list (fun o -> o#regexflag) _x in o
-      | (#logical_binop as x) -> o#logical_binop x
-      | `Cons -> o
-      | `Name _x -> let o = o#name _x in o
+    method binop : BinaryOp.t -> 'self_type =
+      let open BinaryOp in function
+      | Minus -> o
+      | FloatMinus -> o
+      | RegexMatch _x -> let o = o#list (fun o -> o#regexflag) _x in o
+      | And -> o
+      | Or -> o
+      | Cons -> o
+      | Name _x -> let o = o#name _x in o
 
-    method tybinop : tyarg list * binop -> 'self_type =
+    method tybinop : tyarg list * BinaryOp.t -> 'self_type =
       fun (_x, _x_i1) -> o#binop _x_i1
 
     method bindingnode : bindingnode -> 'self_type =
       function
-      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let o = o#pattern _x in
           let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
-      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let o = o#binder _x in
           let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#funlit _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
-      | `Funs _x ->
+      | Funs _x ->
           let o =
             o#list
               (fun o (_x, _x1, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
@@ -1330,20 +1332,20 @@ class fold =
                  let o = o#position _x_i5 in o)
               _x
           in o
-      | `Handler (b, hnlit, t) ->
+      | Handler (b, hnlit, t) ->
           let o = o#binder b in
           let o = o#handlerlit hnlit in
           let o = o#option (fun o -> o#unknown) t in o
-      | `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+      | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in
           let o = o#name _x_i2 in
           let o = o#name _x_i3 in
           let o = o#datatype' _x_i4 in o
-      | `QualifiedImport _xs ->
+      | QualifiedImport _xs ->
           let o = o#list (fun o -> o#name) _xs in
           o
-      | `Type ((_x, _x_i1, _x_i2)) ->
+      | Type ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o =
             o#list
@@ -1353,13 +1355,13 @@ class fold =
                  in o)
               _x_i1
           in let o = o#datatype' _x_i2 in o
-      | `Infix -> o
-      | `Exp _x -> let o = o#phrase _x in o
-      | `Module (n, bs) ->
+      | Infix -> o
+      | Exp _x -> let o = o#phrase _x in o
+      | Module (n, bs) ->
           let o = o#name n in
           let o = o#list (fun o -> o#binding) bs in
           o
-      | `AlienBlock (lang, lib, dts) ->
+      | AlienBlock (lang, lib, dts) ->
           let o = o#name lang in
           let o = o#name lib in
           let o = o#list (fun o (b, dt)->
@@ -1421,13 +1423,13 @@ class fold_map =
     method bool : bool -> ('self_type * bool) =
       function | false -> (o, false) | true -> (o, true)
 
-    method unary_op : unary_op -> ('self_type * unary_op) =
-      function
-      | `Minus -> (o, `Minus)
-      | `FloatMinus -> (o, `FloatMinus)
-      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+    method unary_op : UnaryOp.t -> ('self_type * UnaryOp.t) =
+      let open UnaryOp in function
+      | Minus -> (o, Minus)
+      | FloatMinus -> (o, FloatMinus)
+      | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
-    method tyunary_op : tyarg list * unary_op -> 'self_type * (tyarg list * unary_op) =
+    method tyunary_op : tyarg list * UnaryOp.t -> 'self_type * (tyarg list * UnaryOp.t) =
       fun (_x, _x_i1) ->
         let (o, _x_i1) = o#unary_op _x_i1 in (o, (_x, _x_i1))
 
@@ -1439,12 +1441,12 @@ class fold_map =
       | Expression _x -> let (o, _x) = o#phrase _x in (o, Expression _x)
       | Directive _x -> let (o, _x) = o#directive _x in (o, Directive _x)
 
-    method sec : sec -> ('self_type * sec) =
-      function
-      | `Minus -> (o, `Minus)
-      | `FloatMinus -> (o, `FloatMinus)
-      | `Project _x -> let (o, _x) = o#name _x in (o, (`Project _x))
-      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+    method section : Section.t -> ('self_type * Section.t) =
+      let open Section in function
+      | Minus -> (o, Minus)
+      | FloatMinus -> (o, FloatMinus)
+      | Project _x -> let (o, _x) = o#name _x in (o, Project _x)
+      | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
     method subkind : subkind -> ('self_type * subkind) = fun k -> (o, k)
 
@@ -1464,16 +1466,16 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#subkind) _x_i1 in
         let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
 
-    method row_var : row_var -> ('self_type * row_var) =
-      function
-      | `Closed -> (o, `Closed)
-      | `Open _x ->
-          let (o, _x) = o#known_type_variable _x in (o, (`Open _x))
-      | `Recursive ((_x, _x_i1)) ->
+    method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
+      let open Datatype in function
+      | Closed -> (o, Closed)
+      | Open _x ->
+          let (o, _x) = o#known_type_variable _x in (o, (Open _x))
+      | Recursive ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#row _x_i1 in (o, (`Recursive ((_x, _x_i1))))
+          let (o, _x_i1) = o#row _x_i1 in (o, Recursive ((_x, _x_i1)))
 
-    method row : row -> ('self_type * row) =
+    method row : Datatype.row -> ('self_type * Datatype.row) =
       fun (_x, _x_i1) ->
         let (o, _x) =
           o#list
@@ -1485,8 +1487,8 @@ class fold_map =
 
     method replace_rhs : replace_rhs -> ('self_type * replace_rhs) =
       function
-      | `Literal _x -> let (o, _x) = o#string _x in (o, (`Literal _x))
-      | `Splice _x -> let (o, _x) = o#phrase _x in (o, (`Splice _x))
+      | Literal    _x -> let (o, _x) = o#string _x in (o, (Literal _x))
+      | SpliceExpr _x -> let (o, _x) = o#phrase _x in (o, (SpliceExpr _x))
 
     method regexflag : regexflag -> ('self_type * regexflag) =
       fun flag -> (o, flag)
@@ -1535,73 +1537,73 @@ class fold_map =
 
     method phrasenode : phrasenode -> ('self_type * phrasenode) =
       function
-      | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
-      | `Var _x -> let (o, _x) = o#name _x in (o, (`Var _x))
-      | `QualifiedVar _xs ->
+      | Constant _x -> let (o, _x) = o#constant _x in (o, (Constant _x))
+      | Var _x -> let (o, _x) = o#name _x in (o, (Var _x))
+      | QualifiedVar _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
-          (o, (`QualifiedVar _xs))
-      | `FunLit (_x, _x1, _x_i1, _x_i2) ->
+          (o, (QualifiedVar _xs))
+      | FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
-        let (o, _x_i2) = o#location _x_i2 in (o, (`FunLit (_x, _x1, _x_i1, _x_i2)))
-      | `HandlerLit hnlit ->
+        let (o, _x_i2) = o#location _x_i2 in (o, (FunLit (_x, _x1, _x_i1, _x_i2)))
+      | HandlerLit hnlit ->
 	 let (o, hnlit) = o#handlerlit hnlit in
-	 (o, `HandlerLit hnlit)
-      | `Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
+	 (o, HandlerLit hnlit)
+      | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let (o, _given_spawn_location) = o#given_spawn_location _given_spawn_location in
           let (o, _block_phr) = o#phrase _block_phr in
-          (o, (`Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)))
-      | `Query (_x, _x_i1, _x_i2) ->
+          (o, (Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)))
+      | Query (_x, _x_i1, _x_i2) ->
           let (o, _x) =
             o#option
               (fun o (_x, _x_i1) ->
                  let (o, _x) = o#phrase _x in
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Query (_x, _x_i1, _x_i2)))
-      | `ListLit (_x, _x_i1) ->
-          let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (`ListLit (_x, _x_i1)))
-      | `RangeLit ((_x_i1, _x_i2)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (Query (_x, _x_i1, _x_i2)))
+      | ListLit (_x, _x_i1) ->
+          let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (ListLit (_x, _x_i1)))
+      | RangeLit ((_x_i1, _x_i2)) ->
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2
-          in (o, (`RangeLit ((_x_i1, _x_i2))))
-      | `Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
+          in (o, (RangeLit ((_x_i1, _x_i2))))
+      | Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let (o, _x) = o#list (fun o -> o#iterpatt) _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
           let (o, _x_i3) = o#option (fun o -> o#phrase) _x_i3
-          in (o, (`Iteration ((_x, _x_i1, _x_i2, _x_i3))))
-      | `Escape ((_x, _x_i1)) ->
+          in (o, (Iteration ((_x, _x_i1, _x_i2, _x_i3))))
+      | Escape ((_x, _x_i1)) ->
           let (o, _x) = o#binder _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Escape ((_x, _x_i1))))
-      | `Section _x -> let (o, _x) = o#sec _x in (o, (`Section _x))
-      | `Conditional ((_x, _x_i1, _x_i2)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (Escape ((_x, _x_i1))))
+      | Section _x -> let (o, _x) = o#section _x in (o, (Section _x))
+      | Conditional ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2
-          in (o, (`Conditional ((_x, _x_i1, _x_i2))))
-      | `Block ((_x, _x_i1)) ->
+          in (o, (Conditional ((_x, _x_i1, _x_i2))))
+      | Block ((_x, _x_i1)) ->
           let (o, _x) = o#list (fun o -> o#binding) _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Block ((_x, _x_i1))))
-      | `InfixAppl ((_x, _x_i1, _x_i2)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (Block ((_x, _x_i1))))
+      | InfixAppl ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#tybinop _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2
-          in (o, (`InfixAppl ((_x, _x_i1, _x_i2))))
-      | `Regex _x -> let (o, _x) = o#regex _x in (o, (`Regex _x))
-      | `UnaryAppl ((_x, _x_i1)) ->
+          in (o, (InfixAppl ((_x, _x_i1, _x_i2))))
+      | Regex _x -> let (o, _x) = o#regex _x in (o, (Regex _x))
+      | UnaryAppl ((_x, _x_i1)) ->
           let (o, _x) = o#tyunary_op _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`UnaryAppl ((_x, _x_i1))))
-      | `FnAppl ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (UnaryAppl ((_x, _x_i1))))
+      | FnAppl ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#list (fun o -> o#phrase) _x_i1
-          in (o, (`FnAppl ((_x, _x_i1))))
-      | `TAbstr ((_x, _x_i1)) ->
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`TAbstr ((_x, _x_i1))))
-      | `TAppl ((_x, _x_i1)) ->
-          let (o, _x) = o#phrase _x in (o, (`TAppl ((_x, _x_i1))))
-      | `TupleLit _x ->
-          let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (`TupleLit _x))
-      | `RecordLit ((_x, _x_i1)) ->
+          in (o, (FnAppl ((_x, _x_i1))))
+      | TAbstr ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (TAbstr ((_x, _x_i1))))
+      | TAppl ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in (o, (TAppl ((_x, _x_i1))))
+      | TupleLit _x ->
+          let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (TupleLit _x))
+      | RecordLit ((_x, _x_i1)) ->
           let (o, _x) =
             o#list
               (fun o (_x, _x_i1) ->
@@ -1609,11 +1611,11 @@ class fold_map =
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x in
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
-          in (o, (`RecordLit ((_x, _x_i1))))
-      | `Projection ((_x, _x_i1)) ->
+          in (o, (RecordLit ((_x, _x_i1))))
+      | Projection ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#name _x_i1 in (o, (`Projection ((_x, _x_i1))))
-      | `With ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#name _x_i1 in (o, (Projection ((_x, _x_i1))))
+      | With ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
             o#list
@@ -1621,25 +1623,25 @@ class fold_map =
                  let (o, _x) = o#name _x in
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i1
-          in (o, (`With ((_x, _x_i1))))
-      | `TypeAnnotation ((_x, _x_i1)) ->
+          in (o, (With ((_x, _x_i1))))
+      | TypeAnnotation ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#datatype' _x_i1
-          in (o, (`TypeAnnotation ((_x, _x_i1))))
-      | `Upcast ((_x, _x_i1, _x_i2)) ->
+          in (o, (TypeAnnotation ((_x, _x_i1))))
+      | Upcast ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#datatype' _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
-          in (o, (`Upcast ((_x, _x_i1, _x_i2))))
-      | `ConstructorLit ((_x, _x_i1, _x_i2)) ->
+          in (o, (Upcast ((_x, _x_i1, _x_i2))))
+      | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
-          in (o, (`ConstructorLit ((_x, _x_i1, _x_i2))))
-      | `DoOperation (name, ps, t) ->
+          in (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
+      | DoOperation (name, ps, t) ->
 	 let (o, t) = o#option (fun o -> o#unknown) t in
 	 let (o, ps) = o#list (fun o -> o#phrase) ps in
-	 (o, `DoOperation (name, ps, t))
-      | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+	 (o, DoOperation (name, ps, t))
+      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let (o, m) = o#phrase sh_expr in
           let (o, params) =
             o#option (fun o -> o#handle_params) sh_descr.shd_params
@@ -1660,8 +1662,8 @@ class fold_map =
 	      )
               sh_value_cases
 	  in
-          (o, (`Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }))
-      | `Switch ((_x, _x_i1, _x_i2)) ->
+          (o, (Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }))
+      | Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
             o#list
@@ -1670,8 +1672,8 @@ class fold_map =
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
-          in (o, (`Switch ((_x, _x_i1, _x_i2))))
-      | `Receive ((_x, _x_i1)) ->
+          in (o, (Switch ((_x, _x_i1, _x_i2))))
+      | Receive ((_x, _x_i1)) ->
           let (o, _x) =
             o#list
               (fun o (_x, _x_i1) ->
@@ -1679,15 +1681,15 @@ class fold_map =
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
-          in (o, (`Receive ((_x, _x_i1))))
-      (* | `Link ((_x, _x_i1)) -> *)
+          in (o, (Receive ((_x, _x_i1))))
+      (* | Link ((_x, _x_i1)) -> *)
       (*     let (o, _x) = o#phrase _x in *)
-      (*     let (o, _x_i1) = o#phrase _x in (o, (`Link(_x, _x_i1))) *)
-      | `Select ((_x, _x_i1)) ->
+      (*     let (o, _x_i1) = o#phrase _x in (o, (Link(_x, _x_i1))) *)
+      | Select ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#phrase _x_i1
-          in (o, (`Select (_x, _x_i1)))
-      | `Offer ((_x, _x_i1, _x_i2)) ->
+          in (o, (Select (_x, _x_i1)))
+      | Offer ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
             o#list
@@ -1696,11 +1698,11 @@ class fold_map =
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
-          in (o, (`Offer ((_x, _x_i1, _x_i2))))
-      | `CP p ->
+          in (o, (Offer ((_x, _x_i1, _x_i2))))
+      | CP p ->
          let (o, p) = o#cp_phrase p in
-         o, `CP p
-      | `DatabaseLit ((_x, _x_i1)) ->
+         o, CP p
+      | DatabaseLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
             (fun (_x, _x_i1) ->
@@ -1708,8 +1710,8 @@ class fold_map =
                let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
                in (o, (_x, _x_i1)))
               _x_i1
-          in (o, (`DatabaseLit ((_x, _x_i1))))
-      | `TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+          in (o, (DatabaseLit ((_x, _x_i1))))
+      | TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
             (fun (_x, _x_i1) ->
@@ -1730,60 +1732,60 @@ class fold_map =
               _x_i2 in
           let (o, _x_i3) = o#phrase _x_i3 in
           let (o, _x_i4) = o#phrase _x_i4
-          in (o, (`TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
-      | `LensLit ((_x, _x_i1)) ->
+          in (o, (TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
+      | LensLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
-            (o, (`LensLit (_x, _x_i1)))
-      | `LensKeysLit ((_x, _x_i1, _x_i2)) ->
+            (o, (LensLit (_x, _x_i1)))
+      | LensKeysLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2 in
-            (o, (`LensKeysLit (_x, _x_i1, _x_i2)))
-      | `LensFunDepsLit ((_x, _x_i1, _x_i2)) ->
+            (o, (LensKeysLit (_x, _x_i1, _x_i2)))
+      | LensFunDepsLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2 in
-            (o, (`LensFunDepsLit (_x, _x_i1, _x_i2)))
-      | `LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+            (o, (LensFunDepsLit (_x, _x_i1, _x_i2)))
+      | LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#string _x_i1 in
           let (o, _x_i2) = o#string _x_i2 in
           let (o, _x_i3) = o#phrase _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#unknown) _x_i4 in
-            (o, (`LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
-      | `LensSelectLit ((_x, _x_i1, _x_i2)) ->
+            (o, (LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
+      | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           (* let (o, _x_i1) = o#phrase _x_i1 in *)
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2 in
-            (o, (`LensSelectLit ((_x, _x_i1, _x_i2))))
+            (o, (LensSelectLit ((_x, _x_i1, _x_i2))))
 
-      | `LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
+      | LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i5) = o#option (fun o -> o#unknown) _x_i5 in
-            (o, (`LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5))))
-      | `LensGetLit ((_x, _x_i1)) ->
+            (o, (LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5))))
+      | LensGetLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
-            (o, (`LensGetLit ((_x, _x_i1))))
-      | `LensPutLit ((_x, _x_i1, _x_i2)) ->
+            (o, (LensGetLit ((_x, _x_i1))))
+      | LensPutLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2 in
-            (o, (`LensPutLit ((_x, _x_i1, _x_i2))))
-      | `DBDelete ((_x, _x_i1, _x_i2)) ->
+            (o, (LensPutLit ((_x, _x_i1, _x_i2))))
+      | DBDelete ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2
-          in (o, (`DBDelete ((_x, _x_i1, _x_i2))))
-      | `DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
+          in (o, (DBDelete ((_x, _x_i1, _x_i2))))
+      | DBInsert ((_x, _x_i1, _x_i2, _x_i3)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#list (fun o -> o#name) _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i3) = o#option (fun o -> o#phrase) _x_i3
-          in (o, (`DBInsert ((_x, _x_i1, _x_i2, _x_i3))))
-      | `DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
+          in (o, (DBInsert ((_x, _x_i1, _x_i2, _x_i3))))
+      | DBUpdate ((_x, _x_i1, _x_i2, _x_i3)) ->
           let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
@@ -1793,8 +1795,8 @@ class fold_map =
                  let (o, _x) = o#name _x in
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i3
-          in (o, (`DBUpdate ((_x, _x_i1, _x_i2, _x_i3))))
-      | `Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
+          in (o, (DBUpdate ((_x, _x_i1, _x_i2, _x_i3))))
+      | Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =
             o#list
@@ -1805,30 +1807,30 @@ class fold_map =
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
           let (o, _x_i3) = o#list (fun o -> o#phrase) _x_i3
-          in (o, (`Xml ((_x, _x_i1, _x_i2, _x_i3))))
-      | `TextNode _x -> let (o, _x) = o#string _x in (o, (`TextNode _x))
-      | `Formlet ((_x, _x_i1)) ->
+          in (o, (Xml ((_x, _x_i1, _x_i2, _x_i3))))
+      | TextNode _x -> let (o, _x) = o#string _x in (o, (TextNode _x))
+      | Formlet ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Formlet ((_x, _x_i1))))
-      | `Page _x -> let (o, _x) = o#phrase _x in (o, (`Page _x))
-      | `FormletPlacement ((_x, _x_i1, _x_i2)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (Formlet ((_x, _x_i1))))
+      | Page _x -> let (o, _x) = o#phrase _x in (o, (Page _x))
+      | FormletPlacement ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2
-          in (o, (`FormletPlacement ((_x, _x_i1, _x_i2))))
-      | `PagePlacement _x ->
-          let (o, _x) = o#phrase _x in (o, (`PagePlacement _x))
-      | `FormBinding ((_x, _x_i1)) ->
+          in (o, (FormletPlacement ((_x, _x_i1, _x_i2))))
+      | PagePlacement _x ->
+          let (o, _x) = o#phrase _x in (o, (PagePlacement _x))
+      | FormBinding ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#pattern _x_i1
-          in (o, (`FormBinding ((_x, _x_i1))))
-      | `TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
+          in (o, (FormBinding ((_x, _x_i1))))
+      | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
           let (o, _p1) = o#phrase _p1 in
           let (o, _pat) = o#pattern _pat in
           let (o, _p2) = o#phrase _p2 in
           let (o, _p3) = o#phrase _p3 in
-          (o, (`TryInOtherwise (_p1, _pat, _p2, _p3, _ty)))
-      | `Raise -> (o, `Raise)
+          (o, (TryInOtherwise (_p1, _pat, _p2, _p3, _ty)))
+      | Raise -> (o, Raise)
 
     method phrase : phrase -> ('self_type * phrase) =
       fun {node; pos} ->
@@ -1838,34 +1840,34 @@ class fold_map =
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
       function
-      | Unquote (bs, e) ->
+      | CPUnquote (bs, e) ->
          let o, bs = o#list (fun o -> o#binding) bs in
          let o, e = o#phrase e in
-         o, Unquote (bs, e)
-      | Grab (c, x, p) ->
+         o, CPUnquote (bs, e)
+      | CPGrab (c, x, p) ->
          let o, p = o#cp_phrase p in
-         o, Grab (c, x, p)
-      | Give (c, e, p) ->
+         o, CPGrab (c, x, p)
+      | CPGive (c, e, p) ->
          let o, e = o#option (fun o -> o#phrase) e in
          let o, p = o#cp_phrase p in
-         o, Give (c, e, p)
-      | GiveNothing c ->
+         o, CPGive (c, e, p)
+      | CPGiveNothing c ->
          let o, c = o#binder c in
-         o, GiveNothing c
-      | Select (c, l, p) ->
+         o, CPGiveNothing c
+      | CPSelect (c, l, p) ->
          let o, p = o#cp_phrase p in
-         o, Select (c, l, p)
-      | Offer (c, bs) ->
+         o, CPSelect (c, l, p)
+      | CPOffer (c, bs) ->
          let o, bs = o#list (fun o (l, p) ->
                              let o, p = o#cp_phrase p in
                              o, (l, p)) bs in
-         o, Offer (c, bs)
-      | Link (c, d) ->
-         o, Link (c, d)
-      | Comp (c, p, q) ->
+         o, CPOffer (c, bs)
+      | CPLink (c, d) ->
+         o, CPLink (c, d)
+      | CPComp (c, p, q) ->
          let o, p = o#cp_phrase p in
          let o, q = o#cp_phrase q in
-         o, Comp (c, p, q)
+         o, CPComp (c, p, q)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
       fun {node; pos} ->
@@ -1873,27 +1875,28 @@ class fold_map =
       let o, pos  = o#position pos in
       o, {node; pos}
 
-    method patternnode : patternnode -> ('self_type * patternnode) =
+    method patternnode : Pattern.t -> ('self_type * Pattern.t) =
+      let open Pattern in
       function
-      | `Any -> (o, `Any)
-      | `Nil -> (o, `Nil)
-      | `Cons ((_x, _x_i1)) ->
+      | Any -> (o, Any)
+      | Nil -> (o, Nil)
+      | Cons ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#pattern _x_i1 in (o, (`Cons ((_x, _x_i1))))
-      | `List _x ->
-          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (`List _x))
-      | `Variant ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#pattern _x_i1 in (o, (Cons ((_x, _x_i1))))
+      | List _x ->
+          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (List _x))
+      | Variant ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
-          in (o, (`Variant ((_x, _x_i1))))
-      | `Effect (name, ps, k) ->
+          in (o, (Variant ((_x, _x_i1))))
+      | Effect (name, ps, k) ->
          let (o, name) = o#name name in
          let (o, ps) = o#list (fun o -> o#pattern) ps in
          let (o, k) = o#pattern k in
-         (o, `Effect (name, ps, k))
-      | `Negative _x ->
-          let (o, _x) = o#list (fun o -> o#name) _x in (o, (`Negative _x))
-      | `Record ((_x, _x_i1)) ->
+         (o, Effect (name, ps, k))
+      | Negative _x ->
+          let (o, _x) = o#list (fun o -> o#name) _x in (o, (Negative _x))
+      | Record ((_x, _x_i1)) ->
           let (o, _x) =
             o#list
               (fun o (_x, _x_i1) ->
@@ -1901,19 +1904,19 @@ class fold_map =
                  let (o, _x_i1) = o#pattern _x_i1 in (o, (_x, _x_i1)))
               _x in
           let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
-          in (o, (`Record ((_x, _x_i1))))
-      | `Tuple _x ->
-          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (`Tuple _x))
-      | `Constant _x -> let (o, _x) = o#constant _x in (o, (`Constant _x))
-      | `Variable _x -> let (o, _x) = o#binder _x in (o, (`Variable _x))
-      | `As ((_x, _x_i1)) ->
+          in (o, (Record ((_x, _x_i1))))
+      | Tuple _x ->
+          let (o, _x) = o#list (fun o -> o#pattern) _x in (o, (Tuple _x))
+      | Constant _x -> let (o, _x) = o#constant _x in (o, (Constant _x))
+      | Variable _x -> let (o, _x) = o#binder _x in (o, (Variable _x))
+      | As ((_x, _x_i1)) ->
           let (o, _x) = o#binder _x in
-          let (o, _x_i1) = o#pattern _x_i1 in (o, (`As ((_x, _x_i1))))
-      | `HasType ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#pattern _x_i1 in (o, (As ((_x, _x_i1))))
+      | HasType ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#datatype' _x_i1 in (o, (`HasType ((_x, _x_i1))))
+          let (o, _x_i1) = o#datatype' _x_i1 in (o, (HasType ((_x, _x_i1))))
 
-    method pattern : pattern -> ('self_type * pattern) =
+    method pattern : Pattern.with_pos -> ('self_type * Pattern.with_pos) =
       fun {node; pos} ->
         let (o, node) = o#patternnode node in
         let (o, pos ) = o#position pos in
@@ -1921,19 +1924,16 @@ class fold_map =
 
     method name : name -> ('self_type * name) = o#string
 
-    method logical_binop : logical_binop -> ('self_type * logical_binop) =
-      function | `And -> (o, `And) | `Or -> (o, `Or)
-
-    method location : location -> ('self_type * location) = o#unknown
+    method location : Location.t -> ('self_type * Location.t) = o#unknown
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function
-      | `List ((_x, _x_i1)) ->
+      | List ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`List ((_x, _x_i1))))
-      | `Table ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (List ((_x, _x_i1))))
+      | Table ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Table ((_x, _x_i1))))
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (Table ((_x, _x_i1))))
 
     method funlit : funlit -> ('self_type * funlit) =
       fun (_x, _x_i1) ->
@@ -1971,11 +1971,11 @@ class fold_map =
         in
         (o, { params with shp_bindings = bindings })
 
-    method fieldspec : fieldspec -> ('self_type * fieldspec) =
-      function
-      | `Present _x -> let (o, _x) = o#datatype _x in (o, `Present _x)
-      | `Absent -> (o, `Absent)
-      | `Var _x -> let (o, _x) = o#known_type_variable _x in (o, `Var _x)
+    method fieldspec : Datatype.fieldspec -> ('self_type * Datatype.fieldspec) =
+      let open Datatype in function
+      | Present _x -> let (o, _x) = o#datatype _x in (o, Present _x)
+      | Absent -> (o, Absent)
+      | Var _x -> let (o, _x) = o#known_type_variable _x in (o, Var _x)
 
     method fieldconstraint : fieldconstraint -> ('self_type * fieldconstraint) =
       fun fc -> (o, fc)
@@ -1991,77 +1991,78 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
         in (o, (_x, _x_i1))
 
-    method datatypenode : datatypenode -> ('self_type * datatypenode) =
+    method datatypenode : Datatype.t -> ('self_type * Datatype.t) =
+      let open Datatype in
       function
-      | `TypeVar _x ->
-          let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
-      | `QualifiedTypeApplication (ns, args) ->
+      | TypeVar _x ->
+          let (o, _x) = o#known_type_variable _x in (o, (TypeVar _x))
+      | QualifiedTypeApplication (ns, args) ->
           let (o, ns) = o#list (fun o -> o#name) ns in
           let (o, args) = o#list (fun o -> o#type_arg) args in
-          (o, `QualifiedTypeApplication (ns, args))
-      | `Function (_x, _x_i1, _x_i2) ->
+          (o, QualifiedTypeApplication (ns, args))
+      | Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
-          in (o, (`Function (_x, _x_i1, _x_i2)))
-      | `Lolli (_x, _x_i1, _x_i2) ->
+          in (o, (Function (_x, _x_i1, _x_i2)))
+      | Lolli (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
-          in (o, (`Lolli (_x, _x_i1, _x_i2)))
-      | `Mu (_x, _x_i1) ->
+          in (o, (Lolli (_x, _x_i1, _x_i2)))
+      | Mu (_x, _x_i1) ->
           let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (`Mu (_x, _x_i1)))
-      | `Forall (_x, _x_i1) ->
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (Mu (_x, _x_i1)))
+      | Forall (_x, _x_i1) ->
           (*let (o, _x) = o#list (fun o -> o#quantifier) _x in*)
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (`Forall (_x, _x_i1)))
-      | `Unit -> (o, `Unit)
-      | `Tuple _x ->
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (Forall (_x, _x_i1)))
+      | Unit -> (o, Unit)
+      | Tuple _x ->
           let (o, _x) = o#list (fun o -> o#datatype) _x
-          in (o, (`Tuple _x))
-      | `Record _x -> let (o, _x) = o#row _x in (o, (`Record _x))
-      | `Variant _x -> let (o, _x) = o#row _x in (o, (`Variant _x))
-      | `Effect r -> let (o, r) = o#row r in (o, `Effect r)
-      | `Table (_x, _x_i1, _x_i2) ->
+          in (o, (Tuple _x))
+      | Record _x -> let (o, _x) = o#row _x in (o, (Record _x))
+      | Variant _x -> let (o, _x) = o#row _x in (o, (Variant _x))
+      | Effect r -> let (o, r) = o#row r in (o, Effect r)
+      | Table (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in
-          let (o, _x_i2) = o#datatype _x_i2 in (o, (`Table (_x, _x_i1, _x_i2)))
-      | `List _x -> let (o, _x) = o#datatype _x in (o, (`List _x))
-      | `TypeApplication _x ->
+          let (o, _x_i2) = o#datatype _x_i2 in (o, (Table (_x, _x_i1, _x_i2)))
+      | List _x -> let (o, _x) = o#datatype _x in (o, (List _x))
+      | TypeApplication _x ->
           let (o, _x) =
             (fun (_x, _x_i1) ->
                let (o, _x) = o#string _x in
                let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
                in (o, (_x, _x_i1)))
               _x
-          in (o, (`TypeApplication _x))
-      | `Primitive _x ->
-          let (o, _x) = o#unknown _x in (o, (`Primitive _x))
-      | `DB -> (o, `DB)
-      | `Input (_x, _x_i1) ->
+          in (o, (TypeApplication _x))
+      | Primitive _x ->
+          let (o, _x) = o#unknown _x in (o, (Primitive _x))
+      | DB -> (o, DB)
+      | Input (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, `Input (_x, _x_i1))
-      | `Output (_x, _x_i1) ->
+        let (o, _x_i1) = o#datatype _x_i1 in (o, Input (_x, _x_i1))
+      | Output (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, `Output (_x, _x_i1))
-      | `Select _x ->
-        let (o, _x) = o#row _x in (o, `Select _x)
-      | `Choice _x ->
-        let (o, _x) = o#row _x in (o, `Choice _x)
-      | `Dual _x ->
-        let (o, _x) = o#datatype _x in (o, `Dual _x)
-      | `End -> (o, `End)
+        let (o, _x_i1) = o#datatype _x_i1 in (o, Output (_x, _x_i1))
+      | Select _x ->
+        let (o, _x) = o#row _x in (o, Select _x)
+      | Choice _x ->
+        let (o, _x) = o#row _x in (o, Choice _x)
+      | Dual _x ->
+        let (o, _x) = o#datatype _x in (o, Dual _x)
+      | End -> (o, End)
 
-    method datatype : datatype -> ('self_type * datatype) =
+    method datatype : Datatype.with_pos -> ('self_type * Datatype.with_pos) =
       fun {node; pos} ->
         let (o, node) = o#datatypenode node in
         let (o, pos) = o#position pos in (o, {node; pos})
 
-    method type_arg : type_arg -> ('self_type * type_arg) =
-      function
-      | `Type _x -> let (o, _x) = o#datatype _x in (o, `Type _x)
-      | `Row _x -> let (o, _x) = o#row _x in (o, `Row _x)
-      | `Presence _x -> let (o, _x) = o#fieldspec _x in (o, `Presence _x)
+    method type_arg : Datatype.type_arg -> ('self_type * Datatype.type_arg) =
+      let open Datatype in function
+      | Type _x -> let (o, _x) = o#datatype _x in (o, Type _x)
+      | Row _x -> let (o, _x) = o#row _x in (o, Row _x)
+      | Presence _x -> let (o, _x) = o#fieldspec _x in (o, Presence _x)
 
     method constant : constant -> ('self_type * constant) =
       function
@@ -2071,36 +2072,37 @@ class fold_map =
       | `Bool _x -> let (o, _x) = o#bool _x in (o, (`Bool _x))
       | `Char _x -> let (o, _x) = o#char _x in (o, (`Char _x))
 
-    method binop : binop -> ('self_type * binop) =
-      function
-      | `Minus -> (o, `Minus)
-      | `FloatMinus -> (o, `FloatMinus)
-      | `RegexMatch _x ->
+    method binop : BinaryOp.t -> ('self_type * BinaryOp.t) =
+      let open BinaryOp in function
+      | Minus -> (o, Minus)
+      | FloatMinus -> (o, FloatMinus)
+      | RegexMatch _x ->
           let (o, _x) = o#list (fun o -> o#regexflag) _x
-          in (o, (`RegexMatch _x))
-      | (#logical_binop as x) -> (o#logical_binop x :> 'self_type * binop)
-      | `Cons -> (o, `Cons)
-      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+          in (o, (RegexMatch _x))
+      | And -> (o, And)
+      | Or -> (o, Or)
+      | Cons -> (o, Cons)
+      | Name _x -> let (o, _x) = o#name _x in (o, (Name _x))
 
-    method tybinop : tyarg list * binop -> 'self_type * (tyarg list * binop) =
+    method tybinop : tyarg list * BinaryOp.t -> 'self_type * (tyarg list * BinaryOp.t) =
       fun (_x, _x_i1) ->
         let (o, _x_i1) = o#binop _x_i1 in (o, (_x, _x_i1))
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x   ) = o#pattern _x in
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
-      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          in (o, (Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
+      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i2) = o#funlit _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
-      | `Funs _x ->
+          in (o, (Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
+      | Funs _x ->
           let (o, _x) =
             o#list
               (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
@@ -2111,23 +2113,23 @@ class fold_map =
                  let (o, _x_i5) = o#position _x_i5
                  in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
-          in (o, (`Funs _x))
-      | `Handler (b, hnlit, t) ->
+          in (o, (Funs _x))
+      | Handler (b, hnlit, t) ->
           let (o, b) = o#binder b in
           let (o, hnlit) = o#handlerlit hnlit in
           let (o, t) = o#option (fun o -> o#unknown) t in
-          (o, `Handler (b, hnlit, t))
-      | `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+          (o, Handler (b, hnlit, t))
+      | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#name _x_i1 in
           let (o, _x_i2) = o#name _x_i2 in
           let (o, _x_i3) = o#name _x_i3 in
           let (o, _x_i4) = o#datatype' _x_i4
-          in (o, (`Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
-      | `QualifiedImport _xs ->
+          in (o, (Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
+      | QualifiedImport _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
-          (o, `QualifiedImport _xs)
-      | `Type ((_x, _x_i1, _x_i2)) ->
+          (o, QualifiedImport _xs)
+      | Type ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =
             o#list
@@ -2137,14 +2139,14 @@ class fold_map =
                  in (o, (_x, _x_i1)))
               _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
-          in (o, (`Type ((_x, _x_i1, _x_i2))))
-      | `Infix -> (o, `Infix)
-      | `Exp _x -> let (o, _x) = o#phrase _x in (o, (`Exp _x))
-      | `Module (n, bs) ->
+          in (o, (Type ((_x, _x_i1, _x_i2))))
+      | Infix -> (o, Infix)
+      | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
+      | Module (n, bs) ->
           let (o, n) = o#string n in
           let (o, bs) = o#list (fun o -> o#binding) bs in
-          (o, (`Module (n, bs)))
-      | `AlienBlock (lang, lib, dts) ->
+          (o, (Module (n, bs)))
+      | AlienBlock (lang, lib, dts) ->
           let (o, lang) = o#name lang in
           let (o, lib) = o#name lib in
           let (o, dts) = o#list (fun o (b, dt) ->
@@ -2152,7 +2154,7 @@ class fold_map =
             let (o, dt) = o#datatype' dt in
             (o, (b, dt))
           ) dts in
-          (o, (`AlienBlock (lang, lib, dts)))
+          (o, (AlienBlock (lang, lib, dts)))
 
     method binding : binding -> ('self_type * binding) =
       fun {node; pos} ->
