@@ -204,7 +204,7 @@ end
 type spawn_kind = Angel | Demon | Wait
     [@@deriving show]
 
-type sec = [`Minus | `FloatMinus | `Project of name | `Name of name]
+type section = [`Minus | `FloatMinus | `Project of name | `Name of name]
     [@@deriving show]
 
 type declared_linearity = [ `Lin | `Unl ]
@@ -273,7 +273,7 @@ and phrasenode =
     * (*where:*)   phrase option
                     * (*orderby:*) phrase option
 | Escape           of binder * phrase
-| Section          of sec
+| Section          of section
 | Conditional      of phrase * phrase * phrase
 | Block            of block_body
 | InfixAppl        of (tyarg list * binop) * phrase * phrase

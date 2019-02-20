@@ -178,9 +178,9 @@ class transform (env : Types.typing_environment) =
       fun op ->
         (o, op, type_binary_op var_env tycon_env op)
 
-    method sec : sec -> ('self_type * sec * Types.datatype) =
-      fun sec ->
-        (o, sec, type_section var_env sec)
+    method section : section -> ('self_type * section * Types.datatype) =
+      fun section ->
+        (o, section, type_section var_env section)
 
     method sentence : sentence -> ('self_type * sentence) =
       function

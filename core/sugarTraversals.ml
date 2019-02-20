@@ -59,7 +59,7 @@ class map =
       | Expression _x -> let _x = o#phrase _x in Expression _x
       | Directive _x -> let _x = o#directive _x in Directive _x
 
-    method sec : sec -> sec =
+    method section : section -> section =
       function
       | `Minus -> `Minus
       | `FloatMinus -> `FloatMinus
@@ -186,7 +186,7 @@ class map =
       | Escape ((_x, _x_i1)) ->
           let _x = o#binder _x in
           let _x_i1 = o#phrase _x_i1 in Escape ((_x, _x_i1))
-      | Section _x -> let _x = o#sec _x in Section _x
+      | Section _x -> let _x = o#section _x in Section _x
       | Conditional ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#phrase _x_i1 in
@@ -774,7 +774,7 @@ class fold =
       | Expression _x -> let o = o#phrase _x in o
       | Directive _x -> let o = o#directive _x in o
 
-    method sec : sec -> 'self_type =
+    method section : section -> 'self_type =
       function
       | `Minus -> o
       | `FloatMinus -> o
@@ -888,7 +888,7 @@ class fold =
           let o = o#option (fun o -> o#phrase) _x_i3 in o
       | Escape ((_x, _x_i1)) ->
           let o = o#binder _x in let o = o#phrase _x_i1 in o
-      | Section _x -> let o = o#sec _x in o
+      | Section _x -> let o = o#section _x in o
       | Conditional ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
@@ -1440,7 +1440,7 @@ class fold_map =
       | Expression _x -> let (o, _x) = o#phrase _x in (o, Expression _x)
       | Directive _x -> let (o, _x) = o#directive _x in (o, Directive _x)
 
-    method sec : sec -> ('self_type * sec) =
+    method section : section -> ('self_type * section) =
       function
       | `Minus -> (o, `Minus)
       | `FloatMinus -> (o, `FloatMinus)
@@ -1574,7 +1574,7 @@ class fold_map =
       | Escape ((_x, _x_i1)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#phrase _x_i1 in (o, (Escape ((_x, _x_i1))))
-      | Section _x -> let (o, _x) = o#sec _x in (o, (Section _x))
+      | Section _x -> let (o, _x) = o#section _x in (o, (Section _x))
       | Conditional ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in
