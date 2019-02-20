@@ -1,4 +1,5 @@
 open CommonTypes
+open Operators
 open Utility
 
 (** The syntax tree created by the parser. *)
@@ -14,13 +15,6 @@ open Utility
 
 type name = string [@@deriving show]
 
-type unary_op = [
-| `Minus
-| `FloatMinus
-| `Name of name
-]
-[@@deriving show]
-
 type regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
     [@@deriving show]
 
@@ -30,9 +24,9 @@ type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | `And | `Or
 
 let string_of_unary_op =
   function
-    | `Minus -> "-"
-    | `FloatMinus -> ".-"
-    | `Name name -> name
+  | UnaryOp.Minus -> "-"
+  | UnaryOp.FloatMinus -> ".-"
+  | UnaryOp.Name name -> name
 
 let string_of_binop =
   function
@@ -289,7 +283,7 @@ and phrasenode =
   | Block            of block_body
   | InfixAppl        of (tyarg list * binop) * phrase * phrase
   | Regex            of regex
-  | UnaryAppl        of (tyarg list * unary_op) * phrase
+  | UnaryAppl        of (tyarg list * UnaryOp.t) * phrase
   | FnAppl           of phrase * phrase list
   | TAbstr           of tyvar list ref * phrase
   | TAppl            of phrase * tyarg list

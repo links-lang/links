@@ -1,6 +1,7 @@
 open CommonTypes
-open Utility
+open Operators
 open Sugartypes
+open Utility
 
 module TyEnv = Env.String
 
@@ -20,9 +21,9 @@ let type_section env =
 
 let type_unary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
-    | `Minus      -> datatype "(Int) -> Int"
-    | `FloatMinus -> datatype "(Float) -> Float"
-    | `Name n     -> TyEnv.lookup env n
+    | UnaryOp.Minus      -> datatype "(Int) -> Int"
+    | UnaryOp.FloatMinus -> datatype "(Float) -> Float"
+    | UnaryOp.Name n     -> TyEnv.lookup env n
 
 let type_binary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
@@ -171,7 +172,7 @@ class transform (env : Types.typing_environment) =
     method row : Types.row -> ('self_type * Types.row) =
       fun row -> (o, row)
 
-    method unary_op : unary_op -> ('self_type * unary_op * Types.datatype) =
+    method unary_op : UnaryOp.t -> ('self_type * UnaryOp.t * Types.datatype) =
       fun op ->
         (o, op, type_unary_op var_env tycon_env op)
 

@@ -1,4 +1,5 @@
 open CommonTypes
+open Operators
 open Utility
 open Ir
 
@@ -800,13 +801,13 @@ struct
               I.condition (ev e1, ec e2, cofv (I.constant (`Bool false)))
           | InfixAppl ((_tyargs, `Or), e1, e2) ->
               I.condition (ev e1, cofv (I.constant (`Bool true)), ec e2)
-          | UnaryAppl ((_tyargs, `Minus), e) ->
+          | UnaryAppl ((_tyargs, UnaryOp.Minus), e) ->
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
-          | UnaryAppl ((_tyargs, `FloatMinus), e) ->
+          | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
-          | UnaryAppl ((tyargs, `Name n), e) when Lib.is_pure_primitive n ->
+          | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
-          | UnaryAppl ((tyargs, `Name n), e) ->
+          | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
           | FnAppl ({node=Var f; _}, es) when Lib.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))

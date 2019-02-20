@@ -1,3 +1,4 @@
+open Operators
 open Sugartypes
 
 (* Make a copy of a value.  You can override any method(s) to get a
@@ -22,8 +23,8 @@ class map :
     method float           : float -> float
     method char            : char -> char
     method bool            : bool -> bool
-    method unary_op        : unary_op -> unary_op
-    method tyunary_op      : tyarg list * unary_op -> tyarg list * unary_op
+    method unary_op        : UnaryOp.t -> UnaryOp.t
+    method tyunary_op      : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t
     method binder          : binder -> binder
     method sentence        : sentence -> sentence
     method section         : Section.t -> Section.t
@@ -91,8 +92,8 @@ class fold :
     method float           : float -> 'self
     method char            : char -> 'self
     method bool            : bool -> 'self
-    method unary_op        : unary_op -> 'self
-    method tyunary_op      : tyarg list * unary_op -> 'self
+    method unary_op        : UnaryOp.t -> 'self
+    method tyunary_op      : tyarg list * UnaryOp.t -> 'self
     method binder          : binder -> 'self
     method sentence        : sentence -> 'self
     method section         : Section.t -> 'self
@@ -199,7 +200,7 @@ object ('self)
   method type_variable   : type_variable -> 'self * type_variable
   method known_type_variable : known_type_variable -> 'self * known_type_variable
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
-  method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
-  method unary_op        : unary_op -> 'self * unary_op
+  method tyunary_op      : tyarg list * UnaryOp.t -> 'self * (tyarg list * UnaryOp.t)
+  method unary_op        : UnaryOp.t -> 'self * UnaryOp.t
   method unknown         : 'a . 'a -> 'self * 'a
 end

@@ -1,3 +1,5 @@
+open Operators
+
 (* The operators named here are the ones that it is difficult or
    impossible to define as "user" infix operators:
 
@@ -18,10 +20,9 @@ module Unary = struct
 
   let from_links v =
     match v with
-    | `Minus -> Minus
-    | `FloatMinus -> Minus
-    | `Not -> Not
-    | `Name name -> Name name
+    | UnaryOp.Minus -> Minus
+    | UnaryOp.FloatMinus -> Minus
+    | UnaryOp.Name name -> Name name
 
   let to_string =
   function

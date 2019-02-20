@@ -1,6 +1,6 @@
 open CommonTypes
 open Utility
-open Types
+open Operators
 open Sugartypes
 
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
@@ -1408,9 +1408,9 @@ let add_empty_usages (p, t) = (p, t, StringMap.empty)
 let type_unary_op env =
   let datatype = datatype env.tycon_env in
   function
-  | `Minus      -> add_empty_usages (datatype "(Int) -> Int")
-  | `FloatMinus -> add_empty_usages (datatype "(Float) -> Float")
-  | `Name n     -> add_usages (Utils.instantiate env.var_env n) (StringMap.singleton n 1)
+  | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) -> Int")
+  | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) -> Float")
+  | UnaryOp.Name n     -> add_usages (Utils.instantiate env.var_env n) (StringMap.singleton n 1)
 
 let type_binary_op ctxt =
   let datatype = datatype ctxt.tycon_env in function

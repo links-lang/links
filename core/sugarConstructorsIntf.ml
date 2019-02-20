@@ -1,6 +1,7 @@
 (* This module contains module signatures used by SugarConstructors module.
    Putting them here allows to avoid repetition. *)
 
+open Operators
 open Sugartypes
 
 (* An abstract type of positions and operations on them.  The core type of
@@ -138,9 +139,9 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> (phrase * phrase) option -> phrase -> phrase
 
   (* Operator applications *)
-  val infix_appl' : ?ppos:t -> phrase -> binop    -> phrase -> phrase
-  val infix_appl  : ?ppos:t -> phrase -> string   -> phrase -> phrase
-  val unary_appl  : ?ppos:t ->           unary_op -> phrase -> phrase
+  val infix_appl' : ?ppos:t -> phrase -> binop     -> phrase -> phrase
+  val infix_appl  : ?ppos:t -> phrase -> string    -> phrase -> phrase
+  val unary_appl  : ?ppos:t ->           UnaryOp.t -> phrase -> phrase
 
   (* XML *)
   val xml

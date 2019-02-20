@@ -1,3 +1,4 @@
+open Operators
 open Sugartypes
 
 (*
@@ -92,7 +93,7 @@ object ('self)
   method sentence'       : sentence' -> 'self * sentence'
   method directive       : directive -> 'self * directive
 *)
-  method unary_op        : unary_op -> 'self * unary_op * Types.datatype
+  method unary_op        : UnaryOp.t -> 'self * UnaryOp.t * Types.datatype
 end
 
 val fun_effects : Types.datatype -> Sugartypes.Pattern.with_pos list list -> Types.row

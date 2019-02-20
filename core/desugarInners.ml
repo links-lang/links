@@ -1,4 +1,5 @@
 open Utility
+open Operators
 open Sugartypes
 
 (* Recursive functions must be used monomorphically inside their
@@ -42,10 +43,10 @@ object (o : 'self_type)
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
           super#phrasenode (InfixAppl ((tyargs, `Name name), e1, e2))
-    | UnaryAppl ((tyargs, `Name name), e) when StringMap.mem name extra_env ->
+    | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (UnaryAppl ((tyargs, `Name name), e))
+          super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
             (* HACK: manage the lexical scope of extras *)
     | Spawn _ as e ->
         let (o, e, t) = super#phrasenode e in

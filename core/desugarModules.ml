@@ -24,6 +24,7 @@
  *
 *)
 open Utility
+open Operators
 open Sugartypes
 open Printf
 open ModuleUtils
@@ -237,7 +238,7 @@ and perform_renaming module_table path term_ht type_ht =
       | bo -> super#binop bo
 
     method! unary_op = function
-      | `Name n -> (self, `Name (resolve n term_shadow_table))
+      | UnaryOp.Name n -> (self, UnaryOp.Name (resolve n term_shadow_table))
       | uo -> super#unary_op uo
 
     method! phrasenode = function

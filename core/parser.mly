@@ -39,6 +39,7 @@ or Menhir it is no longer necessary.
 
 open CommonTypes
 open Utility
+open Operators
 open Sugartypes
 open SugarConstructors
 
@@ -514,7 +515,7 @@ spawn_expression:
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
-| primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (`Name $2) $1 }
+| primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 }
 | block                                                        { $1 }
 | QUERY block                                                  { query ~ppos:$loc None $2 }
 | QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (`Int 0)))) $5 }
@@ -533,9 +534,9 @@ perhaps_exps:
 | loption(exps)                                                { $1 }
 
 unary_expression:
-| MINUS unary_expression                                       { unary_appl ~ppos:$loc `Minus      $2 }
-| MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc `FloatMinus $2 }
-| PREFIXOP unary_expression                                    { unary_appl ~ppos:$loc (`Name $1)  $2 }
+| MINUS unary_expression                                       { unary_appl ~ppos:$loc UnaryOp.Minus      $2 }
+| MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
+| PREFIXOP unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
 | DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None)) }
 

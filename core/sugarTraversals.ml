@@ -8,6 +8,7 @@
    generate all this automatically instead of maintaining this file.
 *)
 
+open Operators
 open Sugartypes
 
 class map =
@@ -36,13 +37,13 @@ class map =
 
     method bool : bool -> bool = function | false -> false | true -> true
 
-    method unary_op : unary_op -> unary_op =
-      function
-      | `Minus -> `Minus
-      | `FloatMinus -> `FloatMinus
-      | `Name _x -> let _x = o#name _x in `Name _x
+    method unary_op : UnaryOp.t -> UnaryOp.t =
+      let open UnaryOp in function
+      | Minus -> Minus
+      | FloatMinus -> FloatMinus
+      | Name _x -> let _x = o#name _x in Name _x
 
-    method tyunary_op : tyarg list * unary_op -> tyarg list * unary_op =
+    method tyunary_op : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t =
       fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
 
     method binder : binder -> binder =
@@ -753,13 +754,13 @@ class fold =
 
     method bool : bool -> 'self_type = function | false -> o | true -> o
 
-    method unary_op : unary_op -> 'self_type =
-      function
-      | `Minus -> o
-      | `FloatMinus -> o
-      | `Name _x -> let o = o#name _x in o
+    method unary_op : UnaryOp.t -> 'self_type =
+      let open UnaryOp in function
+      | Minus -> o
+      | FloatMinus -> o
+      | Name _x -> let o = o#name _x in o
 
-    method tyunary_op : tyarg list * unary_op -> 'self_type =
+    method tyunary_op : tyarg list * UnaryOp.t -> 'self_type =
       fun (_x, _x_i1) -> o#unary_op _x_i1
 
     method binder : binder -> 'self_type =
@@ -1422,13 +1423,13 @@ class fold_map =
     method bool : bool -> ('self_type * bool) =
       function | false -> (o, false) | true -> (o, true)
 
-    method unary_op : unary_op -> ('self_type * unary_op) =
-      function
-      | `Minus -> (o, `Minus)
-      | `FloatMinus -> (o, `FloatMinus)
-      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+    method unary_op : UnaryOp.t -> ('self_type * UnaryOp.t) =
+      let open UnaryOp in function
+      | Minus -> (o, Minus)
+      | FloatMinus -> (o, FloatMinus)
+      | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
-    method tyunary_op : tyarg list * unary_op -> 'self_type * (tyarg list * unary_op) =
+    method tyunary_op : tyarg list * UnaryOp.t -> 'self_type * (tyarg list * UnaryOp.t) =
       fun (_x, _x_i1) ->
         let (o, _x_i1) = o#unary_op _x_i1 in (o, (_x, _x_i1))
 
