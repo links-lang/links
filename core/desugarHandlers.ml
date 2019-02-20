@@ -213,7 +213,7 @@ object
     | _ -> super#phrase {node; pos}
 
   method! bindingnode = function
-    | `Handler (binder, hnlit, annotation) ->
+    | Handler (binder, hnlit, annotation) ->
        let fnlit  = funlit_of_handlerlit hnlit in
        (fun_binding' ?annotation binder fnlit).node
     | b -> super#bindingnode b

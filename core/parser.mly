@@ -301,11 +301,11 @@ declaration:
 nofun_declaration:
 | alien_block                                                  { $1 }
 | ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { with_pos $loc
-                                                                          (`Foreign (binder ~ppos:$loc($4) $4,
+                                                                          (Foreign (binder ~ppos:$loc($4) $4,
                                                                                      $4, $2, $3, datatype $6)) }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                  set assoc (from_option default_fixity $2) ($3.node);
-                                                                 with_pos $loc `Infix }
+                                                                 with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 
@@ -316,10 +316,10 @@ alien_datatypes:
 | alien_datatype+                                              { $1 }
 
 links_module:
-| MODULE module_name moduleblock                               { with_pos $loc($2) (`Module ($2, $3)) }
+| MODULE module_name moduleblock                               { with_pos $loc($2) (Module ($2, $3)) }
 
 alien_block:
-| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (`AlienBlock ($2, $3, $5)) }
+| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (AlienBlock ($2, $3, $5)) }
 
 module_name:
 | CONSTRUCTOR                                                  { $1 }
@@ -362,7 +362,7 @@ signature:
 | SIG op COLON datatype                                        { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (`Type ($2, $3, datatype $5)) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Type ($2, $3, datatype $5)) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -836,11 +836,11 @@ record_labels:
 | separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
-| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (`QualifiedImport $2) }
+| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (QualifiedImport $2) }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
-| exp SEMICOLON                                                { with_pos $loc (`Exp $1) }
+| exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, `Unknown, $5) }
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, `Unknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
@@ -857,10 +857,10 @@ block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
 
 block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (`Exp $2)],
+| bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
                                                                   record ~ppos:$loc []) }
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([with_pos $loc($1) (`Exp $1)],
+| exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
                                                                   record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }

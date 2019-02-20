@@ -65,7 +65,7 @@ object (o : 'self_type)
         (o#with_extra_env extra_env, lam, t)
 
   method! bindingnode = function
-    | `Funs defs ->
+    | Funs defs ->
         (* put the outer bindings in the environment *)
         let o, defs = o#rec_activate_outer_bindings defs in
 
@@ -109,7 +109,7 @@ object (o : 'self_type)
                o#unbind (name_of_binder bndr))
             o defs
         in
-          (o, (`Funs defs))
+          (o, (Funs defs))
     | b -> super#bindingnode b
 
   method! binder : binder -> ('self_type * binder) = function
@@ -129,7 +129,7 @@ object
   method satisfied = has_no_inners
 
   method! bindingnode = function
-    | `Funs defs ->
+    | Funs defs ->
         {< has_no_inners =
             List.for_all
               (fun (_f, _, ((_tyvars, dt_opt), _), _, _, _) ->

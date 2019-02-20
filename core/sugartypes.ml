@@ -327,19 +327,20 @@ and phrasenode = [
 | `Raise
 ]
 and phrase = phrasenode with_pos
-and bindingnode = [
-| `Val     of Pattern.with_pos * (tyvar list * phrase) * location * datatype' option
-| `Fun     of binder * declared_linearity * (tyvar list * funlit) * location * datatype' option
-| `Funs    of (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list
-| `Handler of binder * handlerlit * datatype' option
-| `Foreign of binder * name * name * name * datatype' (* Binder, raw function name, language, external file, type *)
-| `QualifiedImport of name list
-| `Type    of name * (quantifier * tyvar option) list * datatype'
-| `Infix
-| `Exp     of phrase
-| `Module  of name * binding list
-| `AlienBlock of (name * name * ((binder * datatype') list))
-]
+and bindingnode =
+| Val     of (Pattern.with_pos * (tyvar list * phrase) * location * datatype' option)
+| Fun     of (binder * declared_linearity * (tyvar list * funlit) * location * datatype' option)
+| Funs    of (binder * declared_linearity *
+                ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+                location * datatype' option * position) list
+| Handler of (binder * handlerlit * datatype' option)
+| Foreign of (binder * name * name * name * datatype') (* Binder, raw function name, language, external file, type *)
+| QualifiedImport of name list
+| Type    of (name * (quantifier * tyvar option) list * datatype')
+| Infix
+| Exp     of phrase
+| Module  of (name * binding list)
+| AlienBlock of (name * name * ((binder * datatype') list))
 and binding = bindingnode with_pos
 and block_body = binding list * phrase
 and cp_phrasenode =
@@ -530,14 +531,14 @@ struct
   and binding ({node = binding; _}: binding) : StringSet.t (* vars bound in the pattern *)
                                              * StringSet.t (* free vars in the rhs *) =
     match binding with
-    | `Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
-    | `Handler (bndr, hnlit, _) ->
+    | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
+    | Handler (bndr, hnlit, _) ->
        let name = singleton (name_of_binder bndr) in
        name, (diff (handlerlit hnlit) name)
-    | `Fun (bndr, _, (_, fn), _, _) ->
+    | Fun (bndr, _, (_, fn), _, _) ->
        let name = singleton (name_of_binder bndr) in
        name, (diff (funlit fn) name)
-    | `Funs funs ->
+    | Funs funs ->
         let names, rhss =
           List.fold_right
             (fun (bndr, _, (_, rhs), _, _, _) (names, rhss) ->
@@ -545,19 +546,19 @@ struct
             funs
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | `Foreign (bndr, _, _, _, _) -> singleton (name_of_binder bndr), empty
-    | `QualifiedImport _
-    | `Type _
-    | `Infix -> empty, empty
-    | `Exp p -> empty, phrase p
-    | `AlienBlock (_, _, decls) ->
+    | Foreign (bndr, _, _, _, _) -> singleton (name_of_binder bndr), empty
+    | QualifiedImport _
+    | Type _
+    | Infix -> empty, empty
+    | Exp p -> empty, phrase p
+    | AlienBlock (_, _, decls) ->
         let bound_foreigns =
           List.fold_left (fun acc (bndr, _) ->
               StringSet.add (name_of_binder bndr) acc)
             (StringSet.empty) decls in
         bound_foreigns, empty
         (* TODO: this needs to be implemented *)
-    | `Module _ -> failwith "Freevars for modules not implemented yet"
+    | Module _ -> failwith "Freevars for modules not implemented yet"
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and handlerlit (_, m, cases, params : handlerlit) : StringSet.t =

@@ -1065,27 +1065,28 @@ struct
         | [] -> ec e
         | { Sugartypes.node = b; _ }::bs ->
             begin
+              let open Sugartypes in
               match b with
-                | `Val ({Sugartypes.node=Sugartypes.Pattern.Variable bndr; _}, (_, body), _, _)
-                     when Sugartypes.binder_has_type bndr ->
-                    let x  = Sugartypes.name_of_binder bndr in
-                    let xt = Sugartypes.type_of_binder_exn bndr in
+                | Val ({node=Pattern.Variable bndr; _}, (_, body), _, _)
+                     when binder_has_type bndr ->
+                    let x  = name_of_binder bndr in
+                    let xt = type_of_binder_exn bndr in
                     let x_info = (xt, x, scope) in
                       I.letvar
                         (x_info,
                          ec body,
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | `Val (p, (_, body), _, _) ->
+                | Val (p, (_, body), _, _) ->
                     let p, penv = CompilePatterns.desugar_pattern scope p in
                     let env' = env ++ penv in
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
-                | `Fun (bndr, _, (tyvars, ([ps], body)), location, _)
-                     when Sugartypes.binder_has_type bndr ->
-                    let f  = Sugartypes.name_of_binder bndr in
-                    let ft = Sugartypes.type_of_binder_exn bndr in
+                | Fun (bndr, _, (tyvars, ([ps], body)), location, _)
+                     when binder_has_type bndr ->
+                    let f  = name_of_binder bndr in
+                    let ft = type_of_binder_exn bndr in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
@@ -1098,14 +1099,14 @@ struct
                         env
                         ((ft, f, scope), (tyvars, (ps, body)), location)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
-                | `Exp e' ->
+                | Exp e' ->
                     I.comp env (`Any, ev e', eval_bindings scope env bs e)
-                | `Funs defs ->
+                | Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
                         (fun (bndr, _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
-                          let f          = Sugartypes.name_of_binder     bndr in
-                          let outer_opt  = Sugartypes.type_of_binder bndr in
+                          let f          = name_of_binder     bndr in
+                          let outer_opt  = type_of_binder bndr in
                           let outer      = OptionUtils.val_of outer_opt in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
@@ -1115,8 +1116,8 @@ struct
                       List.map
                         (fun (bndr, _, ((tyvars, _), (pss, body)), location, _, _) ->
                           assert (List.length pss = 1);
-                          let f      = Sugartypes.name_of_binder     bndr in
-                          let ft_opt = Sugartypes.type_of_binder bndr in
+                          let f      = name_of_binder     bndr in
+                          let ft_opt = type_of_binder bndr in
                           let ft     = OptionUtils.val_of ft_opt in
                           let ps     = List.hd pss in
                            let ps, body_env =
@@ -1131,17 +1132,18 @@ struct
                         defs
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
-                | `Foreign (bndr, raw_name, language, _file, _)
-                     when Sugartypes.binder_has_type bndr ->
-                    let x  = Sugartypes.name_of_binder bndr in
-                    let xt = Sugartypes.type_of_binder_exn bndr in
+                | Foreign (bndr, raw_name, language, _file, _)
+                     when binder_has_type bndr ->
+                    let x  = name_of_binder bndr in
+                    let xt = type_of_binder_exn bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | `Type _
-                | `Infix ->
+                | Type _
+                | Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | `Handler _ | `QualifiedImport _ | `Fun _ | `Foreign _ | `AlienBlock _ | `Module _ -> assert false
+                | Handler _ | QualifiedImport _ | Fun _ | Foreign _
+                | AlienBlock _ | Module _ -> assert false
             end
 
   and evalv env e =

@@ -106,17 +106,17 @@ struct
     | `DBUpdate _ -> false
   and is_pure_binding ({node ; _ }: binding) = match node with
       (* need to check that pattern matching cannot fail *)
-    | `QualifiedImport _
-    | `AlienBlock _
-    | `Module _
-    | `Fun _
-    | `Funs _
-    | `Infix
-    | `Type _
-    | `Handler _
-    | `Foreign _ -> true
-    | `Exp p -> is_pure p
-    | `Val (pat, (_, rhs), _, _) ->
+    | QualifiedImport _
+    | AlienBlock _
+    | Module _
+    | Fun _
+    | Funs _
+    | Infix
+    | Type _
+    | Handler _
+    | Foreign _ -> true
+    | Exp p -> is_pure p
+    | Val (pat, (_, rhs), _, _) ->
         is_safe_pattern pat && is_pure rhs
   and is_safe_pattern {node = pat; _} = let open Pattern in
     match pat with
@@ -3594,7 +3594,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let empty_context = empty_context (context.Types.effect_row) in
 
     let typed, ctxt, usage = match def with
-      | `Val (pat, (_, body), location, datatype) ->
+      | Val (pat, (_, body), location, datatype) ->
           let body = tc body in
           let pat = tpc pat in
           let penv = pattern_env pat in
@@ -3623,11 +3623,11 @@ and type_binding : context -> binding -> binding * context * usagemap =
               else
                 [], erase_pat pat, penv
           in
-            `Val (pat, (tyvars, body), location, datatype),
+            Val (pat, (tyvars, body), location, datatype),
             {empty_context with
               var_env = penv},
             usage
-      | `Fun (bndr, lin, (_, (pats, body)), location, t) ->
+      | Fun (bndr, lin, (_, (pats, body)), location, t) ->
           let name = name_of_binder bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let pats = List.map (List.map tpc) pats in
@@ -3696,14 +3696,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
           (* generalise*)
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
           let ft = Instantiate.freshen_quantifiers ft in
-            (`Fun (set_binder_type bndr ft,
+            (Fun (set_binder_type bndr ft,
                    lin,
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
                    location, t),
              {empty_context with
                 var_env = Env.bind Env.empty (name, ft)},
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
-      | `Funs defs ->
+      | Funs defs ->
           (*
             Compute initial types for the functions using
             - the patterns
@@ -3853,29 +3853,29 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let defined = List.map (fun (bndr, _, _, _, _, _) -> name_of_binder bndr) defs
 
           in
-            `Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
+            Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
 
-      | `Foreign (bndr, raw_name, language, file, (dt1, Some datatype)) ->
+      | Foreign (bndr, raw_name, language, file, (dt1, Some datatype)) ->
           (* Ensure that we quantify FTVs *)
           let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
           let datatype = Instantiate.freshen_quantifiers datatype in
-          (`Foreign (set_binder_type bndr datatype, raw_name, language, file, (dt1, Some datatype)),
+          (Foreign (set_binder_type bndr datatype, raw_name, language, file, (dt1, Some datatype)),
            (bind_var empty_context (name_of_binder bndr, datatype)),
            StringMap.empty)
-      | `Foreign _ -> assert false
-      | `Type (name, vars, (_, Some dt)) as t ->
+      | Foreign _ -> assert false
+      | Type (name, vars, (_, Some dt)) as t ->
           t, bind_tycon empty_context (name, `Alias (List.map (snd ->- val_of) vars, dt)), StringMap.empty
-      | `Type _ -> assert false
-      | `Infix -> `Infix, empty_context, StringMap.empty
-      | `Exp e ->
+      | Type _ -> assert false
+      | Infix -> Infix, empty_context, StringMap.empty
+      | Exp e ->
           let e = tc e in
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
-          `Exp (erase e), empty_context, usages e
-      | `Handler _
-      | `QualifiedImport _
-      | `AlienBlock _
-      | `Module _ -> assert false
+          Exp (erase e), empty_context, usages e
+      | Handler _
+      | QualifiedImport _
+      | AlienBlock _
+      | Module _ -> assert false
     in
       {node = typed; pos}, ctxt, usage
 and type_regex typing_env : regex -> regex =

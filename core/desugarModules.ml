@@ -62,9 +62,9 @@ object(self)
   method get_bindings = List.rev bindings
 
   method! binding = function
-    | {node = `Module (_, bindings); _} ->
+    | {node = Module (_, bindings); _} ->
         self#list (fun o -> o#binding) bindings
-    | {node = `QualifiedImport _; _} -> self
+    | {node = QualifiedImport _; _} -> self
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
   method! program = function
@@ -93,7 +93,7 @@ let group_bindings : binding list -> binding list list = fun bindings ->
   let rec group_bindings_inner acc ret = function
     | [] when acc = [] -> List.rev ret
     | [] -> List.rev ((List.rev acc) :: ret)
-    | ({node=`Fun (_, _, _, _, _); _} as bnd) :: bs ->
+    | ({node=Fun (_, _, _, _, _); _} as bnd) :: bs ->
         group_bindings_inner (bnd :: acc) ret bs
     | b :: bs ->
         (* End block of functions, need to start a new scope *)
@@ -132,30 +132,30 @@ let rec rename_binders_get_shadow_tbl module_table
          (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
 
     method! bindingnode = function
-      | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
+      | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           let (o, bnd') = self#binder bnd in
-          (o, `Fun (bnd', lin, (tvs, fnlit), loc, dt_opt))
-      | `Type t -> (self, `Type t)
-      | `Val v -> (self, `Val v)
-      | `Exp b -> (self, `Exp b)
-      | `Foreign (bnd, raw_name, lang, ext_file, dt) ->
+          (o, Fun (bnd', lin, (tvs, fnlit), loc, dt_opt))
+      | Type t -> (self, Type t)
+      | Val v -> (self, Val v)
+      | Exp b -> (self, Exp b)
+      | Foreign (bnd, raw_name, lang, ext_file, dt) ->
           let (o, bnd') = self#binder bnd in
-          (o, `Foreign (bnd', raw_name, lang, ext_file, dt))
-      | `AlienBlock (lang, lib, decls) ->
+          (o, Foreign (bnd', raw_name, lang, ext_file, dt))
+      | AlienBlock (lang, lib, decls) ->
           let (o, decls') = self#list (fun o (bnd, dt) ->
             let (o, bnd') = o#binder bnd in
             (o, (bnd', dt))) decls in
-          (o, `AlienBlock (lang, lib, decls'))
-      | `QualifiedImport [] -> assert false
-      | `QualifiedImport ((hd :: tl) as ns) ->
+          (o, AlienBlock (lang, lib, decls'))
+      | QualifiedImport [] -> assert false
+      | QualifiedImport ((hd :: tl) as ns) ->
           (* Try to resolve head of PQN. This will either resolve to itself, or
            * to a prefix. Once we have the prefix, we can construct the FQN. *)
           (* Qualified names must (by parser construction) be of at least length 1. *)
           let final = List.hd (List.rev ns) in
           let prefix = resolve hd term_shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
-          (self#bind_open final fqn, `QualifiedImport ns)
-      | `Module (n, bs) ->
+          (self#bind_open final fqn, QualifiedImport ns)
+      | Module (n, bs) ->
           let new_path = path @ [n] in
           let fqn = lst_to_path new_path in
           (* New FQN for module must shadow n *)
@@ -166,9 +166,9 @@ let rec rename_binders_get_shadow_tbl module_table
           (* Recursively get *and rename* inner scope *)
           let (_, _, bindings') =
               process_binding_list bs module_table new_path o_term_ht o_type_ht in
-          (* Finally, return `Module with updated bindings. The module itself
+          (* Finally, return Module with updated bindings. The module itself
            * will be flattened out on the flattening pass. *)
-          (o, `Module (n, bindings'))
+          (o, Module (n, bindings'))
       | b -> super#bindingnode b
   end
 
@@ -208,28 +208,28 @@ and perform_renaming module_table path term_ht type_ht =
           (self, (xs', rv'))
 
     method! bindingnode = function
-      | `Module (n, bs) ->
-          (self, `Module (n, bs))
-      | `AlienBlock ab ->
-          (self, `AlienBlock ab)
-      | `Foreign f -> (self, `Foreign f)
-      | `Type (n, tvs, dt) ->
+      | Module (n, bs) ->
+          (self, Module (n, bs))
+      | AlienBlock ab ->
+          (self, AlienBlock ab)
+      | Foreign f -> (self, Foreign f)
+      | Type (n, tvs, dt) ->
           (* Add type binding *)
           let fqn = make_path_string path n in
           let o = self#bind_shadow_type n fqn in
           let (o, dt') = o#datatype' dt in
-          (o, `Type (fqn, tvs, dt'))
-      | `Val (pat, (tvs, phr), loc, dt_opt) ->
+          (o, Type (fqn, tvs, dt'))
+      | Val (pat, (tvs, phr), loc, dt_opt) ->
           let (_, phr') = self#phrase phr in
           let (o, pat') = self#pattern pat in
           let (o, dt_opt') = o#option (fun o -> o#datatype') dt_opt in
-          (o, `Val (pat', (tvs, phr'), loc, dt_opt'))
-      | `Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
+          (o, Val (pat', (tvs, phr'), loc, dt_opt'))
+      | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           (* Binder will have been changed. We need to add the funlit pattern
            * to the env. *)
           let (_, fnlit') = self#funlit fnlit in
           let (o, dt_opt') = self#option (fun o -> o#datatype') dt_opt in
-          (o, `Fun (bnd, lin, (tvs, fnlit'), loc, dt_opt'))
+          (o, Fun (bnd, lin, (tvs, fnlit'), loc, dt_opt'))
       | b -> super#bindingnode b
 
     method! binop = function

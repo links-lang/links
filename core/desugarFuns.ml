@@ -77,8 +77,8 @@ object (o : 'self_type)
         let f = gensym ~prefix:"_fun_" () in
         let e =
           block_node
-            ([with_dummy_pos (`Fun (unwrap_def ( binder ~ty:ft f, lin, ([], lam)
-                                               , location, None)))],
+            ([with_dummy_pos (Fun (unwrap_def ( binder ~ty:ft f, lin, ([], lam)
+                                              , location, None)))],
              var f)
         in
           (o, e, ft)
@@ -104,18 +104,18 @@ object (o : 'self_type)
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | `Fun _ as b ->
+    | Fun _ as b ->
         let (o, b) = super#bindingnode b in
           begin
             match b with
-              | `Fun r -> (o, `Fun (unwrap_def r))
+              | Fun r -> (o, Fun (unwrap_def r))
               | _ -> assert false
           end
-    | `Funs _ as b ->
+    | Funs _ as b ->
         let (o, b) = super#bindingnode b in
           begin
             match b with
-              | `Funs defs -> (o, `Funs (List.map unwrap_def_dp defs))
+              | Funs defs -> (o, Funs (List.map unwrap_def_dp defs))
               | _ -> assert false
           end
     | b -> super#bindingnode b
@@ -135,10 +135,10 @@ object
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | `Fun (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t) as b ->
+    | Fun (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t) as b ->
         super#bindingnode b
-    | `Fun _ -> {< has_no_funs = false >}
-    | `Funs defs as b ->
+    | Fun _ -> {< has_no_funs = false >}
+    | Funs defs as b ->
         if
           List.exists
             (function

@@ -28,22 +28,22 @@ let refine_bindings : binding list -> binding list =
             match binding with
               (* Modules & qualified imports will have been eliminated by now. Funs
                * aren't introduced yet. *)
-              | `Handler _
-              | `Module _
-              | `QualifiedImport _
-              | `AlienBlock _
-              | `Funs _ -> assert false
-              | `Exp _
-              | `Foreign _
-              | `Type _
-              | `Val _ ->
+              | Handler _
+              | Module _
+              | QualifiedImport _
+              | AlienBlock _
+              | Funs _ -> assert false
+              | Exp _
+              | Foreign _
+              | Type _
+              | Val _ ->
                  (* collapse the group we're collecting, then start a
                      new empty group *)
                  ([], add [bind] (add thisgroup othergroups))
-              | `Fun _ ->
+              | Fun _ ->
                  (* Add binding to group *)
                  (bind::thisgroup, othergroups)
-              | `Infix ->
+              | Infix ->
                  (* discard binding *)
                  (thisgroup, othergroups))
             bindings ([], [])
@@ -55,7 +55,7 @@ let refine_bindings : binding list -> binding list =
       = fun defs ->
         let defs = List.map
           (function
-            | {node=`Fun (bndr, _, (_, funlit), _, _); _} ->
+            | {node=Fun (bndr, _, (_, funlit), _, _); _} ->
                (name_of_binder bndr, funlit)
             | _ -> assert false) defs in
         let names = StringSet.from_list (List.map fst defs) in
@@ -68,12 +68,12 @@ let refine_bindings : binding list -> binding list =
     let groupFuns pos (funs : binding list) : binding list =
       (* Unwrap from the bindingnode type *)
       let unFun = function
-        | {node = `Fun (b, lin, (_, funlit), location, dt); pos} ->
+        | {node = Fun (b, lin, (_, funlit), location, dt); pos} ->
            (b, lin, (([], None), funlit), location, dt, pos)
         | _ -> assert false in
       let find_fun name =
         List.find (function
-                     | {node=`Fun (bndr, _, _, _, _); _} ->
+                     | {node=Fun (bndr, _, _, _, _); _} ->
                         name = name_of_binder bndr
                      | _ -> false)
           funs in
@@ -86,8 +86,8 @@ let refine_bindings : binding list -> binding list =
                  | [(bndr, lin, ((tyvars, _), body), location, dt, pos)]
                      when not (StringSet.mem (name_of_binder bndr)
                                              (Freevars.funlit body)) ->
-                    with_pos pos (`Fun (bndr, lin, (tyvars, body), location, dt))
-                 | _ -> with_pos pos (`Funs (funs)))
+                    with_pos pos (Fun (bndr, lin, (tyvars, body), location, dt))
+                 | _ -> with_pos pos (Funs (funs)))
 
           sccs
     in
@@ -98,7 +98,7 @@ let refine_bindings : binding list -> binding list =
            Compute the position corresponding to the whole collection
            of functions.
         *)
-      | {node=`Fun _; _}::_ as funs -> groupFuns (Lexing.dummy_pos, Lexing.dummy_pos, None) funs
+      | {node=Fun _; _}::_ as funs -> groupFuns (Lexing.dummy_pos, Lexing.dummy_pos, None) funs
       | binds -> binds in
     concat_map groupBindings initial_groups
 
@@ -263,19 +263,19 @@ module RefineTypeBindings = struct
       let group, groups =
         List.fold_right (fun ({node=binding; _} as bind) (currentGroup, otherGroups) ->
 	  match binding with
-          | `Handler _  (* Desugared at this point *)
-          | `Module _
-          | `QualifiedImport _
-          | `AlienBlock _
-          | `Funs _ -> assert false
-          | `Fun _
-          | `Foreign _
-          | `Val _
-          | `Exp _
-          | `Infix ->
+          | Handler _  (* Desugared at this point *)
+          | Module _
+          | QualifiedImport _
+          | AlienBlock _
+          | Funs _ -> assert false
+          | Fun _
+          | Foreign _
+          | Val _
+          | Exp _
+          | Infix ->
               (* Collapse and start a new group *)
               ([], add [bind] (add currentGroup otherGroups))
-          | `Type _ ->
+          | Type _ ->
               (* Add to this group *)
               (bind :: currentGroup, otherGroups)
         ) bindings ([], [])
@@ -315,7 +315,7 @@ module RefineTypeBindings = struct
       let ht = Hashtbl.create 30 in
       List.iter (fun {node = bind; pos} ->
         match bind with
-          | `Type (name, _, _ as tyTy) ->
+          | Type (name, _, _ as tyTy) ->
               let refs = typeReferences tyTy typeHt in
               let referencesSelf = refersToSelf tyTy refs in
               Hashtbl.add ht name (refs, referencesSelf, pos)
@@ -390,11 +390,11 @@ module RefineTypeBindings = struct
         thd3 (Hashtbl.find ri name) in
       List.map (fun name ->
         let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
-        with_pos (getPos name) (`Type res)
+        with_pos (getPos name) (Type res)
       ) sccs
 
   let isTypeGroup : binding list -> bool = function
-    | {node = `Type _; _} :: _xs -> true
+    | {node = Type _; _} :: _xs -> true
     | _ -> false
 
   (* Performs type refinement on a binding group. *)
@@ -404,7 +404,7 @@ module RefineTypeBindings = struct
       let ht = Hashtbl.create 30 in
       List.iter (fun {node; _} ->
         match node with
-          | `Type (name, _, _ as tyTy) ->
+          | Type (name, _, _ as tyTy) ->
             Hashtbl.add ht name tyTy;
           | _ -> assert false;
       ) binds;

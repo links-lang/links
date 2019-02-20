@@ -173,18 +173,18 @@ module SugarConstructors (Position : Pos)
   (* Create a function binding. *)
   let fun_binding ?(ppos=dp) sig_opt (linearity, bndr, args, location, blk) =
     let datatype = datatype_opt_of_sig_opt sig_opt bndr in
-    with_pos ppos (`Fun (binder bndr, linearity,
+    with_pos ppos (Fun (binder bndr, linearity,
                          ([], (args, blk)), location, datatype))
 
   let fun_binding' ?(ppos=dp) ?(linearity=`Unl) ?(tyvars=[])
         ?(location=`Unknown) ?annotation bndr fnlit =
-    with_pos ppos (`Fun (bndr, linearity, (tyvars, fnlit), location, annotation))
+    with_pos ppos (Fun (bndr, linearity, (tyvars, fnlit), location, annotation))
 
 
   (* Create a handler binding. *)
   let handler_binding ?(ppos=dp) sig_opt (name, handlerlit) =
     let datatype = datatype_opt_of_sig_opt sig_opt name in
-    with_pos ppos (`Handler (binder name, handlerlit, datatype))
+    with_pos ppos (Handler (binder name, handlerlit, datatype))
 
   (* Create a Val binding.  This function takes either a name for a variable
      pattern or an already constructed pattern.  In the latter case no signature
@@ -198,7 +198,7 @@ module SugarConstructors (Position : Pos)
       | Pat pat ->
          assert (sig_opt = NoSig);
          (pat, None) in
-    with_pos ppos (`Val (pat, ([], phrase), location, datatype))
+    with_pos ppos (Val (pat, ([], phrase), location, datatype))
 
   (* A commonly used wrapper around val_binding *)
   let val_binding ?(ppos=dp) pat phrase =

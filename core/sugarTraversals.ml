@@ -651,19 +651,19 @@ class map =
 
     method bindingnode : bindingnode -> bindingnode =
       function
-      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x    = o#pattern _x in
           let _x_i2 = o#phrase _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
-      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          in Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
+      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i2 = o#funlit _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))
-      | `Funs _x ->
+          in Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))
+      | Funs _x ->
           let _x =
             o#list
               (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
@@ -674,23 +674,23 @@ class map =
                  let _x_i5 = o#position _x_i5
                  in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
-          in `Funs _x
-      | `Handler (b, hnlit, t) ->
+          in Funs _x
+      | Handler (b, hnlit, t) ->
           let b = o#binder b in
           let hnlit = o#handlerlit hnlit in
           let t     = o#option (fun o -> o#unknown) t in
-          `Handler (b, hnlit, t)
-      | `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+          Handler (b, hnlit, t)
+      | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
           let _x_i2 = o#name _x_i2 in
           let _x_i3 = o#name _x_i3 in
           let _x_i4 = o#datatype' _x_i4 in
-          `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
-      | `QualifiedImport _xs ->
+          Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
+      | QualifiedImport _xs ->
           let _xs = o#list (fun o -> o#name) _xs in
-          `QualifiedImport _xs
-      | `Type ((_x, _x_i1, _x_i2)) ->
+          QualifiedImport _xs
+      | Type ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 =
             o#list
@@ -699,21 +699,21 @@ class map =
                  let _x_i1 = o#unknown _x_i1
                  in (_x, _x_i1))
               _x_i1
-          in let _x_i2 = o#datatype' _x_i2 in `Type ((_x, _x_i1, _x_i2))
-      | `Infix -> `Infix
-      | `Exp _x -> let _x = o#phrase _x in `Exp _x
-      | `Module (n, bs) ->
+          in let _x_i2 = o#datatype' _x_i2 in Type ((_x, _x_i1, _x_i2))
+      | Infix -> Infix
+      | Exp _x -> let _x = o#phrase _x in Exp _x
+      | Module (n, bs) ->
           let n = o#name n in
           let bs = o#list (fun o -> o#binding) bs in
-          `Module (n, bs)
-      | `AlienBlock (lang, lib, dts) ->
+          Module (n, bs)
+      | AlienBlock (lang, lib, dts) ->
           let lang = o#name lang in
           let lib = o#name lib in
           let dts = o#list (fun o (b, dt) ->
             let b = o#binder b in
             let dt = o#datatype' dt in
             (b, dt)) dts in
-          `AlienBlock (lang, lib, dts)
+          AlienBlock (lang, lib, dts)
 
     method binding : binding -> binding =
       fun {node; pos} ->
@@ -1308,19 +1308,19 @@ class fold =
 
     method bindingnode : bindingnode -> 'self_type =
       function
-      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let o = o#pattern _x in
           let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
-      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let o = o#binder _x in
           let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#funlit _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
-      | `Funs _x ->
+      | Funs _x ->
           let o =
             o#list
               (fun o (_x, _x1, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
@@ -1332,20 +1332,20 @@ class fold =
                  let o = o#position _x_i5 in o)
               _x
           in o
-      | `Handler (b, hnlit, t) ->
+      | Handler (b, hnlit, t) ->
           let o = o#binder b in
           let o = o#handlerlit hnlit in
           let o = o#option (fun o -> o#unknown) t in o
-      | `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+      | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in
           let o = o#name _x_i2 in
           let o = o#name _x_i3 in
           let o = o#datatype' _x_i4 in o
-      | `QualifiedImport _xs ->
+      | QualifiedImport _xs ->
           let o = o#list (fun o -> o#name) _xs in
           o
-      | `Type ((_x, _x_i1, _x_i2)) ->
+      | Type ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o =
             o#list
@@ -1355,13 +1355,13 @@ class fold =
                  in o)
               _x_i1
           in let o = o#datatype' _x_i2 in o
-      | `Infix -> o
-      | `Exp _x -> let o = o#phrase _x in o
-      | `Module (n, bs) ->
+      | Infix -> o
+      | Exp _x -> let o = o#phrase _x in o
+      | Module (n, bs) ->
           let o = o#name n in
           let o = o#list (fun o -> o#binding) bs in
           o
-      | `AlienBlock (lang, lib, dts) ->
+      | AlienBlock (lang, lib, dts) ->
           let o = o#name lang in
           let o = o#name lib in
           let o = o#list (fun o (b, dt)->
@@ -2091,19 +2091,19 @@ class fold_map =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-      | `Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x   ) = o#pattern _x in
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
-      | `Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+          in (o, (Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
+      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i2) = o#funlit _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (`Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
-      | `Funs _x ->
+          in (o, (Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
+      | Funs _x ->
           let (o, _x) =
             o#list
               (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
@@ -2114,23 +2114,23 @@ class fold_map =
                  let (o, _x_i5) = o#position _x_i5
                  in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
-          in (o, (`Funs _x))
-      | `Handler (b, hnlit, t) ->
+          in (o, (Funs _x))
+      | Handler (b, hnlit, t) ->
           let (o, b) = o#binder b in
           let (o, hnlit) = o#handlerlit hnlit in
           let (o, t) = o#option (fun o -> o#unknown) t in
-          (o, `Handler (b, hnlit, t))
-      | `Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
+          (o, Handler (b, hnlit, t))
+      | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#name _x_i1 in
           let (o, _x_i2) = o#name _x_i2 in
           let (o, _x_i3) = o#name _x_i3 in
           let (o, _x_i4) = o#datatype' _x_i4
-          in (o, (`Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
-      | `QualifiedImport _xs ->
+          in (o, (Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
+      | QualifiedImport _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
-          (o, `QualifiedImport _xs)
-      | `Type ((_x, _x_i1, _x_i2)) ->
+          (o, QualifiedImport _xs)
+      | Type ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) =
             o#list
@@ -2140,14 +2140,14 @@ class fold_map =
                  in (o, (_x, _x_i1)))
               _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
-          in (o, (`Type ((_x, _x_i1, _x_i2))))
-      | `Infix -> (o, `Infix)
-      | `Exp _x -> let (o, _x) = o#phrase _x in (o, (`Exp _x))
-      | `Module (n, bs) ->
+          in (o, (Type ((_x, _x_i1, _x_i2))))
+      | Infix -> (o, Infix)
+      | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
+      | Module (n, bs) ->
           let (o, n) = o#string n in
           let (o, bs) = o#list (fun o -> o#binding) bs in
-          (o, (`Module (n, bs)))
-      | `AlienBlock (lang, lib, dts) ->
+          (o, (Module (n, bs)))
+      | AlienBlock (lang, lib, dts) ->
           let (o, lang) = o#name lang in
           let (o, lib) = o#name lib in
           let (o, dts) = o#list (fun o (b, dt) ->
@@ -2155,7 +2155,7 @@ class fold_map =
             let (o, dt) = o#datatype' dt in
             (o, (b, dt))
           ) dts in
-          (o, (`AlienBlock (lang, lib, dts)))
+          (o, (AlienBlock (lang, lib, dts)))
 
     method binding : binding -> ('self_type * binding) =
       fun {node; pos} ->

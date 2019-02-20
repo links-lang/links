@@ -73,8 +73,8 @@ object (self)
   method! bindingnode = function
     (* type declarations bind variables; exclude those from the
        analysis. *)
-    | `Type _    -> self
-    | b          -> super#bindingnode b
+    | Type _    -> self
+    | b         -> super#bindingnode b
 
   method! datatypenode = function
     | `TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
@@ -479,7 +479,7 @@ object (self)
     | p -> super#phrasenode p
 
   method! bindingnode = function
-    | `Type (t, args, dt) ->
+    | Type (t, args, dt) ->
         let args, dt' = Desugar.typename alias_env t args dt in
         let (name, vars) = (t, args) in
         let (t, dt) =
@@ -489,19 +489,19 @@ object (self)
           (* NB: type aliases are scoped; we allow shadowing.
              We also allow type aliases to shadow abstract types. *)
           ({< alias_env = SEnv.bind alias_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) >},
-           `Type (name, vars, (t, Some dt)))
+           Type (name, vars, (t, Some dt)))
 
-    | `Val (pat, (tyvars, p), loc, dt) ->
+    | Val (pat, (tyvars, p), loc, dt) ->
         let o, pat = self#pattern pat in
         let o, p   = o#phrase p in
         let o, loc = o#location loc in
-          o, `Val (pat, (tyvars, p), loc, opt_map (Desugar.datatype' map alias_env) dt)
-    | `Fun (bind, lin, (tyvars, fl), loc, dt) ->
+          o, Val (pat, (tyvars, p), loc, opt_map (Desugar.datatype' map alias_env) dt)
+    | Fun (bind, lin, (tyvars, fl), loc, dt) ->
         let o, bind = self#binder bind in
         let o, fl   = o#funlit fl in
         let o, loc  = o#location loc in
-          o, `Fun (bind, lin, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
-    | `Funs binds ->
+          o, Fun (bind, lin, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
+    | Funs binds ->
         let o, binds =
           super#list
             (fun o (bind, lin, (tyvars, fl), loc, dt, pos) ->
@@ -512,11 +512,11 @@ object (self)
                let o, pos  = o#position pos
                in (o, (bind, lin, (tyvars, fl), loc, dt, pos)))
             binds
-        in o, `Funs binds
-    | `Foreign (bind, raw_name, lang, file, dt) ->
+        in o, Funs binds
+    | Foreign (bind, raw_name, lang, file, dt) ->
         let _, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
-        self, `Foreign (bind, raw_name, lang, file, dt')
+        self, Foreign (bind, raw_name, lang, file, dt')
     | b -> super#bindingnode b
 
   method! sentence =

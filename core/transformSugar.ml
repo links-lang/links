@@ -763,15 +763,15 @@ class transform (env : Types.typing_environment) =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
-      | `Val (p, (tyvars, e), location, t) ->
+      | Val (p, (tyvars, e), location, t) ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
          let (o, e, _) = o#phrase e in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, p) = o#pattern p in
          let (o, t) = optionu o (fun o -> o#datatype') t in
-         (o, `Val (p, (tyvars, e), location, t))
-      | `Fun (bndr, lin, (tyvars, lam), location, t) when binder_has_type bndr ->
+         (o, Val (p, (tyvars, e), location, t))
+      | Fun (bndr, lin, (tyvars, lam), location, t) when binder_has_type bndr ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
          let inner_effects = fun_effects (type_of_binder_exn bndr) (fst lam) in
@@ -779,9 +779,9 @@ class transform (env : Types.typing_environment) =
          let o = o#restore_quantifiers outer_tyvars in
          let (o, bndr) = o#binder bndr in
          let (o, t) = optionu o (fun o -> o#datatype') t in
-         (o, `Fun (bndr, lin, (tyvars, lam), location, t))
-      | `Fun _ -> failwith "Unannotated non-recursive function binding"
-      | `Funs defs ->
+         (o, Fun (bndr, lin, (tyvars, lam), location, t))
+      | Fun _ -> failwith "Unannotated non-recursive function binding"
+      | Funs defs ->
          (* put the inner bindings in the environment *)
          let o = o#rec_activate_inner_bindings defs in
 
@@ -790,20 +790,20 @@ class transform (env : Types.typing_environment) =
 
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
-         (o, (`Funs defs))
-      | `Handler _ -> assert false
-      | `Foreign (f, raw_name, language, file, t) ->
+         (o, (Funs defs))
+      | Handler _ -> assert false
+      | Foreign (f, raw_name, language, file, t) ->
          let (o, f) = o#binder f in
-         (o, `Foreign (f, raw_name, language, file, t))
-      | `Type (name, vars, (_, Some dt)) as e ->
+         (o, Foreign (f, raw_name, language, file, t))
+      | Type (name, vars, (_, Some dt)) as e ->
          let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
          {< tycon_env=tycon_env >}, e
-      | `Type _ -> failwith "Unannotated type alias"
-      | `Infix -> (o, `Infix)
-      | `Exp e -> let (o, e, _) = o#phrase e in (o, `Exp e)
-      | `AlienBlock _ -> assert false
-      | `Module _ -> assert false
-      | `QualifiedImport _ -> assert false
+      | Type _ -> failwith "Unannotated type alias"
+      | Infix -> (o, Infix)
+      | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
+      | AlienBlock _ -> assert false
+      | Module _ -> assert false
+      | QualifiedImport _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
       fun {node; pos} ->

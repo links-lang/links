@@ -2,6 +2,8 @@
  Check whether an experimental feature is enabled before use.
  **)
 
+open Sugartypes
+
 module BS = Basicsettings
 
 let get setting = Settings.get_value setting
@@ -32,7 +34,7 @@ object
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | `Handler _ when not (get BS.Handlers.enabled) ->
+    | Handler _ when not (get BS.Handlers.enabled) ->
        failwith "Handlers are only allowed with setting enable_handlers set to true."
     | b -> super#bindingnode b
 end
