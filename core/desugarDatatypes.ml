@@ -85,10 +85,10 @@ object (self)
         o#datatype t
     | dt -> super#datatypenode dt
 
-  method! row_var = function
-    | `Closed               -> self
-    | `Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
-    | `Recursive (s, r)     -> let o = self#bind (s, (`Row, None), `Rigid) in o#row r
+  method! row_var = let open Datatype in function
+    | Closed               -> self
+    | Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
+    | Recursive (s, r)     -> let o = self#bind (s, (`Row, None), `Rigid) in o#row r
 
   method! fieldspec = function
     | `Absent -> self
@@ -243,14 +243,15 @@ struct
   and row var_env alias_env (fields, rv) =
     let lookup_row = flip StringMap.find var_env.renv in
     let seed =
+      let open Datatype in
       match rv with
-        | `Closed -> Types.make_empty_closed_row ()
-        | `Open (rv, _, _) ->
+        | Closed -> Types.make_empty_closed_row ()
+        | Open (rv, _, _) ->
             begin
               try (StringMap.empty, lookup_row rv, false)
               with NotFound _ -> raise (UnexpectedFreeVar rv)
             end
-        | `Recursive (name, r) ->
+        | Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let renv = StringMap.add name point var_env.renv in
@@ -274,10 +275,10 @@ struct
                 when not (TypeUtils.is_builtin_effect name) ->
                (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
                begin match rv, fields with
-               | `Closed, [] -> op
-               | `Open _, []
-               | (`Recursive _), [] -> (* might need an extra check on recursive rows *)
-                  (name, `Present { node = Function (domain, ([], `Closed), codomain); pos})
+               | Closed, [] -> op
+               | Open _, []
+               | Recursive _, [] -> (* might need an extra check on recursive rows *)
+                  (name, `Present { node = Function (domain, ([], Closed), codomain); pos})
                | _,_ -> raise (UnexpectedOperationEffects name)
                end
             | x -> x)

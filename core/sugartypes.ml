@@ -163,9 +163,9 @@ module Datatype = struct
   and with_pos = t WithPos.t
   and row = (string * fieldspec) list * row_var
   and row_var =
-    [ `Closed
-    | `Open of known_type_variable
-    | `Recursive of name * row ]
+    | Closed
+    | Open of known_type_variable
+    | Recursive of name * row
   and fieldspec =
     [ `Present of with_pos
     | `Absent

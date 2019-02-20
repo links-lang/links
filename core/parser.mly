@@ -147,7 +147,7 @@ let attach_subkind (t, subkind) =
 let attach_row_subkind (r, subkind) =
   let update sk =
     match r with
-    | `Open (x, _, freedom) -> `Open (x, sk, freedom)
+    | Datatype.Open (x, _, freedom) -> Datatype.Open (x, sk, freedom)
     | _ -> assert false
   in attach_subkind_helper update subkind
 
@@ -879,7 +879,7 @@ datatype:
 | mu_datatype | straight_arrow | squiggly_arrow                { with_pos $loc $1 }
 
 arrow_prefix:
-| LBRACE RBRACE                                                { ([], `Closed) }
+| LBRACE RBRACE                                                { ([], Datatype.Closed) }
 | LBRACE efields RBRACE                                        { $2            }
 
 straight_arrow_prefix:
@@ -891,10 +891,10 @@ squig_arrow_prefix:
 | TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 
 hear_arrow_prefix:
-| LBRACE COLON datatype COMMA efields RBRACE                   { hear_arrow_prefix $3 $5            }
-| LBRACE COLON datatype RBRACE                                 { hear_arrow_prefix $3 ([], `Closed) }
+| LBRACE COLON datatype COMMA efields RBRACE                   { hear_arrow_prefix $3 $5                    }
+| LBRACE COLON datatype RBRACE                                 { hear_arrow_prefix $3 ([], Datatype.Closed) }
 | LBRACE COLON datatype VBAR nonrec_row_var RBRACE
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { hear_arrow_prefix $3 ([], $5)      }
+| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { hear_arrow_prefix $3 ([], $5)              }
 
 straight_arrow:
 | parenthesized_datatypes
@@ -1005,17 +1005,17 @@ datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }
 
 vrow:
-| vfields                                                      { $1            }
-| /* empty */                                                  { ([], `Closed) }
+| vfields                                                      { $1                    }
+| /* empty */                                                  { ([], Datatype.Closed) }
 
 row:
-| fields                                                       { $1            }
-| /* empty */                                                  { ([], `Closed) }
+| fields                                                       { $1                    }
+| /* empty */                                                  { ([], Datatype.Closed) }
 
 fields_def(field_prod, row_var_prod, kinded_row_var_prod):
-| field_prod                                                   { ([$1]       , `Closed) }
-| soption(field_prod) VBAR row_var_prod                        { ( $1        , $3     ) }
-| soption(field_prod) VBAR kinded_row_var_prod                 { ( $1        , $3     ) }
+| field_prod                                                   { ([$1], Datatype.Closed) }
+| soption(field_prod) VBAR row_var_prod                        { ( $1 , $3             ) }
+| soption(field_prod) VBAR kinded_row_var_prod                 { ( $1 , $3             ) }
 | field_prod COMMA
     fields_def(field_prod, row_var_prod, kinded_row_var_prod)  { ( $1::fst $3, snd $3 ) }
 
@@ -1046,10 +1046,10 @@ record_label:
 | field_label                                                  { $1 }
 
 vfields:
-| vfield                                                       { ([$1]      , `Closed) }
-| row_var                                                      { ([]        , $1     ) }
-| kinded_row_var                                               { ([]        , $1     ) }
-| vfield VBAR vfields                                          { ($1::fst $3, snd $3 ) }
+| vfield                                                       { ([$1], Datatype.Closed) }
+| row_var                                                      { ([]  , $1             ) }
+| kinded_row_var                                               { ([]  , $1             ) }
+| vfield VBAR vfields                                          { ($1::fst $3, snd $3   ) }
 
 vfield:
 | CONSTRUCTOR                                                  { ($1, present) }
@@ -1077,8 +1077,8 @@ fieldspec:
 | LBRACE PERCENT RBRACE                                        { fresh_presence_variable ()       }
 
 nonrec_row_var:
-| VARIABLE                                                     { `Open ($1, None, `Rigid   ) }
-| PERCENTVAR                                                   { `Open ($1, None, `Flexible) }
+| VARIABLE                                                     { Datatype.Open ($1, None, `Rigid   ) }
+| PERCENTVAR                                                   { Datatype.Open ($1, None, `Flexible) }
 | UNDERSCORE                                                   { fresh_rigid_row_variable () }
 | PERCENT                                                      { fresh_row_variable ()       }
 
@@ -1088,7 +1088,7 @@ nonrec_row_var:
  */
 row_var:
 | nonrec_row_var                                               { $1 }
-| LPAREN MU VARIABLE DOT vfields RPAREN                        { `Recursive ($3, $5) }
+| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive ($3, $5) }
 
 kinded_nonrec_row_var:
 | nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }

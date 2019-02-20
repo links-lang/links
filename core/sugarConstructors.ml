@@ -31,11 +31,11 @@ module SugarConstructors (Position : Pos)
 
   let fresh_row_variable () : Datatype.row_var =
     incr type_variable_counter;
-    `Open ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
+    Datatype.Open ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
 
   let fresh_rigid_row_variable () : Datatype.row_var =
     incr type_variable_counter;
-    `Open ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
+    Datatype.Open ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
   let fresh_presence_variable () : Datatype.fieldspec =
     incr type_variable_counter;

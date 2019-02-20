@@ -126,9 +126,9 @@ object (self)
             o#add tyAppName
     | x -> super#datatypenode x
 
-  method! row_var = function
-    | `Open (x, _, _) -> self#add x
-    | `Recursive (x, row) ->
+  method! row_var = let open Datatype in function
+    | Open (x, _, _) -> self#add x
+    | Recursive (x, row) ->
         let o = self#add x in o#row row
     | x -> super#row_var x
 
@@ -194,10 +194,10 @@ object(self)
               | _ -> super#fieldspec fs)
         | _ -> super#fieldspec fs
 
-  method! row_var : Datatype.row_var -> Datatype.row_var = function
-    | `Open (n, _, _) as rv when n = varFrom ->
+  method! row_var : Datatype.row_var -> Datatype.row_var = let open Datatype in function
+    | Open (n, _, _) as rv when n = varFrom ->
         (match taTo with
-          | `Row (_, (`Open _ as rv2)) -> rv2
+          | `Row (_, (Open _ as rv2)) -> rv2
           | _ -> super#row_var rv)
     | rv -> super#row_var rv
 

@@ -85,13 +85,14 @@ class map =
         let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
 
     method row_var : Datatype.row_var -> Datatype.row_var =
+      let open Datatype in
       function
-      | `Closed -> `Closed
-      | `Open _x ->
-          let _x = o#known_type_variable _x in `Open _x
-      | `Recursive ((_x, _x_i1)) ->
+      | Closed -> Closed
+      | Open _x ->
+          let _x = o#known_type_variable _x in Open _x
+      | Recursive ((_x, _x_i1)) ->
           let _x = o#name _x in
-          let _x_i1 = o#row _x_i1 in `Recursive ((_x, _x_i1))
+          let _x_i1 = o#row _x_i1 in Recursive ((_x, _x_i1))
 
     method row : Datatype.row -> Datatype.row =
       fun (_x, _x_i1) ->
@@ -801,11 +802,11 @@ class fold =
         let o = o#freedom _x_i2 in o
 
     method row_var : Datatype.row_var -> 'self_type =
-      function
-      | `Closed -> o
-      | `Open _x ->
+      let open Datatype in function
+      | Closed -> o
+      | Open _x ->
           let o = o#known_type_variable _x in o
-      | `Recursive ((_x, _x_i1)) ->
+      | Recursive ((_x, _x_i1)) ->
           let o = o#name _x in let o = o#row _x_i1 in o
 
     method row : Datatype.row -> 'self_type =
@@ -1469,13 +1470,13 @@ class fold_map =
         let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
 
     method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
-      function
-      | `Closed -> (o, `Closed)
-      | `Open _x ->
-          let (o, _x) = o#known_type_variable _x in (o, (`Open _x))
-      | `Recursive ((_x, _x_i1)) ->
+      let open Datatype in function
+      | Closed -> (o, Closed)
+      | Open _x ->
+          let (o, _x) = o#known_type_variable _x in (o, (Open _x))
+      | Recursive ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#row _x_i1 in (o, (`Recursive ((_x, _x_i1))))
+          let (o, _x_i1) = o#row _x_i1 in (o, Recursive ((_x, _x_i1)))
 
     method row : Datatype.row -> ('self_type * Datatype.row) =
       fun (_x, _x_i1) ->
