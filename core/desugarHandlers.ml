@@ -20,7 +20,7 @@ open SugarConstructors.Make
 
 
 (* Computes the set of names in a given pattern *)
-let rec names : Pattern.t -> string list
+let rec names : Pattern.with_pos -> string list
   = fun pat ->
     let open Pattern in
     match pat.node with
@@ -41,9 +41,9 @@ let rec names : Pattern.t -> string list
    The conflict resolution is simple:
    Given a set of conflicting names ns, then for every name n if (n \in p && n \in ns) then n gets rewritten as _.
  *)
-let resolve_name_conflicts : Pattern.t -> stringset -> Pattern.t
+let resolve_name_conflicts : Pattern.with_pos -> stringset -> Pattern.with_pos
   = fun pat conflicts ->
-    let rec hide_names : Pattern.t -> Pattern.t
+    let rec hide_names : Pattern.with_pos -> Pattern.with_pos
       = fun pat -> with_dummy_pos
          begin
           let open Pattern in
@@ -84,7 +84,7 @@ let resolve_name_conflicts : Pattern.t -> stringset -> Pattern.t
  and the parameters of the introduced functions which encompass clause bodies. Currently,
  the clause-parameters shadow the introduced function parameters.
 *)
-let parameterize : (Pattern.t * phrase) list -> Pattern.t list list option -> (Pattern.t * phrase) list
+let parameterize : (Pattern.with_pos * phrase) list -> Pattern.with_pos list list option -> (Pattern.with_pos * phrase) list
   = fun cases params ->
   match params with
     None
@@ -102,7 +102,7 @@ let parameterize : (Pattern.t * phrase) list -> Pattern.t list list option -> (P
 
 
 (* This function assigns fresh names to `Any (_) *)
-let rec deanonymize : Pattern.t -> Pattern.t
+let rec deanonymize : Pattern.with_pos -> Pattern.with_pos
   = fun pat -> with_dummy_pos
      begin
       let open Pattern in
@@ -123,7 +123,7 @@ let rec deanonymize : Pattern.t -> Pattern.t
      end
 
 (* This function translates a pattern into a phrase. It assumes that the given pattern has been deanonymised. *)
-let rec phrase_of_pattern : Pattern.t -> phrase
+let rec phrase_of_pattern : Pattern.with_pos -> phrase
   = fun pat ->
      begin
       let open Pattern in
@@ -149,7 +149,7 @@ let apply_params : phrase -> phrase list list -> phrase
   = fun h pss ->
     List.fold_right (fun ps acc -> with_dummy_pos (`FnAppl (acc, ps)) ) (List.rev pss) h
 
-let split_handler_cases : (Pattern.t * phrase) list -> (Pattern.t * phrase) list * (Pattern.t * phrase) list
+let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
   = fun cases ->
     let ret, ops =
       List.fold_left
@@ -186,7 +186,7 @@ let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
          let params = List.map (List.map phrase_of_pattern) params in
          apply_params handle params
     in
-    let fnparams : Pattern.t list list = [[]] in
+    let fnparams : Pattern.with_pos list list = [[]] in
     let fnparams =
       match params with
         Some params -> params @ ([m] :: fnparams)

@@ -77,8 +77,8 @@ object ('self)
   method lens_sort        : Types.lens_sort -> 'self * Types.lens_sort
   method row              : Types.row -> 'self * Types.row
 
-  method patternnode     : Pattern.node -> 'self * Pattern.node
-  method pattern         : Pattern.t -> 'self * Pattern.t
+  method patternnode     : Pattern.t -> 'self * Pattern.t
+  method pattern         : Pattern.with_pos -> 'self * Pattern.with_pos
   method phrase          : phrase -> 'self * phrase * Types.datatype
   method given_spawn_location : given_spawn_location -> 'self * given_spawn_location
   method phrasenode      : phrasenode -> 'self * phrasenode * Types.datatype
@@ -95,4 +95,4 @@ object ('self)
   method unary_op        : unary_op -> 'self * unary_op * Types.datatype
 end
 
-val fun_effects : Types.datatype -> Sugartypes.Pattern.t list list -> Types.row
+val fun_effects : Types.datatype -> Sugartypes.Pattern.with_pos list list -> Types.row

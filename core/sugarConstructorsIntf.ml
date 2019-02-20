@@ -47,7 +47,7 @@ module type SugarConstructorsSig = sig
   (* Helper data types and functions for passing arguments to smart
      constructors.  *)
   type name_or_pat = Name of name
-                   | Pat  of Pattern.t
+                   | Pat  of Pattern.with_pos
 
   type signature   = Sig of (name with_pos * datatype') with_pos
                    | NoSig
@@ -76,9 +76,9 @@ module type SugarConstructorsSig = sig
   val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> binder
 
   (* Patterns *)
-  val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> Pattern.t
-  val tuple_pat    : ?ppos:t -> Pattern.t list -> Pattern.t
-  val any_pat      : t -> Pattern.t
+  val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> Pattern.with_pos
+  val tuple_pat    : ?ppos:t -> Pattern.with_pos list -> Pattern.with_pos
+  val any_pat      : t -> Pattern.with_pos
 
   (* Fieldspec *)
   val present : fieldspec
@@ -91,10 +91,10 @@ module type SugarConstructorsSig = sig
   (* Various phrases *)
   val fun_lit
       : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
-     -> ?location:location -> declared_linearity -> Pattern.t list list -> phrase
+     -> ?location:location -> declared_linearity -> Pattern.with_pos list list -> phrase
      -> phrase
   val hnlit_arg
-      : handler_depth -> Pattern.t -> clause list * Pattern.t list list option
+      : handler_depth -> Pattern.with_pos -> clause list * Pattern.with_pos list list option
      -> handlerlit
   val handler_lit
       : ?ppos:t -> handlerlit -> phrase
@@ -112,7 +112,7 @@ module type SugarConstructorsSig = sig
   (* Bindings *)
   val fun_binding
       : ?ppos:t -> signature
-     -> (declared_linearity * name * Pattern.t list list * location * phrase)
+     -> (declared_linearity * name * Pattern.with_pos list list * location * phrase)
      -> binding
   val fun_binding'
       : ?ppos:t -> ?linearity:declared_linearity -> ?tyvars:tyvar list
@@ -125,7 +125,7 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> signature -> (name_or_pat * phrase * location)
      -> binding
   val val_binding
-      : ?ppos:t -> Pattern.t -> phrase
+      : ?ppos:t -> Pattern.with_pos -> phrase
      -> binding
 
   (* Database queries *)
@@ -150,7 +150,7 @@ module type SugarConstructorsSig = sig
 
   (* Handlers *)
   val untyped_handler
-      : ?val_cases:(clause list) -> ?parameters:((phrase * Pattern.t) list)
+      : ?val_cases:(clause list) -> ?parameters:((phrase * Pattern.with_pos) list)
      -> phrase -> clause list -> handler_depth
      -> handler
 end

@@ -449,7 +449,7 @@ class map =
     method cp_phrase : cp_phrase -> cp_phrase =
       fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
 
-    method patternnode : Pattern.node -> Pattern.node =
+    method patternnode : Pattern.t -> Pattern.t =
       let open Pattern in
       function
       | Any -> Any
@@ -489,7 +489,7 @@ class map =
           let _x = o#pattern _x in
           let _x_i1 = o#datatype' _x_i1 in HasType ((_x, _x_i1))
 
-    method pattern : Pattern.t -> Pattern.t =
+    method pattern : Pattern.with_pos -> Pattern.with_pos =
       fun {node; pos} ->
         let node = o#patternnode node in
         let pos = o#position pos in {node; pos}
@@ -1125,7 +1125,7 @@ class fold =
     method cp_phrase : cp_phrase -> 'self_node =
       fun {node; pos} -> (o#cp_phrasenode node)#position pos
 
-    method patternnode : Pattern.node -> 'self_type =
+    method patternnode : Pattern.t -> 'self_type =
       let open Pattern in
       function
       | Any -> o
@@ -1158,7 +1158,7 @@ class fold =
       | HasType ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#datatype' _x_i1 in o
 
-    method pattern : Pattern.t -> 'self_type =
+    method pattern : Pattern.with_pos -> 'self_type =
       fun {node; pos} ->
         let o = o#patternnode node in
         let o = o#position pos in
@@ -1875,7 +1875,7 @@ class fold_map =
       let o, pos  = o#position pos in
       o, {node; pos}
 
-    method patternnode : Pattern.node -> ('self_type * Pattern.node) =
+    method patternnode : Pattern.t -> ('self_type * Pattern.t) =
       let open Pattern in
       function
       | Any -> (o, Any)
@@ -1916,7 +1916,7 @@ class fold_map =
           let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#datatype' _x_i1 in (o, (HasType ((_x, _x_i1))))
 
-    method pattern : Pattern.t -> ('self_type * Pattern.t) =
+    method pattern : Pattern.with_pos -> ('self_type * Pattern.with_pos) =
       fun {node; pos} ->
         let (o, node) = o#patternnode node in
         let (o, pos ) = o#position pos in

@@ -33,7 +33,7 @@ object (o : 'self_type)
 
     (this roughly corresponds to the dagger transformation)
   *)
-  method formlet_patterns : Sugartypes.phrase -> (Sugartypes.Pattern.t list * Sugartypes.phrase list * Types.datatype list) =
+  method formlet_patterns : Sugartypes.phrase -> (Sugartypes.Pattern.with_pos list * Sugartypes.phrase list * Types.datatype list) =
     fun ph ->
       match ph.node with
         | _ when is_raw ph ->

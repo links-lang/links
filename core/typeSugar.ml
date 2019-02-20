@@ -1448,11 +1448,11 @@ let type_binary_op ctxt =
    If there are no _ or variable patterns at a variant type, then that
    variant will be closed.
 *)
-let close_pattern_type : Pattern.t list -> Types.datatype -> Types.datatype = fun pats t ->
+let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.datatype = fun pats t ->
   (* We use a table to keep track of encountered recursive variables
      in order to avert non-termination. *)
   let rec_vars_seen = Hashtbl.create 8 in
-  let rec cpt : Pattern.t list -> Types.datatype -> Types.datatype = fun pats t ->
+  let rec cpt : Pattern.with_pos list -> Types.datatype -> Types.datatype = fun pats t ->
     match t with
       | `Alias (alias, t) -> `Alias (alias, cpt pats t)
       | `Record row when Types.is_tuple row->
@@ -1519,7 +1519,7 @@ let close_pattern_type : Pattern.t list -> Types.datatype -> Types.datatype = fu
               *)
               (end_pos, end_pos, buf) in
 
-          let rec unwrap_at : string -> Pattern.t -> Pattern.t list = fun name p ->
+          let rec unwrap_at : string -> Pattern.with_pos -> Pattern.with_pos list = fun name p ->
             let open Pattern in
             match p.node with
               | Variable _ | Any -> [ with_pos (end_pos p) Pattern.Any ]
@@ -1531,7 +1531,7 @@ let close_pattern_type : Pattern.t list -> Types.datatype -> Types.datatype = fu
               | Negative names when List.mem name names -> []
               | Negative _ -> [ with_pos (end_pos p) Pattern.Any ]
               | Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Effect _ -> assert false in
-          let rec are_open : Pattern.t list -> bool =
+          let rec are_open : Pattern.with_pos list -> bool =
             let open Pattern in
             function
               | [] -> false
@@ -1571,7 +1571,7 @@ let close_pattern_type : Pattern.t list -> Types.datatype -> Types.datatype = fu
           let fields, row_var, lr = fst (Types.unwrap_row row) in
           assert (not lr);
 
-          let unwrap_at : string -> Pattern.t -> Pattern.t list = fun name p ->
+          let unwrap_at : string -> Pattern.with_pos -> Pattern.with_pos list = fun name p ->
             let open Pattern in
             match p.node with
               | Effect (name', ps, _) when name=name' -> ps
@@ -1596,7 +1596,7 @@ let close_pattern_type : Pattern.t list -> Types.datatype -> Types.datatype = fu
                        (* Construct an p x n matrix (i.e. the
                           transposition of p x n matrix as it is easier
                           to map column-wise) *)
-                         let pmat : Pattern.t list list =
+                         let pmat : Pattern.with_pos list list =
                            let non_empty ps = ps <> [] in
                            let rows =
                              map_filter
@@ -1638,7 +1638,7 @@ let close_pattern_type : Pattern.t list -> Types.datatype -> Types.datatype = fu
           `Effect row
       | `Application (l, [`Type t])
           when Types.Abstype.equal l Types.list ->
-          let rec unwrap p : Pattern.t list =
+          let rec unwrap p : Pattern.with_pos list =
             let open Pattern in
             match p.node with
               | Variable _ | Any -> [p]
@@ -1710,7 +1710,7 @@ let unify_or ~(handle:Gripers.griper) ~pos ((_, ltype1), (_, rtype1))
 
 
 (** check for duplicate names in a list of pattern *)
-let check_for_duplicate_names : Sugartypes.position -> Pattern.t list -> string list = fun pos ps ->
+let check_for_duplicate_names : Sugartypes.position -> Pattern.with_pos list -> string list = fun pos ps ->
   let add name binder binderss =
     if StringMap.mem name binderss then
       let (count, binders) = StringMap.find name binderss in
@@ -1756,7 +1756,7 @@ let check_for_duplicate_names : Sugartypes.position -> Pattern.t list -> string 
     else
       List.map fst (StringMap.bindings binderss)
 
-let type_pattern closed : Pattern.t -> Pattern.t * Types.environment * Types.datatype =
+let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
   let make_singleton_row =
     match closed with
       | `Closed -> Types.make_singleton_closed_row
@@ -1772,7 +1772,7 @@ let type_pattern closed : Pattern.t -> Pattern.t * Types.environment * Types.dat
      using types from the inner type.
 
   *)
-  let rec type_pattern {node = pattern; pos = pos'} : Pattern.t * Types.environment * (Types.datatype * Types.datatype) =
+  let rec type_pattern {node = pattern; pos = pos'} : Pattern.with_pos * Types.environment * (Types.datatype * Types.datatype) =
     let _UNKNOWN_POS_ = "<unknown>" in
     let tp = type_pattern in
     let unify (l, r) = unify_or_raise ~pos:pos' (l, r)
@@ -1783,7 +1783,7 @@ let type_pattern closed : Pattern.t -> Pattern.t * Types.environment * Types.dat
     and pos ({pos = p;_},_,_) = let (_,_,p) = SourceCode.resolve_pos p in p
     and (++) = Env.extend in
     let (p, env, (outer_type, inner_type)) :
-      Pattern.node * Types.environment * (Types.datatype * Types.datatype) =
+      Pattern.t * Types.environment * (Types.datatype * Types.datatype) =
       let open Pattern in
       match pattern with
       | Nil ->
@@ -1831,7 +1831,7 @@ let type_pattern closed : Pattern.t -> Pattern.t * Types.environment * Types.dat
         Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
       | Effect (name, ps, k) ->
          (* Auxiliary machinery for typing effect patterns *)
-         let rec type_resumption_pat (kpat : Pattern.t) : Pattern.t * Types.environment * (Types.datatype * Types.datatype) =
+         let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * Types.environment * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
              let domain = Types.fresh_type_variable (`Unl, `Any) in
              let codomain = Types.fresh_type_variable (`Unl, `Any) in
@@ -1953,7 +1953,7 @@ let type_pattern closed : Pattern.t -> Pattern.t * Types.environment * Types.dat
     let pos, env, (outer_type, _) = type_pattern pattern in
     pos, env, outer_type
 
-let rec pattern_env : Pattern.t -> Types.datatype Env.t =
+let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
   fun { node = p; _} -> let open Pattern in
   match p with
     | Any
@@ -1984,7 +1984,7 @@ let update_pattern_vars env =
 (object (self)
   inherit SugarTraversals.map as super
 
-  method! patternnode : Pattern.node -> Pattern.node =
+  method! patternnode : Pattern.t -> Pattern.t =
     fun n ->
       let open Pattern in
       let update bndr =
@@ -3183,7 +3183,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            (** returns a pair of lists whose first component is the
                value clauses, while the second component is the
                operation clauses *)
-           let split_handler_cases : (Pattern.t * phrase) list -> (Pattern.t * phrase) list * (Pattern.t * phrase) list
+           let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
              = fun cases ->
              let ret, ops =
                List.fold_left
@@ -3374,7 +3374,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (* Type operation clause bodies and resumptions *)
              let eff_cases =
                List.fold_right
-                 (fun (pat, (kpat : Pattern.t * Types.datatype Env.t * Types.datatype), body) cases ->
+                 (fun (pat, (kpat : Pattern.with_pos * Types.datatype Env.t * Types.datatype), body) cases ->
                    let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
@@ -3491,7 +3491,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `TryInOtherwise (try_phrase, pat, in_phrase, unless_phrase, _) ->
             let try_phrase = tc try_phrase in
 
-            (* Pattern type variable *)
+            (* Pattern.with_posype variable *)
             let pat = tpc pat in
 
             (* Check whether pattern corresponds to try_phrase *)

@@ -622,7 +622,7 @@ class transform (env : Types.typing_environment) =
         let (o, node, t) = o#phrasenode node in
         (o, {node;pos}, t)
 
-    method patternnode : Pattern.node -> ('self_type * Pattern.node) =
+    method patternnode : Pattern.t -> ('self_type * Pattern.t) =
       let open Pattern in
       function
       | Any -> (o, Any)
@@ -658,7 +658,7 @@ class transform (env : Types.typing_environment) =
       | HasType (p, t) ->
           let (o, p) = o#pattern p in (o, (HasType (p, t)))
 
-    method pattern : Pattern.t -> ('self_type * Pattern.t) =
+    method pattern : Pattern.with_pos -> ('self_type * Pattern.with_pos) =
       fun {node; pos} ->
         let (o, node) = o#patternnode node in (o, {node; pos})
 

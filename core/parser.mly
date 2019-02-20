@@ -240,9 +240,9 @@ let parseRegexFlags f =
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
-%type <Sugartypes.Pattern.t> pattern
+%type <Sugartypes.Pattern.with_pos> pattern
 %type <Sugartypes.declared_linearity * Sugartypes.name *
-       Sugartypes.Pattern.t list list * Sugartypes.location *
+       Sugartypes.Pattern.with_pos list list * Sugartypes.location *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression

@@ -61,7 +61,7 @@ let results :  Types.row ->
             let qt = t in
             let qst = Types.make_tuple_type ts in
 
-            let ((qsb, qs) : Sugartypes.Pattern.t list * Sugartypes.phrase list) =
+            let ((qsb, qs) : Sugartypes.Pattern.with_pos list * Sugartypes.phrase list) =
               List.split
                 (List.map2 (fun x t -> (variable_pat ~ty:t x, var x)) xs ts) in
             let qb, q = (variable_pat ~ty:t x, var x) in
@@ -100,7 +100,7 @@ object (o : 'self_type)
   *)
   method qualifiers : Sugartypes.iterpatt list ->
     'self_type *
-      (Sugartypes.phrase list * Sugartypes.Pattern.t list * Sugartypes.name list *
+      (Sugartypes.phrase list * Sugartypes.Pattern.with_pos list * Sugartypes.name list *
          Types.datatype list) =
     fun qs ->
       let o, (es, ps, xs, ts) =

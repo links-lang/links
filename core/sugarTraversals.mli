@@ -43,8 +43,8 @@ class map :
     method phrase          : phrase -> phrase
     method cp_phrasenode   : cp_phrasenode -> cp_phrasenode
     method cp_phrase       : cp_phrase -> cp_phrase
-    method patternnode     : Pattern.node -> Pattern.node
-    method pattern         : Pattern.t -> Pattern.t
+    method patternnode     : Pattern.t -> Pattern.t
+    method pattern         : Pattern.with_pos -> Pattern.with_pos
     method name            : name -> name
     method logical_binop   : logical_binop -> logical_binop
     method location        : location -> location
@@ -113,8 +113,8 @@ class fold :
     method phrase          : phrase -> 'self
     method cp_phrasenode   : cp_phrasenode -> 'self
     method cp_phrase       : cp_phrase -> 'self
-    method patternnode     : Pattern.node -> 'self
-    method pattern         : Pattern.t -> 'self
+    method patternnode     : Pattern.t -> 'self
+    method pattern         : Pattern.with_pos -> 'self
     method name            : name -> 'self
     method logical_binop   : logical_binop -> 'self
     method location        : location -> 'self
@@ -178,8 +178,8 @@ object ('self)
   method logical_binop   : logical_binop -> 'self * logical_binop
   method name            : name -> 'self * name
   method option          : 'a . ('self -> 'a -> 'self * 'a) -> 'a option -> 'self * 'a option
-  method patternnode     : Pattern.node -> 'self * Pattern.node
-  method pattern         : Pattern.t -> 'self * Pattern.t
+  method patternnode     : Pattern.t -> 'self * Pattern.t
+  method pattern         : Pattern.with_pos -> 'self * Pattern.with_pos
   method phrase          : phrase -> 'self * phrase
   method given_spawn_location : given_spawn_location -> 'self * given_spawn_location
   method phrasenode      : phrasenode -> 'self * phrasenode

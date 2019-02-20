@@ -77,7 +77,7 @@ object (o : 'self_type)
               let envs = o#backup_envs in
               let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.choice_at label s) >} in
               let (o, p, t) = desugar_cp o p in
-              let pat : Pattern.t = with_dummy_pos (Pattern.Variant (label,
+              let pat : Pattern.with_pos = with_dummy_pos (Pattern.Variant (label,
                       Some (variable_pat ~ty:(TypeUtils.choice_at label s) c))) in
               o#restore_envs envs, ((pat, with_dummy_pos p), t) :: cases in
             let (o, cases) = List.fold_right desugar_branch cases (o, []) in

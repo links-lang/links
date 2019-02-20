@@ -69,7 +69,7 @@ object (o : 'self_type)
          * continuation argument. *)
         let cont_pat = variable_pat ~ty:`Not_typed (Utility.gensym ~prefix:"dsh" ()) in
 
-        let otherwise_pat : Sugartypes.Pattern.t =
+        let otherwise_pat : Sugartypes.Pattern.with_pos =
           with_dummy_pos (Pattern.Effect (failure_op_name, [], cont_pat)) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
