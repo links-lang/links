@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Types
 
@@ -49,7 +50,7 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
                         else
                           begin
                             let var' = Types.fresh_raw_variable () in
-                            let point' = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
+                            let point' = Unionfind.fresh (`Var (var', (linAny, `Any), `Flexible)) in
                             let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
                             let _ = Unionfind.change point' (`Recursive (var', t')) in
                               `MetaTypeVar point'
@@ -149,7 +150,7 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
                     else
                       begin
                         let var' = Types.fresh_raw_variable () in
-                        let point' = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
+                        let point' = Unionfind.fresh (`Var (var', (linAny, `Any), `Flexible)) in
                         let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
                         let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
                           (StringMap.empty, point', dual)

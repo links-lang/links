@@ -8,6 +8,7 @@
   to adjust our intermediate language.
 *)
 
+open CommonTypes
 open Utility
 open Ir
 
@@ -77,7 +78,7 @@ let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> pattern * raw_env =
   fun scope {Sugartypes.node=p; Sugartypes.pos} ->
     let desugar_pat = desugar_pattern scope in
-    let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (`Any, `Any)) in
+    let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (linAny, `Any)) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
     let fresh_binder (nenv, tenv, eff) bndr =
       assert (Sugartypes.binder_has_type bndr);

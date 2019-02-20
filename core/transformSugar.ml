@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Sugartypes
 
@@ -8,9 +9,9 @@ let type_section env =
   | Minus -> TyEnv.lookup env "-"
   | FloatMinus -> TyEnv.lookup env "-."
   | Project label ->
-      let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-      let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
-      let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
+      let ab, a = Types.fresh_type_quantifier (linAny, `Any) in
+      let rhob, (fields, rho, _) = Types.fresh_row_quantifier (linAny, `Any) in
+      let eb, e = Types.fresh_row_quantifier (linAny, `Any) in
 
       let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
         `ForAll (Types.box_quantifiers [ab; rhob; eb],
@@ -47,8 +48,8 @@ let type_binary_op env tycon_env =
   | `Name "<"
   | `Name "<="
   | `Name "<>" ->
-      let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-      let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
+      let ab, a = Types.fresh_type_quantifier (linAny, `Any) in
+      let eb, e = Types.fresh_row_quantifier (linAny, `Any) in
         `ForAll (Types.box_quantifiers [ab; eb],
                  `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
   | `Name "!"     -> TyEnv.lookup env "Send"

@@ -1,3 +1,4 @@
+open CommonTypes
 open Sugartypes
 open SugarConstructors.Make
 
@@ -63,7 +64,7 @@ object (o : 'self_type)
            from well-typed insert expressions. An alternative approach
            would be to maintain some kind of insert expression in the
            IR. *)
-        let value_type = `Record (Types.make_empty_open_row (`Any, `Any)) in
+        let value_type = `Record (Types.make_empty_open_row (linAny, `Any)) in
         let o, rows, _ = o#phrase rows in
         let tyvars = [`Type read_type; `Type write_type; `Type needed_type;
                       `Type value_type; `Row eff] in

@@ -16,10 +16,8 @@ type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
 
 type restriction = [ `Any | `Base | `Session | `Effect ]
     [@@deriving eq,show]
-type linearity   = [ `Any | `Unl ]
-    [@@deriving eq,show]
 
-type subkind = linearity * restriction
+type subkind = CommonTypes.Linearity.t * restriction
     [@@deriving eq,show]
 
 type freedom = [`Rigid | `Flexible]
@@ -263,7 +261,7 @@ val fresh_rigid_type_variable : subkind -> datatype
 val fresh_row_variable : subkind -> row_var
 val fresh_rigid_row_variable : subkind -> row_var
 
-val fresh_session_variable : linearity -> datatype
+val fresh_session_variable : CommonTypes.Linearity.t -> datatype
 
 val fresh_presence_variable : subkind -> field_spec
 val fresh_rigid_presence_variable : subkind -> field_spec

@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Ir
 
@@ -868,7 +869,7 @@ struct
              I.do_operation (name, vs, t)
           | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
              let henv, params =
-               let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (`Any, `Any)) in
+               let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (linAny, `Any)) in
                 match (sh_descr.shd_params) with
                 | None -> empty_env, []
                 | Some { shp_bindings = bindings; shp_types = types } ->

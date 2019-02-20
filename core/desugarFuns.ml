@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Sugartypes
 open SugarConstructors.Make
@@ -83,9 +84,9 @@ object (o : 'self_type)
         in
           (o, e, ft)
     | Section (Section.Project name) ->
-        let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
-        let effb, eff = Types.fresh_row_quantifier (`Any, `Any) in
+        let ab, a = Types.fresh_type_quantifier (linAny, `Any) in
+        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (linAny, `Any) in
+        let effb, eff = Types.fresh_row_quantifier (linAny, `Any) in
 
         let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
 

@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Sugartypes
 open SugarConstructors.Make
@@ -40,7 +41,7 @@ object (o : 'self_type)
             [tuple_pat []], [tuple []], [Types.unit_type]
         | FormBinding (f, p) ->
             let (_o, _f, ft) = o#phrase f in
-            let t = Types.fresh_type_variable (`Any, `Any) in
+            let t = Types.fresh_type_variable (linAny, `Any) in
             let () =
               Unify.datatypes
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in

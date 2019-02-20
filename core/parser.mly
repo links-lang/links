@@ -37,6 +37,7 @@ or Menhir it is no longer necessary.
 
 %{
 
+open CommonTypes
 open Utility
 open Sugartypes
 open SugarConstructors
@@ -78,8 +79,8 @@ let primary_kind_of_string p =
 
 let linearity_of_string p =
   function
-  | "Any" -> `Any
-  | "Unl" -> `Unl
+  | "Any" -> Linearity.Any
+  | "Unl" -> Linearity.Unl
   | lin   ->
      raise (ConcreteSyntaxError ("Invalid kind linearity: " ^ lin, pos p))
 
@@ -118,19 +119,19 @@ let kind_of p =
   | "Row"      -> (`Row, None)
   | "Presence" -> (`Presence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (`Type, Some (`Any, `Any))
-  | "Base"     -> (`Type, Some (`Unl, `Base))
-  | "Session"  -> (`Type, Some (`Any, `Session))
-  | "Eff"      -> (`Row , Some (`Unl, `Effect))
+  | "Any"      -> (`Type, Some (Linearity.Any, `Any))
+  | "Base"     -> (`Type, Some (Linearity.Unl, `Base))
+  | "Session"  -> (`Type, Some (Linearity.Any, `Session))
+  | "Eff"      -> (`Row , Some (Linearity.Unl, `Effect))
   | k          -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
 
 let subkind_of p =
   function
   (* subkind abbreviations *)
-  | "Any"     -> Some (`Any, `Any)
-  | "Base"    -> Some (`Unl, `Base)
-  | "Session" -> Some (`Any, `Session)
-  | "Eff"     -> Some (`Unl, `Effect)
+  | "Any"     -> Some (Linearity.Any, `Any)
+  | "Base"    -> Some (Linearity.Unl, `Base)
+  | "Session" -> Some (Linearity.Any, `Session)
+  | "Eff"     -> Some (Linearity.Unl, `Effect)
   | sk        -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos p))
 
 let attach_kind (t, k) = (t, k, `Rigid)

@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 
 [@@@ocaml.warning "-32"] (** disable warnings about unused functions in this module**)
 
@@ -18,12 +19,10 @@ type 'a point = 'a Unionfind.point [@@deriving show]
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
     [@@deriving show]
 
-type linearity   = [ `Any | `Unl ]
-    [@@deriving eq,show]
 type restriction = [ `Any | `Base | `Session | `Effect ]
     [@@deriving eq,show]
 
-type subkind = linearity * restriction
+type subkind = Linearity.t * restriction
     [@@deriving eq,show]
 
 type freedom = [`Rigid | `Flexible]
@@ -74,7 +73,7 @@ end
 let process  = {
   Abstype.id = "Process" ;
   name       = "Process" ;
-  arity      = [`Row, (`Any, `Any)] ;
+  arity      = [`Row, (linAny, `Any)] ;
 }
 
 (* Lists are currently unlimited because the only deconstructors are
@@ -83,7 +82,7 @@ let process  = {
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = [`Type, (`Unl, `Any)] ;
+  arity      = [`Type, (linUnl, `Any)] ;
 }
 
 let event    = {
@@ -100,7 +99,7 @@ let dom_node = {
 let access_point = {
   Abstype.id = "AP" ;
   name       = "AP" ;
-  arity      = [`Type, (`Any, `Session)] ;
+  arity      = [`Type, (linAny, `Session)] ;
 }
 
 let socket = {
@@ -266,7 +265,7 @@ struct
             (IntMap.find var rec_types), o
           else
             let var' = fresh_raw_variable () in
-            let point' : meta_type_var = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
+            let point' : meta_type_var = Unionfind.fresh (`Var (var', (linAny, `Any), `Flexible)) in
             let rec_types' : (meta_type_var) IntMap.t = IntMap.add var point' rec_types in
             let o_extended_rec_env = {< rec_vars = (rec_types', rec_rows) >} in
             let (t', o') = o_extended_rec_env#typ t in
@@ -286,7 +285,7 @@ struct
             (IntMap.find var rec_rows), o
           else
             let var' = fresh_raw_variable () in
-            let point' = Unionfind.fresh (`Var (var', (`Any, `Any), `Flexible)) in
+            let point' = Unionfind.fresh (`Var (var', (linAny, `Any), `Flexible)) in
             let rec_rows' = IntMap.add var point' rec_rows in
             let o_extended_rec_env = {< rec_vars = (rec_types, rec_rows') >} in
             let (r', o') = o_extended_rec_env#row r in
@@ -439,7 +438,7 @@ struct
         method! meta_type_var point = match Unionfind.find point with
           | `Recursive (id, t) ->
              if Utility.IntSet.mem id mu_vars then
-               let newvar = `Var (id, (`Any, `Any), `Rigid) in
+               let newvar = `Var (id, (linAny, `Any), `Rigid) in
                (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
                (Unionfind.fresh newvar, o)
              else
@@ -452,7 +451,7 @@ struct
         method! meta_row_var point = match Unionfind.find point with
           | `Recursive (id, t) ->
              if Utility.IntSet.mem id mu_vars then
-               let newvar = `Var (id, (`Any, `Any), `Rigid) in
+               let newvar = `Var (id, (linAny, `Any), `Rigid) in
                (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
                (Unionfind.fresh newvar, o)
              else
@@ -645,7 +644,7 @@ let is_unl_point =
     begin
       match Unionfind.find point with
       | `Closed -> true
-      | `Var (var, (lin, _), _) -> IntSet.mem var quant_vars || lin=`Unl
+      | `Var (var, (lin, _), _) -> IntSet.mem var quant_vars || isUnl lin
       | `Body t -> f (rec_vars, quant_vars) t
       | `Recursive (var, t) ->
         check_rec var rec_vars true (fun rec_vars' -> f (rec_vars', quant_vars) t)
@@ -694,7 +693,7 @@ let point_can_be_unl =
     begin
         match Unionfind.find point with
         | `Closed -> true
-        | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || lin=`Unl
+        | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || isUnl lin
         | `Var (_, _, `Flexible)     -> true
         | `Body t -> f vars t
         | `Recursive (var, t) ->
@@ -748,8 +747,8 @@ let make_point_unl : ((var_set * var_set) -> 'a -> unit) -> (var_set * var_set) 
   fun f ((rec_vars, quant_vars) as vars) point ->
     match Unionfind.find point with
     | `Closed -> ()
-    | `Var (v, (lin, _), `Rigid)       -> if IntSet.mem v quant_vars || lin = `Unl then () else assert false
-    | `Var (var, (_, rest), `Flexible) -> Unionfind.change point (`Var (var, (`Unl, rest), `Flexible))
+    | `Var (v, (lin, _), `Rigid)       -> if IntSet.mem v quant_vars || isUnl lin then () else assert false
+    | `Var (var, (_, rest), `Flexible) -> Unionfind.change point (`Var (var, (linUnl, rest), `Flexible))
     | `Body t -> f vars t
     | `Recursive (var, t) ->
       check_rec var rec_vars () (fun rec_vars' -> f (rec_vars', quant_vars) t)
@@ -1403,7 +1402,7 @@ and flatten_row : row -> row = fun (field_env, row_var, dual) ->
               else
                 (let row_var' =
                    Unionfind.fresh (`Recursive (var, (FieldEnv.empty,
-                                                      Unionfind.fresh (`Var (var, (`Any, `Any), `Flexible)),
+                                                      Unionfind.fresh (`Var (var, (linAny, `Any), `Flexible)),
                                                       false))) in
                  let rec_row' = flatten_row' (IntMap.add var row_var' rec_env) rec_row in
                    Unionfind.change row_var' (`Recursive (var, rec_row'));
@@ -1890,16 +1889,13 @@ struct
     | s -> "::" ^ s
 
   let subkind : (policy * names) -> subkind -> string =
-    let linearity = function
-      | `Any -> "Any"
-      | `Unl -> "Unl" in
     let restriction = function
       | `Any -> "Any"
       | `Base -> "Base"
       | `Session -> "Session"
       | `Effect -> "Eff"
     in
-    let full (l, r) = "(" ^ linearity l ^ "," ^ restriction r ^ ")" in
+    let full (l, r) = "(" ^ string_of_linearity l ^ "," ^ restriction r ^ ")" in
 
     fun (policy, _vars) ->
     if policy.kinds = "full" then
@@ -1908,11 +1904,11 @@ struct
       function (_, _) -> ""
     else
       function
-      | (`Unl, `Any) -> ""
-      | (`Any, `Any) -> "Any"
-      | (`Unl, `Base) -> restriction `Base
-      | (`Any, `Session) -> restriction `Session
-      | (`Unl, `Effect) -> restriction `Effect
+      | (Linearity.Unl, `Any) -> ""
+      | (Linearity.Any, `Any) -> "Any"
+      | (Linearity.Unl, `Base) -> restriction `Base
+      | (Linearity.Any, `Session) -> restriction `Session
+      | (Linearity.Unl, `Effect) -> restriction `Effect
       | (l, r) -> full (l, r)
 
   let primary_kind : primary_kind -> string = function
@@ -1936,13 +1932,13 @@ struct
       primary_kind k
     else
       match (k, sk) with
-      | `Type, (`Unl, `Any) -> ""
-      | `Type, (`Unl, `Base) -> restriction `Base
-      | `Type, (`Any, `Session) -> restriction `Session
+      | `Type, (Linearity.Unl, `Any) -> ""
+      | `Type, (Linearity.Unl, `Base) -> restriction `Base
+      | `Type, (Linearity.Any, `Session) -> restriction `Session
       | `Type, sk -> subkind ({policy with kinds="full"}, _vars) sk
-      | `Row, (`Unl, `Any) -> primary_kind `Row
-      | `Row, (`Unl, `Effect) -> primary_kind `Row
-      | `Presence, (`Unl, `Any) -> primary_kind `Presence
+      | `Row, (Linearity.Unl, `Any) -> primary_kind `Row
+      | `Row, (Linearity.Unl, `Effect) -> primary_kind `Row
+      | `Presence, (Linearity.Unl, `Any) -> primary_kind `Presence
       | `Row, _
       | `Presence, _ -> full ({policy with kinds="full"}, _vars) (k, sk)
 
@@ -2524,15 +2520,15 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
 
 let make_rigid_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
-    (IntMap.map (fun _ -> fresh_rigid_type_variable (`Any, `Any)) tenv,
-     IntMap.map (fun _ -> (StringMap.empty, fresh_rigid_row_variable (`Any, `Any), false)) renv,
-     IntMap.map (fun _ -> fresh_rigid_presence_variable (`Any, `Any)) penv)
+    (IntMap.map (fun _ -> fresh_rigid_type_variable (Linearity.Any, `Any)) tenv,
+     IntMap.map (fun _ -> (StringMap.empty, fresh_rigid_row_variable (Linearity.Any, `Any), false)) renv,
+     IntMap.map (fun _ -> fresh_rigid_presence_variable (Linearity.Any, `Any)) penv)
 
 let make_wobbly_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
-    (IntMap.map (fun _ -> fresh_type_variable (`Any, `Any)) tenv,
-     IntMap.map (fun _ -> (StringMap.empty, fresh_row_variable (`Any, `Any), false)) renv,
-     IntMap.map (fun _ -> fresh_presence_variable (`Any, `Any)) penv)
+    (IntMap.map (fun _ -> fresh_type_variable (Linearity.Any, `Any)) tenv,
+     IntMap.map (fun _ -> (StringMap.empty, fresh_row_variable (Linearity.Any, `Any), false)) renv,
+     IntMap.map (fun _ -> fresh_presence_variable (Linearity.Any, `Any)) penv)
 
 
 (* subtyping *)

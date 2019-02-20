@@ -1,3 +1,4 @@
+open CommonTypes
 open Sugartypes
 open SugarConstructors.Make
 
@@ -36,8 +37,8 @@ let rec desugar_page (o, page_type) =
         | FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
             let formlet_type = Types.concrete_type formlet_type in
-            let a = Types.fresh_type_variable (`Any, `Any) in
-            let b = Types.fresh_type_variable (`Any, `Any) in
+            let a = Types.fresh_type_variable (linAny, `Any) in
+            let b = Types.fresh_type_variable (linAny, `Any) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
               fn_appl "formP" [`Type a; `Row (o#lookup_effects)]
                       [formlet; handler; attributes]

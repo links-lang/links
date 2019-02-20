@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 
 (** The syntax tree created by the parser. *)
@@ -102,13 +103,11 @@ let string_of_location = function
 
 type restriction = [ `Any | `Base | `Session | `Effect ]
     [@@deriving eq,show]
-type linearity   = [ `Any | `Unl ]
+
+type subkind = Linearity.t * restriction
     [@@deriving eq,show]
 
-type subkind = linearity * restriction
-    [@@deriving eq,show]
-
-let default_subkind = (`Unl, `Any)
+let default_subkind : subkind = (Linearity.Unl, `Any)
 
 type freedom = [`Flexible | `Rigid]
     [@@deriving show]
