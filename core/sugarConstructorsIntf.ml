@@ -46,8 +46,8 @@ module type SugarConstructorsSig = sig
 
   (* Helper data types and functions for passing arguments to smart
      constructors.  *)
-  type name_or_pat = Name of name
-                   | Pat  of Pattern.with_pos
+  type name_or_pat = PatName of name
+                   | Pat     of Pattern.with_pos
 
   type signature   = Sig of (name with_pos * datatype') with_pos
                    | NoSig

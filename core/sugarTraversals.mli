@@ -26,7 +26,7 @@ class map :
     method tyunary_op      : tyarg list * unary_op -> tyarg list * unary_op
     method binder          : binder -> binder
     method sentence        : sentence -> sentence
-    method section         : section -> section
+    method section         : Section.t -> Section.t
     method subkind         : subkind -> subkind
     method kind            : kind -> kind
     method freedom         : freedom -> freedom
@@ -95,7 +95,7 @@ class fold :
     method tyunary_op      : tyarg list * unary_op -> 'self
     method binder          : binder -> 'self
     method sentence        : sentence -> 'self
-    method section         : section -> 'self
+    method section         : Section.t -> 'self
     method subkind         : subkind -> 'self
     method kind            : kind -> 'self
     method freedom         : freedom -> 'self
@@ -190,7 +190,7 @@ object ('self)
   method replace_rhs     : replace_rhs -> 'self * replace_rhs
   method row             : Datatype.row -> 'self * Datatype.row
   method row_var         : Datatype.row_var -> 'self * Datatype.row_var
-  method section         : section -> 'self * section
+  method section         : Section.t -> 'self * Section.t
   method sentence        : sentence -> 'self * sentence
   method string          : name -> 'self * name
   method subkind         : subkind -> 'self * subkind

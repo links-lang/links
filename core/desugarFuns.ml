@@ -82,7 +82,7 @@ object (o : 'self_type)
              var f)
         in
           (o, e, ft)
-    | Section (`Project name) ->
+    | Section (Section.Project name) ->
         let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
         let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
         let effb, eff = Types.fresh_row_quantifier (`Any, `Any) in

@@ -355,7 +355,7 @@ tlfunbinding:
 | OP pattern POSTFIXOP perhaps_location block                  { (`Unl, $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
-| VAR VARIABLE perhaps_location EQ exp                         { (Name $2, $5, $3) }
+| VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
 
 signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
@@ -479,17 +479,17 @@ constructor_expression:
 | CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
 
 parenthesized_thing:
-| LPAREN binop RPAREN                                          { with_pos $loc (Section $2)              }
-| LPAREN DOT record_label RPAREN                               { with_pos $loc (Section (`Project $3))   }
-| LPAREN RPAREN                                                { record ~ppos:$loc []                    }
-| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3            }
-| LPAREN exps RPAREN                                           { with_pos $loc (TupleLit ($2))           }
-| LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (With ($2, $4))           }
+| LPAREN binop_section RPAREN                                  { with_pos $loc (Section $2)                   }
+| LPAREN DOT record_label RPAREN                               { with_pos $loc (Section (Section.Project $3)) }
+| LPAREN RPAREN                                                { record ~ppos:$loc []                         }
+| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3                 }
+| LPAREN exps RPAREN                                           { with_pos $loc (TupleLit ($2))                }
+| LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (With ($2, $4))                }
 
-binop:
-| MINUS                                                        { `Minus          }
-| MINUSDOT                                                     { `FloatMinus     }
-| op                                                           { `Name ($1.node) }
+binop_section:
+| MINUS                                                        { Section.Minus          }
+| MINUSDOT                                                     { Section.FloatMinus     }
+| op                                                           { Section.Name ($1.node) }
 
 op:
 | INFIX0 | INFIXL0 | INFIXR0

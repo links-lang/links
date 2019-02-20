@@ -86,7 +86,7 @@ object ('self)
   method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode * Types.datatype
   method program         : program -> 'self * program * Types.datatype option
   method regex           : regex -> 'self * regex
-  method section         : section -> 'self * section * Types.datatype
+  method section         : Section.t -> 'self * Section.t * Types.datatype
   method sentence        : sentence -> 'self * sentence
 (*
   method sentence'       : sentence' -> 'self * sentence'

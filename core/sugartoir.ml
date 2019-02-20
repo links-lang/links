@@ -771,9 +771,9 @@ struct
              let k  = name_of_binder bndr in
              let kt = type_of_binder_exn bndr in
              I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
-          | Section (`Minus) -> cofv (lookup_var "-")
-          | Section (`FloatMinus) -> cofv (lookup_var "-.")
-          | Section (`Name name) -> cofv (lookup_var name)
+          | Section (Section.Minus) -> cofv (lookup_var "-")
+          | Section (Section.FloatMinus) -> cofv (lookup_var "-.")
+          | Section (Section.Name name) -> cofv (lookup_var name)
           | Conditional (p, e1, e2) ->
               I.condition (ev p, ec e1, ec e2)
           | InfixAppl ((tyargs, `Name ((">" | ">=" | "==" | "<" | "<=" | "<>") as op)), e1, e2) ->
@@ -1024,7 +1024,7 @@ struct
                   (* These things should all have been desugared already *)
           | Spawn _
           | Receive _
-          | Section (`Project _)
+          | Section (Section.Project _)
           | FunLit _
           | Iteration _
           | InfixAppl ((_, `RegexMatch _), _, _)

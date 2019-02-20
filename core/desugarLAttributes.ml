@@ -104,7 +104,7 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string) StringMap.t
     p', !lnames
 
 let let_in name rhs body : phrase =
-  block ([val_binding' NoSig (Name name, rhs, `Unknown)], body)
+  block ([val_binding' NoSig (PatName name, rhs, `Unknown)], body)
 
 let bind_lname_vars lnames = function
   | "l:action" as attr, es ->

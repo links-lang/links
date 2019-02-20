@@ -1382,16 +1382,16 @@ let type_section context = function
   | Section s as s' ->
      let env = context.var_env in
      let ((tyargs, t), usages) =
-       match s with
-       | `Minus         -> Utils.instantiate env "-", StringMap.empty
-       | `FloatMinus    -> Utils.instantiate env "-.", StringMap.empty
-       | `Project label ->
+       let open Section in match s with
+       | Minus         -> Utils.instantiate env "-", StringMap.empty
+       | FloatMinus    -> Utils.instantiate env "-.", StringMap.empty
+       | Project label ->
           let a = Types.fresh_type_variable (`Any, `Any) in
           let rho = Types.fresh_row_variable (`Any, `Any) in
           let effects = Types.make_empty_open_row (`Any, `Any) in (* projection is pure! *)
           let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho, false) in
             ([`Type a; `Row (StringMap.empty, rho, false); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), StringMap.empty
-       | `Name var      -> Utils.instantiate env var, StringMap.singleton var 1
+       | Name var      -> Utils.instantiate env var, StringMap.singleton var 1
      in
      if Settings.get_value Instantiate.quantified_instantiation then
        let tyvars = Types.quantifiers_of_type_args tyargs in

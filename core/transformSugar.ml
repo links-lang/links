@@ -4,18 +4,18 @@ open Sugartypes
 module TyEnv = Env.String
 
 let type_section env =
-  function
-    | `Minus -> TyEnv.lookup env "-"
-    | `FloatMinus -> TyEnv.lookup env "-."
-    | `Project label ->
-        let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
-        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
-        let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
+  let open Section in function
+  | Minus -> TyEnv.lookup env "-"
+  | FloatMinus -> TyEnv.lookup env "-."
+  | Project label ->
+      let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
+      let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
+      let eb, e = Types.fresh_row_quantifier (`Any, `Any) in
 
-        let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
-          `ForAll (Types.box_quantifiers [ab; rhob; eb],
-                   `Function (Types.make_tuple_type [r], e, a))
-    | `Name var -> TyEnv.lookup env var
+      let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
+        `ForAll (Types.box_quantifiers [ab; rhob; eb],
+                 `Function (Types.make_tuple_type [r], e, a))
+  | Name var -> TyEnv.lookup env var
 
 let type_unary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
@@ -178,7 +178,7 @@ class transform (env : Types.typing_environment) =
       fun op ->
         (o, op, type_binary_op var_env tycon_env op)
 
-    method section : section -> ('self_type * section * Types.datatype) =
+    method section : Section.t -> ('self_type * Section.t * Types.datatype) =
       fun section ->
         (o, section, type_section var_env section)
 

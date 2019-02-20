@@ -204,8 +204,10 @@ end
 type spawn_kind = Angel | Demon | Wait
     [@@deriving show]
 
-type section = [`Minus | `FloatMinus | `Project of name | `Name of name]
+module Section = struct
+  type t = Minus | FloatMinus | Project of name | Name of name
     [@@deriving show]
+end
 
 type declared_linearity = [ `Lin | `Unl ]
     [@@deriving show]
@@ -273,7 +275,7 @@ and phrasenode =
     * (*where:*)   phrase option
                     * (*orderby:*) phrase option
 | Escape           of binder * phrase
-| Section          of section
+| Section          of Section.t
 | Conditional      of phrase * phrase * phrase
 | Block            of block_body
 | InfixAppl        of (tyarg list * binop) * phrase * phrase
@@ -419,11 +421,11 @@ struct
     let p = p.node in
     match p with
     | Var v -> singleton v
-    | Section (`Name n) -> singleton n
+    | Section (Section.Name n) -> singleton n
 
     | Constant _
     | TextNode _
-    | Section (`Minus|`FloatMinus|`Project _) -> empty
+    | Section (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
 
     | Spawn (_, _, p, _)
     | TAbstr (_, p)

@@ -59,12 +59,12 @@ class map =
       | Expression _x -> let _x = o#phrase _x in Expression _x
       | Directive _x -> let _x = o#directive _x in Directive _x
 
-    method section : section -> section =
-      function
-      | `Minus -> `Minus
-      | `FloatMinus -> `FloatMinus
-      | `Project _x -> let _x = o#name _x in `Project _x
-      | `Name _x -> let _x = o#name _x in `Name _x
+    method section : Section.t -> Section.t =
+      let open Section in function
+      | Minus -> Minus
+      | FloatMinus -> FloatMinus
+      | Project _x -> let _x = o#name _x in Project _x
+      | Name _x -> let _x = o#name _x in Name _x
 
     method subkind : subkind -> subkind = fun x -> x
 
@@ -774,12 +774,12 @@ class fold =
       | Expression _x -> let o = o#phrase _x in o
       | Directive _x -> let o = o#directive _x in o
 
-    method section : section -> 'self_type =
-      function
-      | `Minus -> o
-      | `FloatMinus -> o
-      | `Project _x -> let o = o#name _x in o
-      | `Name _x -> let o = o#name _x in o
+    method section : Section.t -> 'self_type =
+      let open Section in function
+      | Minus -> o
+      | FloatMinus -> o
+      | Project _x -> let o = o#name _x in o
+      | Name _x -> let o = o#name _x in o
 
     method subkind : subkind -> 'self_type = fun _ -> o
 
@@ -1440,12 +1440,12 @@ class fold_map =
       | Expression _x -> let (o, _x) = o#phrase _x in (o, Expression _x)
       | Directive _x -> let (o, _x) = o#directive _x in (o, Directive _x)
 
-    method section : section -> ('self_type * section) =
-      function
-      | `Minus -> (o, `Minus)
-      | `FloatMinus -> (o, `FloatMinus)
-      | `Project _x -> let (o, _x) = o#name _x in (o, (`Project _x))
-      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+    method section : Section.t -> ('self_type * Section.t) =
+      let open Section in function
+      | Minus -> (o, Minus)
+      | FloatMinus -> (o, FloatMinus)
+      | Project _x -> let (o, _x) = o#name _x in (o, Project _x)
+      | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
     method subkind : subkind -> ('self_type * subkind) = fun k -> (o, k)
 
