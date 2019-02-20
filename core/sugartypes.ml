@@ -20,9 +20,7 @@ type unary_op = [
 ]
 and regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
     [@@deriving show]
-type logical_binop = [`And | `Or ]
-    [@@deriving show]
-type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name ]
+type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | `And | `Or | `Cons | `Name of name ]
     [@@deriving show]
 
 let string_of_unary_op =
@@ -199,7 +197,6 @@ module Pattern = struct
   | Variable of binder
   | As       of binder * with_pos
   | HasType  of with_pos * datatype'
-   [@@deriving show]
   and with_pos = t WithPos.t
    [@@deriving show]
 end

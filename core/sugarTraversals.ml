@@ -497,9 +497,6 @@ class map =
 
     method name : name -> name = o#string
 
-    method logical_binop : logical_binop -> logical_binop =
-      function | `And -> `And | `Or -> `Or
-
     method location : location -> location = o#unknown
 
     method iterpatt : iterpatt -> iterpatt =
@@ -644,7 +641,8 @@ class map =
       | `FloatMinus -> `FloatMinus
       | `RegexMatch _x ->
           let _x = o#list (fun o -> o#regexflag) _x in `RegexMatch _x
-      | (#logical_binop as x) -> (o#logical_binop x :> binop)
+      | `And -> `And
+      | `Or -> `Or
       | `Cons -> `Cons
       | `Name _x -> let _x = o#name _x in `Name _x
 
@@ -1168,9 +1166,6 @@ class fold =
 
     method name : name -> 'self_type = o#string
 
-    method logical_binop : logical_binop -> 'self_type =
-      function | `And -> o | `Or -> o
-
     method location : location -> 'self_type = o#unknown
 
     method iterpatt : iterpatt -> 'self_type =
@@ -1302,7 +1297,8 @@ class fold =
       | `Minus -> o
       | `FloatMinus -> o
       | `RegexMatch _x -> let o = o#list (fun o -> o#regexflag) _x in o
-      | (#logical_binop as x) -> o#logical_binop x
+      | `And -> o
+      | `Or -> o
       | `Cons -> o
       | `Name _x -> let o = o#name _x in o
 
@@ -1927,9 +1923,6 @@ class fold_map =
 
     method name : name -> ('self_type * name) = o#string
 
-    method logical_binop : logical_binop -> ('self_type * logical_binop) =
-      function | `And -> (o, `And) | `Or -> (o, `Or)
-
     method location : location -> ('self_type * location) = o#unknown
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
@@ -2085,7 +2078,8 @@ class fold_map =
       | `RegexMatch _x ->
           let (o, _x) = o#list (fun o -> o#regexflag) _x
           in (o, (`RegexMatch _x))
-      | (#logical_binop as x) -> (o#logical_binop x :> 'self_type * binop)
+      | `And -> (o, `And)
+      | `Or -> (o, `Or)
       | `Cons -> (o, `Cons)
       | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
 
