@@ -55,9 +55,9 @@ let desugar_regex phrase regex_type regex : phrase =
         constructor' repeat_str ~body:(tuple [desugar_repeat rep; aux r])
       | Splice e ->
         constructor' quote_str ~body:(constructor' ~body:(expr e) simply_str)
-      | Replace (re, (`Literal tmpl)) ->
+      | Replace (re, (Literal tmpl)) ->
         constructor' replace_str ~body:(tuple [aux re; constant_str tmpl])
-      | Replace (re, (`Splice e)) ->
+      | Replace (re, (SpliceExpr e)) ->
          constructor' replace_str ~body:(tuple [aux re; expr e])
   in block (List.map (fun (v, e1, t) ->
                 val_binding (variable_pat ~ty:t v) e1) !exprs,

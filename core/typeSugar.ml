@@ -151,8 +151,8 @@ struct
     | Seq rs -> List.for_all is_pure_regex rs
     | Alternate (r1, r2) -> is_pure_regex r1 && is_pure_regex r2
     | Splice p -> is_pure p
-    | Replace (r, `Literal _) -> is_pure_regex r
-    | Replace (r, `Splice p) -> is_pure_regex r && is_pure p
+    | Replace (r, Literal _) -> is_pure_regex r
+    | Replace (r, SpliceExpr p) -> is_pure_regex r && is_pure p
 
   let is_generalisable = is_pure
 end
@@ -3898,8 +3898,8 @@ and type_regex typing_env : regex -> regex =
            let () = unify_or_raise ~pos:pos ~handle:Gripers.splice_exp
                       (no_pos (typ e), no_pos Types.string_type)
            in Splice (erase e)
-        | Replace (r, `Literal s) -> Replace (tr r, `Literal s)
-        | Replace (r, `Splice e)  -> Replace (tr r, `Splice (erase (type_check typing_env e)))
+        | Replace (r, Literal s) -> Replace (tr r, Literal s)
+        | Replace (r, SpliceExpr e)  -> Replace (tr r, SpliceExpr (erase (type_check typing_env e)))
 and type_bindings (globals : context)  bindings =
   let tyenv, (bindings, uinf) =
     List.fold_left

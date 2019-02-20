@@ -1110,9 +1110,9 @@ regex_flags_opt:
 | SLASHFLAGS                                                   { parseRegexFlags $1 }
 
 regex_replace:
-| /* empty */                                                  { `Literal "" }
-| REGEXREPL                                                    { `Literal $1 }
-| block                                                        { `Splice $1 }
+| /* empty */                                                  { Literal "" }
+| REGEXREPL                                                    { Literal $1 }
+| block                                                        { SpliceExpr $1 }
 
 regex_pattern:
 | RANGE                                                        { Range $1 }

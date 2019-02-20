@@ -105,8 +105,8 @@ class map =
 
     method replace_rhs : replace_rhs -> replace_rhs =
       function
-      | `Literal _x -> let _x = o#string _x in `Literal _x
-      | `Splice _x -> let _x = o#phrase _x in `Splice _x
+      | Literal    _x -> let _x = o#string _x in Literal    _x
+      | SpliceExpr _x -> let _x = o#phrase _x in SpliceExpr _x
 
     method regexflag : regexflag -> regexflag =
       fun flag -> flag
@@ -818,8 +818,8 @@ class fold =
 
     method replace_rhs : replace_rhs -> 'self_type =
       function
-      | `Literal _x -> let o = o#string _x in o
-      | `Splice _x -> let o = o#phrase _x in o
+      | Literal    _x -> let o = o#string _x in o
+      | SpliceExpr _x -> let o = o#phrase _x in o
 
     method regexflag : regexflag -> 'self_type =
       fun _ -> o
@@ -1487,8 +1487,8 @@ class fold_map =
 
     method replace_rhs : replace_rhs -> ('self_type * replace_rhs) =
       function
-      | `Literal _x -> let (o, _x) = o#string _x in (o, (`Literal _x))
-      | `Splice _x -> let (o, _x) = o#phrase _x in (o, (`Splice _x))
+      | Literal    _x -> let (o, _x) = o#string _x in (o, (Literal _x))
+      | SpliceExpr _x -> let (o, _x) = o#phrase _x in (o, (SpliceExpr _x))
 
     method regexflag : regexflag -> ('self_type * regexflag) =
       fun flag -> (o, flag)

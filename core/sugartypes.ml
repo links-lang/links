@@ -217,10 +217,9 @@ type fn_dep = string * string
 type handler_depth = Deep | Shallow
     [@@deriving show]
 
-type replace_rhs = [
-| `Literal of string
-| `Splice  of phrase
-]
+type replace_rhs =
+| Literal     of string
+| SpliceExpr  of phrase
 and given_spawn_location =
 | ExplicitSpawnLocation of phrase (* spawnAt function *)
 | SpawnClient (* spawnClient function *)
@@ -579,8 +578,8 @@ struct
     | Group r
     | Repeat (_, r) -> regex r
     | Splice p -> phrase p
-    | Replace (r, `Literal _) -> regex r
-    | Replace (r, `Splice p) -> union (regex r) (phrase p)
+    | Replace (r, Literal _) -> regex r
+    | Replace (r, SpliceExpr p) -> union (regex r) (phrase p)
   and cp_phrase {node = p; _ } = match p with
     | CPUnquote e -> block e
     | CPGrab ((c, _t), Some bndr, p) ->

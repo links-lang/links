@@ -204,13 +204,13 @@ class transform (env : Types.typing_environment) =
         | Repeat (repeat, r) ->
             let (o, r) = o#regex r in (o, Repeat (repeat, r))
         | Splice e -> let (o, e, _) = o#phrase e in (o, Splice e)
-        | Replace (r, `Literal s) ->
+        | Replace (r, Literal s) ->
             let (o, r) = o#regex r in
-              (o, Replace (r, `Literal s))
-        | Replace (r, `Splice e) ->
+              (o, Replace (r, Literal s))
+        | Replace (r, SpliceExpr e) ->
             let (o, r) = o#regex r in
             let (o, e, _) = o#phrase e in
-              (o, Replace (r, `Splice e))
+              (o, Replace (r, SpliceExpr e))
 
     method program : program -> ('self_type * program * Types.datatype option) =
       fun (bs, e) ->
