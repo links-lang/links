@@ -19,7 +19,7 @@ object (self)
     | _ -> self
 
   method! phrasenode = function
-    | `TableLit (_, (_, None), _, _, _) -> {< all_desugared = false >}
+    | TableLit (_, (_, None), _, _, _) -> {< all_desugared = false >}
     | p -> super#phrasenode p
 end
 
@@ -452,7 +452,7 @@ object (self)
 
 
   method! phrasenode = function
-    | `Block (bs, p) ->
+    | Block (bs, p) ->
         (* aliases bound in `bs'
            should not escape the scope of the block *)
         let o       = {<>} in
@@ -461,19 +461,19 @@ object (self)
           (* NB: we return `self' rather than `_o' in order to return
              to the outer scope; any aliases bound in _o are
              unreachable from outside the block *)
-          self, `Block (bs, p)
-    | `TypeAnnotation (p, dt) ->
+          self, Block (bs, p)
+    | TypeAnnotation (p, dt) ->
         let o, p = self#phrase p in
-          o, `TypeAnnotation (p, Desugar.datatype' map self#aliases dt)
-    | `Upcast (p, dt1, dt2) ->
+          o, TypeAnnotation (p, Desugar.datatype' map self#aliases dt)
+    | Upcast (p, dt1, dt2) ->
         let o, p = self#phrase p in
-          o, `Upcast (p, Desugar.datatype' map alias_env dt1, Desugar.datatype' map alias_env dt2)
-    | `TableLit (t, (dt, _), cs, keys, p) ->
+          o, Upcast (p, Desugar.datatype' map alias_env dt1, Desugar.datatype' map alias_env dt2)
+    | TableLit (t, (dt, _), cs, keys, p) ->
         let read, write, needed = Desugar.tableLit alias_env cs dt in
         let o, t = self#phrase t in
 	let o, keys = o#phrase keys in
         let o, p = o#phrase p in
-          o, `TableLit (t, (dt, Some (read, write, needed)), cs, keys, p)
+          o, TableLit (t, (dt, Some (read, write, needed)), cs, keys, p)
     (* Switch and receive type annotations are never filled in by
        this point, so we ignore them.  *)
     | p -> super#phrasenode p

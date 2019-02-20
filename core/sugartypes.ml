@@ -260,72 +260,71 @@ and handler_parameterisation = {
 and iterpatt =
 | List  of (Pattern.with_pos * phrase)
 | Table of (Pattern.with_pos * phrase)
-and phrasenode = [
-| `Constant         of constant
-| `Var              of name
-| `QualifiedVar     of name list
-| `FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
-| `HandlerLit       of handlerlit
+and phrasenode =
+| Constant         of constant
+| Var              of name
+| QualifiedVar     of name list
+| FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
+| HandlerLit       of handlerlit
 (* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
-| `Spawn            of spawn_kind * given_spawn_location * phrase * Types.row option
-| `Query            of (phrase * phrase) option * phrase * Types.datatype option
-| `RangeLit         of (phrase * phrase)
-| `ListLit          of phrase list * Types.datatype option
-| `Iteration        of iterpatt list * phrase
+| Spawn            of spawn_kind * given_spawn_location * phrase * Types.row option
+| Query            of (phrase * phrase) option * phrase * Types.datatype option
+| RangeLit         of (phrase * phrase)
+| ListLit          of phrase list * Types.datatype option
+| Iteration        of iterpatt list * phrase
     * (*where:*)   phrase option
                     * (*orderby:*) phrase option
-| `Escape           of binder * phrase
-| `Section          of sec
-| `Conditional      of phrase * phrase * phrase
-| `Block            of block_body
-| `InfixAppl        of (tyarg list * binop) * phrase * phrase
-| `Regex            of regex
-| `UnaryAppl        of (tyarg list * unary_op) * phrase
-| `FnAppl           of phrase * phrase list
-| `TAbstr           of tyvar list ref * phrase
-| `TAppl            of phrase * tyarg list
-| `TupleLit         of phrase list
-| `RecordLit        of (name * phrase) list * phrase option
-| `Projection       of phrase * name
-| `With             of phrase * (name * phrase) list
-| `TypeAnnotation   of phrase * datatype'
-| `Upcast           of phrase * datatype' * datatype'
-| `ConstructorLit   of name * phrase option * Types.datatype option
-| `DoOperation      of name * phrase list * Types.datatype option
-| `Handle           of handler
-| `Switch           of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
-| `Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
-| `DatabaseLit      of phrase * (phrase option * phrase option)
-| `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
-| `DBDelete         of Pattern.with_pos * phrase * phrase option
-| `DBInsert         of phrase * name list * phrase * phrase option
-| `DBUpdate         of Pattern.with_pos * phrase * phrase option * (name * phrase) list
-| `LensLit          of phrase * Types.lens_sort option
+| Escape           of binder * phrase
+| Section          of sec
+| Conditional      of phrase * phrase * phrase
+| Block            of block_body
+| InfixAppl        of (tyarg list * binop) * phrase * phrase
+| Regex            of regex
+| UnaryAppl        of (tyarg list * unary_op) * phrase
+| FnAppl           of phrase * phrase list
+| TAbstr           of tyvar list ref * phrase
+| TAppl            of phrase * tyarg list
+| TupleLit         of phrase list
+| RecordLit        of (name * phrase) list * phrase option
+| Projection       of phrase * name
+| With             of phrase * (name * phrase) list
+| TypeAnnotation   of phrase * datatype'
+| Upcast           of phrase * datatype' * datatype'
+| ConstructorLit   of name * phrase option * Types.datatype option
+| DoOperation      of name * phrase list * Types.datatype option
+| Handle           of handler
+| Switch           of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
+| Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
+| DatabaseLit      of phrase * (phrase option * phrase option)
+| TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
+| DBDelete         of Pattern.with_pos * phrase * phrase option
+| DBInsert         of phrase * name list * phrase * phrase option
+| DBUpdate         of Pattern.with_pos * phrase * phrase option * (name * phrase) list
+| LensLit          of phrase * Types.lens_sort option
 (* the lens keys lit is a literal that takes an expression and is converted into a LensLit
    with the corresponding table keys marked in the lens_sort *)
-| `LensKeysLit      of phrase * phrase * Types.lens_sort option
-| `LensFunDepsLit   of phrase * (string list * string list) list * Types.lens_sort option
-| `LensDropLit      of phrase * string * string * phrase * Types.lens_sort option
-| `LensSelectLit    of phrase * phrase * Types.lens_sort option
-| `LensJoinLit      of phrase * phrase * phrase * phrase * phrase * Types.lens_sort option
-| `LensGetLit       of phrase * Types.datatype option
-| `LensPutLit       of phrase * phrase * Types.datatype option
-| `Xml              of name * (name * (phrase list)) list * phrase option * phrase list
-| `TextNode         of string
-| `Formlet          of phrase * phrase
-| `Page             of phrase
-| `FormletPlacement of phrase * phrase * phrase
-| `PagePlacement    of phrase
-| `FormBinding      of phrase * Pattern.with_pos
+| LensKeysLit      of phrase * phrase * Types.lens_sort option
+| LensFunDepsLit   of phrase * (string list * string list) list * Types.lens_sort option
+| LensDropLit      of phrase * string * string * phrase * Types.lens_sort option
+| LensSelectLit    of phrase * phrase * Types.lens_sort option
+| LensJoinLit      of phrase * phrase * phrase * phrase * phrase * Types.lens_sort option
+| LensGetLit       of phrase * Types.datatype option
+| LensPutLit       of phrase * phrase * Types.datatype option
+| Xml              of name * (name * (phrase list)) list * phrase option * phrase list
+| TextNode         of string
+| Formlet          of phrase * phrase
+| Page             of phrase
+| FormletPlacement of phrase * phrase * phrase
+| PagePlacement    of phrase
+| FormBinding      of phrase * Pattern.with_pos
 (* choose *)
-| `Select           of name * phrase
+| Select           of name * phrase
 (* choice *)
-| `Offer            of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
+| Offer            of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
 (* | `Fork             of binder * phrase *)
-| `CP               of cp_phrase
-| `TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase * Types.datatype option)
-| `Raise
-]
+| CP               of cp_phrase
+| TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase * Types.datatype option)
+| Raise
 and phrase = phrasenode with_pos
 and bindingnode =
 | Val     of (Pattern.with_pos * (tyvar list * phrase) * location * datatype' option)
@@ -379,13 +378,12 @@ exception RedundantPatternMatch of SourceCode.pos
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
-    | _ ->
-        `TAbstr (Types.box_quantifiers tyvars, with_dummy_pos e)
+    | _  -> TAbstr (Types.box_quantifiers tyvars, with_dummy_pos e)
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
-    | _ -> `TAppl (with_dummy_pos e, tys)
+    | _  -> TAppl (with_dummy_pos e, tys)
 
 module Freevars =
 struct
@@ -416,81 +414,81 @@ struct
 
 
   let rec formlet_bound ({node; _} : phrase) : StringSet.t = match node with
-    | `Xml (_, _, _, children) -> union_map formlet_bound children
-    | `FormBinding (_, pat) -> pattern pat
+    | Xml (_, _, _, children) -> union_map formlet_bound children
+    | FormBinding (_, pat) -> pattern pat
     | _ -> empty
 
   let rec phrase (p : phrase) : StringSet.t =
     let p = p.node in
     match p with
-    | `Var v -> singleton v
-    | `Section (`Name n) -> singleton n
+    | Var v -> singleton v
+    | Section (`Name n) -> singleton n
 
-    | `Constant _
-    | `TextNode _
-    | `Section (`Minus|`FloatMinus|`Project _) -> empty
+    | Constant _
+    | TextNode _
+    | Section (`Minus|`FloatMinus|`Project _) -> empty
 
-    | `Spawn (_, _, p, _)
-    | `TAbstr (_, p)
-    | `TAppl (p, _)
-    | `FormBinding (p, _)
-    | `Projection (p, _)
-    | `Page p
-    | `PagePlacement p
-    | `Upcast (p, _, _)
-    | `Select (_, p)
-    | `TypeAnnotation (p, _) -> phrase p
+    | Spawn (_, _, p, _)
+    | TAbstr (_, p)
+    | TAppl (p, _)
+    | FormBinding (p, _)
+    | Projection (p, _)
+    | Page p
+    | PagePlacement p
+    | Upcast (p, _, _)
+    | Select (_, p)
+    | TypeAnnotation (p, _) -> phrase p
 
-    | `ListLit (ps, _)
-    | `TupleLit ps -> union_map phrase ps
+    | ListLit (ps, _)
+    | TupleLit ps -> union_map phrase ps
 
-    | `LensLit (l, _) -> phrase l
+    | LensLit (l, _) -> phrase l
     (* this should be converted to `LensLit during typeSugar *)
-    | `LensFunDepsLit _ -> assert false
-    | `LensKeysLit (l, _, _) -> phrase l
-    | `LensSelectLit (l, _, _) -> phrase l
-    | `LensDropLit (l, _, _, _, _) -> phrase l
-    | `LensJoinLit (l1, l2, _, _, _, _) -> union_all [phrase l1; phrase l2]
+    | LensFunDepsLit _ -> assert false
+    | LensKeysLit (l, _, _) -> phrase l
+    | LensSelectLit (l, _, _) -> phrase l
+    | LensDropLit (l, _, _, _, _) -> phrase l
+    | LensJoinLit (l1, l2, _, _, _, _) -> union_all [phrase l1; phrase l2]
 
-    | `LensGetLit (l, _) -> phrase l
-    | `LensPutLit (l, data, _) -> union_all [phrase l; phrase data]
+    | LensGetLit (l, _) -> phrase l
+    | LensPutLit (l, data, _) -> union_all [phrase l; phrase data]
 
-    | `Query (None, p, _) -> phrase p
-    | `Query (Some (limit, offset), p, _) -> union_all [phrase limit; phrase offset; phrase p]
+    | Query (None, p, _) -> phrase p
+    | Query (Some (limit, offset), p, _) -> union_all [phrase limit; phrase offset; phrase p]
 
-    | `Escape (v, p) -> diff (phrase p) (singleton (name_of_binder v))
-    | `FormletPlacement (p1, p2, p3)
-    | `Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
-    | `Block b -> block b
-    | `InfixAppl ((_, `Name n), p1, p2) -> union (singleton n) (union_map phrase [p1;p2])
-    | `InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
-    | `RangeLit (p1, p2) -> union_map phrase [p1;p2]
-    | `Regex r -> regex r
-    | `UnaryAppl (_, p) -> phrase p
-    | `FnAppl (p, ps) -> union_map phrase (p::ps)
-    | `RecordLit (fields, p) ->
+    | Escape (v, p) -> diff (phrase p) (singleton (name_of_binder v))
+    | FormletPlacement (p1, p2, p3)
+    | Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
+    | Block b -> block b
+    | InfixAppl ((_, `Name n), p1, p2) -> union (singleton n) (union_map phrase [p1;p2])
+    | InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
+    | RangeLit (p1, p2) -> union_map phrase [p1;p2]
+    | Regex r -> regex r
+    | UnaryAppl (_, p) -> phrase p
+    | FnAppl (p, ps) -> union_map phrase (p::ps)
+    | RecordLit (fields, p) ->
         union (union_map (snd ->- phrase) fields)
           (option_map phrase p)
-    | `With (p, fields) ->
+    | With (p, fields) ->
         union (union_map (snd ->- phrase) fields)
           (phrase p)
-    | `ConstructorLit (_, popt, _) -> option_map phrase popt
-    | `DatabaseLit (p, (popt1, popt2)) ->
+    | ConstructorLit (_, popt, _) -> option_map phrase popt
+    | DatabaseLit (p, (popt1, popt2)) ->
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
-    | `DBInsert (p1, _labels, p2, popt) ->
+    | DBInsert (p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
-    | `TableLit (p1, _, _, _, p2) -> union (phrase p1) (phrase p2)
-    | `Xml (_, attrs, attrexp, children) ->
+    | TableLit (p1, _, _, _, p2) -> union (phrase p1) (phrase p2)
+    | Xml (_, attrs, attrexp, children) ->
         union_all
           [union_map (snd ->- union_map phrase) attrs;
            option_map phrase attrexp;
            union_map phrase children]
-    | `Formlet (xml, yields) ->
+    | Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | `HandlerLit hnlit -> handlerlit hnlit
-    | `FunLit (_, _, fnlit, _) -> funlit fnlit
-    | `Iteration (generators, body, where, orderby) ->
+    | HandlerLit hnlit -> handlerlit hnlit
+    | FunLit (_, _, fnlit, _) -> funlit fnlit
+    | Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                               | List (_, source)
                               | Table (_, source) -> phrase source) generators in
@@ -501,7 +499,7 @@ struct
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
                      diff (option_map phrase orderby) pat_bound]
-    | `Handle { sh_expr = e; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr } ->
+    | Handle { sh_expr = e; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr } ->
        let params_bound =
          option_map
            (fun params -> union_map (snd ->- pattern) params.shp_bindings)
@@ -511,23 +509,23 @@ struct
                   union_map case eff_cases;
                   union_map case val_cases;
                   diff (option_map (fun params -> union_map (fst ->- phrase) params.shp_bindings) descr.shd_params) params_bound]
-    | `Switch (p, cases, _)
-    | `Offer (p, cases, _) -> union (phrase p) (union_map case cases)
-    | `CP cp -> cp_phrase cp
-    | `Receive (cases, _) -> union_map case cases
-    | `DBDelete (pat, p, where) ->
+    | Switch (p, cases, _)
+    | Offer (p, cases, _) -> union (phrase p) (union_map case cases)
+    | CP cp -> cp_phrase cp
+    | Receive (cases, _) -> union_map case cases
+    | DBDelete (pat, p, where) ->
         union (phrase p)
           (diff (option_map phrase where)
              (pattern pat))
-    | `DBUpdate (pat, from, where, fields) ->
+    | DBUpdate (pat, from, where, fields) ->
         let pat_bound = pattern pat in
           union_all [phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
-    | `DoOperation (_, ps, _) -> union_map phrase ps
-    | `QualifiedVar _ -> empty
-    | `TryInOtherwise (p1, pat, p2, p3, _ty) -> union (union_map phrase [p1; p2; p3]) (pattern pat)
-    | `Raise -> empty
+    | DoOperation (_, ps, _) -> union_map phrase ps
+    | QualifiedVar _ -> empty
+    | TryInOtherwise (p1, pat, p2, p3, _ty) -> union (union_map phrase [p1; p2; p3]) (pattern pat)
+    | Raise -> empty
   and binding ({node = binding; _}: binding) : StringSet.t (* vars bound in the pattern *)
                                              * StringSet.t (* free vars in the rhs *) =
     match binding with

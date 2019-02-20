@@ -64,7 +64,7 @@ object
     | dt -> super#datatypenode dt
 
   method! phrasenode = function
-    | `QualifiedVar _ -> {< has_no_modules = false >}
+    | QualifiedVar _ -> {< has_no_modules = false >}
     | pn -> super#phrasenode pn
 end
 

@@ -141,7 +141,7 @@ object (o : 'self_type)
   method! phrasenode : Sugartypes.phrasenode ->
     ('self_type * Sugartypes.phrasenode * Types.datatype) =
     function
-    | `Iteration (generators, body, filter, sort) ->
+    | Iteration (generators, body, filter, sort) ->
         let eff = o#lookup_effects in
         let o, (es, ps, xs, ts) = o#qualifiers generators in
         let o, body, body_type = o#phrase body in
@@ -153,7 +153,7 @@ object (o : 'self_type)
           match filter with
             | None -> body
             | Some condition ->
-                with_dummy_pos (`Conditional (condition, body, list ~ty:elem_type [])) in
+                with_dummy_pos (Conditional (condition, body, list ~ty:elem_type [])) in
 
         let arg =
           match ps with
@@ -202,6 +202,6 @@ object
   method satisfied = has_no_fors
 
   method! phrasenode = function
-    | `Iteration _ -> {< has_no_fors = false >}
+    | Iteration _ -> {< has_no_fors = false >}
     | e -> super#phrasenode e
 end

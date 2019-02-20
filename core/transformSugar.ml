@@ -228,9 +228,9 @@ class transform (env : Types.typing_environment) =
 
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
       function
-      | `Constant c -> let (o, c, t) = o#constant c in (o, (`Constant c), t)
-      | `Var var -> (o, `Var var, o#lookup_type var)
-      | `FunLit (Some argss, lin, lam, location) ->
+      | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
+      | Var var -> (o, Var var, o#lookup_type var)
+      | FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
@@ -242,9 +242,9 @@ class transform (env : Types.typing_environment) =
               argss
               (o, rt)
           in
-            (o, `FunLit (Some argss, lin, lam, location), t)
-      | `HandlerLit _ -> assert false
-      | `Spawn (Wait, loc, body, Some inner_effects) ->
+            (o, FunLit (Some argss, lin, lam, location), t)
+      | HandlerLit _ -> assert false
+      | Spawn (Wait, loc, body, Some inner_effects) ->
           assert (loc = NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -253,8 +253,8 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `Spawn (Wait, loc, body, Some inner_effects), body_type)
-      | `Spawn (k, spawn_loc, body, Some inner_effects) ->
+            (o, Spawn (Wait, loc, body, Some inner_effects), body_type)
+      | Spawn (k, spawn_loc, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let (o, spawn_loc) = o#given_spawn_location spawn_loc in
@@ -264,11 +264,11 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, (`Spawn (k, spawn_loc, body, Some inner_effects)), process_type)
-      | `Select (l, e) ->
+            (o, Spawn (k, spawn_loc, body, Some inner_effects), process_type)
+      | Select (l, e) ->
          let (o, e, t) = o#phrase e in
-         (o, (`Select (l, e)), TypeUtils.select_type l t)
-      | `Offer (e, bs, Some t) ->
+         (o, Select (l, e), TypeUtils.select_type l t)
+      | Offer (e, bs, Some t) ->
           let (o, e, _) = o#phrase e in
           let (o, bs) =
             listu o
@@ -277,11 +277,11 @@ class transform (env : Types.typing_environment) =
                  let (o, e, _) = o#phrase e in (o, (p, e)))
               bs in
           let (o, t) = o#datatype t in
-            (o, `Offer (e, bs, Some t), t)
-      | `CP p ->
+            (o, Offer (e, bs, Some t), t)
+      | CP p ->
          let (o, p, t) = o#cp_phrase p in
-         (o, `CP p, t)
-      | `Query (range, body, Some t) ->
+         (o, CP p, t)
+      | Query (range, body, Some t) ->
           let (o, range) =
             optionu o
               (fun o (limit, offset) ->
@@ -291,88 +291,88 @@ class transform (env : Types.typing_environment) =
               range in
           let (o, body, _) = o#phrase body in
           let (o, t) = o#datatype t in
-            (o, (`Query (range, body, Some t)), t)
-      | `ListLit (es, Some t) ->
+            (o, Query (range, body, Some t), t)
+      | ListLit (es, Some t) ->
           let (o, es, _) = list o (fun o -> o#phrase) es in
           let (o, t) = o#datatype t in
-            (o, `ListLit (es, Some t), Types.make_list_type t)
-      | `RangeLit (e1, e2) ->
+            (o, ListLit (es, Some t), Types.make_list_type t)
+      | RangeLit (e1, e2) ->
           let (o, e1, _) = o#phrase e1 in
           let (o, e2, _) = o#phrase e2 in
-            (o, `RangeLit (e1, e2), Types.make_list_type Types.int_type)
-      | `Iteration (gens, body, cond, orderby) ->
+            (o, RangeLit (e1, e2), Types.make_list_type Types.int_type)
+      | Iteration (gens, body, cond, orderby) ->
           let (o, gens) = listu o (fun o -> o#iterpatt) gens in
           let (o, body, t) = o#phrase body in
           let (o, cond, _) = option o (fun o -> o#phrase) cond in
           let (o, orderby, _) = option o (fun o -> o#phrase) orderby in
-            (o, `Iteration (gens, body, cond, orderby), t)
-      | `Escape (b, e) ->
+            (o, Iteration (gens, body, cond, orderby), t)
+      | Escape (b, e) ->
           let envs = o#backup_envs in
           let (o, b) = o#binder b in
           let (o, e, t) = o#phrase e in
           let o = o#restore_envs envs in
-            (o, `Escape (b, e), t)
-      | `Section sec -> (o, `Section sec, type_section var_env sec)
-      | `Conditional (p, e1, e2) ->
+            (o, Escape (b, e), t)
+      | Section sec -> (o, Section sec, type_section var_env sec)
+      | Conditional (p, e1, e2) ->
           let (o, p, _) = o#phrase p in
           let (o, e1, t) = o#phrase e1 in
           let (o, e2, _) = o#phrase e2
-          in (o, `Conditional (p, e1, e2), t)
-      | `Block (bs, e) ->
+          in (o, Conditional (p, e1, e2), t)
+      | Block (bs, e) ->
           let envs = o#backup_envs in
           let (o, bs) = listu o (fun o -> o#binding) bs in
           let (o, e, t) = o#phrase e in
           let o = o#restore_envs envs in
-            o, `Block (bs, e), t
-      | `InfixAppl ((tyargs, op), e1, e2) ->
+            o, Block (bs, e), t
+      | InfixAppl ((tyargs, op), e1, e2) ->
           let (o, op, t) = o#binop op in
             check_type_application
-              (`InfixAppl ((tyargs, op), e1, e2), t)
+              (InfixAppl ((tyargs, op), e1, e2), t)
               (fun () ->
                  let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
                  let (o, e1, _) = o#phrase e1 in
                  let (o, e2, _) = o#phrase e2 in
-                   (o, `InfixAppl ((tyargs, op), e1, e2), t))
-      | `Regex r ->
+                   (o, InfixAppl ((tyargs, op), e1, e2), t))
+      | Regex r ->
           let (o, r) = o#regex r in
-            (o, `Regex r, Instantiate.alias "Regex" [] tycon_env)
-      | `UnaryAppl ((tyargs, op), e) ->
+            (o, Regex r, Instantiate.alias "Regex" [] tycon_env)
+      | UnaryAppl ((tyargs, op), e) ->
           let (o, op, t) = o#unary_op op in
             check_type_application
-              (`UnaryAppl ((tyargs, op), e), t)
+              (UnaryAppl ((tyargs, op), e), t)
               (fun () ->
                  let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
                  let (o, e, _) = o#phrase e in
-                   (o, `UnaryAppl ((tyargs, op), e), t))
-      | `FnAppl (f, args) ->
+                   (o, UnaryAppl ((tyargs, op), e), t))
+      | FnAppl (f, args) ->
          let (o, f, ft) = o#phrase f in
          let (o, args, _) = list o (fun o -> o#phrase) args in
-            (o, `FnAppl (f, args), TypeUtils.return_type ft)
-      | `TAbstr (tyvars, e) ->
+            (o, FnAppl (f, args), TypeUtils.return_type ft)
+      | TAbstr (tyvars, e) ->
           let outer_tyvars = o#backup_quantifiers in
           let (o, qs) = o#quantifiers (Types.unbox_quantifiers tyvars) in
           let (o, e, t) = o#phrase e in
           let o = o#restore_quantifiers outer_tyvars in
           let t = Types.for_all (qs, t) in
             (o, tabstr (qs, e.node), t)
-      | `TAppl (e, tyargs) ->
+      | TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
             check_type_application
-              (`TAppl (e, tyargs), t)
+              (TAppl (e, tyargs), t)
               (fun () ->
                  let t = Instantiate.apply_type t tyargs in
-                   (o, `TAppl (e, tyargs), t))
-      | `TupleLit [e] ->
+                   (o, TAppl (e, tyargs), t))
+      | TupleLit [e] ->
           (* QUESTION:
 
              Why do we type 1-tuples as if they aren't tuples?
           *)
           let (o, e, t) = o#phrase e in
-            (o, `TupleLit [e], t)
-      | `TupleLit es ->
+            (o, TupleLit [e], t)
+      | TupleLit es ->
           let (o, es, ts) = list o (fun o -> o#phrase) es in
-            (o, `TupleLit es, Types.make_tuple_type ts)
-      | `RecordLit (fields, base) ->
+            (o, TupleLit es, Types.make_tuple_type ts)
+      | RecordLit (fields, base) ->
           let (o, fields, field_types) =
             let rec list o =
               function
@@ -399,11 +399,11 @@ class transform (env : Types.typing_environment) =
                           assert false
                   end
           in
-            (o, `RecordLit (fields, base), t)
-      | `Projection (e, name) ->
+            (o, RecordLit (fields, base), t)
+      | Projection (e, name) ->
           let (o, e, t) = o#phrase e in
-          (o, `Projection (e, name), TypeUtils.project_type name t)
-      | `With (e, fields) ->
+          (o, Projection (e, name), TypeUtils.project_type name t)
+      | With (e, fields) ->
           let (o, e, t) = o#phrase e in
           let (o, fields) =
             let rec list o =
@@ -416,26 +416,26 @@ class transform (env : Types.typing_environment) =
             in
               list o fields
           in
-            (o, `With (e, fields), t)
-      | `TypeAnnotation (e, ann_type) ->
+            (o, With (e, fields), t)
+      | TypeAnnotation (e, ann_type) ->
           let (o, e, _) = o#phrase e in
           let (o, ann_type) = o#datatype' ann_type in
           let t = val_of (snd ann_type) in
-          (o, `TypeAnnotation (e, ann_type), t)
-      | `Upcast (e, to_type, from_type) ->
+          (o, TypeAnnotation (e, ann_type), t)
+      | Upcast (e, to_type, from_type) ->
           let (o, e, _) = o#phrase e in
           let (o, to_type) = o#datatype' to_type in
           let (o, from_type) = o#datatype' from_type in
           let t = val_of (snd to_type) in
-            (o, `Upcast (e, to_type, from_type), t)
-      | `ConstructorLit (name, e, Some t) ->
+            (o, Upcast (e, to_type, from_type), t)
+      | ConstructorLit (name, e, Some t) ->
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
-          (o, `ConstructorLit (name, e, Some t), t)
-      | `DoOperation (name, ps, Some t) ->
+          (o, ConstructorLit (name, e, Some t), t)
+      | DoOperation (name, ps, Some t) ->
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
-         (o, `DoOperation (name, ps, Some t), t)
-      | `Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+         (o, DoOperation (name, ps, Some t), t)
+      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
          let (o, expr, _) = o#phrase sh_expr in
          let envs = o#backup_envs in
@@ -479,16 +479,16 @@ class transform (env : Types.typing_environment) =
            shd_raw_row = raw_row;
            shd_params = params}
          in
-         (o, `Handle { sh_expr = expr; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr }, output_t)
-      | `TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->
+         (o, Handle { sh_expr = expr; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr }, output_t)
+      | TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->
           let (o, try_phr, _) = o#phrase try_phr in
           let (o, as_pat) = o#pattern as_pat in
           let (o, as_phr, _) = o#phrase as_phr in
           let (o, otherwise_phr, _) = o#phrase otherwise_phr in
           let (o, dt) = o#datatype dt in
-          (o, `TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)), dt)
-      | `Raise -> (o, `Raise, `Not_typed) (* TEMP *)
-      | `Switch (v, cases, Some t) ->
+          (o, TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)), dt)
+      | Raise -> (o, Raise, `Not_typed) (* TEMP *)
+      | Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
             listu o
@@ -497,8 +497,8 @@ class transform (env : Types.typing_environment) =
                  let (o, e, _) = o#phrase e in (o, (p, e)))
               cases in
           let (o, t) = o#datatype t in
-            (o, `Switch (v, cases, Some t), t)
-      | `Receive (cases, Some t) ->
+            (o, Switch (v, cases, Some t), t)
+      | Receive (cases, Some t) ->
           let (o, cases) =
             listu o
               (fun o (p, e) ->
@@ -506,49 +506,49 @@ class transform (env : Types.typing_environment) =
                  let (o, e, _) = o#phrase e in (o, (p, e)))
               cases in
           let (o, t) = o#datatype t in
-            (o, `Receive (cases, Some t), t)
-      | `DatabaseLit (name, (driver, args)) ->
+            (o, Receive (cases, Some t), t)
+      | DatabaseLit (name, (driver, args)) ->
           let (o, name, _) = o#phrase name in
           let (o, driver, _) = option o (fun o -> o#phrase) driver in
           let (o, args, _) = option o (fun o -> o#phrase) args in
-            (o, `DatabaseLit (name, (driver, args)), `Primitive `DB)
-      | `LensLit (table, Some t) ->
+            (o, DatabaseLit (name, (driver, args)), `Primitive `DB)
+      | LensLit (table, Some t) ->
          let (o, table, _) = o#phrase table in
          let (o, t) = o#lens_sort t in
-            (o, `LensLit (table, Some t), `Lens (t))
-      | `LensDropLit (lens, drop, key, default, Some t) ->
+            (o, LensLit (table, Some t), `Lens (t))
+      | LensDropLit (lens, drop, key, default, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#lens_sort t in
           let (o, default, _) = o#phrase default in
-            (o, `LensDropLit (lens, drop, key, default, Some t), `Lens (t))
-      | `LensSelectLit (lens, predicate, Some t) ->
+            (o, LensDropLit (lens, drop, key, default, Some t), `Lens (t))
+      | LensSelectLit (lens, predicate, Some t) ->
           let (o, lens, _) = o#phrase lens in
           (* let (o, predicate, _) = o#phrase predicate in *)
           let (o, t) = o#lens_sort t in
-            (o, `LensSelectLit (lens, predicate, Some t), `Lens t)
-      | `LensJoinLit (lens1, lens2, on, left, right, Some t) ->
+            (o, LensSelectLit (lens, predicate, Some t), `Lens t)
+      | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
           let (o, lens1, _) = o#phrase lens1 in
           let (o, lens2, _) = o#phrase lens2 in
           let (o, t) = o#lens_sort t in
-            (o, `LensJoinLit (lens1, lens2, on, left, right, Some t), `Lens t)
-      | `LensGetLit (lens, Some t) ->
+            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), `Lens t)
+      | LensGetLit (lens, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#datatype t in
-            (o, `LensGetLit (lens, Some t), Types.make_list_type t)
-      | `LensPutLit (lens, data, Some t) ->
+            (o, LensGetLit (lens, Some t), Types.make_list_type t)
+      | LensPutLit (lens, data, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, data, _) = o#phrase data in
           let (o, t) = o#datatype t in
-            (o, `LensPutLit (lens, data, Some t), Types.make_list_type t)
-      | `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
+            (o, LensPutLit (lens, data, Some t), Types.make_list_type t)
+      | TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
           let (o, name, _) = o#phrase name in
           let (o, db, _) = o#phrase db in
           let (o, dtype) = o#sugar_datatype dtype in
           let (o, read_row) = o#datatype read_row in
           let (o, write_row) = o#datatype write_row in
           let (o, needed_row) = o#datatype needed_row in
-            (o, `TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), `Table (read_row, write_row, needed_row))
-      | `DBDelete (p, from, where) ->
+            (o, TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), `Table (read_row, write_row, needed_row))
+      | DBDelete (p, from, where) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
             (* BUG:
@@ -556,16 +556,16 @@ class transform (env : Types.typing_environment) =
                We should really reset the environment: variables bound
                by p shouldn't be visible in subsequent expression.
 
-               The same applies to `DBUpdate and `Iteration.
+               The same applies to DBUpdate and Iteration.
             *)
           let (o, where, _) = option o (fun o -> o#phrase) where in
-            (o, `DBDelete (p, from, where), Types.unit_type)
-      | `DBInsert (into, labels, values, id) ->
+            (o, DBDelete (p, from, where), Types.unit_type)
+      | DBInsert (into, labels, values, id) ->
           let (o, into, _) = o#phrase into in
           let (o, values, _) = o#phrase values in
           let (o, id, _) = option o (fun o -> o#phrase) id in
-            (o, `DBInsert (into, labels, values, id), Types.unit_type)
-      | `DBUpdate (p, from, where, set) ->
+            (o, DBInsert (into, labels, values, id), Types.unit_type)
+      | DBUpdate (p, from, where, set) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
           let (o, where, _) = option o (fun o -> o#phrase) where in
@@ -575,8 +575,8 @@ class transform (env : Types.typing_environment) =
                  let (o, value, _) = o#phrase value in (o, (name, value)))
               set
           in
-            (o, `DBUpdate (p, from, where, set), Types.unit_type)
-      | `Xml (tag, attrs, attrexp, children) ->
+            (o, DBUpdate (p, from, where, set), Types.unit_type)
+      | Xml (tag, attrs, attrexp, children) ->
           let (o, attrs) =
             listu o
               (fun o (name, value) ->
@@ -585,9 +585,9 @@ class transform (env : Types.typing_environment) =
               attrs in
           let (o, attrexp, _) = option o (fun o -> o#phrase) attrexp in
           let (o, children, _) = list o (fun o -> o#phrase) children in
-            (o, `Xml (tag, attrs, attrexp, children), Types.xml_type)
-      | `TextNode s -> (o, `TextNode s, Types.xml_type)
-      | `Formlet (body, yields) ->
+            (o, Xml (tag, attrs, attrexp, children), Types.xml_type)
+      | TextNode s -> (o, TextNode s, Types.xml_type)
+      | Formlet (body, yields) ->
          let envs = o#backup_envs in
          let (o, body, _) = o#phrase body in
          (* ensure that the formlet bindings are only in scope in the
@@ -595,16 +595,16 @@ class transform (env : Types.typing_environment) =
          let o = o#with_var_env (TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ())) in
          let (o, yields, t) = o#phrase yields in
          let o = o#restore_envs envs in
-         (o, `Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
-      | `Page e -> let (o, e, _) = o#phrase e in (o, `Page e, Instantiate.alias "Page" [] tycon_env)
-      | `FormletPlacement (f, h, attributes) ->
+         (o, Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
+      | Page e -> let (o, e, _) = o#phrase e in (o, Page e, Instantiate.alias "Page" [] tycon_env)
+      | FormletPlacement (f, h, attributes) ->
           let (o, f, _) = o#phrase f in
           let (o, h, _) = o#phrase h in
           let (o, attributes, _) = o#phrase attributes in
-            (o, `FormletPlacement (f, h, attributes), Types.xml_type)
-      | `PagePlacement e ->
-          let (o, e, _) = o#phrase e in (o, `PagePlacement e, Types.xml_type)
-      | `FormBinding (f, p) ->
+            (o, FormletPlacement (f, h, attributes), Types.xml_type)
+      | PagePlacement e ->
+          let (o, e, _) = o#phrase e in (o, PagePlacement e, Types.xml_type)
+      | FormBinding (f, p) ->
          let envs = o#backup_envs in
          let (o, f, _) = o#phrase f in
          (* HACK: add the formlet bindings to the formlet environment *)
@@ -614,7 +614,7 @@ class transform (env : Types.typing_environment) =
          let o = o#restore_envs envs in
          let o = o#with_formlet_env formlet_env in
          (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
-         (o, `FormBinding (f, p), Types.xml_type)
+         (o, FormBinding (f, p), Types.xml_type)
       | e -> failwith ("oops: "^show_phrasenode  e)
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =

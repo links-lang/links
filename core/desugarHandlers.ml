@@ -141,13 +141,13 @@ let rec phrase_of_pattern : Pattern.with_pos -> phrase
       | Constant c                  -> constant c
       | Variable b                  -> var (name_of_binder b)
       | As (b,_)                    -> var (name_of_binder b)
-      | HasType (p,t)               -> with_dummy_pos (`TypeAnnotation (phrase_of_pattern p, t))
+      | HasType (p,t)               -> with_dummy_pos (TypeAnnotation (phrase_of_pattern p, t))
      end
 
 (* This function applies the list of parameters to the generated handle. *)
 let apply_params : phrase -> phrase list list -> phrase
   = fun h pss ->
-    List.fold_right (fun ps acc -> with_dummy_pos (`FnAppl (acc, ps)) ) (List.rev pss) h
+    List.fold_right (fun ps acc -> with_dummy_pos (FnAppl (acc, ps)) ) (List.rev pss) h
 
 let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
   = fun cases ->
@@ -174,10 +174,10 @@ let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos 
 let funlit_of_handlerlit : Sugartypes.handlerlit -> Sugartypes.funlit
   = fun (depth, m, cases, params) ->
     let m    = deanonymize m in
-    let comp = with_dummy_pos (`FnAppl (phrase_of_pattern m, [])) in
+    let comp = with_dummy_pos (FnAppl (phrase_of_pattern m, [])) in
     let cases = parameterize cases params in
     let hndlr = SugarConstructors.Make.untyped_handler comp cases depth in
-    let handle = block ([], (with_dummy_pos (`Handle hndlr))) in
+    let handle = block ([], (with_dummy_pos (Handle hndlr))) in
     let params = opt_map (List.map (List.map deanonymize)) params in
     let body  =
       match params with
@@ -198,7 +198,7 @@ let desugar_handlers_early =
 object
   inherit SugarTraversals.map as super
   method! phrasenode = function
-    | `HandlerLit hnlit ->
+    | HandlerLit hnlit ->
        let (fnparams, body) = funlit_of_handlerlit hnlit in
        let funlit : Sugartypes.phrasenode = (fun_lit `Unl fnparams body).node in
        super#phrasenode funlit
@@ -206,9 +206,9 @@ object
 
   method! phrase {node; pos} =
     match node with
-    | `Handle h ->
+    | Handle h ->
        let (val_cases, eff_cases) = split_handler_cases h.sh_effect_cases in
-       with_dummy_pos (`Handle { h with sh_effect_cases = eff_cases;
+       with_dummy_pos (Handle { h with sh_effect_cases = eff_cases;
                                         sh_value_cases  = val_cases })
     | _ -> super#phrase {node; pos}
 

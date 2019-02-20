@@ -416,13 +416,13 @@ qualified_type_name:
 | CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
 
 atomic_expression:
-| qualified_name                                               { with_pos $loc (`QualifiedVar $1) }
-| VARIABLE                                                     { with_pos $loc (`Var          $1) }
-| constant                                                     { with_pos $loc (`Constant     $1) }
+| qualified_name                                               { with_pos $loc (QualifiedVar $1) }
+| VARIABLE                                                     { with_pos $loc (Var          $1) }
+| constant                                                     { with_pos $loc (Constant     $1) }
 | parenthesized_thing                                          { $1 }
 /* HACK: allows us to support both mailbox receive syntax
 and receive for session types. */
-| RECEIVE                                                      { with_pos $loc (`Var "receive") }
+| RECEIVE                                                      { with_pos $loc (Var "receive") }
 
 cp_name:
 | VARIABLE                                                     { binder ~ppos:$loc($1) $1 }
@@ -458,10 +458,10 @@ cp_expression:
 primary_expression:
 | atomic_expression                                            { $1 }
 | LBRACKET perhaps_exps RBRACKET                               { list ~ppos:$loc $2 }
-| LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (`RangeLit($2, $4))   }
+| LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
-| LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (`CP $2) }
+| LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | handler_depth optional_computation_parameter
      handler_parameterization                                  { handler_lit ~ppos:$loc (hnlit_arg $1 $2 $3) }
 
@@ -479,12 +479,12 @@ constructor_expression:
 | CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
 
 parenthesized_thing:
-| LPAREN binop RPAREN                                          { with_pos $loc (`Section $2)              }
-| LPAREN DOT record_label RPAREN                               { with_pos $loc (`Section (`Project $3))   }
-| LPAREN RPAREN                                                { record ~ppos:$loc []                     }
-| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3             }
-| LPAREN exps RPAREN                                           { with_pos $loc (`TupleLit ($2))           }
-| LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (`With ($2, $4))           }
+| LPAREN binop RPAREN                                          { with_pos $loc (Section $2)              }
+| LPAREN DOT record_label RPAREN                               { with_pos $loc (Section (`Project $3))   }
+| LPAREN RPAREN                                                { record ~ppos:$loc []                    }
+| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3            }
+| LPAREN exps RPAREN                                           { with_pos $loc (TupleLit ($2))           }
+| LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (With ($2, $4))           }
 
 binop:
 | MINUS                                                        { `Minus          }
@@ -516,10 +516,10 @@ postfix_expression:
 | primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (`Name $2) $1 }
 | block                                                        { $1 }
 | QUERY block                                                  { query ~ppos:$loc None $2 }
-| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (`Constant (`Int 0)))) $5 }
+| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (`Int 0)))) $5 }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
-| postfix_expression arg_spec                                  { with_pos $loc (`FnAppl ($1, $2)) }
-| postfix_expression DOT record_label                          { with_pos $loc (`Projection ($1, $3)) }
+| postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
+| postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
 
 
 arg_spec:
@@ -536,7 +536,7 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc `FloatMinus $2 }
 | PREFIXOP unary_expression                                    { unary_appl ~ppos:$loc (`Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (`DoOperation ($2, $3, None)) }
+| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None)) }
 
 
 infixr_9:
@@ -643,14 +643,14 @@ logical_expression:
 
 typed_expression:
 | logical_expression                                           { $1 }
-| typed_expression COLON datatype                              { with_pos $loc (`TypeAnnotation ($1, datatype $3)) }
-| typed_expression COLON datatype LARROW datatype              { with_pos $loc (`Upcast ($1, datatype $3, datatype $5)) }
+| typed_expression COLON datatype                              { with_pos $loc (TypeAnnotation ($1, datatype $3)) }
+| typed_expression COLON datatype LARROW datatype              { with_pos $loc (Upcast ($1, datatype $3, datatype $5)) }
 
 db_expression:
-| DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in with_pos $loc (`DBDelete (pat, phrase, $5)) }
+| DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in with_pos $loc (DBDelete (pat, phrase, $5)) }
 | UPDATE LPAREN table_generator RPAREN
          perhaps_where
-         SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in with_pos $loc (`DBUpdate(pat, phrase, $5, $8)) }
+         SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in with_pos $loc (DBUpdate(pat, phrase, $5, $8)) }
 
 /* XML */
 xmlid:
@@ -678,28 +678,28 @@ xml_contents:
 | block                                                        { $1 }
 | formlet_binding | formlet_placement | page_placement
 | xml                                                          { $1 }
-| CDATA                                                        { with_pos $loc (`TextNode (Utility.xml_unescape $1)) }
+| CDATA                                                        { with_pos $loc (TextNode (Utility.xml_unescape $1)) }
 
 formlet_binding:
-| LBRACE logical_expression RARROW pattern RBRACE              { with_pos $loc (`FormBinding($2, $4)) }
+| LBRACE logical_expression RARROW pattern RBRACE              { with_pos $loc (FormBinding($2, $4)) }
 
 formlet_placement:
 | LBRACE logical_expression
-         FATRARROW logical_expression RBRACE                   { with_pos $loc (`FormletPlacement ($2, $4,
+         FATRARROW logical_expression RBRACE                   { with_pos $loc (FormletPlacement ($2, $4,
                                                                                                    list ~ppos:$loc [])) }
 | LBRACE logical_expression
          FATRARROW logical_expression
-         WITH logical_expression RBRACE                        { with_pos $loc (`FormletPlacement ($2, $4, $6)) }
+         WITH logical_expression RBRACE                        { with_pos $loc (FormletPlacement ($2, $4, $6)) }
 
 page_placement:
-| LBRACEBAR exp BARRBRACE                                      { with_pos $loc($2) (`PagePlacement $2) }
+| LBRACEBAR exp BARRBRACE                                      { with_pos $loc($2) (PagePlacement $2) }
 
 session_expression:
-| SELECT field_label exp                                       { with_pos $loc (`Select ($2, $3))      }
-| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { with_pos $loc (`Offer ($3, $6, None)) }
+| SELECT field_label exp                                       { with_pos $loc (Select ($2, $3))      }
+| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { with_pos $loc (Offer ($3, $6, None)) }
 
 conditional_expression:
-| IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (`Conditional ($3, $5, $7)) }
+| IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
 case:
 | CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
@@ -711,15 +711,15 @@ perhaps_cases:
 | case*                                                        { $1 }
 
 case_expression:
-| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Switch ($3, $6, None)) }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (`Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (`Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Handle (untyped_handler $3 $6 Deep   )) }
+| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Switch ($3, $6, None)) }
+| RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (Receive ($3, None)) }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
+| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
 | HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE perhaps_cases RBRACE
-                                                               { with_pos $loc (`Handle (untyped_handler ~parameters:(List.rev $6)
+                                                               { with_pos $loc (Handle (untyped_handler ~parameters:(List.rev $6)
                                                                                          $3 $9 Deep)) }
-| RAISE                                                        { with_pos $loc (`Raise) }
-| TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (`TryInOtherwise ($2, $4, $6, $8, None)) }
+| RAISE                                                        { with_pos $loc (Raise) }
+| TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
 
 handle_params:
 | rev(separated_nonempty_list(COMMA,
@@ -729,7 +729,7 @@ iteration_expression:
 | FOR LPAREN perhaps_generators RPAREN
       perhaps_where
       perhaps_orderby
-      exp                                                      { with_pos $loc (`Iteration ($3, $7, $5, $6)) }
+      exp                                                      { with_pos $loc (Iteration ($3, $7, $5, $6)) }
 
 perhaps_generators:
 | separated_list(COMMA, generator)                             { $1 }
@@ -753,18 +753,18 @@ perhaps_orderby:
 | ORDERBY LPAREN exps RPAREN                                   { Some (tuple ~ppos:$loc($3) $3) }
 
 escape_expression:
-| ESCAPE VARIABLE IN postfix_expression                        { with_pos $loc (`Escape (binder ~ppos:$loc($2) $2, $4)) }
+| ESCAPE VARIABLE IN postfix_expression                        { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
 
 formlet_expression:
-| FORMLET xml YIELDS exp                                       { with_pos $loc (`Formlet ($2, $4)) }
-| PAGE xml                                                     { with_pos $loc (`Page $2)          }
+| FORMLET xml YIELDS exp                                       { with_pos $loc (Formlet ($2, $4)) }
+| PAGE xml                                                     { with_pos $loc (Page $2)          }
 
 table_expression:
-| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { with_pos $loc (`TableLit ($2, datatype $4, $5,
-                                                                                           list ~ppos:$loc [], $7)) }
+| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { with_pos $loc (TableLit ($2, datatype $4, $5,
+                                                                                          list ~ppos:$loc [], $7)) }
 /* SAND */
 | TABLE exp WITH datatype perhaps_table_constraints
-            TABLEKEYS exp FROM exp                             { with_pos $loc (`TableLit ($2, datatype $4, $5, $7, $9))}
+            TABLEKEYS exp FROM exp                             { with_pos $loc (TableLit ($2, datatype $4, $5, $7, $9))}
 
 perhaps_table_constraints:
 | loption(preceded(WHERE, table_constraints))                  { $1 }
@@ -806,7 +806,7 @@ database_expression:
   RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN db_expression
   RETURNING VARIABLE                                           { db_insert ~ppos:$loc $2 $5 $7 (Some $9) }
-| DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (`DatabaseLit ($2, $3))           }
+| DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
 | VARIABLE+                                                    { $1 }
@@ -818,18 +818,18 @@ fn_deps:
 | separated_nonempty_list(COMMA, fn_dep)                       { $1 }
 
 lens_expression:
-| LENS exp DEFAULT                                             { with_pos $loc (`LensLit ($2, None))}
-| LENS exp TABLEKEYS exp                                       { with_pos $loc (`LensKeysLit ($2, $4, None))}
-| LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (`LensFunDepsLit ($2, $5, None))}
+| LENS exp DEFAULT                                             { with_pos $loc (LensLit ($2, None))}
+| LENS exp TABLEKEYS exp                                       { with_pos $loc (LensKeysLit ($2, $4, None))}
+| LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (LensFunDepsLit ($2, $5, None))}
 | LENSDROP VARIABLE DETERMINED BY
-  VARIABLE DEFAULT exp FROM exp                                { with_pos $loc (`LensDropLit ($9, $2, $5, $7, None)) }
-| LENSSELECT FROM exp BY exp                                   { with_pos $loc (`LensSelectLit ($3, $5, None)) }
-| LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { with_pos $loc (`LensJoinLit ($2, $4, $6, $9, $11, None)) }
-| LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { with_pos $loc (`LensJoinLit ($2, $4, $6,
-                                                                                       with_pos $loc (`Constant (`Bool true )),
-                                                                                       with_pos $loc (`Constant (`Bool false)), None)) }
-| LENSGET exp                                                  { with_pos $loc (`LensGetLit ($2, None)) }
-| LENSPUT exp WITH exp                                         { with_pos $loc (`LensPutLit ($2, $4, None)) }
+  VARIABLE DEFAULT exp FROM exp                                { with_pos $loc (LensDropLit ($9, $2, $5, $7, None)) }
+| LENSSELECT FROM exp BY exp                                   { with_pos $loc (LensSelectLit ($3, $5, None)) }
+| LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { with_pos $loc (LensJoinLit ($2, $4, $6, $9, $11, None)) }
+| LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { with_pos $loc (LensJoinLit ($2, $4, $6,
+                                                                                       with_pos $loc (Constant (`Bool true )),
+                                                                                       with_pos $loc (Constant (`Bool false)), None)) }
+| LENSGET exp                                                  { with_pos $loc (LensGetLit ($2, None)) }
+| LENSPUT exp WITH exp                                         { with_pos $loc (LensPutLit ($2, $4, None)) }
 
 
 record_labels:
@@ -863,7 +863,7 @@ block_contents:
 | exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
                                                                   record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
-| SEMICOLON | /* empty */                                      { ([], with_pos $loc (`TupleLit [])) }
+| SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exps:
 | separated_nonempty_list(COMMA,
@@ -1099,10 +1099,10 @@ kinded_row_var:
  * Regular expression grammar
  */
 regex:
-| SLASH regex_pattern_alternate regex_flags_opt                { with_pos $loc($2) (`Regex $2), $3 }
-| SLASH regex_flags_opt                                        { with_pos $loc (`Regex (Simply "")), $2 }
+| SLASH regex_pattern_alternate regex_flags_opt                { with_pos $loc($2) (Regex $2), $3 }
+| SLASH regex_flags_opt                                        { with_pos $loc (Regex (Simply "")), $2 }
 | SSLASH regex_pattern_alternate SLASH regex_replace
-    regex_flags_opt                                            { with_pos $loc (`Regex (Replace ($2, $4))),
+    regex_flags_opt                                            { with_pos $loc (Regex (Replace ($2, $4))),
                                                                  RegexReplace :: $5 }
 
 regex_flags_opt:

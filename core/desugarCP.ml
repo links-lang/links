@@ -19,7 +19,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode = function
-    | `CP p ->
+    | CP p ->
        let rec desugar_cp = fun o {node = p; _} ->
          match p with
          | CPUnquote (bs, e) ->
@@ -62,7 +62,7 @@ object (o : 'self_type)
                               (fn_appl send_str give_tyargs [e; var c])],
                  with_dummy_pos p), t
          | CPGiveNothing ({node=c, Some t; _}) ->
-            o, `Var c, t
+            o, Var c, t
          | CPSelect ({node=c, Some s; _}, label, p) ->
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
@@ -70,7 +70,7 @@ object (o : 'self_type)
             let o = o#restore_envs envs in
             o, block_node
                 ([val_binding (variable_pat ~ty:(TypeUtils.select_type label s) c)
-                               (with_dummy_pos (`Select (label, var c)))],
+                               (with_dummy_pos (Select (label, var c)))],
                  with_dummy_pos p), t
          | CPOffer ({node=c, Some s; _}, cases) ->
             let desugar_branch (label, p) (o, cases) =
@@ -84,7 +84,7 @@ object (o : 'self_type)
             (match List.split cases with
                 | (_, []) -> assert false (* Case list cannot be empty *)
                 | (cases, t :: _ts) ->
-                    o, `Offer (var c, cases, Some t), t)
+                    o, Offer (var c, cases, Some t), t)
          | CPLink ({node=c, Some ct; _}, {node=d, Some _; _}) ->
             o, fn_appl_node link_sync_str [`Type ct; `Row o#lookup_effects]
                             [var c; var d],

@@ -65,7 +65,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `FunLit (Some argss, lin, lam, location) ->
+    | FunLit (Some argss, lin, lam, location) ->
         let inner_mb = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("!"^s))) in
         let (o, lam, rt) = o#funlit inner_mb lam in
         let ft =
@@ -82,7 +82,7 @@ object (o : 'self_type)
              var f)
         in
           (o, e, ft)
-    | `Section (`Project name) ->
+    | Section (`Project name) ->
         let ab, a = Types.fresh_type_quantifier (`Any, `Any) in
         let rhob, (fields, rho, _) = Types.fresh_row_quantifier (`Any, `Any) in
         let effb, eff = Types.fresh_row_quantifier (`Any, `Any) in
@@ -95,7 +95,7 @@ object (o : 'self_type)
                                            `Function (Types.make_tuple_type [r], eff, a)) in
 
         let pss = [[variable_pat ~ty:r x]] in
-        let body = with_dummy_pos (`Projection (var x, name)) in
+        let body = with_dummy_pos (Projection (var x, name)) in
         let e : phrasenode =
           block_node
             ([fun_binding' ~tyvars:[ab; rhob; effb] (binder ~ty:ft f) (pss, body)],
@@ -131,7 +131,7 @@ object
   method satisfied = has_no_funs
 
   method! phrasenode = function
-    | `FunLit _ -> {< has_no_funs = false >}
+    | FunLit _ -> {< has_no_funs = false >}
     | e -> super#phrasenode e
 
   method! bindingnode = function

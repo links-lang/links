@@ -19,13 +19,13 @@ object(self)
   inherit SugarTraversals.map as super
 
   method! phrasenode : phrasenode -> phrasenode = function
-    | `Block (bs, phr) ->
+    | Block (bs, phr) ->
         let flattened_bindings =
           List.concat (
             List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
           ) in
         let flattened_phrase = self#phrase phr in
-        `Block (flattened_bindings, flattened_phrase)
+        Block (flattened_bindings, flattened_phrase)
     | x -> super#phrasenode x
 end
 and flatten_bindings = fun () ->

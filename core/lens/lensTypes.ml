@@ -39,13 +39,13 @@ let sort_cols_of_table (tableName : string) (t : Types.typ) =
 
 let var_name (var : phrase) =
     match var.node with
-    | `Var name -> name
+    | Var name -> name
     | _ -> failwith "Expected a `Var type"
 
 let cols_of_phrase (key : phrase) : string list =
     match key.node with
-    | `TupleLit keys -> List.map var_name keys
-    | `Var name -> [name]
+    | TupleLit keys -> List.map var_name keys
+    | Var name -> [name]
     | _ -> failwith "Expected a tuple or a variable."
 
 let select_lens_sort (sort : Lens_sort.t) (pred : lens_phrase) : Lens_sort.t =

@@ -34,26 +34,26 @@ object (o : 'self_type)
     {< extra_env = StringMap.remove f extra_env >}
 
   method! phrasenode = function
-    | `TAppl ({node=`Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
+    | TAppl ({node=Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`TAppl (phn, tyargs))
-    | `InfixAppl ((tyargs, `Name name), e1, e2) when StringMap.mem name extra_env ->
+          super#phrasenode (TAppl (phn, tyargs))
+    | InfixAppl ((tyargs, `Name name), e1, e2) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`InfixAppl ((tyargs, `Name name), e1, e2))
-    | `UnaryAppl ((tyargs, `Name name), e) when StringMap.mem name extra_env ->
+          super#phrasenode (InfixAppl ((tyargs, `Name name), e1, e2))
+    | UnaryAppl ((tyargs, `Name name), e) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`UnaryAppl ((tyargs, `Name name), e))
+          super#phrasenode (UnaryAppl ((tyargs, `Name name), e))
             (* HACK: manage the lexical scope of extras *)
-    | `Spawn _ as e ->
+    | Spawn _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
-    | `Escape _ as e ->
+    | Escape _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
-    | `Block _ as e ->
+    | Block _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e

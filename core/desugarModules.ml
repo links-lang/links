@@ -38,13 +38,13 @@ object(self)
   inherit SugarTraversals.map as super
 
   method! phrasenode : phrasenode -> phrasenode = function
-    | `Block (bs, phr) ->
+    | Block (bs, phr) ->
         let flattened_bindings =
           List.concat (
             List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
           ) in
         let flattened_phrase = self#phrase phr in
-        `Block (flattened_bindings, flattened_phrase)
+        Block (flattened_bindings, flattened_phrase)
     | x -> super#phrasenode x
 end
 
@@ -241,7 +241,7 @@ and perform_renaming module_table path term_ht type_ht =
       | uo -> super#unary_op uo
 
     method! phrasenode = function
-      | `Block (bs, phr) ->
+      | Block (bs, phr) ->
           (* Process bindings, then process the phrase using
            * updated shadow table. *)
           let (term_ht, type_ht, bs') =
@@ -250,29 +250,29 @@ and perform_renaming module_table path term_ht type_ht =
           let (_, phr') =
               (perform_renaming module_table path
                 term_ht type_ht)#phrase phr in
-          (self, `Block (bs', phr'))
-      | `Var n -> (self, `Var (resolve n term_shadow_table))
-      | `RecordLit (xs, p_opt) ->
+          (self, Block (bs', phr'))
+      | Var n -> (self, Var (resolve n term_shadow_table))
+      | RecordLit (xs, p_opt) ->
           let (_, xs') =
             self#list (fun o (n, p) ->
               let (o, p') = o#phrase p in
               (o, (n, p'))) xs in
           let (_, p_opt') = self#option (fun o -> o#phrase) p_opt in
-          (self, `RecordLit (xs', p_opt'))
-      | `Projection (p, n) ->
+          (self, RecordLit (xs', p_opt'))
+      | Projection (p, n) ->
           let (_, p') = self#phrase p in
-          (self, `Projection (p', n))
-      | `ConstructorLit (n, p_opt, dt_opt) ->
+          (self, Projection (p', n))
+      | ConstructorLit (n, p_opt, dt_opt) ->
           (* Resolve constructor name using term table *)
           let fqn = resolve n term_shadow_table in
           let (_, p_opt') = self#option (fun o -> o#phrase) p_opt in
-          (self, `ConstructorLit (fqn, p_opt', dt_opt))
-      | `QualifiedVar [] -> assert false
-      | `QualifiedVar (hd :: tl) ->
+          (self, ConstructorLit (fqn, p_opt', dt_opt))
+      | QualifiedVar [] -> assert false
+      | QualifiedVar (hd :: tl) ->
           (* Similar to qualified imports. *)
           let prefix = resolve hd term_shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
-          (self, `Var fqn)
+          (self, Var fqn)
       | phr -> super#phrasenode phr
 
     method! datatypenode = function
