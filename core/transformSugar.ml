@@ -664,14 +664,14 @@ class transform (env : Types.typing_environment) =
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function
-      | `List (p, e) ->
+      | List (p, e) ->
           let (o, e, _) = o#phrase e in
           let (o, p) = o#pattern p in
-            (o, `List (p, e))
-      | `Table (p, e) ->
+          (o, List (p, e))
+      | Table (p, e) ->
           let (o, e, _) = o#phrase e in
           let (o, p) = o#pattern p in
-           (o, `Table (p, e))
+          (o, Table (p, e))
 
     method funlit : Types.row -> funlit -> ('self_type * funlit * Types.datatype) =
       fun inner_eff (pss, e) ->

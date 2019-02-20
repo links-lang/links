@@ -503,12 +503,12 @@ class map =
 
     method iterpatt : iterpatt -> iterpatt =
       function
-      | `List ((_x, _x_i1)) ->
+      | List ((_x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in `List ((_x, _x_i1))
-      | `Table ((_x, _x_i1)) ->
+          let _x_i1 = o#phrase _x_i1 in List ((_x, _x_i1))
+      | Table ((_x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in `Table ((_x, _x_i1))
+          let _x_i1 = o#phrase _x_i1 in Table ((_x, _x_i1))
 
     method funlit : funlit -> funlit =
       fun (_x, _x_i1) ->
@@ -1173,9 +1173,9 @@ class fold =
 
     method iterpatt : iterpatt -> 'self_type =
       function
-      | `List ((_x, _x_i1)) ->
+      | List ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#phrase _x_i1 in o
-      | `Table ((_x, _x_i1)) ->
+      | Table ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#phrase _x_i1 in o
 
     method funlit : funlit -> 'self_type =
@@ -1931,12 +1931,12 @@ class fold_map =
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function
-      | `List ((_x, _x_i1)) ->
+      | List ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`List ((_x, _x_i1))))
-      | `Table ((_x, _x_i1)) ->
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (List ((_x, _x_i1))))
+      | Table ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (`Table ((_x, _x_i1))))
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (Table ((_x, _x_i1))))
 
     method funlit : funlit -> ('self_type * funlit) =
       fun (_x, _x_i1) ->

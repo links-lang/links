@@ -107,7 +107,7 @@ object (o : 'self_type)
         List.fold_left
           (fun (o, (es, ps, xs, ts)) q ->
              match q with
-               | `List (p, e) ->
+               | List (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
 
@@ -117,7 +117,7 @@ object (o : 'self_type)
                    let xb = binder ~ty:t var in
                      o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
                          var::xs, element_type::ts)
-               | `Table (p, e) ->
+               | Table (p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
 

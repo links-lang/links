@@ -2915,8 +2915,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | `Iteration (generators, body, where, orderby) ->
             let is_query =
               List.exists (function
-                             | `List _ -> false
-                             | `Table _ -> true) generators in
+                             | List  _ -> false
+                             | Table _ -> true) generators in
             let context =
               if is_query then
                 {context with effect_row = Types.make_empty_closed_row ()}
@@ -2926,7 +2926,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               List.fold_left
                 (fun (generators, generator_usages, environments) ->
                    function
-                     | `List (pattern, e) ->
+                     | List (pattern, e) ->
                          let a = Types.fresh_type_variable (`Any, `Any) in
                          let lt = Types.make_list_type a in
                          let pattern = tpc pattern in
@@ -2934,17 +2934,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                          let () = unify ~handle:Gripers.iteration_list_body (pos_and_typ e, no_pos lt) in
                          let () = unify ~handle:Gripers.iteration_list_pattern (ppos_and_typ pattern, (exp_pos e, a))
                          in
-                           (`List (erase_pat pattern, erase e) :: generators,
+                           (List (erase_pat pattern, erase e) :: generators,
                             usages e :: generator_usages,
                             pattern_env pattern :: environments)
-                     | `Table (pattern, e) ->
+                     | Table (pattern, e) ->
                          let a = Types.fresh_type_variable (`Any, `Any) in
                          let tt = Types.make_table_type (a, Types.fresh_type_variable (`Any, `Any), Types.fresh_type_variable (`Any, `Any)) in
                          let pattern = tpc pattern in
                          let e = tc e in
                          let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in
                          let () = unify ~handle:Gripers.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a)) in
-                           (`Table (erase_pat pattern, erase e) :: generators,
+                           (Table (erase_pat pattern, erase e) :: generators,
                             usages e :: generator_usages,
                             pattern_env pattern:: environments))
                 ([], [], []) generators in

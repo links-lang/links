@@ -257,10 +257,9 @@ and handler_parameterisation = {
   shp_bindings: (phrase * Pattern.with_pos) list;
   shp_types: Types.datatype list
 }
-and iterpatt = [
-| `List of Pattern.with_pos * phrase
-| `Table of Pattern.with_pos * phrase
-]
+and iterpatt =
+| List  of (Pattern.with_pos * phrase)
+| Table of (Pattern.with_pos * phrase)
 and phrasenode = [
 | `Constant         of constant
 | `Var              of name
@@ -297,7 +296,6 @@ and phrasenode = [
 | `Switch           of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
 | `Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
 | `DatabaseLit      of phrase * (phrase option * phrase option)
-(* | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase *)
 | `TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
 | `DBDelete         of Pattern.with_pos * phrase * phrase option
 | `DBInsert         of phrase * name list * phrase * phrase option
@@ -493,22 +491,15 @@ struct
     | `FunLit (_, _, fnlit, _) -> funlit fnlit
     | `Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
-                              | `List (_, source)
-                              | `Table (_, source) -> phrase source) generators in
+                              | List (_, source)
+                              | Table (_, source) -> phrase source) generators in
         let pat_bound = union_map (function
-                                     | `List (pat, _)
-                                     | `Table (pat, _) -> pattern pat) generators in
+                                     | List (pat, _)
+                                     | Table (pat, _) -> pattern pat) generators in
           union_all [xs;
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
                      diff (option_map phrase orderby) pat_bound]
-            (*     | `Iteration (`List (pat, source), body, where, orderby) *)
-(*     | `Iteration (`Table (pat, source), body, where, orderby) ->  *)
-(*         let pat_bound = pattern pat in *)
-(*           union_all [phrase source; *)
-(*                      diff (phrase body) pat_bound; *)
-(*                      diff (option_map phrase where) pat_bound; *)
-(*                      diff (option_map phrase orderby) pat_bound] *)
     | `Handle { sh_expr = e; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr } ->
        let params_bound =
          option_map

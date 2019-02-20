@@ -735,8 +735,8 @@ perhaps_generators:
 | separated_list(COMMA, generator)                             { $1 }
 
 generator:
-| list_generator                                               { `List $1  }
-| table_generator                                              { `Table $1 }
+| list_generator                                               { List $1  }
+| table_generator                                              { Table $1 }
 
 list_generator:
 | pattern LARROW exp                                           { ($1, $3) }
