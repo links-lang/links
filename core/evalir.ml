@@ -724,7 +724,7 @@ struct
                                         | _ -> assert false) fields)
           | _ -> assert false in
       let update_query =
-        EvalQuery.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
+        Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
         apply_cont cont env (`Record [])
     | `Delete ((xb, source), where) ->
@@ -736,7 +736,7 @@ struct
                                         | _ -> assert false) fields)
           | _ -> assert false in
       let delete_query =
-        EvalQuery.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
+        Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
     | `CallCC f ->

@@ -18,13 +18,11 @@ type unary_op = [
 | `FloatMinus
 | `Name of name
 ]
-and regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
+and regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
     [@@deriving show]
 type logical_binop = [`And | `Or ]
     [@@deriving show]
 type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name ]
-    [@@deriving show]
-type operator = [ unary_op | binop | `Project of name ]
     [@@deriving show]
 
 let string_of_unary_op =
@@ -130,7 +128,7 @@ type quantifier = type_variable
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
-type fieldconstraint = [ `Readonly | `Default ]
+type fieldconstraint = Readonly | Default
     [@@deriving show]
 
 type datatypenode =
@@ -197,35 +195,34 @@ type patternnode = [
 and pattern = patternnode with_pos
     [@@deriving show]
 
-type spawn_kind = [ `Angel | `Demon | `Wait ]
+type spawn_kind = Angel | Demon | Wait
     [@@deriving show]
 
 type replace_rhs = [
 | `Literal of string
 | `Splice  of phrase
 ]
-and given_spawn_location = [
-  | `ExplicitSpawnLocation of phrase (* spawnAt function *)
-  | `SpawnClient (* spawnClient function *)
-  | `NoSpawnLocation (* spawn function *)
-]
-and regex = [
-| `Range     of char * char
-| `Simply    of string
-| `Quote     of regex
-| `Any
-| `StartAnchor
-| `EndAnchor
-| `Seq       of regex list
-| `Alternate of regex * regex
-| `Group     of regex
-| `Repeat    of Regex.repeat * regex
-| `Splice    of phrase
-| `Replace   of regex * replace_rhs
-]
+and given_spawn_location =
+| ExplicitSpawnLocation of phrase (* spawnAt function *)
+| SpawnClient (* spawnClient function *)
+| NoSpawnLocation (* spawn function *)
+and regex =
+| Range     of (char * char)
+| Simply    of string
+| Quote     of regex
+| Any
+| StartAnchor
+| EndAnchor
+| Seq       of regex list
+| Alternate of (regex * regex)
+| Group     of regex
+| Repeat    of (Regex.repeat * regex)
+| Splice    of phrase
+| Replace   of (regex * replace_rhs)
 and clause = pattern * phrase
 and funlit = pattern list list * phrase
-and handlerlit = [`Deep | `Shallow] * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
+and handler_depth = Deep | Shallow
+and handlerlit = handler_depth * pattern * clause list * pattern list list option (* computation arg, cases, parameters *)
 and handler = {
   sh_expr: phrase;
   sh_effect_cases: clause list;
@@ -233,7 +230,7 @@ and handler = {
   sh_descr: handler_descriptor
 }
 and handler_descriptor = {
-  shd_depth: [`Deep | `Shallow];
+  shd_depth: handler_depth;
   shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
   shd_raw_row: Types.row;
   shd_params: handler_parameterisation option
@@ -333,19 +330,19 @@ and bindingnode = [
 and binding = bindingnode with_pos
 and block_body = binding list * phrase
 and directive = string * string list
-and sentence = [
-| `Definitions of binding list
-| `Expression  of phrase
-| `Directive   of directive ]
-and cp_phrasenode = [
-| `Unquote of binding list * phrase
-| `Grab of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
-| `Give of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
-| `GiveNothing of binder
-| `Select of binder * string * cp_phrase
-| `Offer of binder * (string * cp_phrase) list
-| `Link of binder * binder
-| `Comp of binder * cp_phrase * cp_phrase ]
+and sentence =
+| Definitions of binding list
+| Expression  of phrase
+| Directive   of directive
+and cp_phrasenode =
+| Unquote     of (binding list * phrase)
+| Grab        of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
+| Give        of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
+| GiveNothing of binder
+| Select      of (binder * string * cp_phrase)
+| Offer       of (binder * (string * cp_phrase) list)
+| Link        of (binder * binder)
+| Comp        of (binder * cp_phrase * cp_phrase)
 and cp_phrase = cp_phrasenode with_pos
     [@@deriving show]
 
@@ -560,32 +557,32 @@ struct
               union exprfree (diff bodyfree patbound))
   and case (pat, body) : StringSet.t = diff (phrase body) (pattern pat)
   and regex = function
-    | `Range _
-    | `Simply _
-    | `Any
-    | `StartAnchor
-    | `EndAnchor
-    | `Quote _ -> empty
-    | `Seq rs -> union_map regex rs
-    | `Alternate (r1, r2) -> union (regex r1) (regex r2)
-    | `Group r
-    | `Repeat (_, r) -> regex r
-    | `Splice p -> phrase p
-    | `Replace (r, `Literal _) -> regex r
-    | `Replace (r, `Splice p) -> union (regex r) (phrase p)
+    | Range _
+    | Simply _
+    | Any
+    | StartAnchor
+    | EndAnchor
+    | Quote _ -> empty
+    | Seq rs -> union_map regex rs
+    | Alternate (r1, r2) -> union (regex r1) (regex r2)
+    | Group r
+    | Repeat (_, r) -> regex r
+    | Splice p -> phrase p
+    | Replace (r, `Literal _) -> regex r
+    | Replace (r, `Splice p) -> union (regex r) (phrase p)
   and cp_phrase {node = p; _ } = match p with
-    | `Unquote e -> block e
-    | `Grab ((c, _t), Some bndr, p) ->
-       union (singleton c) (diff (cp_phrase p) (singleton (name_of_binder bndr)))
-    | `Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
-    | `Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
-    | `GiveNothing bndr -> singleton (name_of_binder bndr)
-    | `Select (bndr, _label, p) ->
-       union (singleton (name_of_binder bndr)) (cp_phrase p)
-    | `Offer (bndr, cases) ->
-       union (singleton (name_of_binder bndr)) (union_map (fun (_label, p) -> cp_phrase p) cases)
-    | `Link (bndr1, bndr2) ->
-       union (singleton (name_of_binder bndr1)) (singleton (name_of_binder bndr2))
-    | `Comp (bndr, left, right) ->
+    | Unquote e -> block e
+    | Grab ((c, _t), Some bndr, p) ->
+      union (singleton c) (diff (cp_phrase p) (singleton (name_of_binder bndr)))
+    | Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
+    | Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
+    | GiveNothing bndr -> singleton (name_of_binder bndr)
+    | Select (bndr, _label, p) ->
+      union (singleton (name_of_binder bndr)) (cp_phrase p)
+    | Offer (bndr, cases) ->
+      union (singleton (name_of_binder bndr)) (union_map (fun (_label, p) -> cp_phrase p) cases)
+    | Link (bndr1, bndr2) ->
+      union (singleton (name_of_binder bndr1)) (singleton (name_of_binder bndr2))
+    | Comp (bndr, left, right) ->
        diff (union (cp_phrase left) (cp_phrase right)) (singleton (name_of_binder bndr))
 end

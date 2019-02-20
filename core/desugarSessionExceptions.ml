@@ -23,7 +23,7 @@ object (o: 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode = function
-    | (`Spawn (`Wait, _, _, _)) as sw ->
+    | (`Spawn (Wait, _, _, _)) as sw ->
         super#phrasenode sw
     | `Spawn (k, spawn_loc, {node=body;_}, Some inner_effects) ->
         let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
@@ -96,7 +96,7 @@ object (o : 'self_type)
            Types.make_empty_closed_row (), otherwise_dt) in
 
         let hndl_desc = {
-          shd_depth = `Deep;
+          shd_depth = Deep;
           shd_types = types;
           shd_raw_row = raw_row;
           shd_params = None;

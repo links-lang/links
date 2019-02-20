@@ -1057,9 +1057,10 @@ let compile_handle_cases
         ih_return = return;
         ih_cases  = compiled_effect_cases;
         ih_depth  =
-          match Sugartypes.(desc.shd_depth) with
-          | `Shallow -> `Shallow
-          | `Deep -> `Deep params
+          let open Sugartypes in
+          match desc.shd_depth with
+          | Shallow -> `Shallow
+          | Deep    -> `Deep params
       }
   in
   (outer_param_bindings, `Special handle)

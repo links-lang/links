@@ -20,4 +20,4 @@ script:
   - make tests
   - ./run-tests db-only shredding
   - ./run-tests db-only relational-lenses
-  - ./run-tests unit 
+  - ./run-tests unit

@@ -45,7 +45,6 @@ class map :
     method cp_phrase       : cp_phrase -> cp_phrase
     method patternnode     : patternnode -> patternnode
     method pattern         : pattern -> pattern
-    method operator        : operator -> operator
     method name            : name -> name
     method logical_binop   : logical_binop -> logical_binop
     method location        : location -> location
@@ -116,7 +115,6 @@ class fold :
     method cp_phrase       : cp_phrase -> 'self
     method patternnode     : patternnode -> 'self
     method pattern         : pattern -> 'self
-    method operator        : operator -> 'self
     method name            : name -> 'self
     method logical_binop   : logical_binop -> 'self
     method location        : location -> 'self
@@ -179,7 +177,6 @@ object ('self)
   method location        : location -> 'self * location
   method logical_binop   : logical_binop -> 'self * logical_binop
   method name            : name -> 'self * name
-  method operator        : operator -> 'self * operator
   method option          : 'a . ('self -> 'a -> 'self * 'a) -> 'a option -> 'self * 'a option
   method patternnode     : patternnode -> 'self * patternnode
   method pattern         : pattern -> 'self * pattern

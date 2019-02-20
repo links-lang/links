@@ -832,3 +832,278 @@ struct
 (*    Debug.print ("e: "^Ir.show_computation e); *)
     computation (env_of_value_env env) e
 end
+
+let prepare_clauses : t -> t list =
+  function
+    | `Concat vs -> vs
+    | v -> [v]
+
+type index = (Var.var * string) list
+
+
+let gens_index gs  =
+  let all_fields t =
+    let field_types = table_field_types t in
+    labels_of_field_types field_types
+  in
+ (* Use keys if available *)
+  let key_fields t =
+    match t with
+      (_, _, (ks::_), _) -> StringSet.from_list ks
+    |	_ -> all_fields t
+  in
+  let table_index get_fields (x, source) =
+    let t = match source with `Table t -> t | _ -> assert false in
+    let labels = get_fields t in
+      List.rev
+        (StringSet.fold
+           (fun name ps -> (x, name) :: ps)
+           labels
+           [])
+  in
+  if Settings.get_value Basicsettings.use_keys_in_shredding
+  then concat_map (table_index key_fields) gs
+  else concat_map (table_index all_fields) gs
+
+let outer_index gs_out = gens_index gs_out
+let inner_index z gs_in =
+  (* it's just a dynamic index! *)
+  (z, "2") :: gens_index gs_in
+
+let extract_gens =
+  function
+    | `For (_, gs, _, _) -> gs
+    | _ -> assert false
+
+type let_clause = Var.var * t * Var.var * t
+type let_query = let_clause list
+
+let rec let_clause : Value.database -> let_clause -> Sql.query =
+  fun db (q, outer, z, inner) ->
+    let gs_out = extract_gens outer in
+    let gs_in = extract_gens inner in
+      `With (q,
+             clause db (outer_index gs_out) false outer,
+             z,
+             clause db (inner_index z gs_in) false inner)
+and clause : Value.database -> index -> bool -> t -> Sql.query = fun db index unit_query v ->
+  (*  Debug.print ("clause: "^string_of_t v); *)
+  match v with
+    | `Concat _ -> assert false
+    | `For (_, [], _, body) ->
+        clause db index unit_query body
+    | `For (_, (x, `Table (_db, table, _keys, _row))::gs, os, body) ->
+        let body = clause db index unit_query (`For (None, gs, [], body)) in
+        let os = List.map (base db index) os in
+          begin
+            match body with
+              | `Select (fields, tables, condition, []) ->
+                  `Select (fields, (table, x)::tables, condition, os)
+              | _ -> assert false
+          end
+    | `If (c, body, `Concat []) ->
+      (* Turn conditionals into where clauses. We might want to do
+         this earlier on.  *)
+      let c = base db index c in
+      let body = clause db index unit_query body in
+        begin
+          match body with
+            | `Select (fields, tables, c', os) ->
+              let c =
+                match c, c' with
+                  (* optimisations *)
+                  | `Constant (`Bool true), c
+                  | c, `Constant (`Bool true) -> c
+                  | `Constant (`Bool false), _
+                  | _, `Constant (`Bool false) -> `Constant (`Bool false)
+                  (* default case *)
+                  | c, c' -> `Apply ("&&", [c; c'])
+              in
+                `Select (fields, tables, c, os)
+            | _ -> assert false
+        end
+    | `Table (_db, table, _keys, (fields, _, _)) ->
+      (* eta expand tables. We might want to do this earlier on.  *)
+      (* In fact this should never be necessary as it is impossible
+         to produce non-eta expanded tables. *)
+      let var = Sql.fresh_table_var () in
+      let fields =
+        List.rev
+          (StringMap.fold
+             (fun name _ fields ->
+               (`Project (var, name), name)::fields)
+             fields
+             [])
+      in
+        `Select (fields, [(table, var)], `Constant (`Bool true), [])
+    | `Singleton _ when unit_query ->
+      (* If we're inside an `Empty or a `Length it's safe to ignore
+         any fields here. *)
+      (* We currently detect this earlier, so the unit_query stuff here
+         is redundant. *)
+      `Select ([], [], `Constant (`Bool true), [])
+    | `Singleton (`Record fields) ->
+      let fields =
+        List.rev
+          (StringMap.fold
+             (fun name v fields ->
+               (base db index v, name)::fields)
+             fields
+             [])
+      in
+        `Select (fields, [], `Constant (`Bool true), [])
+    | _ -> assert false
+and base : Value.database -> index -> t -> Sql.base = fun db index ->
+  function
+    | `If (c, t, e) ->
+      `Case (base db index c, base db index t, base db index e)
+    | `Apply ("tilde", [s; r]) ->
+      begin
+        match likeify r with
+          | Some r ->
+            `Apply ("LIKE", [base db index s; `Constant (`String r)])
+          | None ->
+            let r =
+                  (* HACK:
+
+                     this only works if the regexp doesn't include any variables bound by the query
+                  *)
+                  `Constant (`String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
+                in
+                  `Apply ("RLIKE", [base db index s; r])
+        end
+    | `Apply ("Empty", [v]) ->
+        `Empty (unit_query db v)
+    | `Apply ("length", [v]) ->
+        `Length (unit_query db v)
+    | `Apply (f, vs) ->
+        `Apply (f, List.map (base db index) vs)
+    | `Project (`Var (x, _field_types), name) ->
+        `Project (x, name)
+    | `Constant c -> `Constant c
+    | `Primitive "index" -> `RowNumber index
+    | e ->
+      Debug.print ("Not a base expression: " ^ show e);
+      assert false
+
+(* convert a regexp to a like if possible *)
+and likeify v =
+  let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+    match v with
+      | `Variant ("Repeat", pair) ->
+          begin
+            match unbox_pair pair with
+              | `Variant ("Star", _), `Variant ("Any", _) -> Some ("%")
+              | _ -> None
+          end
+      | `Variant ("Simply", `Constant (`String s)) -> Some (quote s)
+      | `Variant ("Quote", `Variant ("Simply", v)) ->
+          (* TODO:
+
+             detect variables and convert to a concatenation operation
+             (this needs to happen in RLIKE compilation as well)
+          *)
+         let rec string =
+            function
+              | `Constant (`String s) -> Some s
+              | `Singleton (`Constant (`Char c)) -> Some (string_of_char c)
+              | `Concat vs ->
+                  let rec concat =
+                    function
+                      | [] -> Some ""
+                      | v::vs ->
+                          begin
+                            match string v with
+                              | None -> None
+                              | Some s ->
+                                  begin
+                                    match concat vs with
+                                      | None -> None
+                                      | Some s' -> Some (s ^ s')
+                                  end
+                          end
+                  in
+                    concat vs
+              | _ -> None
+          in
+            opt_map quote (string v)
+      | `Variant ("Seq", rs) ->
+          let rec seq =
+            function
+              | [] -> Some ""
+              | r::rs ->
+                  begin
+                    match likeify r with
+                      | None -> None
+                      | Some s ->
+                          begin
+                            match seq rs with
+                              | None -> None
+                              | Some s' -> Some (s^s')
+                          end
+                  end
+          in
+            seq (unbox_list rs)
+      | `Variant ("StartAnchor", _) -> Some ""
+      | `Variant ("EndAnchor", _) -> Some ""
+      | _ -> assert false
+and unit_query db v =
+  (* queries passed to Empty and Length
+     (where we don't care about what data they return)
+  *)
+  `UnionAll (List.map (clause db [] true) (prepare_clauses v), 0)
+
+and query : Value.database -> let_query -> Sql.query =
+  fun db cs ->
+    `UnionAll (List.map (let_clause db) cs, 0)
+
+let update db ((_, table), where, body) =
+  Sql.reset_dummy_counter ();
+  let base = (base db []) ->- (Sql.string_of_base db true) in
+  let where =
+    match where with
+      | None -> ""
+      | Some where ->
+          " where (" ^ base where ^ ")" in
+  let fields =
+    match body with
+      | `Record fields ->
+          String.concat ","
+            (List.map
+               (fun (label, v) -> db#quote_field label ^ " = " ^ base v)
+               (StringMap.to_alist fields))
+      | _ -> assert false
+  in
+    "update "^table^" set "^fields^where
+
+let delete db ((_, table), where) =
+  Sql.reset_dummy_counter ();
+  let base = base db [] ->- (Sql.string_of_base db true) in
+  let where =
+    match where with
+      | None -> ""
+      | Some where ->
+          " where (" ^ base where ^ ")"
+  in
+    "delete from "^table^where
+
+let compile_update : Value.database -> Value.env ->
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
+  fun db env ((x, table, field_types), where, body) ->
+    let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
+(*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
+    let where = opt_map (Eval.computation env) where in
+(*       Debug.print ("body: "^Ir.show_computation body); *)
+    let body = Eval.computation env body in
+    let q = update db ((x, table), where, body) in
+      Debug.print ("Generated update query: "^q);
+      q
+
+let compile_delete : Value.database -> Value.env ->
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
+  fun db env ((x, table, field_types), where) ->
+    let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
+    let where = opt_map (Eval.computation env) where in
+    let q = delete db ((x, table), where) in
+      Debug.print ("Generated update query: "^q);
+      q
