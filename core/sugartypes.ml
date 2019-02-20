@@ -183,19 +183,19 @@ type constant = Constant.constant
 
 module Pattern = struct
   type t =
-  | Any
-  | Nil
-  | Cons     of with_pos * with_pos
-  | List     of with_pos list
-  | Variant  of name * with_pos option
-  | Effect   of name * with_pos list * with_pos
-  | Negative of name list
-  | Record   of (name * with_pos) list * with_pos option
-  | Tuple    of with_pos list
-  | Constant of constant
-  | Variable of binder
-  | As       of binder * with_pos
-  | HasType  of with_pos * datatype'
+    | Any
+    | Nil
+    | Cons     of with_pos * with_pos
+    | List     of with_pos list
+    | Variant  of name * with_pos option
+    | Effect   of name * with_pos list * with_pos
+    | Negative of name list
+    | Record   of (name * with_pos) list * with_pos option
+    | Tuple    of with_pos list
+    | Constant of constant
+    | Variable of binder
+    | As       of binder * with_pos
+    | HasType  of with_pos * datatype'
   and with_pos = t WithPos.t
    [@@deriving show]
 end
@@ -218,25 +218,25 @@ type handler_depth = Deep | Shallow
     [@@deriving show]
 
 type replace_rhs =
-| Literal     of string
-| SpliceExpr  of phrase
+  | Literal     of string
+  | SpliceExpr  of phrase
 and given_spawn_location =
-| ExplicitSpawnLocation of phrase (* spawnAt function *)
-| SpawnClient (* spawnClient function *)
-| NoSpawnLocation (* spawn function *)
+  | ExplicitSpawnLocation of phrase (* spawnAt function *)
+  | SpawnClient (* spawnClient function *)
+  | NoSpawnLocation (* spawn function *)
 and regex =
-| Range     of (char * char)
-| Simply    of string
-| Quote     of regex
-| Any
-| StartAnchor
-| EndAnchor
-| Seq       of regex list
-| Alternate of (regex * regex)
-| Group     of regex
-| Repeat    of (Regex.repeat * regex)
-| Splice    of phrase
-| Replace   of (regex * replace_rhs)
+  | Range     of (char * char)
+  | Simply    of string
+  | Quote     of regex
+  | Any
+  | StartAnchor
+  | EndAnchor
+  | Seq       of regex list
+  | Alternate of (regex * regex)
+  | Group     of regex
+  | Repeat    of (Regex.repeat * regex)
+  | Splice    of phrase
+  | Replace   of (regex * replace_rhs)
 and clause = Pattern.with_pos * phrase
 and funlit = Pattern.with_pos list list * phrase
 and handlerlit = handler_depth * Pattern.with_pos * clause list * Pattern.with_pos list list option (* computation arg, cases, parameters *)
@@ -257,108 +257,108 @@ and handler_parameterisation = {
   shp_types: Types.datatype list
 }
 and iterpatt =
-| List  of (Pattern.with_pos * phrase)
-| Table of (Pattern.with_pos * phrase)
+  | List  of (Pattern.with_pos * phrase)
+  | Table of (Pattern.with_pos * phrase)
 and phrasenode =
-| Constant         of constant
-| Var              of name
-| QualifiedVar     of name list
-| FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
-| HandlerLit       of handlerlit
-(* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
-| Spawn            of spawn_kind * given_spawn_location * phrase * Types.row option
-| Query            of (phrase * phrase) option * phrase * Types.datatype option
-| RangeLit         of (phrase * phrase)
-| ListLit          of phrase list * Types.datatype option
-| Iteration        of iterpatt list * phrase
-    * (*where:*)   phrase option
-                    * (*orderby:*) phrase option
-| Escape           of binder * phrase
-| Section          of Section.t
-| Conditional      of phrase * phrase * phrase
-| Block            of block_body
-| InfixAppl        of (tyarg list * binop) * phrase * phrase
-| Regex            of regex
-| UnaryAppl        of (tyarg list * unary_op) * phrase
-| FnAppl           of phrase * phrase list
-| TAbstr           of tyvar list ref * phrase
-| TAppl            of phrase * tyarg list
-| TupleLit         of phrase list
-| RecordLit        of (name * phrase) list * phrase option
-| Projection       of phrase * name
-| With             of phrase * (name * phrase) list
-| TypeAnnotation   of phrase * datatype'
-| Upcast           of phrase * datatype' * datatype'
-| ConstructorLit   of name * phrase option * Types.datatype option
-| DoOperation      of name * phrase list * Types.datatype option
-| Handle           of handler
-| Switch           of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
-| Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
-| DatabaseLit      of phrase * (phrase option * phrase option)
-| TableLit         of phrase * (Datatype.with_pos * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
-| DBDelete         of Pattern.with_pos * phrase * phrase option
-| DBInsert         of phrase * name list * phrase * phrase option
-| DBUpdate         of Pattern.with_pos * phrase * phrase option * (name * phrase) list
-| LensLit          of phrase * Types.lens_sort option
-(* the lens keys lit is a literal that takes an expression and is converted into a LensLit
+  | Constant         of constant
+  | Var              of name
+  | QualifiedVar     of name list
+  | FunLit           of ((Types.datatype * Types.row) list) option * declared_linearity * funlit * location
+  | HandlerLit       of handlerlit
+  (* Spawn kind, expression referring to spawn location (client n, server...), spawn block, row opt *)
+  | Spawn            of spawn_kind * given_spawn_location * phrase * Types.row option
+  | Query            of (phrase * phrase) option * phrase * Types.datatype option
+  | RangeLit         of (phrase * phrase)
+  | ListLit          of phrase list * Types.datatype option
+  | Iteration        of iterpatt list * phrase
+                        * (*where:*)   phrase option
+                        * (*orderby:*) phrase option
+  | Escape           of binder * phrase
+  | Section          of Section.t
+  | Conditional      of phrase * phrase * phrase
+  | Block            of block_body
+  | InfixAppl        of (tyarg list * binop) * phrase * phrase
+  | Regex            of regex
+  | UnaryAppl        of (tyarg list * unary_op) * phrase
+  | FnAppl           of phrase * phrase list
+  | TAbstr           of tyvar list ref * phrase
+  | TAppl            of phrase * tyarg list
+  | TupleLit         of phrase list
+  | RecordLit        of (name * phrase) list * phrase option
+  | Projection       of phrase * name
+  | With             of phrase * (name * phrase) list
+  | TypeAnnotation   of phrase * datatype'
+  | Upcast           of phrase * datatype' * datatype'
+  | ConstructorLit   of name * phrase option * Types.datatype option
+  | DoOperation      of name * phrase list * Types.datatype option
+  | Handle           of handler
+  | Switch           of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
+  | Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
+  | DatabaseLit      of phrase * (phrase option * phrase option)
+  | TableLit         of phrase * (Datatype.with_pos * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
+  | DBDelete         of Pattern.with_pos * phrase * phrase option
+  | DBInsert         of phrase * name list * phrase * phrase option
+  | DBUpdate         of Pattern.with_pos * phrase * phrase option * (name * phrase) list
+  | LensLit          of phrase * Types.lens_sort option
+  (* the lens keys lit is a literal that takes an expression and is converted into a LensLit
    with the corresponding table keys marked in the lens_sort *)
-| LensKeysLit      of phrase * phrase * Types.lens_sort option
-| LensFunDepsLit   of phrase * (string list * string list) list * Types.lens_sort option
-| LensDropLit      of phrase * string * string * phrase * Types.lens_sort option
-| LensSelectLit    of phrase * phrase * Types.lens_sort option
-| LensJoinLit      of phrase * phrase * phrase * phrase * phrase * Types.lens_sort option
-| LensGetLit       of phrase * Types.datatype option
-| LensPutLit       of phrase * phrase * Types.datatype option
-| Xml              of name * (name * (phrase list)) list * phrase option * phrase list
-| TextNode         of string
-| Formlet          of phrase * phrase
-| Page             of phrase
-| FormletPlacement of phrase * phrase * phrase
-| PagePlacement    of phrase
-| FormBinding      of phrase * Pattern.with_pos
-(* choose *)
-| Select           of name * phrase
-(* choice *)
-| Offer            of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
-| CP               of cp_phrase
-| TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase * Types.datatype option)
-| Raise
+  | LensKeysLit      of phrase * phrase * Types.lens_sort option
+  | LensFunDepsLit   of phrase * (string list * string list) list * Types.lens_sort option
+  | LensDropLit      of phrase * string * string * phrase * Types.lens_sort option
+  | LensSelectLit    of phrase * phrase * Types.lens_sort option
+  | LensJoinLit      of phrase * phrase * phrase * phrase * phrase * Types.lens_sort option
+  | LensGetLit       of phrase * Types.datatype option
+  | LensPutLit       of phrase * phrase * Types.datatype option
+  | Xml              of name * (name * (phrase list)) list * phrase option * phrase list
+  | TextNode         of string
+  | Formlet          of phrase * phrase
+  | Page             of phrase
+  | FormletPlacement of phrase * phrase * phrase
+  | PagePlacement    of phrase
+  | FormBinding      of phrase * Pattern.with_pos
+  (* choose *)
+  | Select           of name * phrase
+  (* choice *)
+  | Offer            of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
+  | CP               of cp_phrase
+  | TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase * Types.datatype option)
+  | Raise
 and phrase = phrasenode with_pos
 and bindingnode =
-| Val     of (Pattern.with_pos * (tyvar list * phrase) * location * datatype' option)
-| Fun     of (binder * declared_linearity * (tyvar list * funlit) * location * datatype' option)
-| Funs    of (binder * declared_linearity *
-                ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-                location * datatype' option * position) list
-| Handler of (binder * handlerlit * datatype' option)
-| Foreign of (binder * name * name * name * datatype') (* Binder, raw function name, language, external file, type *)
-| QualifiedImport of name list
-| Type    of (name * (quantifier * tyvar option) list * datatype')
-| Infix
-| Exp     of phrase
-| Module  of (name * binding list)
-| AlienBlock of (name * name * ((binder * datatype') list))
+  | Val     of (Pattern.with_pos * (tyvar list * phrase) * location * datatype' option)
+  | Fun     of (binder * declared_linearity * (tyvar list * funlit) * location * datatype' option)
+  | Funs    of (binder * declared_linearity *
+                  ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+                    location * datatype' option * position) list
+  | Handler of (binder * handlerlit * datatype' option)
+  | Foreign of (binder * name * name * name * datatype') (* Binder, raw function name, language, external file, type *)
+  | QualifiedImport of name list
+  | Type    of (name * (quantifier * tyvar option) list * datatype')
+  | Infix
+  | Exp     of phrase
+  | Module  of (name * binding list)
+  | AlienBlock of (name * name * ((binder * datatype') list))
 and binding = bindingnode with_pos
 and block_body = binding list * phrase
 and cp_phrasenode =
-| CPUnquote     of (binding list * phrase)
-| CPGrab        of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
-| CPGive        of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
-| CPGiveNothing of binder
-| CPSelect      of (binder * string * cp_phrase)
-| CPOffer       of (binder * (string * cp_phrase) list)
-| CPLink        of (binder * binder)
-| CPComp        of (binder * cp_phrase * cp_phrase)
+  | CPUnquote     of (binding list * phrase)
+  | CPGrab        of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
+  | CPGive        of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
+  | CPGiveNothing of binder
+  | CPSelect      of (binder * string * cp_phrase)
+  | CPOffer       of (binder * (string * cp_phrase) list)
+  | CPLink        of (binder * binder)
+  | CPComp        of (binder * cp_phrase * cp_phrase)
 and cp_phrase = cp_phrasenode with_pos
-    [@@deriving show]
+                  [@@deriving show]
 
 type directive = string * string list
-    [@@deriving show]
+                            [@@deriving show]
 
 type sentence =
-| Definitions of binding list
-| Expression  of phrase
-| Directive   of directive
+  | Definitions of binding list
+  | Expression  of phrase
+  | Directive   of directive
     [@@deriving show]
 
 type program = binding list * phrase option
