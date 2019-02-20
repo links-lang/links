@@ -169,9 +169,9 @@ module Datatype = struct
     | Absent
     | Var of known_type_variable
   and type_arg =
-    [ `Type of with_pos
-    | `Row of row
-    | `Presence of fieldspec ]
+    | Type of with_pos
+    | Row of row
+    | Presence of fieldspec
       [@@deriving show]
 end
 

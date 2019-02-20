@@ -121,7 +121,7 @@ let kind_of p =
   | "Any"      -> (`Type, Some (`Any, `Any))
   | "Base"     -> (`Type, Some (`Unl, `Base))
   | "Session"  -> (`Type, Some (`Any, `Session))
-  | "Eff"      -> (`Row, Some (`Unl, `Effect))
+  | "Eff"      -> (`Row , Some (`Unl, `Effect))
   | k          -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
 
 let subkind_of p =
@@ -995,11 +995,11 @@ type_arg_list:
    (TYPE, ROW, and PRESENCE are no longer tokens...)
 */
 type_arg:
-| datatype                                                     { `Type $1     }
-| TYPE LPAREN datatype RPAREN                                  { `Type $3     }
-| ROW LPAREN row RPAREN                                        { `Row $3      }
-| PRESENCE LPAREN fieldspec RPAREN                             { `Presence $3 }
-| LBRACE row RBRACE                                            { `Row $2      }
+| datatype                                                     { Datatype.Type $1     }
+| TYPE LPAREN datatype RPAREN                                  { Datatype.Type $3     }
+| ROW LPAREN row RPAREN                                        { Datatype.Row $3      }
+| PRESENCE LPAREN fieldspec RPAREN                             { Datatype.Presence $3 }
+| LBRACE row RBRACE                                            { Datatype.Row $2      }
 
 datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }

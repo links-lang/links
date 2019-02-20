@@ -622,10 +622,10 @@ class map =
         {node; pos}
 
     method type_arg : Datatype.type_arg -> Datatype.type_arg =
-      function
-      | `Type _x -> let _x = o#datatype _x in `Type _x
-      | `Row _x -> let _x = o#row _x in `Row _x
-      | `Presence _x -> let _x = o#fieldspec _x in `Presence _x
+      let open Datatype in function
+      | Type _x -> let _x = o#datatype _x in Type _x
+      | Row _x -> let _x = o#row _x in Row _x
+      | Presence _x -> let _x = o#fieldspec _x in Presence _x
 
     method constant : constant -> constant =
       function
@@ -1279,10 +1279,10 @@ class fold =
         o
 
     method type_arg : Datatype.type_arg -> 'self_type =
-      function
-      | `Type _x -> let o = o#datatype _x in o
-      | `Row _x -> let o = o#row _x in o
-      | `Presence _x -> let o = o#fieldspec _x in o
+      let open Datatype in function
+      | Type _x -> let o = o#datatype _x in o
+      | Row _x -> let o = o#row _x in o
+      | Presence _x -> let o = o#fieldspec _x in o
 
     method constant : constant -> 'self_type =
       function
@@ -2058,10 +2058,10 @@ class fold_map =
         let (o, pos) = o#position pos in (o, {node; pos})
 
     method type_arg : Datatype.type_arg -> ('self_type * Datatype.type_arg) =
-      function
-      | `Type _x -> let (o, _x) = o#datatype _x in (o, `Type _x)
-      | `Row _x -> let (o, _x) = o#row _x in (o, `Row _x)
-      | `Presence _x -> let (o, _x) = o#fieldspec _x in (o, `Presence _x)
+      let open Datatype in function
+      | Type _x -> let (o, _x) = o#datatype _x in (o, Type _x)
+      | Row _x -> let (o, _x) = o#row _x in (o, Row _x)
+      | Presence _x -> let (o, _x) = o#fieldspec _x in (o, Presence _x)
 
     method constant : constant -> ('self_type * constant) =
       function

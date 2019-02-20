@@ -172,11 +172,11 @@ object(self)
       match dt with
         | TypeVar (n, _, _) when n = varFrom ->
             (match taTo with
-               | `Type {node = dtTo; _} -> dtTo
+               | Type {node = dtTo; _} -> dtTo
                | _ -> super#datatypenode dt)
         | Forall (qs, {node = quantDt; pos}) ->
             (match taTo with
-              | `Type {node = TypeVar (n, _, _); _} ->
+              | Type {node = TypeVar (n, _, _); _} ->
                   let qs' =
                     List.map (fun (tv, k, f as q) ->
                       if tv = varFrom then
@@ -187,18 +187,18 @@ object(self)
 
   method! fieldspec : Datatype.fieldspec -> Datatype.fieldspec =
     fun fs ->
-      let open Datatype in 
+      let open Datatype in
       match fs with
         | Var (n, _, _) when n = varFrom ->
             (match taTo with
-              | `Presence (Var _ as fsTo) -> fsTo
+              | Presence (Var _ as fsTo) -> fsTo
               | _ -> super#fieldspec fs)
         | _ -> super#fieldspec fs
 
   method! row_var : Datatype.row_var -> Datatype.row_var = let open Datatype in function
     | Open (n, _, _) as rv when n = varFrom ->
         (match taTo with
-          | `Row (_, (Open _ as rv2)) -> rv2
+          | Row (_, (Open _ as rv2)) -> rv2
           | _ -> super#row_var rv)
     | rv -> super#row_var rv
 

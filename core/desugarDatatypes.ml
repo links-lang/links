@@ -179,19 +179,21 @@ struct
             begin match SEnv.find alias_env tycon with
               | None -> raise (UnboundTyCon (pos,tycon))
               | Some (`Alias (qs, _dt)) ->
+                 let open Datatype in
                  let exception Kind_mismatch (* TODO add more information *) in
                  let match_kinds (q, t) =
-                   let primary_kind_of_type_arg : Datatype.type_arg -> primary_kind = function
-                     | `Type _ -> `Type
-                     | `Row _ -> `Row
-                     | `Presence _ -> `Presence
+                   let primary_kind_of_type_arg : Datatype.type_arg -> primary_kind =
+                     function
+                     | Type _ -> `Type
+                     | Row _ -> `Row
+                     | Presence _ -> `Presence
                    in
                    if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
                      raise Kind_mismatch
                    else (q, t)
                  in
                  let type_arg' var_env alias_env = function
-                   | `Row r -> `Row (effect_row var_env alias_env r)
+                   | Row r -> `Row (effect_row var_env alias_env r)
                    | t -> type_arg var_env alias_env t
                  in
                  begin try
@@ -302,10 +304,10 @@ struct
     in
     (fields, rho, dual)
   and type_arg var_env alias_env =
-    function
-      | `Type t -> `Type (datatype var_env alias_env t)
-      | `Row r -> `Row (row var_env alias_env r)
-      | `Presence f -> `Presence (fieldspec var_env alias_env f)
+    let open Datatype in function
+    | Type t -> `Type (datatype var_env alias_env t)
+    | Row r -> `Row (row var_env alias_env r)
+    | Presence f -> `Presence (fieldspec var_env alias_env f)
 
   (* pre condition: all subkinds have been filled in *)
   let generate_var_mapping (vars : type_variable list) : (Types.quantifier list * var_env) =
