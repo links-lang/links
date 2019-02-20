@@ -437,14 +437,14 @@ class map =
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
-      | Unquote (bs, e)  -> Unquote (o#list (fun o -> o#binding) bs, o#phrase e)
-      | Grab (c, x, p)   -> Grab (c, x, o#cp_phrase p)
-      | Give (c, e, p)   -> Give (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
-      | GiveNothing c    -> GiveNothing (o#binder c)
-      | Select (c, l, p) -> Select (c, l, o#cp_phrase p)
-      | Offer (c, bs)    -> Offer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
-      | Link (c, d)      -> Link (c, d)
-      | Comp (c, p, q)   -> Comp (c, o#cp_phrase p, o#cp_phrase q)
+      | CPUnquote (bs, e)  -> CPUnquote (o#list (fun o -> o#binding) bs, o#phrase e)
+      | CPGrab (c, x, p)   -> CPGrab (c, x, o#cp_phrase p)
+      | CPGive (c, e, p)   -> CPGive (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
+      | CPGiveNothing c    -> CPGiveNothing (o#binder c)
+      | CPSelect (c, l, p) -> CPSelect (c, l, o#cp_phrase p)
+      | CPOffer (c, bs)    -> CPOffer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
+      | CPLink (c, d)      -> CPLink (c, d)
+      | CPComp (c, p, q)   -> CPComp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
       fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
@@ -1113,14 +1113,14 @@ class fold =
 
     method cp_phrasenode : cp_phrasenode -> 'self_type =
       function
-      | Unquote (bs, e)    -> (o#list (fun o -> o#binding) bs)#phrase e
-      | Grab (_c, _x, p)   -> o#cp_phrase p
-      | Give (_c, e, p)    -> (o#option (fun o -> o#phrase) e)#cp_phrase p
-      | GiveNothing c      -> o#binder c
-      | Select (_c, _l, p) -> o#cp_phrase p
-      | Offer (_c, bs)     -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
-      | Link (_c, _d)      -> o
-      | Comp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
+      | CPUnquote (bs, e)    -> (o#list (fun o -> o#binding) bs)#phrase e
+      | CPGrab (_c, _x, p)   -> o#cp_phrase p
+      | CPGive (_c, e, p)    -> (o#option (fun o -> o#phrase) e)#cp_phrase p
+      | CPGiveNothing c      -> o#binder c
+      | CPSelect (_c, _l, p) -> o#cp_phrase p
+      | CPOffer (_c, bs)     -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
+      | CPLink (_c, _d)      -> o
+      | CPComp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
       fun {node; pos} -> (o#cp_phrasenode node)#position pos
@@ -1840,34 +1840,34 @@ class fold_map =
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
       function
-      | Unquote (bs, e) ->
+      | CPUnquote (bs, e) ->
          let o, bs = o#list (fun o -> o#binding) bs in
          let o, e = o#phrase e in
-         o, Unquote (bs, e)
-      | Grab (c, x, p) ->
+         o, CPUnquote (bs, e)
+      | CPGrab (c, x, p) ->
          let o, p = o#cp_phrase p in
-         o, Grab (c, x, p)
-      | Give (c, e, p) ->
+         o, CPGrab (c, x, p)
+      | CPGive (c, e, p) ->
          let o, e = o#option (fun o -> o#phrase) e in
          let o, p = o#cp_phrase p in
-         o, Give (c, e, p)
-      | GiveNothing c ->
+         o, CPGive (c, e, p)
+      | CPGiveNothing c ->
          let o, c = o#binder c in
-         o, GiveNothing c
-      | Select (c, l, p) ->
+         o, CPGiveNothing c
+      | CPSelect (c, l, p) ->
          let o, p = o#cp_phrase p in
-         o, Select (c, l, p)
-      | Offer (c, bs) ->
+         o, CPSelect (c, l, p)
+      | CPOffer (c, bs) ->
          let o, bs = o#list (fun o (l, p) ->
                              let o, p = o#cp_phrase p in
                              o, (l, p)) bs in
-         o, Offer (c, bs)
-      | Link (c, d) ->
-         o, Link (c, d)
-      | Comp (c, p, q) ->
+         o, CPOffer (c, bs)
+      | CPLink (c, d) ->
+         o, CPLink (c, d)
+      | CPComp (c, p, q) ->
          let o, p = o#cp_phrase p in
          let o, q = o#cp_phrase q in
-         o, Comp (c, p, q)
+         o, CPComp (c, p, q)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
       fun {node; pos} ->

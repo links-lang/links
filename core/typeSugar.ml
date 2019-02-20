@@ -3937,19 +3937,19 @@ and type_cp (context : context) = fun {node = p; pos} ->
   let unify ~pos ~handle (t, u) = unify_or_raise ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
 
   let (p, t, u) = match p with
-    | Unquote (bindings, e) ->
+    | CPUnquote (bindings, e) ->
        let context', bindings, usage_builder = type_bindings context bindings in
        let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
          if Settings.get_value endbang_antiquotes then
            unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
-         Unquote (bindings, e), t, usage_builder u
-    | Grab ((c, _), None, p) ->
+         CPUnquote (bindings, e), t, usage_builder u
+    | CPGrab ((c, _), None, p) ->
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        let ctype = `Alias (("EndQuery", []), `Input (Types.unit_type, `End)) in
        unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
-       Grab ((c, Some (ctype, [])), None, p), pt, use c u
-    | Grab ((c, _), Some bndr, p) ->
+       CPGrab ((c, Some (ctype, [])), None, p), pt, use c u
+    | CPGrab ((c, _), Some bndr, p) ->
        let x = name_of_binder bndr in
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        let a = Types.fresh_type_variable (`Any, `Any) in
@@ -3978,14 +3978,14 @@ and type_cp (context : context) = fun {node = p; pos} ->
               | _ -> assert false
             end
          | _ -> assert false in
-       Grab ((c, Some (ctype, tyargs)), Some (set_binder_type bndr a), p), pt, use c (StringMap.remove x u)
-    | Give ((c, _), None, p) ->
+       CPGrab ((c, Some (ctype, tyargs)), Some (set_binder_type bndr a), p), pt, use c (StringMap.remove x u)
+    | CPGive ((c, _), None, p) ->
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        let ctype = `Output (Types.unit_type, `End) in
        unify ~pos:pos ~handle:(Gripers.cp_give c) (t, ctype);
        let (p, t, u) = type_cp (unbind_var context c) p in
-       Give ((c, Some (ctype, [])), None, p), t, use c u
-    | Give ((c, _), Some e, p) ->
+       CPGive ((c, Some (ctype, [])), None, p), t, use c u
+    | CPGive ((c, _), Some e, p) ->
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        let (e, t', u) = type_check context e in
        let s = Types.fresh_session_variable `Any in
@@ -4008,14 +4008,14 @@ and type_cp (context : context) = fun {node = p; pos} ->
               | _ -> assert false
             end
          | _ -> assert false in
-       Give ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
-    | GiveNothing bndr ->
+       CPGive ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
+    | CPGiveNothing bndr ->
        let c = name_of_binder bndr in
        let binder_pos = bndr.pos in
        let _, t, _ = type_check context (with_pos binder_pos (`Var c)) in
        unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
-       GiveNothing (set_binder_type bndr t), t, StringMap.singleton c 1
-    | Select (bndr, label, p) ->
+       CPGiveNothing (set_binder_type bndr t), t, StringMap.singleton c 1
+    | CPSelect (bndr, label, p) ->
        let c = name_of_binder bndr in
        let (_, t, _) = type_check context (with_pos pos  (`Var c)) in
        let s = Types.fresh_session_variable `Any in
@@ -4024,8 +4024,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
        unify ~pos:pos ~handle:(Gripers.cp_select c)
              (t, ctype);
        let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) p) in
-       Select (set_binder_type bndr ctype, label, p), t, use c u
-    | Offer (bndr, branches) ->
+       CPSelect (set_binder_type bndr ctype, label, p), t, use c u
+    | CPOffer (bndr, branches) ->
        let c = name_of_binder bndr in
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        (*
@@ -4044,8 +4044,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let t' = Types.fresh_type_variable (`Any, `Any) in
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
        let u = usage_compat (List.map (fun (_, _, u) -> u) branches) in
-       Offer (set_binder_type bndr t, List.map (fun (x, _, _) -> x) branches), t', use c u
-    | Link (bndr1, bndr2) ->
+       CPOffer (set_binder_type bndr t, List.map (fun (x, _, _) -> x) branches), t', use c u
+    | CPLink (bndr1, bndr2) ->
       let c = name_of_binder bndr1 in
       let d = name_of_binder bndr2 in
       let (_, tc, uc) = type_check context (with_pos pos (`Var c)) in
@@ -4055,14 +4055,14 @@ and type_cp (context : context) = fun {node = p; pos} ->
         unify ~pos:pos ~handle:Gripers.cp_link_session
           (td, Types.fresh_type_variable (`Any, `Session));
         unify ~pos:pos ~handle:Gripers.cp_link_dual (Types.dual_type tc, td);
-        Link (set_binder_type bndr1 tc, set_binder_type bndr1 td), Types.make_endbang_type, merge_usages [uc; ud]
-    | Comp (bndr, left, right) ->
+        CPLink (set_binder_type bndr1 tc, set_binder_type bndr1 td), Types.make_endbang_type, merge_usages [uc; ud]
+    | CPComp (bndr, left, right) ->
        let c = name_of_binder bndr in
        let s = Types.fresh_session_variable `Any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in
        let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Dual s)) right) in
        unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.make_endbang_type, t);
-       Comp (set_binder_type bndr s, left, right), t', merge_usages [u; u'] in
+       CPComp (set_binder_type bndr s, left, right), t', merge_usages [u; u'] in
   {node = p; pos}, t, u
 
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing

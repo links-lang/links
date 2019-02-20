@@ -443,17 +443,17 @@ perhaps_name:
 | cp_name?                                                     { $1 }
 
 cp_expression:
-| LBRACE block_contents RBRACE                                 { with_pos $loc (Unquote $2) }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (Grab ((name_of_binder $1, None), $3, $6)) }
-| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (Grab ((name_of_binder $1, None), $3, cp_unit $loc)) }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (Give ((name_of_binder $1, None), Some $3, $6)) }
-| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (Give ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
-| cp_name LBRACKET RBRACKET                                    { with_pos $loc (GiveNothing $1) }
-| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (Offer ($2, $4)) }
-| cp_label cp_name DOT cp_expression                           { with_pos $loc (Select ($2, $1, $4)) }
-| cp_label cp_name                                             { with_pos $loc (Select ($2, $1, cp_unit $loc)) }
-| cp_name LRARROW cp_name                                      { with_pos $loc (Link ($1, $3)) }
-| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (Comp ($2, $5, $7)) }
+| LBRACE block_contents RBRACE                                 { with_pos $loc (CPUnquote $2) }
+| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (CPGrab ((name_of_binder $1, None), $3, $6)) }
+| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (CPGrab ((name_of_binder $1, None), $3, cp_unit $loc)) }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (CPGive ((name_of_binder $1, None), Some $3, $6)) }
+| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (CPGive ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
+| cp_name LBRACKET RBRACKET                                    { with_pos $loc (CPGiveNothing $1) }
+| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (CPOffer ($2, $4)) }
+| cp_label cp_name DOT cp_expression                           { with_pos $loc (CPSelect ($2, $1, $4)) }
+| cp_label cp_name                                             { with_pos $loc (CPSelect ($2, $1, cp_unit $loc)) }
+| cp_name LRARROW cp_name                                      { with_pos $loc (CPLink ($1, $3)) }
+| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (CPComp ($2, $5, $7)) }
 
 primary_expression:
 | atomic_expression                                            { $1 }

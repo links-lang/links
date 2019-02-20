@@ -822,44 +822,44 @@ class transform (env : Types.typing_environment) =
 
     (* TODO: should really invoke o#datatype on type annotations! *)
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
-      | Unquote (bs, e) ->
+      | CPUnquote (bs, e) ->
          let envs = o#backup_envs in
          let (o, bs) = listu o (fun o -> o#binding) bs in
          let (o, e, t) = o#phrase e in
          let o = o#restore_envs envs in
-         o, Unquote (bs, e), t
-      | Grab (cbind, None, p) ->
+         o, CPUnquote (bs, e), t
+      | CPGrab (cbind, None, p) ->
          let (o, p, t) = o#cp_phrase p in
-         o, Grab (cbind, None, p), t
-      | Grab ((c, Some (`Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
+         o, CPGrab (cbind, None, p), t
+      | CPGrab ((c, Some (`Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let (o, b) = o#binder b in
          let venv = TyEnv.bind (o#get_var_env ()) (c, s) in
          let o = {< var_env = venv >} in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, Grab (cbind, Some b, p), t
-      | Give ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
+         o, CPGrab (cbind, Some b, p), t
+      | CPGive ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
          let envs = o#backup_envs in
          let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
          let (o, e, _typ) = option o (fun o -> o#phrase) e in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, Give (cbind, e, p), t
-      | GiveNothing c ->
+         o, CPGive (cbind, e, p), t
+      | CPGiveNothing c ->
          let envs = o#backup_envs in
          let o, c = o#binder c in
          let o = o#restore_envs envs in
-         o, GiveNothing c, Types.make_endbang_type
-      | Grab _ -> failwith "Malformed grab in TransformSugar"
-      | Give _ -> failwith "Malformed give in TransformSugar"
-      | Select (b, label, p) ->
+         o, CPGiveNothing c, Types.make_endbang_type
+      | CPGrab _ -> failwith "Malformed grab in TransformSugar"
+      | CPGive _ -> failwith "Malformed give in TransformSugar"
+      | CPSelect (b, label, p) ->
          let envs = o#backup_envs in
          let o, b = o#binder b in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, Select (b, label, p), t
-      | Offer (b, cases) ->
+         o, CPSelect (b, label, p), t
+      | CPOffer (b, cases) ->
          let (o, cases) = List.fold_right (fun (label, p) (o, cases) ->
                                            let envs = o#backup_envs in
                                            let o, _ = o#binder b in
@@ -868,16 +868,16 @@ class transform (env : Types.typing_environment) =
          begin
            match List.split cases with
            | cases, t :: _ts ->
-              o, Offer (b, cases), t
+              o, CPOffer (b, cases), t
            | _ -> assert false
          end
-      | Link (c, d) -> o, Link (c, d), Types.unit_type
-      | Comp ({node = c, Some s; _} as bndr, left, right) ->
+      | CPLink (c, d) -> o, CPLink (c, d), Types.unit_type
+      | CPComp ({node = c, Some s; _} as bndr, left, right) ->
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
-         o, Comp (bndr, left, right), t
-      | Comp _ -> assert false
+         o, CPComp (bndr, left, right), t
+      | CPComp _ -> assert false
   end

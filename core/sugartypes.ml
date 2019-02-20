@@ -344,14 +344,14 @@ and bindingnode =
 and binding = bindingnode with_pos
 and block_body = binding list * phrase
 and cp_phrasenode =
-| Unquote     of (binding list * phrase)
-| Grab        of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
-| Give        of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
-| GiveNothing of binder
-| Select      of (binder * string * cp_phrase)
-| Offer       of (binder * (string * cp_phrase) list)
-| Link        of (binder * binder)
-| Comp        of (binder * cp_phrase * cp_phrase)
+| CPUnquote     of (binding list * phrase)
+| CPGrab        of (string * (Types.datatype * tyarg list) option) * binder option * cp_phrase
+| CPGive        of (string * (Types.datatype * tyarg list) option) * phrase option * cp_phrase
+| CPGiveNothing of binder
+| CPSelect      of (binder * string * cp_phrase)
+| CPOffer       of (binder * (string * cp_phrase) list)
+| CPLink        of (binder * binder)
+| CPComp        of (binder * cp_phrase * cp_phrase)
 and cp_phrase = cp_phrasenode with_pos
     [@@deriving show]
 
@@ -584,18 +584,18 @@ struct
     | Replace (r, `Literal _) -> regex r
     | Replace (r, `Splice p) -> union (regex r) (phrase p)
   and cp_phrase {node = p; _ } = match p with
-    | Unquote e -> block e
-    | Grab ((c, _t), Some bndr, p) ->
+    | CPUnquote e -> block e
+    | CPGrab ((c, _t), Some bndr, p) ->
       union (singleton c) (diff (cp_phrase p) (singleton (name_of_binder bndr)))
-    | Grab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
-    | Give ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
-    | GiveNothing bndr -> singleton (name_of_binder bndr)
-    | Select (bndr, _label, p) ->
+    | CPGrab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
+    | CPGive ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e) (cp_phrase p))
+    | CPGiveNothing bndr -> singleton (name_of_binder bndr)
+    | CPSelect (bndr, _label, p) ->
       union (singleton (name_of_binder bndr)) (cp_phrase p)
-    | Offer (bndr, cases) ->
+    | CPOffer (bndr, cases) ->
       union (singleton (name_of_binder bndr)) (union_map (fun (_label, p) -> cp_phrase p) cases)
-    | Link (bndr1, bndr2) ->
+    | CPLink (bndr1, bndr2) ->
       union (singleton (name_of_binder bndr1)) (singleton (name_of_binder bndr2))
-    | Comp (bndr, left, right) ->
+    | CPComp (bndr, left, right) ->
        diff (union (cp_phrase left) (cp_phrase right)) (singleton (name_of_binder bndr))
 end
