@@ -545,10 +545,10 @@ class map =
         { params with shp_bindings = bindings }
 
     method fieldspec : Datatype.fieldspec -> Datatype.fieldspec =
-      function
-      | `Present _x -> let _x = o#datatype _x in `Present _x
-      | `Absent -> `Absent
-      | `Var _x -> let _x = o#known_type_variable _x in `Var _x
+      let open Datatype in function
+      | Present _x -> let _x = o#datatype _x in Present _x
+      | Absent -> Absent
+      | Var _x -> let _x = o#known_type_variable _x in Var _x
 
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       fun fc -> fc
@@ -1208,10 +1208,10 @@ class fold =
           params.shp_bindings
 
     method fieldspec : Datatype.fieldspec -> 'self_type =
-      function
-      | `Present _x -> let o = o#datatype _x in o
-      | `Absent -> o
-      | `Var _x -> let o = o#known_type_variable _x in o
+      let open Datatype in function
+      | Present _x -> let o = o#datatype _x in o
+      | Absent -> o
+      | Var _x -> let o = o#known_type_variable _x in o
 
     method fieldconstraint : fieldconstraint -> 'self_type =
       fun _ -> o
@@ -1971,10 +1971,10 @@ class fold_map =
         (o, { params with shp_bindings = bindings })
 
     method fieldspec : Datatype.fieldspec -> ('self_type * Datatype.fieldspec) =
-      function
-      | `Present _x -> let (o, _x) = o#datatype _x in (o, `Present _x)
-      | `Absent -> (o, `Absent)
-      | `Var _x -> let (o, _x) = o#known_type_variable _x in (o, `Var _x)
+      let open Datatype in function
+      | Present _x -> let (o, _x) = o#datatype _x in (o, Present _x)
+      | Absent -> (o, Absent)
+      | Var _x -> let (o, _x) = o#known_type_variable _x in (o, Var _x)
 
     method fieldconstraint : fieldconstraint -> ('self_type * fieldconstraint) =
       fun fc -> (o, fc)

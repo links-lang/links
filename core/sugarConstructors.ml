@@ -39,11 +39,11 @@ module SugarConstructors (Position : Pos)
 
   let fresh_presence_variable () : Datatype.fieldspec =
     incr type_variable_counter;
-    `Var ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
+    Datatype.Var ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
 
   let fresh_rigid_presence_variable () : Datatype.fieldspec =
     incr type_variable_counter;
-    `Var ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
+    Datatype.Var ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
 
   (** Helper data types and functions for passing arguments to smart
@@ -127,9 +127,9 @@ module SugarConstructors (Position : Pos)
 
   (** Fieldspec *)
 
-  let present        = `Present (Sugartypes.with_dummy_pos Datatype.Unit)
+  let present        = Datatype.Present (Sugartypes.with_dummy_pos Datatype.Unit)
   let wild_present   = ("wild", present)
-  let hear_present p = ("hear", `Present p)
+  let hear_present p = ("hear", Datatype.Present p)
 
 
   (** Rows *)

@@ -187,10 +187,11 @@ object(self)
 
   method! fieldspec : Datatype.fieldspec -> Datatype.fieldspec =
     fun fs ->
+      let open Datatype in 
       match fs with
-        | `Var (n, _, _) when n = varFrom ->
+        | Var (n, _, _) when n = varFrom ->
             (match taTo with
-              | `Presence (`Var _ as fsTo) -> fsTo
+              | `Presence (Var _ as fsTo) -> fsTo
               | _ -> super#fieldspec fs)
         | _ -> super#fieldspec fs
 

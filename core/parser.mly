@@ -1067,12 +1067,12 @@ effect_label:
 | VARIABLE                                                     { $1 }
 
 fieldspec:
-| COLON datatype                                               { `Present $2 }
-| LBRACE COLON datatype RBRACE                                 { `Present $3 }
-| MINUS                                                        { `Absent }
-| LBRACE MINUS RBRACE                                          { `Absent }
-| LBRACE VARIABLE RBRACE                                       { `Var ($2, None, `Rigid) }
-| LBRACE PERCENTVAR RBRACE                                     { `Var ($2, None, `Flexible) }
+| COLON datatype                                               { Datatype.Present $2 }
+| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
+| MINUS                                                        { Datatype.Absent }
+| LBRACE MINUS RBRACE                                          { Datatype.Absent }
+| LBRACE VARIABLE RBRACE                                       { Datatype.Var ($2, None, `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { Datatype.Var ($2, None, `Flexible) }
 | LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
 | LBRACE PERCENT RBRACE                                        { fresh_presence_variable ()       }
 

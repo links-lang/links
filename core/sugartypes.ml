@@ -165,9 +165,9 @@ module Datatype = struct
     | Open of known_type_variable
     | Recursive of name * row
   and fieldspec =
-    [ `Present of with_pos
-    | `Absent
-    | `Var of known_type_variable ]
+    | Present of with_pos
+    | Absent
+    | Var of known_type_variable
   and type_arg =
     [ `Type of with_pos
     | `Row of row

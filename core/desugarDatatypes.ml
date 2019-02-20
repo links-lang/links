@@ -90,10 +90,10 @@ object (self)
     | Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
     | Recursive (s, r)     -> let o = self#bind (s, (`Row, None), `Rigid) in o#row r
 
-  method! fieldspec = function
-    | `Absent -> self
-    | `Present t -> self#datatype t
-    | `Var (x, k, freedom) -> self#add (x, (`Presence, k), freedom)
+  method! fieldspec = let open Datatype in function
+    | Absent -> self
+    | Present t -> self#datatype t
+    | Var (x, k, freedom) -> self#add (x, (`Presence, k), freedom)
 end
 
 type var_env = { tenv : Types.meta_type_var StringMap.t;
@@ -232,10 +232,10 @@ struct
     | _ -> assert false
   and fieldspec var_env alias_env =
     let lookup_flag = flip StringMap.find var_env.penv in
-      function
-        | `Absent -> `Absent
-        | `Present t -> `Present (datatype var_env alias_env t)
-        | `Var (name, _, _) ->
+      let open Datatype in function
+        | Absent -> `Absent
+        | Present t -> `Present (datatype var_env alias_env t)
+        | Var (name, _, _) ->
             begin
               try `Var (lookup_flag name)
               with NotFound _ -> raise (UnexpectedFreeVar name)
@@ -271,14 +271,14 @@ struct
          unbound effect variable.  *)
       try List.map
             (let open Datatype in function
-            | (name, `Present { node = Function (domain, (fields, rv), codomain); pos}) as op
+            | (name, Present { node = Function (domain, (fields, rv), codomain); pos}) as op
                 when not (TypeUtils.is_builtin_effect name) ->
                (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
                begin match rv, fields with
                | Closed, [] -> op
                | Open _, []
                | Recursive _, [] -> (* might need an extra check on recursive rows *)
-                  (name, `Present { node = Function (domain, ([], Closed), codomain); pos})
+                  (name, Present { node = Function (domain, ([], Closed), codomain); pos})
                | _,_ -> raise (UnexpectedOperationEffects name)
                end
             | x -> x)
@@ -297,17 +297,6 @@ struct
              (* Elaborates `Op : a' to `Op : () {}-> a' *)
              let eff = Types.make_empty_closed_row () in
              `Present (Types.make_function_type [] eff t)
-          (* | `Present t *)
-          (*     when not (TypeUtils.is_builtin_effect name) && TypeUtils.is_function_type t -> *)
-          (*    let domain = TypeUtils.arg_types t in *)
-          (*    let eff = TypeUtils.effect_row t in *)
-          (*    let codomain = TypeUtils.return_type t in *)
-          (*    let t = *)
-          (*      if Types.is_empty_row eff *)
-          (*      then Types.make_function_type domain (Types.make_empty_closed_row ()) codomain *)
-          (*      else t *)
-          (*    in *)
-          (*    `Present t *)
           | t -> t)
         fields
     in
