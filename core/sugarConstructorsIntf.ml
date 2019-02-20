@@ -37,12 +37,12 @@ module type SugarConstructorsSig = sig
   val with_dummy_pos : 'a -> 'a with_pos
 
   (* Fresh type variables. *)
-  val fresh_type_variable           : unit -> datatypenode
-  val fresh_rigid_type_variable     : unit -> datatypenode
-  val fresh_row_variable            : unit -> row_var
-  val fresh_rigid_row_variable      : unit -> row_var
-  val fresh_presence_variable       : unit -> fieldspec
-  val fresh_rigid_presence_variable : unit -> fieldspec
+  val fresh_type_variable           : unit -> Datatype.t
+  val fresh_rigid_type_variable     : unit -> Datatype.t
+  val fresh_row_variable            : unit -> Datatype.row_var
+  val fresh_rigid_row_variable      : unit -> Datatype.row_var
+  val fresh_presence_variable       : unit -> Datatype.fieldspec
+  val fresh_rigid_presence_variable : unit -> Datatype.fieldspec
 
   (* Helper data types and functions for passing arguments to smart
      constructors.  *)
@@ -58,7 +58,7 @@ module type SugarConstructorsSig = sig
   val var         : ?ppos:t -> name -> phrase
   val block       : ?ppos:t -> block_body -> phrase
   val block_node  :            block_body -> phrasenode
-  val datatype    : datatype -> datatype * 'a option
+  val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
   val cp_unit     : t -> cp_phrase
   val record      : ?ppos:t -> ?exp:phrase -> (name * phrase) list -> phrase
   val tuple       : ?ppos:t -> phrase list -> phrase
@@ -81,12 +81,12 @@ module type SugarConstructorsSig = sig
   val any_pat      : t -> Pattern.with_pos
 
   (* Fieldspec *)
-  val present : fieldspec
+  val present : Datatype.fieldspec
 
   (* Rows *)
-  val fresh_row         : unit -> row
-  val row_with_wp       : row -> row
-  val hear_arrow_prefix : datatype -> row -> row
+  val fresh_row         : unit -> Datatype.row
+  val row_with_wp       : Datatype.row -> Datatype.row
+  val hear_arrow_prefix : Datatype.with_pos -> Datatype.row -> Datatype.row
 
   (* Various phrases *)
   val fun_lit

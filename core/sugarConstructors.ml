@@ -21,27 +21,27 @@ module SugarConstructors (Position : Pos)
 
   let type_variable_counter = ref 0
 
-  let fresh_type_variable () : datatypenode =
+  let fresh_type_variable () : Datatype.t =
     incr type_variable_counter;
-    `TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
+    Datatype.TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
 
-  let fresh_rigid_type_variable () : datatypenode =
+  let fresh_rigid_type_variable () : Datatype.t =
     incr type_variable_counter;
-    `TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
+    Datatype.TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
-  let fresh_row_variable () : row_var =
+  let fresh_row_variable () : Datatype.row_var =
     incr type_variable_counter;
     `Open ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
 
-  let fresh_rigid_row_variable () : row_var =
+  let fresh_rigid_row_variable () : Datatype.row_var =
     incr type_variable_counter;
     `Open ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
-  let fresh_presence_variable () : fieldspec =
+  let fresh_presence_variable () : Datatype.fieldspec =
     incr type_variable_counter;
     `Var ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
 
-  let fresh_rigid_presence_variable () : fieldspec =
+  let fresh_rigid_presence_variable () : Datatype.fieldspec =
     incr type_variable_counter;
     `Var ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
 
@@ -127,7 +127,7 @@ module SugarConstructors (Position : Pos)
 
   (** Fieldspec *)
 
-  let present        = `Present (Sugartypes.with_dummy_pos `Unit)
+  let present        = `Present (Sugartypes.with_dummy_pos Datatype.Unit)
   let wild_present   = ("wild", present)
   let hear_present p = ("hear", `Present p)
 

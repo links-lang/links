@@ -60,7 +60,7 @@ object
     | b -> super#bindingnode b
 
   method! datatypenode = function
-    | `QualifiedTypeApplication _ -> {< has_no_modules = false >}
+    | Datatype.QualifiedTypeApplication _ -> {< has_no_modules = false >}
     | dt -> super#datatypenode dt
 
   method! phrasenode = function
@@ -142,7 +142,7 @@ let get_data_constructors init_constrs =
         method get_constrs = StringSet.elements constrs
 
         method! datatypenode = function
-            | `Variant (xs, _) ->
+            | Datatype.Variant (xs, _) ->
                 self#list (fun o (lbl, _) -> o#add_constr lbl) xs
             | dt -> super#datatypenode dt
     end

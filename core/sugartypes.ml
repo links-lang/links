@@ -136,47 +136,49 @@ let rigidify (name, kind, _) = (name, kind, `Rigid)
 type fieldconstraint = Readonly | Default
     [@@deriving show]
 
-type datatypenode =
-  [ `TypeVar         of known_type_variable
-  | `QualifiedTypeApplication of (name list * type_arg list)
-  | `Function        of datatype list * row * datatype
-  | `Lolli           of datatype list * row * datatype
-  | `Mu              of name * datatype
-  | `Forall          of quantifier list * datatype
-  | `Unit
-  | `Tuple           of datatype list
-  | `Record          of row
-  | `Variant         of row
-  | `Effect          of row
-  | `Table           of datatype * datatype * datatype
-  | `List            of datatype
-  | `TypeApplication of (string * type_arg list)
-  | `Primitive       of Types.primitive
-  | `DB
-  | `Input           of datatype * datatype
-  | `Output          of datatype * datatype
-  | `Select          of row
-  | `Choice          of row
-  | `Dual            of datatype
-  | `End ]
-and datatype = datatypenode with_pos
-and row = (string * fieldspec) list * row_var
-and row_var =
+module Datatype = struct
+  type t =
+    | TypeVar         of known_type_variable
+    | QualifiedTypeApplication of (name list * type_arg list)
+    | Function        of with_pos list * row * with_pos
+    | Lolli           of with_pos list * row * with_pos
+    | Mu              of name * with_pos
+    | Forall          of quantifier list * with_pos
+    | Unit
+    | Tuple           of with_pos list
+    | Record          of row
+    | Variant         of row
+    | Effect          of row
+    | Table           of with_pos * with_pos * with_pos
+    | List            of with_pos
+    | TypeApplication of (string * type_arg list)
+    | Primitive       of Types.primitive
+    | DB
+    | Input           of with_pos * with_pos
+    | Output          of with_pos * with_pos
+    | Select          of row
+    | Choice          of row
+    | Dual            of with_pos
+    | End
+  and with_pos = t WithPos.t
+  and row = (string * fieldspec) list * row_var
+  and row_var =
     [ `Closed
     | `Open of known_type_variable
     | `Recursive of name * row ]
-and fieldspec =
-    [ `Present of datatype
+  and fieldspec =
+    [ `Present of with_pos
     | `Absent
     | `Var of known_type_variable ]
-and type_arg =
-    [ `Type of datatype
+  and type_arg =
+    [ `Type of with_pos
     | `Row of row
     | `Presence of fieldspec ]
       [@@deriving show]
+end
 
 (* Store the denotation along with the notation once it's computed *)
-type datatype' = datatype * Types.datatype option
+type datatype' = Datatype.with_pos * Types.datatype option
     [@@deriving show]
 
 type constant = Constant.constant
@@ -295,7 +297,7 @@ and phrasenode =
 | Switch           of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
 | Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
 | DatabaseLit      of phrase * (phrase option * phrase option)
-| TableLit         of phrase * (datatype * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
+| TableLit         of phrase * (Datatype.with_pos * (Types.datatype * Types.datatype * Types.datatype) option) * (name * fieldconstraint list) list * phrase * phrase
 | DBDelete         of Pattern.with_pos * phrase * phrase option
 | DBInsert         of phrase * name list * phrase * phrase option
 | DBUpdate         of Pattern.with_pos * phrase * phrase option * (name * phrase) list
@@ -320,7 +322,6 @@ and phrasenode =
 | Select           of name * phrase
 (* choice *)
 | Offer            of phrase * (Pattern.with_pos * phrase) list * Types.datatype option
-(* | `Fork             of binder * phrase *)
 | CP               of cp_phrase
 | TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase * Types.datatype option)
 | Raise

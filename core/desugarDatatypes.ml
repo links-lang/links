@@ -76,19 +76,14 @@ object (self)
     | Type _    -> self
     | b         -> super#bindingnode b
 
-  method! datatypenode = function
-    | `TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
-    | `Mu (v, t)       -> let o = self#bind (v, (`Type, None), `Rigid) in o#datatype t
-    | `Forall (qs, t)  ->
-        let o =
-          List.fold_left
-            (fun o q ->
-               o#bind (rigidify q))
-            self
-            qs
-        in
-          o#datatype t
-    | dt                  -> super#datatypenode dt
+  method! datatypenode = let open Datatype in
+    function
+    | TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
+    | Mu (v, t)       -> let o = self#bind (v, (`Type, None), `Rigid) in o#datatype t
+    | Forall (qs, t)  ->
+        let o = List.fold_left (fun o q -> o#bind (rigidify q)) self qs in
+        o#datatype t
+    | dt -> super#datatypenode dt
 
   method! row_var = function
     | `Closed               -> self
@@ -117,26 +112,27 @@ struct
     match t' with
     | {node = t; pos} ->
       let lookup_type t = StringMap.find t var_env.tenv in
+      let open Datatype in
       match t with
-        | `TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
+        | TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
                                 with NotFound _ -> raise (UnexpectedFreeVar s))
-        | `QualifiedTypeApplication _ -> assert false (* will have been erased *)
-        | `Function (f, e, t) ->
+        | QualifiedTypeApplication _ -> assert false (* will have been erased *)
+        | Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
-                       effect_row var_env alias_env e,
-                       datatype var_env t)
-        | `Lolli (f, e, t) ->
+                      effect_row var_env alias_env e,
+                      datatype var_env t)
+        | Lolli (f, e, t) ->
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
                        effect_row var_env alias_env e,
                        datatype var_env t)
-        | `Mu (name, t) ->
+        | Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
             (* FIXME: shouldn't we support other subkinds for recursive types? *)
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tenv = StringMap.add name point var_env.tenv in
             let _ = Unionfind.change point (`Recursive (var, datatype {var_env with tenv=tenv} t)) in
               `MetaTypeVar point
-        | `Forall (qs, t) ->
+        | Forall (qs, t) ->
             let desugar_quantifier (var_env, qs) =
               fun (name, kind, _freedom) ->
                 match kind with
@@ -167,25 +163,25 @@ struct
             let qs = List.rev qs in
             let t = datatype var_env t in
               `ForAll (Types.box_quantifiers qs, t)
-        | `Unit -> Types.unit_type
-        | `Tuple ks ->
+        | Unit -> Types.unit_type
+        | Tuple ks ->
             let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) in
             let unit = Types.make_empty_closed_row () in
             let present (s, x) = (s, `Present x)
             in
               `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
-        | `Record r -> `Record (row var_env alias_env r)
-        | `Variant r -> `Variant (row var_env alias_env r)
-        | `Effect r -> `Effect (row var_env alias_env r)
-        | `Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
-        | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
-        | `TypeApplication (tycon, ts) ->
+        | Record r -> `Record (row var_env alias_env r)
+        | Variant r -> `Variant (row var_env alias_env r)
+        | Effect r -> `Effect (row var_env alias_env r)
+        | Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
+        | List k -> `Application (Types.list, [`Type (datatype var_env k)])
+        | TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
               | None -> raise (UnboundTyCon (pos,tycon))
               | Some (`Alias (qs, _dt)) ->
                  let exception Kind_mismatch (* TODO add more information *) in
                  let match_kinds (q, t) =
-                   let primary_kind_of_type_arg : Sugartypes.type_arg -> primary_kind = function
+                   let primary_kind_of_type_arg : Datatype.type_arg -> primary_kind = function
                      | `Type _ -> `Type
                      | `Row _ -> `Row
                      | `Presence _ -> `Presence
@@ -219,31 +215,20 @@ struct
                   (* TODO: check that the kinds match up *)
                   `Application (abstype, List.map (type_arg var_env alias_env) ts)
             end
-        | `Primitive k -> `Primitive k
-        | `DB -> `Primitive `DB
-        | (`Input _ | `Output _ | `Select _ | `Choice _ | `Dual _ | `End) as s -> session_type var_env alias_env s
+        | Primitive k -> `Primitive k
+        | DB -> `Primitive `DB
+        | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s -> session_type var_env alias_env s
   and session_type var_env alias_env =
     (* let lookup_type t = StringMap.find t var_env.tenv in  -- used only in commented code *)
     (* HACKY *)
+    let open Datatype in
     function
-    | `Input (t, s) -> `Input (datatype var_env alias_env t, datatype var_env alias_env s)
-    | `Output (t, s) -> `Output (datatype var_env alias_env t, datatype var_env alias_env s)
-    | `Select r -> `Select (row var_env alias_env r)
-    | `Choice r -> `Choice (row var_env alias_env r)
-    (* | `TypeVar (name, _, _) -> *)
-    (*   begin *)
-    (*     try `MetaSessionVar (lookup_type name) *)
-    (*     with NotFound _ -> raise (UnexpectedFreeVar name) *)
-    (*   end *)
-    (* | `Mu (name, s) -> *)
-    (*   let var = Types.fresh_raw_variable () in *)
-    (*   let point = Unionfind.fresh (`Var (var, (`Any, `Session), `Flexible)) in *)
-    (*   let tenv = StringMap.add name point var_env.tenv in *)
-    (*   let _ = Unionfind.change point (`Recursive (var, *)
-    (*                                               `Session (session_type {var_env with tenv=tenv} alias_env s))) in *)
-    (*     `MetaSessionVar point *)
-    | `Dual s -> `Dual (datatype var_env alias_env s)
-    | `End -> `End
+    | Input (t, s)  -> `Input (datatype var_env alias_env t, datatype var_env alias_env s)
+    | Output (t, s) -> `Output (datatype var_env alias_env t, datatype var_env alias_env s)
+    | Select r      -> `Select (row var_env alias_env r)
+    | Choice r      -> `Choice (row var_env alias_env r)
+    | Dual s        -> `Dual (datatype var_env alias_env s)
+    | End           -> `End
     | _ -> assert false
   and fieldspec var_env alias_env =
     let lookup_flag = flip StringMap.find var_env.penv in
@@ -284,15 +269,15 @@ struct
          operations. Note any row which can be closed will have an
          unbound effect variable.  *)
       try List.map
-            (function
-            | (name, `Present { node = `Function (domain, (fields, rv), codomain); pos}) as op
+            (let open Datatype in function
+            | (name, `Present { node = Function (domain, (fields, rv), codomain); pos}) as op
                 when not (TypeUtils.is_builtin_effect name) ->
                (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
                begin match rv, fields with
                | `Closed, [] -> op
                | `Open _, []
                | (`Recursive _), [] -> (* might need an extra check on recursive rows *)
-                  (name, `Present { node = `Function (domain, ([], `Closed), codomain); pos})
+                  (name, `Present { node = Function (domain, ([], `Closed), codomain); pos})
                | _,_ -> raise (UnexpectedOperationEffects name)
                end
             | x -> x)

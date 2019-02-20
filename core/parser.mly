@@ -140,7 +140,7 @@ let attach_subkind_helper update sk = update sk
 let attach_subkind (t, subkind) =
   let update sk =
     match t with
-    | `TypeVar (x, _, freedom) -> `TypeVar (x, sk, freedom)
+    | Datatype.TypeVar (x, _, freedom) -> Datatype.TypeVar (x, sk, freedom)
     | _ -> assert false
   in attach_subkind_helper update subkind
 
@@ -234,8 +234,8 @@ let parseRegexFlags f =
 %start file
 
 %type <Sugartypes.binding list * Sugartypes.phrase option> file
-%type <Sugartypes.datatype> datatype
-%type <Sugartypes.datatype> just_datatype
+%type <Sugartypes.Datatype.with_pos> datatype
+%type <Sugartypes.Datatype.with_pos> just_datatype
 %type <Sugartypes.sentence> interactive
 %type <Sugartypes.regex> regex_pattern_alternate
 %type <Sugartypes.regex> regex_pattern
@@ -898,26 +898,26 @@ hear_arrow_prefix:
 
 straight_arrow:
 | parenthesized_datatypes
-  straight_arrow_prefix RARROW datatype                        { `Function ($1, $2, $4) }
+  straight_arrow_prefix RARROW datatype                        { Datatype.Function ($1, $2, $4) }
 | parenthesized_datatypes
-  straight_arrow_prefix LOLLI datatype                         { `Lolli    ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { `Function ($1, fresh_row (), $3) }
-| parenthesized_datatypes LOLLI datatype                       { `Lolli    ($1, fresh_row (), $3) }
+  straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
+| parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_row (), $3) }
+| parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_row (), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { `Function ($1, row_with_wp $2, $4) }
+  squig_arrow_prefix SQUIGRARROW datatype                      { Datatype.Function ($1, row_with_wp $2, $4) }
 | parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { `Lolli    ($1, row_with_wp $2, $4) }
-| parenthesized_datatypes SQUIGRARROW datatype                 { `Function ($1, row_with_wp (fresh_row ()), $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { `Lolli    ($1, row_with_wp (fresh_row ()), $3) }
+  squig_arrow_prefix SQUIGLOLLI datatype                       { Datatype.Lolli    ($1, row_with_wp $2, $4) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp (fresh_row ()), $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp (fresh_row ()), $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                  { `Mu ($2, with_pos $loc($4) $4) }
+| MU VARIABLE DOT mu_datatype                                  { Datatype.Mu ($2, with_pos $loc($4) $4) }
 | forall_datatype                                              { $1 }
 
 forall_datatype:
-| FORALL varlist DOT datatype                                  { `Forall (labels $2, $4) }
+| FORALL varlist DOT datatype                                  { Datatype.Forall (labels $2, $4) }
 | session_datatype                                             { $1 }
 
 /* Parenthesised dts disambiguate between sending qualified types and recursion variables.
@@ -937,14 +937,14 @@ forall_datatype:
    among several nonterminals.
 */
 session_datatype:
-| BANG primary_datatype_pos DOT datatype                       { `Output ($2, $4) }
-| QUESTION primary_datatype_pos DOT datatype                   { `Input  ($2, $4) }
-| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { `Select $2       }
-| LBRACKETAMPBAR row BARAMPRBRACKET                            { `Choice $2       }
-| END                                                          { `End             }
-| primary_datatype                                             { $1               }
-| qualified_type_name                                          { `QualifiedTypeApplication ($1, []) }
-| qualified_type_name LPAREN type_arg_list RPAREN              { `QualifiedTypeApplication ($1, $3) }
+| BANG primary_datatype_pos DOT datatype                       { Datatype.Output ($2, $4) }
+| QUESTION primary_datatype_pos DOT datatype                   { Datatype.Input  ($2, $4) }
+| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { Datatype.Select $2       }
+| LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
+| END                                                          { Datatype.End             }
+| primary_datatype                                             { $1                       }
+| qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
+| qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
@@ -954,33 +954,34 @@ primary_datatype_pos:
 | primary_datatype                                             { with_pos $loc $1 }
 
 primary_datatype:
-| TILDE primary_datatype_pos                                   { `Dual $2 }
+| TILDE primary_datatype_pos                                   { Datatype.Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
-                                                                   | [] -> `Unit
+                                                                   | [] -> Datatype.Unit
                                                                    | [{node;_}] -> node
-                                                                   | ts  -> `Tuple ts }
-| LPAREN rfields RPAREN                                        { `Record $2 }
+                                                                   | ts  -> Datatype.Tuple ts }
+| LPAREN rfields RPAREN                                        { Datatype.Record $2 }
 | TABLEHANDLE
-     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { `Table ($3, $5, $7) }
-| LBRACKETBAR vrow BARRBRACKET                                 { `Variant $2 }
-| LBRACKET datatype RBRACKET                                   { `List $2 }
+     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { Datatype.Table ($3, $5, $7) }
+| LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
+| LBRACKET datatype RBRACKET                                   { Datatype.List $2 }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
-| CONSTRUCTOR                                                  { match $1 with
-                                                                   | "Bool"    -> `Primitive `Bool
-                                                                   | "Int"     -> `Primitive `Int
-                                                                   | "Char"    -> `Primitive `Char
-                                                                   | "Float"   -> `Primitive `Float
-                                                                   | "XmlItem" -> `Primitive `XmlItem
-                                                                   | "String"  -> `Primitive `String
-                                                                   | "Database"-> `DB
-                                                                   | t         -> `TypeApplication (t, [])
+| CONSTRUCTOR                                                  { let open Datatype in
+                                                                 match $1 with
+                                                                   | "Bool"    -> Primitive `Bool
+                                                                   | "Int"     -> Primitive `Int
+                                                                   | "Char"    -> Primitive `Char
+                                                                   | "Float"   -> Primitive `Float
+                                                                   | "XmlItem" -> Primitive `XmlItem
+                                                                   | "String"  -> Primitive `String
+                                                                   | "Database"-> DB
+                                                                   | t         -> TypeApplication (t, [])
                                                                }
-| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { `TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
 
 type_var:
-| VARIABLE                                                     { `TypeVar ($1, None, `Rigid)    }
-| PERCENTVAR                                                   { `TypeVar ($1, None, `Flexible) }
+| VARIABLE                                                     { Datatype.TypeVar ($1, None, `Rigid)    }
+| PERCENTVAR                                                   { Datatype.TypeVar ($1, None, `Flexible) }
 | UNDERSCORE                                                   { fresh_rigid_type_variable ()   }
 | PERCENT                                                      { fresh_type_variable ()         }
 

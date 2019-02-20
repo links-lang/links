@@ -151,7 +151,7 @@ class transform (env : Types.typing_environment) =
     method with_effects : Types.row -> 'self_type = fun effects ->
       {< effect_row = fst (Types.unwrap_row effects) >}
 
-    method sugar_datatype : datatype -> ('self_type * datatype) =
+    method sugar_datatype : Datatype.with_pos -> ('self_type * Datatype.with_pos) =
       fun s -> (o, s)
 
     method datatype : Types.datatype -> ('self_type * Types.datatype) =

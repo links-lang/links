@@ -71,7 +71,7 @@ object ('self)
     (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
     'self
 
-  method sugar_datatype   : datatype -> 'self * datatype
+  method sugar_datatype   : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatype         : Types.datatype -> 'self * Types.datatype
   method datatype'        : datatype' -> 'self * datatype'
   method lens_sort        : Types.lens_sort -> 'self * Types.lens_sort

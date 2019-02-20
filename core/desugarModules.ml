@@ -275,22 +275,23 @@ and perform_renaming module_table path term_ht type_ht =
           (self, Var fqn)
       | phr -> super#phrasenode phr
 
-    method! datatypenode = function
-      | `Function (dts, row, dt) ->
+    method! datatypenode = let open Datatype in
+      function
+      | Function (dts, row, dt) ->
           let (_, dts') = self#list (fun o -> o#datatype) dts in
           let (_, dt') = self#datatype dt in
-          (self, `Function (dts', row, dt'))
-      | `TypeApplication (n, args) ->
+          (self, Function (dts', row, dt'))
+      | TypeApplication (n, args) ->
           let fqn = resolve n type_shadow_table in
           let (_, args') = self#list (fun o -> o#type_arg) args in
-          (self, `TypeApplication (fqn, args'))
-      | `QualifiedTypeApplication ([], _args) -> assert false
-      | `QualifiedTypeApplication (hd :: tl, args) ->
+          (self, TypeApplication (fqn, args'))
+      | QualifiedTypeApplication ([], _args) -> assert false
+      | QualifiedTypeApplication (hd :: tl, args) ->
           let prefix = resolve hd type_shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
           let (_, args') = self#list (fun o -> o#type_arg) args in
-          (self, `TypeApplication (fqn, args'))
-      | `Variant (xs, rv) ->
+          (self, TypeApplication (fqn, args'))
+      | Variant (xs, rv) ->
           (* Variants need to have constructors renamed *)
           let (o, xs') =
             self#list (fun o (name, fspec) ->
@@ -299,7 +300,7 @@ and perform_renaming module_table path term_ht type_ht =
               let (o, fspec') = o#fieldspec fspec in
               (o, (fqn, fspec'))) xs in
           let (o, rv') = o#row_var rv in
-          (o, `Variant (xs', rv'))
+          (o, Variant (xs', rv'))
       | dt -> super#datatypenode dt
 
   end

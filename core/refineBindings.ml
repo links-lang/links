@@ -119,7 +119,7 @@ object (self)
     StringSet.elements (StringSet.from_list (List.rev references))
 
   method! datatypenode = function
-    | `TypeApplication (tyAppName, argList) ->
+    | Datatype.TypeApplication (tyAppName, argList) ->
           let o =
             List.fold_left (fun acc ta -> acc#type_arg ta) self argList
           in
@@ -143,9 +143,10 @@ let subst_ty_app refFrom refTo =
 object(_self)
   inherit SugarTraversals.map as super
 
-  method! datatypenode : datatypenode -> datatypenode = function
-    | `TypeApplication (tyAppName, _) as tyApp ->
-        if tyAppName = refFrom then `TypeVar (refTo, Some default_subkind, `Rigid)
+  method! datatypenode : Datatype.t -> Datatype.t = let open Datatype in
+    function
+    | TypeApplication (tyAppName, _) as tyApp ->
+        if tyAppName = refFrom then TypeVar (refTo, Some default_subkind, `Rigid)
         else super#datatypenode tyApp
     | dt -> super#datatypenode dt
 end
@@ -155,7 +156,7 @@ let substTyApp ty refFrom refTo =
 
 
 (* Type variable substitution *)
-let subst_ty_var varFrom (taTo : type_arg) =
+let subst_ty_var varFrom (taTo : Datatype.type_arg) =
 object(self)
   inherit SugarTraversals.map as super
 
@@ -165,25 +166,26 @@ object(self)
    *  - This is the one found in the application
    *)
 
-  method! datatypenode : datatypenode -> datatypenode =
+  method! datatypenode : Datatype.t -> Datatype.t =
     fun dt ->
+      let open Datatype in
       match dt with
-        | `TypeVar (n, _, _) when n = varFrom ->
+        | TypeVar (n, _, _) when n = varFrom ->
             (match taTo with
                | `Type {node = dtTo; _} -> dtTo
                | _ -> super#datatypenode dt)
-        | `Forall (qs, {node = quantDt; pos}) ->
+        | Forall (qs, {node = quantDt; pos}) ->
             (match taTo with
-              | `Type {node = `TypeVar (n, _, _); _} ->
+              | `Type {node = TypeVar (n, _, _); _} ->
                   let qs' =
                     List.map (fun (tv, k, f as q) ->
                       if tv = varFrom then
                         (n, k, f)
-                      else q) qs in `Forall (qs', with_pos pos (self#datatypenode quantDt))
+                      else q) qs in Forall (qs', with_pos pos (self#datatypenode quantDt))
               | _ -> super#datatypenode dt)
         | _ -> super#datatypenode dt
 
-  method! fieldspec : fieldspec -> fieldspec =
+  method! fieldspec : Datatype.fieldspec -> Datatype.fieldspec =
     fun fs ->
       match fs with
         | `Var (n, _, _) when n = varFrom ->
@@ -192,7 +194,7 @@ object(self)
               | _ -> super#fieldspec fs)
         | _ -> super#fieldspec fs
 
-  method! row_var : row_var -> row_var = function
+  method! row_var : Datatype.row_var -> Datatype.row_var = function
     | `Open (n, _, _) as rv when n = varFrom ->
         (match taTo with
           | `Row (_, (`Open _ as rv2)) -> rv2
@@ -209,10 +211,10 @@ let inline_ty toFind inlineArgs toInline =
 object(_self)
   inherit SugarTraversals.map as super
 
-  method! datatypenode : datatypenode -> datatypenode =
+  method! datatypenode : Datatype.t -> Datatype.t =
     fun dt ->
       match dt with
-        | `TypeApplication (tyAppName, argList) as tyApp ->
+        | Datatype.TypeApplication (tyAppName, argList) as tyApp ->
             if tyAppName = toFind then (* && List.length argList = 0 then *)
               (* Ok, so what we need to do:
                 * We have a list of the type arguments of the type to inline,
@@ -302,11 +304,11 @@ module RefineTypeBindings = struct
     fun (name, _, _) -> name
 
   (* Gets the sugared datatype from a type binding. *)
-  let getDT : type_ty -> datatype =
+  let getDT : type_ty -> Datatype.with_pos =
     fun (_, _, (dt, _)) -> dt
 
   (* Updates the datatype in a type binding. *)
-  let updateDT : type_ty -> datatypenode -> type_ty =
+  let updateDT : type_ty -> Datatype.t -> type_ty =
     fun (name, tyArgs, ({pos; _}, unsugaredDT)) newDT ->
       (name, tyArgs, ((with_pos pos newDT), unsugaredDT))
 
@@ -352,7 +354,7 @@ module RefineTypeBindings = struct
         if List.mem_assoc tyName env then assert false else
         if rts || List.length sccs > 1 then
           let muName = gensym ~prefix:"refined_mu" () in
-            ((tyName, muName) :: env, `Mu (muName, sugaredDT))
+            ((tyName, muName) :: env, Datatype.Mu (muName, sugaredDT))
         else (env, sugaredDT.node) in
       (* Now, we go through the list of type references.
        * If the reference is in the substitution environment, we replace it

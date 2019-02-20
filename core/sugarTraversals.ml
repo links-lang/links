@@ -84,7 +84,7 @@ class map =
         let _x_i1 = o#option (fun o -> o#subkind) _x_i1 in
         let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
 
-    method row_var : row_var -> row_var =
+    method row_var : Datatype.row_var -> Datatype.row_var =
       function
       | `Closed -> `Closed
       | `Open _x ->
@@ -93,7 +93,7 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#row _x_i1 in `Recursive ((_x, _x_i1))
 
-    method row : row -> row =
+    method row : Datatype.row -> Datatype.row =
       fun (_x, _x_i1) ->
         let _x =
           o#list
@@ -546,7 +546,7 @@ class map =
         in
         { params with shp_bindings = bindings }
 
-    method fieldspec : fieldspec -> fieldspec =
+    method fieldspec : Datatype.fieldspec -> Datatype.fieldspec =
       function
       | `Present _x -> let _x = o#datatype _x in `Present _x
       | `Absent -> `Absent
@@ -560,69 +560,70 @@ class map =
         let _x = o#string _x in
         let _x_i1 = o#list (fun o -> o#string) _x_i1 in (_x, _x_i1)
 
-    method datatypenode : datatypenode -> datatypenode =
+    method datatypenode : Datatype.t -> Datatype.t =
+      let open Datatype in
       function
-      | `TypeVar _x ->
-          let _x = o#known_type_variable _x in `TypeVar _x
-      | `QualifiedTypeApplication (ns, args) ->
+      | TypeVar _x ->
+          let _x = o#known_type_variable _x in TypeVar _x
+      | QualifiedTypeApplication (ns, args) ->
           let ns = o#list (fun o -> o#name) ns in
           let args = o#list (fun o -> o#type_arg) args in
-          `QualifiedTypeApplication (ns, args)
-      | `Function (_x, _x_i1, _x_i2) ->
+          QualifiedTypeApplication (ns, args)
+      | Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in `Function (_x, _x_i1, _x_i2)
-      | `Lolli (_x, _x_i1, _x_i2) ->
+          let _x_i2 = o#datatype _x_i2 in Function (_x, _x_i1, _x_i2)
+      | Lolli (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in `Lolli (_x, _x_i1, _x_i2)
-      | `Mu (_x, _x_i1) ->
+          let _x_i2 = o#datatype _x_i2 in Lolli (_x, _x_i1, _x_i2)
+      | Mu (_x, _x_i1) ->
           let _x = o#name _x in
-          let _x_i1 = o#datatype _x_i1 in `Mu (_x, _x_i1)
-      | `Forall (_x, _x_i1) ->
-          let _x = _x in (*o#list (fun o -> o#quantifier) _x in*)
-          let _x_i1 = o#datatype _x_i1 in `Forall (_x, _x_i1)
-      | `Unit -> `Unit
-      | `Tuple _x ->
-          let _x = o#list (fun o -> o#datatype) _x in `Tuple _x
-      | `Record _x -> let _x = o#row _x in `Record _x
-      | `Variant _x -> let _x = o#row _x in `Variant _x
-      | `Effect r -> let r = o#row r in `Effect r
-      | `Table (_x, _x_i1, _x_i2) ->
+          let _x_i1 = o#datatype _x_i1 in Mu (_x, _x_i1)
+      | Forall (_x, _x_i1) ->
+          let _x = _x in
+          let _x_i1 = o#datatype _x_i1 in Forall (_x, _x_i1)
+      | Unit -> Unit
+      | Tuple _x ->
+          let _x = o#list (fun o -> o#datatype) _x in Tuple _x
+      | Record _x -> let _x = o#row _x in Record _x
+      | Variant _x -> let _x = o#row _x in Variant _x
+      | Effect r -> let r = o#row r in Effect r
+      | Table (_x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
-         let _x_i2 = o#datatype _x_i2 in `Table (_x, _x_i1, _x_i2)
-      | `List _x -> let _x = o#datatype _x in `List _x
-      | `TypeApplication _x ->
+         let _x_i2 = o#datatype _x_i2 in Table (_x, _x_i1, _x_i2)
+      | List _x -> let _x = o#datatype _x in List _x
+      | TypeApplication _x ->
           let _x =
             (fun (_x, _x_i1) ->
                let _x = o#name _x in
                let _x_i1 = o#list (fun o -> o#type_arg) _x_i1 in (_x, _x_i1))
               _x
-          in `TypeApplication _x
-      | `Primitive _x -> let _x = o#unknown _x in `Primitive _x
-      | `DB -> `DB
-      | `Input (_x, _x_i1) ->
+          in TypeApplication _x
+      | Primitive _x -> let _x = o#unknown _x in Primitive _x
+      | DB -> DB
+      | Input (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#datatype _x_i1 in `Input (_x, _x_i1)
-      | `Output (_x, _x_i1) ->
+        let _x_i1 = o#datatype _x_i1 in Input (_x, _x_i1)
+      | Output (_x, _x_i1) ->
         let _x = o#datatype _x in
-        let _x_i1 = o#datatype _x_i1 in `Output (_x, _x_i1)
-      | `Select _x ->
-        let _x = o#row _x in `Select _x
-      | `Choice _x ->
-        let _x = o#row _x in `Choice _x
-      | `Dual _x ->
-        let _x = o#datatype _x in `Dual _x
-      | `End -> `End
+        let _x_i1 = o#datatype _x_i1 in Output (_x, _x_i1)
+      | Select _x ->
+        let _x = o#row _x in Select _x
+      | Choice _x ->
+        let _x = o#row _x in Choice _x
+      | Dual _x ->
+        let _x = o#datatype _x in Dual _x
+      | End -> End
 
-    method datatype : datatype -> datatype =
+    method datatype : Datatype.with_pos -> Datatype.with_pos =
       fun {node; pos} ->
         let node = o#datatypenode node in
         let pos  = o#position pos in
         {node; pos}
 
-    method type_arg : type_arg -> type_arg =
+    method type_arg : Datatype.type_arg -> Datatype.type_arg =
       function
       | `Type _x -> let _x = o#datatype _x in `Type _x
       | `Row _x -> let _x = o#row _x in `Row _x
@@ -799,7 +800,7 @@ class fold =
         let o = o#option (fun o -> o#subkind) _x_i1 in
         let o = o#freedom _x_i2 in o
 
-    method row_var : row_var -> 'self_type =
+    method row_var : Datatype.row_var -> 'self_type =
       function
       | `Closed -> o
       | `Open _x ->
@@ -807,7 +808,7 @@ class fold =
       | `Recursive ((_x, _x_i1)) ->
           let o = o#name _x in let o = o#row _x_i1 in o
 
-    method row : row -> 'self_type =
+    method row : Datatype.row -> 'self_type =
       fun (_x, _x_i1) ->
         let o =
           o#list
@@ -1210,7 +1211,7 @@ class fold =
             o#pattern pat)
           params.shp_bindings
 
-    method fieldspec : fieldspec -> 'self_type =
+    method fieldspec : Datatype.fieldspec -> 'self_type =
       function
       | `Present _x -> let o = o#datatype _x in o
       | `Absent -> o
@@ -1225,62 +1226,63 @@ class fold =
 
     method tyvar : tyvar -> 'self_type = fun _ -> o
 
-    method datatypenode : datatypenode -> 'self_type =
+    method datatypenode : Datatype.t -> 'self_type =
+      let open Datatype in
       function
-      | `TypeVar _x ->
+      | TypeVar _x ->
           let o = o#known_type_variable _x in o
-      | `QualifiedTypeApplication (ns, args) ->
+      | QualifiedTypeApplication (ns, args) ->
           let o = o#list (fun o -> o#name) ns in
           let o = o#list (fun o -> o#type_arg) args in
           o
-      | `Function (_x, _x_i1, _x_i2) ->
+      | Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | `Lolli (_x, _x_i1, _x_i2) ->
+      | Lolli (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | `Mu (_x, _x_i1) ->
+      | Mu (_x, _x_i1) ->
           let o = o#name _x in let o = o#datatype _x_i1 in o
-      | `Forall (_x, _x_i1) ->
-          let o = o (*o#list (fun o -> o#quantifier) _x*) in let o = o#datatype _x_i1 in o
-      | `Unit -> o
-      | `Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
-      | `Record _x -> let o = o#row _x in o
-      | `Variant _x -> let o = o#row _x in o
-      | `Effect r -> let o = o#row r in o
-      | `Table (_x, _x_i1, _x_i2) ->
+      | Forall (_x, _x_i1) ->
+          let o = o#datatype _x_i1 in o
+      | Unit -> o
+      | Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
+      | Record _x -> let o = o#row _x in o
+      | Variant _x -> let o = o#row _x in o
+      | Effect r -> let o = o#row r in o
+      | Table (_x, _x_i1, _x_i2) ->
           let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
-      | `List _x -> let o = o#datatype _x in o
-      | `TypeApplication _x ->
+      | List _x -> let o = o#datatype _x in o
+      | TypeApplication _x ->
           let o =
             (fun (_x, _x_i1) ->
                let o = o#name _x in
                let o = o#list (fun o -> o#type_arg) _x_i1 in o)
               _x
           in o
-      | `Primitive _x -> let o = o#unknown _x in o
-      | `DB -> o
-      | `Input (_x, _x_i1) ->
+      | Primitive _x -> let o = o#unknown _x in o
+      | DB -> o
+      | Input (_x, _x_i1) ->
         let o = o#datatype _x in
         let o = o#datatype _x_i1 in o
-      | `Output (_x, _x_i1) ->
+      | Output (_x, _x_i1) ->
         let o = o#datatype _x in
         let o = o#datatype _x_i1 in o
-      | `Select _x ->
+      | Select _x ->
         let o = o#row _x in o
-      | `Choice _x ->
+      | Choice _x ->
         let o = o#row _x in o
-      | `Dual _x ->
+      | Dual _x ->
         let o = o#datatype _x in o
-      | `End -> o
+      | End -> o
 
-    method datatype : datatype -> 'self_type =
+    method datatype : Datatype.with_pos -> 'self_type =
       fun {node; pos} ->
         let o = o#datatypenode node in
         let o = o#position pos in
         o
 
-    method type_arg : type_arg -> 'self_type =
+    method type_arg : Datatype.type_arg -> 'self_type =
       function
       | `Type _x -> let o = o#datatype _x in o
       | `Row _x -> let o = o#row _x in o
@@ -1466,7 +1468,7 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#subkind) _x_i1 in
         let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
 
-    method row_var : row_var -> ('self_type * row_var) =
+    method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
       function
       | `Closed -> (o, `Closed)
       | `Open _x ->
@@ -1475,7 +1477,7 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#row _x_i1 in (o, (`Recursive ((_x, _x_i1))))
 
-    method row : row -> ('self_type * row) =
+    method row : Datatype.row -> ('self_type * Datatype.row) =
       fun (_x, _x_i1) ->
         let (o, _x) =
           o#list
@@ -1974,7 +1976,7 @@ class fold_map =
         in
         (o, { params with shp_bindings = bindings })
 
-    method fieldspec : fieldspec -> ('self_type * fieldspec) =
+    method fieldspec : Datatype.fieldspec -> ('self_type * Datatype.fieldspec) =
       function
       | `Present _x -> let (o, _x) = o#datatype _x in (o, `Present _x)
       | `Absent -> (o, `Absent)
@@ -1994,73 +1996,74 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
         in (o, (_x, _x_i1))
 
-    method datatypenode : datatypenode -> ('self_type * datatypenode) =
+    method datatypenode : Datatype.t -> ('self_type * Datatype.t) =
+      let open Datatype in
       function
-      | `TypeVar _x ->
-          let (o, _x) = o#known_type_variable _x in (o, (`TypeVar _x))
-      | `QualifiedTypeApplication (ns, args) ->
+      | TypeVar _x ->
+          let (o, _x) = o#known_type_variable _x in (o, (TypeVar _x))
+      | QualifiedTypeApplication (ns, args) ->
           let (o, ns) = o#list (fun o -> o#name) ns in
           let (o, args) = o#list (fun o -> o#type_arg) args in
-          (o, `QualifiedTypeApplication (ns, args))
-      | `Function (_x, _x_i1, _x_i2) ->
+          (o, QualifiedTypeApplication (ns, args))
+      | Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
-          in (o, (`Function (_x, _x_i1, _x_i2)))
-      | `Lolli (_x, _x_i1, _x_i2) ->
+          in (o, (Function (_x, _x_i1, _x_i2)))
+      | Lolli (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2
-          in (o, (`Lolli (_x, _x_i1, _x_i2)))
-      | `Mu (_x, _x_i1) ->
+          in (o, (Lolli (_x, _x_i1, _x_i2)))
+      | Mu (_x, _x_i1) ->
           let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (`Mu (_x, _x_i1)))
-      | `Forall (_x, _x_i1) ->
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (Mu (_x, _x_i1)))
+      | Forall (_x, _x_i1) ->
           (*let (o, _x) = o#list (fun o -> o#quantifier) _x in*)
-          let (o, _x_i1) = o#datatype _x_i1 in (o, (`Forall (_x, _x_i1)))
-      | `Unit -> (o, `Unit)
-      | `Tuple _x ->
+          let (o, _x_i1) = o#datatype _x_i1 in (o, (Forall (_x, _x_i1)))
+      | Unit -> (o, Unit)
+      | Tuple _x ->
           let (o, _x) = o#list (fun o -> o#datatype) _x
-          in (o, (`Tuple _x))
-      | `Record _x -> let (o, _x) = o#row _x in (o, (`Record _x))
-      | `Variant _x -> let (o, _x) = o#row _x in (o, (`Variant _x))
-      | `Effect r -> let (o, r) = o#row r in (o, `Effect r)
-      | `Table (_x, _x_i1, _x_i2) ->
+          in (o, (Tuple _x))
+      | Record _x -> let (o, _x) = o#row _x in (o, (Record _x))
+      | Variant _x -> let (o, _x) = o#row _x in (o, (Variant _x))
+      | Effect r -> let (o, r) = o#row r in (o, Effect r)
+      | Table (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in
-          let (o, _x_i2) = o#datatype _x_i2 in (o, (`Table (_x, _x_i1, _x_i2)))
-      | `List _x -> let (o, _x) = o#datatype _x in (o, (`List _x))
-      | `TypeApplication _x ->
+          let (o, _x_i2) = o#datatype _x_i2 in (o, (Table (_x, _x_i1, _x_i2)))
+      | List _x -> let (o, _x) = o#datatype _x in (o, (List _x))
+      | TypeApplication _x ->
           let (o, _x) =
             (fun (_x, _x_i1) ->
                let (o, _x) = o#string _x in
                let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
                in (o, (_x, _x_i1)))
               _x
-          in (o, (`TypeApplication _x))
-      | `Primitive _x ->
-          let (o, _x) = o#unknown _x in (o, (`Primitive _x))
-      | `DB -> (o, `DB)
-      | `Input (_x, _x_i1) ->
+          in (o, (TypeApplication _x))
+      | Primitive _x ->
+          let (o, _x) = o#unknown _x in (o, (Primitive _x))
+      | DB -> (o, DB)
+      | Input (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, `Input (_x, _x_i1))
-      | `Output (_x, _x_i1) ->
+        let (o, _x_i1) = o#datatype _x_i1 in (o, Input (_x, _x_i1))
+      | Output (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, `Output (_x, _x_i1))
-      | `Select _x ->
-        let (o, _x) = o#row _x in (o, `Select _x)
-      | `Choice _x ->
-        let (o, _x) = o#row _x in (o, `Choice _x)
-      | `Dual _x ->
-        let (o, _x) = o#datatype _x in (o, `Dual _x)
-      | `End -> (o, `End)
+        let (o, _x_i1) = o#datatype _x_i1 in (o, Output (_x, _x_i1))
+      | Select _x ->
+        let (o, _x) = o#row _x in (o, Select _x)
+      | Choice _x ->
+        let (o, _x) = o#row _x in (o, Choice _x)
+      | Dual _x ->
+        let (o, _x) = o#datatype _x in (o, Dual _x)
+      | End -> (o, End)
 
-    method datatype : datatype -> ('self_type * datatype) =
+    method datatype : Datatype.with_pos -> ('self_type * Datatype.with_pos) =
       fun {node; pos} ->
         let (o, node) = o#datatypenode node in
         let (o, pos) = o#position pos in (o, {node; pos})
 
-    method type_arg : type_arg -> ('self_type * type_arg) =
+    method type_arg : Datatype.type_arg -> ('self_type * Datatype.type_arg) =
       function
       | `Type _x -> let (o, _x) = o#datatype _x in (o, `Type _x)
       | `Row _x -> let (o, _x) = o#row _x in (o, `Row _x)

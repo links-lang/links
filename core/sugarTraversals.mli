@@ -32,8 +32,8 @@ class map :
     method freedom         : freedom -> freedom
     method type_variable   : type_variable -> type_variable
     method known_type_variable   : known_type_variable -> known_type_variable
-    method row_var         : row_var -> row_var
-    method row             : row -> row
+    method row_var         : Datatype.row_var -> Datatype.row_var
+    method row             : Datatype.row -> Datatype.row
     method replace_rhs     : replace_rhs -> replace_rhs
     method regexflag       : regexflag -> regexflag
     method regex           : regex -> regex
@@ -52,13 +52,13 @@ class map :
     method funlit          : funlit -> funlit
     method handlerlit      : handlerlit -> handlerlit
     method handle_params   : handler_parameterisation -> handler_parameterisation
-    method fieldspec       : fieldspec -> fieldspec
+    method fieldspec       : Datatype.fieldspec -> Datatype.fieldspec
     method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
-    method datatype        : datatype -> datatype
-    method datatypenode    : datatypenode -> datatypenode
+    method datatype        : Datatype.with_pos -> Datatype.with_pos
+    method datatypenode    : Datatype.t -> Datatype.t
     method datatype'       : datatype' -> datatype'
-    method type_arg        : type_arg -> type_arg
+    method type_arg        : Datatype.type_arg -> Datatype.type_arg
     method constant        : constant -> constant
     method binop           : binop -> binop
     method tybinop         : tyarg list * binop -> tyarg list * binop
@@ -102,8 +102,8 @@ class fold :
     method freedom         : freedom -> 'self
     method type_variable   : type_variable -> 'self
     method known_type_variable : known_type_variable -> 'self
-    method row_var         : row_var -> 'self
-    method row             : row -> 'self
+    method row_var         : Datatype.row_var -> 'self
+    method row             : Datatype.row -> 'self
     method replace_rhs     : replace_rhs -> 'self
     method regexflag       : regexflag -> 'self
     method regex           : regex -> 'self
@@ -123,14 +123,14 @@ class fold :
     method handlerlit      : handlerlit -> 'self
     method handle_params   : handler_parameterisation -> 'self
     (* method quantifier      : quantifier -> 'self *)
-    method fieldspec       : fieldspec -> 'self
+    method fieldspec       : Datatype.fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
     method tyvar           : tyvar -> 'self
-    method datatype        : datatype -> 'self
-    method datatypenode    : datatypenode -> 'self
+    method datatype        : Datatype.with_pos -> 'self
+    method datatypenode    : Datatype.t -> 'self
     method datatype'       : datatype' -> 'self
-    method type_arg        : type_arg -> 'self
+    method type_arg        : Datatype.type_arg -> 'self
     method constant        : constant -> 'self
     method binop           : binop -> 'self
     method tybinop         : tyarg list * binop -> 'self
@@ -161,12 +161,12 @@ object ('self)
   method bool            : bool -> 'self * bool
   method char            : char -> 'self * char
   method constant        : constant -> 'self * constant
-  method datatype        : datatype -> 'self * datatype
-  method datatypenode    : datatypenode -> 'self * datatypenode
+  method datatype        : Datatype.with_pos -> 'self * Datatype.with_pos
+  method datatypenode    : Datatype.t -> 'self * Datatype.t
   method datatype'       : datatype' -> 'self * datatype'
   method directive       : directive -> 'self * directive
   method fieldconstraint : fieldconstraint -> 'self * fieldconstraint
-  method fieldspec       : fieldspec -> 'self * fieldspec
+  method fieldspec       : Datatype.fieldspec -> 'self * Datatype.fieldspec
   method int             : int -> 'self * int
   method float           : float -> 'self * float
   method funlit          : funlit -> 'self * funlit
@@ -191,8 +191,8 @@ object ('self)
   method regex           : regex -> 'self * regex
   method regexflag       : regexflag -> 'self * regexflag
   method replace_rhs     : replace_rhs -> 'self * replace_rhs
-  method row             : row -> 'self * row
-  method row_var         : row_var -> 'self * row_var
+  method row             : Datatype.row -> 'self * Datatype.row
+  method row_var         : Datatype.row_var -> 'self * Datatype.row_var
   method sec             : sec -> 'self * sec
   method sentence        : sentence -> 'self * sentence
   method string          : name -> 'self * name
@@ -201,7 +201,7 @@ object ('self)
   method freedom         : freedom -> 'self * freedom
   method type_variable   : type_variable -> 'self * type_variable
   method known_type_variable : known_type_variable -> 'self * known_type_variable
-  method type_arg        : type_arg -> 'self * type_arg
+  method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
   method tyunary_op      : tyarg list * unary_op -> 'self * (tyarg list * unary_op)
   method unary_op        : unary_op -> 'self * unary_op
   method unknown         : 'a . 'a -> 'self * 'a
