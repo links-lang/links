@@ -679,8 +679,8 @@ struct
            | None -> computation env cont e
            | Some (db, p) ->
              begin
-               if db#driver_name() <> "postgresql"
-                 then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
+               if not (List.mem (db#driver_name()) ["postgresql"; "sqlite3"])
+                 then raise (Errors.Runtime_error "Only PostgreSQL and SQLite3 database drivers support shredding");
                let get_fields t =
                              match t with
                              | `Record fields ->
