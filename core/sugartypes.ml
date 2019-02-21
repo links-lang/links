@@ -19,7 +19,9 @@ type 'a with_pos = { node : 'a
 let with_pos           pos node   = { node; pos }
 let with_dummy_pos     node       = { node; pos = dummy_position }
 
-(* JSTOLAREK: document *)
+(* A type alias to be used inside modules that define a node t and a with_pos
+   type, which is a node with attached position.  Alias is required due to
+   with_pos name inside the module overlapping with top-level with_pos type. *)
 module WithPos = struct
   type 'a t = 'a with_pos [@@deriving show]
 end
@@ -31,10 +33,10 @@ let name_of_binder     {node=(n,_ );_} = n
 let type_of_binder     {node=(_,ty);_} = ty
 let type_of_binder_exn {node=(_,ty);_} =
   OptionUtils.val_of ty (* raises exception when ty = None *)
-let set_binder_name   {node=(_   ,ty); pos} name = with_pos pos (name, ty     )
-let set_binder_type   {node=(name,_ ); pos} ty   = with_pos pos (name, Some ty)
-let erase_binder_type {node=(name,_ ); pos}      = with_pos pos (name, None   )
-let binder_has_type   {node=(_   ,ty); _  }      = OptionUtils.is_some ty
+let set_binder_name    {node=(_   ,ty); pos} name = with_pos pos (name, ty     )
+let set_binder_type    {node=(name,_ ); pos} ty   = with_pos pos (name, Some ty)
+let erase_binder_type  {node=(name,_ ); pos}      = with_pos pos (name, None   )
+let binder_has_type    {node=(_   ,ty); _  }      = OptionUtils.is_some ty
 
 (* type variables *)
 type tyvar = Types.quantifier
