@@ -641,7 +641,7 @@ let is_unl_point =
     begin
       match Unionfind.find point with
       | `Closed -> true
-      | `Var (var, (lin, _), _) -> IntSet.mem var quant_vars || isUnl lin
+      | `Var (var, (lin, _), _) -> IntSet.mem var quant_vars || Linearity.isUnl lin
       | `Body t -> f (rec_vars, quant_vars) t
       | `Recursive (var, t) ->
         check_rec var rec_vars true (fun rec_vars' -> f (rec_vars', quant_vars) t)
@@ -690,7 +690,7 @@ let point_can_be_unl =
     begin
         match Unionfind.find point with
         | `Closed -> true
-        | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || isUnl lin
+        | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || Linearity.isUnl lin
         | `Var (_, _, `Flexible)     -> true
         | `Body t -> f vars t
         | `Recursive (var, t) ->
@@ -744,7 +744,7 @@ let make_point_unl : ((var_set * var_set) -> 'a -> unit) -> (var_set * var_set) 
   fun f ((rec_vars, quant_vars) as vars) point ->
     match Unionfind.find point with
     | `Closed -> ()
-    | `Var (v, (lin, _), `Rigid)       -> if IntSet.mem v quant_vars || isUnl lin then () else assert false
+    | `Var (v, (lin, _), `Rigid)       -> if IntSet.mem v quant_vars || Linearity.isUnl lin then () else assert false
     | `Var (var, (_, rest), `Flexible) -> Unionfind.change point (`Var (var, (linUnl, rest), `Flexible))
     | `Body t -> f vars t
     | `Recursive (var, t) ->
@@ -1887,8 +1887,8 @@ struct
     | s -> "::" ^ s
 
   let subkind : (policy * names) -> subkind -> string =
-    let full (l, r) = "(" ^ string_of_linearity l ^ "," ^
-                        string_of_restriction r ^ ")" in
+    let full (l, r) = "(" ^ Linearity.string_of l ^ "," ^
+                        Restriction.string_of r ^ ")" in
 
     fun (policy, _vars) ->
     if policy.kinds = "full" then
@@ -1899,9 +1899,9 @@ struct
       function
       | (Linearity.Unl, Restriction.Any)     -> ""
       | (Linearity.Any, Restriction.Any)     -> "Any"
-      | (Linearity.Unl, Restriction.Base)    -> string_of_restriction resBase
-      | (Linearity.Any, Restriction.Session) -> string_of_restriction resSession
-      | (Linearity.Unl, Restriction.Effect)  -> string_of_restriction resEffect
+      | (Linearity.Unl, Restriction.Base)    -> Restriction.string_of resBase
+      | (Linearity.Any, Restriction.Session) -> Restriction.string_of resSession
+      | (Linearity.Unl, Restriction.Effect)  -> Restriction.string_of resEffect
       | (l, r) -> full (l, r)
 
   let primary_kind : primary_kind -> string = function
@@ -1920,8 +1920,8 @@ struct
     else
       match (k, sk) with
       | `Type, (Linearity.Unl, Restriction.Any) -> ""
-      | `Type, (Linearity.Unl, Restriction.Base) -> string_of_restriction resBase
-      | `Type, (Linearity.Any, Restriction.Session) -> string_of_restriction resSession
+      | `Type, (Linearity.Unl, Restriction.Base) -> Restriction.string_of resBase
+      | `Type, (Linearity.Any, Restriction.Session) -> Restriction.string_of resSession
       | `Type, sk -> subkind ({policy with kinds="full"}, _vars) sk
       | `Row, (Linearity.Unl, Restriction.Any) -> primary_kind `Row
       | `Row, (Linearity.Unl, Restriction.Effect) -> primary_kind `Row

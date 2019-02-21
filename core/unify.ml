@@ -313,8 +313,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               begin
                 let lin =
                   match llin, rlin with
-                  | Linearity.Unl, _
-                    | _, Linearity.Unl -> Linearity.Unl
+                  | Linearity.Unl, _ | _, Linearity.Unl -> Linearity.Unl
                   | _       -> llin in
                 let rest =
                   let open Restriction in
@@ -380,7 +379,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                     else
                       raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                               " with the non-base type "^ string_of_datatype t2)));
-                  if isUnl lin then
+                  if Linearity.isUnl lin then
                     if Types.type_can_be_unl t2 then
                       Types.make_type_unl t2
                     else
@@ -420,7 +419,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                     else
                       raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                               " with the non-base type "^ string_of_datatype t1)));
-                  if isUnl lin then
+                  if Linearity.isUnl lin then
                     if Types.type_can_be_unl t1 then
                       Types.make_type_unl t1
                     else
@@ -534,7 +533,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                  else
                    raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                            " with the non-base type "^ string_of_datatype t)));
-               if isUnl lin then
+               if Linearity.isUnl lin then
                  if Types.type_can_be_unl t then
                    Types.make_type_unl t
                  else
@@ -1029,7 +1028,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                  raise (Failure (`Msg ("Cannot unify the session row variable "^ string_of_int var ^
                                          " with the non-session row "^ string_of_row extension_row)));
 
-             if isUnl lin then
+             if Linearity.isUnl lin then
                if Types.row_can_be_unl extension_row then
                  Types.make_row_unl extension_row
                else

@@ -1,15 +1,17 @@
 module Linearity = struct
   type t = Any | Unl
     [@@deriving eq,show]
-end
 
-let string_of_linearity = function
-  | Linearity.Any -> "Any"
-  | Linearity.Unl -> "Unl"
+  let isAny lin = lin == Any
+  let isUnl lin = lin == Unl
+
+  let string_of = function
+    | Any -> "Any"
+    | Unl -> "Unl"
+end
 
 let linUnl = Linearity.Unl
 let linAny = Linearity.Any
-let isUnl lin = lin == Linearity.Unl
 
 module Restriction = struct
   type t =
@@ -30,15 +32,15 @@ module Restriction = struct
   let isSession = function
     | Session -> true
     | _       -> false
+
+  let string_of = function
+    | Any     -> "Any"
+    | Base    -> "Base"
+    | Session -> "Session"
+    | Effect  -> "Eff"
 end
 
 let resAny     = Restriction.Any
 let resBase    = Restriction.Base
 let resSession = Restriction.Session
 let resEffect  = Restriction.Effect
-
-let string_of_restriction = function
- | Restriction.Any     -> "Any"
- | Restriction.Base    -> "Base"
- | Restriction.Session -> "Session"
- | Restriction.Effect  -> "Eff"
