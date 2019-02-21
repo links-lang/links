@@ -82,16 +82,16 @@ let primary_kind_of_string p =
 
 let linearity_of_string p =
   function
-  | "Any" -> Linearity.Any
-  | "Unl" -> Linearity.Unl
+  | "Any" -> linAny
+  | "Unl" -> linUnl
   | lin   ->
      raise (ConcreteSyntaxError ("Invalid kind linearity: " ^ lin, pos p))
 
 let restriction_of_string p =
   function
-  | "Any"     -> `Any
-  | "Base"    -> `Base
-  | "Session" -> `Session
+  | "Any"     -> resAny
+  | "Base"    -> resBase
+  | "Session" -> resSession
   | rest      ->
      raise (ConcreteSyntaxError ("Invalid kind restriction: " ^ rest, pos p))
 
@@ -122,19 +122,19 @@ let kind_of p =
   | "Row"      -> (`Row, None)
   | "Presence" -> (`Presence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (`Type, Some (Linearity.Any, `Any))
-  | "Base"     -> (`Type, Some (Linearity.Unl, `Base))
-  | "Session"  -> (`Type, Some (Linearity.Any, `Session))
-  | "Eff"      -> (`Row , Some (Linearity.Unl, `Effect))
+  | "Any"      -> (`Type, Some (linAny, resAny))
+  | "Base"     -> (`Type, Some (linUnl, resBase))
+  | "Session"  -> (`Type, Some (linAny, resSession))
+  | "Eff"      -> (`Row , Some (linUnl, resEffect))
   | k          -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
 
 let subkind_of p =
   function
   (* subkind abbreviations *)
-  | "Any"     -> Some (Linearity.Any, `Any)
-  | "Base"    -> Some (Linearity.Unl, `Base)
-  | "Session" -> Some (Linearity.Any, `Session)
-  | "Eff"     -> Some (Linearity.Unl, `Effect)
+  | "Any"     -> Some (linAny, resAny)
+  | "Base"    -> Some (linUnl, resBase)
+  | "Session" -> Some (linAny, resSession)
+  | "Eff"     -> Some (linUnl, resEffect)
   | sk        -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos p))
 
 let attach_kind (t, k) = (t, k, `Rigid)

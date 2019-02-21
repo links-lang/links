@@ -1,3 +1,4 @@
+open CommonTypes
 open Types
 open Sugartypes
 open Utility
@@ -202,7 +203,7 @@ struct
                            (fun (q,t) ->
                              let (q, t) = match_kinds (q, t) in
                              match subkind_of_quantifier q with
-                             | (_, `Effect) -> type_arg' var_env alias_env t
+                             | (_, Restriction.Effect) -> type_arg' var_env alias_env t
                              | _ -> type_arg var_env alias_env t)
                            ts
                          in

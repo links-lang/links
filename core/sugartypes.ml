@@ -58,13 +58,10 @@ let string_of_location = function
 | `Native -> "native"
 | `Unknown -> "unknown"
 
-type restriction = [ `Any | `Base | `Session | `Effect ]
+type subkind = Linearity.t * Restriction.t
     [@@deriving eq,show]
 
-type subkind = Linearity.t * restriction
-    [@@deriving eq,show]
-
-let default_subkind : subkind = (Linearity.Unl, `Any)
+let default_subkind : subkind = (linUnl, resAny)
 
 type freedom = [`Flexible | `Rigid]
     [@@deriving show]
