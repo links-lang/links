@@ -1,3 +1,4 @@
+open Links_core
 open Utility
 open Sqlite3
 
@@ -83,11 +84,12 @@ class lite3_database file = object(self)
   inherit Value.database
   val connection = db_open file
   method exec query : Value.dbvalue =
+    Debug.print query;
     let stmt = prepare connection query in
       new lite3_result stmt
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
-  method quote_field = self#escape_string
+  method quote_field s = "\"" ^ self#escape_string s ^ "\""
   method driver_name () = "sqlite3"
 end
 
