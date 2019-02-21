@@ -246,7 +246,7 @@ let parseRegexFlags f =
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.Pattern.with_pos> pattern
 %type <DeclaredLinearity.t * Sugartypes.name *
-       Sugartypes.Pattern.with_pos list list * Sugartypes.location *
+       Sugartypes.Pattern.with_pos list list * Location.t *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
@@ -396,10 +396,10 @@ fixity:
 | POSTFIX                                                      { (`Post , $1) }
 
 perhaps_location:
-| SERVER                                                       { `Server  }
-| CLIENT                                                       { `Client  }
-| NATIVE                                                       { `Native  }
-| /* empty */                                                  { `Unknown }
+| SERVER                                                       { locServer  }
+| CLIENT                                                       { locClient  }
+| NATIVE                                                       { locNative  }
+| /* empty */                                                  { locUnknown }
 
 constant:
 | UINTEGER                                                     { `Int    $1  }
@@ -845,8 +845,8 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, `Unknown, $5) }
-| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, `Unknown, $4) }
+| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, locUnknown, $5) }
+| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, locUnknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 

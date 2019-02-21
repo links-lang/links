@@ -51,15 +51,6 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-type location = [`Client | `Server | `Native | `Unknown]
-    [@@deriving show]
-
-let string_of_location = function
-| `Client -> "client"
-| `Server -> "server"
-| `Native -> "native"
-| `Unknown -> "unknown"
-
 type subkind = Linearity.t * Restriction.t
     [@@deriving eq,show]
 
@@ -216,7 +207,7 @@ and phrasenode =
   | Var              of name
   | QualifiedVar     of name list
   | FunLit           of ((Types.datatype * Types.row) list) option *
-                          DeclaredLinearity.t * funlit * location
+                          DeclaredLinearity.t * funlit * Location.t
   | HandlerLit       of handlerlit
   (* Spawn kind, expression referring to spawn location (client n, server...),
       spawn block, row opt *)
@@ -291,14 +282,14 @@ and phrasenode =
   | Raise
 and phrase = phrasenode with_pos
 and bindingnode =
-  | Val     of (Pattern.with_pos * (tyvar list * phrase) * location *
+  | Val     of (Pattern.with_pos * (tyvar list * phrase) * Location.t *
                   datatype' option)
-  | Fun     of (binder * DeclaredLinearity.t * (tyvar list * funlit) * location *
+  | Fun     of (binder * DeclaredLinearity.t * (tyvar list * funlit) * Location.t *
                   datatype' option)
   | Funs    of (binder * DeclaredLinearity.t *
                   ((tyvar list *
                    (Types.datatype * Types.quantifier option list) option)
-                   * funlit) * location * datatype' option * position) list
+                   * funlit) * Location.t * datatype' option * position) list
   | Handler of (binder * handlerlit * datatype' option)
   | Foreign of (binder * name * name * name * datatype')
                (* Binder, raw function name, language, external file, type *)

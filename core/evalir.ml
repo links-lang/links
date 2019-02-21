@@ -1,3 +1,4 @@
+open CommonTypes
 open Webserver_types
 open Ir
 open Lwt
@@ -68,14 +69,14 @@ struct
     | Some (finfo, _, None, location) ->
       begin
         match location with
-        | `Server | `Unknown ->
+        | Location.Server | Location.Unknown ->
           (* TODO: perhaps we should actually use env here - and make
              sure we only call this function when it is sufficiently
              small *)
           Some (`FunctionPtr (f, None))
-        | `Client ->
+        | Location.Client ->
           Some (`ClientFunction (Js.var_name_binder (f, finfo)))
-        | `Native -> assert false
+        | Location.Native -> assert false
       end
     | _ -> assert false
 

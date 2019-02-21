@@ -2,6 +2,7 @@ open Links_core
 open Utility
 open List
 open Sugartypes
+open CommonTypes
 
 module BS = Basicsettings
 
@@ -227,11 +228,11 @@ let evaluate_parse_result envs parse_result =
                   | Some (finfo, _, None, location) ->
                     let v =
                       match location with
-                      | `Server | `Unknown ->
+                      | Location.Server | Location.Unknown ->
                         `FunctionPtr (var, None)
-                      | `Client ->
+                      | Location.Client ->
                         `ClientFunction (Js.var_name_binder (var, finfo))
-                      | `Native -> assert false in
+                      | Location.Native -> assert false in
                     let t = Var.info_type finfo in v, t
                   | _ -> assert false
                 in

@@ -93,10 +93,12 @@ module type SugarConstructorsSig = sig
   (* Various phrases *)
   val fun_lit
       : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
-     -> ?location:location -> DeclaredLinearity.t -> Pattern.with_pos list list -> phrase
+     -> ?location:Location.t -> DeclaredLinearity.t
+     -> Pattern.with_pos list list -> phrase
      -> phrase
   val hnlit_arg
-      : handler_depth -> Pattern.with_pos -> clause list * Pattern.with_pos list list option
+      : handler_depth -> Pattern.with_pos
+     -> clause list * Pattern.with_pos list list option
      -> handlerlit
   val handler_lit
       : ?ppos:t -> handlerlit -> phrase
@@ -114,17 +116,18 @@ module type SugarConstructorsSig = sig
   (* Bindings *)
   val fun_binding
       : ?ppos:t -> signature
-     -> (DeclaredLinearity.t * name * Pattern.with_pos list list * location * phrase)
+     -> (DeclaredLinearity.t * name * Pattern.with_pos list list * Location.t *
+           phrase)
      -> binding
   val fun_binding'
       : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list
-     -> ?location:location -> ?annotation:datatype' -> binder -> funlit
+     -> ?location:Location.t -> ?annotation:datatype' -> binder -> funlit
      -> binding
   val handler_binding
       : ?ppos:t -> signature -> (name * handlerlit)
      -> binding
   val val_binding'
-      : ?ppos:t -> signature -> (name_or_pat * phrase * location)
+      : ?ppos:t -> signature -> (name_or_pat * phrase * Location.t)
      -> binding
   val val_binding
       : ?ppos:t -> Pattern.with_pos -> phrase
@@ -152,7 +155,8 @@ module type SugarConstructorsSig = sig
 
   (* Handlers *)
   val untyped_handler
-      : ?val_cases:(clause list) -> ?parameters:((phrase * Pattern.with_pos) list)
+      : ?val_cases:(clause list)
+     -> ?parameters:((phrase * Pattern.with_pos) list)
      -> phrase -> clause list -> handler_depth
      -> handler
 end

@@ -717,9 +717,9 @@ class transform (env : Types.typing_environment) =
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
 
     method rec_bodies :
-      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
       ('self_type *
-         (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
+         (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list) =
       let outer_tyvars = o#backup_quantifiers in
       let rec list o =
         function
@@ -737,9 +737,9 @@ class transform (env : Types.typing_environment) =
         list o
 
     method rec_activate_outer_bindings :
-      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
       ('self_type *
-         (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list) =
+         (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list) =
       let rec list o =
         function
           | [] -> o, []
@@ -752,7 +752,7 @@ class transform (env : Types.typing_environment) =
         list o
 
     method rec_activate_inner_bindings :
-      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
       'self_type =
       let rec list o =
         function

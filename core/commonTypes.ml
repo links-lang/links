@@ -76,3 +76,36 @@ end
 let pkType     = PrimaryKind.Type
 let pkRow      = PrimaryKind.Row
 let pkPresence = PrimaryKind.Presence
+
+module Location = struct
+  type t = Client | Server | Native | Unknown
+    [@@deriving show]
+
+  let isClient = function
+    | Client -> true
+    | _      -> false
+
+  let isServer = function
+    | Server -> true
+    | _      -> false
+
+  let isNative = function
+    | Native -> true
+    | _      -> false
+
+  let isUnknown = function
+    | Unknown -> true
+    | _      -> false
+
+  let string_of = function
+    | Client -> "client"
+    | Server -> "server"
+    | Native -> "native"
+    | Unknown -> "unknown"
+end
+
+(* Convenient aliases for constructing values *)
+let locClient  = Location.Client
+let locServer  = Location.Server
+let locNative  = Location.Native
+let locUnknown = Location.Unknown

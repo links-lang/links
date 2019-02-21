@@ -9,6 +9,7 @@
 *)
 
 open Operators
+open CommonTypes
 open Sugartypes
 
 class map =
@@ -498,7 +499,7 @@ class map =
 
     method name : name -> name = o#string
 
-    method location : location -> location = o#unknown
+    method location : Location.t -> Location.t = o#unknown
 
     method iterpatt : iterpatt -> iterpatt =
       function
@@ -1167,7 +1168,7 @@ class fold =
 
     method name : name -> 'self_type = o#string
 
-    method location : location -> 'self_type = o#unknown
+    method location : Location.t -> 'self_type = o#unknown
 
     method iterpatt : iterpatt -> 'self_type =
       function
@@ -1924,7 +1925,7 @@ class fold_map =
 
     method name : name -> ('self_type * name) = o#string
 
-    method location : location -> ('self_type * location) = o#unknown
+    method location : Location.t -> ('self_type * Location.t) = o#unknown
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function
