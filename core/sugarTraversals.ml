@@ -581,7 +581,6 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#datatype _x_i1 in Mu (_x, _x_i1)
       | Forall (_x, _x_i1) ->
-          let _x = _x in
           let _x_i1 = o#datatype _x_i1 in Forall (_x, _x_i1)
       | Unit -> Unit
       | Tuple _x ->
