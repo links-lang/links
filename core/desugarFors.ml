@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 open Sugartypes
 open SugarConstructors.Make
 
@@ -76,12 +77,13 @@ let results :  Types.row ->
                   | [t] -> Types.make_tuple_type [t]
                   | ts -> Types.make_tuple_type [Types.make_tuple_type ts]
               in
-              fun_lit ~args:[a, eff] `Unl [ps] (tuple (q::qs)) in
+              fun_lit ~args:[a, eff] DeclaredLinearity.Unl [ps] (tuple (q::qs)) in
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
-                fun_lit ~args:[Types.make_tuple_type [t], eff] `Unl [[qb]]
-                  (fn_appl "map" [a; `Row eff; b] [inner; r]) in
+                fun_lit ~args:[Types.make_tuple_type [t], eff]
+                        DeclaredLinearity.Unl [[qb]]
+                        (fn_appl "map" [a; `Row eff; b] [inner; r]) in
             let a = `Type qt in
             let b = `Type (Types.make_tuple_type (t :: ts)) in
             fn_appl "concatMap" [a; `Row eff; b] [outer; e]
@@ -166,7 +168,7 @@ object (o : 'self_type)
             | ts -> Types.make_tuple_type ts in
 
         let f : phrase = fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
-                                 `Unl [arg] body in
+                                 DeclaredLinearity.Unl [arg] body in
 
         let results = results eff (es, xs, ts) in
         let results =
@@ -178,7 +180,7 @@ object (o : 'self_type)
 
                 let g : phrase =
                   fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
-                          `Unl [arg] sort
+                          DeclaredLinearity.Unl [arg] sort
                 in
                 fn_appl sort_by [`Type arg_type; `Row eff; sort_type_arg]
                         [g; results]

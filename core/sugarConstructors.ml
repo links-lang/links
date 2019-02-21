@@ -1,3 +1,4 @@
+open CommonTypes
 open Operators
 open Sugartypes
 open Utility.OptionUtils
@@ -177,7 +178,7 @@ module SugarConstructors (Position : Pos)
     with_pos ppos (Fun (binder bndr, linearity,
                          ([], (args, blk)), location, datatype))
 
-  let fun_binding' ?(ppos=dp) ?(linearity=`Unl) ?(tyvars=[])
+  let fun_binding' ?(ppos=dp) ?(linearity=DeclaredLinearity.Unl) ?(tyvars=[])
         ?(location=`Unknown) ?annotation bndr fnlit =
     with_pos ppos (Fun (bndr, linearity, (tyvars, fnlit), location, annotation))
 

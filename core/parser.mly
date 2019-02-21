@@ -108,10 +108,10 @@ let full_subkind_of pos lin rest =
 
 (* In kind and subkind abbreviations, we aim to provide the most
 common case. For everything except session types, the default
-linearity is `Unl and the default restriction is `Any. For session
-types the default linearity is `Any. *)
+linearity is Unl and the default restriction is Any. For session
+types the default linearity is Any. *)
 
-(* Currently "Any" means `Any,`Any, but it is probably advisable to
+(* Currently "Any" means Any,Any, but it is probably advisable to
 change "Any" to something more evocative of linearity - "Lin"
 perhaps. *)
 
@@ -245,7 +245,7 @@ let parseRegexFlags f =
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.Pattern.with_pos> pattern
-%type <Sugartypes.declared_linearity * Sugartypes.name *
+%type <DeclaredLinearity.t * Sugartypes.name *
        Sugartypes.Pattern.with_pos list list * Sugartypes.location *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
@@ -349,14 +349,14 @@ perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
 
 linearity:
-| FUN                                                          { `Unl }
-| LINFUN                                                       { `Lin }
+| FUN                                                          { DeclaredLinearity.Unl }
+| LINFUN                                                       { DeclaredLinearity.Lin }
 
 tlfunbinding:
-| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                }
-| OP pattern op pattern perhaps_location block                 { (`Unl, $3.node, [[$2; $4]], $5, $6) }
-| OP PREFIXOP pattern perhaps_location block                   { (`Unl, $2, [[$3]], $4, $5)          }
-| OP pattern POSTFIXOP perhaps_location block                  { (`Unl, $3, [[$2]], $4, $5)          }
+| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                                 }
+| OP pattern op pattern perhaps_location block                 { (DeclaredLinearity.Unl, $3.node, [[$2; $4]], $5, $6) }
+| OP PREFIXOP pattern perhaps_location block                   { (DeclaredLinearity.Unl, $2, [[$3]], $4, $5)          }
+| OP pattern POSTFIXOP perhaps_location block                  { (DeclaredLinearity.Unl, $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }

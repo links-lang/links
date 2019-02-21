@@ -49,7 +49,7 @@ let rec desugar_page (o, page_type) =
             let x = Utility.gensym ~prefix:"xml" () in
             fn_appl "plugP" [`Row (o#lookup_effects)]
                [fun_lit ~args:[Types.make_tuple_type [Types.xml_type], o#lookup_effects]
-                        `Unl [[variable_pat ~ty:Types.xml_type x]]
+                        DeclaredLinearity.Unl [[variable_pat ~ty:Types.xml_type x]]
                         (xml name attrs dynattrs [block ([], var x)]);
                 desugar_nodes children]
         | _ ->

@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 open Operators
 open Sugartypes
 open SugarConstructors.Make
@@ -98,7 +99,7 @@ let parameterize : (Pattern.with_pos * phrase) list -> Pattern.with_pos list lis
          StringSet.inter (StringSet.from_list pat_names) (StringSet.from_list param_names)
        in
        let params = List.map (List.map (fun p -> resolve_name_conflicts p name_conflicts)) params in
-       (pat, fun_lit `Unl params body)
+       (pat, fun_lit DeclaredLinearity.Unl params body)
      ) cases
 
 
@@ -201,7 +202,7 @@ object
   method! phrasenode = function
     | HandlerLit hnlit ->
        let (fnparams, body) = funlit_of_handlerlit hnlit in
-       let funlit : Sugartypes.phrasenode = (fun_lit `Unl fnparams body).node in
+       let funlit : Sugartypes.phrasenode = (fun_lit DeclaredLinearity.Unl fnparams body).node in
        super#phrasenode funlit
     | e -> super#phrasenode e
 

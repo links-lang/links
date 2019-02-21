@@ -2023,7 +2023,7 @@ let make_ft declared_linearity ps effects return_type =
   let pattern_typ (_, _, t) = t in
   let args =
     Types.make_tuple_type -<- List.map pattern_typ in
-  let ftcon = fun p -> if declared_linearity=`Lin then `Lolli p else `Function p in
+  let ftcon = fun p -> if DeclaredLinearity.isLin declared_linearity then `Lolli p else `Function p in
   let rec ft =
     function
       | [p] -> ftcon (args p, effects, return_type)
@@ -2036,7 +2036,7 @@ let make_ft_poly_curry declared_linearity ps effects return_type =
   let pattern_typ (_, _, t) = t in
   let args =
     Types.make_tuple_type -<- List.map pattern_typ in
-  let ftcon = fun p -> if declared_linearity=`Lin then `Lolli p else `Function p in
+  let ftcon = fun p -> if DeclaredLinearity.isLin declared_linearity then `Lolli p else `Function p in
   let rec ft =
     function
       | [p] -> [], ftcon (args p, effects, return_type)
@@ -2290,7 +2290,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 pat_env in
 
             let () =
-              if lin=`Unl then
+              if DeclaredLinearity.isUnl lin then
                 StringMap.iter (fun v _ ->
                                 if not (List.mem v vs) then
                                   let t = Env.lookup env' v in
@@ -3674,7 +3674,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                      (List.flatten pats) in
 
           let () =
-            if lin = `Unl then
+            if DeclaredLinearity.isUnl lin then
               StringMap.iter (fun v _ ->
                               if not (List.mem v vs) then
                                 let t = Env.lookup context'.var_env v in
@@ -3779,7 +3779,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                           pat_env in
                       let used =
                         let vs = StringSet.add name (Env.domain pat_env) in
-                        if lin=`Unl then
+                        if DeclaredLinearity.isUnl lin then
                           StringMap.iter (fun v _ ->
                                           if not (StringSet.mem v vs) then
                                             let t = Env.lookup context'.var_env v in

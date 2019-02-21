@@ -1,4 +1,5 @@
 open Operators
+open CommonTypes
 open Sugartypes
 
 (*
@@ -61,15 +62,15 @@ object ('self)
   method restore_quantifiers : Utility.IntSet.t -> 'self
 
   method rec_bodies :
-    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
     ('self *
-       (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)
+       (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)
   method rec_activate_outer_bindings :
-    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
     ('self *
-       (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)
+       (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list)
   method rec_activate_inner_bindings :
-    (binder * declared_linearity * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
+    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * location * datatype' option * position) list ->
     'self
 
   method sugar_datatype   : Datatype.with_pos -> 'self * Datatype.with_pos

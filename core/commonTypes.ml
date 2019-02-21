@@ -13,6 +13,14 @@ end
 let linUnl = Linearity.Unl
 let linAny = Linearity.Any
 
+module DeclaredLinearity = struct
+  type t = Lin | Unl
+    [@@deriving show]
+
+  let isLin lin = lin == Lin
+  let isUnl lin = lin == Unl
+end
+
 module Restriction = struct
   type t =
     | Any

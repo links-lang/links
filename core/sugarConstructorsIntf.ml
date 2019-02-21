@@ -1,6 +1,7 @@
 (* This module contains module signatures used by SugarConstructors module.
    Putting them here allows to avoid repetition. *)
 
+open CommonTypes
 open Operators
 open Sugartypes
 
@@ -92,7 +93,7 @@ module type SugarConstructorsSig = sig
   (* Various phrases *)
   val fun_lit
       : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
-     -> ?location:location -> declared_linearity -> Pattern.with_pos list list -> phrase
+     -> ?location:location -> DeclaredLinearity.t -> Pattern.with_pos list list -> phrase
      -> phrase
   val hnlit_arg
       : handler_depth -> Pattern.with_pos -> clause list * Pattern.with_pos list list option
@@ -113,10 +114,10 @@ module type SugarConstructorsSig = sig
   (* Bindings *)
   val fun_binding
       : ?ppos:t -> signature
-     -> (declared_linearity * name * Pattern.with_pos list list * location * phrase)
+     -> (DeclaredLinearity.t * name * Pattern.with_pos list list * location * phrase)
      -> binding
   val fun_binding'
-      : ?ppos:t -> ?linearity:declared_linearity -> ?tyvars:tyvar list
+      : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list
      -> ?location:location -> ?annotation:datatype' -> binder -> funlit
      -> binding
   val handler_binding

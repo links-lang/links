@@ -120,7 +120,7 @@ object (o : 'self_type)
                         let mb = `Row (o#lookup_effects) in
                         let base : phrase =
                           fn_appl pure_str [`Type ft; mb]
-                            [fun_lit ~args:(List.rev args) `Unl (List.rev pss)
+                            [fun_lit ~args:(List.rev args) DeclaredLinearity.Unl (List.rev pss)
                                      (tuple vs)] in
                         let p, et =
                           List.fold_right
@@ -142,7 +142,7 @@ object (o : 'self_type)
               let context : phrase =
                 let name = Utility.gensym ~prefix:"_formlet_" () in
                 fun_lit ~args:[Types.make_tuple_type [Types.xml_type], eff]
-                        `Unl
+                        DeclaredLinearity.Unl
                         [[variable_pat ~ty:(Types.xml_type) name]]
                         (xml tag attrs attrexp [block ([], var name)]) in
               let (o, e, t) = o#formlet_body (xml "#" [] None contents) in
@@ -177,7 +177,7 @@ object (o : 'self_type)
              [`Type arg_type; `Type yields_type; mb]
              [body; fn_appl pure_str
                     [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]
-                    [fun_lit ~args:[Types.make_tuple_type [arg_type], empty_eff] `Unl pss yields]]
+                    [fun_lit ~args:[Types.make_tuple_type [arg_type], empty_eff] DeclaredLinearity.Unl pss yields]]
         in
           (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)
     | e -> super#phrasenode e

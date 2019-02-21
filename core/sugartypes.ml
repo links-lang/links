@@ -162,9 +162,6 @@ module Section = struct
     [@@deriving show]
 end
 
-type declared_linearity = [ `Lin | `Unl ]
-    [@@deriving show]
-
 type fn_dep = string * string
     [@@deriving show]
 
@@ -220,7 +217,7 @@ and phrasenode =
   | Var              of name
   | QualifiedVar     of name list
   | FunLit           of ((Types.datatype * Types.row) list) option *
-                          declared_linearity * funlit * location
+                          DeclaredLinearity.t * funlit * location
   | HandlerLit       of handlerlit
   (* Spawn kind, expression referring to spawn location (client n, server...),
       spawn block, row opt *)
@@ -297,9 +294,9 @@ and phrase = phrasenode with_pos
 and bindingnode =
   | Val     of (Pattern.with_pos * (tyvar list * phrase) * location *
                   datatype' option)
-  | Fun     of (binder * declared_linearity * (tyvar list * funlit) * location *
+  | Fun     of (binder * DeclaredLinearity.t * (tyvar list * funlit) * location *
                   datatype' option)
-  | Funs    of (binder * declared_linearity *
+  | Funs    of (binder * DeclaredLinearity.t *
                   ((tyvar list *
                    (Types.datatype * Types.quantifier option list) option)
                    * funlit) * location * datatype' option * position) list
