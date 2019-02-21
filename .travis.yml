@@ -16,6 +16,7 @@ before_install:
 script:
   - ./opam2_local pin add links . -y
   - ./opam2_local pin add links-postgresql . -y
+  - ./opam2_local pin add links-sqlite3 . -y
   - make nc-release
   - make tests
   - ./run-tests db-only shredding
