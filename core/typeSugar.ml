@@ -1413,10 +1413,11 @@ let type_unary_op env =
   | UnaryOp.Name n     -> add_usages (Utils.instantiate env.var_env n) (StringMap.singleton n 1)
 
 let type_binary_op ctxt =
+  let open BinaryOp in
   let datatype = datatype ctxt.tycon_env in function
-  | `Minus        -> add_empty_usages (Utils.instantiate ctxt.var_env "-")
-  | `FloatMinus   -> add_empty_usages (Utils.instantiate ctxt.var_env "-.")
-  | `RegexMatch flags ->
+  | Minus        -> add_empty_usages (Utils.instantiate ctxt.var_env "-")
+  | FloatMinus   -> add_empty_usages (Utils.instantiate ctxt.var_env "-.")
+  | RegexMatch flags ->
       let nativep  = List.exists ((=) RegexNative)  flags
       and listp    = List.exists ((=) RegexList)    flags
       and replacep = List.exists ((=) RegexReplace) flags in
@@ -1427,23 +1428,23 @@ let type_binary_op ctxt =
            | false, false, false -> (* tilde *)   add_empty_usages (datatype "(String, Regex) -> Bool")
            | _    , _    , true  -> assert false
         end
-  | `And
-  | `Or           -> add_empty_usages (datatype "(Bool,Bool) -> Bool")
-  | `Cons         -> add_empty_usages (Utils.instantiate ctxt.var_env "Cons")
-  | `Name "++"    -> add_empty_usages (Utils.instantiate ctxt.var_env "Concat")
-  | `Name ">"
-  | `Name ">="
-  | `Name "=="
-  | `Name "<"
-  | `Name "<="
-  | `Name "<>"    ->
+  | And
+  | Or           -> add_empty_usages (datatype "(Bool,Bool) -> Bool")
+  | Cons         -> add_empty_usages (Utils.instantiate ctxt.var_env "Cons")
+  | Name "++"    -> add_empty_usages (Utils.instantiate ctxt.var_env "Concat")
+  | Name ">"
+  | Name ">="
+  | Name "=="
+  | Name "<"
+  | Name "<="
+  | Name "<>"    ->
       let a = Types.fresh_type_variable (linAny, `Any) in
       let eff = (StringMap.empty, Types.fresh_row_variable (linAny, `Any), false) in
         ([`Type a; `Row eff],
          `Function (Types.make_tuple_type [a; a], eff, `Primitive `Bool),
          StringMap.empty)
-  | `Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
-  | `Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (StringMap.singleton n 1)
+  | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
+  | Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (StringMap.singleton n 1)
 
 (** close a pattern type relative to a list of patterns
 

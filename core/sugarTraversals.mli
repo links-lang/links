@@ -60,8 +60,8 @@ class map :
     method datatype'       : datatype' -> datatype'
     method type_arg        : Datatype.type_arg -> Datatype.type_arg
     method constant        : constant -> constant
-    method binop           : binop -> binop
-    method tybinop         : tyarg list * binop -> tyarg list * binop
+    method binop           : BinaryOp.t -> BinaryOp.t
+    method tybinop         : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
     method program         : program -> program
@@ -131,8 +131,8 @@ class fold :
     method datatype'       : datatype' -> 'self
     method type_arg        : Datatype.type_arg -> 'self
     method constant        : constant -> 'self
-    method binop           : binop -> 'self
-    method tybinop         : tyarg list * binop -> 'self
+    method binop           : BinaryOp.t -> 'self
+    method tybinop         : tyarg list * BinaryOp.t -> 'self
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
     method program         : program -> 'self
@@ -155,8 +155,8 @@ object ('self)
   method binder          : binder -> 'self * binder
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
-  method binop           : binop -> 'self * binop
-  method tybinop         : tyarg list * binop -> 'self * (tyarg list * binop)
+  method binop           : BinaryOp.t -> 'self * BinaryOp.t
+  method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)
   method bool            : bool -> 'self * bool
   method char            : char -> 'self * char
   method constant        : constant -> 'self * constant

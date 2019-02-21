@@ -1,4 +1,5 @@
 open Utility
+open Operators
 open Sugartypes
 open SugarConstructors.Make
 
@@ -130,7 +131,7 @@ let rec phrase_of_pattern : Pattern.with_pos -> phrase
       match pat.node with
         Any                         -> assert false (* can never happen after the fresh name generation pass *)
       | Nil                         -> list []
-      | Cons (hd, tl)               -> infix_appl' (phrase_of_pattern hd) `Cons (phrase_of_pattern tl)
+      | Cons (hd, tl)               -> infix_appl' (phrase_of_pattern hd) BinaryOp.Cons (phrase_of_pattern tl)
       | List ps                     -> list (List.map phrase_of_pattern ps)
       | Effect _                    -> assert false
       | Variant (name, pat_opt)     -> constructor name ?body:(opt_map phrase_of_pattern pat_opt)

@@ -636,18 +636,18 @@ class map =
       | `Bool _x -> let _x = o#bool _x in `Bool _x
       | `Char _x -> let _x = o#char _x in `Char _x
 
-    method binop : binop -> binop =
-      function
-      | `Minus -> `Minus
-      | `FloatMinus -> `FloatMinus
-      | `RegexMatch _x ->
-          let _x = o#list (fun o -> o#regexflag) _x in `RegexMatch _x
-      | `And -> `And
-      | `Or -> `Or
-      | `Cons -> `Cons
-      | `Name _x -> let _x = o#name _x in `Name _x
+    method binop : BinaryOp.t -> BinaryOp.t =
+      let open BinaryOp in function
+      | Minus -> Minus
+      | FloatMinus -> FloatMinus
+      | RegexMatch _x ->
+          let _x = o#list (fun o -> o#regexflag) _x in RegexMatch _x
+      | And -> And
+      | Or -> Or
+      | Cons -> Cons
+      | Name _x -> let _x = o#name _x in Name _x
 
-    method tybinop : tyarg list * binop -> tyarg list * binop =
+    method tybinop : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t =
       fun (_x, _x_i1) -> (_x, o#binop _x_i1)
 
     method bindingnode : bindingnode -> bindingnode =
@@ -1293,17 +1293,17 @@ class fold =
       | `Bool _x -> let o = o#bool _x in o
       | `Char _x -> let o = o#char _x in o
 
-    method binop : binop -> 'self_type =
-      function
-      | `Minus -> o
-      | `FloatMinus -> o
-      | `RegexMatch _x -> let o = o#list (fun o -> o#regexflag) _x in o
-      | `And -> o
-      | `Or -> o
-      | `Cons -> o
-      | `Name _x -> let o = o#name _x in o
+    method binop : BinaryOp.t -> 'self_type =
+      let open BinaryOp in function
+      | Minus -> o
+      | FloatMinus -> o
+      | RegexMatch _x -> let o = o#list (fun o -> o#regexflag) _x in o
+      | And -> o
+      | Or -> o
+      | Cons -> o
+      | Name _x -> let o = o#name _x in o
 
-    method tybinop : tyarg list * binop -> 'self_type =
+    method tybinop : tyarg list * BinaryOp.t -> 'self_type =
       fun (_x, _x_i1) -> o#binop _x_i1
 
     method bindingnode : bindingnode -> 'self_type =
@@ -2072,19 +2072,19 @@ class fold_map =
       | `Bool _x -> let (o, _x) = o#bool _x in (o, (`Bool _x))
       | `Char _x -> let (o, _x) = o#char _x in (o, (`Char _x))
 
-    method binop : binop -> ('self_type * binop) =
-      function
-      | `Minus -> (o, `Minus)
-      | `FloatMinus -> (o, `FloatMinus)
-      | `RegexMatch _x ->
+    method binop : BinaryOp.t -> ('self_type * BinaryOp.t) =
+      let open BinaryOp in function
+      | Minus -> (o, Minus)
+      | FloatMinus -> (o, FloatMinus)
+      | RegexMatch _x ->
           let (o, _x) = o#list (fun o -> o#regexflag) _x
-          in (o, (`RegexMatch _x))
-      | `And -> (o, `And)
-      | `Or -> (o, `Or)
-      | `Cons -> (o, `Cons)
-      | `Name _x -> let (o, _x) = o#name _x in (o, (`Name _x))
+          in (o, (RegexMatch _x))
+      | And -> (o, And)
+      | Or -> (o, Or)
+      | Cons -> (o, Cons)
+      | Name _x -> let (o, _x) = o#name _x in (o, (Name _x))
 
-    method tybinop : tyarg list * binop -> 'self_type * (tyarg list * binop) =
+    method tybinop : tyarg list * BinaryOp.t -> 'self_type * (tyarg list * BinaryOp.t) =
       fun (_x, _x_i1) ->
         let (o, _x_i1) = o#binop _x_i1 in (o, (_x, _x_i1))
 

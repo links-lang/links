@@ -4,48 +4,7 @@ open Utility
 
 (** The syntax tree created by the parser. *)
 
-(* The operators named here are the ones that it is difficult or
-   impossible to define as "user" infix operators:
-
-      - -.  are both infix and prefix
-     && ||  have special evaluation
-     ::     is also used in patterns
-     ~      triggers a lexer state switch
-*)
-
 type name = string [@@deriving show]
-
-type regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
-    [@@deriving show]
-
-type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | `And | `Or
-             | `Cons | `Name of name ]
-    [@@deriving show]
-
-let string_of_unary_op =
-  function
-  | UnaryOp.Minus -> "-"
-  | UnaryOp.FloatMinus -> ".-"
-  | UnaryOp.Name name -> name
-
-let string_of_binop =
-  function
-    | `Minus -> "-"
-    | `FloatMinus -> ".-"
-    | `RegexMatch _ -> "<some regex nonsense>"
-    | `And -> "&&"
-    | `Or -> "||"
-    | `Cons -> "::"
-    | `Name name -> name
-
-let binop_of_string : string -> binop =
-   function
-      | "-" -> `Minus
-      | ".-" -> `FloatMinus
-      | "&&" -> `And
-      | "||" -> `Or
-      | "::" -> `Cons
-      | name -> `Name name
 
 type position = SourceCode.pos
 let dummy_position = SourceCode.dummy_pos
@@ -281,7 +240,7 @@ and phrasenode =
   | Section          of Section.t
   | Conditional      of phrase * phrase * phrase
   | Block            of block_body
-  | InfixAppl        of (tyarg list * binop) * phrase * phrase
+  | InfixAppl        of (tyarg list * BinaryOp.t) * phrase * phrase
   | Regex            of regex
   | UnaryAppl        of (tyarg list * UnaryOp.t) * phrase
   | FnAppl           of phrase * phrase list
@@ -479,7 +438,7 @@ struct
     | FormletPlacement (p1, p2, p3)
     | Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | Block b -> block b
-    | InfixAppl ((_, `Name n), p1, p2) ->
+    | InfixAppl ((_, BinaryOp.Name n), p1, p2) ->
        union (singleton n) (union_map phrase [p1;p2])
     | InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
     | RangeLit (p1, p2) -> union_map phrase [p1;p2]

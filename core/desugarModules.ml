@@ -234,7 +234,7 @@ and perform_renaming module_table path term_ht type_ht =
       | b -> super#bindingnode b
 
     method! binop = function
-      | `Name n -> (self, `Name (resolve n term_shadow_table))
+      | BinaryOp.Name n -> (self, BinaryOp.Name (resolve n term_shadow_table))
       | bo -> super#binop bo
 
     method! unary_op = function

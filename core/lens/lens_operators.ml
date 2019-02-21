@@ -60,14 +60,14 @@ module Binary = struct
 
   let of_supertype_operator v =
     match v with
-    | `Minus -> Minus
-    | `FloatMinus -> Minus
-    | `Cons -> Cons
-    | `And -> Logical Logical_binop.And
-    | `Or -> Logical Logical_binop.Or
-    | `Name "==" -> Equal
-    | `Name name -> Name name
-    | `RegexMatch _ -> failwith "Regex not supported in relational lenses."
+    | BinaryOp.Minus -> Minus
+    | BinaryOp.FloatMinus -> Minus
+    | BinaryOp.Cons -> Cons
+    | BinaryOp.And -> Logical Logical_binop.And
+    | BinaryOp.Or -> Logical Logical_binop.Or
+    | BinaryOp.Name "==" -> Equal
+    | BinaryOp.Name name -> Name name
+    | BinaryOp.RegexMatch _ -> failwith "Regex not supported in relational lenses."
 
   let to_string =
     function

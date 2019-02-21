@@ -45,9 +45,11 @@ open SugarConstructors
 
 module Links_core = (* See Note [Dune "wrapped" workaround] *)
 struct
+  module CommonTypes       = CommonTypes
   module Sugartypes        = Sugartypes
   module SugarConstructors = SugarConstructors
   module Types             = Types
+  module Operators         = Operators
 end
 
 (* Construction of nodes using positions produced by Menhir parser *)
@@ -553,8 +555,8 @@ infixl_9:
 infixr_8:
 | infixl_9                                                     { $1 }
 | infixl_9 INFIX8  infixl_9
-| infixl_9 INFIXR8 infixr_8                                    { infix_appl  ~ppos:$loc $1 $2    $3 }
-| infixl_9 COLONCOLON infixr_8                                 { infix_appl' ~ppos:$loc $1 `Cons $3 }
+| infixl_9 INFIXR8 infixr_8                                    { infix_appl  ~ppos:$loc $1 $2            $3 }
+| infixl_9 COLONCOLON infixr_8                                 { infix_appl' ~ppos:$loc $1 BinaryOp.Cons $3 }
 
 infixl_8:
 | infixr_8                                                     { $1 }
@@ -576,9 +578,9 @@ infixr_6:
 
 infixl_6:
 | infixr_6                                                     { $1 }
-| infixl_6 INFIXL6 infixr_6                                    { infix_appl  ~ppos:$loc $1 $2          $3 }
-| infixl_6 MINUS infixr_6                                      { infix_appl' ~ppos:$loc $1 `Minus      $3 }
-| infixl_6 MINUSDOT infixr_6                                   { infix_appl' ~ppos:$loc $1 `FloatMinus $3 }
+| infixl_6 INFIXL6 infixr_6                                    { infix_appl  ~ppos:$loc $1 $2                  $3 }
+| infixl_6 MINUS infixr_6                                      { infix_appl' ~ppos:$loc $1 BinaryOp.Minus      $3 }
+| infixl_6 MINUSDOT infixr_6                                   { infix_appl' ~ppos:$loc $1 BinaryOp.FloatMinus $3 }
 /* HACK: the type variables should get inserted later... */
 | infixl_6 BANG infixr_6                                       { infix_appl  ~ppos:$loc $1 "!" $3         }
 
@@ -596,7 +598,7 @@ infixr_4:
 | infixl_5 INFIX4    infixl_5
 | infixl_5 INFIXR4   infixr_4                                  { infix_appl ~ppos:$loc $1 $2 $3 }
 | infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in
-                                                                 infix_appl' ~ppos:$loc $1 (`RegexMatch flags) r }
+                                                                 infix_appl' ~ppos:$loc $1 (BinaryOp.RegexMatch flags) r }
 
 infixl_4:
 | infixr_4                                                     { $1 }
@@ -640,8 +642,8 @@ infixl_0:
 
 logical_expression:
 | infixl_0                                                     { $1 }
-| logical_expression BARBAR infixl_0                           { infix_appl' ~ppos:$loc $1 `Or  $3 }
-| logical_expression AMPAMP infixl_0                           { infix_appl' ~ppos:$loc $1 `And $3 }
+| logical_expression BARBAR infixl_0                           { infix_appl' ~ppos:$loc $1 BinaryOp.Or  $3 }
+| logical_expression AMPAMP infixl_0                           { infix_appl' ~ppos:$loc $1 BinaryOp.And $3 }
 
 typed_expression:
 | logical_expression                                           { $1 }

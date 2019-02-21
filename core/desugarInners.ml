@@ -39,10 +39,10 @@ object (o : 'self_type)
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
           super#phrasenode (TAppl (phn, tyargs))
-    | InfixAppl ((tyargs, `Name name), e1, e2) when StringMap.mem name extra_env ->
+    | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (InfixAppl ((tyargs, `Name name), e1, e2))
+          super#phrasenode (InfixAppl ((tyargs, BinaryOp.Name name), e1, e2))
     | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in

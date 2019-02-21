@@ -778,28 +778,28 @@ struct
           | Section (Section.Name name) -> cofv (lookup_var name)
           | Conditional (p, e1, e2) ->
               I.condition (ev p, ec e1, ec e2)
-          | InfixAppl ((tyargs, `Name ((">" | ">=" | "==" | "<" | "<=" | "<>") as op)), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.Name ((">" | ">=" | "==" | "<" | "<=" | "<>") as op)), e1, e2) ->
               cofv (I.apply_pure (instantiate op tyargs, [ev e1; ev e2]))
-          | InfixAppl ((tyargs, `Name "++"), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.Name "++"), e1, e2) ->
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
-          | InfixAppl ((tyargs, `Name "!"), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.Name "!"), e1, e2) ->
               I.apply (instantiate "Send" tyargs, [ev e1; ev e2])
-          | InfixAppl ((tyargs, `Name n), e1, e2) when Lib.is_pure_primitive n ->
+          | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
-          | InfixAppl ((tyargs, `Name n), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) ->
               I.apply (instantiate n tyargs, [ev e1; ev e2])
-          | InfixAppl ((tyargs, `Cons), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.Cons), e1, e2) ->
               cofv (I.apply_pure (instantiate "Cons" tyargs, [ev e1; ev e2]))
-          | InfixAppl ((tyargs, `FloatMinus), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.FloatMinus), e1, e2) ->
               cofv (I.apply_pure (instantiate "-." tyargs, [ev e1; ev e2]))
-          | InfixAppl ((tyargs, `Minus), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.Minus), e1, e2) ->
               cofv (I.apply_pure (instantiate "-" tyargs, [ev e1; ev e2]))
-          | InfixAppl ((_tyargs, `And), e1, e2) ->
+          | InfixAppl ((_tyargs, BinaryOp.And), e1, e2) ->
               (* IMPORTANT: we compile boolean expressions to
                  conditionals in order to faithfully capture
                  short-circuit evaluation *)
               I.condition (ev e1, ec e2, cofv (I.constant (`Bool false)))
-          | InfixAppl ((_tyargs, `Or), e1, e2) ->
+          | InfixAppl ((_tyargs, BinaryOp.Or), e1, e2) ->
               I.condition (ev e1, cofv (I.constant (`Bool true)), ec e2)
           | UnaryAppl ((_tyargs, UnaryOp.Minus), e) ->
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
@@ -1029,7 +1029,7 @@ struct
           | Section (Section.Project _)
           | FunLit _
           | Iteration _
-          | InfixAppl ((_, `RegexMatch _), _, _)
+          | InfixAppl ((_, BinaryOp.RegexMatch _), _, _)
           | DBInsert _
           | Regex _
           | Formlet _

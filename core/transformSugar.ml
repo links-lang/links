@@ -26,10 +26,11 @@ let type_unary_op env tycon_env =
     | UnaryOp.Name n     -> TyEnv.lookup env n
 
 let type_binary_op env tycon_env =
+  let open BinaryOp in
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
-  | `Minus        -> TyEnv.lookup env "-"
-  | `FloatMinus   -> TyEnv.lookup env "-."
-  | `RegexMatch flags ->
+  | Minus        -> TyEnv.lookup env "-"
+  | FloatMinus   -> TyEnv.lookup env "-."
+  | RegexMatch flags ->
       let nativep  = List.exists ((=) RegexNative)  flags
       and listp    = List.exists ((=) RegexList)    flags
       and replacep = List.exists ((=) RegexReplace) flags in
@@ -39,22 +40,22 @@ let type_binary_op env tycon_env =
            | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool"
            | _,     _,     true  -> assert false)
 
-  | `And
-  | `Or           -> datatype "(Bool,Bool) -> Bool"
-  | `Cons         -> TyEnv.lookup env "Cons"
-  | `Name "++"    -> TyEnv.lookup env "Concat"
-  | `Name ">"
-  | `Name ">="
-  | `Name "=="
-  | `Name "<"
-  | `Name "<="
-  | `Name "<>" ->
+  | And
+  | Or           -> datatype "(Bool,Bool) -> Bool"
+  | Cons         -> TyEnv.lookup env "Cons"
+  | Name "++"    -> TyEnv.lookup env "Concat"
+  | Name ">"
+  | Name ">="
+  | Name "=="
+  | Name "<"
+  | Name "<="
+  | Name "<>" ->
       let ab, a = Types.fresh_type_quantifier (linAny, `Any) in
       let eb, e = Types.fresh_row_quantifier (linAny, `Any) in
         `ForAll (Types.box_quantifiers [ab; eb],
                  `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
-  | `Name "!"     -> TyEnv.lookup env "Send"
-  | `Name n       -> TyEnv.lookup env n
+  | Name "!"     -> TyEnv.lookup env "Send"
+  | Name n       -> TyEnv.lookup env n
 
 let fun_effects t pss =
   let rec get_eff =
@@ -176,7 +177,7 @@ class transform (env : Types.typing_environment) =
       fun op ->
         (o, op, type_unary_op var_env tycon_env op)
 
-    method binop : binop -> ('self_type * binop * Types.datatype) =
+    method binop : BinaryOp.t -> ('self_type * BinaryOp.t * Types.datatype) =
       fun op ->
         (o, op, type_binary_op var_env tycon_env op)
 

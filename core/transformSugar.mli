@@ -50,7 +50,7 @@ object ('self)
   method binder          : binder -> 'self * binder
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
-  method binop           : binop -> 'self * binop * Types.datatype
+  method binop           : BinaryOp.t -> 'self * BinaryOp.t * Types.datatype
   method constant        : constant -> 'self * constant * Types.datatype
   method funlit          : Types.row -> funlit -> 'self * funlit * Types.datatype
   method handlerlit      : Types.datatype -> handlerlit -> 'self * handlerlit * Types.datatype

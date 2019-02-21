@@ -1,3 +1,4 @@
+open Operators
 open Sugartypes
 open Utility.OptionUtils
 
@@ -239,7 +240,7 @@ module SugarConstructors (Position : Pos)
 
   (* Apply a binary infix operator with a specified name. *)
   let infix_appl ?(ppos=dp) arg1 op arg2 =
-    infix_appl' ~ppos arg1 (`Name op) arg2
+    infix_appl' ~ppos arg1 (BinaryOp.Name op) arg2
 
   (* Apply an unary operator. *)
   let unary_appl ?(ppos=dp) op arg =

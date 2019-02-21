@@ -9,6 +9,9 @@
 
 type name = string [@@deriving show]
 
+type regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
+    [@@deriving show]
+
 module UnaryOp = struct
   type t =
     | Minus
@@ -16,3 +19,40 @@ module UnaryOp = struct
     | Name of name
     [@@deriving show]
 end
+
+let string_of_unary_op =
+  function
+  | UnaryOp.Minus -> "-"
+  | UnaryOp.FloatMinus -> ".-"
+  | UnaryOp.Name name -> name
+
+module BinaryOp = struct
+  type t =
+    | Minus
+    | FloatMinus
+    | RegexMatch of regexflag list
+    | And
+    | Or
+    | Cons
+    | Name of name
+    [@@deriving show]
+end
+
+let string_of_binop =
+  let open BinaryOp in function
+  | Minus -> "-"
+  | FloatMinus -> ".-"
+  | RegexMatch _ -> "<some regex nonsense>"
+  | And -> "&&"
+  | Or -> "||"
+  | Cons -> "::"
+  | Name name -> name
+
+let binop_of_string : string -> BinaryOp.t =
+   let open BinaryOp in function
+   | "-"  -> Minus
+   | ".-" -> FloatMinus
+   | "&&" -> And
+   | "||" -> Or
+   | "::" -> Cons
+   | name -> Name name
