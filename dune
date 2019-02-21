@@ -18,3 +18,10 @@
   (ocamlopt_flags (:standard
                    -O3 ;; Applies (aggressive) optimisations to the resulting executable.
                   ))))
+
+(install
+ (package links)
+ (section doc)
+ (files (INSTALL as README)))
+
+(include install.inc)

@@ -10,45 +10,8 @@ license: "GPL-2"
 
 build: [
   [ "dune" "subst" ] {pinned}
+  [ "dune" "exec" "preinstall/preinstall.exe" "--" "-libdir" links:lib ]
   [ "dune" "build" "-p" name "-j" jobs ]
-]
-
-install: [
-# Install documentation
-  [ "mkdir" "-p" "%{doc}%"                                      ] {with-doc}
-  [ "cp" "INSTALL" "%{doc}%/README"                             ] {with-doc}
-# Copy examples
-  [ "mkdir" "-p" "%{share}%/examples"                           ]
-  [ "sh" "-c" "cp -r examples/dbsetup %{share}%/examples/dbsetup/" ]
-  [ "sh" "-c" "cp examples/*.links %{share}%/examples"          ]
-  [ "sh" "-c" "cp examples/*.jpg %{share}%/examples"            ]
-  [ "sh" "-c" "cp examples/*.sql %{share}%/examples"            ]
-  [ "sh" "-c" "cp examples/*.html %{share}%/examples"           ]
-  [ "sh" "-c" "cp examples/*.css %{share}%/examples"            ]
-  [ "sh" "-c" "cp examples/*.js %{share}%/examples"             ]
-  [ "sh" "-c" "cp -r examples/dictionary %{share}%/examples/"   ]
-  [ "sh" "-c" "cp -r examples/games %{share}%/examples/"        ]
-  [ "sh" "-c" "cp -r examples/sessions %{share}%/examples/"     ]
-  [ "sh" "-c" "cp -r examples/webserver %{share}%/examples/"    ]
-  [ "sh" "-c" "cp -r examples/css %{share}%/examples/"          ]
-# Generate and install a config file
-  [ "touch" "config"                                                  ]
-  [ "sh" "-c" "echo jsliburl=/lib/js > config"                          ]
-  [ "sh" "-c" "echo jslibdir=%{lib}%/js >> config"               ]
-  [ "sh" "-c" "echo #database_driver=postgresql >> config"             ]
-  [ "sh" "-c" "echo #database_args=localhost:5432:user:pass >> config" ]
-  [ "mkdir" "-p" "%{etc}%"                                      ]
-  [ "cp" "config" "%{etc}%"                                     ]
-]
-
-remove: [
-  [ "rm" "-f"  "%{bin}%/linx" ]
-  [ "rm" "-f"  "%{lib}%/prelude.links" ]
-  [ "rm" "-rf" "%{lib}%/stdlib" ]
-  [ "rm" "-rf" "%{lib}%/js" ]
-  [ "rm" "-rf" "%{share}%/examples" ]
-  [ "rm" "-f"  "%{etc}%/config" ]
-  [ "rm" "-f"  "%{doc}%/README" ] {with-doc}
 ]
 
 depends: [
