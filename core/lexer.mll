@@ -145,7 +145,7 @@ object
     Stack.push lexer lexers
 
   method pop_lexer =
-    Stack.pop lexers
+    let _ = Stack.pop lexers in ()
 
   method next_lexer =
     Stack.top lexers
@@ -295,6 +295,7 @@ rule lex ctxt nl = parse
   | "|>"                                { RIGHTTRIANGLE }
   | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML id }
+  | "<!--"                              { xmlcomment_lex ctxt nl lexbuf }
   | "[|"                                { LBRACKETBAR }
   | "|]"                                { BARRBRACKET }
   | '['                                 { LBRACKET }
@@ -353,8 +354,15 @@ and starttag ctxt nl = parse
   | '\n'                                { nl () ; bump_lines lexbuf 1; starttag ctxt nl lexbuf }
   | def_blank                           { starttag ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and xmlcomment_lex ctxt nl = parse
+  | "-->"                               { ctxt#next_lexer lexbuf }
+  | '\n'                                { nl() ; bump_lines lexbuf 1; xmlcomment_lex ctxt nl lexbuf }
+  | eof                                 { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+  | "--"                                { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+  | _                                   { xmlcomment_lex ctxt nl lexbuf }
 and xmllex ctxt nl = parse
   | eof                                 { END }
+  | "<!--"                              { xmlcomment_lex ctxt nl lexbuf }
   | "{{"                                { CDATA "{" }
   | "}}"                                { CDATA "}" }
   | "}"                                 { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
@@ -418,7 +426,10 @@ and regexrepl ctxt nl = parse
   | '/' (regex_flags as f)              { ctxt#pop_lexer; ctxt#pop_lexer; SLASHFLAGS (f) }
 
 {
- let lexer ctxt ~newline_hook =
+ let lexer : lexer_context
+         -> newline_hook:(unit -> unit)
+         -> (Lexing.lexbuf -> Parser.token) =
+fun ctxt ~newline_hook ->
    ctxt#push_lexer (lex ctxt newline_hook);
    fun lexbuf -> ctxt#next_lexer lexbuf
 }

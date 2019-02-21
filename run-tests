@@ -7,6 +7,7 @@
 
 DATABASE_TEST_DIR=tests/database   # Location of database tests
 SHREDDING_TEST_DIR=tests/shredding # Location of database tests
+RELATIONAL_LENSES_TEST_DIR=tests/relational-lenses # Location of database tests
 ret=0                              # Return code. If <> 0 then some tests failed
 STARTCOLOR="\e[31m"                # Control sequence to enable red text
 ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
@@ -24,10 +25,10 @@ prepare_database_config () {
     fi
 }
 
-if [[ "$1" == "lens" ]]; then
+if [[ "$1" == "unit" ]]; then
     prepare_database_config "$DATABASE_TEST_DIR"
     export LINKS_CONFIG="$DATABASE_TEST_DIR"
-    dune exec --profile=development tests/lens/unitTests.exe -- -runner sequential ${@:2}
+    dune exec --profile=development tests/unit/unitTests.exe -- -runner sequential ${@:2}
     if [ $? != 0 ]; then
         ret=1
     fi
@@ -116,6 +117,11 @@ fi
 # Run shredding tests only if user called for them explicitly
 if [ "$1" == "shredding" -o "$2" == "shredding" ]; then
     run_database_testsuite $SHREDDING_TEST_DIR
+fi
+
+# Run relational lenses tests only if user called for them explicitly
+if [ "$1" == "relational-lenses" -o "$2" == "relational-lenses" ]; then
+    run_database_testsuite $RELATIONAL_LENSES_TEST_DIR
 fi
 
 #look for custom test scripts in the tests folder and execute them

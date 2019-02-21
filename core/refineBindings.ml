@@ -1,6 +1,5 @@
 open Utility
 open Sugartypes
-open Operators
 
 (* Helper function: add a group to a list of groups *)
 let add group groups = match group with
@@ -449,12 +448,12 @@ object (self)
       refined_bindings, body
 
   method! sentence : sentence -> sentence = function
-    |`Definitions defs ->
+    | Definitions defs ->
        let defs = self#list (fun o -> o#binding) defs in
        let refined_bindings =
          (RefineTypeBindings.refineTypeBindings ->-
          refine_bindings) defs in
-       `Definitions (refined_bindings)
+       Definitions (refined_bindings)
     | d -> super#sentence d
 
 end

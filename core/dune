@@ -16,5 +16,9 @@
              findlib menhirLib)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
 
+;; Make Query modules available.
+(copy_files# query/*.ml)
+
 ;; Make Lens modules available.
 (copy_files# lens/*.ml)
+(copy_files# lens/*.mli)

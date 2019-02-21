@@ -140,19 +140,19 @@ struct
   and is_pure_regex = function
       (* don't check whether it can fail; just check whether it
          contains non-generilisable sub-expressions *)
-    | `Range _
-    | `Simply _
-    | `Any
-    | `StartAnchor
-    | `EndAnchor -> true
-    | `Group r
-    | `Repeat (_, r)
-    | `Quote r -> is_pure_regex r
-    | `Seq rs -> List.for_all is_pure_regex rs
-    | `Alternate (r1, r2) -> is_pure_regex r1 && is_pure_regex r2
-    | `Splice p -> is_pure p
-    | `Replace (r, `Literal _) -> is_pure_regex r
-    | `Replace (r, `Splice p) -> is_pure_regex r && is_pure p
+    | Range _
+    | Simply _
+    | Any
+    | StartAnchor
+    | EndAnchor -> true
+    | Group r
+    | Repeat (_, r)
+    | Quote r -> is_pure_regex r
+    | Seq rs -> List.for_all is_pure_regex rs
+    | Alternate (r1, r2) -> is_pure_regex r1 && is_pure_regex r2
+    | Splice p -> is_pure p
+    | Replace (r, `Literal _) -> is_pure_regex r
+    | Replace (r, `Splice p) -> is_pure_regex r && is_pure p
 
   let is_generalisable = is_pure
 end
@@ -1414,9 +1414,9 @@ let type_binary_op ctxt =
   | `Minus        -> add_empty_usages (Utils.instantiate ctxt.var_env "-")
   | `FloatMinus   -> add_empty_usages (Utils.instantiate ctxt.var_env "-.")
   | `RegexMatch flags ->
-      let nativep  = List.exists ((=) `RegexNative)  flags
-      and listp    = List.exists ((=) `RegexList)    flags
-      and replacep = List.exists ((=) `RegexReplace) flags in
+      let nativep  = List.exists ((=) RegexNative)  flags
+      and listp    = List.exists ((=) RegexList)    flags
+      and replacep = List.exists ((=) RegexReplace) flags in
         begin
           match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) add_empty_usages (datatype "(String, Regex) -> String")
@@ -2352,64 +2352,65 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               merge_usages [usages tname; usages db]
         | `TableLit _ -> assert false
         | `LensLit (table, _) ->
+           let open Lens in
            let table = tc table in
-           let cols = Lens.Types.sort_cols_of_table "" (typ table) in
-           let lens_sort = (Lens.Utility.FunDepSet.empty, None, cols) in
+           let cols = Types.sort_cols_of_table "" (typ table) in
+           let lens_sort = Sort.make cols in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensKeysLit (table, keys, _) ->
+           let open Lens in
            let table = tc table in
-           let cols = Lens.Types.sort_cols_of_table "" (typ table) in
-           let keys = Lens.Types.cols_of_phrase keys in
-           let fds =
-             Lens.Utility.FunDepSet.key_fds
-               keys
-               (Lens.Helpers.Record.LensColList.present_aliases cols)
-           in
-           let lens_sort = (fds, None, cols) in
+           let cols = Types.sort_cols_of_table "" (typ table) in
+           let keys = Types.cols_of_phrase keys in
+           let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases cols) in
+           let lens_sort = Sort.make ~fds cols in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensFunDepsLit (table, fds, _) ->
+           let open Lens in
            let table = tc table in
-           let cols = Lens.Types.sort_cols_of_table "" (typ table) in
-           let fds = Lens.Helpers.Incremental.get_fds fds cols in
-           let lens_sort = (fds, None, cols) in
+           let cols = Types.sort_cols_of_table "" (typ table) in
+           let fds = Helpers.Incremental.get_fds fds cols in
+           let lens_sort = Sort.make ~fds cols in
            `LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
         | `LensDropLit (lens, drop, key, default, _) ->
+           let open Lens in
            let lens = tc lens
            and default = tc default in
            let sort =
-             Lens.Types.drop_lens_sort
-               (Lens.Helpers.LensType.sort (typ lens))
-               (Lens.Utility.ColSet.singleton drop)
-               (Lens.Utility.ColSet.singleton key)
+             Types.drop_lens_sort
+               (Lens.Type.sort (typ lens))
+               (Alias.Set.singleton drop)
+               (Alias.Set.singleton key)
            in
            `LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens (sort), merge_usages [usages lens; usages default]
         | `LensSelectLit (lens, predicate, _) ->
            let lens = tc lens in
-           let lens_sort = Lens.Helpers.LensType.sort (typ lens) in
+           let lens_sort = Lens.Type.sort (typ lens) in
                `LensSelectLit(erase lens, predicate, Some (lens_sort)), `Lens(lens_sort), merge_usages [usages lens]
         | `LensJoinLit (lens1, lens2, on, left, right, _) ->
            let lens1 = tc lens1
            and lens2 = tc lens2 in
-           let sort1 = Lens.Helpers.LensType.sort (typ lens1) in
-           let sort2 = Lens.Helpers.LensType.sort (typ lens2) in
+           let sort1 = Lens.Type.sort (typ lens1) in
+           let sort2 = Lens.Type.sort (typ lens2) in
            let sort, _ =
-             Lens.Helpers.join_lens_sort
+             Lens.Sort.join_lens_sort
                sort1
                sort2
-               (Lens.Types.cols_of_phrase on)
+               ~on:(Lens.Types.cols_of_phrase on)
            in
            `LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens(sort), merge_usages [usages lens1; usages lens2]
         | `LensGetLit (lens, _) ->
            let lens = tc lens in
-           let sort = LensHelpers.LensType.sort (typ lens) in
-           let trowtype = Lens.Helpers.Record.get_lens_sort_row_type sort in
+           let sort = Lens.Type.sort (typ lens) in
+           let trowtype = Lens.Sort.record_type sort in
            `LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | `LensPutLit (lens, data, _) ->
+           let make_tuple_type = Types.make_tuple_type in
            let lens = tc lens in
-           let sort = Lens.Helpers.LensType.sort (typ lens) in
-           let trowtype = Lens.Helpers.Record.get_lens_sort_row_type sort in
+           let sort = Lens.Type.sort (typ lens) in
+           let trowtype = Lens.Sort.record_type sort in
            let data = tc data in
-           `LensPutLit (erase lens, erase data, Some trowtype), Types.make_tuple_type [], merge_usages [usages lens; usages data]
+           `LensPutLit (erase lens, erase data, Some trowtype), make_tuple_type [], merge_usages [usages lens; usages data]
         | `DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in
@@ -2601,8 +2602,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
             `Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | `Spawn (`Wait, l, p, _) ->
-            assert (l = `NoSpawnLocation);
+        | `Spawn (Wait, l, p, _) ->
+            assert (l = NoSpawnLocation);
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row (`Any, `Any) in
             (* TODO: check if pid_type is actually needed somewhere *)
@@ -2615,11 +2616,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
             let return_type = typ p in
-              `Spawn (`Wait, l, erase p, Some inner_effects), return_type, usages p
+              `Spawn (Wait, l, erase p, Some inner_effects), return_type, usages p
         | `Spawn (k, given_loc, p, _) ->
             (* Location -> (() -e-> _) -> Process (e) *)
             (match given_loc with
-              | `ExplicitSpawnLocation loc_phr ->
+              | ExplicitSpawnLocation loc_phr ->
                   let target_ty = `Application (Types.spawn_location, []) in
                   let t = tc loc_phr in
                   let _ = unify ~handle:Gripers.spawn_location (pos_and_typ t, no_pos target_ty) in ()
@@ -2691,7 +2692,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and p = tc p
             and rettyp = Types.fresh_type_variable (`Any, `Any) in
               unify ~handle:Gripers.unary_apply
-                ((Operators.string_of_unary_op op, opt),
+                ((string_of_unary_op op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ p], context.effect_row, rettyp)));
               `UnaryAppl ((tyargs, op), erase p), rettyp, merge_usages [usages p; op_usage]
         | `InfixAppl ((_, op), l, r) ->
@@ -2700,7 +2701,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and r = tc r
             and rettyp = Types.fresh_type_variable (`Any, `Any) in
               unify ~handle:Gripers.infix_apply
-                ((Operators.string_of_binop op, opt),
+                ((string_of_binop op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ l; typ r],
                                     context.effect_row, rettyp)));
               `InfixAppl ((tyargs, op), erase l, erase r), rettyp, merge_usages [usages l; usages r; op_usages]
@@ -3280,7 +3281,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                        | [] -> raise Not_found
                      in
                      match descr.shd_params with
-                     | Some params when descr.shd_depth = `Deep ->
+                     | Some params when descr.shd_depth = Deep ->
                         let handler_params = params.shp_types in
                         begin match kpat.node with
                         | `Any ->
@@ -3369,13 +3370,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      let (_,_,pos') = SourceCode.resolve_pos @@ (fst3 kpat).pos in
                      let kt = TypeUtils.return_type (pattern_typ kpat) in
                      match descr.shd_depth with
-                     | `Deep ->
+                     | Deep ->
                         let eff = context.effect_row in
                         unify ~handle:Gripers.deep_resumption
                           ((pos', kt), no_pos bt);
                         unify ~handle:Gripers.deep_resumption_effects
                           ((pos', `Effect eff), no_pos (`Effect outer_eff))
-                     | `Shallow ->
+                     | Shallow ->
                         let eff = TypeUtils.effect_row (pattern_typ kpat) in
                         unify ~handle:Gripers.shallow_resumption
                           ((pos', kt), no_pos rt);
@@ -3868,21 +3869,20 @@ and type_regex typing_env : regex -> regex =
     let no_pos t = ("<unknown>", t) in
     let tr = type_regex typing_env in
       match m with
-        | (`Range _ | `Simply _ | `Any  | `StartAnchor | `EndAnchor) as r -> r
-        | `Quote r -> `Quote (tr r)
-        | `Seq rs -> `Seq (List.map tr rs)
-        | `Alternate (r1, r2) -> `Alternate (tr r1, tr r2)
-        | `Group r -> `Group (tr r)
-        | `Repeat (repeat, r) -> `Repeat (repeat, tr r)
-        | `Splice e ->
-            let pos = e.pos in
-            let e = type_check typing_env e in
-            let () = unify_or_raise ~pos:pos ~handle:Gripers.splice_exp
-              (no_pos (typ e), no_pos Types.string_type)
-            in
-              `Splice (erase e)
-        | `Replace (r, `Literal s) -> `Replace (tr r, `Literal s)
-        | `Replace (r, `Splice e) -> `Replace (tr r, `Splice (erase (type_check typing_env e)))
+        | (Range _ | Simply _ | Any  | StartAnchor | EndAnchor) as r -> r
+        | Quote r -> Quote (tr r)
+        | Seq rs -> Seq (List.map tr rs)
+        | Alternate (r1, r2) -> Alternate (tr r1, tr r2)
+        | Group r -> Group (tr r)
+        | Repeat (repeat, r) -> Repeat (repeat, tr r)
+        | Splice e ->
+           let pos = e.pos in
+           let e = type_check typing_env e in
+           let () = unify_or_raise ~pos:pos ~handle:Gripers.splice_exp
+                      (no_pos (typ e), no_pos Types.string_type)
+           in Splice (erase e)
+        | Replace (r, `Literal s) -> Replace (tr r, `Literal s)
+        | Replace (r, `Splice e)  -> Replace (tr r, `Splice (erase (type_check typing_env e)))
 and type_bindings (globals : context)  bindings =
   let tyenv, (bindings, uinf) =
     List.fold_left
@@ -3921,19 +3921,19 @@ and type_cp (context : context) = fun {node = p; pos} ->
   let unify ~pos ~handle (t, u) = unify_or_raise ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
 
   let (p, t, u) = match p with
-    | `Unquote (bindings, e) ->
+    | Unquote (bindings, e) ->
        let context', bindings, usage_builder = type_bindings context bindings in
        let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
          if Settings.get_value endbang_antiquotes then
            unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
-         `Unquote (bindings, e), t, usage_builder u
-    | `Grab ((c, _), None, p) ->
+         Unquote (bindings, e), t, usage_builder u
+    | Grab ((c, _), None, p) ->
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        let ctype = `Alias (("EndQuery", []), `Input (Types.unit_type, `End)) in
        unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
-       `Grab ((c, Some (ctype, [])), None, p), pt, use c u
-    | `Grab ((c, _), Some bndr, p) ->
+       Grab ((c, Some (ctype, [])), None, p), pt, use c u
+    | Grab ((c, _), Some bndr, p) ->
        let x = name_of_binder bndr in
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        let a = Types.fresh_type_variable (`Any, `Any) in
@@ -3962,14 +3962,14 @@ and type_cp (context : context) = fun {node = p; pos} ->
               | _ -> assert false
             end
          | _ -> assert false in
-       `Grab ((c, Some (ctype, tyargs)), Some (set_binder_type bndr a), p), pt, use c (StringMap.remove x u)
-    | `Give ((c, _), None, p) ->
+       Grab ((c, Some (ctype, tyargs)), Some (set_binder_type bndr a), p), pt, use c (StringMap.remove x u)
+    | Give ((c, _), None, p) ->
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        let ctype = `Output (Types.unit_type, `End) in
        unify ~pos:pos ~handle:(Gripers.cp_give c) (t, ctype);
        let (p, t, u) = type_cp (unbind_var context c) p in
-       `Give ((c, Some (ctype, [])), None, p), t, use c u
-    | `Give ((c, _), Some e, p) ->
+       Give ((c, Some (ctype, [])), None, p), t, use c u
+    | Give ((c, _), Some e, p) ->
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        let (e, t', u) = type_check context e in
        let s = Types.fresh_session_variable `Any in
@@ -3992,14 +3992,14 @@ and type_cp (context : context) = fun {node = p; pos} ->
               | _ -> assert false
             end
          | _ -> assert false in
-       `Give ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
-    | `GiveNothing bndr ->
+       Give ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
+    | GiveNothing bndr ->
        let c = name_of_binder bndr in
        let binder_pos = bndr.pos in
        let _, t, _ = type_check context (with_pos binder_pos (`Var c)) in
        unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
-       `GiveNothing (set_binder_type bndr t), t, StringMap.singleton c 1
-    | `Select (bndr, label, p) ->
+       GiveNothing (set_binder_type bndr t), t, StringMap.singleton c 1
+    | Select (bndr, label, p) ->
        let c = name_of_binder bndr in
        let (_, t, _) = type_check context (with_pos pos  (`Var c)) in
        let s = Types.fresh_session_variable `Any in
@@ -4008,8 +4008,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
        unify ~pos:pos ~handle:(Gripers.cp_select c)
              (t, ctype);
        let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) p) in
-       `Select (set_binder_type bndr ctype, label, p), t, use c u
-    | `Offer (bndr, branches) ->
+       Select (set_binder_type bndr ctype, label, p), t, use c u
+    | Offer (bndr, branches) ->
        let c = name_of_binder bndr in
        let (_, t, _) = type_check context (with_pos pos (`Var c)) in
        (*
@@ -4028,8 +4028,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let t' = Types.fresh_type_variable (`Any, `Any) in
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
        let u = usage_compat (List.map (fun (_, _, u) -> u) branches) in
-       `Offer (set_binder_type bndr t, List.map (fun (x, _, _) -> x) branches), t', use c u
-    | `Link (bndr1, bndr2) ->
+       Offer (set_binder_type bndr t, List.map (fun (x, _, _) -> x) branches), t', use c u
+    | Link (bndr1, bndr2) ->
       let c = name_of_binder bndr1 in
       let d = name_of_binder bndr2 in
       let (_, tc, uc) = type_check context (with_pos pos (`Var c)) in
@@ -4039,14 +4039,14 @@ and type_cp (context : context) = fun {node = p; pos} ->
         unify ~pos:pos ~handle:Gripers.cp_link_session
           (td, Types.fresh_type_variable (`Any, `Session));
         unify ~pos:pos ~handle:Gripers.cp_link_dual (Types.dual_type tc, td);
-        `Link (set_binder_type bndr1 tc, set_binder_type bndr1 td), Types.make_endbang_type, merge_usages [uc; ud]
-    | `Comp (bndr, left, right) ->
+        Link (set_binder_type bndr1 tc, set_binder_type bndr1 td), Types.make_endbang_type, merge_usages [uc; ud]
+    | Comp (bndr, left, right) ->
        let c = name_of_binder bndr in
        let s = Types.fresh_session_variable `Any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in
        let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Dual s)) right) in
        unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.make_endbang_type, t);
-       `Comp (set_binder_type bndr s, left, right), t', merge_usages [u; u'] in
+       Comp (set_binder_type bndr s, left, right), t', merge_usages [u; u'] in
   {node = p; pos}, t, u
 
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
@@ -4082,13 +4082,13 @@ struct
       (fun () ->
          "before type checking: \n"^ show_sentence sentence);
     match sentence with
-      | `Definitions bindings ->
+      | Definitions bindings ->
           let tyenv', bindings, _ = type_bindings tyenv bindings in
           let tyenv' = Types.normalise_typing_environment tyenv' in
-            `Definitions bindings, Types.unit_type, tyenv'
-      | `Expression body ->
+            Definitions bindings, Types.unit_type, tyenv'
+      | Expression body ->
           let body, t, _ = (type_check tyenv body) in
           let t = Types.normalise_datatype t in
-            `Expression body, t, tyenv
-      | `Directive d -> `Directive d, Types.unit_type, tyenv
+            Expression body, t, tyenv
+      | Directive d -> Directive d, Types.unit_type, tyenv
 end

@@ -594,29 +594,31 @@ struct
     | `Wrong _                    -> raise Exceptions.Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Lens (table, sort) ->
+      let open Lens in
       begin
-          let typ = Lens.Helpers.Record.get_lens_sort_row_type sort in
+          let typ = Sort.record_type sort in
           match value env table, (TypeUtils.concrete_type typ) with
-            | `Table ((_, tableName, _, _) as tinfo), `Record _row ->
-                 apply_cont cont env (`Lens (tinfo, Lens.Helpers.Record.set_lens_sort_table_name sort tableName))
+            | `Table ((_, table, _, _) as tinfo), `Record _row ->
+                 apply_cont cont env (`Lens (tinfo, Sort.update_table_name sort ~table))
             | `List records, `Record _row -> apply_cont cont env (`LensMem (`List records, sort))
             | _ -> failwith ("Unsupported underlying lens value.")
       end
     | `LensDrop (lens, drop, key, def, _sort) ->
+        let open Lens in
         let lens = value env lens in
         let def = value env def in
         let sort =
-          Lens.Types.drop_lens_sort
-            (Lens.Helpers.Lens'.sort lens)
-            (Lens.Utility.ColSet.singleton drop)
-            (Lens.Utility.ColSet.singleton key)
+          Types.drop_lens_sort
+            (Lens.Value.sort lens)
+            (Alias.Set.singleton drop)
+            (Alias.Set.singleton key)
         in
         apply_cont cont env (`LensDrop (lens, drop, key, def, sort))
     | `LensSelect (lens, pred, _sort) ->
         let lens = value env lens in
         let sort =
           Lens.Types.select_lens_sort
-            (Lens.Helpers.Lens'.sort lens)
+            (Lens.Value.sort lens)
             pred
         in
         apply_cont cont env (`LensSelect (lens, pred, sort))
@@ -624,22 +626,22 @@ struct
         let lens1 = value env lens1 in
         let lens2 = value env lens2 in
         let lens1, lens2 =
-          if Lens.Helpers.join_lens_should_swap
-               (Lens.Helpers.Lens'.sort lens1)
-               (Lens.Helpers.Lens'.sort lens2) on
+          if Lens.Sort.join_lens_should_swap
+               (Lens.Value.sort lens1)
+               (Lens.Value.sort lens2) ~on
           then lens2, lens1
           else lens1, lens2
         in
         let sort, on =
-          Lens.Helpers.join_lens_sort
-            (Lens.Helpers.Lens'.sort lens1)
-            (Lens.Helpers.Lens'.sort lens2) on
+          Lens.Sort.join_lens_sort
+            (Lens.Value.sort lens1)
+            (Lens.Value.sort lens2) ~on
         in
         apply_cont cont env (`LensJoin (lens1, lens2, on, left, right, sort))
     | `LensGet (lens, _rtype) ->
         let lens = value env lens in
         (* let callfn = fun fnptr -> fnptr in *)
-        let res = Lens.Helpers.lens_get lens () in
+        let res = Lens.Value.lens_get lens in
           apply_cont cont env res
     | `LensPut (lens, data, _rtype) ->
         let lens = value env lens in
@@ -672,7 +674,7 @@ struct
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
        if Settings.get_value Basicsettings.Shredding.shredding then
          begin
-           match Queryshredding.compile_shredded env (range, e) with
+           match EvalNestedQuery.compile_shredded env (range, e) with
            | None -> computation env cont e
            | Some (db, p) ->
              begin
@@ -687,16 +689,16 @@ struct
                let execute_shredded_raw (q, t) =
                  Database.execute_select_result (get_fields t) q db, t in
                let raw_results =
-                 Queryshredding.Shred.pmap execute_shredded_raw p in
+                 EvalNestedQuery.Shred.pmap execute_shredded_raw p in
                let mapped_results =
-                 Queryshredding.Shred.pmap Queryshredding.Stitch.build_stitch_map raw_results in
+                 EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
                  apply_cont cont env
-                 (Queryshredding.Stitch.stitch_mapped_query mapped_results)
+                 (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
              end
          end
        else (* shredding disabled *)
          begin
-           match Query.compile env (range, e) with
+           match EvalQuery.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
                let (fieldMap, _, _), _ =

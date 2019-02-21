@@ -16,7 +16,7 @@
       Stack.push lexer lexers
 
     method pop_lexer =
-      Stack.pop lexers
+      let _ = Stack.pop lexers in ()
 
     method next_lexer =
       Stack.top lexers

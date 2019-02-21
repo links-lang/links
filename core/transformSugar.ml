@@ -1,6 +1,5 @@
 open Utility
 open Sugartypes
-open Operators
 
 module TyEnv = Env.String
 
@@ -29,9 +28,9 @@ let type_binary_op env tycon_env =
   | `Minus        -> TyEnv.lookup env "-"
   | `FloatMinus   -> TyEnv.lookup env "-."
   | `RegexMatch flags ->
-      let nativep  = List.exists ((=) `RegexNative)  flags
-      and listp    = List.exists ((=) `RegexList)    flags
-      and replacep = List.exists ((=) `RegexReplace) flags in
+      let nativep  = List.exists ((=) RegexNative)  flags
+      and listp    = List.exists ((=) RegexList)    flags
+      and replacep = List.exists ((=) RegexReplace) flags in
         (match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) datatype "(String, Regex) -> String"
            | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> [String]"
@@ -165,8 +164,8 @@ class transform (env : Types.typing_environment) =
           (o, (s, t))
 
     method lens_sort : Types.lens_sort -> ('self_type * Types.lens_sort) =
-      fun (fds, cond, t) ->
-            (o, (fds, cond, t))
+      fun sort ->
+            (o, sort)
 
     method row : Types.row -> ('self_type * Types.row) =
       fun row -> (o, row)
@@ -185,33 +184,33 @@ class transform (env : Types.typing_environment) =
 
     method sentence : sentence -> ('self_type * sentence) =
       function
-      | `Definitions defs ->
+      | Definitions defs ->
           let (o, defs) = listu o (fun o -> o#binding) defs
-          in (o, `Definitions defs)
-      | `Expression e -> let (o, e, _) = o#phrase e in (o, `Expression e)
-      | `Directive d -> (o, `Directive d)
+          in (o, Definitions defs)
+      | Expression e -> let (o, e, _) = o#phrase e in (o, Expression e)
+      | Directive d -> (o, Directive d)
 
     method regex : regex -> ('self_type * regex) =
       function
-        | (`Range _ | `Simply _ | `Any  | `StartAnchor | `EndAnchor) as r -> (o, r)
-        | `Quote r -> let (o, r) = o#regex r in (o, `Quote r)
-        | `Seq rs ->
-            let (o, rs) = listu o (fun o -> o#regex) rs in (o, `Seq rs)
-        | `Alternate (r1, r2) ->
+        | (Range _ | Simply _ | Any  | StartAnchor | EndAnchor) as r -> (o, r)
+        | Quote r -> let (o, r) = o#regex r in (o, Quote r)
+        | Seq rs ->
+            let (o, rs) = listu o (fun o -> o#regex) rs in (o, Seq rs)
+        | Alternate (r1, r2) ->
             let (o, r1) = o#regex r1 in
             let (o, r2) = o#regex r2 in
-              (o, `Alternate (r1, r2))
-        | `Group r -> let (o, r) = o#regex r in (o, `Group r)
-        | `Repeat (repeat, r) ->
-            let (o, r) = o#regex r in (o, `Repeat (repeat, r))
-        | `Splice e -> let (o, e, _) = o#phrase e in (o, `Splice e)
-        | `Replace (r, `Literal s) ->
+              (o, Alternate (r1, r2))
+        | Group r -> let (o, r) = o#regex r in (o, Group r)
+        | Repeat (repeat, r) ->
+            let (o, r) = o#regex r in (o, Repeat (repeat, r))
+        | Splice e -> let (o, e, _) = o#phrase e in (o, Splice e)
+        | Replace (r, `Literal s) ->
             let (o, r) = o#regex r in
-              (o, `Replace (r, `Literal s))
-        | `Replace (r, `Splice e) ->
+              (o, Replace (r, `Literal s))
+        | Replace (r, `Splice e) ->
             let (o, r) = o#regex r in
             let (o, e, _) = o#phrase e in
-              (o, `Replace (r, `Splice e))
+              (o, Replace (r, `Splice e))
 
     method program : program -> ('self_type * program * Types.datatype option) =
       fun (bs, e) ->
@@ -222,9 +221,9 @@ class transform (env : Types.typing_environment) =
     method given_spawn_location :
       given_spawn_location ->
       ('self_type * given_spawn_location) = function
-        | `ExplicitSpawnLocation p ->
+        | ExplicitSpawnLocation p ->
             let (o, phr, _phr_ty) = o#phrase p in
-            (o, `ExplicitSpawnLocation phr)
+            (o, ExplicitSpawnLocation phr)
         | l -> (o, l)
 
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
@@ -245,8 +244,8 @@ class transform (env : Types.typing_environment) =
           in
             (o, `FunLit (Some argss, lin, lam, location), t)
       | `HandlerLit _ -> assert false
-      | `Spawn (`Wait, loc, body, Some inner_effects) ->
-          assert (loc = `NoSpawnLocation);
+      | `Spawn (Wait, loc, body, Some inner_effects) ->
+          assert (loc = NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
           let envs = o#backup_envs in
@@ -254,7 +253,7 @@ class transform (env : Types.typing_environment) =
           let o = o#with_effects inner_effects in
           let (o, body, body_type) = o#phrase body in
           let o = o#restore_envs envs in
-            (o, `Spawn (`Wait, loc, body, Some inner_effects), body_type)
+            (o, `Spawn (Wait, loc, body, Some inner_effects), body_type)
       | `Spawn (k, spawn_loc, body, Some inner_effects) ->
           (* bring the inner effects into scope, then restore the
              environments afterwards *)
@@ -822,44 +821,44 @@ class transform (env : Types.typing_environment) =
 
     (* TODO: should really invoke o#datatype on type annotations! *)
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
-      | `Unquote (bs, e) ->
+      | Unquote (bs, e) ->
          let envs = o#backup_envs in
          let (o, bs) = listu o (fun o -> o#binding) bs in
          let (o, e, t) = o#phrase e in
          let o = o#restore_envs envs in
-         o, `Unquote (bs, e), t
-      | `Grab (cbind, None, p) ->
+         o, Unquote (bs, e), t
+      | Grab (cbind, None, p) ->
          let (o, p, t) = o#cp_phrase p in
-         o, `Grab (cbind, None, p), t
-      | `Grab ((c, Some (`Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
+         o, Grab (cbind, None, p), t
+      | Grab ((c, Some (`Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let (o, b) = o#binder b in
          let venv = TyEnv.bind (o#get_var_env ()) (c, s) in
          let o = {< var_env = venv >} in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Grab (cbind, Some b, p), t
-      | `Give ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
+         o, Grab (cbind, Some b, p), t
+      | Give ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
          let envs = o#backup_envs in
          let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
          let (o, e, _typ) = option o (fun o -> o#phrase) e in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Give (cbind, e, p), t
-      | `GiveNothing c ->
+         o, Give (cbind, e, p), t
+      | GiveNothing c ->
          let envs = o#backup_envs in
          let o, c = o#binder c in
          let o = o#restore_envs envs in
-         o, `GiveNothing c, Types.make_endbang_type
-      | `Grab _ -> failwith "Malformed grab in TransformSugar"
-      | `Give _ -> failwith "Malformed give in TransformSugar"
-      | `Select (b, label, p) ->
+         o, GiveNothing c, Types.make_endbang_type
+      | Grab _ -> failwith "Malformed grab in TransformSugar"
+      | Give _ -> failwith "Malformed give in TransformSugar"
+      | Select (b, label, p) ->
          let envs = o#backup_envs in
          let o, b = o#binder b in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
-         o, `Select (b, label, p), t
-      | `Offer (b, cases) ->
+         o, Select (b, label, p), t
+      | Offer (b, cases) ->
          let (o, cases) = List.fold_right (fun (label, p) (o, cases) ->
                                            let envs = o#backup_envs in
                                            let o, _ = o#binder b in
@@ -868,16 +867,16 @@ class transform (env : Types.typing_environment) =
          begin
            match List.split cases with
            | cases, t :: _ts ->
-              o, `Offer (b, cases), t
+              o, Offer (b, cases), t
            | _ -> assert false
          end
-      | `Link (c, d) -> o, `Link (c, d), Types.unit_type
-      | `Comp ({node = c, Some s; _} as bndr, left, right) ->
+      | Link (c, d) -> o, Link (c, d), Types.unit_type
+      | Comp ({node = c, Some s; _} as bndr, left, right) ->
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
-         o, `Comp (bndr, left, right), t
-      | `Comp _ -> assert false
+         o, Comp (bndr, left, right), t
+      | Comp _ -> assert false
   end

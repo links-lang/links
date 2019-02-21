@@ -198,3 +198,88 @@ Get attributes
 getAttributes(<div id="myid" ns:foo="bar" />)
 stdout : [("ns:foo", "bar"), ("id", "myid")] : [(String, String)]
 
+Top level comment
+<!-- This is an XML comment --> ()
+stdout : () : ()
+
+Body comment
+<b><!-- abc -->ab<!-- foobar -->ba</b>
+stdout : <b>abba</b> : Xml
+
+Unterminated top level comment (1)
+<!-- this comment never ends -> ()
+stderr : @..*
+exit : 1
+
+Unterminated top level comment (2)
+<!-- this comment never ends > ()
+stderr : @..*
+exit : 1
+
+Unterminated top level comment (3)
+<!-- this comment never ends ()
+stderr : @..*
+exit : 1
+
+Unterminated body comment (1)
+<b>ab<!-- this comment never ends -></b>
+stderr : @..*
+exit : 1
+
+Unterminated body comment (2)
+<b>ab<!-- this comment never ends ></b>
+stderr : @..*
+exit : 1
+
+Unterminated body comment (3)
+<b>ab<!-- this comment never ends -></b>
+stderr : @..*
+exit : 1
+
+Unterminated body comment (4)
+<b>ab<!-- this comment never ends</b>
+stderr : @..*
+exit : 1
+
+Nested comments
+<b><!-- First <!-- Second --> --></b>
+stderr : @..*
+exit : 1
+
+Double dash in comment (1)
+<b><!-- -- --></b>
+stderr : @..*
+exit : 1
+
+Double dash in comment (2)
+<b><!-- ---></b>
+stderr : @..*
+exit : 1
+
+Triple dash in comment
+<b><!-- --- --></b>
+stderr : @..*
+exit : 1
+
+XML comment embodied inside a string literal
+"<!-- This is an XML comment -->"
+stdout : "<!-- This is an XML comment -->" : String
+
+Valid XML embodied inside an XML comment
+<!-- <b>Hello World</b> --> ()
+stdout : () : ()
+
+Ill-bracketed tag (closing tag hidden in a comment)
+<b><!-- </b> -->
+stderr : @..*
+exit : 1
+
+Ill-bracketed tag (opening tag hidden in a comment)
+<!-- <b> --></b>
+stderr : @..*
+exit : 1
+
+Newlines in comment
+./tests/xml_comment_newlines.links
+stdout : <b/> : Xml
+filemode : true

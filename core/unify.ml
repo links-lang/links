@@ -114,7 +114,7 @@ let rec eq_types : (datatype * datatype) -> bool =
 
       | `Alias  _ -> assert false
       | `Table _  -> assert false
-      | `Lens _ -> true
+      | `Lens _ as t1 -> Lens.Type.equal t1 t2
 and eq_sessions : (datatype * datatype) -> bool =
   function
   | `Input (lt, _), `Input (rt, _)

@@ -1,5 +1,4 @@
 open Sugartypes
-open Operators
 
 (*
   These functions are contravariant in the object type so if

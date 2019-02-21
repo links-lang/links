@@ -46,7 +46,6 @@ struct
   module Sugartypes        = Sugartypes
   module SugarConstructors = SugarConstructors
   module Types             = Types
-  module Operators         = Operators
 end
 
 (* Construction of nodes using positions produced by Menhir parser *)
@@ -161,9 +160,9 @@ let parseRegexFlags f =
     else
       asList f (i+1) ((String.get f i)::l) in
     List.map (function
-                'l' -> `RegexList
-              | 'n' -> `RegexNative
-              | 'g' -> `RegexGlobal
+                'l' -> RegexList
+              | 'n' -> RegexNative
+              | 'g' -> RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
 
@@ -263,12 +262,12 @@ let parseRegexFlags f =
 | x = X           { [x] }
 
 interactive:
-| nofun_declaration                                            { `Definitions [$1] }
-| fun_declarations SEMICOLON                                   { `Definitions $1   }
-| SEMICOLON                                                    { `Definitions []   }
-| exp SEMICOLON                                                { `Expression $1    }
-| directive                                                    { `Directive $1     }
-| END                                                          { `Directive ("quit", []) (* rather hackish *) }
+| nofun_declaration                                            { Definitions [$1] }
+| fun_declarations SEMICOLON                                   { Definitions $1   }
+| SEMICOLON                                                    { Definitions []   }
+| exp SEMICOLON                                                { Expression $1    }
+| directive                                                    { Directive $1     }
+| END                                                          { Directive ("quit", []) (* rather hackish *) }
 
 file:
 | declarations exp? END                                        { ($1, $2     ) }
@@ -444,17 +443,17 @@ perhaps_name:
 | cp_name?                                                     { $1 }
 
 cp_expression:
-| LBRACE block_contents RBRACE                                 { with_pos $loc (`Unquote $2) }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (`Grab ((name_of_binder $1, None), $3, $6)) }
-| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (`Grab ((name_of_binder $1, None), $3, cp_unit $loc)) }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, $6)) }
-| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (`Give ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
-| cp_name LBRACKET RBRACKET                                    { with_pos $loc (`GiveNothing $1) }
-| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (`Offer ($2, $4)) }
-| cp_label cp_name DOT cp_expression                           { with_pos $loc (`Select ($2, $1, $4)) }
-| cp_label cp_name                                             { with_pos $loc (`Select ($2, $1, cp_unit $loc)) }
-| cp_name LRARROW cp_name                                      { with_pos $loc (`Link ($1, $3)) }
-| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (`Comp ($2, $5, $7)) }
+| LBRACE block_contents RBRACE                                 { with_pos $loc (Unquote $2) }
+| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (Grab ((name_of_binder $1, None), $3, $6)) }
+| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (Grab ((name_of_binder $1, None), $3, cp_unit $loc)) }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (Give ((name_of_binder $1, None), Some $3, $6)) }
+| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (Give ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
+| cp_name LBRACKET RBRACKET                                    { with_pos $loc (GiveNothing $1) }
+| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (Offer ($2, $4)) }
+| cp_label cp_name DOT cp_expression                           { with_pos $loc (Select ($2, $1, $4)) }
+| cp_label cp_name                                             { with_pos $loc (Select ($2, $1, cp_unit $loc)) }
+| cp_name LRARROW cp_name                                      { with_pos $loc (Link ($1, $3)) }
+| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (Comp ($2, $5, $7)) }
 
 primary_expression:
 | atomic_expression                                            { $1 }
@@ -470,8 +469,8 @@ handler_parameterization:
 | arg_lists? handler_body                                      { ($2, $1) }
 
 handler_depth:
-| HANDLER                                                      { `Deep }
-| SHALLOWHANDLER                                               { `Shallow }
+| HANDLER                                                      { Deep    }
+| SHALLOWHANDLER                                               { Shallow }
 
 handler_body:
 | LBRACE cases RBRACE                                          { $2 }
@@ -505,12 +504,12 @@ op:
 | INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
 
 spawn_expression:
-| SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc `Demon (`ExplicitSpawnLocation $3) $5 }
-| SPAWN block                                                  { spawn ~ppos:$loc `Demon  `NoSpawnLocation           $2 }
-| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { spawn ~ppos:$loc `Angel (`ExplicitSpawnLocation $3) $5 }
-| SPAWNANGEL  block                                            { spawn ~ppos:$loc `Angel  `NoSpawnLocation           $2 }
-| SPAWNCLIENT block                                            { spawn ~ppos:$loc `Demon  `SpawnClient               $2 }
-| SPAWNWAIT   block                                            { spawn ~ppos:$loc `Wait   `NoSpawnLocation           $2 }
+| SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc Demon (ExplicitSpawnLocation $3) $5 }
+| SPAWN block                                                  { spawn ~ppos:$loc Demon  NoSpawnLocation           $2 }
+| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { spawn ~ppos:$loc Angel (ExplicitSpawnLocation $3) $5 }
+| SPAWNANGEL  block                                            { spawn ~ppos:$loc Angel  NoSpawnLocation           $2 }
+| SPAWNCLIENT block                                            { spawn ~ppos:$loc Demon  SpawnClient               $2 }
+| SPAWNWAIT   block                                            { spawn ~ppos:$loc Wait   NoSpawnLocation           $2 }
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
@@ -714,11 +713,11 @@ perhaps_cases:
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Switch ($3, $6, None)) }
 | RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (`Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (`Handle (untyped_handler $3 $6 `Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Handle (untyped_handler $3 $6 `Deep   )) }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (`Handle (untyped_handler $3 $6 Shallow)) }
+| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (`Handle (untyped_handler $3 $6 Deep   )) }
 | HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE perhaps_cases RBRACE
                                                                { with_pos $loc (`Handle (untyped_handler ~parameters:(List.rev $6)
-                                                                                         $3 $9 `Deep)) }
+                                                                                         $3 $9 Deep)) }
 | RAISE                                                        { with_pos $loc (`Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (`TryInOtherwise ($2, $4, $6, $8, None)) }
 
@@ -778,8 +777,8 @@ field_constraints:
 | field_constraint+                                            { $1 }
 
 field_constraint:
-| READONLY                                                     { `Readonly }
-| DEFAULT                                                      { `Default  }
+| READONLY                                                     { Readonly }
+| DEFAULT                                                      { Default  }
 
 perhaps_db_args:
 | atomic_expression?                                           { $1 }
@@ -945,6 +944,7 @@ session_datatype:
 | END                                                          { `End             }
 | primary_datatype                                             { $1               }
 | qualified_type_name                                          { `QualifiedTypeApplication ($1, []) }
+| qualified_type_name LPAREN type_arg_list RPAREN              { `QualifiedTypeApplication ($1, $3) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
@@ -1100,10 +1100,10 @@ kinded_row_var:
  */
 regex:
 | SLASH regex_pattern_alternate regex_flags_opt                { with_pos $loc($2) (`Regex $2), $3 }
-| SLASH regex_flags_opt                                        { with_pos $loc (`Regex (`Simply "")), $2 }
+| SLASH regex_flags_opt                                        { with_pos $loc (`Regex (Simply "")), $2 }
 | SSLASH regex_pattern_alternate SLASH regex_replace
-    regex_flags_opt                                            { with_pos $loc (`Regex (`Replace ($2, $4))),
-                                                                 `RegexReplace :: $5 }
+    regex_flags_opt                                            { with_pos $loc (`Regex (Replace ($2, $4))),
+                                                                 RegexReplace :: $5 }
 
 regex_flags_opt:
 | SLASH                                                        { [] }
@@ -1115,21 +1115,21 @@ regex_replace:
 | block                                                        { `Splice $1 }
 
 regex_pattern:
-| RANGE                                                        { `Range $1 }
-| STRING                                                       { `Simply $1 }
-| QUOTEDMETA                                                   { `Quote (`Simply $1) }
-| DOT                                                          { `Any }
-| CARET                                                        { `StartAnchor }
-| DOLLAR                                                       { `EndAnchor }
-| LPAREN regex_pattern_alternate RPAREN                        { `Group $2 }
-| regex_pattern STAR                                           { `Repeat (Regex.Star, $1) }
-| regex_pattern PLUS                                           { `Repeat (Regex.Plus, $1) }
-| regex_pattern QUESTION                                       { `Repeat (Regex.Question, $1) }
-| block                                                        { `Splice $1 }
+| RANGE                                                        { Range $1 }
+| STRING                                                       { Simply $1 }
+| QUOTEDMETA                                                   { Quote (Simply $1) }
+| DOT                                                          { Any }
+| CARET                                                        { StartAnchor }
+| DOLLAR                                                       { EndAnchor }
+| LPAREN regex_pattern_alternate RPAREN                        { Group $2 }
+| regex_pattern STAR                                           { Repeat (Regex.Star, $1) }
+| regex_pattern PLUS                                           { Repeat (Regex.Plus, $1) }
+| regex_pattern QUESTION                                       { Repeat (Regex.Question, $1) }
+| block                                                        { Splice $1 }
 
 regex_pattern_alternate:
-| regex_pattern_sequence                                       { `Seq $1 }
-| regex_pattern_sequence ALTERNATE regex_pattern_alternate     { `Alternate (`Seq $1, $3) }
+| regex_pattern_sequence                                       { Seq $1 }
+| regex_pattern_sequence ALTERNATE regex_pattern_alternate     { Alternate (Seq $1, $3) }
 
 regex_pattern_sequence:
 | regex_pattern+                                               { $1 }

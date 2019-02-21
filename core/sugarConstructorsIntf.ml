@@ -2,7 +2,6 @@
    Putting them here allows to avoid repetition. *)
 
 open Sugartypes
-open Operators
 
 (* An abstract type of positions and operations on them.  The core type of
    positions used in the compilation pipeline is Sugartypes.position, which
@@ -95,7 +94,7 @@ module type SugarConstructorsSig = sig
      -> ?location:location -> declared_linearity -> pattern list list -> phrase
      -> phrase
   val hnlit_arg
-      : [`Deep | `Shallow ] -> pattern -> clause list * pattern list list option
+      : handler_depth -> pattern -> clause list * pattern list list option
      -> handlerlit
   val handler_lit
       : ?ppos:t -> handlerlit -> phrase
@@ -152,6 +151,6 @@ module type SugarConstructorsSig = sig
   (* Handlers *)
   val untyped_handler
       : ?val_cases:(clause list) -> ?parameters:((phrase * pattern) list)
-     -> phrase -> clause list -> [`Deep | `Shallow]
+     -> phrase -> clause list -> handler_depth
      -> handler
 end
