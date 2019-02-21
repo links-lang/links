@@ -10,6 +10,7 @@ module Linearity = struct
     | Unl -> "Unl"
 end
 
+(* Convenient aliases for constructing values *)
 let linUnl = Linearity.Unl
 let linAny = Linearity.Any
 
@@ -20,6 +21,10 @@ module DeclaredLinearity = struct
   let isLin lin = lin == Lin
   let isUnl lin = lin == Unl
 end
+
+(* Convenient aliases for constructing values *)
+let dlLin = DeclaredLinearity.Lin
+let dlUnl = DeclaredLinearity.Unl
 
 module Restriction = struct
   type t =
@@ -48,7 +53,26 @@ module Restriction = struct
     | Effect  -> "Eff"
 end
 
+(* Convenient aliases for constructing values *)
 let resAny     = Restriction.Any
 let resBase    = Restriction.Base
 let resSession = Restriction.Session
 let resEffect  = Restriction.Effect
+
+module PrimaryKind = struct
+  type t =
+    | Type
+    | Row
+    | Presence
+    [@@deriving show,eq]
+
+  let string_of = function
+    | Type -> "Type"
+    | Row -> "Row"
+    | Presence -> "Presence"
+end
+
+(* Convenient aliases for constructing values *)
+let pkType     = PrimaryKind.Type
+let pkRow      = PrimaryKind.Row
+let pkPresence = PrimaryKind.Presence

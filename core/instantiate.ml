@@ -420,7 +420,10 @@ let alias name tyargs env =
             (fun q arg (tenv, renv, penv) ->
               if not (primary_kind_of_quantifier q = primary_kind_of_type_arg arg)
               then failwith (Printf.sprintf
-"Argument '%s' to type alias '%s' has the wrong kind ('%s' instead of '%s')" (Types.string_of_type_arg arg) name (Types.string_of_primary_kind (primary_kind_of_type_arg arg)) (Types.string_of_primary_kind (primary_kind_of_quantifier q)));
+                 "Argument '%s' to type alias '%s' has the wrong kind ('%s' instead of '%s')"
+                 (Types.string_of_type_arg arg) name
+                 (PrimaryKind.string_of (primary_kind_of_type_arg arg))
+                 (PrimaryKind.string_of (primary_kind_of_quantifier q)));
               let x = var_of_quantifier q in
                 match arg with
                 | `Type t ->

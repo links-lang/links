@@ -79,8 +79,8 @@ object (self)
 
   method! datatypenode = let open Datatype in
     function
-    | TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
-    | Mu (v, t)       -> let o = self#bind (v, (`Type, None), `Rigid) in o#datatype t
+    | TypeVar (x, k, freedom) -> self#add (x, (pkType, k), freedom)
+    | Mu (v, t)       -> let o = self#bind (v, (pkType, None), `Rigid) in o#datatype t
     | Forall (qs, t)  ->
         let o = List.fold_left (fun o q -> o#bind (rigidify q)) self qs in
         o#datatype t
@@ -88,13 +88,13 @@ object (self)
 
   method! row_var = let open Datatype in function
     | Closed               -> self
-    | Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
-    | Recursive (s, r)     -> let o = self#bind (s, (`Row, None), `Rigid) in o#row r
+    | Open (x, k, freedom) -> self#add (x, (pkRow, k), freedom)
+    | Recursive (s, r)     -> let o = self#bind (s, (pkRow, None), `Rigid) in o#row r
 
   method! fieldspec = let open Datatype in function
     | Absent -> self
     | Present t -> self#datatype t
-    | Var (x, k, freedom) -> self#add (x, (`Presence, k), freedom)
+    | Var (x, k, freedom) -> self#add (x, (pkPresence, k), freedom)
 end
 
 type var_env = { tenv : Types.meta_type_var StringMap.t;
@@ -137,21 +137,21 @@ struct
             let desugar_quantifier (var_env, qs) =
               fun (name, kind, _freedom) ->
                 match kind with
-                | `Type, subkind ->
+                | PrimaryKind.Type, subkind ->
                     let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = (var, subkind, `Type point) in
                     let var_env = {var_env with tenv=StringMap.add name point var_env.tenv} in
                       var_env, q::qs
-                | `Row, subkind ->
+                | PrimaryKind.Row, subkind ->
                     let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = (var, subkind, `Row point) in
                     let var_env = {var_env with renv=StringMap.add name point var_env.renv} in
                       var_env, q::qs
-                | `Presence, subkind ->
+                | PrimaryKind.Presence, subkind ->
                     let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
@@ -180,14 +180,13 @@ struct
             begin match SEnv.find alias_env tycon with
               | None -> raise (UnboundTyCon (pos,tycon))
               | Some (`Alias (qs, _dt)) ->
-                 let open Datatype in
                  let exception Kind_mismatch (* TODO add more information *) in
                  let match_kinds (q, t) =
-                   let primary_kind_of_type_arg : Datatype.type_arg -> primary_kind =
+                   let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t =
                      function
-                     | Type _ -> `Type
-                     | Row _ -> `Row
-                     | Presence _ -> `Presence
+                     | Datatype.Type     _ -> pkType
+                     | Datatype.Row      _ -> pkRow
+                     | Datatype.Presence _ -> pkPresence
                    in
                    if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
                      raise Kind_mismatch
@@ -321,13 +320,13 @@ struct
            let var = Types.fresh_raw_variable () in
              fun (x, kind, freedom) ->
              match (kind, freedom) with
-             | (`Type, Some subkind), freedom ->
+             | (PrimaryKind.Type, Some subkind), freedom ->
                let t = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Type t)::vars, addt x t envs
-             | (`Row, Some subkind), freedom ->
+             | (PrimaryKind.Row, Some subkind), freedom ->
                let r = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Row r)::vars, addr x r envs
-             | (`Presence, Some subkind), freedom ->
+             | (PrimaryKind.Presence, Some subkind), freedom ->
                let f = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Presence f)::vars, addf x f envs
              | (_, None), _ ->
@@ -353,17 +352,17 @@ struct
             ~f:(fun (q, _) (args, {tenv=tenv; renv=renv; penv=penv}) ->
                   let var = Types.fresh_raw_variable () in
                     match q with
-                      | (name, (`Type, subkind), _freedom) ->
+                      | (name, (PrimaryKind.Type, subkind), _freedom) ->
                           let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Type point))::args,
                              {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
-                      | (name, (`Row, subkind), _freedom) ->
+                      | (name, (PrimaryKind.Row, subkind), _freedom) ->
                           let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Row point))::args,
                              {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
-                      | (name, (`Presence, subkind), _freedom) ->
+                      | (name, (PrimaryKind.Presence, subkind), _freedom) ->
                           let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Presence point))::args,

@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 
 type freevars = {termvars: (Ir.binder list) ; typevars: Types.quantifier list} [@@deriving show]
 type fenv = freevars IntMap.t [@@deriving show]
@@ -585,15 +586,15 @@ struct
           let newvar = Types.fresh_raw_variable () in
           let make_new_type_variable () = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
           let new_meta_var, updated_maps = match primary_kind with
-            | `Type ->
+            | PrimaryKind.Type ->
               let new_type_variable = make_new_type_variable () in
               let t = `MetaTypeVar new_type_variable in
               (`Type new_type_variable, (IntMap.add typevar t type_map, row_map, presence_map))
-            | `Row ->
+            | PrimaryKind.Row ->
               let new_type_variable = make_new_type_variable () in
               let r = (Types.empty_field_env, new_type_variable, false) in
               (`Row new_type_variable, (type_map, IntMap.add typevar r row_map, presence_map))
-            | `Presence ->
+            | PrimaryKind.Presence ->
               let new_type_variable = make_new_type_variable () in
               let p = `Var new_type_variable in
               (`Presence new_type_variable, (type_map, row_map, IntMap.add typevar p presence_map)) in

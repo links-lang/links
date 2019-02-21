@@ -31,7 +31,7 @@ object (o : 'self_type)
 
         let e : phrasenode =
           fn_appl_node "spawnWait" [`Row inner_eff; `Type body_type; `Row outer_eff]
-            [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] DeclaredLinearity.Unl [[]] body]
+            [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dlUnl [[]] body]
         in
           (o, e, body_type)
     | Spawn (k, spawn_loc, body, Some inner_eff) ->
@@ -63,7 +63,7 @@ object (o : 'self_type)
 
         let e : phrasenode =
           fn_appl_node spawn_fun [`Row inner_eff; `Type body_type; `Row outer_eff]
-             [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] DeclaredLinearity.Unl [[]] body;
+             [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dlUnl [[]] body;
               spawn_loc_phr]
         in
           (o, e, process_type)

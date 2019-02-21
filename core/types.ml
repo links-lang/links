@@ -25,10 +25,7 @@ type subkind = Linearity.t * Restriction.t
 type freedom = [`Rigid | `Flexible]
     [@@deriving eq,show]
 
-type primary_kind = [ `Type | `Row | `Presence ]
-    [@@deriving eq,show]
-
-type kind = primary_kind * subkind
+type kind = PrimaryKind.t * subkind
     [@@deriving eq,show]
 
 type 't meta_type_var_non_rec_basis =
@@ -70,7 +67,7 @@ end
 let process  = {
   Abstype.id = "Process" ;
   name       = "Process" ;
-  arity      = [`Row, (linAny, resAny)] ;
+  arity      = [pkRow, (linAny, resAny)] ;
 }
 
 (* Lists are currently unlimited because the only deconstructors are
@@ -79,7 +76,7 @@ let process  = {
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = [`Type, (linUnl, resAny)] ;
+  arity      = [pkType, (linUnl, resAny)] ;
 }
 
 let event    = {
@@ -96,7 +93,7 @@ let dom_node = {
 let access_point = {
   Abstype.id = "AP" ;
   name       = "AP" ;
-  arity      = [`Type, (linAny, resSession)] ;
+  arity      = [pkType, (linAny, resSession)] ;
 }
 
 let socket = {
@@ -605,9 +602,9 @@ let var_of_quantifier : quantifier -> int =
 
 let kind_of_quantifier : quantifier -> kind =
   function
-  | _, sk, `Type _     -> `Type, sk
-  | _, sk, `Row _      -> `Row, sk
-  | _, sk, `Presence _ -> `Presence, sk
+  | _, sk, `Type _     -> pkType, sk
+  | _, sk, `Row _      -> pkRow, sk
+  | _, sk, `Presence _ -> pkPresence, sk
 
 let type_arg_of_quantifier : quantifier -> type_arg =
   function
@@ -615,21 +612,21 @@ let type_arg_of_quantifier : quantifier -> type_arg =
     | _, _, `Row row_var    -> `Row (FieldEnv.empty, row_var, false)
     | _, _, `Presence point -> `Presence (`Var point)
 
-let primary_kind_of_quantifier : quantifier -> primary_kind =
+let primary_kind_of_quantifier : quantifier -> PrimaryKind.t =
   function
-  | _, _, `Type _     -> `Type
-  | _, _, `Row _      -> `Row
-  | _, _, `Presence _ -> `Presence
+  | _, _, `Type _     -> pkType
+  | _, _, `Row _      -> pkRow
+  | _, _, `Presence _ -> pkPresence
 
 let subkind_of_quantifier : quantifier -> subkind
   = fun q ->
     snd (kind_of_quantifier q)
 
-let primary_kind_of_type_arg : type_arg -> primary_kind =
+let primary_kind_of_type_arg : type_arg -> PrimaryKind.t =
   function
-  | `Type _     -> `Type
-  | `Row _      -> `Row
-  | `Presence _ -> `Presence
+  | `Type _     -> pkType
+  | `Row _      -> pkRow
+  | `Presence _ -> pkPresence
 
 let add_quantified_vars qs vars =
   List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
@@ -1667,7 +1664,7 @@ let show_raw_type_vars = Basicsettings.Types.show_raw_type_vars
 module Vars =
 struct
   type flavour = [`Rigid | `Flexible | `Recursive]
-  type kind    = primary_kind
+  type kind    = PrimaryKind.t
   type scope   = [`Free | `Bound]
   type spec    = flavour * kind * int
 
@@ -1703,12 +1700,12 @@ struct
             begin
               match Unionfind.find point with
                 | `Var (var, _, freedom) ->
-                      [var, ((freedom :> flavour), `Type, `Free)]
+                      [var, ((freedom :> flavour), pkType, `Free)]
                 | `Recursive (var, body) ->
                     if TypeVarSet.mem var bound_vars then
-                      [var, (`Recursive, `Type, `Bound)]
+                      [var, (`Recursive, pkType, `Bound)]
                     else
-                      (var, (`Recursive, `Type, `Bound))::(free_bound_type_vars ~include_aliases (TypeVarSet.add var bound_vars) body)
+                      (var, (`Recursive, pkType, `Bound))::(free_bound_type_vars ~include_aliases (TypeVarSet.add var bound_vars) body)
                 | `Body t -> fbtv t
             end
         | `Function (f, m, t) ->
@@ -1750,7 +1747,7 @@ struct
           begin
             match Unionfind.find point with
               | `Var (var, _, freedom) ->
-                    [var, ((freedom :> flavour), `Presence, `Free)]
+                    [var, ((freedom :> flavour), pkPresence, `Free)]
               | `Body f -> free_bound_field_spec_type_vars ~include_aliases bound_vars f
           end
   and free_bound_row_type_vars ~include_aliases bound_vars (field_env, row_var, _) =
@@ -1765,12 +1762,12 @@ struct
     match Unionfind.find row_var with
       | `Closed -> []
       | `Var (var, _, freedom) ->
-            [var, ((freedom :> flavour), `Row, `Free)]
+            [var, ((freedom :> flavour), pkRow, `Free)]
       | `Recursive (var, row) ->
           if TypeVarSet.mem var bound_vars then
-            [var, (`Recursive, `Row, `Bound)]
+            [var, (`Recursive, pkRow, `Bound)]
           else
-            (var, (`Recursive, `Row, `Bound))::(free_bound_row_type_vars ~include_aliases (TypeVarSet.add var bound_vars) row)
+            (var, (`Recursive, pkRow, `Bound))::(free_bound_row_type_vars ~include_aliases (TypeVarSet.add var bound_vars) row)
       | `Body row -> free_bound_row_type_vars ~include_aliases bound_vars row
   and free_bound_tyarg_vars ~include_aliases bound_vars =
     function
@@ -1904,30 +1901,31 @@ struct
       | (Linearity.Unl, Restriction.Effect)  -> Restriction.string_of resEffect
       | (l, r) -> full (l, r)
 
-  let primary_kind : primary_kind -> string = function
-    | `Type -> "Type"
-    | `Row -> "Row"
-    | `Presence -> "Presence"
-
   let kind : (policy * names) -> kind -> string =
     let full (policy, _vars) (k, sk) =
-      primary_kind k ^ subkind (policy, _vars) sk in
+      PrimaryKind.string_of k ^ subkind (policy, _vars) sk in
     fun (policy, _vars) (k, sk) ->
     if policy.kinds = "full" then
       full (policy, _vars) (k, sk)
     else if policy.kinds = "hide" then
-      primary_kind k
+      PrimaryKind.string_of k
     else
       match (k, sk) with
-      | `Type, (Linearity.Unl, Restriction.Any) -> ""
-      | `Type, (Linearity.Unl, Restriction.Base) -> Restriction.string_of resBase
-      | `Type, (Linearity.Any, Restriction.Session) -> Restriction.string_of resSession
-      | `Type, sk -> subkind ({policy with kinds="full"}, _vars) sk
-      | `Row, (Linearity.Unl, Restriction.Any) -> primary_kind `Row
-      | `Row, (Linearity.Unl, Restriction.Effect) -> primary_kind `Row
-      | `Presence, (Linearity.Unl, Restriction.Any) -> primary_kind `Presence
-      | `Row, _
-      | `Presence, _ -> full ({policy with kinds="full"}, _vars) (k, sk)
+      | PrimaryKind.Type, (Linearity.Unl, Restriction.Any) -> ""
+      | PrimaryKind.Type, (Linearity.Unl, Restriction.Base) ->
+         Restriction.string_of resBase
+      | PrimaryKind.Type, (Linearity.Any, Restriction.Session) ->
+         Restriction.string_of resSession
+      | PrimaryKind.Type, sk ->
+         subkind ({policy with kinds="full"}, _vars) sk
+      | PrimaryKind.Row, (Linearity.Unl, Restriction.Any) ->
+         PrimaryKind.string_of pkRow
+      | PrimaryKind.Row, (Linearity.Unl, Restriction.Effect) ->
+         PrimaryKind.string_of pkRow
+      | PrimaryKind.Presence, (Linearity.Unl, Restriction.Any) ->
+         PrimaryKind.string_of pkPresence
+      | PrimaryKind.Row, _ | PrimaryKind.Presence, _ ->
+         full ({policy with kinds="full"}, _vars) (k, sk)
 
   let quantifier : (policy * names) -> quantifier -> string =
     fun (policy, vars) q ->
@@ -2382,9 +2380,6 @@ let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
   if refresh_tyvar_names then
     build_tyvar_names (fun x -> free_bound_tycon_type_vars x) [tycon];
   Print.tycon_spec TypeVarSet.empty (policy (), Vars.tyvar_name_map) tycon
-
-let string_of_primary_kind primary_kind =
-  Print.primary_kind primary_kind
 
 let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
   if refresh_tyvar_names then

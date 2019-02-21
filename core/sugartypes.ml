@@ -68,10 +68,7 @@ let default_subkind : subkind = (linUnl, resAny)
 type freedom = [`Flexible | `Rigid]
     [@@deriving show]
 
-type primary_kind = [`Type | `Row | `Presence]
-    [@@deriving show]
-
-type kind = primary_kind * subkind option
+type kind = PrimaryKind.t * subkind option
     [@@deriving show]
 
 type type_variable = name * kind * freedom

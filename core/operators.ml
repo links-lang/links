@@ -7,6 +7,8 @@
      ~      triggers a lexer state switch
 *)
 
+(*JSTOLAREK: define fixity *)
+
 type name = string [@@deriving show]
 
 type regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace

@@ -74,9 +74,9 @@ let default_fixity = 9
 
 let primary_kind_of_string p =
   function
-  | "Type"     -> `Type
-  | "Row"      -> `Row
-  | "Presence" -> `Presence
+  | "Type"     -> pkType
+  | "Row"      -> pkRow
+  | "Presence" -> pkPresence
   | pk         ->
      raise (ConcreteSyntaxError ("Invalid primary kind: " ^ pk, pos p))
 
@@ -118,14 +118,14 @@ perhaps. *)
 let kind_of p =
   function
   (* primary kind abbreviation  *)
-  | "Type"     -> (`Type, None)
-  | "Row"      -> (`Row, None)
-  | "Presence" -> (`Presence, None)
+  | "Type"     -> (pkType, None)
+  | "Row"      -> (pkRow, None)
+  | "Presence" -> (pkPresence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (`Type, Some (linAny, resAny))
-  | "Base"     -> (`Type, Some (linUnl, resBase))
-  | "Session"  -> (`Type, Some (linAny, resSession))
-  | "Eff"      -> (`Row , Some (linUnl, resEffect))
+  | "Any"      -> (pkType, Some (linAny, resAny))
+  | "Base"     -> (pkType, Some (linUnl, resBase))
+  | "Session"  -> (pkType, Some (linAny, resSession))
+  | "Eff"      -> (pkRow , Some (linUnl, resEffect))
   | k          -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
 
 let subkind_of p =
@@ -349,14 +349,14 @@ perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
 
 linearity:
-| FUN                                                          { DeclaredLinearity.Unl }
-| LINFUN                                                       { DeclaredLinearity.Lin }
+| FUN                                                          { dlUnl }
+| LINFUN                                                       { dlLin }
 
 tlfunbinding:
-| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                                 }
-| OP pattern op pattern perhaps_location block                 { (DeclaredLinearity.Unl, $3.node, [[$2; $4]], $5, $6) }
-| OP PREFIXOP pattern perhaps_location block                   { (DeclaredLinearity.Unl, $2, [[$3]], $4, $5)          }
-| OP pattern POSTFIXOP perhaps_location block                  { (DeclaredLinearity.Unl, $3, [[$2]], $4, $5)          }
+| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                 }
+| OP pattern op pattern perhaps_location block                 { (dlUnl, $3.node, [[$2; $4]], $5, $6) }
+| OP PREFIXOP pattern perhaps_location block                   { (dlUnl, $2, [[$3]], $4, $5)          }
+| OP pattern POSTFIXOP perhaps_location block                  { (dlUnl, $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
@@ -382,7 +382,7 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (($1, (`Type, None), `Rigid), None) }
+| VARIABLE                                                     { (($1, (PrimaryKind.Type, None), `Rigid), None) }
 | VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
 
 varlist:
