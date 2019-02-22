@@ -693,7 +693,6 @@ struct
               apply_cont cont env
                 (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
             else
-              let driver = db#driver_name () in
               let error_msg =
                 Printf.sprintf
                   "The database driver '%s' does not support shredding."
