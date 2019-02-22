@@ -74,24 +74,24 @@ let default_fixity = 9
 
 let primary_kind_of_string p =
   function
-  | "Type"     -> pkType
-  | "Row"      -> pkRow
-  | "Presence" -> pkPresence
+  | "Type"     -> pk_type
+  | "Row"      -> pk_row
+  | "Presence" -> pk_presence
   | pk         ->
      raise (ConcreteSyntaxError ("Invalid primary kind: " ^ pk, pos p))
 
 let linearity_of_string p =
   function
-  | "Any" -> linAny
-  | "Unl" -> linUnl
+  | "Any" -> lin_any
+  | "Unl" -> lin_unl
   | lin   ->
      raise (ConcreteSyntaxError ("Invalid kind linearity: " ^ lin, pos p))
 
 let restriction_of_string p =
   function
-  | "Any"     -> resAny
-  | "Base"    -> resBase
-  | "Session" -> resSession
+  | "Any"     -> res_any
+  | "Base"    -> res_base
+  | "Session" -> res_session
   | rest      ->
      raise (ConcreteSyntaxError ("Invalid kind restriction: " ^ rest, pos p))
 
@@ -118,23 +118,23 @@ perhaps. *)
 let kind_of p =
   function
   (* primary kind abbreviation  *)
-  | "Type"     -> (pkType, None)
-  | "Row"      -> (pkRow, None)
-  | "Presence" -> (pkPresence, None)
+  | "Type"     -> (pk_type, None)
+  | "Row"      -> (pk_row, None)
+  | "Presence" -> (pk_presence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (pkType, Some (linAny, resAny))
-  | "Base"     -> (pkType, Some (linUnl, resBase))
-  | "Session"  -> (pkType, Some (linAny, resSession))
-  | "Eff"      -> (pkRow , Some (linUnl, resEffect))
+  | "Any"      -> (pk_type, Some (lin_any, res_any))
+  | "Base"     -> (pk_type, Some (lin_unl, res_base))
+  | "Session"  -> (pk_type, Some (lin_any, res_session))
+  | "Eff"      -> (pk_row , Some (lin_unl, res_effect))
   | k          -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
 
 let subkind_of p =
   function
   (* subkind abbreviations *)
-  | "Any"     -> Some (linAny, resAny)
-  | "Base"    -> Some (linUnl, resBase)
-  | "Session" -> Some (linAny, resSession)
-  | "Eff"     -> Some (linUnl, resEffect)
+  | "Any"     -> Some (lin_any, res_any)
+  | "Base"    -> Some (lin_unl, res_base)
+  | "Session" -> Some (lin_any, res_session)
+  | "Eff"     -> Some (lin_unl, res_effect)
   | sk        -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos p))
 
 let attach_kind (t, k) = (t, k, `Rigid)
@@ -349,14 +349,14 @@ perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
 
 linearity:
-| FUN                                                          { dlUnl }
-| LINFUN                                                       { dlLin }
+| FUN                                                          { dl_unl }
+| LINFUN                                                       { dl_lin }
 
 tlfunbinding:
 | linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                 }
-| OP pattern op pattern perhaps_location block                 { (dlUnl, $3.node, [[$2; $4]], $5, $6) }
-| OP PREFIXOP pattern perhaps_location block                   { (dlUnl, $2, [[$3]], $4, $5)          }
-| OP pattern POSTFIXOP perhaps_location block                  { (dlUnl, $3, [[$2]], $4, $5)          }
+| OP pattern op pattern perhaps_location block                 { (dl_unl, $3.node, [[$2; $4]], $5, $6) }
+| OP PREFIXOP pattern perhaps_location block                   { (dl_unl, $2, [[$3]], $4, $5)          }
+| OP pattern POSTFIXOP perhaps_location block                  { (dl_unl, $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
@@ -396,10 +396,10 @@ fixity:
 | POSTFIX                                                      { (`Post , $1) }
 
 perhaps_location:
-| SERVER                                                       { locServer  }
-| CLIENT                                                       { locClient  }
-| NATIVE                                                       { locNative  }
-| /* empty */                                                  { locUnknown }
+| SERVER                                                       { loc_server  }
+| CLIENT                                                       { loc_client  }
+| NATIVE                                                       { loc_native  }
+| /* empty */                                                  { loc_unknown }
 
 constant:
 | UINTEGER                                                     { `Int    $1  }
@@ -845,8 +845,8 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, locUnknown, $5) }
-| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, locUnknown, $4) }
+| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
+| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
 | typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
 

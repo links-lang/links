@@ -41,7 +41,7 @@ object (o : 'self_type)
             [tuple_pat []], [tuple []], [Types.unit_type]
         | FormBinding (f, p) ->
             let (_o, _f, ft) = o#phrase f in
-            let t = Types.fresh_type_variable (linAny, resAny) in
+            let t = Types.fresh_type_variable (lin_any, res_any) in
             let () =
               Unify.datatypes
                 (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
@@ -120,7 +120,7 @@ object (o : 'self_type)
                         let mb = `Row (o#lookup_effects) in
                         let base : phrase =
                           fn_appl pure_str [`Type ft; mb]
-                            [fun_lit ~args:(List.rev args) dlUnl (List.rev pss)
+                            [fun_lit ~args:(List.rev args) dl_unl (List.rev pss)
                                      (tuple vs)] in
                         let p, et =
                           List.fold_right
@@ -142,7 +142,7 @@ object (o : 'self_type)
               let context : phrase =
                 let name = Utility.gensym ~prefix:"_formlet_" () in
                 fun_lit ~args:[Types.make_tuple_type [Types.xml_type], eff]
-                        dlUnl
+                        dl_unl
                         [[variable_pat ~ty:(Types.xml_type) name]]
                         (xml tag attrs attrexp [block ([], var name)]) in
               let (o, e, t) = o#formlet_body (xml "#" [] None contents) in
@@ -177,7 +177,7 @@ object (o : 'self_type)
              [`Type arg_type; `Type yields_type; mb]
              [body; fn_appl pure_str
                     [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]
-                    [fun_lit ~args:[Types.make_tuple_type [arg_type], empty_eff] dlUnl pss yields]]
+                    [fun_lit ~args:[Types.make_tuple_type [arg_type], empty_eff] dl_unl pss yields]]
         in
           (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)
     | e -> super#phrasenode e

@@ -37,8 +37,8 @@ let rec desugar_page (o, page_type) =
         | FormletPlacement (formlet, handler, attributes) ->
             let (_, formlet, formlet_type) = o#phrase formlet in
             let formlet_type = Types.concrete_type formlet_type in
-            let a = Types.fresh_type_variable (linAny, resAny) in
-            let b = Types.fresh_type_variable (linAny, resAny) in
+            let a = Types.fresh_type_variable (lin_any, res_any) in
+            let b = Types.fresh_type_variable (lin_any, res_any) in
               Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
               fn_appl "formP" [`Type a; `Row (o#lookup_effects)]
                       [formlet; handler; attributes]
@@ -49,7 +49,7 @@ let rec desugar_page (o, page_type) =
             let x = Utility.gensym ~prefix:"xml" () in
             fn_appl "plugP" [`Row (o#lookup_effects)]
                [fun_lit ~args:[Types.make_tuple_type [Types.xml_type], o#lookup_effects]
-                        dlUnl [[variable_pat ~ty:Types.xml_type x]]
+                        dl_unl [[variable_pat ~ty:Types.xml_type x]]
                         (xml name attrs dynattrs [block ([], var x)]);
                 desugar_nodes children]
         | _ ->

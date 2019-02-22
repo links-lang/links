@@ -77,12 +77,12 @@ let results :  Types.row ->
                   | [t] -> Types.make_tuple_type [t]
                   | ts -> Types.make_tuple_type [Types.make_tuple_type ts]
               in
-              fun_lit ~args:[a, eff] dlUnl [ps] (tuple (q::qs)) in
+              fun_lit ~args:[a, eff] dl_unl [ps] (tuple (q::qs)) in
             let outer : Sugartypes.phrase =
               let a = `Type qst in
               let b = `Type (Types.make_tuple_type (t :: ts)) in
                 fun_lit ~args:[Types.make_tuple_type [t], eff]
-                        dlUnl [[qb]]
+                        dl_unl [[qb]]
                         (fn_appl "map" [a; `Row eff; b] [inner; r]) in
             let a = `Type qt in
             let b = `Type (Types.make_tuple_type (t :: ts)) in
@@ -168,7 +168,7 @@ object (o : 'self_type)
             | ts -> Types.make_tuple_type ts in
 
         let f : phrase = fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
-                                 dlUnl [arg] body in
+                                 dl_unl [arg] body in
 
         let results = results eff (es, xs, ts) in
         let results =
@@ -180,7 +180,7 @@ object (o : 'self_type)
 
                 let g : phrase =
                   fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
-                          dlUnl [arg] sort
+                          dl_unl [arg] sort
                 in
                 fn_appl sort_by [`Type arg_type; `Row eff; sort_type_arg]
                         [g; results]

@@ -146,7 +146,7 @@ module SugarConstructors (Position : Pos)
   (** Various phrases *)
 
   (* Create a FunLit. *)
-  let fun_lit ?(ppos=dp) ?args ?(location=locUnknown) linearity pats blk =
+  let fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats blk =
     with_pos ppos (FunLit (args, linearity, (pats, blk), location))
 
   (* Create an argument used by Handler and HandlerLit. *)
@@ -178,8 +178,8 @@ module SugarConstructors (Position : Pos)
     with_pos ppos (Fun (binder bndr, linearity,
                          ([], (args, blk)), location, datatype))
 
-  let fun_binding' ?(ppos=dp) ?(linearity=dlUnl) ?(tyvars=[])
-        ?(location=locUnknown) ?annotation bndr fnlit =
+  let fun_binding' ?(ppos=dp) ?(linearity=dl_unl) ?(tyvars=[])
+        ?(location=loc_unknown) ?annotation bndr fnlit =
     with_pos ppos (Fun (bndr, linearity, (tyvars, fnlit), location, annotation))
 
 
@@ -204,7 +204,7 @@ module SugarConstructors (Position : Pos)
 
   (* A commonly used wrapper around val_binding *)
   let val_binding ?(ppos=dp) pat phrase =
-    val_binding' ~ppos NoSig (Pat pat, phrase, locUnknown)
+    val_binding' ~ppos NoSig (Pat pat, phrase, loc_unknown)
 
 
   (** Database queries *)

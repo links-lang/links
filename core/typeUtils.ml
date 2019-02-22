@@ -215,7 +215,7 @@ let rec table_needed_type t = match concrete_type t with
       error ("Attempt to take needed type of non-table: " ^ string_of_datatype t)
 
 let inject_type name t =
-  `Variant (make_singleton_open_row (name, `Present t) (linAny, resAny))
+  `Variant (make_singleton_open_row (name, `Present t) (lin_any, res_any))
 
 let abs_type _ = assert false
 let app_type _ _ = assert false

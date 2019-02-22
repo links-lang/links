@@ -362,7 +362,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                     | Some t2 -> unify' rec_env (t1, t2); false
                     | None ->
                        Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
-                       if Restriction.isBase rest then
+                       if Restriction.is_base rest then
                          raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
                                                  " with the body "^ string_of_datatype t2)));
                        rec_intro rpoint (var, Types.concrete_type t2);
@@ -373,19 +373,19 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               (* FIXME: does this really still need to happen if we've just introduced a recursive type? *)
               if tidy then
                 begin
-                  if Restriction.isBase rest then
+                  if Restriction.is_base rest then
                     if Types.is_baseable_type t2 then
                       Types.basify_type t2
                     else
                       raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                               " with the non-base type "^ string_of_datatype t2)));
-                  if Linearity.isUnl lin then
+                  if Linearity.is_nonlinear lin then
                     if Types.type_can_be_unl t2 then
                       Types.make_type_unl t2
                     else
                       raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
                                               " with the linear type " ^ string_of_datatype t2)));
-                  if Restriction.isSession rest then
+                  if Restriction.is_session rest then
                     if Types.is_sessionable_type t2 then
                       Types.sessionify_type t2
                     else
@@ -402,7 +402,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                     | Some t1 -> unify' rec_env (t1, t2); false
                     | None ->
                        Debug.if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
-                       if Restriction.isBase rest then
+                       if Restriction.is_base rest then
                          raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
                                                  " with the body "^ string_of_datatype t1)));
                        rec_intro lpoint (var, Types.concrete_type t1);
@@ -413,19 +413,19 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               (* FIXME: does this really still need to happen if we've just introduced a recursive type? *)
               if tidy then
                 begin
-                  if Restriction.isBase rest then
+                  if Restriction.is_base rest then
                     if Types.is_baseable_type t1 then
                       Types.basify_type t1
                     else
                       raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                               " with the non-base type "^ string_of_datatype t1)));
-                  if Linearity.isUnl lin then
+                  if Linearity.is_nonlinear lin then
                     if Types.type_can_be_unl t1 then
                       Types.make_type_unl t1
                     else
                       raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
                                               " with the linear type " ^ string_of_datatype t1)));
-                  if Restriction.isSession rest then
+                  if Restriction.is_session rest then
                     if Types.is_sessionable_type t1 then
                       Types.sessionify_type t1
                     else
@@ -518,7 +518,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                    Debug.if_set
                      (show_recursion)
                      (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")");
-                   if Restriction.isBase rest then
+                   if Restriction.is_base rest then
                      raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                              " with the body "^ string_of_datatype t)));
                    let point' = Unionfind.fresh (`Body t) in
@@ -527,19 +527,19 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               end
             else
               (Debug.if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
-               if Restriction.isBase rest then
+               if Restriction.is_base rest then
                  if Types.is_baseable_type t then
                    Types.basify_type t
                  else
                    raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
                                            " with the non-base type "^ string_of_datatype t)));
-               if Linearity.isUnl lin then
+               if Linearity.is_nonlinear lin then
                  if Types.type_can_be_unl t then
                    Types.make_type_unl t
                  else
                    raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
                                            " with the linear type "^ string_of_datatype t)));
-               if Restriction.isSession rest then
+               if Restriction.is_session rest then
                  if Types.is_sessionable_type t then
                    Types.sessionify_type t
                  else
@@ -979,7 +979,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
       | `Closed ->
          raise (Failure (`Msg ("Rigid row var cannot be unified with empty closed row\n")))
       | `Var (_, (_, rest'), `Flexible) ->
-         if Restriction.isAny rest && Restriction.isBase rest' then
+         if Restriction.is_any rest && Restriction.is_base rest' then
            raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
          Unionfind.change point' (`Var (var, (lin, rest), `Rigid))
       | `Var (var', _, `Rigid) when var=var' -> ()
@@ -1008,27 +1008,27 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
          if not (StringMap.is_empty extension_field_env) &&
               TypeVarSet.mem var (free_row_type_vars extension_row) then
            begin
-             if Restriction.isBase rest then
+             if Restriction.is_base rest then
                raise (Failure (`Msg ("Cannot infer a recursive type for the base row variable "^ string_of_int var ^
                                        " with the body "^ string_of_row extension_row)));
              rec_row_intro point (var, extension_row)
            end
          else
            begin
-             if Restriction.isBase rest then
+             if Restriction.is_base rest then
                if Types.is_baseable_row extension_row then
                  Types.basify_row extension_row
                else
                  raise (Failure (`Msg ("Cannot unify the base row variable "^ string_of_int var ^
                                          " with the non-base row "^ string_of_row extension_row)));
-             if Restriction.isSession rest then
+             if Restriction.is_session rest then
                if Types.is_sessionable_row extension_row then
                  Types.sessionify_row extension_row
                else
                  raise (Failure (`Msg ("Cannot unify the session row variable "^ string_of_int var ^
                                          " with the non-session row "^ string_of_row extension_row)));
 
-             if Linearity.isUnl lin then
+             if Linearity.is_nonlinear lin then
                if Types.row_can_be_unl extension_row then
                  Types.make_row_unl extension_row
                else
@@ -1209,7 +1209,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
            unify_field_envs ~closed:false ~rigid:false rec_env (lfield_env', rfield_env');
 
            (* a fresh row variable common to the left and the right *)
-           let fresh_row_var = fresh_row_variable (linAny, resAny) in
+           let fresh_row_var = fresh_row_variable (lin_any, res_any) in
 
            (* each row can contain fields missing from the other *)
            let rextension = StringMap.filter (fun label _ -> not (StringMap.mem label rfield_env')) lfield_env' in

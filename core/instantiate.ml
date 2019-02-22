@@ -50,7 +50,7 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
                         else
                           begin
                             let var' = Types.fresh_raw_variable () in
-                            let point' = Unionfind.fresh (`Var (var', (linAny, resAny), `Flexible)) in
+                            let point' = Unionfind.fresh (`Var (var', (lin_any, res_any), `Flexible)) in
                             let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
                             let _ = Unionfind.change point' (`Recursive (var', t')) in
                               `MetaTypeVar point'
@@ -150,7 +150,7 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
                     else
                       begin
                         let var' = Types.fresh_raw_variable () in
-                        let point' = Unionfind.fresh (`Var (var', (linAny, resAny), `Flexible)) in
+                        let point' = Unionfind.fresh (`Var (var', (lin_any, res_any), `Flexible)) in
                         let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
                         let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
                           (StringMap.empty, point', dual)
@@ -422,8 +422,8 @@ let alias name tyargs env =
               then failwith (Printf.sprintf
                  "Argument '%s' to type alias '%s' has the wrong kind ('%s' instead of '%s')"
                  (Types.string_of_type_arg arg) name
-                 (PrimaryKind.string_of (primary_kind_of_type_arg arg))
-                 (PrimaryKind.string_of (primary_kind_of_quantifier q)));
+                 (PrimaryKind.to_string (primary_kind_of_type_arg arg))
+                 (PrimaryKind.to_string (primary_kind_of_quantifier q)));
               let x = var_of_quantifier q in
                 match arg with
                 | `Type t ->

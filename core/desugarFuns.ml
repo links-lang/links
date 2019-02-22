@@ -84,9 +84,9 @@ object (o : 'self_type)
         in
           (o, e, ft)
     | Section (Section.Project name) ->
-        let ab, a = Types.fresh_type_quantifier (linAny, resAny) in
-        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (linAny, resAny) in
-        let effb, eff = Types.fresh_row_quantifier (linAny, resAny) in
+        let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
+        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
+        let effb, eff = Types.fresh_row_quantifier (lin_any, res_any) in
 
         let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
 

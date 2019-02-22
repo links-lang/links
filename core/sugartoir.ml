@@ -598,7 +598,7 @@ struct
     let f_info = (ft, "", `Local) in
     let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)),
                                               body_type) in
-      M.bind (fun_binding (f_info, ([], [kb], body), locUnknown)) rest
+      M.bind (fun_binding (f_info, ([], [kb], body), loc_unknown)) rest
 
   let letfun env ((ft, _, _) as f_info, (tyvars, (ps, body)), location) rest =
     let xsb : binder list =
@@ -870,7 +870,7 @@ struct
              I.do_operation (name, vs, t)
           | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
              let henv, params =
-               let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (linAny, resAny)) in
+               let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
                 match (sh_descr.shd_params) with
                 | None -> empty_env, []
                 | Some { shp_bindings = bindings; shp_types = types } ->

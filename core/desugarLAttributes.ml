@@ -36,7 +36,7 @@ let desugar_lhref : phrasenode -> phrasenode = function
           | [_,[target]], rest ->
               ("href",
                [constant_str "?_k=";
-                apply "pickleCont" [fun_lit ~location:locServer dlUnl [[]] target]])
+                apply "pickleCont" [fun_lit ~location:loc_server dl_unl [[]] target]])
               :: rest
           | _ -> assert false (* multiple l:hrefs, or an invalid rhs;
                                  NOTE: this is a user error and should
@@ -54,7 +54,7 @@ let desugar_laction : phrasenode -> phrasenode = function
                   ["type",  [constant_str "hidden"];
                    "name",  [constant_str "_k"];
                    "value", [apply "pickleCont"
-                                   [fun_lit ~location:locServer dlUnl [[]] action_expr]]]
+                                   [fun_lit ~location:loc_server dl_unl [[]] action_expr]]]
                   None []
             and action = ("action", [constant_str "#"])
             in Xml (form, action::rest, attrexp, hidden::children)
@@ -69,7 +69,7 @@ let desugar_lonevent : phrasenode -> phrasenode =
     | (name, [rhs]) ->
         let event_name = StringLabels.sub ~pos:4 ~len:(String.length name - 4) name in
           tuple [constant_str event_name;
-                 fun_lit ~location:locClient dlUnl [[variable_pat "event"]] rhs]
+                 fun_lit ~location:loc_client dl_unl [[variable_pat "event"]] rhs]
     | _ -> assert false
   in function
     | Xml (tag, attrs, attrexp, children)
@@ -105,7 +105,7 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string) StringMap.t
     p', !lnames
 
 let let_in name rhs body : phrase =
-  block ([val_binding' NoSig (PatName name, rhs, locUnknown)], body)
+  block ([val_binding' NoSig (PatName name, rhs, loc_unknown)], body)
 
 let bind_lname_vars lnames = function
   | "l:action" as attr, es ->

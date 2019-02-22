@@ -691,7 +691,7 @@ end = functor (K : CONTINUATION) -> struct
               | _ ->
                  if Lib.is_primitive f_name
                    && not (List.mem f_name cps_prims)
-                   && not (Location.isServer (Lib.primitive_location f_name))
+                   && not (Location.is_server (Lib.primitive_location f_name))
                  then
                    Call (Var ("_" ^ f_name), List.map gv vs)
                  else
@@ -787,7 +787,7 @@ end = functor (K : CONTINUATION) -> struct
           (Env.Int.fold
              (fun var _v funcs ->
                let name = Lib.primitive_name var in
-               if Location.isServer (Lib.primitive_location name) then
+               if Location.is_server (Lib.primitive_location name) then
                  (name, var)::funcs
                else
                  funcs)
@@ -812,7 +812,7 @@ end = functor (K : CONTINUATION) -> struct
             ((name,
               args @ [__kappa],
               body,
-              locServer),
+              loc_server),
              code))
         prim_server_calls
         code
@@ -844,7 +844,7 @@ end = functor (K : CONTINUATION) -> struct
                 | _ ->
                    if Lib.is_primitive f_name
                      && not (List.mem f_name cps_prims)
-                     && not (Location.isServer (Lib.primitive_location f_name))
+                     && not (Location.is_server (Lib.primitive_location f_name))
                    then
                      let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
                      K.apply ~strategy:`Direct kappa arg

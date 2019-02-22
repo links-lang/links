@@ -2,29 +2,39 @@ module Linearity = struct
   type t = Any | Unl
     [@@deriving eq,show]
 
-  let isAny lin = lin == Any
-  let isUnl lin = lin == Unl
+  let is_any = function
+    | Any -> true
+    | _   -> false
 
-  let string_of = function
+  let is_nonlinear = function
+    | Unl -> true
+    | _   -> false
+
+  let to_string = function
     | Any -> "Any"
     | Unl -> "Unl"
 end
 
 (* Convenient aliases for constructing values *)
-let linUnl = Linearity.Unl
-let linAny = Linearity.Any
+let lin_any = Linearity.Any
+let lin_unl = Linearity.Unl
 
 module DeclaredLinearity = struct
   type t = Lin | Unl
     [@@deriving show]
 
-  let isLin lin = lin == Lin
-  let isUnl lin = lin == Unl
+  let is_linear = function
+    | Lin -> true
+    | _   -> false
+
+  let is_nonlinear = function
+    | Unl -> true
+    | _   -> false
 end
 
 (* Convenient aliases for constructing values *)
-let dlLin = DeclaredLinearity.Lin
-let dlUnl = DeclaredLinearity.Unl
+let dl_lin = DeclaredLinearity.Lin
+let dl_unl = DeclaredLinearity.Unl
 
 module Restriction = struct
   type t =
@@ -34,19 +44,23 @@ module Restriction = struct
     | Effect
     [@@deriving eq,show]
 
-  let isAny = function
+  let is_any = function
     | Any -> true
     | _   -> false
 
-  let isBase = function
+  let is_base = function
     | Base -> true
     | _    -> false
 
-  let isSession = function
+  let is_session = function
     | Session -> true
     | _       -> false
 
-  let string_of = function
+  let is_effect = function
+    | Effect -> true
+    | _      -> false
+
+  let to_string = function
     | Any     -> "Any"
     | Base    -> "Base"
     | Session -> "Session"
@@ -54,10 +68,10 @@ module Restriction = struct
 end
 
 (* Convenient aliases for constructing values *)
-let resAny     = Restriction.Any
-let resBase    = Restriction.Base
-let resSession = Restriction.Session
-let resEffect  = Restriction.Effect
+let res_any     = Restriction.Any
+let res_base    = Restriction.Base
+let res_session = Restriction.Session
+let res_effect  = Restriction.Effect
 
 module PrimaryKind = struct
   type t =
@@ -66,38 +80,38 @@ module PrimaryKind = struct
     | Presence
     [@@deriving show,eq]
 
-  let string_of = function
-    | Type -> "Type"
-    | Row -> "Row"
+  let to_string = function
+    | Type     -> "Type"
+    | Row      -> "Row"
     | Presence -> "Presence"
 end
 
 (* Convenient aliases for constructing values *)
-let pkType     = PrimaryKind.Type
-let pkRow      = PrimaryKind.Row
-let pkPresence = PrimaryKind.Presence
+let pk_type     = PrimaryKind.Type
+let pk_row      = PrimaryKind.Row
+let pk_presence = PrimaryKind.Presence
 
 module Location = struct
   type t = Client | Server | Native | Unknown
     [@@deriving show]
 
-  let isClient = function
+  let is_client = function
     | Client -> true
     | _      -> false
 
-  let isServer = function
+  let is_server = function
     | Server -> true
     | _      -> false
 
-  let isNative = function
+  let is_native = function
     | Native -> true
     | _      -> false
 
-  let isUnknown = function
+  let is_unknown = function
     | Unknown -> true
     | _      -> false
 
-  let string_of = function
+  let to_string = function
     | Client -> "client"
     | Server -> "server"
     | Native -> "native"
@@ -105,7 +119,7 @@ module Location = struct
 end
 
 (* Convenient aliases for constructing values *)
-let locClient  = Location.Client
-let locServer  = Location.Server
-let locNative  = Location.Native
-let locUnknown = Location.Unknown
+let loc_client  = Location.Client
+let loc_server  = Location.Server
+let loc_native  = Location.Native
+let loc_unknown = Location.Unknown

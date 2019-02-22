@@ -79,8 +79,8 @@ object (self)
 
   method! datatypenode = let open Datatype in
     function
-    | TypeVar (x, k, freedom) -> self#add (x, (pkType, k), freedom)
-    | Mu (v, t)       -> let o = self#bind (v, (pkType, None), `Rigid) in o#datatype t
+    | TypeVar (x, k, freedom) -> self#add (x, (pk_type, k), freedom)
+    | Mu (v, t)       -> let o = self#bind (v, (pk_type, None), `Rigid) in o#datatype t
     | Forall (qs, t)  ->
         let o = List.fold_left (fun o q -> o#bind (rigidify q)) self qs in
         o#datatype t
@@ -88,13 +88,13 @@ object (self)
 
   method! row_var = let open Datatype in function
     | Closed               -> self
-    | Open (x, k, freedom) -> self#add (x, (pkRow, k), freedom)
-    | Recursive (s, r)     -> let o = self#bind (s, (pkRow, None), `Rigid) in o#row r
+    | Open (x, k, freedom) -> self#add (x, (pk_row, k), freedom)
+    | Recursive (s, r)     -> let o = self#bind (s, (pk_row, None), `Rigid) in o#row r
 
   method! fieldspec = let open Datatype in function
     | Absent -> self
     | Present t -> self#datatype t
-    | Var (x, k, freedom) -> self#add (x, (pkPresence, k), freedom)
+    | Var (x, k, freedom) -> self#add (x, (pk_presence, k), freedom)
 end
 
 type var_env = { tenv : Types.meta_type_var StringMap.t;
@@ -184,9 +184,9 @@ struct
                  let match_kinds (q, t) =
                    let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t =
                      function
-                     | Datatype.Type     _ -> pkType
-                     | Datatype.Row      _ -> pkRow
-                     | Datatype.Presence _ -> pkPresence
+                     | Datatype.Type     _ -> pk_type
+                     | Datatype.Row      _ -> pk_row
+                     | Datatype.Presence _ -> pk_presence
                    in
                    if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
                      raise Kind_mismatch
