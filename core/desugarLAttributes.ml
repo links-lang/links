@@ -2,7 +2,7 @@ open Utility
 open CommonTypes
 open Sugartypes
 open List
-open SugarConstructors.Make
+open SugarConstructors.SugartypesPositions
 
 (* TODO:
 
@@ -101,8 +101,7 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string) StringMap.t
     | Xml (tag, attrs, attrexp, children) ->
         let attrs = concat_map attr attrs in
         let children =
-          List.map (fun {node;pos} -> Sugartypes.with_pos pos (aux node))
-                   children in
+          List.map (fun {node;pos} -> with_pos pos (aux node)) children in
           Xml (tag, attrs, attrexp, children)
     | p -> p
   in
@@ -135,8 +134,7 @@ let desugar_form : phrasenode -> phrasenode = function
           raise (Errors.SugarError (dummy_position, "Duplicate l:name binding: "
                                                     ^ item)) in
       let attrs = List.map (bind_lname_vars lnames) attrs in
-        Xml (form, attrs, attrexp,
-             Utility.zip_with Sugartypes.with_pos poss children)
+        Xml (form, attrs, attrexp, Utility.zip_with with_pos poss children)
   | e -> e
 
 let replace_lattrs : phrasenode -> phrasenode =

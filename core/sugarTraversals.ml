@@ -11,24 +11,7 @@
 open Operators
 open CommonTypes
 open Sugartypes
-open SugarConstructors
-
-(* Positions used inside traversals.  with_pos function keeps the position
-   annotation unchanged, as opposed to discarding it (default in other parts of
-   the compiler). *)
-module TraversalPosition
-       : Pos with type t = (SourceCode.lexpos * SourceCode.lexpos * SourceCode.source_code option) = struct
-  (* Sugartypes position *)
-  type t = SourceCode.lexpos * SourceCode.lexpos * SourceCode.source_code option
-  (* Identity - positions in this module are alread Sugartypes positions *)
-  let pos p = p
-  (* Construct a node with position *)
-  let with_pos pos node = {node; pos}
-  (* Default (dummy) position *)
-  let dp = (Lexing.dummy_pos, Lexing.dummy_pos, None)
-end
-
-open TraversalPosition
+open SugarConstructors.SugartypesPositions
 
 class map =
   object ((o : 'self_type))

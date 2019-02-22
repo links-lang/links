@@ -6,5 +6,10 @@ module type SugarConstructorsSig = SugarConstructorsIntf.SugarConstructorsSig
 module SugarConstructors (Position : Pos)
        : (SugarConstructorsSig with type t := Position.t)
 
-(* Module for making nodes using Sugartypes positions. *)
-module Make : (SugarConstructorsSig with type t := unit)
+(* Module for making nodes with dummy positions. *)
+module DummyPositions : (SugarConstructorsSig with type t := unit)
+
+(* Module for making nodes with concrete Sugartypes positions. *)
+module SugartypesPositions : (SugarConstructorsSig with
+   type t := (SourceCode.lexpos * SourceCode.lexpos *
+              SourceCode.source_code option))

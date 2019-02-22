@@ -1,7 +1,7 @@
 open Utility
 open CommonTypes
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 (*
    spawn {e}

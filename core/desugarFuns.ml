@@ -1,7 +1,7 @@
 open CommonTypes
 open Utility
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 (*
     fun f[qs](xs1)...(xsk) {e}

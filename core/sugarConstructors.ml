@@ -277,18 +277,62 @@ module SugarConstructors (Position : Pos)
 
 end
 
-(* A default positions module used inside the compiler.  This module is based on
-   dummy/unit positions, which prevents attaching any kind of meaningful
-   positions to nodes.  The motivation for this is that a positions store
-   locations of source code tokens and these can only be meaningfully
-   constructed by the parser.  So when we construct new nodes outside of the
-   parser, e.g. in desugar modules, we enforce that they contain empty
-   positions. *)
-module SugartypesPosition : Pos with type t = unit = struct
+(* Positions module based on standard Sugartypes positions. *)
+module SugartypesPos : Pos with type t = (SourceCode.lexpos *
+    SourceCode.lexpos * SourceCode.source_code option) = struct
+  (* Sugartypes position *)
+  type t = SourceCode.lexpos * SourceCode.lexpos * SourceCode.source_code option
+  (* Identity - positions in this module are alread Sugartypes positions *)
+  let pos p = p
+  (* Construct a node with position *)
+  let with_pos pos node = {node; pos}
+  (* Default (dummy) position *)
+  let dp = (Lexing.dummy_pos, Lexing.dummy_pos, None)
+end
+
+(* Positions module based on dummy/unit positions.  Prevents attaching any
+   kind of meaningful positions to nodes.  *)
+module DummyPos : Pos with type t = unit = struct
   type t = unit
   let pos ()           = Sugartypes.dummy_position
   let with_pos () node = {node; pos = Sugartypes.dummy_position}
   let dp               = ()
 end
 
-module Make = SugarConstructors(SugartypesPosition)
+module SugartypesPositions = SugarConstructors(SugartypesPos)
+module DummyPositions      = SugarConstructors(DummyPos     )
+
+(*
+
+Note [Attaching positions to nodes]
+===================================
+
+Positions represent locations of tokens inside a source file (roughly: filename
++ line number + column offset) and are attached to most nodes in an AST -
+c.f. datatype definitions in Sugartypes.  During various stages of the
+compilation pipeline we change the structure of an AST, often creating new nodes
+that don't really correspond to any tokens in the source files.  In theory these
+nodes should have dummy positions attached to them but in practice we often
+maintain positions to know from which source code location a given node was
+derived.  This is mostly used when debugging the compiler.
+
+All that being said, there are two modules providing concrete access to
+SugarConstructors:
+
+  * SugartypesPositions provides constructors that allow to attach normal
+    Sugartypes positions to nodes.  Used to traverse the AST and to propagate
+    positions to derived nodes.
+
+  * DummyPositions provides constructors that allow only to attach dummy
+    positions to nodes.  Used to erase positions in derived nodes.
+
+Note that all smart constructors have an optional position argument that
+defaults to a dummy position.  These default arguments are usually only provided
+in the parser, so the main difference between using SugartypesPositions and
+DummyPositions lies in the usage of with_pos function.
+
+All of this is a bit inconsistent at the moment.  There are no strict rules when
+to propagate positions to derived nodes and when to discard them, so use your
+best judgement.
+
+*)

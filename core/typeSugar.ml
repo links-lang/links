@@ -2,7 +2,7 @@ open CommonTypes
 open Utility
 open Operators
 open Sugartypes
-open SugarConstructors
+open SugarConstructors.SugartypesPositions
 
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 
@@ -3924,14 +3924,14 @@ and type_cp (context : context) = fun {node = p; pos} ->
            unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
          CPUnquote (bindings, e), t, usage_builder u
     | CPGrab ((c, _), None, p) ->
-       let (_, t, _) = type_check context (Make.var c) in
+       let (_, t, _) = type_check context (var c) in
        let ctype = `Alias (("EndQuery", []), `Input (Types.unit_type, `End)) in
        unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
        CPGrab ((c, Some (ctype, [])), None, p), pt, use c u
     | CPGrab ((c, _), Some bndr, p) ->
        let x = name_of_binder bndr in
-       let (_, t, _) = type_check context (Make.var c) in
+       let (_, t, _) = type_check context (var c) in
        let a = Types.fresh_type_variable (lin_any, res_any) in
        let s = Types.fresh_session_variable lin_any in
        let ctype = `Input (a, s) in
@@ -3960,13 +3960,13 @@ and type_cp (context : context) = fun {node = p; pos} ->
          | _ -> assert false in
        CPGrab ((c, Some (ctype, tyargs)), Some (set_binder_type bndr a), p), pt, use c (StringMap.remove x u)
     | CPGive ((c, _), None, p) ->
-       let (_, t, _) = type_check context (Make.var c) in
+       let (_, t, _) = type_check context (var c) in
        let ctype = `Output (Types.unit_type, `End) in
        unify ~pos:pos ~handle:(Gripers.cp_give c) (t, ctype);
        let (p, t, u) = type_cp (unbind_var context c) p in
        CPGive ((c, Some (ctype, [])), None, p), t, use c u
     | CPGive ((c, _), Some e, p) ->
-       let (_, t, _) = type_check context (Make.var c) in
+       let (_, t, _) = type_check context (var c) in
        let (e, t', u) = type_check context e in
        let s = Types.fresh_session_variable lin_any in
        let ctype = `Output (t', s) in
@@ -3991,12 +3991,12 @@ and type_cp (context : context) = fun {node = p; pos} ->
        CPGive ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
     | CPGiveNothing bndr ->
        let c = name_of_binder bndr in
-       let _, t, _ = type_check context (Make.var c) in
+       let _, t, _ = type_check context (var c) in
        unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
        CPGiveNothing (set_binder_type bndr t), t, StringMap.singleton c 1
     | CPSelect (bndr, label, p) ->
        let c = name_of_binder bndr in
-       let (_, t, _) = type_check context (Make.var c) in
+       let (_, t, _) = type_check context (var c) in
        let s = Types.fresh_session_variable lin_any in
        let r = Types.make_singleton_open_row (label, `Present s) (lin_any, res_session) in
        let ctype = `Select r in
@@ -4006,7 +4006,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
        CPSelect (set_binder_type bndr ctype, label, p), t, use c u
     | CPOffer (bndr, branches) ->
        let c = name_of_binder bndr in
-       let (_, t, _) = type_check context (Make.var c) in
+       let (_, t, _) = type_check context (var c) in
        (*
        let crow = Types.make_empty_open_row (lin_any, res_session) in
        let ctype = `Choice crow in
@@ -4027,8 +4027,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
     | CPLink (bndr1, bndr2) ->
       let c = name_of_binder bndr1 in
       let d = name_of_binder bndr2 in
-      let (_, tc, uc) = type_check context (Make.var c) in
-      let (_, td, ud) = type_check context (Make.var d) in
+      let (_, tc, uc) = type_check context (var c) in
+      let (_, td, ud) = type_check context (var d) in
         unify ~pos:pos ~handle:Gripers.cp_link_session
           (tc, Types.fresh_type_variable (lin_any, res_session));
         unify ~pos:pos ~handle:Gripers.cp_link_session

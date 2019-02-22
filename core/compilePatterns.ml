@@ -11,7 +11,7 @@
 open CommonTypes
 open Utility
 open Ir
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 type pattern = [
 | `Any

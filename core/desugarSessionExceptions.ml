@@ -1,5 +1,5 @@
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 (*
  try { M } as (pat) in { N } otherwise { N' }

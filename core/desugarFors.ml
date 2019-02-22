@@ -1,7 +1,7 @@
 open Utility
 open CommonTypes
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 (*
   Desugaring n-ary for comprehensions with conditions and orderby

@@ -1,6 +1,6 @@
 open CommonTypes
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 (*
   Desugaring database stuff
