@@ -91,6 +91,7 @@ class lite3_database file = object(self)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
   method quote_field s = "\"" ^ self#escape_string s ^ "\""
   method driver_name () = "sqlite3"
+  method supports_shredding () = true
 end
 
 let driver_name = "sqlite3"
