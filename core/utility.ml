@@ -86,26 +86,6 @@ module String = struct
   include String
   let pp = Format.pp_print_string
   let show = fun x -> x
-
-  (* Case insensitive equality test. *)
-  let iequal_ascii xs ys =
-    let char_iequal x y =
-      Char.(equal x y ||
-           (equal (uppercase_ascii x) (uppercase_ascii y)))
-    in
-    let rec equal xs ys ptr len =
-      if ptr < len
-      then let x = String.get xs ptr in
-           let y = String.get ys ptr in
-           if char_iequal x y
-           then equal xs ys (ptr+1) len
-           else false
-      else true
-    in
-    let xslen = String.length xs in
-    if xslen = String.length ys
-    then equal xs ys 0 xslen
-    else false
 end
 
 module Int = struct
