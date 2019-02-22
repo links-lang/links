@@ -17,6 +17,7 @@ type 'a with_pos = { node : 'a
                      [@@deriving show]
 let with_pos   pos node = { node; pos }
 let with_dummy_pos node = { node; pos = dummy_position }
+let tuple_of_with_pos {node; pos} = (node, pos)
 
 (* A type alias to be used inside modules that define a node t and a with_pos
    type, which is a node with attached position.  Alias is required due to
