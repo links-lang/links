@@ -51,13 +51,7 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-type subkind = Linearity.t * Restriction.t
-    [@@deriving eq,show]
-
 let default_subkind : subkind = (lin_unl, res_any)
-
-type freedom = [`Flexible | `Rigid]
-    [@@deriving show]
 
 type kind = PrimaryKind.t * subkind option
     [@@deriving show]

@@ -73,6 +73,9 @@ let res_base    = Restriction.Base
 let res_session = Restriction.Session
 let res_effect  = Restriction.Effect
 
+type subkind = Linearity.t * Restriction.t
+    [@@deriving eq,show]
+
 module PrimaryKind = struct
   type t =
     | Type
@@ -123,3 +126,6 @@ let loc_client  = Location.Client
 let loc_server  = Location.Server
 let loc_native  = Location.Native
 let loc_unknown = Location.Unknown
+
+type freedom = [`Flexible | `Rigid]
+    [@@deriving show]

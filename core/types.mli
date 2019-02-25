@@ -15,12 +15,6 @@ type 'a point = 'a Unionfind.point
 type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
     [@@deriving show]
 
-type subkind = Linearity.t * Restriction.t
-    [@@deriving eq,show]
-
-type freedom = [`Rigid | `Flexible]
-    [@@deriving eq,show]
-
 type kind = PrimaryKind.t * subkind
     [@@deriving eq,show]
 
