@@ -704,13 +704,13 @@ class transform (env : Types.typing_environment) =
       let o = o#restore_envs envs in
       (o, (m, cases, params), t)*)
 
-    method constant : constant -> ('self_type * constant * Types.datatype) =
+    method constant : Constant.t -> ('self_type * Constant.t * Types.datatype) =
       function
-        | `Float v -> (o, `Float v, Types.float_type)
-        | `Int v -> (o, `Int v, Types.int_type)
-        | `String v -> (o, `String v, Types.string_type)
-        | `Bool v -> (o, `Bool v, Types.bool_type)
-        | `Char v -> (o, `Char v, Types.char_type)
+        | Constant.Float v  -> (o, Constant.Float v , Types.float_type )
+        | Constant.Int v    -> (o, Constant.Int v   , Types.int_type   )
+        | Constant.String v -> (o, Constant.String v, Types.string_type)
+        | Constant.Bool v   -> (o, Constant.Bool v  , Types.bool_type  )
+        | Constant.Char v   -> (o, Constant.Char v  , Types.char_type  )
 
     method quantifiers : Types.quantifier list -> ('self_type * Types.quantifier list) =
       fun qs -> (o, qs)

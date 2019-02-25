@@ -1788,7 +1788,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
         let t = Types.fresh_type_variable (lin_unl, res_any) in
         Any, Env.empty, (t, t)
       | Constant c as c' ->
-        let t = Constant.constant_type c in
+        let t = `Primitive (Constant.type_of c) in
         c', Env.empty, (t, t)
       | Variable bndr ->
         let xtype = Types.fresh_type_variable (lin_any, res_any) in
@@ -2170,7 +2170,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             )
         | Section _ as s   -> type_section context s
         (* literals *)
-        | Constant c as c' -> c', Constant.constant_type c, StringMap.empty
+        | Constant c as c' ->
+           c', `Primitive (Constant.type_of c), StringMap.empty
         | TupleLit [p] ->
            let p = tc p in
               TupleLit [erase p], typ p, usages p (* When is a tuple not a tuple? *)
@@ -2498,7 +2499,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 | Some ({node=(id : phrasenode); _}, _, _) ->
                     begin
                       match id with
-                        | Constant (`String id) ->
+                        | Constant (Constant.String id) ->
                             (* HACK: The returned column is encoded as
                                a string.  We check here that it
                                appears as a column in the read type of

@@ -126,7 +126,7 @@ struct
         | `DefVal t     -> [Q.default_of_base_type t]
         | `DefGen g     -> List.map default_of_base_value (gen g)
         | `DefTailGen _ -> []
-        | `Branch i     -> [`Constant (`Int i)]
+        | `Branch i     -> [`Constant (Constant.Int i)]
     in
       concat_map long
 
@@ -239,7 +239,7 @@ struct
 
   let query : Q.t -> clause list =
     fun v ->
-      let q = query [] (`Constant (`Bool true)) v in
+      let q = query [] (`Constant (Constant.Bool true)) v in
       let ss = flatten_tree q in
         ss
 

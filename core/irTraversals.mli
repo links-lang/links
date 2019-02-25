@@ -1,5 +1,6 @@
 open Ir
 open Utility
+open CommonTypes
 
 module type IR_VISITOR =
 sig
@@ -10,7 +11,7 @@ sig
     val tyenv : environment
 
     method lookup_type : var -> Types.datatype
-    method constant : constant -> (constant * Types.datatype * 'self_type)
+    method constant : Constant.t -> (Constant.t * Types.datatype * 'self_type)
     method optionu :
       'a.
       ('self_type -> 'a -> ('a * 'self_type)) ->

@@ -1,6 +1,8 @@
 (* This module contains common datatypes used in ASTs in both the frontend
    (Sugartypes) and typechecker (Types). *)
 
+open Utility
+
 module Linearity = struct
   type t = Any | Unl
     [@@deriving eq,show]
@@ -145,4 +147,34 @@ module Primitive = struct
     | XmlItem -> "XmlItem"
     | DB      -> "Database"
     | String  -> "String"
+end
+
+module Constant = struct
+  type t =
+    | Float  of float
+    | Int    of int
+    | Bool   of bool
+    | String of string
+    | Char   of char
+      [@@deriving show]
+
+  let type_of = function
+    | Float  _ -> Primitive.Float
+    | Int    _ -> Primitive.Int
+    | Bool   _ -> Primitive.Bool
+    | Char   _ -> Primitive.Char
+    | String _ -> Primitive.String
+
+  (* SQL standard for escaping single quotes in a string *)
+  let escape_string s =
+    Str.global_replace (Str.regexp "'") "''" s
+
+  (* This function is actually specific to database query generation; it should
+     be moved to the database module(s). *)
+  let to_string = function
+    | Bool value  -> string_of_bool value
+    | Int value   -> string_of_int value
+    | Char c      -> "'"^ Char.escaped c ^"'"
+    | String s    -> "'" ^ escape_string s ^ "'"
+    | Float value -> string_of_float' value
 end

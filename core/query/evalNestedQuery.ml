@@ -151,7 +151,7 @@ struct
   let static_in = `Primitive "in"
   let static_out = `Primitive "out"
 
-  let dyn_index a = `Constant (`Int a)
+  let dyn_index a = `Constant (Constant.Int a)
 
   let in_index a = pair (dyn_index a) static_in
   let out_index a = pair (dyn_index a) static_out
@@ -275,11 +275,11 @@ struct
       | `Var (x, t) -> `Var (x, t)
       | `Constant c -> `Constant c
       | e when Q.is_list e ->
-        `Concat (query [] [] (`Constant (`Bool true)) e)
+        `Concat (query [] [] (`Constant (Constant.Bool true)) e)
       | _ -> assert false
 
   let query : Q.t -> Q.t list =
-    query [] [] (`Constant (`Bool true))
+    query [] [] (`Constant (Constant.Bool true))
 end
 
 
