@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 open Ir
 
 (** Traversal with type reconstruction
@@ -297,7 +298,7 @@ struct
         | `Wrong t -> `Wrong t, t, o
         | `Database v ->
             let v, _, o = o#value v in
-              `Database v, `Primitive `DB, o
+              `Database v, `Primitive Primitive.DB, o
         | `Table (db, table_name, keys, tt) ->
             let db, _, o = o#value db in
             let keys, _, o = o#value keys in

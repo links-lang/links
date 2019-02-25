@@ -1,3 +1,6 @@
+(* This module contains common datatypes used in ASTs in both the frontend
+   (Sugartypes) and typechecker (Types). *)
+
 module Linearity = struct
   type t = Any | Unl
     [@@deriving eq,show]
@@ -129,3 +132,17 @@ let loc_unknown = Location.Unknown
 
 type freedom = [`Flexible | `Rigid]
     [@@deriving show]
+
+module Primitive = struct
+  type t = Bool | Int | Char | Float | XmlItem | DB | String
+    [@@deriving show]
+
+  let to_string = function
+    | Bool    -> "Bool"
+    | Int     -> "Int"
+    | Char    -> "Char"
+    | Float   -> "Float"
+    | XmlItem -> "XmlItem"
+    | DB      -> "Database"
+    | String  -> "String"
+end

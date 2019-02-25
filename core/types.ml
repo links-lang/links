@@ -16,9 +16,6 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point [@@deriving show]
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String]
-    [@@deriving show]
-
 type kind = PrimaryKind.t * subkind
     [@@deriving eq,show]
 
@@ -136,7 +133,7 @@ type lens_phrase =
 
 type typ =
     [ `Not_typed
-    | `Primitive of primitive
+    | `Primitive of Primitive.t
     | `Function of (typ * row * typ)
     | `Lolli of (typ * row * typ)
     | `Record of row
@@ -177,7 +174,7 @@ and type_arg =
 type session_type = (typ, row) session_type_basis
   [@@deriving show]
 
-let dummy_type = `Primitive `Int
+let dummy_type = `Primitive Primitive.Int
 
 let is_present =
   function
@@ -203,7 +200,7 @@ sig
     method remove_rec_row_binding : int -> 'self_type
     method remove_rec_type_binding : int ->'self_type
 
-    method primitive : primitive -> (primitive * 'self_type)
+    method primitive : Primitive.t -> (Primitive.t * 'self_type)
     method lens_col : lens_col -> (lens_col * 'self_type)
     method lens_sort : lens_sort -> (lens_sort * 'self_type)
     method typ : typ -> (typ * 'self_type)
@@ -476,7 +473,8 @@ end
 (* base type stuff *)
 let rec is_base_type : typ -> bool =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> true
+    | `Primitive (Primitive.Bool | Primitive.Int | Primitive.Char |
+                  Primitive.Float | Primitive.String) -> true
     | `Alias (_, t) -> is_base_type t
     | `MetaTypeVar point ->
         begin
@@ -509,7 +507,8 @@ let rec is_base_row (fields, row_var, _) =
 
 let rec is_baseable_type : typ -> bool =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> true
+    | `Primitive (Primitive.Bool | Primitive.Int | Primitive.Char |
+                  Primitive.Float | Primitive.String) -> true
     | `Alias (_, t) -> is_baseable_type t
     | `MetaTypeVar point ->
         begin
@@ -544,7 +543,8 @@ let rec is_baseable_row (fields, row_var, _) =
 
 let rec basify_type : typ -> unit =
   function
-    | `Primitive ((`Bool | `Int | `Char | `Float | `String)) -> ()
+    | `Primitive (Primitive.Bool | Primitive.Int | Primitive.Char |
+                  Primitive.Float | Primitive.String) -> ()
     | `Alias (_, t) -> basify_type t
     | `MetaTypeVar point ->
         begin
@@ -1606,15 +1606,15 @@ let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
   concrete_type (`ForAll (box_quantifiers qs, t))
 
 (* useful types *)
-let unit_type = `Record (make_empty_closed_row ())
-let string_type = `Primitive `String
-let keys_type = `Application (list, [`Type (`Application (list, [`Type (string_type)]))])
-let char_type = `Primitive `Char
-let bool_type = `Primitive `Bool
-let int_type = `Primitive `Int
-let float_type = `Primitive `Float
-let xml_type = `Alias (("Xml", []), `Application (list, [`Type (`Primitive `XmlItem)]))
-let database_type = `Primitive `DB
+let unit_type     = `Record (make_empty_closed_row ())
+let string_type   = `Primitive Primitive.String
+let keys_type     = `Application (list, [`Type (`Application (list, [`Type string_type]))])
+let char_type     = `Primitive Primitive.Char
+let bool_type     = `Primitive Primitive.Bool
+let int_type      = `Primitive Primitive.Int
+let float_type    = `Primitive Primitive.Float
+let xml_type      = `Alias (("Xml", []), `Application (list, [`Type (`Primitive Primitive.XmlItem)]))
+let database_type = `Primitive Primitive.DB
 
 (* precondition: the row is unwrapped *)
 let is_tuple ?(allow_onetuples=false) (field_env, rowvar, _) =
@@ -1868,10 +1868,6 @@ struct
      hide_fresh=Settings.get_value hide_fresh_type_vars;
      kinds=Settings.get_value show_kinds}
 
-  let primitive : primitive -> string = function
-    | `Bool -> "Bool"  | `Int -> "Int"  | `Char -> "Char"  | `Float   -> "Float"
-    | `XmlItem -> "XmlItem" | `DB -> "Database" | `String -> "String"
-
   let has_kind =
     function
     | "" -> ""
@@ -2028,7 +2024,7 @@ struct
 
       in match t with
           | `Not_typed       -> "not typed"
-          | `Primitive p     -> primitive p
+          | `Primitive p     -> Primitive.to_string p
           | `MetaTypeVar point ->
               begin
                 match Unionfind.find point with

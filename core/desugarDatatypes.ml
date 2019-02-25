@@ -218,7 +218,7 @@ struct
                   `Application (abstype, List.map (type_arg var_env alias_env) ts)
             end
         | Primitive k -> `Primitive k
-        | DB -> `Primitive `DB
+        | DB -> `Primitive Primitive.DB
         | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s -> session_type var_env alias_env s
   and session_type var_env alias_env =
     (* let lookup_type t = StringMap.find t var_env.tenv in  -- used only in commented code *)

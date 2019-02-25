@@ -166,12 +166,12 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
 
 let default_of_base_type =
   function
-    | `Bool   -> `Constant (`Bool false)
-    | `Int    -> `Constant (`Int 42)
-    | `Char   -> `Constant (`Char '?')
-    | `Float  -> `Constant (`Float 0.0)
-    | `String -> `Constant (`String "")
-    | _       -> assert false
+    | Primitive.Bool   -> `Constant (`Bool false)
+    | Primitive.Int    -> `Constant (`Int 42)
+    | Primitive.Char   -> `Constant (`Char '?')
+    | Primitive.Float  -> `Constant (`Float 0.0)
+    | Primitive.String -> `Constant (`String "")
+    | _                -> assert false
 
 let rec value_of_expression = fun v ->
   let ve = value_of_expression in

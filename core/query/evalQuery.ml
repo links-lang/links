@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 module Q = Query
 module S = Sql
 
@@ -50,7 +51,7 @@ struct
      e.g. by converting tail generators to non-tail generators. *)
 
   type order_index = [ `Val of Q.t | `Gen of gen | `TailGen of gen
-                     | `DefVal of Types.primitive | `DefGen of gen | `DefTailGen of gen
+                     | `DefVal of Primitive.t | `DefGen of gen | `DefTailGen of gen
                      | `Branch of int ]
 
   (* TODO:

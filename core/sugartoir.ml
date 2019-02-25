@@ -461,7 +461,7 @@ struct
               lift (`Case (v, StringMap.empty, None), t))
 
   let database s =
-    bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
+    bind s (fun v -> lift (`Special (`Database v), `Primitive Primitive.DB))
 
   let table_handle (database, table, keys, (r, w, n)) =
     bind database
@@ -967,8 +967,8 @@ struct
                                            "XML forest literals cannot have attributes"))
                   else
                     cofv
-                      (I.concat (instantiate "Nil" [`Type (`Primitive `XmlItem)],
-                                 instantiate "Concat" [`Type (`Primitive `XmlItem); `Row eff],
+                      (I.concat (instantiate "Nil" [`Type (`Primitive Primitive.XmlItem)],
+                                 instantiate "Concat" [`Type (`Primitive Primitive.XmlItem); `Row eff],
                                  List.map ev children))
                 else
                   let attrs = alistmap (List.map ev) attrs in

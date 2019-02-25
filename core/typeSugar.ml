@@ -1442,7 +1442,7 @@ let type_binary_op ctxt =
       let a = Types.fresh_type_variable (lin_any, res_any) in
       let eff = (StringMap.empty, Types.fresh_row_variable (lin_any, res_any), false) in
         ([`Type a; `Row eff],
-         `Function (Types.make_tuple_type [a; a], eff, `Primitive `Bool),
+         `Function (Types.make_tuple_type [a; a], eff, `Primitive Primitive.Bool),
          StringMap.empty)
   | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
   | Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (StringMap.singleton n 1)
@@ -2344,7 +2344,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let driver = opt_map tc driver
             and args   = opt_map tc args
             and name   = tc name in
-              DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), `Primitive `DB,
+              DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), `Primitive Primitive.DB,
               merge_usages [from_option StringMap.empty (opt_map usages driver); from_option StringMap.empty (opt_map usages args); usages name]
         | TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
             let tname = tc tname
@@ -3009,7 +3009,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and t = tc t
             and e = tc e in
               unify ~handle:Gripers.if_condition
-                (pos_and_typ i, no_pos (`Primitive `Bool));
+                (pos_and_typ i, no_pos (`Primitive Primitive.Bool));
               unify ~handle:Gripers.if_branches
                 (pos_and_typ t, pos_and_typ e);
               Conditional (erase i, erase t, erase e), (typ t), merge_usages [usages i; usage_compat [usages t; usages e]]

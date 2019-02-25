@@ -12,9 +12,6 @@ module TypeVarMap : Utility.INTMAP
 (* points *)
 type 'a point = 'a Unionfind.point
 
-type primitive = [ `Bool | `Int | `Char | `Float | `XmlItem | `DB | `String ]
-    [@@deriving show]
-
 type kind = PrimaryKind.t * subkind
     [@@deriving eq,show]
 
@@ -92,7 +89,7 @@ type lens_phrase =
 
 type typ =
     [ `Not_typed
-    | `Primitive of primitive
+    | `Primitive of Primitive.t
     | `Function of (typ * row * typ)
     | `Lolli of (typ * row * typ)
     | `Record of row
@@ -394,7 +391,7 @@ sig
     method remove_rec_row_binding : int -> 'self_type
     method remove_rec_type_binding : int ->'self_type
 
-    method primitive : primitive -> (primitive * 'self_type)
+    method primitive : Primitive.t -> (Primitive.t * 'self_type)
     method lens_col : lens_col -> (lens_col * 'self_type)
     method lens_sort : lens_sort -> (lens_sort * 'self_type)
     method typ : typ -> (typ * 'self_type)

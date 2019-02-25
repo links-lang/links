@@ -972,12 +972,12 @@ primary_datatype:
 | kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { let open Datatype in
                                                                  match $1 with
-                                                                   | "Bool"    -> Primitive `Bool
-                                                                   | "Int"     -> Primitive `Int
-                                                                   | "Char"    -> Primitive `Char
-                                                                   | "Float"   -> Primitive `Float
-                                                                   | "XmlItem" -> Primitive `XmlItem
-                                                                   | "String"  -> Primitive `String
+                                                                   | "Bool"    -> Primitive Primitive.Bool
+                                                                   | "Int"     -> Primitive Primitive.Int
+                                                                   | "Char"    -> Primitive Primitive.Char
+                                                                   | "Float"   -> Primitive Primitive.Float
+                                                                   | "XmlItem" -> Primitive Primitive.XmlItem
+                                                                   | "String"  -> Primitive Primitive.String
                                                                    | "Database"-> DB
                                                                    | t         -> TypeApplication (t, [])
                                                                }

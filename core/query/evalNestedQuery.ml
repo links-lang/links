@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 module Q = Query
 module S = Sql
 
@@ -48,25 +49,25 @@ let pair x y = tuple [x; y]
 module Shred =
 struct
   type nested_type =
-    [ `Primitive of Types.primitive
+    [ `Primitive of Primitive.t
     | `Record of nested_type StringMap.t
     | `List of nested_type ]
       [@@deriving show]
 
   type 'a shredded = [`Primitive of 'a | `Record of ('a shredded) StringMap.t]
       [@@deriving show]
-  type shredded_type = Types.primitive shredded
+  type shredded_type = Primitive.t shredded
       [@@deriving show]
   type shredded_value = Value.t shredded
       [@@deriving show]
 
   type flat_type =
-    [ `Primitive of Types.primitive
-    | `Record of Types.primitive StringMap.t ]
+    [ `Primitive of Primitive.t
+    | `Record of Primitive.t StringMap.t ]
       [@@deriving show]
 
   type 'a package =
-    [ `Primitive of Types.primitive
+    [ `Primitive of Primitive.t
     | `Record of 'a package StringMap.t
     | `List of 'a package * 'a ]
       [@@deriving show]
@@ -208,8 +209,8 @@ struct
       | `Record fields -> `Record (StringMap.map shred_inner_type fields)
       | `List _        ->
         `Record
-          (StringMap.add "1" (`Primitive `Int)
-            (StringMap.add "2" (`Primitive `Int) StringMap.empty))
+          (StringMap.add "1" (`Primitive Primitive.Int)
+            (StringMap.add "2" (`Primitive Primitive.Int) StringMap.empty))
 
   let rec shred_outer_type : nested_type -> path -> shredded_type =
     fun t p ->
@@ -218,8 +219,8 @@ struct
           `Record
             (StringMap.add "1"
                (`Record
-                   (StringMap.add "1" (`Primitive `Int)
-                      (StringMap.add "2" (`Primitive `Int)
+                   (StringMap.add "1" (`Primitive Primitive.Int)
+                      (StringMap.add "2" (`Primitive Primitive.Int)
                          StringMap.empty)))
                (StringMap.add "2" (shred_inner_type t)
                   StringMap.empty))

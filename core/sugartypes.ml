@@ -87,7 +87,7 @@ module Datatype = struct
     | Table           of with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of (string * type_arg list)
-    | Primitive       of Types.primitive
+    | Primitive       of Primitive.t
     | DB
     | Input           of with_pos * with_pos
     | Output          of with_pos * with_pos

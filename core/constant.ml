@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 
 type constant =
     [ `Float  of float
@@ -9,11 +10,11 @@ type constant =
       [@@deriving show]
 
 let constant_type = function
-  | `Float _  -> `Primitive `Float
-  | `Int _    -> `Primitive `Int
-  | `Bool _   -> `Primitive `Bool
-  | `Char _   -> `Primitive `Char
-  | `String _ -> `Primitive `String
+  | `Float _  -> `Primitive Primitive.Float
+  | `Int _    -> `Primitive Primitive.Int
+  | `Bool _   -> `Primitive Primitive.Bool
+  | `Char _   -> `Primitive Primitive.Char
+  | `String _ -> `Primitive Primitive.String
 
 let escape_string s = (* SQL standard for escaping single quotes in a string *)
   Str.global_replace (Str.regexp "'") "''" s

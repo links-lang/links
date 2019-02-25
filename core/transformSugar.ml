@@ -53,7 +53,8 @@ let type_binary_op env tycon_env =
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
       let eb, e = Types.fresh_row_quantifier (lin_any, res_any) in
         `ForAll (Types.box_quantifiers [ab; eb],
-                 `Function (Types.make_tuple_type [a; a], e, `Primitive `Bool))
+                 `Function (Types.make_tuple_type [a; a], e,
+                            `Primitive Primitive.Bool))
   | Name "!"     -> TyEnv.lookup env "Send"
   | Name n       -> TyEnv.lookup env n
 
@@ -514,7 +515,7 @@ class transform (env : Types.typing_environment) =
           let (o, name, _) = o#phrase name in
           let (o, driver, _) = option o (fun o -> o#phrase) driver in
           let (o, args, _) = option o (fun o -> o#phrase) args in
-            (o, DatabaseLit (name, (driver, args)), `Primitive `DB)
+            (o, DatabaseLit (name, (driver, args)), `Primitive Primitive.DB)
       | LensLit (table, Some t) ->
          let (o, table, _) = o#phrase table in
          let (o, t) = o#lens_sort t in
