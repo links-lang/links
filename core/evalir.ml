@@ -138,11 +138,11 @@ struct
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
-    | `Constant `Bool b -> `Bool b
-    | `Constant `Int n -> `Int n
-    | `Constant `Char c -> `Char c
-    | `Constant `String s -> Value.box_string s
-    | `Constant `Float f -> `Float f
+    | `Constant (Constant.Bool   b) -> `Bool b
+    | `Constant (Constant.Int    n) -> `Int n
+    | `Constant (Constant.Char   c) -> `Char c
+    | `Constant (Constant.String s) -> Value.box_string s
+    | `Constant (Constant.Float  f) -> `Float f
     | `Variable var -> lookup_var var env
 (*
         begin

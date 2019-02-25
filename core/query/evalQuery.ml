@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 module Q = Query
 module S = Sql
 
@@ -50,7 +51,7 @@ struct
      e.g. by converting tail generators to non-tail generators. *)
 
   type order_index = [ `Val of Q.t | `Gen of gen | `TailGen of gen
-                     | `DefVal of Types.primitive | `DefGen of gen | `DefTailGen of gen
+                     | `DefVal of Primitive.t | `DefGen of gen | `DefTailGen of gen
                      | `Branch of int ]
 
   (* TODO:
@@ -125,7 +126,7 @@ struct
         | `DefVal t     -> [Q.default_of_base_type t]
         | `DefGen g     -> List.map default_of_base_value (gen g)
         | `DefTailGen _ -> []
-        | `Branch i     -> [`Constant (`Int i)]
+        | `Branch i     -> [`Constant (Constant.Int i)]
     in
       concat_map long
 
@@ -238,7 +239,7 @@ struct
 
   let query : Q.t -> clause list =
     fun v ->
-      let q = query [] (`Constant (`Bool true)) v in
+      let q = query [] (`Constant (Constant.Bool true)) v in
       let ss = flatten_tree q in
         ss
 

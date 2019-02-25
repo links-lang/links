@@ -51,13 +51,7 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-type subkind = Linearity.t * Restriction.t
-    [@@deriving eq,show]
-
 let default_subkind : subkind = (lin_unl, res_any)
-
-type freedom = [`Flexible | `Rigid]
-    [@@deriving show]
 
 type kind = PrimaryKind.t * subkind option
     [@@deriving show]
@@ -93,7 +87,7 @@ module Datatype = struct
     | Table           of with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of (string * type_arg list)
-    | Primitive       of Types.primitive
+    | Primitive       of Primitive.t
     | DB
     | Input           of with_pos * with_pos
     | Output          of with_pos * with_pos
@@ -122,9 +116,6 @@ end
 type datatype' = Datatype.with_pos * Types.datatype option
     [@@deriving show]
 
-type constant = Constant.constant
-    [@@deriving show]
-
 module Pattern = struct
   type t =
     | Any
@@ -136,7 +127,7 @@ module Pattern = struct
     | Negative of name list
     | Record   of (name * with_pos) list * with_pos option
     | Tuple    of with_pos list
-    | Constant of constant
+    | Constant of Constant.t
     | Variable of binder
     | As       of binder * with_pos
     | HasType  of with_pos * datatype'
@@ -203,7 +194,7 @@ and iterpatt =
   | List  of (Pattern.with_pos * phrase)
   | Table of (Pattern.with_pos * phrase)
 and phrasenode =
-  | Constant         of constant
+  | Constant         of Constant.t
   | Var              of name
   | QualifiedVar     of name list
   | FunLit           of ((Types.datatype * Types.row) list) option *

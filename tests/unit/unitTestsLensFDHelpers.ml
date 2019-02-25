@@ -7,6 +7,7 @@ open Links_core
 open Types
 open Value
 open Utility
+open CommonTypes
 
 module Fun_dep = Lens.Fun_dep
 
@@ -45,7 +46,7 @@ let construct_join_lens fd_set name data =
   let cols = Fun_dep.Set.fold (fun fd fld -> Lens.Alias.Set.union_all [Fun_dep.left fd; Fun_dep.right fd; fld]) fd_set Lens.Alias.Set.empty in
   let cols = Lens.Alias.Set.elements cols in
   let colFn tbl name = {
-    alias = name;  name = name; table = tbl; typ = `Primitive `Int; present = true
+    alias = name;  name = name; table = tbl; typ = `Primitive Primitive.Int; present = true
   } in
   let l1 = `LensMem ((`List data), (fd_set, None, List.map (colFn name) cols)) in
   l1

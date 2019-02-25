@@ -468,7 +468,7 @@ struct
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
 
-            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive `String) t (`Value orig)) attribute_types in
+            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive Primitive.String) t (`Value orig)) attribute_types in
             let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t (`Value orig)) children_types in
               `XmlNode (tag, attributes, children), Types.xml_type, o
 
@@ -626,7 +626,7 @@ struct
             let v, vt, o = o#value v in
             let left, lt, o = o#computation left in
             let right, rt, o = o#computation right in
-            o#check_eq_types vt (`Primitive `Bool) (`TC orig);
+            o#check_eq_types vt (`Primitive Primitive.Bool) (`TC orig);
             o#check_eq_types lt rt (`TC orig);
             `If (v, left, right), lt, o
 
@@ -639,7 +639,7 @@ struct
             List.iter (fun field ->
                 o#check_eq_types (project_type field vt) Types.string_type (`Special special)
               ) ["name"; "args"; "driver"];
-            `Database v, `Primitive `DB, o
+            `Database v, `Primitive Primitive.DB, o
 
         | `Table (db, table_name, keys, tt) ->
             let db, db_type, o = o#value db in
