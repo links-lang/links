@@ -3945,7 +3945,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
            Types.make_type_unl a
          else
            Gripers.non_linearity pos uses x a;
-       let (_, grab_ty, _) = type_check context (with_dummy_pos (Sugartypes.Var "receive")) in
+       let (_, grab_ty, _) = type_check context (var "receive") in
        let tyargs =
          match Types.concrete_type grab_ty with
          | `ForAll (qs, _t) ->
@@ -3975,7 +3975,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
              (t, ctype);
        let (p, t, u') = with_channel c s (type_cp (bind_var context (c, s)) p) in
 
-       let (_, give_ty, _) = type_check context (with_dummy_pos (Sugartypes.Var "send")) in
+       let (_, give_ty, _) = type_check context (var "send") in
        let tyargs =
          match Types.concrete_type give_ty with
          | `ForAll (qs, _t) ->
