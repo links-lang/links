@@ -10,82 +10,72 @@ let trim_initial_newline s =
   else s
 
 class source_code =
-  object (self)
-    val lines =
-      let tbl = Hashtbl.create default_lines in
-      Hashtbl.add tbl 0 0;
-      tbl
-    val text = Buffer.create default_chars
+object (self)
+  val lines =
+    let tbl = Hashtbl.create default_lines in
+    Hashtbl.add tbl 0 0;
+    tbl
+  val text = Buffer.create default_chars
 
-    (* Return the portion of source code that falls between two positions *)
-    method private extract_substring (start : Lexing.position) (finish : Lexing.position) =
-      try
-        Buffer.sub text start.Lexing.pos_cnum (finish.Lexing.pos_cnum - start.Lexing.pos_cnum)
-      with Invalid_argument _ -> "*** DUMMY POSITION ****"
+  (* Return the portion of source code that falls between two positions *)
+  method private extract_substring (start : Lexing.position) (finish : Lexing.position) =
+    try
+      Buffer.sub text start.Lexing.pos_cnum (finish.Lexing.pos_cnum - start.Lexing.pos_cnum)
+    with Invalid_argument _ -> "*** DUMMY POSITION ****"
 
-    (* Return some lines of the source code *)
-    method extract_line_range (startline : int) (finishline : int) =
-      try
-        let start  = Hashtbl.find lines startline
-        and finish = (if finishline = Hashtbl.length lines
-        (* handle the last line of input *)
-                      then Buffer.length text
-                      else Hashtbl.find lines finishline)
-        in
-        trim_initial_newline (Buffer.sub text (start) (finish - start))
-      with NotFound _ -> "<unknown>"
+  (* Return some lines of the source code *)
+  method extract_line_range (startline : int) (finishline : int) =
+    try
+      let start  = Hashtbl.find lines startline
+      and finish = (if finishline = Hashtbl.length lines
+      (* handle the last line of input *)
+                    then Buffer.length text
+                    else Hashtbl.find lines finishline)
+      in
+      trim_initial_newline (Buffer.sub text (start) (finish - start))
+    with NotFound _ -> "<unknown>"
 
-    (* Return one line of the source code *)
-    method private extract_line (line : int) =
-      self#extract_line_range (line - 1) line
+  (* Return one line of the source code *)
+  method private extract_line (line : int) =
+    self#extract_line_range (line - 1) line
 
-    (* Given a function `infun' as required by Lexing.from_function,
-       return another such function that stores the text read in `code'.
-    *)
-    method parse_into (infun : bytes -> int -> int) : bytes -> int -> int =
-      fun buffer nchars ->
-      let nchars = infun buffer nchars in
-      List.iter (fun linepos ->
-          Hashtbl.add lines
-            (Hashtbl.length lines)
-            (linepos + Buffer.length text))
-        (Utility.find_char (Bytes.sub buffer 0 nchars) '\n');
-      Buffer.add_subbytes text buffer 0 nchars;
-      nchars
+  (* Given a function `infun' as required by Lexing.from_function,
+     return another such function that stores the text read in `code'.
+  *)
+  method parse_into (infun : bytes -> int -> int) : bytes -> int -> int =
+    fun buffer nchars ->
+    let nchars = infun buffer nchars in
+    List.iter (fun linepos ->
+        Hashtbl.add lines
+          (Hashtbl.length lines)
+          (linepos + Buffer.length text))
+      (Utility.find_char (Bytes.sub buffer 0 nchars) '\n');
+    Buffer.add_subbytes text buffer 0 nchars;
+    nchars
 
-    (* Retrieve the last line of source code read. *)
-    method find_line (pos : Lexing.position) : (string * int) =
-      (self#extract_line pos.Lexing.pos_lnum,
-       abs @@ pos.Lexing.pos_cnum - Hashtbl.find lines (pos.Lexing.pos_lnum -1) - 1)
+  (* Retrieve the last line of source code read. *)
+  method find_line (pos : Lexing.position) : (string * int) =
+    (self#extract_line pos.Lexing.pos_lnum,
+     abs @@ pos.Lexing.pos_cnum - Hashtbl.find lines (pos.Lexing.pos_lnum -1) - 1)
 
-    (* Create a `lookup function' that given start and finish positions
-       returns a resolved position
-    *)
-    method lookup =
-      fun (start, finish) ->
-      (start,
-       self#extract_line start.Lexing.pos_lnum,
-       self#extract_substring start finish)
-  end
+  (* Create a `lookup function' that given start and finish positions
+     returns a resolved position
+  *)
+  method lookup =
+    fun (start, finish) ->
+    (start,
+     self#extract_line start.Lexing.pos_lnum,
+     self#extract_substring start finish)
+end
 
 module Lexpos = struct
   type t = Lexing.position
-
-  module LexposType = struct
-    type a = t
-    let tname = "SourceCode.lexpos"
-  end
 
   let pp fmt _ =
     (** Supress lexpos output**)
     Utility.format_omission fmt
 
   let show v = Format.asprintf "%a" pp v
-
-  module SourceCodePos = struct
-    type a = source_code
-    let tname = "SourceCode.source_code"
-  end
 end
 
 

@@ -18,16 +18,6 @@ class source_code :
 module Lexpos : sig
   type t = Lexing.position
   [@@deriving show]
-
-  module LexposType : sig
-    type a = t
-    val tname : string
-  end
-
-  module SourceCodePos : sig
-    type a = source_code
-    val tname : string
-  end
 end
 
 (** A module for keeping track of source code positions. *)
