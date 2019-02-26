@@ -825,7 +825,7 @@ and match_record
                     else
                       let xt = TypeUtils.project_type name t in
                       let xb, x = Var.fresh_var_of_type xt in
-                        ([], Pattern.Variable xb)::ps, StringMap.add name (Variable x) fields)
+                        ([], mk_variable xb)::ps, StringMap.add name (Variable x) fields)
                names
                ([], StringMap.empty) in
            let rps, body =
@@ -861,7 +861,7 @@ and match_record
                              ((apply_annotation (Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
-                 ([], Pattern.Variable restb)::rps, body in
+                 ([], mk_variable restb)::rps, body in
            let ps = List.rev rps @ ps in
              (annotation, (ps, body))::annotated_clauses
         ) xs [] in
@@ -1003,9 +1003,9 @@ let compile_handle_cases
                 let variant_pat =
                   match ps with
                   | [Pattern.Effect (name, [], _)] ->
-                     Pattern.Variant (name, mk_any)
+                     mk_variant (name, mk_any)
                   | [Pattern.Effect (name, [p], _)] ->
-                     Pattern.Variant (name, p)
+                     mk_variant (name, p)
                   | [Pattern.Effect (name, ps, _)] ->
                      let packaged_args =
                        let fields =
@@ -1013,7 +1013,7 @@ let compile_handle_cases
                        in
                        mk_record (StringMap.from_alist fields, None)
                      in
-                     Pattern.Variant (name, packaged_args)
+                     mk_variant (name, packaged_args)
                   | _ -> assert false
                 in
               [variant_pat], body)
