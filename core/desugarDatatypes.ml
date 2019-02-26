@@ -1,6 +1,6 @@
 open CommonTypes
 open Types
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 open Sugartypes
 open Utility
 open List

@@ -85,22 +85,17 @@ module Position : sig
 end
 
 module WithPos : sig
-  (** Module for legacy support. Try not to use this in new code. *)
-  module Legacy : sig
-    type 'a with_pos = {
-      node : 'a;
-      pos : Position.t;
-    } [@@deriving show]
-
-    val with_pos : Position.t -> 'a -> 'a with_pos
-    val with_dummy_pos : 'a -> 'a with_pos
-    val tuple_of_with_pos : 'a with_pos -> 'a * Position.t
-  end
-
-  type 'a t = 'a Legacy.with_pos [@@deriving show]
+  type 'a t = { node : 'a
+              ; pos  : Position.t
+              } [@@deriving show]
 
   (** Construct a new with_pos given a node and an optional source code position. Use the [dummy] position if none is specified. *)
   val make : ?pos:Position.t -> 'a -> 'a t
+
+  (** Construct a new with_pos with a dummy source position *)
+  val dummy : 'a -> 'a t
+
+  val tuple_of_with_pos : 'a t -> 'a * Position.t
 
   (** Fetch the corresponding node. *)
   val node : 'a t -> 'a

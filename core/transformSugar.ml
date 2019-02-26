@@ -2,7 +2,7 @@ open CommonTypes
 open Operators
 open Sugartypes
 open SourceCode
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 open Utility
 
 module TyEnv = Env.String

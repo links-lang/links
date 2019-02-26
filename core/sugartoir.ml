@@ -2,7 +2,7 @@ open CommonTypes
 open Operators
 open Utility
 open SourceCode
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 open Ir
 
 (* {0 Sugar To IR}
@@ -1211,7 +1211,7 @@ struct
 (*     Debug.print (Sugartypes.show_program (bindings, body)); *)
     let body =
       match body with
-        | None -> with_dummy_pos (Sugartypes.RecordLit ([], None))
+        | None -> WithPos.dummy (Sugartypes.RecordLit ([], None))
         | Some body -> body in
       let s = eval_bindings `Global env bindings body in
         let r = (I.reify s) in

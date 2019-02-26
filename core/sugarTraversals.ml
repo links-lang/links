@@ -11,7 +11,7 @@
 open Operators
 open CommonTypes
 open SourceCode
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 open Sugartypes
 
 class map =

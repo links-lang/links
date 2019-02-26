@@ -4,7 +4,7 @@ open Operators
 open Sugartypes
 open SugarConstructors.SugartypesPositions
 open SourceCode
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 

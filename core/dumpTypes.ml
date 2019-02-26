@@ -9,7 +9,7 @@
   particular that there are no free variables.
 *)
 
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 
 let program =
   fun ({Types.var_env=env; Types.tycon_env=_; effect_row=_} as tyenv) code ->

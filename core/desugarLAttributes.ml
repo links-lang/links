@@ -4,7 +4,7 @@ open Sugartypes
 open List
 open SugarConstructors.SugartypesPositions
 open SourceCode
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 
 (* TODO:
 

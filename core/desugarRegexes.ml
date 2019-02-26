@@ -1,5 +1,5 @@
 open Operators
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 open Sugartypes
 open SugarConstructors.DummyPositions
 

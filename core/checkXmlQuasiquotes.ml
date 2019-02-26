@@ -1,5 +1,5 @@
 open SourceCode
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 open Sugartypes
 
 (* check that:

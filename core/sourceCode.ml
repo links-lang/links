@@ -163,25 +163,14 @@ module Position = struct
 end
 
 module WithPos = struct
-  module Legacy = struct
-      type 'a with_pos = {
-      node : 'a;
-      pos  : Position.t;
-    }
-    [@@deriving show]
-
-    let make ?(pos = Position.dummy) node = { node; pos }
-
-    let with_pos pos node = make ~pos node
-    let with_dummy_pos node = make node
-    let tuple_of_with_pos t = t.node, t.pos
-  end
-
-  open Legacy
-
-  type 'a t = 'a with_pos [@@deriving show]
+  type 'a t = { node : 'a
+              ; pos  : Position.t
+              } [@@deriving show]
 
   let make ?(pos = Position.dummy) node = { node; pos }
+  let dummy node = make node
+  (* JSTOLAREK: remove this? *)
+  let tuple_of_with_pos t = t.node, t.pos
 
   let node t = t.node
 

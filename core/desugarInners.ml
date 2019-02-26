@@ -1,6 +1,6 @@
 open Utility
 open Operators
-open SourceCode.WithPos.Legacy
+open SourceCode.WithPos
 open Sugartypes
 
 (* Recursive functions must be used monomorphically inside their
