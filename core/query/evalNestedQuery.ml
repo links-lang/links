@@ -1,13 +1,14 @@
 open Utility
 open CommonTypes
 module Q = Query
+module QL = Query.Lang
 module S = Sql
 
 (* generate a unique tag for each comprehension in
    a normalised query
 *)
 
-let tag_query : Q.t -> Q.t =
+let tag_query : QL.t -> QL.t =
   fun e ->
     let r = ref 1 in
     let next () =
@@ -15,30 +16,31 @@ let tag_query : Q.t -> Q.t =
         r := v+1;
         v in
     let rec tag =
+    let open Q.Lang in
       function
-        | `For (_, gs, os, body) ->
-          `For (Some (next()), gs, os, tag body)
-        | `If (c, t, e) ->
-          `If (tag c, tag t, tag e)
-        | `Table t -> `Table t
-        | `Singleton e -> `Singleton (tag e)
-        | `Concat es ->
-          `Concat (List.map tag es)
-        | `Record fields -> `Record (StringMap.map tag fields)
-        | `Project (e, l) -> `Project (tag e, l)
-        | `Erase (e, fields) -> `Erase (tag e, fields)
-        | `Variant (l, e) -> `Variant (l, tag e)
-        | `XML v -> `XML v
-        | `Apply (f, es) -> `Apply (f, List.map tag es)
-        | `Closure ((xs, body), env) -> `Closure ((xs, body), env)
-        | `Primitive p -> `Primitive p
-        | `Var (x, t) -> `Var (x, t)
-        | `Constant c -> `Constant c
-        | `Database db -> `Database db
+        | For (_, gs, os, body) ->
+          For (Some (next()), gs, os, tag body)
+        | If (c, t, e) ->
+          If (tag c, tag t, tag e)
+        | Table t -> Table t
+        | Singleton e -> Singleton (tag e)
+        | Concat es ->
+          Concat (List.map tag es)
+        | Record fields -> Record (StringMap.map tag fields)
+        | Project (e, l) -> Project (tag e, l)
+        | Erase (e, fields) -> Erase (tag e, fields)
+        | Variant (l, e) -> Variant (l, tag e)
+        | XML v -> XML v
+        | Apply (f, es) -> Apply (f, List.map tag es)
+        | Closure ((xs, body), env) -> Closure ((xs, body), env)
+        | Primitive p -> Primitive p
+        | Var (x, t) -> Var (x, t)
+        | Constant c -> Constant c
+        | Database db -> Database db
     in
       tag e
 
-let tuple xs = `Record (snd
+let tuple xs = QL.Record (snd
                           (List.fold_left
                              (fun (i, fields) x ->
                                (i+1, StringMap.add (string_of_int i) x fields))
@@ -143,63 +145,65 @@ struct
 
   let rec split_conditions f =
     function
-      | `If (c, t, `Concat []) ->
-        split_conditions (fun body -> f (`If (c, body, `Concat []))) t
-      | `Singleton body -> f, body
+      | QL.If (c, t, QL.Concat []) ->
+        split_conditions (fun body -> f (QL.If (c, body, QL.Concat []))) t
+      | QL.Singleton body -> f, body
       | _ -> assert false
 
-  let static_in = `Primitive "in"
-  let static_out = `Primitive "out"
+  let static_in = QL.Primitive "in"
+  let static_out = QL.Primitive "out"
 
-  let dyn_index a = `Constant (Constant.Int a)
+  let dyn_index a = QL.Constant (Constant.Int a)
 
   let in_index a = pair (dyn_index a) static_in
   let out_index a = pair (dyn_index a) static_out
 
   (* inner shredding function *)
   let rec shinner a =
+    let open Q.Lang in
     function
-      | `Project p -> `Project p
-      | `Apply ("Empty", [e]) -> `Apply ("Empty", [shred_outer e []])
-      | `Apply ("length", [e]) -> `Apply ("length", [shred_outer e []])
-      | `Apply (f, vs) -> `Apply (f, List.map (shinner a) vs)
-      | `Record fields ->
-        `Record (StringMap.map (shinner a) fields)
+      | Project (v,l) -> Project (v,l)
+      | Apply ("Empty", [e]) -> Apply ("Empty", [shred_outer e []])
+      | Apply ("length", [e]) -> Apply ("length", [shred_outer e []])
+      | Apply (f, vs) -> Apply (f, List.map (shinner a) vs)
+      | Record fields ->
+        Record (StringMap.map (shinner a) fields)
       | e when Q.is_list e ->
         in_index a
       | e -> e
 
   (* outer shredding function *)
-  and shouter a p : Q.t -> Q.t list =
+  and shouter a p : QL.t -> QL.t list =
+    let open QL in
     function
-      | `Concat cs ->
+      | Concat cs ->
         concat_map (shouter a p) cs
-      | `Record fields ->
+      | Record fields ->
         begin
           match p with
             | (`Record l :: p) ->
               shouter a p (StringMap.find l fields)
             | _ -> assert false
         end
-      | `For (Some b, gs, os, body) ->
+      | For (Some b, gs, os, body) ->
         let f, body = split_conditions (fun x -> x) body in
           begin
             match p with
               | [] ->
-                [`For (Some b, gs, os, f (`Singleton (pair (out_index a) (shinner b body))))]
+                [For (Some b, gs, os, f (Singleton (pair (out_index a) (shinner b body))))]
               | (`List :: p) ->
                 List.map
-                  (fun c -> `For (Some b, gs, os, f c))
+                  (fun c -> For (Some b, gs, os, f c))
                   (shouter b p body)
               | _ -> assert false
           end
       | e ->
-         Debug.print ("Can't apply shouter to: " ^ Q.show e);
+         Debug.print ("Can't apply shouter to: " ^ QL.show e);
          assert false
 
-  and shred_outer q p = `Concat (shouter top p q)
+  and shred_outer q p = QL.Concat (shouter top p q)
 
-  let shred_query : Q.t -> nested_type -> Q.t package =
+  let shred_query : QL.t -> nested_type -> QL.t package =
     fun q t -> package (shred_outer q) t
 
 
@@ -249,57 +253,59 @@ end
 *)
 module Split =
 struct
-  type gen = Var.var * Q.t
+  type gen = Var.var * QL.t
 
-  let rec query : gen list -> Q.t list -> Q.t -> Q.t -> Q.t list =
+  let rec query : gen list -> QL.t list -> QL.t -> QL.t -> QL.t list =
     fun gs os cond ->
+      let open QL in
       function
-        | `Singleton r ->
-          [`For (None, gs, os, Q.Eval.reduce_where_then (cond, `Singleton (inner r)))]
-        | `Concat vs ->
+        | Singleton r ->
+          [For (None, gs, os, Q.Eval.reduce_where_then (cond, Singleton (inner r)))]
+        | Concat vs ->
           concat_map (query gs os cond) vs
-        | `If (cond', v, `Concat []) ->
+        | If (cond', v, Concat []) ->
           query gs os (Q.Eval.reduce_and (cond, cond')) v
-        | `For (_, gs', os', body) ->
+        | For (_, gs', os', body) ->
           query (gs @ gs') (os @ os') cond body
         | _ -> assert false
 
   and inner =
+    let open QL in
     function
-      | `If (c, t, e) ->
-        `If (inner c, inner t, inner e)
-      | `Record fields -> `Record (StringMap.map inner fields)
-      | `Project (e, l) -> `Project (inner e, l)
-      | `Apply (f, es) -> `Apply (f, List.map inner es)
-      | `Primitive p -> `Primitive p
-      | `Var (x, t) -> `Var (x, t)
-      | `Constant c -> `Constant c
+      | If (c, t, e) ->
+        If (inner c, inner t, inner e)
+      | Record fields -> Record (StringMap.map inner fields)
+      | Project (e, l) -> Project (inner e, l)
+      | Apply (f, es) -> Apply (f, List.map inner es)
+      | Primitive p -> Primitive p
+      | Var (x, t) -> Var (x, t)
+      | Constant c -> Constant c
       | e when Q.is_list e ->
-        `Concat (query [] [] (`Constant (Constant.Bool true)) e)
+        Concat (query [] [] (Constant (Constant.Bool true)) e)
       | _ -> assert false
 
-  let query : Q.t -> Q.t list =
-    query [] [] (`Constant (Constant.Bool true))
+  let query : QL.t -> QL.t list =
+    query [] [] (QL.Constant (Constant.Bool true))
 end
 
 
 module LetInsertion =
 struct
-  type let_clause = Var.var * Q.t * Var.var * Q.t
+  type let_clause = Var.var * QL.t * Var.var * QL.t
       [@@deriving show]
   type query = let_clause list
       [@@deriving show]
 
-  type cond = Q.t option
-  type gen = Var.var * Q.t
+  type cond = QL.t option
+  type gen = Var.var * QL.t
 
   let where c e =
     match c with
       | None -> e
       | Some c ->
-        `If (c, e, `Concat [])
+        QL.If (c, e, QL.Concat [])
 
-  let index = `Primitive "index"
+  let index = QL.Primitive "index"
 
   let position_of x =
     let rec position_of x i =
@@ -324,32 +330,32 @@ struct
       | _::y::xs -> last (y::xs)
       | []       -> assert false
 
-  let rec gens : Q.t -> (gen list) list =
+  let rec gens : QL.t -> (gen list) list =
     function
-      | `Singleton _           -> []
-      | `If (_, t, `Concat []) -> gens t
-      | `For (_, gs, _, e)     -> gs :: gens e
+      | QL.Singleton _           -> []
+      | QL.If (_, t, QL.Concat []) -> gens t
+      | QL.For (_, gs, _, e)     -> gs :: gens e
       | _                      -> assert false
 
-  let rec orders : Q.t -> (Q.t list) list =
+  let rec orders : QL.t -> (QL.t list) list =
     function
-      | `Singleton _           -> []
-      | `If (_, t, `Concat []) -> orders t
-      | `For (_, _, os, e)     -> os :: orders e
+      | QL.Singleton _           -> []
+      | QL.If (_, t, QL.Concat []) -> orders t
+      | QL.For (_, _, os, e)     -> os :: orders e
       | _                      -> assert false
 
-  let rec conds : Q.t -> cond list =
+  let rec conds : QL.t -> cond list =
     function
-      | `Singleton _                           -> []
-      | `For (_, _, _, `If (c, t, `Concat [])) -> Some c :: conds t
-      | `For (_, _, _, e)                      -> None :: conds e
+      | QL.Singleton _                           -> []
+      | QL.For (_, _, _, QL.If (c, t, QL.Concat [])) -> Some c :: conds t
+      | QL.For (_, _, _, e)                      -> None :: conds e
       | _                                      -> assert false
 
-  let rec body : Q.t -> Q.t =
+  let rec body : QL.t -> QL.t =
     function
-      | `Singleton e           -> e
-      | `If (_, t, `Concat []) -> body t
-      | `For (_, _, _, e)      -> body e
+      | QL.Singleton e           -> e
+      | QL.If (_, t, QL.Concat []) -> body t
+      | QL.For (_, _, _, e)      -> body e
       | _                      -> assert false
 
 
@@ -362,50 +368,52 @@ struct
   (* dynamic index type *)
   let index_type = Types.int_type
 
-  let rec lins_inner (z, z_fields) ys : Q.t -> Q.t =
+  let rec lins_inner (z, z_fields) ys : QL.t -> QL.t =
+    let open QL in
     function
-      | `Project (`Var (x, fields), l) ->
+      | Project (Var (x, fields), l) ->
         begin
           match position_of x ys with
-            | None -> `Project (`Var (x, fields), l)
+            | None -> Project (Var (x, fields), l)
             | Some i ->
               (* z.1.i.l *)
-              `Project
-                (`Project
-                    (`Project (`Var (z, z_fields), "1"), string_of_int i), l)
+              Project
+                (Project
+                    (Project (Var (z, z_fields), "1"), string_of_int i), l)
         end
-      | `Apply ("Empty", [e]) -> `Apply ("Empty", [lins_inner_query (z, z_fields) ys e])
-      | `Apply ("length", [e]) -> `Apply ("length", [lins_inner_query (z, z_fields) ys e])
-      | `Apply (f, es) ->
-        `Apply (f, List.map (lins_inner (z, z_fields) ys) es)
-      | `Record fields ->
-        `Record (StringMap.map (lins_inner (z, z_fields) ys) fields)
-      | `Primitive "out" ->
+      | Apply ("Empty", [e]) -> Apply ("Empty", [lins_inner_query (z, z_fields) ys e])
+      | Apply ("length", [e]) -> Apply ("length", [lins_inner_query (z, z_fields) ys e])
+      | Apply (f, es) ->
+        Apply (f, List.map (lins_inner (z, z_fields) ys) es)
+      | Record fields ->
+        Record (StringMap.map (lins_inner (z, z_fields) ys) fields)
+      | Primitive "out" ->
         (* z.2 *)
-        `Project (`Var (z, z_fields), "2")
-      | `Primitive "in"  -> `Primitive "index"
-      | `Constant c      -> `Constant c
+        Project (Var (z, z_fields), "2")
+      | Primitive "in"  -> Primitive "index"
+      | Constant c      -> Constant c
       | e ->
-        Debug.print ("Can't apply lins_inner to: " ^ Q.show e);
+        Debug.print ("Can't apply lins_inner to: " ^ QL.show e);
         assert false
 
-  and lins_inner_query (z, z_fields) ys : Q.t -> Q.t =
+  and lins_inner_query (z, z_fields) ys : QL.t -> QL.t =
     fun e ->
       let li = lins_inner (z, z_fields) ys in
       let liq = lins_inner_query (z, z_fields) ys in
+        let open QL in
         match e with
-          | `Concat es -> `Concat (List.map liq es)
-          | `For (tag, gs, os, body) ->
-            `For (tag, gs, List.map li os, liq body)
-          | `If (c, t, `Concat []) -> `If (li c, liq t, `Concat [])
+          | Concat es -> Concat (List.map liq es)
+          | For (tag, gs, os, body) ->
+            For (tag, gs, List.map li os, liq body)
+          | If (c, t, Concat []) -> If (li c, liq t, Concat [])
           (* OPTIMISATION:
 
              For Empty and length we don't care about what the body
              returns.
           *)
-          | `Singleton _ -> `Singleton (`Record StringMap.empty)
+          | Singleton _ -> Singleton (Record StringMap.empty)
           | e ->
-            Debug.print ("Can't apply lins_inner_query to: " ^ Q.show e);
+            Debug.print ("Can't apply lins_inner_query to: " ^ QL.show e);
             assert false
 
   let rec lins c : let_clause =
@@ -427,7 +435,7 @@ struct
       tuple (List.map
                (fun (x, source) ->
                  match source with
-                   | `Table t ->
+                   | QL.Table t ->
                      Q.Eval.eta_expand_var (x, Q.table_field_types t)
                    | _ -> assert false)
                gs_out) in
@@ -436,7 +444,7 @@ struct
         (List.map
            (fun (_, source) ->
              match source with
-               | `Table (_, _, _, row) ->
+               | QL.Table (_, _, _, row) ->
                  `Record row
                | _ -> assert false)
            gs_out) in
@@ -452,15 +460,15 @@ struct
         (Types.make_tuple_type
            [r_out_type; index_type])
     in
-      (q, `For (None, gs_out, [], where x_out (`Singleton (pair r_out index))),
-       z, `For (None, gs_in, os,
+      (q, QL.For (None, gs_out, [], where x_out (QL.Singleton (pair r_out index))),
+       z, QL.For (None, gs_in, os,
                 where
                   (opt_map (lins_inner (z, z_fields) ys) x_in)
-                  (`Singleton (lins_inner (z, z_fields) ys (body c)))))
+                  (QL.Singleton (lins_inner (z, z_fields) ys (body c)))))
 
-  and lins_query : Q.t -> query =
+  and lins_query : QL.t -> query =
     function
-      | `Concat cs -> List.map lins cs
+      | QL.Concat cs -> List.map lins cs
       | _          -> assert false
 
 end
@@ -474,26 +482,27 @@ struct
   type query = LetInsertion.query
 
 
-  let rec flatten_inner : Q.t -> Q.t =
+  let rec flatten_inner : QL.t -> QL.t =
+    let open QL in
     function
-      | `Constant c    -> `Constant c
-      | `Primitive p   -> `Primitive p
-      | `Apply ("Empty", [e]) -> `Apply ("Empty", [flatten_inner_query e])
-      | `Apply ("length", [e]) -> `Apply ("length", [flatten_inner_query e])
-      | `Apply (f, es) -> `Apply (f, List.map flatten_inner es)
-      | `If (c, t, e)  ->
-        `If (flatten_inner c, flatten_inner t, flatten_inner e)
-      | `Project (`Var x, l) -> `Project (`Var x, l)
-      | `Project (`Project (`Project (`Var z, "1"), i), l) ->
+      | Constant c    -> Constant c
+      | Primitive p   -> Primitive p
+      | Apply ("Empty", [e]) -> Apply ("Empty", [flatten_inner_query e])
+      | Apply ("length", [e]) -> Apply ("length", [flatten_inner_query e])
+      | Apply (f, es) -> Apply (f, List.map flatten_inner es)
+      | If (c, t, e)  ->
+        If (flatten_inner c, flatten_inner t, flatten_inner e)
+      | Project (Var (x, t), l) -> Project (Var (x, t), l)
+      | Project (Project (Project (Var (x, t), "1"), i), l) ->
         (* HACK: this keeps z annotated with its original unflattened type *)
-        `Project (`Var z, "1"^"@"^i^"@"^l)
-      | `Record fields ->
+        Project (Var (x, t), "1"^"@"^i^"@"^l)
+      | Record fields ->
         (* concatenate labels of nested records *)
-        `Record
+        Record
           (StringMap.fold
              (fun name body fields ->
                match flatten_inner body with
-                 | `Record inner_fields ->
+                 | Record inner_fields ->
                    StringMap.fold
                      (fun name' body fields ->
                        StringMap.add (name ^ "@" ^ name') body fields)
@@ -504,31 +513,32 @@ struct
              fields
              StringMap.empty)
       | e ->
-        Debug.print ("Can't apply flatten_inner to: " ^ Q.show e);
+        Debug.print ("Can't apply flatten_inner to: " ^ QL.show e);
         assert false
 
-  and flatten_inner_query : Q.t -> Q.t = fun e -> flatten_comprehension e
+  and flatten_inner_query : QL.t -> QL.t = fun e -> flatten_comprehension e
 
-  and flatten_comprehension : Q.t -> Q.t =
+  and flatten_comprehension : QL.t -> QL.t =
+    let open QL in
     function
-      | `For (tag, gs, os, body) ->
-        `For (tag, gs, os, flatten_comprehension body)
-      | `If (c, e, `Concat []) ->
-        `If (flatten_inner c, flatten_comprehension e, `Concat [])
-      | `Singleton e ->
+      | For (tag, gs, os, body) ->
+        For (tag, gs, os, flatten_comprehension body)
+      | If (c, e, Concat []) ->
+        If (flatten_inner c, flatten_comprehension e, Concat [])
+      | Singleton e ->
         let e' =
           (* lift base expressions to records *)
           match flatten_inner e with
-            | `Record fields -> `Record fields
-            | p -> `Record (StringMap.add "@" p StringMap.empty)
+            | Record fields -> Record fields
+            | p -> Record (StringMap.add "@" p StringMap.empty)
         in
-          `Singleton e'
-      (* HACK: not sure if `Concat is supposed to appear here...
+          Singleton e'
+      (* HACK: not sure if Concat is supposed to appear here...
          but it can do inside "Empty" or "Length". *)
-      | `Concat es ->
-        `Concat (List.map flatten_comprehension es)
+      | Concat es ->
+        Concat (List.map flatten_comprehension es)
       | e ->
-        Debug.print ("Can't apply flatten_comprehension to: " ^ Q.show e);
+        Debug.print ("Can't apply flatten_comprehension to: " ^ QL.show e);
         assert false
 
   let flatten_let_clause : LetInsertion.let_clause -> let_clause =
@@ -755,7 +765,7 @@ let unordered_query_package db (range: (int * int) option) t v =
   let t = Shred.nested_type_of_type t in
   (* Debug.print ("v: "^string_of_t v); *)
   S.reset_dummy_counter ();
-  let w = `Concat (Split.query v) in
+  let w = QL.Concat (Split.query v) in
     (* Debug.print ("w: "^string_of_t w); *)
   let tagged_w = tag_query w in
   let shredded_w = Shred.shred_query tagged_w t in

@@ -1,13 +1,14 @@
 open Utility
 open CommonTypes
 module Q = Query
+module QL = Query.Lang
 module S = Sql
 
 (* Introducing ordering indexes in order to support a list
    semantics. *)
 module Order =
 struct
-  type gen = Var.var * Q.t
+  type gen = Var.var * QL.t
   type context = gen list
 
 (* TODO:
@@ -50,9 +51,14 @@ struct
      duplicated and ensuring that we order by all occurences of them -
      e.g. by converting tail generators to non-tail generators. *)
 
-  type order_index = [ `Val of Q.t | `Gen of gen | `TailGen of gen
-                     | `DefVal of Primitive.t | `DefGen of gen | `DefTailGen of gen
-                     | `Branch of int ]
+  type order_index =
+    | Val of QL.t
+    | Gen of gen
+    | TailGen of gen
+    | DefVal of Primitive.t
+    | DefGen of gen
+    | DefTailGen of gen
+    | Branch of int
 
   (* TODO:
 
@@ -86,22 +92,23 @@ struct
 
   type orders = order_index list
 
-  type query_tree = [ `Node of orders * (int * query_tree) list
-                    | `Leaf of (context * Q.t) * orders ]
+  type query_tree =
+    | Node of orders * (int * query_tree) list
+    | Leaf of (context * QL.t) * orders
 
   type path = int list
 
-  type preclause = (path * (context * Q.t)) * query_tree
-  type clause = context * Q.t * orders
+  type preclause = (path * (context * QL.t)) * query_tree
+  type clause = context * QL.t * orders
 
-  let gen : (Var.var * Q.t) -> Q.t list =
+  let gen : (Var.var * QL.t) -> QL.t list =
     function
-      | (x, `Table t) ->
+      | (x, QL.Table t) ->
         let field_types = Q.table_field_types t in
           List.rev
             (StringMap.fold
                (fun name _t es ->
-                 `Project (`Var (x, field_types), name) :: es
+                 QL.Project (QL.Var (x, field_types), name) :: es
                ) field_types [])
       | _ -> assert false
 
@@ -117,43 +124,44 @@ struct
      - represent generators by projecting all fields
      - ignore tail generators
   *)
-  let long_orders : orders -> Q.t list =
+  let long_orders : orders -> QL.t list =
     let long =
       function
-        | `Val t        -> [t]
-        | `Gen g        -> gen g
-        | `TailGen _    -> []
-        | `DefVal t     -> [Q.default_of_base_type t]
-        | `DefGen g     -> List.map default_of_base_value (gen g)
-        | `DefTailGen _ -> []
-        | `Branch i     -> [`Constant (Constant.Int i)]
+        | Val t        -> [t]
+        | Gen g        -> gen g
+        | TailGen _    -> []
+        | DefVal t     -> [Q.default_of_base_type t]
+        | DefGen g     -> List.map default_of_base_value (gen g)
+        | DefTailGen _ -> []
+        | Branch i     -> [QL.Constant (Constant.Int i)]
     in
       concat_map long
 
-  let lift_vals = List.map (fun o -> `Val o)
-  let lift_gens = List.map (fun g -> `Gen g)
-  let lift_tail_gens = List.map (fun g -> `TailGen g)
+  let lift_vals = List.map (fun o -> Val o)
+  let lift_gens = List.map (fun g -> Gen g)
+  let lift_tail_gens = List.map (fun g -> TailGen g)
 
-  let rec query : context -> Q.t -> Q.t -> query_tree =
+  let rec query : context -> QL.t -> QL.t -> query_tree =
     fun gs cond ->
+      let open QL in
       function
-        | `Concat vs ->
+        | Concat vs ->
           let cs = queries gs cond vs in
-            `Node ([], cs)
-        | `If (cond', v, `Concat []) ->
+            Node ([], cs)
+        | If (cond', v, Concat []) ->
           query gs (Q.Eval.reduce_and (cond, cond')) v
-        | `For (_, gs', os, `Concat vs) ->
+        | For (_, gs', os, Concat vs) ->
           let os' = lift_vals os @ lift_gens gs' in
           let cs = queries (gs @ gs') cond vs in
-            `Node (os', cs)
-        | `For (_, gs', os, body) ->
-          `Leaf ((gs @ gs',
+            Node (os', cs)
+        | For (_, gs', os, body) ->
+          Leaf ((gs @ gs',
                   Q.Eval.reduce_where_then (cond, body)),
                  lift_vals os @ lift_gens gs @ lift_tail_gens gs')
-        | `Singleton r ->
-          `Leaf ((gs, Q.Eval.reduce_where_then (cond, `Singleton r)), [])
+        | Singleton r ->
+          Leaf ((gs, Q.Eval.reduce_where_then (cond, Singleton r)), [])
         | _ -> assert false
-  and queries : context -> Q.t -> Q.t list -> (int * query_tree) list =
+  and queries : context -> QL.t -> QL.t list -> (int * query_tree) list =
     fun gs cond vs ->
       let _, cs =
         List.fold_left
@@ -170,14 +178,14 @@ struct
     let dv =
       List.map
         (function
-          | `Val t -> `DefVal (base_type_of_expression t)
-          | `Gen g -> `DefGen g
-          | `TailGen g -> `DefTailGen g
+          | Val t -> DefVal (base_type_of_expression t)
+          | Gen g -> DefGen g
+          | TailGen g -> DefTailGen g
           | _ -> assert false)
     in
       function
-        | `Node (os, cs) -> `Node (dv os, mask_children cs)
-        | `Leaf (x, os)  -> `Leaf (x, dv os)
+        | Node (os, cs) -> Node (dv os, mask_children cs)
+        | Leaf (x, os)  -> Leaf (x, dv os)
   and mask_children : (int * query_tree) list -> (int * query_tree) list =
     fun cs ->
       List.map (fun (branch, tree) -> (branch, mask tree)) cs
@@ -186,14 +194,14 @@ struct
      (path, query, tree) *)
   let rec decompose : query_tree -> preclause list =
     function
-      | `Leaf (q, os) -> [(([], q), `Leaf (q, os))]
-      | `Node (os, cs) ->
+      | Leaf (q, os) -> [(([], q), Leaf (q, os))]
+      | Node (os, cs) ->
         List.map
           (fun ((path, q), cs) ->
-            ((path, q), `Node (os, cs)))
+            ((path, q), Node (os, cs)))
           (decompose_children [] cs)
   and decompose_children prefix : (int * query_tree) list
-      -> ((int list * (context * Q.t)) * (int * query_tree) list) list =
+      -> ((int list * (context * QL.t)) * (int * query_tree) list) list =
     function
       | [] -> []
       | (branch, tree) :: cs ->
@@ -210,14 +218,14 @@ struct
      path *)
   let rec flatten_at path active : query_tree -> orders =
     function
-        | `Leaf (_, os) -> os
-        | `Node (os, cs) ->
+        | Leaf (_, os) -> os
+        | Node (os, cs) ->
           if active then
             let branch = List.hd path in
             let path   = List.tl path in
-              os @ `Branch branch :: flatten_at_children branch path active cs
+              os @ Branch branch :: flatten_at_children branch path active cs
           else
-            os @ `Branch 0 :: flatten_at_children 0 [] active cs
+            os @ Branch 0 :: flatten_at_children 0 [] active cs
   and flatten_at_children branch path active =
     function
       | [] -> []
@@ -237,9 +245,9 @@ struct
         (gs, body, flatten_at path true tree))
       (decompose q)
 
-  let query : Q.t -> clause list =
+  let query : QL.t -> clause list =
     fun v ->
-      let q = query [] (`Constant (Constant.Bool true)) v in
+      let q = query [] (QL.Constant (Constant.Bool true)) v in
       let ss = flatten_tree q in
         ss
 
@@ -259,17 +267,17 @@ struct
             os in
     let rec order =
       function
-        | `Singleton (`Record fields) ->
-          `Singleton (`Record (add_indexes fields 1 orders))
-        | `If (c, body, `Concat []) ->
-          `If (c, order body, `Concat [])
+        | QL.Singleton (QL.Record fields) ->
+          QL.Singleton (QL.Record (add_indexes fields 1 orders))
+        | QL.If (c, body, QL.Concat []) ->
+          QL.If (c, order body, QL.Concat [])
         | _ -> assert false in
     let body' = order body in
       match gs with
         | [] -> body'
-        | _  -> `For (None, gs, [], body')
+        | _  -> QL.For (None, gs, [], body')
 
-  let index_length : (orders -> Q.t list) -> clause list -> int =
+  let index_length : (orders -> QL.t list) -> clause list -> int =
     fun pick_orders ->
       function
         | (_, _, os) :: _ -> List.length (pick_orders os)
