@@ -218,15 +218,9 @@ module SugarConstructors (Position : Pos)
     list ~ppos [record ~ppos exps]
 
   (* Is the list of labeled database expressions empty? *)
-  let is_empty_db_exps : phrase -> bool =
-    fun n ->
-    let node = WithPos.node n in
-    match node with
-    | ListLit ([node], _) ->
-        (match WithPos.node node with
-        | RecordLit ([], _) -> true
-        | _ -> false)
-    | _ -> false
+  let is_empty_db_exps : phrase -> bool = let open WithPos in function
+    | {node=ListLit ([{node=RecordLit ([], _);_}], _);_} -> true
+    | _                                                  -> false
 
   (* Create a database insertion query.  Raises an exception when the list of
      labeled expression is empty and the returning variable has not been named.
