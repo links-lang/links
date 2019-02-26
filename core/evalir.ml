@@ -851,7 +851,7 @@ struct
 
   let run_defs : Value.env -> Ir.binding list -> Value.env =
     fun env bs ->
-    let (env, _value) = run_program env (bs, Return(Extend(StringMap.empty, None))) in env
+    let (env, _value) = run_program env (bs, Ir.Return (Ir.Extend(StringMap.empty, None))) in env
 
   (** [apply_cont_toplevel cont env v] applies a continuation to a value
       and returns the result. Finishing the main thread normally comes

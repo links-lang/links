@@ -1,4 +1,5 @@
 open Utility
+open Ir
 
 module FunDefs =
 struct

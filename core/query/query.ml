@@ -1,5 +1,6 @@
 open Utility
 open CommonTypes
+open Ir
 
 type base_type = [ `Bool | `Char | `Float | `Int | `String ]
 
@@ -605,6 +606,7 @@ struct
       | [] -> tail_computation env tailcomp
       | b::bs ->
           begin
+          let open Ir in
             match b with
               | Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
@@ -624,8 +626,8 @@ struct
     | Return v -> value env v
     | Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
-    | Special (Query (None, e, _)) -> computation env e
-    | Special (Table (db, name, keys, (readtype, _, _))) as _s ->
+    | Special (Ir.Query (None, e, _)) -> computation env e
+    | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
        (** WR: this case is because shredding needs to access the keys of tables
            but can we avoid it (issue #432)? *)
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)

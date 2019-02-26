@@ -1,5 +1,6 @@
 open Utility
 open CommonTypes
+open Ir
 
 type freevars = {termvars: (Ir.binder list) ; typevars: Types.quantifier list} [@@deriving show]
 type fenv = freevars IntMap.t [@@deriving show]

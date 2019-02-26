@@ -2,6 +2,7 @@
 (** JavaScript generation *)
 open Utility
 open CommonTypes
+open Ir
 
 let _ = ParseSettings.config_file
 
@@ -11,8 +12,8 @@ let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exce
 (* strip any top level polymorphism from an expression *)
 let rec strip_poly =
   function
-    | Ir.TAbs (_, e)
-    | Ir.TApp (e, _) -> strip_poly e
+    | TAbs (_, e)
+    | TApp (e, _) -> strip_poly e
     | e -> e
 
 (** Intermediate language *)
@@ -822,8 +823,8 @@ end = functor (K : CONTINUATION) -> struct
     fun tc kappa ->
       let gv v = generate_value env v in
       let gc c kappa = snd (generate_computation env c kappa) in
-      match tc with
-      | Return v ->
+      match (tc : Ir.tail_computation) with
+      | Ir.Return v ->
          K.apply kappa (gv v)
       | Apply (f, vs) ->
          let f = strip_poly f in
@@ -862,7 +863,7 @@ end = functor (K : CONTINUATION) -> struct
          end
       | Special special ->
          generate_special env special kappa
-      | Case (v, cases, default) ->
+      | Ir.Case (v, cases, default) ->
          let v = gv v in
          let k, x =
            match v with
@@ -879,7 +880,7 @@ end = functor (K : CONTINUATION) -> struct
              let cases = StringMap.map gen_cont cases in
              let default = opt_map gen_cont default in
              k (Case (x, cases, default)))
-      | If (v, c1, c2) ->
+      | Ir.If (v, c1, c2) ->
          K.bind kappa
            (fun kappa ->
              If (gv v, gc c1 kappa, gc c2 kappa))
@@ -1113,7 +1114,7 @@ end = functor (K : CONTINUATION) -> struct
       let rec gbs : venv -> continuation -> Ir.binding list -> venv * code =
         fun env kappa ->
           function
-          | Let (b, (_, Return v)) :: bs ->
+          | Ir.Let (b, (_, Ir.Return v)) :: bs ->
              let (x, x_name) = name_binder b in
              let env', rest = gbs (VEnv.bind env (x, x_name)) kappa bs in
              (env', Bind (x_name, generate_value env v, rest))

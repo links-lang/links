@@ -914,7 +914,7 @@ struct
           | DatabaseLit (name, (Some driver, args)) ->
               let args =
                 match args with
-                  | None -> with_pos pos (Constant (Constant.String ""))
+                  | None -> with_pos pos (Sugartypes.Constant (Constant.String ""))
                   | Some args -> args
               in
                 I.database
@@ -985,7 +985,7 @@ struct
           | TextNode name ->
               cofv
                 (I.apply_pure
-                   (instantiate_mb "stringToXml", [ev (with_pos pos (Constant (Constant.String name)))]))
+                   (instantiate_mb "stringToXml", [ev (with_pos pos (Sugartypes.Constant (Constant.String name)))]))
           | Block (bs, e) -> eval_bindings `Local env bs e
           | Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)

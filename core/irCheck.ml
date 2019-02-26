@@ -572,7 +572,7 @@ struct
             let special, t, o = o#special special in
               Special special, t, o
 
-        | Case (v, cases, default) ->
+        | Ir.Case (v, cases, default) ->
             let v, vt, o = o#value v in
             begin match vt with
             | `Variant row as variant ->
@@ -619,7 +619,7 @@ struct
                let types = OptionUtils.opt_app (fun dt -> dt :: types) types default_type in
                let t = List.hd types in
                List.iter (fun ty -> o#check_eq_types t ty (`TC orig)) (List.tl types);
-               Case (v, cases, default), t, o
+               Ir.Case (v, cases, default), t, o
             | _ ->  raise_ir_type_error "Case over non-variant value" (`TC orig)
             end
         | If (v, left, right) ->

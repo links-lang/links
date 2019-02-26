@@ -168,8 +168,8 @@ struct
 
     method value : value -> (value * datatype * 'self_type) =
       function
-        | Constant c -> let (c, t, o) = o#constant c in Constant c, t, o
-        | Variable x -> let (x, t, o) = o#var x in Variable x, t, o
+        | Ir.Constant c -> let (c, t, o) = o#constant c in Ir.Constant c, t, o
+        | Variable x -> let (x, t, o) = o#var x in Ir.Variable x, t, o
         (* | ClosureVar x -> let (x, t, o) = o#closure_var x in ClosureVar x, t, o *)
         | Extend (fields, base) ->
             let (fields, field_types, o) = o#name_map (fun o -> o#value) fields in
@@ -267,7 +267,7 @@ struct
             let special, t, o = o#special special in
               Special special, t, o
 
-        | Case (v, cases, default) ->
+        | Ir.Case (v, cases, default) ->
             let v, _, o = o#value v in
             let cases, case_types, o =
               o#name_map
@@ -286,7 +286,7 @@ struct
               else
                 val_of default_type
             in
-              Case (v, cases, default), t, o
+              Ir.Case (v, cases, default), t, o
         | If (v, left, right) ->
             let v, _, o = o#value v in
             let left, t, o = o#computation left in
