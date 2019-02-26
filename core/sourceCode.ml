@@ -169,8 +169,6 @@ module WithPos = struct
 
   let make ?(pos = Position.dummy) node = { node; pos }
   let dummy node = make node
-  (* JSTOLAREK: remove this? *)
-  let tuple_of_with_pos t = t.node, t.pos
 
   let node t = t.node
 

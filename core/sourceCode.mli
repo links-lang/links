@@ -95,8 +95,6 @@ module WithPos : sig
   (** Construct a new with_pos with a dummy source position *)
   val dummy : 'a -> 'a t
 
-  val tuple_of_with_pos : 'a t -> 'a * Position.t
-
   (** Fetch the corresponding node. *)
   val node : 'a t -> 'a
 
