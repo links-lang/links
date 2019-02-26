@@ -1,4 +1,5 @@
 open Utility
+open SourceCode
 open Lexing
 
 (* NB : For now, positions are resolved eagerly.  It might be better
@@ -37,7 +38,8 @@ fun ~context ?nlhook ~parse ~infun ~name ->
                   Errors.message = "";
                   Errors.linetext = line;
                   Errors.marker = String.make column ' ' ^ "^" })
-      | Sugartypes.ConcreteSyntaxError (msg, (start, finish, _)) ->
+      | Sugartypes.ConcreteSyntaxError (msg, pos) ->
+          let start, finish = Position.start pos, Position.finish pos in
           let linespec =
             if start.pos_lnum = finish.pos_lnum
             then string_of_int start.pos_lnum

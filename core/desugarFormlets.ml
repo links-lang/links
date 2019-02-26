@@ -1,17 +1,19 @@
 open CommonTypes
 open Utility
+open SourceCode
+open SourceCode.With_pos.Legacy
 open Sugartypes
 open SugarConstructors.DummyPositions
 
 let rec is_raw phrase =
-  match phrase.node with
+  match With_pos.node phrase with
   | TextNode _ -> true
   | Block _    -> true
   | FormBinding _ -> false
   | Xml (_, _, _, children) ->
-     List.for_all is_raw children
+      List.for_all is_raw children
   | _ ->
-     raise (Errors.SugarError (phrase.pos, "Invalid element in formlet literal"))
+      raise (Errors.SugarError (phrase.pos, "Invalid element in formlet literal"))
 
 let tt =
   function
@@ -36,7 +38,7 @@ object (o : 'self_type)
   *)
   method formlet_patterns : Sugartypes.phrase -> (Sugartypes.Pattern.with_pos list * Sugartypes.phrase list * Types.datatype list) =
     fun ph ->
-      match ph.node with
+      match With_pos.node ph with
         | _ when is_raw ph ->
             [tuple_pat []], [tuple []], [Types.unit_type]
         | FormBinding (f, p) ->

@@ -1,5 +1,6 @@
 open Utility
 open Operators
+open SourceCode.With_pos.Legacy
 open Sugartypes
 
 (* Recursive functions must be used monomorphically inside their
@@ -75,7 +76,7 @@ object (o : 'self_type)
           List.fold_left
             (fun o (bndr, _, ((_tyvars, dt_opt), _), _, _, _) ->
                match dt_opt with
-                 | Some (_, extras) -> o#bind (name_of_binder bndr) extras
+                 | Some (_, extras) -> o#bind (Binder.name bndr) extras
                  | None -> assert false
             )
             o defs in
@@ -107,16 +108,16 @@ object (o : 'self_type)
         let o =
           List.fold_left
             (fun o (bndr, _, ((_tyvars, _), _), _, _, _) ->
-               o#unbind (name_of_binder bndr))
+               o#unbind (Binder.name bndr))
             o defs
         in
           (o, (Funs defs))
     | b -> super#bindingnode b
 
-  method! binder : binder -> ('self_type * binder) = function
+  method! binder : Binder.t -> ('self_type * Binder.t) = function
       | {node=_, None; _} -> assert false
       | bndr ->
-         let var_env = Env.String.bind var_env (name_of_binder bndr, type_of_binder_exn bndr) in
+         let var_env = Env.String.bind var_env (Binder.name bndr, Binder.typ_exn bndr) in
          ({< var_env=var_env; extra_env=extra_env >}, bndr)
 end
 

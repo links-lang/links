@@ -4,6 +4,8 @@ include module type of List
 
 module Seq = Lens_seq
 
+val map : 'a list -> f:('a -> 'b) -> 'b list
+
 val filter_map : 'a list -> f:('a -> 'b option) -> 'b list
 
 val unzip3 : ('a * 'b * 'c) list -> 'a list * 'b list * 'c list

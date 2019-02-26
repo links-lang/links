@@ -1,5 +1,6 @@
 open CommonTypes
 open Operators
+open SourceCode
 open Sugartypes
 open Utility.OptionUtils
 
@@ -56,7 +57,7 @@ module SugarConstructors (Position : Pos)
   type name_or_pat = PatName of name | Pat of Pattern.with_pos
 
   (* Optionally stores a datatype signature.  Isomporphic to Option. *)
-  type signature = Sig of (name with_pos * datatype') with_pos | NoSig
+  type signature = Sig of (name With_pos.t * datatype') With_pos.t | NoSig
   let sig_of_opt = function
     | Some s -> Sig s
     | None   -> NoSig
@@ -65,7 +66,10 @@ module SugarConstructors (Position : Pos)
      exception if name does not match a name in a signature. *)
   let datatype_opt_of_sig_opt sig_opt name =
     match sig_opt with
-    | Sig {node=({node=signame; _}, datatype); pos} ->
+    | Sig node ->
+       let pos = With_pos.pos node in
+       let name', datatype = With_pos.node node in
+       let signame = With_pos.node name' in
        (* Ensure that name in a signature matches name in a declaration. *)
        if signame <> name then
          raise (ConcreteSyntaxError
@@ -129,7 +133,7 @@ module SugarConstructors (Position : Pos)
 
   (** Fieldspec *)
 
-  let present        = Datatype.Present (Sugartypes.with_dummy_pos Datatype.Unit)
+  let present        = Datatype.Present (With_pos.make Datatype.Unit)
   let wild_present   = ("wild", present)
   let hear_present p = ("hear", Datatype.Present p)
 
@@ -214,9 +218,15 @@ module SugarConstructors (Position : Pos)
     list ~ppos [record ~ppos exps]
 
   (* Is the list of labeled database expressions empty? *)
-  let is_empty_db_exps : phrase -> bool = function
-    | {node=ListLit ([{node=RecordLit ([], _);_}], _);_} -> true
-    | _                                                    -> false
+  let is_empty_db_exps : phrase -> bool =
+    fun n ->
+    let node = With_pos.node n in
+    match node with
+    | ListLit ([node], _) ->
+        (match With_pos.node node with
+        | RecordLit ([], _) -> true
+        | _ -> false)
+    | _ -> false
 
   (* Create a database insertion query.  Raises an exception when the list of
      labeled expression is empty and the returning variable has not been named.
@@ -278,24 +288,23 @@ module SugarConstructors (Position : Pos)
 end
 
 (* Positions module based on standard Sugartypes positions. *)
-module SugartypesPos : Pos with type t = (SourceCode.lexpos *
-    SourceCode.lexpos * SourceCode.source_code option) = struct
+module SugartypesPos : Pos with type t = Position.t = struct
   (* Sugartypes position *)
-  type t = SourceCode.lexpos * SourceCode.lexpos * SourceCode.source_code option
+  type t = Position.t
   (* Identity - positions in this module are alread Sugartypes positions *)
   let pos p = p
   (* Construct a node with position *)
-  let with_pos pos node = {node; pos}
+  let with_pos pos node = With_pos.make ~pos node
   (* Default (dummy) position *)
-  let dp = (Lexing.dummy_pos, Lexing.dummy_pos, None)
+  let dp = Position.dummy
 end
 
 (* Positions module based on dummy/unit positions.  Prevents attaching any
    kind of meaningful positions to nodes.  *)
 module DummyPos : Pos with type t = unit = struct
   type t = unit
-  let pos ()           = Sugartypes.dummy_position
-  let with_pos () node = {node; pos = Sugartypes.dummy_position}
+  let pos ()           = Position.dummy
+  let with_pos () node = With_pos.make node
   let dp               = ()
 end
 

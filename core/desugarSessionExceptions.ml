@@ -1,3 +1,4 @@
+open SourceCode.With_pos.Legacy
 open Sugartypes
 open SugarConstructors.DummyPositions
 

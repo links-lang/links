@@ -1,5 +1,6 @@
 open Operators
 open CommonTypes
+open SourceCode
 open Sugartypes
 
 (* Make a copy of a value.  You can override any method(s) to get a
@@ -26,7 +27,7 @@ class map :
     method bool            : bool -> bool
     method unary_op        : UnaryOp.t -> UnaryOp.t
     method tyunary_op      : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t
-    method binder          : binder -> binder
+    method binder          : Binder.t -> Binder.t
     method sentence        : sentence -> sentence
     method section         : Section.t -> Section.t
     method subkind         : subkind -> subkind
@@ -39,7 +40,7 @@ class map :
     method replace_rhs     : replace_rhs -> replace_rhs
     method regexflag       : regexflag -> regexflag
     method regex           : regex -> regex
-    method position        : position -> position
+    method position        : Position.t -> Position.t
     method given_spawn_location : given_spawn_location -> given_spawn_location
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
@@ -95,7 +96,7 @@ class fold :
     method bool            : bool -> 'self
     method unary_op        : UnaryOp.t -> 'self
     method tyunary_op      : tyarg list * UnaryOp.t -> 'self
-    method binder          : binder -> 'self
+    method binder          : Binder.t -> 'self
     method sentence        : sentence -> 'self
     method section         : Section.t -> 'self
     method subkind         : subkind -> 'self
@@ -108,7 +109,7 @@ class fold :
     method replace_rhs     : replace_rhs -> 'self
     method regexflag       : regexflag -> 'self
     method regex           : regex -> 'self
-    method position        : position -> 'self
+    method position        : Position.t -> 'self
     method given_spawn_location : given_spawn_location -> 'self
     method phrasenode      : phrasenode -> 'self
     method phrase          : phrase -> 'self
@@ -153,7 +154,7 @@ end
 (* A combination of fold and map *)
 class fold_map :
 object ('self)
-  method binder          : binder -> 'self * binder
+  method binder          : Binder.t -> 'self * Binder.t
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
   method binop           : BinaryOp.t -> 'self * BinaryOp.t
@@ -184,7 +185,7 @@ object ('self)
   method phrasenode      : phrasenode -> 'self * phrasenode
   method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode
   method cp_phrase       : cp_phrase -> 'self * cp_phrase
-  method position        : position -> 'self * position
+  method position        : Position.t -> 'self * Position.t
   method program         : program -> 'self * program
   (* method quantifier      : quantifier -> 'self * quantifier *)
   method regex           : regex -> 'self * regex

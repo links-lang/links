@@ -27,6 +27,7 @@ open Utility
 open Operators
 open Sugartypes
 open Printf
+open SourceCode.With_pos.Legacy
 open ModuleUtils
 
 let _print_shadow_table st =
@@ -128,9 +129,9 @@ let rec rename_binders_get_shadow_tbl module_table
 
     method! binder = function
       | bndr ->
-         let n = name_of_binder bndr in
+         let n = Binder.name bndr in
          let fqn = make_path_string path n in
-         (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
+         (self#bind_shadow_term n fqn, Binder.set_name bndr fqn)
 
     method! bindingnode = function
       | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
@@ -188,9 +189,9 @@ and perform_renaming module_table path term_ht type_ht =
 
     method! binder = function
       | bndr ->
-         let n = name_of_binder bndr in
+         let n = Binder.name bndr in
          let fqn = make_path_string path n in
-         (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
+         (self#bind_shadow_term n fqn, Binder.set_name bndr fqn)
 
     method! patternnode = function
       | Pattern.Variant (n, p_opt) ->

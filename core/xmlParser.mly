@@ -9,7 +9,7 @@ struct
   module Value = Value
 end
 
-let pos (start_pos, end_pos) : Sugartypes.position = start_pos, end_pos, None
+let pos (start, finish) : SourceCode.Position.t = SourceCode.Position.make ~start ~finish ~code:None
 
 let ensure_match p (opening : string) (closing : string) = function
   | result when opening = closing -> result

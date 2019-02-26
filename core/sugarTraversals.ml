@@ -10,8 +10,9 @@
 
 open Operators
 open CommonTypes
+open SourceCode
+open SourceCode.With_pos.Legacy
 open Sugartypes
-open SugarConstructors.SugartypesPositions
 
 class map =
   object ((o : 'self_type))
@@ -48,12 +49,12 @@ class map =
     method tyunary_op : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t =
       fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
 
-    method binder : binder -> binder =
+    method binder : Binder.t -> Binder.t =
       fun bndr ->
-        let name = o#name (name_of_binder bndr) in
-        let ty  = o#option (fun o -> o#unknown) (type_of_binder bndr) in
-        let pos = o#position bndr.pos in
-        {node=(name,ty); pos}
+        let name = o#name (Binder.name bndr) in
+        let ty  = o#option (fun o -> o#unknown) (Binder.typ bndr) in
+        let pos = With_pos.pos bndr |> o#position in
+        With_pos.make ~pos (name,ty)
 
     method sentence : sentence -> sentence =
       function
@@ -138,11 +139,12 @@ class map =
           let _x = o#regex _x in
           let _x_i1 = o#replace_rhs _x_i1 in Replace ((_x, _x_i1))
 
-    method position : position -> position =
-      fun (_x, _x_i1, _x_i2) ->
-        let _x = o#unknown _x in
-        let _x_i1 = o#unknown _x_i1 in
-        let _x_i2 = o#unknown _x_i2 in (_x, _x_i1, _x_i2)
+    method position : Position.t -> Position.t =
+      fun pos ->
+        let start = Position.start pos |> o#unknown in
+        let finish = Position.finish pos |> o#unknown in
+        let code = Position.code pos |> o#unknown in
+        Position.make ~start ~finish ~code
 
     method datatype' : datatype' -> datatype' =
       fun (x, y) ->
@@ -434,10 +436,8 @@ class map =
 
 
     method phrase : phrase -> phrase =
-      fun {node; pos} ->
-        let node = o#phrasenode node in
-        let pos  = o#position pos in
-        {node; pos}
+      fun p ->
+        With_pos.map2 ~f_pos:o#position ~f_node:o#phrasenode p
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
@@ -451,7 +451,8 @@ class map =
       | CPComp (c, p, q)   -> CPComp (c, o#cp_phrase p, o#cp_phrase q)
 
     method cp_phrase : cp_phrase -> cp_phrase =
-      fun {node; pos} -> with_pos (o#position pos) (o#cp_phrasenode node)
+      fun p ->
+      With_pos.map2 ~f_pos:o#position ~f_node:o#cp_phrasenode p
 
     method patternnode : Pattern.t -> Pattern.t =
       let open Pattern in
@@ -494,9 +495,8 @@ class map =
           let _x_i1 = o#datatype' _x_i1 in HasType ((_x, _x_i1))
 
     method pattern : Pattern.with_pos -> Pattern.with_pos =
-      fun {node; pos} ->
-        let node = o#patternnode node in
-        let pos = o#position pos in {node; pos}
+      fun p ->
+        With_pos.map2 ~f_pos:o#position ~f_node:o#patternnode p
 
     method name : name -> name = o#string
 
@@ -618,10 +618,7 @@ class map =
       | End -> End
 
     method datatype : Datatype.with_pos -> Datatype.with_pos =
-      fun {node; pos} ->
-        let node = o#datatypenode node in
-        let pos  = o#position pos in
-        {node; pos}
+        With_pos.map2 ~f_pos:o#position ~f_node:o#datatypenode
 
     method type_arg : Datatype.type_arg -> Datatype.type_arg =
       let open Datatype in function
@@ -718,10 +715,8 @@ class map =
           AlienBlock (lang, lib, dts)
 
     method binding : binding -> binding =
-      fun {node; pos} ->
-        let node = o#bindingnode node in
-        let pos  = o#position    pos  in
-        {node; pos}
+      fun p ->
+        With_pos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
 
     method program : program -> program =
       fun (bindings, phrase) ->
@@ -764,11 +759,11 @@ class fold =
     method tyunary_op : tyarg list * UnaryOp.t -> 'self_type =
       fun (_x, _x_i1) -> o#unary_op _x_i1
 
-    method binder : binder -> 'self_type =
+    method binder : Binder.t -> 'self_type =
       fun bndr ->
-        let o = o#name (name_of_binder bndr) in
-        let o = o#option (fun o -> o#unknown) (type_of_binder bndr) in
-        let o = o#position bndr.pos in o
+        let o = o#name (Binder.name bndr) in
+        let o = o#option (fun o -> o#unknown) (Binder.typ bndr) in
+        let o = o#position (With_pos.pos bndr) in o
 
     method sentence : sentence -> 'self_type =
       function
@@ -845,11 +840,12 @@ class fold =
       | Replace ((_x, _x_i1)) ->
           let o = o#regex _x in let o = o#replace_rhs _x_i1 in o
 
-    method position : position -> 'self_type =
-      fun (_x, _x_i1, _x_i2) ->
-        let o = o#unknown _x in
-        let o = o#unknown _x_i1 in
-        let o = o#unknown _x_i2 in o
+    method position : Position.t -> 'self_type =
+      Position.traverse
+        ~o
+        ~f_start:(fun o v -> o#unknown v)
+        ~f_finish:(fun o v -> o#unknown v)
+        ~f_code:(fun o v -> o#unknown v)
 
     method datatype' : datatype' -> 'self_type =
       fun (x, y) ->
@@ -1110,8 +1106,10 @@ class fold =
       | Raise -> o
 
     method phrase : phrase -> 'self_type =
-      fun {node; pos} ->
-        let o = o#phrasenode node in let o = o#position pos in o
+      With_pos.traverse
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#phrasenode v)
 
     method cp_phrasenode : cp_phrasenode -> 'self_type =
       function
@@ -1125,7 +1123,10 @@ class fold =
       | CPComp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
-      fun {node; pos} -> (o#cp_phrasenode node)#position pos
+      With_pos.traverse
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#cp_phrasenode v)
 
     method patternnode : Pattern.t -> 'self_type =
       let open Pattern in
@@ -1160,11 +1161,12 @@ class fold =
       | HasType ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#datatype' _x_i1 in o
 
+
     method pattern : Pattern.with_pos -> 'self_type =
-      fun {node; pos} ->
-        let o = o#patternnode node in
-        let o = o#position pos in
-        o
+      With_pos.traverse
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#patternnode v)
 
     method name : name -> 'self_type = o#string
 
@@ -1275,10 +1277,10 @@ class fold =
       | End -> o
 
     method datatype : Datatype.with_pos -> 'self_type =
-      fun {node; pos} ->
-        let o = o#datatypenode node in
-        let o = o#position pos in
-        o
+      With_pos.traverse
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#datatypenode v)
 
     method type_arg : Datatype.type_arg -> 'self_type =
       let open Datatype in function
@@ -1371,10 +1373,10 @@ class fold =
           o
 
     method binding : binding -> 'self_type =
-      fun {node; pos} ->
-        let o = o#bindingnode node in
-        let o = o#position    pos  in
-        o
+      With_pos.traverse
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#bindingnode v)
 
     method program : program -> 'self_type =
       fun (bindings, phrase) ->
@@ -1525,12 +1527,12 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
         in (o, (_x, _x_i1))
 
-    method position : position -> ('self_type * position) =
-      fun (_x, _x_i1, _x_i2) ->
-        let (o, _x) = o#unknown _x in
-        let (o, _x_i1) = o#unknown _x_i1 in
-        let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
-        in (o, (_x, _x_i1, _x_i2))
+    method position : Position.t -> ('self_type * Position.t) =
+      Position.traverse_map
+        ~o
+        ~f_start:(fun o v -> o#unknown v)
+        ~f_finish:(fun o v -> o#unknown v)
+        ~f_code:(fun o v -> o#option (fun o -> o#unknown) v)
 
     method given_spawn_location : given_spawn_location -> ('self_type * given_spawn_location) = function
       | ExplicitSpawnLocation _p -> let (o, _p) = o#phrase _p in (o, ExplicitSpawnLocation _p)
@@ -2163,10 +2165,10 @@ class fold_map =
         let (o, pos ) = o#position    pos  in
         (o, {node; pos})
 
-    method binder : binder -> ('self_type * binder) =
+    method binder : Binder.t -> ('self_type * Binder.t) =
       fun bndr ->
-        let (o, name) = o#name (name_of_binder bndr) in
-        let (o, ty  ) = o#option (fun o -> o#unknown) (type_of_binder bndr) in
+        let (o, name) = o#name (Binder.name bndr) in
+        let (o, ty  ) = o#option (fun o -> o#unknown) (Binder.typ bndr) in
         let (o, pos ) = o#position bndr.pos in
         (o, {node=name,ty;pos})
 

@@ -126,7 +126,7 @@ type lens_delete_mode =
 type lens_name = string
     [@@deriving show]
 
-type lens_phrase =
+type lens_phrasenode =
   | Constant  of Constant.constant
   | Var       of lens_name
   | InfixAppl of Lens_operators.Binary.t * lens_phrase * lens_phrase
@@ -136,6 +136,7 @@ type lens_phrase =
   | In        of Lens_operators.name list * (Constant.constant list) list
   | Case      of lens_phrase option * (lens_phrase * lens_phrase) list * lens_phrase
   | TupleLit  of lens_phrase list
+and lens_phrase = lens_phrasenode SourceCode.With_pos.t
   [@@deriving show]
 
 (* End of Lenses *)

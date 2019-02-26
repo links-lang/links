@@ -1,5 +1,6 @@
 open Operators
 open CommonTypes
+open SourceCode
 open Sugartypes
 
 (*
@@ -48,7 +49,7 @@ object ('self)
   method lookup_effects  : Types.row
   method with_effects    : Types.row -> 'self
 
-  method binder          : binder -> 'self * binder
+  method binder          : Binder.t -> 'self * Binder.t
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
   method binop           : BinaryOp.t -> 'self * BinaryOp.t * Types.datatype
@@ -62,15 +63,16 @@ object ('self)
   method restore_quantifiers : Utility.IntSet.t -> 'self
 
   method rec_bodies :
-    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
+
+    (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
     ('self *
-       (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list)
+       (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list)
   method rec_activate_outer_bindings :
-    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
+    (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
     ('self *
-       (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list)
+       (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list)
   method rec_activate_inner_bindings :
-    (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
+    (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
     'self
 
   method sugar_datatype   : Datatype.with_pos -> 'self * Datatype.with_pos

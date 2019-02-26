@@ -2,6 +2,7 @@ open CommonTypes
 open List
 
 (*open Value*)
+open SourceCode
 open Types
 open Utility
 open Proc
@@ -1482,9 +1483,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   try
                     let ts = DumpTypes.program (val_of (!prelude_tyenv)) (Value.unbox_string code) in
 
-                    let line ({Lexing.pos_lnum=l; _}, _, _) = l in
-                    let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c; _ }, _, _) = c-b in
-                    let finish (_, {Lexing.pos_bol=b; Lexing.pos_cnum=c; _}, _) = c-b in
+                    let line {Lexing.pos_lnum=l; _} = l in
+                    let start {Lexing.pos_bol=b; Lexing.pos_cnum=c; _ } = c-b in
+                    let finish {Lexing.pos_bol=b; Lexing.pos_cnum=c; _} = c-b in
 
                     let resolve (name, t, pos) =
                       (* HACK: we need to be more principled about foralls  *)
@@ -1495,9 +1496,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                       in
                         `Record [("name", Value.box_string name);
                                  ("t", Value.box_string (Types.string_of_datatype t));
-                                 ("pos", `Record [("line", Value.box_int (line pos));
-                                                  ("start", Value.box_int (start pos));
-                                                  ("finish", Value.box_int (finish pos))])]
+                                 ("pos", `Record [("line", Value.box_int (Position.start pos |> line));
+                                                  ("start", Value.box_int (Position.start pos |> start));
+                                                  ("finish", Value.box_int (Position.finish pos |> finish))])]
                     in
                       `Variant ("Success", Value.box_list (List.map resolve ts))
                   with e ->

@@ -1,4 +1,6 @@
 open Utility
+open SourceCode
+open SourceCode.With_pos.Legacy
 open Sugartypes
 open Operators
 
@@ -57,7 +59,7 @@ let refine_bindings : binding list -> binding list =
         let defs = List.map
           (function
             | {node=Fun (bndr, _, (_, funlit), _, _); _} ->
-               (name_of_binder bndr, funlit)
+               (Binder.name bndr, funlit)
             | _ -> assert false) defs in
         let names = StringSet.from_list (List.map fst defs) in
           List.map
@@ -75,7 +77,7 @@ let refine_bindings : binding list -> binding list =
       let find_fun name =
         List.find (function
                      | {node=Fun (bndr, _, _, _, _); _} ->
-                        name = name_of_binder bndr
+                        name = Binder.name bndr
                      | _ -> false)
           funs in
       let graph = callgraph funs in
@@ -85,7 +87,7 @@ let refine_bindings : binding list -> binding list =
              let funs = List.map (find_fun ->- unFun) scc in
                match funs with
                  | [(bndr, lin, ((tyvars, _), body), location, dt, pos)]
-                     when not (StringSet.mem (name_of_binder bndr)
+                     when not (StringSet.mem (Binder.name bndr)
                                              (Freevars.funlit body)) ->
                     with_pos pos (Fun (bndr, lin, (tyvars, body), location, dt))
                  | _ -> with_dummy_pos (Funs (funs)))
@@ -251,7 +253,7 @@ module RefineTypeBindings = struct
   type type_name = string
   type type_ty = name * (quantifier * tyvar option) list * datatype'
   type mu_alias = string
-  type reference_info = (type_name, (type_name list * bool * position)) Hashtbl.t
+  type reference_info = (type_name, (type_name list * bool * Position.t)) Hashtbl.t
   type type_hashtable = (type_name, type_ty) Hashtbl.t
 
   (* Type synonyms for substitution environments *)

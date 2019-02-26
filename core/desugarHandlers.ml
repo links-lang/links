@@ -1,6 +1,7 @@
 open Utility
 open CommonTypes
 open Operators
+open SourceCode.With_pos.Legacy
 open Sugartypes
 open SugarConstructors.DummyPositions
 
@@ -30,14 +31,14 @@ let rec names : Pattern.with_pos -> string list
     | Record (name_pats,pat_opt) ->
        let optns = opt_app names [] pat_opt in
        (List.fold_left (fun ns p -> (names p) @ ns) [] (List.map snd name_pats)) @ optns
-    | Variable bndr              -> [name_of_binder bndr]
+    | Variable bndr              -> [Binder.name bndr]
     | Cons (pat,pat')            -> (names pat) @ (names pat')
     | Tuple pats
     | List pats                  -> List.fold_left (fun ns pat -> (names pat) @ ns ) [] pats
     | Negative ns'               -> List.fold_left (fun ns n -> n :: ns) [] ns'
-    | As  (bndr,pat)             -> [name_of_binder bndr] @ (names pat)
+    | As  (bndr,pat)             -> [Binder.name bndr] @ (names pat)
     | HasType (pat,_)            -> names pat
-    | _                          -> []
+    | _                           -> []
 
 (* This function resolves name conflicts in a given pattern p.
    The conflict resolution is simple:
@@ -53,15 +54,15 @@ let resolve_name_conflicts : Pattern.with_pos -> stringset -> Pattern.with_pos
           | Variant (label, pat_opt)    -> Variant (label, opt_map hide_names pat_opt)
           | Record (name_pats, pat_opt) -> Record  (List.map (fun (label, pat) -> (label, hide_names pat)) name_pats, opt_map hide_names pat_opt)
           | Variable bndr               ->
-             if StringSet.mem (name_of_binder bndr) conflicts
+             if StringSet.mem (Binder.name bndr) conflicts
              then Pattern.Any
              else pat.node
           | Cons (pat, pat')            -> Cons (hide_names pat, hide_names pat')
           | Tuple pats                  -> Tuple (List.map hide_names pats)
           | List pats                   -> List (List.map hide_names pats)
-          | Negative _                  -> failwith "desugarHandlers.ml: hide_names Negative not yet implemented"
+          | Negative _                  -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
           | As (bndr,pat)               -> let {node;_} as pat = hide_names pat in
-                                            if StringSet.mem (name_of_binder bndr) conflicts
+                                            if StringSet.mem (Binder.name bndr) conflicts
                                             then node
                                             else As (bndr, pat)
           | HasType (pat, t)            -> HasType (hide_names pat, t)
@@ -138,11 +139,11 @@ let rec phrase_of_pattern : Pattern.with_pos -> phrase
       | Variant (name, pat_opt)     -> constructor name ?body:(opt_map phrase_of_pattern pat_opt)
       | Negative _                  -> failwith "desugarHandlers.ml: phrase_of_pattern case for `Negative not yet implemented!"
       | Record (name_pats, pat_opt) -> record (List.map (fun (n,p) -> (n, phrase_of_pattern p)) name_pats)
-                                              ?exp:(opt_map phrase_of_pattern pat_opt)
+                                               ?exp:(opt_map phrase_of_pattern pat_opt)
       | Tuple ps                    -> tuple (List.map phrase_of_pattern ps)
       | Constant c                  -> constant c
-      | Variable b                  -> var (name_of_binder b)
-      | As (b,_)                    -> var (name_of_binder b)
+      | Variable b                  -> var (Binder.name b)
+      | As (b,_)                    -> var (Binder.name b)
       | HasType (p,t)               -> with_dummy_pos (TypeAnnotation (phrase_of_pattern p, t))
      end
 

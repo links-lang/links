@@ -1,6 +1,8 @@
 open CommonTypes
 open Operators
 open Sugartypes
+open SourceCode
+open SourceCode.With_pos.Legacy
 open Utility
 
 module TyEnv = Env.String
@@ -717,9 +719,10 @@ class transform (env : Types.typing_environment) =
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
 
     method rec_bodies :
-      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
+
+      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
       ('self_type *
-         (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list) =
+         (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list) =
       let outer_tyvars = o#backup_quantifiers in
       let rec list o =
         function
@@ -737,9 +740,9 @@ class transform (env : Types.typing_environment) =
         list o
 
     method rec_activate_outer_bindings :
-      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
+      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
       ('self_type *
-         (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list) =
+         (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list) =
       let rec list o =
         function
           | [] -> o, []
@@ -752,13 +755,13 @@ class transform (env : Types.typing_environment) =
         list o
 
     method rec_activate_inner_bindings :
-      (binder * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * position) list ->
+      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
       'self_type =
       let rec list o =
         function
           | [] -> o
           | (f, _, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
-              let (o, _) = o#binder (set_binder_type f inner) in
+              let (o, _) = o#binder (Binder.set_type f inner) in
                 list o defs
           | _ :: _ -> assert false
       in
@@ -774,10 +777,10 @@ class transform (env : Types.typing_environment) =
          let (o, p) = o#pattern p in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Val (p, (tyvars, e), location, t))
-      | Fun (bndr, lin, (tyvars, lam), location, t) when binder_has_type bndr ->
+      | Fun (bndr, lin, (tyvars, lam), location, t) when Binder.has_type bndr ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let inner_effects = fun_effects (type_of_binder_exn bndr) (fst lam) in
+         let inner_effects = fun_effects (Binder.typ_exn bndr) (fst lam) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, bndr) = o#binder bndr in
@@ -812,10 +815,10 @@ class transform (env : Types.typing_environment) =
       fun {node; pos} ->
         let (o, node) = o#bindingnode node in (o, {node; pos})
 
-    method binder : binder -> ('self_type * binder) =
+    method binder : Binder.t -> ('self_type * Binder.t) =
       fun bndr ->
-      assert (binder_has_type bndr);
-      let var_env = TyEnv.bind var_env (name_of_binder bndr, type_of_binder_exn bndr) in
+      assert (Binder.has_type bndr);
+      let var_env = TyEnv.bind var_env (Binder.name bndr, Binder.typ_exn bndr) in
       ({< var_env=var_env >}, bndr)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =

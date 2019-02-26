@@ -1,4 +1,5 @@
 open Utility
+open SourceCode
 open ModuleUtils
 open Sugartypes
 
@@ -72,7 +73,7 @@ let rec add_module_bindings deps dep_map =
     | [module_name]::ys ->
       (try
         let (bindings, _) = StringMap.find module_name dep_map in
-        with_dummy_pos (Module (module_name, bindings)) :: (add_module_bindings ys dep_map)
+        With_pos.make (Module (module_name, bindings)) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
         (failwith (Printf.sprintf "Trying to find %s in dep map containing keys: %s\n"
           module_name (print_list (List.map fst (StringMap.bindings dep_map))))));
