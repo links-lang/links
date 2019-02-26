@@ -51,6 +51,7 @@ struct
   module SugarConstructors = SugarConstructors
   module Types             = Types
   module Operators         = Operators
+  module SourceCode        = SourceCode
 end
 
 (* Construction of nodes using positions produced by Menhir parser *)
@@ -60,8 +61,8 @@ module ParserPosition
   type t = SourceCode.Lexpos.t * SourceCode.Lexpos.t
   (* Convert position produced by a parser to SourceCode position *)
   let pos (start, finish) = SourceCode.Position.make ~start ~finish ~code:None
-  (* Wrapper around SourceCode.With_pos.make.  Accepts parser positions. *)
-  let with_pos p v = SourceCode.With_pos.make ~pos:(pos p) v
+  (* Wrapper around SourceCode.WithPos.make.  Accepts parser positions. *)
+  let with_pos p v = SourceCode.WithPos.make ~pos:(pos p) v
   (* Default (dummy) parser position *)
   let dp = (Lexing.dummy_pos, Lexing.dummy_pos)
 end
@@ -309,7 +310,7 @@ nofun_declaration:
                                                                           (Foreign (binder ~ppos:$loc($4) $4,
                                                                                      $4, $2, $3, datatype $6)) }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                 set assoc (from_option default_fixity $2) (With_pos.node $3);
+                                                                 set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
@@ -355,7 +356,7 @@ linearity:
 
 tlfunbinding:
 | linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                }
-| OP pattern op pattern perhaps_location block                 { (dl_unl, With_pos.node $3, [[$2; $4]], $5, $6) }
+| OP pattern op pattern perhaps_location block                 { (dl_unl, WithPos.node $3, [[$2; $4]], $5, $6) }
 | OP PREFIXOP pattern perhaps_location block                   { (dl_unl, $2, [[$3]], $4, $5)          }
 | OP pattern POSTFIXOP perhaps_location block                  { (dl_unl, $3, [[$2]], $4, $5)          }
 
@@ -494,7 +495,7 @@ parenthesized_thing:
 binop:
 | MINUS                                                        { Section.Minus          }
 | MINUSDOT                                                     { Section.FloatMinus     }
-| op                                                           { Section.Name (With_pos.node $1) }
+| op                                                           { Section.Name (WithPos.node $1) }
 
 op:
 | INFIX0 | INFIXL0 | INFIXR0
@@ -962,7 +963,7 @@ primary_datatype:
 | TILDE primary_datatype_pos                                   { Datatype.Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> Datatype.Unit
-                                                                   | [n] -> With_pos.node n
+                                                                   | [n] -> WithPos.node n
                                                                    | ts  -> Datatype.Tuple ts }
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
 | TABLEHANDLE

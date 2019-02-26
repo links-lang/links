@@ -10,16 +10,16 @@ type name = string [@@deriving show]
 
 
 module Binder = struct
-  type t = (name * Types.datatype option) With_pos.t
+  type t = (name * Types.datatype option) WithPos.t
   [@@deriving show]
 
-  let name b = let (n, _) = With_pos.node b in n
-  let typ b = let (_, ty) = With_pos.node b in ty
+  let name b = let (n, _) = WithPos.node b in n
+  let typ b = let (_, ty) = WithPos.node b in ty
 
   let typ_exn b = typ b |> OptionUtils.val_of
 
-  let set_name b name = With_pos.map ~f:(fun (_, ty) -> name, ty) b
-  let set_type b typ = With_pos.map ~f:(fun (name, _) -> name, Some typ) b
+  let set_name b name = WithPos.map ~f:(fun (_, ty) -> name, ty) b
+  let set_type b typ = WithPos.map ~f:(fun (name, _) -> name, Some typ) b
 
   let erase_type b = set_type b None
   let has_type b = typ b |> OptionUtils.is_some
@@ -88,7 +88,7 @@ module Datatype = struct
     | Choice          of row
     | Dual            of with_pos
     | End
-  and with_pos = t With_pos.t
+  and with_pos = t WithPos.t
   and row = (string * fieldspec) list * row_var
   and row_var =
     | Closed
@@ -127,7 +127,7 @@ module Pattern = struct
     | Variable of Binder.t
     | As       of Binder.t * with_pos
     | HasType  of with_pos * datatype'
-  and with_pos = t With_pos.t
+  and with_pos = t WithPos.t
    [@@deriving show]
 end
 
@@ -267,7 +267,7 @@ and phrasenode =
   | TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase *
                            Types.datatype option)
   | Raise
-and phrase = phrasenode With_pos.t
+and phrase = phrasenode WithPos.t
 and bindingnode =
   | Val     of (Pattern.with_pos * (tyvar list * phrase) * Location.t *
                   datatype' option)
@@ -286,7 +286,7 @@ and bindingnode =
   | Exp     of phrase
   | Module  of (name * binding list)
   | AlienBlock of (name * name * ((Binder.t * datatype') list))
-and binding = bindingnode With_pos.t
+and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
   | CPUnquote     of (binding list * phrase)
@@ -299,7 +299,7 @@ and cp_phrasenode =
   | CPOffer       of (Binder.t * (string * cp_phrase) list)
   | CPLink        of (Binder.t * Binder.t)
   | CPComp        of (Binder.t * cp_phrase * cp_phrase)
-and cp_phrase = cp_phrasenode With_pos.t
+and cp_phrase = cp_phrasenode WithPos.t
                   [@@deriving show]
 
 type directive = string * string list
@@ -327,12 +327,12 @@ exception RedundantPatternMatch of Position.t
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
-    | _  -> TAbstr (Types.box_quantifiers tyvars, With_pos.make e)
+    | _  -> TAbstr (Types.box_quantifiers tyvars, WithPos.make e)
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
-    | _  -> TAppl (With_pos.make e, tys)
+    | _  -> TAppl (WithPos.make e, tys)
 
 module Freevars =
 struct
@@ -344,7 +344,7 @@ struct
 
   let rec pattern (phrase : Pattern.with_pos) : StringSet.t =
     let open Pattern in
-    match With_pos.node phrase with
+    match WithPos.node phrase with
     | Any
     | Nil
     | Constant _
@@ -362,13 +362,13 @@ struct
     | HasType (pat, _)      -> pattern pat
 
 
-  let rec formlet_bound (phrase : phrase) : StringSet.t = match With_pos.node phrase with
+  let rec formlet_bound (phrase : phrase) : StringSet.t = match WithPos.node phrase with
     | Xml (_, _, _, children) -> union_map formlet_bound children
     | FormBinding (_, pat) -> pattern pat
     | _ -> empty
 
   let rec phrase (p : phrase) : StringSet.t =
-    let p = With_pos.node p in
+    let p = WithPos.node p in
     match p with
     | Var v -> singleton v
     | Section (Section.Name n) -> singleton n
@@ -484,7 +484,7 @@ struct
   and binding (binding: binding)
       : StringSet.t (* vars bound in the pattern *)
       * StringSet.t (* free vars in the rhs *) =
-    match With_pos.node binding with
+    match WithPos.node binding with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
     | Handler (bndr, hnlit, _) ->
        let name = singleton (Binder.name bndr) in
@@ -538,7 +538,7 @@ struct
     | Splice p -> phrase p
     | Replace (r, Literal _) -> regex r
     | Replace (r, SpliceExpr p) -> union (regex r) (phrase p)
-  and cp_phrase p = match With_pos.node p with
+  and cp_phrase p = match WithPos.node p with
     | CPUnquote e -> block e
     | CPGrab ((c, _t), Some bndr, p) ->
       union (singleton c) (diff (cp_phrase p) (singleton (Binder.name bndr)))

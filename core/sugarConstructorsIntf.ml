@@ -19,7 +19,7 @@ module type Pos = sig
   (* Convert a position to Sugartypes.position. *)
   val pos      : t -> Position.t
   (* Produce a syntax tree node with a position attached. *)
-  val with_pos : t -> 'a -> 'a With_pos.t
+  val with_pos : t -> 'a -> 'a WithPos.t
   (* Default (dummy) position *)
   val dp       : t
 end
@@ -33,11 +33,11 @@ module type SugarConstructorsSig = sig
      qualification and additional module opens. *)
   type t
   val pos      : t -> Position.t
-  val with_pos : t -> 'a -> 'a With_pos.t
+  val with_pos : t -> 'a -> 'a WithPos.t
   val dp       : t
 
   (* Attach a dummy position to a node. *)
-  val with_dummy_pos : 'a -> 'a With_pos.t
+  val with_dummy_pos : 'a -> 'a WithPos.t
 
   (* Fresh type variables. *)
   val fresh_type_variable           : unit -> Datatype.t
@@ -52,10 +52,10 @@ module type SugarConstructorsSig = sig
   type name_or_pat = PatName of name
                    | Pat     of Pattern.with_pos
 
-  type signature   = Sig of (name With_pos.t * datatype') With_pos.t
+  type signature   = Sig of (name WithPos.t * datatype') WithPos.t
                    | NoSig
 
-  val sig_of_opt : (name With_pos.t * datatype') With_pos.t option -> signature
+  val sig_of_opt : (name WithPos.t * datatype') WithPos.t option -> signature
 
   (* Common stuff *)
   val var         : ?ppos:t -> name -> phrase

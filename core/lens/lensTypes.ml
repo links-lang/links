@@ -39,12 +39,12 @@ let sort_cols_of_table (tableName : string) (t : Types.typ) =
     sort_cols_of_record tableName rt
 
 let var_name (var : phrase) =
-    match With_pos.node var with
+    match WithPos.node var with
     | Var name -> name
     | _ -> failwith "Expected a `Var type"
 
 let cols_of_phrase (key : phrase) : string list =
-    match With_pos.node key with
+    match WithPos.node key with
     | TupleLit keys -> List.map var_name keys
     | Var name -> [name]
     | _ -> failwith "Expected a tuple or a variable."

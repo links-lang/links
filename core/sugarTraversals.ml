@@ -11,7 +11,7 @@
 open Operators
 open CommonTypes
 open SourceCode
-open SourceCode.With_pos.Legacy
+open SourceCode.WithPos.Legacy
 open Sugartypes
 
 class map =
@@ -53,8 +53,8 @@ class map =
       fun bndr ->
         let name = o#name (Binder.name bndr) in
         let ty  = o#option (fun o -> o#unknown) (Binder.typ bndr) in
-        let pos = With_pos.pos bndr |> o#position in
-        With_pos.make ~pos (name,ty)
+        let pos = WithPos.pos bndr |> o#position in
+        WithPos.make ~pos (name,ty)
 
     method sentence : sentence -> sentence =
       function
@@ -437,7 +437,7 @@ class map =
 
     method phrase : phrase -> phrase =
       fun p ->
-        With_pos.map2 ~f_pos:o#position ~f_node:o#phrasenode p
+        WithPos.map2 ~f_pos:o#position ~f_node:o#phrasenode p
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
       function
@@ -452,7 +452,7 @@ class map =
 
     method cp_phrase : cp_phrase -> cp_phrase =
       fun p ->
-      With_pos.map2 ~f_pos:o#position ~f_node:o#cp_phrasenode p
+      WithPos.map2 ~f_pos:o#position ~f_node:o#cp_phrasenode p
 
     method patternnode : Pattern.t -> Pattern.t =
       let open Pattern in
@@ -496,7 +496,7 @@ class map =
 
     method pattern : Pattern.with_pos -> Pattern.with_pos =
       fun p ->
-        With_pos.map2 ~f_pos:o#position ~f_node:o#patternnode p
+        WithPos.map2 ~f_pos:o#position ~f_node:o#patternnode p
 
     method name : name -> name = o#string
 
@@ -618,7 +618,7 @@ class map =
       | End -> End
 
     method datatype : Datatype.with_pos -> Datatype.with_pos =
-        With_pos.map2 ~f_pos:o#position ~f_node:o#datatypenode
+        WithPos.map2 ~f_pos:o#position ~f_node:o#datatypenode
 
     method type_arg : Datatype.type_arg -> Datatype.type_arg =
       let open Datatype in function
@@ -716,7 +716,7 @@ class map =
 
     method binding : binding -> binding =
       fun p ->
-        With_pos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
+        WithPos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
 
     method program : program -> program =
       fun (bindings, phrase) ->
@@ -763,7 +763,7 @@ class fold =
       fun bndr ->
         let o = o#name (Binder.name bndr) in
         let o = o#option (fun o -> o#unknown) (Binder.typ bndr) in
-        let o = o#position (With_pos.pos bndr) in o
+        let o = o#position (WithPos.pos bndr) in o
 
     method sentence : sentence -> 'self_type =
       function
@@ -1106,7 +1106,7 @@ class fold =
       | Raise -> o
 
     method phrase : phrase -> 'self_type =
-      With_pos.traverse
+      WithPos.traverse
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#phrasenode v)
@@ -1123,7 +1123,7 @@ class fold =
       | CPComp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
 
     method cp_phrase : cp_phrase -> 'self_node =
-      With_pos.traverse
+      WithPos.traverse
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#cp_phrasenode v)
@@ -1163,7 +1163,7 @@ class fold =
 
 
     method pattern : Pattern.with_pos -> 'self_type =
-      With_pos.traverse
+      WithPos.traverse
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
@@ -1277,7 +1277,7 @@ class fold =
       | End -> o
 
     method datatype : Datatype.with_pos -> 'self_type =
-      With_pos.traverse
+      WithPos.traverse
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#datatypenode v)
@@ -1373,7 +1373,7 @@ class fold =
           o
 
     method binding : binding -> 'self_type =
-      With_pos.traverse
+      WithPos.traverse
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)

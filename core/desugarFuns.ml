@@ -1,6 +1,6 @@
 open CommonTypes
 open Utility
-open SourceCode.With_pos.Legacy
+open SourceCode.WithPos.Legacy
 open Sugartypes
 open SugarConstructors.DummyPositions
 

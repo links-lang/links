@@ -94,7 +94,7 @@ module Position : sig
   val resolve_start_expr : t -> Lexpos.t * string
 end
 
-module With_pos : sig
+module WithPos : sig
   (** Module for legacy support. Try not to use this in new code. *)
   module Legacy : sig
     type 'a with_pos = {

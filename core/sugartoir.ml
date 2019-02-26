@@ -2,7 +2,7 @@ open CommonTypes
 open Operators
 open Utility
 open SourceCode
-open SourceCode.With_pos.Legacy
+open SourceCode.WithPos.Legacy
 open Ir
 
 (* {0 Sugar To IR}
@@ -728,9 +728,9 @@ struct
 
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
     fun env node ->
-      let e = With_pos.node node in
-      let pos = With_pos.pos node in
-      let with_pos = With_pos.make in
+      let e = WithPos.node node in
+      let pos = WithPos.pos node in
+      let with_pos = WithPos.make in
       let lookup_var name =
         let x, xt = lookup_name_and_type name env in
           I.var (x, xt) in
@@ -751,7 +751,7 @@ struct
 
       let rec is_pure_primitive e =
         let open Sugartypes in
-        match With_pos.node e with
+        match WithPos.node e with
           | TAbstr (_, e)
           | TAppl (e, _) -> is_pure_primitive e
           | Var f when Lib.is_pure_primitive f -> true
@@ -773,7 +773,7 @@ struct
               cofv (instantiate "Nil" [`Type t])
           | ListLit (e::es, Some t) ->
               cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff],
-                                 [ev e; ev (With_pos.make ~pos (ListLit (es, Some t)))]))
+                                 [ev e; ev (WithPos.make ~pos (ListLit (es, Some t)))]))
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.name bndr in
              let kt = Binder.typ_exn bndr in

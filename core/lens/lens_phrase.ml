@@ -9,11 +9,11 @@ module Alias = Lens_alias
 type t = lens_phrase
 type node = lens_phrasenode
 
-let source_position phrase = With_pos.pos phrase
+let source_position phrase = WithPos.pos phrase
 
-let node phrase = With_pos.node phrase
+let node phrase = WithPos.node phrase
 
-let with_pos ~pos phrase = With_pos.make ~pos phrase
+let with_pos ~pos phrase = WithPos.make ~pos phrase
 
 let dummy_pos = Position.dummy
 
@@ -34,14 +34,14 @@ let tuple ?(pos = dummy_pos) v = TupleLit v |> with_pos ~pos
 let tuple_singleton ?(pos = dummy_pos) v = tuple ~pos [v]
 
 let name_of_var expr =
-  match With_pos.node expr with
+  match WithPos.node expr with
   | Sugartypes.Var n -> n
   | _ -> failwith "Expected var."
 
 let of_phrase p =
   let rec f p =
     let phrase =
-      match With_pos.node p with
+      match WithPos.node p with
       | Sugartypes.Constant c -> Constant c
       | Sugartypes.Var v -> Var v
       | Sugartypes.UnaryAppl ((_, op), phrase) -> UnaryAppl (Unary.from_links op, f phrase)
@@ -54,7 +54,7 @@ let of_phrase p =
           | _ -> failwith "Unsupported function"
         end
       | _ -> failwith "Unknown phrasenode for lens_phrase to phrase." in
-    With_pos.map ~f:(fun _ -> phrase) p
+    WithPos.map ~f:(fun _ -> phrase) p
   in
   f p
 

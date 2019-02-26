@@ -27,7 +27,7 @@ open Utility
 open Operators
 open Sugartypes
 open Printf
-open SourceCode.With_pos.Legacy
+open SourceCode.WithPos.Legacy
 open ModuleUtils
 
 let _print_shadow_table st =

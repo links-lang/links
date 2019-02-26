@@ -92,7 +92,7 @@ type lens_phrasenode =
   | In        of Lens_operators.name list * (Constant.constant list) list
   | Case      of lens_phrase option * (lens_phrase * lens_phrase) list * lens_phrase
   | TupleLit  of lens_phrase list
-and lens_phrase = lens_phrasenode SourceCode.With_pos.t
+and lens_phrase = lens_phrasenode SourceCode.WithPos.t
   [@@deriving show]
 
 (* End Lenses *)

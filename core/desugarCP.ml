@@ -1,7 +1,7 @@
 open Utility
 open Sugartypes
 open SugarConstructors.DummyPositions
-open SourceCode.With_pos.Legacy
+open SourceCode.WithPos.Legacy
 
 module TyEnv = Env.String
 

@@ -172,7 +172,7 @@ module Position = struct
   let pp fmt _ = Utility.format_omission fmt
 end
 
-module With_pos = struct
+module WithPos = struct
   module Legacy = struct
       type 'a with_pos = {
       node : 'a;

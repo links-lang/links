@@ -79,8 +79,8 @@ let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> pattern * raw_env =
   fun scope node ->
     let desugar_pat = desugar_pattern scope in
-    let p = With_pos.node node in
-    let pos = With_pos.pos node in
+    let p = WithPos.node node in
+    let pos = WithPos.pos node in
     let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
     let fresh_binder (nenv, tenv, eff) bndr =
@@ -98,10 +98,10 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> pattern * r
             let p, env = desugar_pat p in
             let ps, env' = desugar_pat ps in
               `Cons (p, ps), env ++ env'
-        | List [] -> desugar_pat (With_pos.make ~pos Nil)
+        | List [] -> desugar_pat (WithPos.make ~pos Nil)
         | List (p::ps) ->
             let p, env = desugar_pat p in
-            let ps, env' = desugar_pat (With_pos.make ~pos (List ps)) in
+            let ps, env' = desugar_pat (WithPos.make ~pos (List ps)) in
               `Cons (p, ps), env ++ env'
         | Variant (name, None) -> `Variant (name, `Any), empty
         | Variant (name, Some p) ->
@@ -136,7 +136,7 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> pattern * r
               `Record (bs, p), env
         | Tuple ps ->
             let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
-              desugar_pat (With_pos.make ~pos (Record (bs, None)))
+              desugar_pat (WithPos.make ~pos (Record (bs, None)))
         | Constant constant ->
             `Constant constant, empty
         | Variable b ->

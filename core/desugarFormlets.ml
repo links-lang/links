@@ -1,12 +1,12 @@
 open CommonTypes
 open Utility
 open SourceCode
-open SourceCode.With_pos.Legacy
+open SourceCode.WithPos.Legacy
 open Sugartypes
 open SugarConstructors.DummyPositions
 
 let rec is_raw phrase =
-  match With_pos.node phrase with
+  match WithPos.node phrase with
   | TextNode _ -> true
   | Block _    -> true
   | FormBinding _ -> false
@@ -38,7 +38,7 @@ object (o : 'self_type)
   *)
   method formlet_patterns : Sugartypes.phrase -> (Sugartypes.Pattern.with_pos list * Sugartypes.phrase list * Types.datatype list) =
     fun ph ->
-      match With_pos.node ph with
+      match WithPos.node ph with
         | _ when is_raw ph ->
             [tuple_pat []], [tuple []], [Types.unit_type]
         | FormBinding (f, p) ->

@@ -57,7 +57,7 @@ module SugarConstructors (Position : Pos)
   type name_or_pat = PatName of name | Pat of Pattern.with_pos
 
   (* Optionally stores a datatype signature.  Isomporphic to Option. *)
-  type signature = Sig of (name With_pos.t * datatype') With_pos.t | NoSig
+  type signature = Sig of (name WithPos.t * datatype') WithPos.t | NoSig
   let sig_of_opt = function
     | Some s -> Sig s
     | None   -> NoSig
@@ -67,9 +67,9 @@ module SugarConstructors (Position : Pos)
   let datatype_opt_of_sig_opt sig_opt name =
     match sig_opt with
     | Sig node ->
-       let pos = With_pos.pos node in
-       let name', datatype = With_pos.node node in
-       let signame = With_pos.node name' in
+       let pos = WithPos.pos node in
+       let name', datatype = WithPos.node node in
+       let signame = WithPos.node name' in
        (* Ensure that name in a signature matches name in a declaration. *)
        if signame <> name then
          raise (ConcreteSyntaxError
@@ -133,7 +133,7 @@ module SugarConstructors (Position : Pos)
 
   (** Fieldspec *)
 
-  let present        = Datatype.Present (With_pos.make Datatype.Unit)
+  let present        = Datatype.Present (WithPos.make Datatype.Unit)
   let wild_present   = ("wild", present)
   let hear_present p = ("hear", Datatype.Present p)
 
@@ -220,10 +220,10 @@ module SugarConstructors (Position : Pos)
   (* Is the list of labeled database expressions empty? *)
   let is_empty_db_exps : phrase -> bool =
     fun n ->
-    let node = With_pos.node n in
+    let node = WithPos.node n in
     match node with
     | ListLit ([node], _) ->
-        (match With_pos.node node with
+        (match WithPos.node node with
         | RecordLit ([], _) -> true
         | _ -> false)
     | _ -> false
@@ -294,7 +294,7 @@ module SugartypesPos : Pos with type t = Position.t = struct
   (* Identity - positions in this module are alread Sugartypes positions *)
   let pos p = p
   (* Construct a node with position *)
-  let with_pos pos node = With_pos.make ~pos node
+  let with_pos pos node = WithPos.make ~pos node
   (* Default (dummy) position *)
   let dp = Position.dummy
 end
@@ -304,7 +304,7 @@ end
 module DummyPos : Pos with type t = unit = struct
   type t = unit
   let pos ()           = Position.dummy
-  let with_pos () node = With_pos.make node
+  let with_pos () node = WithPos.make node
   let dp               = ()
 end
 

@@ -4,7 +4,7 @@ open Operators
 open Sugartypes
 open SugarConstructors.SugartypesPositions
 open SourceCode
-open SourceCode.With_pos.Legacy
+open SourceCode.WithPos.Legacy
 
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 
@@ -2110,7 +2110,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       Position.Resolved.resolve p |> Position.Resolved.source_expression in
     let ppos_and_typ p = (pattern_pos p, pattern_typ p) in
     let uexp_pos p =
-      With_pos.pos p |>
+      WithPos.pos p |>
       Position.Resolved.resolve |>
       Position.Resolved.source_expression in
     let exp_pos (p,_,_) = uexp_pos p in
@@ -2119,7 +2119,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     and tpo p = type_pattern `Open p
     and tc : phrase -> phrase * Types.datatype * usagemap = type_check context
     and expr_string (p : Sugartypes.phrase) : string =
-      let pos = With_pos.pos p in
+      let pos = WithPos.pos p in
       Position.Resolved.resolve pos |> Position.Resolved.source_expression
     and erase_cases = List.map (fun ((p, _, _t), (e, _, _)) -> p, e) in
     let type_cases binders =
@@ -3370,7 +3370,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    let vs' = Env.domain henv.var_env in
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
                    let () =
-                     let pos' = (fst3 kpat) |> With_pos.pos |> Position.resolve_expression in
+                     let pos' = (fst3 kpat) |> WithPos.pos |> Position.resolve_expression in
                      let kt = TypeUtils.return_type (pattern_typ kpat) in
                      match descr.shd_depth with
                      | Deep ->
@@ -3574,7 +3574,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let no_pos t = (_UNKNOWN_POS_, t) in
     let pattern_pos ({pos=p;_},_,_) = Position.resolve_expression p in
     let ppos_and_typ p = (pattern_pos p, pattern_typ p) in
-    let uexp_pos p = With_pos.pos p |> Position.resolve_expression in
+    let uexp_pos p = WithPos.pos p |> Position.resolve_expression in
     let exp_pos (p,_,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
 

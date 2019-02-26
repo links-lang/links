@@ -1,6 +1,6 @@
 open Utility
 open SourceCode
-open SourceCode.With_pos.Legacy
+open SourceCode.WithPos.Legacy
 open Sugartypes
 open Operators
 
