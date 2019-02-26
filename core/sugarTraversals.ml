@@ -626,13 +626,13 @@ class map =
       | Row _x -> let _x = o#row _x in Row _x
       | Presence _x -> let _x = o#fieldspec _x in Presence _x
 
-    method constant : constant -> constant =
+    method constant : Constant.t -> Constant.t =
       function
-      | `Float _x -> let _x = o#float _x in `Float _x
-      | `Int _x -> let _x = o#int _x in `Int _x
-      | `String _x -> let _x = o#string _x in `String _x
-      | `Bool _x -> let _x = o#bool _x in `Bool _x
-      | `Char _x -> let _x = o#char _x in `Char _x
+      | Constant.Float _x  -> let _x = o#float _x  in Constant.Float _x
+      | Constant.Int _x    -> let _x = o#int _x    in Constant.Int _x
+      | Constant.String _x -> let _x = o#string _x in Constant.String _x
+      | Constant.Bool _x   -> let _x = o#bool _x   in Constant.Bool _x
+      | Constant.Char _x   -> let _x = o#char _x   in Constant.Char _x
 
     method binop : BinaryOp.t -> BinaryOp.t =
       let open BinaryOp in function
@@ -1288,13 +1288,13 @@ class fold =
       | Row _x -> let o = o#row _x in o
       | Presence _x -> let o = o#fieldspec _x in o
 
-    method constant : constant -> 'self_type =
+    method constant : Constant.t -> 'self_type =
       function
-      | `Float _x -> let o = o#float _x in o
-      | `Int _x -> let o = o#int _x in o
-      | `String _x -> let o = o#string _x in o
-      | `Bool _x -> let o = o#bool _x in o
-      | `Char _x -> let o = o#char _x in o
+      | Constant.Float  _x -> let o = o#float  _x in o
+      | Constant.Int    _x -> let o = o#int    _x in o
+      | Constant.String _x -> let o = o#string _x in o
+      | Constant.Bool   _x -> let o = o#bool   _x in o
+      | Constant.Char   _x -> let o = o#char   _x in o
 
     method binop : BinaryOp.t -> 'self_type =
       let open BinaryOp in function
@@ -2067,13 +2067,18 @@ class fold_map =
       | Row _x -> let (o, _x) = o#row _x in (o, Row _x)
       | Presence _x -> let (o, _x) = o#fieldspec _x in (o, Presence _x)
 
-    method constant : constant -> ('self_type * constant) =
+    method constant : Constant.t -> ('self_type * Constant.t) =
       function
-      | `Float _x -> let (o, _x) = o#float _x in (o, (`Float _x))
-      | `Int _x -> let (o, _x) = o#int _x in (o, (`Int _x))
-      | `String _x -> let (o, _x) = o#string _x in (o, (`String _x))
-      | `Bool _x -> let (o, _x) = o#bool _x in (o, (`Bool _x))
-      | `Char _x -> let (o, _x) = o#char _x in (o, (`Char _x))
+      | Constant.Float _x ->
+         let (o, _x) = o#float _x in (o, (Constant.Float _x))
+      | Constant.Int _x ->
+         let (o, _x) = o#int _x in (o, (Constant.Int _x))
+      | Constant.String _x ->
+         let (o, _x) = o#string _x in (o, (Constant.String _x))
+      | Constant.Bool _x ->
+         let (o, _x) = o#bool _x in (o, (Constant.Bool _x))
+      | Constant.Char _x ->
+         let (o, _x) = o#char _x in (o, (Constant.Char _x))
 
     method binop : BinaryOp.t -> ('self_type * BinaryOp.t) =
       let open BinaryOp in function

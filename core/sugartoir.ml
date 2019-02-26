@@ -103,7 +103,7 @@ sig
   val value_of_comp : tail_computation sem -> value sem
   val comp_of_value : value sem -> tail_computation sem
 
-  val constant : constant -> value sem
+  val constant : Constant.t -> value sem
   val var : (var * datatype) -> value sem
 
   val escape : (var_info * Types.row * (var -> tail_computation sem)) -> tail_computation sem
@@ -340,7 +340,7 @@ struct
     bind s (fun v -> lift (`Return v, sem_type s))
 
   (* eval parameters *)
-  let constant c = lift (`Constant c, Constant.constant_type c)
+  let constant c = lift (`Constant c, `Primitive (Constant.type_of c))
   let var (x, t) = lift (`Variable x, t)
 
   let apply (s, ss) =
@@ -371,7 +371,7 @@ struct
 
   let string_concat (string_append, ss) =
     match ss with
-      | [] -> lift (`Constant (`String ""), Types.string_type)
+      | [] -> lift (`Constant (Constant.String ""), Types.string_type)
       | [s] -> s
       | s::ss ->
           List.fold_left (fun s s' -> apply_pure (string_append, [s; s'])) s ss
@@ -463,7 +463,7 @@ struct
               lift (`Case (v, StringMap.empty, None), t))
 
   let database s =
-    bind s (fun v -> lift (`Special (`Database v), `Primitive (`DB)))
+    bind s (fun v -> lift (`Special (`Database v), `Primitive Primitive.DB))
 
   let table_handle (database, table, keys, (r, w, n)) =
     bind database
@@ -803,9 +803,9 @@ struct
               (* IMPORTANT: we compile boolean expressions to
                  conditionals in order to faithfully capture
                  short-circuit evaluation *)
-              I.condition (ev e1, ec e2, cofv (I.constant (`Bool false)))
+              I.condition (ev e1, ec e2, cofv (I.constant (Constant.Bool false)))
           | InfixAppl ((_tyargs, BinaryOp.Or), e1, e2) ->
-              I.condition (ev e1, cofv (I.constant (`Bool true)), ec e2)
+              I.condition (ev e1, cofv (I.constant (Constant.Bool true)), ec e2)
           | UnaryAppl ((_tyargs, UnaryOp.Minus), e) ->
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
           | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
@@ -919,7 +919,7 @@ struct
           | DatabaseLit (name, (Some driver, args)) ->
               let args =
                 match args with
-                  | None -> with_pos ~pos (Constant (`String ""))
+                  | None -> with_pos ~pos (Constant (Constant.String ""))
                   | Some args -> args
               in
                 I.database
@@ -972,8 +972,8 @@ struct
                                            "XML forest literals cannot have attributes"))
                   else
                     cofv
-                      (I.concat (instantiate "Nil" [`Type (`Primitive `XmlItem)],
-                                 instantiate "Concat" [`Type (`Primitive `XmlItem); `Row eff],
+                      (I.concat (instantiate "Nil" [`Type (`Primitive Primitive.XmlItem)],
+                                 instantiate "Concat" [`Type (`Primitive Primitive.XmlItem); `Row eff],
                                  List.map ev children))
                 else
                   let attrs = alistmap (List.map ev) attrs in
@@ -990,7 +990,7 @@ struct
           | TextNode name ->
               cofv
                 (I.apply_pure
-                   (instantiate_mb "stringToXml", [ev (with_pos ~pos (Constant (`String name)))]))
+                   (instantiate_mb "stringToXml", [ev (with_pos ~pos (Constant (Constant.String name)))]))
           | Block (bs, e) -> eval_bindings `Local env bs e
           | Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)

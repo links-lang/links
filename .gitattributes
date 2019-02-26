@@ -1,0 +1,6 @@
+# Checkout files in repository using UNIX line endings
+* text eol=lf
+
+# An important exception is a file for testing Links' support for DOS line
+# endings
+tests/dos-newlines.links text eol=crlf

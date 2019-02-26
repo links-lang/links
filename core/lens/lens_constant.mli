@@ -1,4 +1,6 @@
-type t = Constant.constant
+open CommonTypes
+
+type t = Constant.t
 
 val bool : bool -> t
 

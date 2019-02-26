@@ -61,7 +61,7 @@ class map :
     method datatypenode    : Datatype.t -> Datatype.t
     method datatype'       : datatype' -> datatype'
     method type_arg        : Datatype.type_arg -> Datatype.type_arg
-    method constant        : constant -> constant
+    method constant        : Constant.t -> Constant.t
     method binop           : BinaryOp.t -> BinaryOp.t
     method tybinop         : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t
     method bindingnode     : bindingnode -> bindingnode
@@ -132,7 +132,7 @@ class fold :
     method datatypenode    : Datatype.t -> 'self
     method datatype'       : datatype' -> 'self
     method type_arg        : Datatype.type_arg -> 'self
-    method constant        : constant -> 'self
+    method constant        : Constant.t -> 'self
     method binop           : BinaryOp.t -> 'self
     method tybinop         : tyarg list * BinaryOp.t -> 'self
     method bindingnode     : bindingnode -> 'self
@@ -161,7 +161,7 @@ object ('self)
   method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)
   method bool            : bool -> 'self * bool
   method char            : char -> 'self * char
-  method constant        : constant -> 'self * constant
+  method constant        : Constant.t -> 'self * Constant.t
   method datatype        : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatypenode    : Datatype.t -> 'self * Datatype.t
   method datatype'       : datatype' -> 'self * datatype'

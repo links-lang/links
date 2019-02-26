@@ -2,6 +2,7 @@ open Types
 open Utility
 open Lens_operators
 open Lens_utility
+open CommonTypes
 
 module Constant = Lens_constant
 
@@ -123,7 +124,7 @@ module Select = struct
 
   let query_exists query ~(database:db) =
     let sql = Format.asprintf "SELECT EXISTS (%a) AS t" fmt query in
-    let mappings = ["t", `Primitive `Bool] in
+    let mappings = ["t", `Primitive Primitive.Bool] in
     let res = Database.execute_select_result mappings sql database in
     let res = Database.build_result res in
     let (_,v) = Value.unbox_record (List.hd (Value.unbox_list res)) |> List.hd in

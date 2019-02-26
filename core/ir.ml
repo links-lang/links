@@ -1,5 +1,7 @@
 (** Monadic IR *)
 
+open CommonTypes
+
 [@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
 [@@@ocaml.warning "-3"] (** disables deprecation warnings **)
 
@@ -33,14 +35,11 @@ type 'a var_map = 'a Utility.intmap
 type language = string
   [@@deriving show]
 
-type constant = Constant.constant
-  [@@deriving show]
-
 type location = CommonTypes.Location.t
   [@@deriving show]
 
 type value =
-  [ `Constant of constant
+  [ `Constant of Constant.t
   | `Variable of var
   | `Extend of (value name_map * value option)
   | `Project of (name * value)
@@ -125,10 +124,10 @@ let letmv (b, v) = letm (b, `Return v)
 
 let rec is_atom =
   function
-    | `Constant (`Bool _)
-    | `Constant (`Int _)
-    | `Constant (`Char _)
-    | `Constant (`Float _)
+    | `Constant (Constant.Bool  _)
+    | `Constant (Constant.Int   _)
+    | `Constant (Constant.Char  _)
+    | `Constant (Constant.Float _)
     | `Variable _ -> true
 (*
   This can only be an atom if
