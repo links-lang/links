@@ -42,36 +42,21 @@ struct
   type context =
     | CNil
     | CCons
-    | CVariant of string
-    | CNVariant of StringSet.t
-    | CConstant of Constant.t
+    | CVariant   of string
+    | CNVariant  of StringSet.t
+    | CConstant  of Constant.t
     | CNConstant of ConstSet.t
 
-  type ptype =
-    | TList
-    | TVariant
-    | TNegative
-    | TRecord
-    | TConstant
-    | TVariable
-    | TEffect
+  type sort =
+    | SList
+    | SVariant
+    | SNegative
+    | SRecord
+    | SConstant
+    | SVariable
+    | SEffect
 
 end
-
-
-
-let mk_any = Pattern.Any
-let mk_nil = Pattern.Nil
-let mk_cons (p1, p2) = Pattern.Cons (p1, p2)
-let mk_variant (name, pattern) = Pattern.Variant (name, pattern)
-let mk_effect  (name, ps, p) = Pattern.Effect (name, ps, p)
-let mk_negative s = Pattern.Negative s
-let mk_record (pmap, op) = Pattern.Record (pmap, op)
-let mk_constant c = Pattern.Constant c
-let mk_variable b = Pattern.Variable b
-let mk_as (b, p) = Pattern.As (b, p)
-let mk_has_type (p, t) = Pattern.HasType (p, t)
-
 
 
 
@@ -123,21 +108,21 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t *
     in
       let open Sugartypes.Pattern in
       match p with
-        | Any -> mk_any, empty
-        | Nil -> mk_nil, empty
+        | Any -> Pattern.Any, empty
+        | Nil -> Pattern.Nil, empty
         | Cons (p, ps) ->
             let p, env = desugar_pat p in
             let ps, env' = desugar_pat ps in
-              mk_cons (p, ps), env ++ env'
+              Pattern.Cons (p, ps), env ++ env'
         | List [] -> desugar_pat (with_dummy_pos Nil)
         | List (p::ps) ->
             let p, env = desugar_pat p in
             let ps, env' = desugar_pat (with_dummy_pos (List ps)) in
-              mk_cons (p, ps), env ++ env'
-        | Variant (name, None) -> mk_variant (name, mk_any), empty
+              Pattern.Cons (p, ps), env ++ env'
+        | Variant (name, None) -> Pattern.Variant (name, Pattern.Any), empty
         | Variant (name, Some p) ->
             let p, env = desugar_pat p in
-            mk_variant (name, p), env
+            Pattern.Variant (name, p), env
         | Effect (name, ps, k) ->
            let ps, env =
              List.fold_right
@@ -147,8 +132,8 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t *
                ps ([], empty)
            in
            let k, env' = desugar_pat k in
-           mk_effect (name, ps, k), env ++ env'
-        | Negative names -> mk_negative (StringSet.from_list names), empty
+           Pattern.Effect (name, ps, k), env ++ env'
+        | Negative names -> Pattern.Negative (StringSet.from_list names), empty
         | Record (bs, p) ->
             let bs, env =
               List.fold_right
@@ -164,22 +149,22 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t *
                     let p, env' = desugar_pat p in
                       Some p, env ++ env'
             in
-              mk_record (bs, p), env
+              Pattern.Record (bs, p), env
         | Tuple ps ->
             let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
               desugar_pat (with_dummy_pos (Record (bs, None)))
         | Constant constant ->
-            mk_constant constant, empty
+            Pattern.Constant constant, empty
         | Variable b ->
             let xb, env = fresh_binder empty b in
-              mk_variable xb, env
+              Pattern.Variable xb, env
         | As (b, p) ->
             let xb, env = fresh_binder empty b in
             let p, env' = desugar_pat p in
-              mk_as (xb, p), env ++ env'
+              Pattern.As (xb, p), env ++ env'
         | HasType (p, (_, Some t)) ->
             let p, env = desugar_pat p in
-              mk_has_type (p, t), env
+              Pattern.HasType (p, t), env
         | HasType (_, (_, None)) -> assert false
 
 type raw_bound_computation = raw_env -> computation
@@ -324,27 +309,27 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
     in
       lp value_type pat value body
 
-let rec get_pattern_type : Pattern.t -> Pattern.ptype =
+let rec get_pattern_sort : Pattern.t -> Pattern.sort =
   let open Pattern in
   function
-    | Nil | Cons _ -> TList
-    | Variant _ -> TVariant
-    | Negative _ -> TNegative
-    | Record _ -> TRecord
-    | Constant _ -> TConstant
-    | Any | Variable _ -> TVariable
-    | As (_, pattern) -> get_pattern_type pattern
-    | HasType (pattern, _) -> get_pattern_type pattern
-    | Effect _ -> TEffect
+    | Nil | Cons _ -> SList
+    | Variant _ -> SVariant
+    | Negative _ -> SNegative
+    | Record _ -> SRecord
+    | Constant _ -> SConstant
+    | Any | Variable _ -> SVariable
+    | As (_, pattern) -> get_pattern_sort pattern
+    | HasType (pattern, _) -> get_pattern_sort pattern
+    | Effect _ -> SEffect
 
-let get_clause_pattern_type : clause -> Pattern.ptype =
+let get_clause_pattern_sort : clause -> Pattern.sort =
   function
-  | ((_, pattern)::_, _) -> get_pattern_type pattern
+  | ((_, pattern)::_, _) -> get_pattern_sort pattern
   | _ -> assert false
 
-let get_clauses_pattern_kind : clause list -> Pattern.ptype =
+let get_clauses_pattern_sort : clause list -> Pattern.sort =
   function
-  | (((_, pattern)::_, _)::_) -> get_pattern_type pattern
+  | (((_, pattern)::_, _)::_) -> get_pattern_sort pattern
   | _ -> assert false
 
 (* compile away top-level As and HasType patterns *)
@@ -362,7 +347,7 @@ let reduce_clause : raw_clause -> clause =
   fun (ps, body) ->
     (List.map reduce_pattern ps, fun (nenv, tenv, eff, _penv) -> body (nenv, tenv, eff))
 
-(* partition clauses sequentially by pattern kind *)
+(* partition clauses sequentially by pattern sort *)
 let partition_clauses : clause list -> (clause list) list =
   function
     | [] -> []
@@ -370,15 +355,15 @@ let partition_clauses : clause list -> (clause list) list =
         let (_, es, ess) =
           List.fold_right
             (fun clause (t, es, ess) ->
-               let t' = get_clause_pattern_type clause in
+               let t' = get_clause_pattern_sort clause in
                let es', ess' =
-                 (* group non-variable patterns of the same kind *)
-                 if es = [] || (t' = t && t' <> Pattern.TVariable && t' <> Pattern.TNegative) then
+                 (* group non-variable patterns of the same sort *)
+                 if es = [] || (t' = t && t' <> Pattern.SVariable && t' <> Pattern.SNegative) then
                    clause::es, ess
                  else
                    [clause], es::ess
                in
-                 (t', es', ess')) clauses (Pattern.TVariable, [], [])
+                 (t', es', ess')) clauses (Pattern.SVariable, [], [])
         in
           es::ess
 
@@ -504,21 +489,21 @@ let rec match_cases : var list -> clause list -> bound_computation -> bound_comp
             List.fold_right
               (fun clauses comp ->
                  let open Pattern in
-                 match get_clauses_pattern_kind clauses with
-                   | TList ->
+                 match get_clauses_pattern_sort clauses with
+                   | SList ->
                        match_list vars (arrange_list_clauses clauses) comp var
-                   | TVariant ->
+                   | SVariant ->
                        match_variant vars (arrange_variant_clauses clauses) comp var
-                   | TNegative ->
+                   | SNegative ->
                        assert (List.length clauses == 1);
                        match_negative vars (List.hd clauses) comp var
-                   | TVariable ->
+                   | SVariable ->
                        match_var vars clauses comp var
-                   | TRecord ->
+                   | SRecord ->
                        match_record vars (arrange_record_clauses clauses) comp var
-                   | TConstant ->
+                   | SConstant ->
                       match_constant vars (arrange_constant_clauses clauses) comp var
-                   | TEffect -> assert false (* TODO FIXME have proper pattern matching compilation of effect patterns *)
+                   | SEffect -> assert false (* TODO FIXME have proper pattern matching compilation of effect patterns *)
               ) clausess def env
       | _, _ -> assert false
 
@@ -811,7 +796,7 @@ and match_record
         (fun (bs, p, (annotation, (ps, body))) annotated_clauses ->
            let p, closed =
              match p with
-               | None -> ([], mk_any), true
+               | None -> ([], Pattern.Any), true
                | Some p -> p, false in
 
            let rps, fields =
@@ -821,18 +806,18 @@ and match_record
                     StringMap.find name bs :: ps, fields
                   else
                     if closed then
-                      ([], mk_any)::ps, fields
+                      ([], Pattern.Any)::ps, fields
                     else
                       let xt = TypeUtils.project_type name t in
                       let xb, x = Var.fresh_var_of_type xt in
-                        ([], mk_variable xb)::ps, StringMap.add name (Variable x) fields)
+                        ([], Pattern.Variable xb)::ps, StringMap.add name (Variable x) fields)
                names
                ([], StringMap.empty) in
            let rps, body =
              if all_closed then
                rps, body
              else if closed then
-               ([], mk_any)::List.rev rps, body
+               ([], Pattern.Any)::List.rev rps, body
              else
                let original_names =
                  StringMap.fold
@@ -861,7 +846,7 @@ and match_record
                              ((apply_annotation (Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
-                 ([], mk_variable restb)::rps, body in
+                 ([], Pattern.Variable restb)::rps, body in
            let ps = List.rev rps @ ps in
              (annotation, (ps, body))::annotated_clauses
         ) xs [] in
@@ -1003,17 +988,17 @@ let compile_handle_cases
                 let variant_pat =
                   match ps with
                   | [Pattern.Effect (name, [], _)] ->
-                     mk_variant (name, mk_any)
+                     Pattern.Variant (name, Pattern.Any)
                   | [Pattern.Effect (name, [p], _)] ->
-                     mk_variant (name, p)
+                     Pattern.Variant (name, p)
                   | [Pattern.Effect (name, ps, _)] ->
                      let packaged_args =
                        let fields =
                          List.mapi (fun i p -> (string_of_int (i+1), p)) ps
                        in
-                       mk_record (StringMap.from_alist fields, None)
+                       Pattern.Record (StringMap.from_alist fields, None)
                      in
-                     mk_variant (name, packaged_args)
+                     Pattern.Variant (name, packaged_args)
                   | _ -> assert false
                 in
               [variant_pat], body)

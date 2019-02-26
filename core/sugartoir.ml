@@ -1103,7 +1103,7 @@ struct
                         ((ft, f, scope), (tyvars, (ps, body)), location)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | Exp e' ->
-                    I.comp env (CompilePatterns.mk_any, ev e', eval_bindings scope env bs e)
+                    I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
                 | Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
