@@ -2689,7 +2689,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and p = tc p
             and rettyp = Types.fresh_type_variable (lin_any, res_any) in
               unify ~handle:Gripers.unary_apply
-                ((string_of_unary_op op, opt),
+                ((UnaryOp.to_string op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ p], context.effect_row, rettyp)));
               UnaryAppl ((tyargs, op), erase p), rettyp, merge_usages [usages p; op_usage]
         | InfixAppl ((_, op), l, r) ->
@@ -2698,7 +2698,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and r = tc r
             and rettyp = Types.fresh_type_variable (lin_any, res_any) in
               unify ~handle:Gripers.infix_apply
-                ((string_of_binop op, opt),
+                ((BinaryOp.to_string op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ l; typ r],
                                     context.effect_row, rettyp)));
               InfixAppl ((tyargs, op), erase l, erase r), rettyp, merge_usages [usages l; usages r; op_usages]

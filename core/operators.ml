@@ -27,13 +27,12 @@ module UnaryOp = struct
     | FloatMinus
     | Name of name
     [@@deriving show]
-end
 
-let string_of_unary_op =
-  function
-  | UnaryOp.Minus -> "-"
-  | UnaryOp.FloatMinus -> ".-"
-  | UnaryOp.Name name -> name
+  let to_string = function
+    | Minus      -> "-"
+    | FloatMinus -> ".-"
+    | Name name  -> name
+end
 
 module BinaryOp = struct
   type t =
@@ -45,23 +44,19 @@ module BinaryOp = struct
     | Cons
     | Name of name
     [@@deriving show]
+
+  let to_string = function
+    | Minus        -> "-"
+    | FloatMinus   -> ".-"
+    | RegexMatch _ -> "<some regex nonsense>"
+    | And          -> "&&"
+    | Or           -> "||"
+    | Cons         -> "::"
+    | Name name    -> name
 end
 
-let string_of_binop =
-  let open BinaryOp in function
-  | Minus -> "-"
-  | FloatMinus -> ".-"
-  | RegexMatch _ -> "<some regex nonsense>"
-  | And -> "&&"
-  | Or -> "||"
-  | Cons -> "::"
-  | Name name -> name
-
-let binop_of_string : string -> BinaryOp.t =
-   let open BinaryOp in function
-   | "-"  -> Minus
-   | ".-" -> FloatMinus
-   | "&&" -> And
-   | "||" -> Or
-   | "::" -> Cons
-   | name -> Name name
+(* Operator section *)
+module Section = struct
+  type t = Minus | FloatMinus | Project of name | Name of name
+    [@@deriving show]
+end

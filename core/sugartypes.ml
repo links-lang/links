@@ -138,11 +138,6 @@ end
 type spawn_kind = Angel | Demon | Wait
     [@@deriving show]
 
-module Section = struct
-  type t = Minus | FloatMinus | Project of name | Name of name
-    [@@deriving show]
-end
-
 type fn_dep = string * string
     [@@deriving show]
 
