@@ -9,7 +9,29 @@ type name = string [@@deriving show]
 
 
 
-module Binder = struct
+module Binder : sig
+  type t = (name * Types.datatype option) WithPos.t
+      [@@deriving show]
+
+  val name : t -> name
+  val typ : t -> Types.datatype option
+
+  val typ_exn : t -> Types.datatype
+
+  val set_name : t -> name -> t
+  val set_type : t -> Types.datatype -> t
+
+  val erase_type : t -> t
+  val has_type : t -> bool
+
+  val traverse_map :
+    t ->
+    o:'o ->
+    f_pos:('o -> Position.t -> 'a * Position.t) ->
+    f_name:('a -> name -> 'b * name) ->
+    f_ty:('b -> Types.datatype option -> 'c * Types.datatype option) ->
+    'c * t
+end = struct
   type t = (name * Types.datatype option) WithPos.t
   [@@deriving show]
 
@@ -21,8 +43,15 @@ module Binder = struct
   let set_name b name = WithPos.map ~f:(fun (_, ty) -> name, ty) b
   let set_type b typ = WithPos.map ~f:(fun (name, _) -> name, Some typ) b
 
-  let erase_type b = set_type b None
+  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, None) b
   let has_type b = typ b |> OptionUtils.is_some
+
+  let traverse_map b ~o ~f_pos ~f_name ~f_ty =
+    WithPos.traverse_map b ~o ~f_pos ~f_node:(fun o (n, ty) ->
+        let o, name = f_name o n in
+        let o, typ = f_ty o ty in
+        o, (name, typ)
+      )
 end
 
 (* type variables *)

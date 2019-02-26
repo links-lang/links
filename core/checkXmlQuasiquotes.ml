@@ -38,7 +38,7 @@ let check mode pos e =
         | _ -> o
     end
   in
-  let o = checker#phrase {node=e; pos} in
+  let o = WithPos.make ~pos e |> checker#phrase in
   let kind =
     match mode with
     | `Xml -> "XML"

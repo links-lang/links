@@ -3865,7 +3865,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
       | AlienBlock _
       | Module _ -> assert false
     in
-      {node = typed; pos}, ctxt, usage
+      WithPos.make ~pos typed, ctxt, usage
 and type_regex typing_env : regex -> regex =
   fun m ->
     let erase (e, _, _) = e in
@@ -4051,7 +4051,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Dual s)) right) in
        unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.make_endbang_type, t);
        CPComp (Binder.set_type bndr s, left, right), t', merge_usages [u; u'] in
-  {node = p; pos}, t, u
+  WithPos.make ~pos p, t, u
 
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
 

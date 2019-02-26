@@ -188,4 +188,9 @@ module WithPos = struct
     let o = f_pos o t.pos in
     let o = f_node o t.node in
     o
+
+  let traverse_map t ~o ~f_pos ~f_node =
+    let o, pos = f_pos o t.pos in
+    let o, node = f_node o t.node in
+    o, make ~pos node
 end

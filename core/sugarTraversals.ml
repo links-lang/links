@@ -11,7 +11,6 @@
 open Operators
 open CommonTypes
 open SourceCode
-open SourceCode.WithPos
 open Sugartypes
 
 class map =
@@ -1836,10 +1835,10 @@ class fold_map =
       | Raise -> (o, Raise)
 
     method phrase : phrase -> ('self_type * phrase) =
-      fun {node; pos} ->
-        let (o, node) = o#phrasenode node in
-        let (o, pos ) = o#position   pos  in
-        (o, {node; pos})
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#phrasenode v)
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
       function
@@ -1873,10 +1872,10 @@ class fold_map =
          o, CPComp (c, p, q)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
-      fun {node; pos} ->
-      let o, node = o#cp_phrasenode node in
-      let o, pos  = o#position pos in
-      o, {node; pos}
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#cp_phrasenode v)
 
     method patternnode : Pattern.t -> ('self_type * Pattern.t) =
       let open Pattern in
@@ -1920,10 +1919,10 @@ class fold_map =
           let (o, _x_i1) = o#datatype' _x_i1 in (o, (HasType ((_x, _x_i1))))
 
     method pattern : Pattern.with_pos -> ('self_type * Pattern.with_pos) =
-      fun {node; pos} ->
-        let (o, node) = o#patternnode node in
-        let (o, pos ) = o#position pos in
-        (o, {node; pos})
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#patternnode v)
 
     method name : name -> ('self_type * name) = o#string
 
@@ -2057,9 +2056,10 @@ class fold_map =
       | End -> (o, End)
 
     method datatype : Datatype.with_pos -> ('self_type * Datatype.with_pos) =
-      fun {node; pos} ->
-        let (o, node) = o#datatypenode node in
-        let (o, pos) = o#position pos in (o, {node; pos})
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#datatypenode v)
 
     method type_arg : Datatype.type_arg -> ('self_type * Datatype.type_arg) =
       let open Datatype in function
@@ -2165,17 +2165,17 @@ class fold_map =
           (o, (AlienBlock (lang, lib, dts)))
 
     method binding : binding -> ('self_type * binding) =
-      fun {node; pos} ->
-        let (o, node) = o#bindingnode node in
-        let (o, pos ) = o#position    pos  in
-        (o, {node; pos})
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#bindingnode v)
 
     method binder : Binder.t -> ('self_type * Binder.t) =
-      fun bndr ->
-        let (o, name) = o#name (Binder.name bndr) in
-        let (o, ty  ) = o#option (fun o -> o#unknown) (Binder.typ bndr) in
-        let (o, pos ) = o#position bndr.pos in
-        (o, {node=name,ty;pos})
+      Binder.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_name:(fun o v -> o#name v)
+        ~f_ty:(fun o v -> o#option (fun o -> o#unknown) v)
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
   end

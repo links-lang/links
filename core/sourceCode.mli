@@ -86,7 +86,7 @@ module Position : sig
 end
 
 module WithPos : sig
-  type 'a t = { node : 'a
+  type 'a t = private { node : 'a
               ; pos  : Position.t
               } [@@deriving show]
 
@@ -110,4 +110,11 @@ module WithPos : sig
 
   val traverse : 'a t -> o:'o -> f_pos:('o -> Position.t -> 'b)
               -> f_node:('b -> 'a -> 'c) -> 'c
+
+  val traverse_map :
+    'a t ->
+    o:'o ->
+    f_pos:('o -> Position.t -> 'b * Position.t) ->
+    f_node:('b -> 'a -> 'c * 'd) ->
+    'c * 'd t
 end

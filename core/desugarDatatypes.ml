@@ -1,5 +1,6 @@
 open CommonTypes
 open Types
+open SourceCode
 open SourceCode.WithPos
 open Sugartypes
 open Utility
@@ -281,7 +282,7 @@ struct
                | Closed, [] -> op
                | Open _, []
                | Recursive _, [] -> (* might need an extra check on recursive rows *)
-                  (name, Present { node = Function (domain, ([], Closed), codomain); pos})
+                  (name, Present (WithPos.make ~pos @@ Function (domain, ([], Closed), codomain)))
                | _,_ -> raise (UnexpectedOperationEffects name)
                end
             | x -> x)

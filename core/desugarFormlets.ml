@@ -154,7 +154,7 @@ object (o : 'self_type)
 
   method formlet_body : Sugartypes.phrase -> ('self_type * Sugartypes.phrase * Types.datatype) =
     fun {node; pos} ->
-      let (o, node, t) = o#formlet_body_node node in (o, {node; pos}, t)
+      let (o, node, t) = o#formlet_body_node node in (o, WithPos.make ~pos node, t)
 
   method! phrasenode  : phrasenode -> ('self_type * phrasenode * Types.datatype) = function
     | Formlet (body, yields) ->

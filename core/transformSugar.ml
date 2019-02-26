@@ -626,7 +626,7 @@ class transform (env : Types.typing_environment) =
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun {node; pos} ->
         let (o, node, t) = o#phrasenode node in
-        (o, {node;pos}, t)
+        (o, WithPos.make ~pos node, t)
 
     method patternnode : Pattern.t -> ('self_type * Pattern.t) =
       let open Pattern in
@@ -665,8 +665,10 @@ class transform (env : Types.typing_environment) =
           let (o, p) = o#pattern p in (o, (HasType (p, t)))
 
     method pattern : Pattern.with_pos -> ('self_type * Pattern.with_pos) =
-      fun {node; pos} ->
-        let (o, node) = o#patternnode node in (o, {node; pos})
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o, v)
+        ~f_node:(fun o v -> o#patternnode v)
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
       function
@@ -813,8 +815,10 @@ class transform (env : Types.typing_environment) =
       | QualifiedImport _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
-      fun {node; pos} ->
-        let (o, node) = o#bindingnode node in (o, {node; pos})
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o, v)
+        ~f_node:(fun _ v -> o#bindingnode v)
 
     method binder : Binder.t -> ('self_type * Binder.t) =
       fun bndr ->
@@ -823,9 +827,9 @@ class transform (env : Types.typing_environment) =
       ({< var_env=var_env >}, bndr)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
-      fun {node; pos} ->
-      let (o, node, t) = o#cp_phrasenode node in
-      (o, {node; pos}, t)
+      fun phrase ->
+      let o, node, t = WithPos.node phrase |> o#cp_phrasenode in
+      o, (WithPos.map ~f:(fun _ -> node) phrase), t
 
     (* TODO: should really invoke o#datatype on type annotations! *)
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function

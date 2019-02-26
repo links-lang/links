@@ -1,6 +1,7 @@
 open Utility
 open CommonTypes
 open Operators
+open SourceCode
 open SourceCode.WithPos
 open Sugartypes
 open SugarConstructors.DummyPositions
@@ -213,7 +214,7 @@ object
        let (val_cases, eff_cases) = split_handler_cases h.sh_effect_cases in
        with_dummy_pos (Handle { h with sh_effect_cases = eff_cases;
                                         sh_value_cases  = val_cases })
-    | _ -> super#phrase {node; pos}
+    | _ -> WithPos.make ~pos node |> super#phrase
 
   method! bindingnode = function
     | Handler (binder, hnlit, annotation) ->
