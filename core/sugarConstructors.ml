@@ -1,6 +1,7 @@
 open CommonTypes
 open Operators
 open SourceCode
+open SourceCode.WithPos
 open Sugartypes
 open Utility.OptionUtils
 
@@ -66,10 +67,7 @@ module SugarConstructors (Position : Pos)
      exception if name does not match a name in a signature. *)
   let datatype_opt_of_sig_opt sig_opt name =
     match sig_opt with
-    | Sig node ->
-       let pos = WithPos.pos node in
-       let name', datatype = WithPos.node node in
-       let signame = WithPos.node name' in
+    | Sig {node=({node=signame; _}, datatype); pos} ->
        (* Ensure that name in a signature matches name in a declaration. *)
        if signame <> name then
          raise (ConcreteSyntaxError
@@ -133,7 +131,7 @@ module SugarConstructors (Position : Pos)
 
   (** Fieldspec *)
 
-  let present        = Datatype.Present (WithPos.make Datatype.Unit)
+  let present        = Datatype.Present (WithPos.dummy Datatype.Unit)
   let wild_present   = ("wild", present)
   let hear_present p = ("hear", Datatype.Present p)
 
@@ -218,7 +216,7 @@ module SugarConstructors (Position : Pos)
     list ~ppos [record ~ppos exps]
 
   (* Is the list of labeled database expressions empty? *)
-  let is_empty_db_exps : phrase -> bool = let open WithPos in function
+  let is_empty_db_exps : phrase -> bool = function
     | {node=ListLit ([{node=RecordLit ([], _);_}], _);_} -> true
     | _                                                  -> false
 
@@ -298,7 +296,7 @@ end
 module DummyPos : Pos with type t = unit = struct
   type t = unit
   let pos ()           = Position.dummy
-  let with_pos () node = WithPos.make node
+  let with_pos () node = WithPos.dummy node
   let dp               = ()
 end
 
