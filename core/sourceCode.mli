@@ -80,7 +80,8 @@ module Position : sig
   (** Resolve the source code position and return the source expression. *)
   val resolve_expression : t -> string
 
-  (** Resolve the source code position and return the start position and the source expression. *)
+  (** Resolve the source code position and return the start position and the
+      source expression. *)
   val resolve_start_expr : t -> Lexpos.t * string
 end
 
@@ -89,7 +90,8 @@ module WithPos : sig
               ; pos  : Position.t
               } [@@deriving show]
 
-  (** Construct a new with_pos given a node and an optional source code position. Use the [dummy] position if none is specified. *)
+  (** Construct a new with_pos given a node and an optional source code
+      position. Use the [dummy] position if none is specified. *)
   val make : ?pos:Position.t -> 'a -> 'a t
 
   (** Construct a new with_pos with a dummy source position *)
@@ -103,7 +105,9 @@ module WithPos : sig
 
   val map : 'a t -> f:('a -> 'b) -> 'b t
 
-  val map2 : 'a t -> f_pos:(Position.t -> Position.t) -> f_node:('a -> 'b) -> 'b t
+  val map2 : 'a t -> f_pos:(Position.t -> Position.t) -> f_node:('a -> 'b)
+          -> 'b t
 
-  val traverse : 'a t -> o:'o -> f_pos:('o -> Position.t -> 'b) -> f_node:('b -> 'a -> 'c) -> 'c
+  val traverse : 'a t -> o:'o -> f_pos:('o -> Position.t -> 'b)
+              -> f_node:('b -> 'a -> 'c) -> 'c
 end
