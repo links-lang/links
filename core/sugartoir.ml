@@ -113,7 +113,7 @@ sig
   val apply_pure : (value sem * (value sem) list) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 
-  val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
+  val comp : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem) -> tail_computation sem
   val letvar : (var_info * tail_computation sem * (var -> tail_computation sem)) -> tail_computation sem
 
   val xml : value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
@@ -126,19 +126,19 @@ sig
 
   val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
 
-  val db_update : env -> (CompilePatterns.pattern * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
-  val db_delete : env -> (CompilePatterns.pattern * value sem * tail_computation sem option) -> tail_computation sem
+  val db_update : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
+  val db_delete : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option) -> tail_computation sem
 
   val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 
   val handle : env -> (tail_computation sem *
-                         (CompilePatterns.pattern * (env -> tail_computation sem)) list *
-                         (CompilePatterns.pattern * (env -> tail_computation sem)) list *
-                         ((env -> tail_computation sem) * CompilePatterns.pattern * Types.datatype) list *
+                         (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
+                         (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
+                         ((env -> tail_computation sem) * CompilePatterns.Pattern.t * Types.datatype) list *
                           Sugartypes.handler_descriptor)
                -> tail_computation sem
 
-  val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
+  val switch : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
   val inject : name * value sem * datatype -> value sem
   (* val case : *)
@@ -169,13 +169,13 @@ sig
 
   val letfun :
     env ->
-    (var_info * (Types.quantifier list * (CompilePatterns.pattern list * tail_computation sem)) * location) ->
+    (var_info * (Types.quantifier list * (CompilePatterns.Pattern.t list * tail_computation sem)) * location) ->
     (var -> tail_computation sem) ->
     tail_computation sem
 
   val letrec :
     env ->
-    (var_info * (Types.quantifier list * (CompilePatterns.pattern list * (var list -> tail_computation sem))) * location) list ->
+    (var_info * (Types.quantifier list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location) list ->
     (var list -> tail_computation sem) ->
     tail_computation sem
 
@@ -183,7 +183,7 @@ sig
 
   val select : name * value sem -> tail_computation sem
 
-  val offer : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
+  val offer : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -1103,7 +1103,7 @@ struct
                         ((ft, f, scope), (tyvars, (ps, body)), location)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | Exp e' ->
-                    I.comp env (`Any, ev e', eval_bindings scope env bs e)
+                    I.comp env (CompilePatterns.mk_any, ev e', eval_bindings scope env bs e)
                 | Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
