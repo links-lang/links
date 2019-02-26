@@ -917,7 +917,7 @@ let rec let_clause : Value.database -> let_clause -> Sql.query =
   fun db (q, outer, z, inner) ->
     let gs_out = extract_gens outer in
     let gs_in = extract_gens inner in
-      `With (q,
+      Sql.With (q,
              clause db (outer_index gs_out) false outer,
              z,
              clause db (inner_index z gs_in) false inner)
@@ -933,8 +933,8 @@ and clause : Value.database -> index -> bool -> Q.t -> Sql.query = fun db index 
         let os = List.map (base db index) os in
           begin
             match body with
-              | `Select (fields, tables, condition, []) ->
-                  `Select (fields, (table, x)::tables, condition, os)
+              | Sql.Select (fields, tables, condition, []) ->
+                  Sql.Select (fields, (table, x)::tables, condition, os)
               | _ -> assert false
           end
     | If (c, body, Concat []) ->
@@ -944,19 +944,19 @@ and clause : Value.database -> index -> bool -> Q.t -> Sql.query = fun db index 
       let body = clause db index unit_query body in
         begin
           match body with
-            | `Select (fields, tables, c', os) ->
+            | Sql.Select (fields, tables, c', os) ->
               let c =
                 match c, c' with
                   (* optimisations *)
-                  | `Constant (Constant.Bool true), c
-                  | c, `Constant (Constant.Bool true) -> c
-                  | `Constant (Constant.Bool false), _
-                  | _, `Constant (Constant.Bool false) ->
-                     `Constant (Constant.Bool false)
+                  | Sql.Constant (Constant.Bool true), c
+                  | c, Sql.Constant (Constant.Bool true) -> c
+                  | Sql.Constant (Constant.Bool false), _
+                  | _, Sql.Constant (Constant.Bool false) ->
+                     Sql.Constant (Constant.Bool false)
                   (* default case *)
-                  | c, c' -> `Apply ("&&", [c; c'])
+                  | c, c' -> Sql.Apply ("&&", [c; c'])
               in
-                `Select (fields, tables, c, os)
+                Sql.Select (fields, tables, c, os)
             | _ -> assert false
         end
     | Table (_db, table, _keys, (fields, _, _)) ->
@@ -968,17 +968,17 @@ and clause : Value.database -> index -> bool -> Q.t -> Sql.query = fun db index 
         List.rev
           (StringMap.fold
              (fun name _ fields ->
-               (`Project (var, name), name)::fields)
+               (Sql.Project (var, name), name)::fields)
              fields
              [])
       in
-        `Select (fields, [(table, var)], `Constant (Constant.Bool true), [])
+        Sql.Select (fields, [(table, var)], Sql.Constant (Constant.Bool true), [])
     | Singleton _ when unit_query ->
-      (* If we're inside an `Empty or a `Length it's safe to ignore
+      (* If we're inside an Sql.Empty or a Sql.Length it's safe to ignore
          any fields here. *)
       (* We currently detect this earlier, so the unit_query stuff here
          is redundant. *)
-      `Select ([], [], `Constant (Constant.Bool true), [])
+      Sql.Select ([], [], Sql.Constant (Constant.Bool true), [])
     | Singleton (Record fields) ->
       let fields =
         List.rev
@@ -988,38 +988,38 @@ and clause : Value.database -> index -> bool -> Q.t -> Sql.query = fun db index 
              fields
              [])
       in
-        `Select (fields, [], `Constant (Constant.Bool true), [])
+        Sql.Select (fields, [], Sql.Constant (Constant.Bool true), [])
     | _ -> assert false
 and base : Value.database -> index -> Q.t -> Sql.base = fun db index ->
   let open Q in
   function
     | If (c, t, e) ->
-      `Case (base db index c, base db index t, base db index e)
+      Sql.Case (base db index c, base db index t, base db index e)
     | Apply ("tilde", [s; r]) ->
       begin
         match likeify r with
           | Some r ->
-            `Apply ("LIKE", [base db index s; `Constant (Constant.String r)])
+            Sql.Apply ("LIKE", [base db index s; Sql.Constant (Constant.String r)])
           | None ->
             let r =
                   (* HACK:
 
                      this only works if the regexp doesn't include any variables bound by the query
                   *)
-                  `Constant (Constant.String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
+                  Sql.Constant (Constant.String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
                 in
-                  `Apply ("RLIKE", [base db index s; r])
+                  Sql.Apply ("RLIKE", [base db index s; r])
         end
     | Apply ("Empty", [v]) ->
-        `Empty (unit_query db v)
+        Sql.Empty (unit_query db v)
     | Apply ("length", [v]) ->
-        `Length (unit_query db v)
+        Sql.Length (unit_query db v)
     | Apply (f, vs) ->
-        `Apply (f, List.map (base db index) vs)
+        Sql.Apply (f, List.map (base db index) vs)
     | Project (Var (x, _field_types), name) ->
-        `Project (x, name)
-    | Constant c -> `Constant c
-    | Primitive "index" -> `RowNumber index
+        Sql.Project (x, name)
+    | Constant c -> Sql.Constant c
+    | Primitive "index" -> Sql.RowNumber index
     | e ->
       Debug.print ("Not a base expression: " ^ Q.show e);
       assert false
@@ -1090,11 +1090,11 @@ and unit_query db v =
   (* queries passed to Empty and Length
      (where we don't care about what data they return)
   *)
-  `UnionAll (List.map (clause db [] true) (prepare_clauses v), 0)
+  Sql.UnionAll (List.map (clause db [] true) (prepare_clauses v), 0)
 
 and query : Value.database -> let_query -> Sql.query =
   fun db cs ->
-    `UnionAll (List.map (let_clause db) cs, 0)
+    Sql.UnionAll (List.map (let_clause db) cs, 0)
 
 let update : Value.database -> ((Ir.var * string) * Q.t option * Q.t) -> string =
   fun db ((_, table), where, body) ->
