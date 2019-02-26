@@ -293,7 +293,7 @@ struct
         let (_, nenv, {Types.tycon_env = tycon_env; _ }) = !env in
         let _, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
         let render_page = Env.String.lookup nenv "renderPage" in
-        let tail = `Apply (`Variable render_page, [`Variable x]) in
+        let tail = Ir.Apply (Ir.Variable render_page, [Ir.Variable x]) in
         Hashtbl.add Tables.scopes x `Global;
         Hashtbl.add Tables.cont_defs x ([], tail);
         Hashtbl.add Tables.cont_vars x IntSet.empty;

@@ -383,8 +383,8 @@ struct
       ([x, xs], [], `Singleton (eta_expand_var (x, field_types)))
 
   let rec value env : Ir.value -> t = function
-    | `Constant c -> `Constant c
-    | `Variable var ->
+    | Constant c -> `Constant c
+    | Variable var ->
         begin
           match lookup env var with
             | `Var (x, field_types) ->
@@ -423,7 +423,7 @@ struct
               (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
               freshen_for_bindings (Env.Int.empty) v
         end
-    | `Extend (ext_fields, r) ->
+    | Extend (ext_fields, r) ->
       begin
         match opt_app (value env) (`Record StringMap.empty) r with
           | `Record fields ->
@@ -439,7 +439,7 @@ struct
                        fields)
           | _ -> eval_error "Error adding fields: non-record"
       end
-    | `Project (label, r) ->
+    | Project (label, r) ->
       let rec project (r, label) =
         match r with
           | `Record fields ->
@@ -453,7 +453,7 @@ struct
           | _ -> eval_error ("Error projecting from record: %s") (string_of_t r)
       in
         project (value env r, label)
-    | `Erase (labels, r) ->
+    | Erase (labels, r) ->
       let rec erase (r, labels) =
         match r with
           | `Record fields ->
@@ -476,11 +476,11 @@ struct
           | _ -> eval_error "Error erasing from record"
       in
         erase (value env r, labels)
-    | `Inject (label, v, _) -> `Variant (label, value env v)
-    | `TAbs (_, v) -> value env v
-    | `TApp (v, _) -> value env v
+    | Inject (label, v, _) -> `Variant (label, value env v)
+    | TAbs (_, v) -> value env v
+    | TApp (v, _) -> value env v
 
-    | `XmlNode (tag, attrs, children) ->
+    | XmlNode (tag, attrs, children) ->
         (* TODO: deal with variables in XML *)
         let children =
           List.fold_right
@@ -496,9 +496,9 @@ struct
         in
           `Singleton (`XML (Value.Node (tag, children)))
 
-    | `ApplyPure (f, ps) ->
+    | ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
-    | `Closure (f, _, v) ->
+    | Closure (f, _, v) ->
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)
@@ -516,7 +516,7 @@ struct
       (*   | _ -> *)
       (*     failwith "ill-formed closure in query compilation" *)
       (* end *)
-    | `Coerce (v, _) -> value env v
+    | Coerce (v, _) -> value env v
 
   and apply env : t * t list -> t = function
     | `Closure ((xs, body), closure_env), args ->
@@ -606,26 +606,26 @@ struct
       | b::bs ->
           begin
             match b with
-              | `Let (xb, (_, tc)) ->
+              | Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | `Fun (_, _, _, (Location.Client | Location.Native)) ->
+              | Fun (_, _, _, (Location.Client | Location.Native)) ->
                   eval_error "Client function"
-              | `Fun ((f, _), _, _, _) ->
+              | Fun ((f, _), _, _, _) ->
                 (* This should never happen now that we have closure conversion*)
                 failwith ("Function definition in query: " ^ string_of_int f)
-              | `Rec _ ->
+              | Rec _ ->
                   eval_error "Recursive function"
-              | `Alien _ -> (* just skip it *)
+              | Alien _ -> (* just skip it *)
                   computation env (bs, tailcomp)
-              | `Module _ -> failwith "Not implemented modules yet"
+              | Module _ -> failwith "Not implemented modules yet"
           end
   and tail_computation env : Ir.tail_computation -> t = function
-    | `Return v -> value env v
-    | `Apply (f, args) ->
+    | Return v -> value env v
+    | Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
-    | `Special (`Query (None, e, _)) -> computation env e
-    | `Special (`Table (db, name, keys, (readtype, _, _))) as _s ->
+    | Special (Query (None, e, _)) -> computation env e
+    | Special (Table (db, name, keys, (readtype, _, _))) as _s ->
        (** WR: this case is because shredding needs to access the keys of tables
            but can we avoid it (issue #432)? *)
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
@@ -641,7 +641,7 @@ struct
             `Table ((db, params), unbox_string name, unboxed_keys, row)
          | _ -> eval_error "Error evaluating table handle"
        end
-    | `Special _s ->
+    | Special _s ->
       (* FIXME:
 
          There's no particular reason why we can't allow
@@ -650,7 +650,7 @@ struct
          that only one database be used inside a query block - see
          SML#.)  *)
       failwith "special not allowed in query block"
-    | `Case (v, cases, default) ->
+    | Case (v, cases, default) ->
       let rec reduce_case (v, cases, default) =
         match v with
           | `Variant (label, v) as w ->
@@ -670,7 +670,7 @@ struct
           |  _ -> assert false
       in
         reduce_case (value env v, cases, default)
-    | `If (c, t, e) ->
+    | If (c, t, e) ->
       let c = value env c in
       let t = computation env t in
       let e = computation env e in

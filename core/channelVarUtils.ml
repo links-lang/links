@@ -16,32 +16,32 @@ let variables_in_computation comp =
     fun proj_fn smap -> (* (proj_fn: 'a . 'a -> 'b) (smap: 'a stringmap) : unit = *)
       StringMap.fold (fun _ v _ -> proj_fn v) smap ()
   and traverse_value = function
-    | `Variable v -> add_variable v
-    | `Closure (_, _, value)
-    | `Project (_, value)
-    | `Inject (_, value, _)
-    | `TAbs (_, value)
-    | `TApp (value, _)
-    | `Coerce (value, _)
-    | `Erase (_, value) -> traverse_value value
-    | `XmlNode (_, v_map, vs) ->
+    | Variable v -> add_variable v
+    | Closure (_, _, value)
+    | Project (_, value)
+    | Inject (_, value, _)
+    | TAbs (_, value)
+    | TApp (value, _)
+    | Coerce (value, _)
+    | Erase (_, value) -> traverse_value value
+    | XmlNode (_, v_map, vs) ->
         traverse_stringmap (traverse_value) v_map;
         List.iter traverse_value vs
-    | `ApplyPure (v, vs) ->
+    | ApplyPure (v, vs) ->
         traverse_value v;
         List.iter traverse_value vs
-    | `Extend (v_map, v_opt) ->
+    | Extend (v_map, v_opt) ->
         traverse_stringmap (traverse_value) v_map;
         begin match v_opt with | Some v -> traverse_value v | None -> () end
-    | `Constant _ -> ()
+    | Constant _ -> ()
   and traverse_tail_computation = function
-    | `Return value -> traverse_value value
-    | `Apply (value, values) ->
+    | Return value -> traverse_value value
+    | Apply (value, values) ->
         traverse_value value; List.iter traverse_value values
-    | `Special s -> traverse_special s
-    | `If (v, c1, c2) ->
+    | Special s -> traverse_special s
+    | If (v, c1, c2) ->
         traverse_value v; List.iter traverse_computation [c1 ; c2]
-    | `Case (scrutinee, cases, case_opt) ->
+    | Case (scrutinee, cases, case_opt) ->
         traverse_value scrutinee;
         traverse_stringmap (fun (_, c) -> traverse_computation c) cases;
         OptionUtils.opt_iter (fun (_, c) -> traverse_computation c) case_opt
@@ -55,43 +55,43 @@ let variables_in_computation comp =
       | _ -> ()
     (* traverse_computation c *)
   and traverse_binding = function
-    | `Let (_, (_, tc)) -> traverse_tail_computation tc
-    | `Fun fd ->
+    | Let (_, (_, tc)) -> traverse_tail_computation tc
+    | Fun fd ->
         Debug.print "traversing fundef";
         traverse_fundef fd
-    | `Rec fds -> List.iter traverse_fundef fds
-    | `Module (_, (Some bs)) -> List.iter traverse_binding bs
-    | `Module _
-    | `Alien _ -> ()
+    | Rec fds -> List.iter traverse_fundef fds
+    | Module (_, (Some bs)) -> List.iter traverse_binding bs
+    | Module _
+    | Alien _ -> ()
   and traverse_special = function
-    | `Database value
-    | `CallCC value
-    | `Select (_, value) -> traverse_value value
-    | `Wrong _ -> ()
-    | `Table (v1, v2, v3, _) -> List.iter (traverse_value) [v1; v2; v3]
-    | `Query (vs_opt, comp, _) ->
+    | Database value
+    | CallCC value
+    | Select (_, value) -> traverse_value value
+    | Wrong _ -> ()
+    | Table (v1, v2, v3, _) -> List.iter (traverse_value) [v1; v2; v3]
+    | Query (vs_opt, comp, _) ->
         OptionUtils.opt_iter
           (fun (v1, v2) -> List.iter (traverse_value) [v1; v2]) vs_opt;
         traverse_computation comp
-    | `Update ((_, v), c_opt, c) ->
+    | Update ((_, v), c_opt, c) ->
         traverse_value v;
         OptionUtils.opt_iter (traverse_computation) c_opt;
         traverse_computation c
-    | `Delete ((_, v), c_opt) ->
+    | Delete ((_, v), c_opt) ->
         traverse_value v;
         OptionUtils.opt_iter (traverse_computation) c_opt
-    | `Handle h -> traverse_handler h
-    | `DoOperation (_, vs, _) -> List.iter (traverse_value) vs
-    | `Choice (v, clauses) ->
+    | Handle h -> traverse_handler h
+    | DoOperation (_, vs, _) -> List.iter (traverse_value) vs
+    | Choice (v, clauses) ->
         traverse_value v;
         traverse_stringmap (fun (_, c) ->
           traverse_computation c) clauses
-    | `Lens (value, _)
-    | `LensSelect (value, _, _)
-    | `LensGet (value, _) -> traverse_value value
-    | `LensDrop (v1, _, _, v2, _)
-    | `LensJoin (v1, v2, _, _, _, _)
-    | `LensPut (v1, v2, _) -> List.iter (traverse_value) [v1; v2]
+    | Lens (value, _)
+    | LensSelect (value, _, _)
+    | LensGet (value, _) -> traverse_value value
+    | LensDrop (v1, _, _, v2, _)
+    | LensJoin (v1, v2, _, _, _, _)
+    | LensPut (v1, v2, _) -> List.iter (traverse_value) [v1; v2]
   and traverse_computation (bnds, tc) =
     List.iter traverse_binding bnds; traverse_tail_computation tc
   and traverse_clause (_, _, c) = traverse_computation c

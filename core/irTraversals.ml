@@ -168,10 +168,10 @@ struct
 
     method value : value -> (value * datatype * 'self_type) =
       function
-        | `Constant c -> let (c, t, o) = o#constant c in `Constant c, t, o
-        | `Variable x -> let (x, t, o) = o#var x in `Variable x, t, o
-        (* | `ClosureVar x -> let (x, t, o) = o#closure_var x in `ClosureVar x, t, o *)
-        | `Extend (fields, base) ->
+        | Constant c -> let (c, t, o) = o#constant c in Constant c, t, o
+        | Variable x -> let (x, t, o) = o#var x in Variable x, t, o
+        (* | ClosureVar x -> let (x, t, o) = o#closure_var x in ClosureVar x, t, o *)
+        | Extend (fields, base) ->
             let (fields, field_types, o) = o#name_map (fun o -> o#value) fields in
             let (base, base_type, o) = o#option (fun o -> o#value) base in
 
@@ -186,35 +186,35 @@ struct
                         | _ -> assert false
                     end
             in
-              `Extend (fields, base), t, o
-        | `Project (name, v) ->
+              Extend (fields, base), t, o
+        | Project (name, v) ->
             let (v, vt, o) = o#value v in
-              `Project (name, v), deconstruct (project_type name) vt, o
-        | `Erase (names, v) ->
+              Project (name, v), deconstruct (project_type name) vt, o
+        | Erase (names, v) ->
             let (v, vt, o) = o#value v in
             let t = deconstruct (erase_type names) vt in
-              `Erase (names, v), t, o
-        | `Inject (name, v, t) ->
+              Erase (names, v), t, o
+        | Inject (name, v, t) ->
             let v, _vt, o = o#value v in
-              `Inject (name, v, t), t, o
-        | `TAbs (tyvars, v) ->
+              Inject (name, v, t), t, o
+        | TAbs (tyvars, v) ->
             let v, t, o = o#value v in
             let t = Types.for_all (tyvars, t) in
-              `TAbs (tyvars, v), t, o
-        | `TApp (v, ts) ->
+              TAbs (tyvars, v), t, o
+        | TApp (v, ts) ->
             let v, t, o = o#value v in
               begin try
                 let t = Instantiate.apply_type t ts in
-                  `TApp (v, ts), t, o
+                  TApp (v, ts), t, o
               with
                   Instantiate.ArityMismatch ->
                     prerr_endline ("Arity mismatch in type application (Ir.Transform)");
-                    prerr_endline ("expression: "^show_value (`TApp (v, ts)));
+                    prerr_endline ("expression: "^show_value (TApp (v, ts)));
                     prerr_endline ("type: "^Types.string_of_datatype t);
                     prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts));
                     failwith "fatal internal error"
               end
-        | `XmlNode (tag, attributes, children) ->
+        | XmlNode (tag, attributes, children) ->
             let (attributes, _, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , _, o) = o#list (fun o -> o#value) children in
 
@@ -222,14 +222,14 @@ struct
                 let _ = assert (StringMap.for_all (fun t -> t=string_type) attribute_types) in
                 let _ = assert (List.for_all (fun t -> t=xml_type) children_types) in
               *)
-              `XmlNode (tag, attributes, children), xml_type, o
-        | `ApplyPure (f, args) ->
+              XmlNode (tag, attributes, children), xml_type, o
+        | ApplyPure (f, args) ->
             let (f, ft, o) = o#value f in
             let (args, _, o) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `ApplyPure (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
+              ApplyPure (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
 
-        | `Closure (f, tyargs, z) ->
+        | Closure (f, tyargs, z) ->
             let (f, t, o) = o#var f in
             let t =
               match tyargs with
@@ -239,35 +239,35 @@ struct
                   Instantiate.datatype instantiation_maps remaining_type in
             let (z, _, o) = o#value z in
               (* TODO: check that closure environment types match expectations for f *)
-              `Closure (f, tyargs, z), t, o
-        | `Coerce (v, t) ->
+              Closure (f, tyargs, z), t, o
+        | Coerce (v, t) ->
             let v, _, o = o#value v in
             (* TODO: check that vt <: t *)
-              `Coerce (v, t), t, o
+              Coerce (v, t), t, o
 
     method tail_computation :
       tail_computation -> (tail_computation * datatype * 'self_type) =
       function
           (* TODO: type checking *)
-        | `Return v ->
+        | Return v ->
             let v, t, o = o#value v in
-              `Return v, t, o
-        | `Apply (f, args) ->
+              Return v, t, o
+        | Apply (f, args) ->
             let f, ft, o = o#value f in
             let args, _, o = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              `Apply (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
-        (* | `ApplyClosure (f, args) -> *)
+              Apply (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
+        (* | ApplyClosure (f, args) -> *)
         (*     let f, ft, o = o#value f in *)
         (*     let args, arg_types, o = o#list (fun o -> o#value) args in *)
         (*     (\* TODO: check arg types match *\) *)
         (*     (\* TOOD: add closure type *\) *)
-        (*       `ApplyClosure (f, args), deconstruct return_type ft, o *)
-        | `Special special ->
+        (*       ApplyClosure (f, args), deconstruct return_type ft, o *)
+        | Special special ->
             let special, t, o = o#special special in
-              `Special special, t, o
+              Special special, t, o
 
-        | `Case (v, cases, default) ->
+        | Case (v, cases, default) ->
             let v, _, o = o#value v in
             let cases, case_types, o =
               o#name_map
@@ -286,46 +286,46 @@ struct
               else
                 val_of default_type
             in
-              `Case (v, cases, default), t, o
-        | `If (v, left, right) ->
+              Case (v, cases, default), t, o
+        | If (v, left, right) ->
             let v, _, o = o#value v in
             let left, t, o = o#computation left in
             let right, _, o = o#computation right in
-              `If (v, left, right), t, o
+              If (v, left, right), t, o
 
     method special : special -> (special * datatype * 'self_type) =
       function
-        | `Wrong t -> `Wrong t, t, o
-        | `Database v ->
+        | Wrong t -> Wrong t, t, o
+        | Database v ->
             let v, _, o = o#value v in
-              `Database v, `Primitive Primitive.DB, o
-        | `Table (db, table_name, keys, tt) ->
+              Database v, `Primitive Primitive.DB, o
+        | Table (db, table_name, keys, tt) ->
             let db, _, o = o#value db in
             let keys, _, o = o#value keys in
             let table_name, _, o = o#value table_name in
-              `Table (db, table_name, keys, tt), `Table tt, o
-        | `Lens (table, rtype) ->
+              Table (db, table_name, keys, tt), `Table tt, o
+        | Lens (table, rtype) ->
             let table, _, o = o#value table in
-              `Lens (table, rtype), `Lens (rtype), o
-        | `LensDrop (lens, drop, key, default, rtype) ->
+              Lens (table, rtype), `Lens (rtype), o
+        | LensDrop (lens, drop, key, default, rtype) ->
             let lens, _, o = o#value lens in
             let default, _, o = o#value default in
-              `LensDrop (lens, drop, key, default, rtype), `Lens (rtype), o
-        | `LensSelect (lens, pred, sort) ->
+              LensDrop (lens, drop, key, default, rtype), `Lens (rtype), o
+        | LensSelect (lens, pred, sort) ->
             let lens, _, o = o#value lens in
-              `LensSelect (lens, pred, sort), `Lens (sort), o
-        | `LensJoin (lens1, lens2, on, left, right, sort) ->
+              LensSelect (lens, pred, sort), `Lens (sort), o
+        | LensJoin (lens1, lens2, on, left, right, sort) ->
             let lens1, _, o = o#value lens1 in
             let lens2, _, o = o#value lens2 in
-              `LensJoin (lens1, lens2, on, left, right, sort), `Lens (sort), o
-        | `LensGet (lens, rtype) ->
+              LensJoin (lens1, lens2, on, left, right, sort), `Lens (sort), o
+        | LensGet (lens, rtype) ->
             let lens, _, o = o#value lens in
-              `LensGet (lens, rtype), Types.make_list_type rtype, o
-        | `LensPut (lens, data, rtype) ->
+              LensGet (lens, rtype), Types.make_list_type rtype, o
+        | LensPut (lens, data, rtype) ->
             let lens, _, o = o#value lens in
             let data, _, o = o#value data in
-            `LensPut (lens, data, rtype), Types.make_tuple_type [], o
-        | `Query (range, e, _) ->
+            LensPut (lens, data, rtype), Types.make_tuple_type [], o
+        | Query (range, e, _) ->
             let range, o =
               o#optionu
                 (fun o (limit, offset) ->
@@ -334,25 +334,25 @@ struct
                      (limit, offset), o)
                 range in
             let e, t, o = o#computation e in
-              `Query (range, e, t), t, o
-        | `Update ((x, source), where, body) ->
+              Query (range, e, t), t, o
+        | Update ((x, source), where, body) ->
             let source, _, o = o#value source in
             let x, o = o#binder x in
             let where, _, o = o#option (fun o -> o#computation) where in
             let body, _, o = o#computation body in
-              `Update ((x, source), where, body), Types.unit_type, o
-        | `Delete ((x, source), where) ->
+              Update ((x, source), where, body), Types.unit_type, o
+        | Delete ((x, source), where) ->
             let source, _, o = o#value source in
             let x, o = o#binder x in
             let where, _, o = o#option (fun o -> o#computation) where in
-              `Delete ((x, source), where), Types.unit_type, o
-        | `CallCC v ->
+              Delete ((x, source), where), Types.unit_type, o
+        | CallCC v ->
             let v, t, o = o#value v in
-              `CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t, o
-        | `Select (l, v) ->
+              CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t, o
+        | Select (l, v) ->
            let v, t, o = o#value v in
-           `Select (l, v), t, o
-        | `Choice (v, bs) ->
+           Select (l, v), t, o
+        | Choice (v, bs) ->
            let v, _, o = o#value v in
            let bs, branch_types, o =
              o#name_map (fun o (b, c) ->
@@ -360,13 +360,13 @@ struct
                          let c, t, o = o#computation c in
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-           `Choice (v, bs), t, o
-	| `Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
+           Choice (v, bs), t, o
+	| Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
 	   let (comp, _, o) = o#computation ih_comp in
            (* TODO FIXME traverse parameters *)
            let (depth, o) =
              match ih_depth with
-             | `Deep params ->
+             | Deep params ->
                 let (o, bindings) =
                   List.fold_left
                     (fun (o, bvs) (b,v) ->
@@ -375,8 +375,8 @@ struct
                       (o, (b,v) :: bvs))
                     (o, []) params
                 in
-                `Deep (List.rev bindings), o
-             | `Shallow -> `Shallow, o
+                Deep (List.rev bindings), o
+             | Shallow -> Shallow, o
            in
 	   let (cases, _branch_types, o) =
 	     o#name_map
@@ -392,10 +392,10 @@ struct
              let (comp, t, o) = o#computation (snd ih_return) in
              (b, comp), t, o
            in
-	   `Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t, o
-	| `DoOperation (name, vs, t) ->
+	   Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t, o
+	| DoOperation (name, vs, t) ->
 	   let (vs, _, o) = o#list (fun o -> o#value) vs in
-	   (`DoOperation (name, vs, t), t, o)
+	   (DoOperation (name, vs, t), t, o)
 
    method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
@@ -417,11 +417,11 @@ struct
 
     method binding : binding -> (binding * 'self_type) =
       function
-        | `Let (x, (tyvars, tc)) ->
+        | Let (x, (tyvars, tc)) ->
             let x, o = o#binder x in
             let tc, _, o = o#tail_computation tc in
-              `Let (x, (tyvars, tc)), o
-        | `Fun (f, (tyvars, xs, body), z, location) ->
+              Let (x, (tyvars, tc)), o
+        | Fun (f, (tyvars, xs, body), z, location) ->
             let xs, body, z, o =
               let (z, o) = o#optionu (fun o -> o#binder) z in
               let (xs, o) =
@@ -435,8 +435,8 @@ struct
                 xs, body, z, o in
             let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
-              `Fun (f, (tyvars, xs, body), z, location), o
-        | `Rec defs ->
+              Fun (f, (tyvars, xs, body), z, location), o
+        | Rec defs ->
             (* it's important to traverse the function binders first in
                order to make sure they're in scope for all of the
                function bodies *)
@@ -464,11 +464,11 @@ struct
                 ([], o)
                 defs in
             let defs = List.rev defs in
-              `Rec defs, o
-        | `Alien (x, name, language) ->
+              Rec defs, o
+        | Alien (x, name, language) ->
             let x, o = o#binder x in
-              `Alien (x, name, language), o
-        | `Module (name, defs) ->
+              Alien (x, name, language), o
+        | Module (name, defs) ->
             let defs, o =
               match defs with
                 | None -> None, o
@@ -477,7 +477,7 @@ struct
                     in
                       Some defs, o
             in
-              `Module (name, defs), o
+              Module (name, defs), o
 
     method binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
@@ -498,11 +498,11 @@ struct
   let rec is_inlineable_value =
     function
       | v when is_atom v -> true
-      | `Project (_, v)
-      | `Erase (_, v)
-      | `Inject (_, v, _)
-      | `TAbs (_, v)
-      | `TApp (v, _) -> is_inlineable_value v
+      | Project (_, v)
+      | Erase (_, v)
+      | Inject (_, v, _)
+      | TAbs (_, v)
+      | TApp (v, _) -> is_inlineable_value v
       | _ -> false
 
   let inliner tyenv env =
@@ -516,7 +516,7 @@ struct
 
     method! value =
       function
-        | `Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o
+        | Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o
         | v -> super#value v
 
     method! bindings =
@@ -525,11 +525,11 @@ struct
             let b, o = o#binding b in
               begin
                 match b with
-                  | `Let ((x, (_, _, `Local)), (tyvars, `Return v)) when is_inlineable_value v ->
+                  | Let ((x, (_, _, `Local)), (tyvars, Return v)) when is_inlineable_value v ->
                       let v =
                         match tyvars with
                           | [] -> v
-                          | tyvars -> `TAbs (tyvars, v)
+                          | tyvars -> TAbs (tyvars, v)
                       in
                         (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
                   | _ ->
@@ -663,13 +663,13 @@ struct
 
     method! binding b =
       match b with
-        | `Let (x, (_, `Return _)) ->
+        | Let (x, (_, Return _)) ->
             let b, o = super#binding b in
               b, o#init x
-        | `Fun (f, _, _, _) ->
+        | Fun (f, _, _, _) ->
             let b, o = super#binding b in
               b, o#init f
-        | `Rec defs ->
+        | Rec defs ->
             let fs, o =
               List.fold_right
                 (fun (f, _, _, _) (fs, o) ->
@@ -697,7 +697,7 @@ struct
                 defs in
             let o = o#set_nonrecs fs in
             let defs = List.rev defs in
-              `Rec defs, o
+              Rec defs, o
         | _ ->
             super#binding b
 
@@ -725,11 +725,11 @@ struct
             begin
               let b, o = o#binding b in
                 match b with
-                  | `Let ((x, _), (_tyvars, _)) when o#is_dead x ->
+                  | Let ((x, _), (_tyvars, _)) when o#is_dead x ->
                       o#bindings bs
-                  | `Fun ((f, _), _, _, _) when o#is_dead f ->
+                  | Fun ((f, _), _, _, _) when o#is_dead f ->
                       o#bindings bs
-                  | `Rec defs ->
+                  | Rec defs ->
                       Debug.if_set show_rec_uses (fun () -> "Rec block:");
                       let fs, defs =
                         List.fold_left
@@ -759,7 +759,7 @@ struct
                             | [] -> o#bindings bs
                             | defs ->
                                 let bs, o = o#bindings bs in
-                                  `Rec defs :: bs, o
+                                  Rec defs :: bs, o
                         end
                   | _ ->
                       let bs, o = o#bindings bs in
@@ -786,38 +786,38 @@ let ir_type_mod_visitor tyenv type_visitor =
   object
     inherit Transform.visitor(tyenv) as super
           method! value = function
-            | `Inject (name, value, datatype) ->
+            | Inject (name, value, datatype) ->
                let (datatype, _) = type_visitor#typ datatype in
-               super#value (`Inject (name, value, datatype))
-            | `TAbs (tyvars, value) ->
+               super#value (Inject (name, value, datatype))
+            | TAbs (tyvars, value) ->
                let tyvars = List.map (fun arg -> fst (type_visitor#quantifier arg)) tyvars in
-               super#value (`TAbs (tyvars, value))
-            | `TApp (value, tyargs) ->
+               super#value (TAbs (tyvars, value))
+            | TApp (value, tyargs) ->
                let tyargs = List.map (fun arg -> fst (type_visitor#type_arg arg)) tyargs in
-               super#value (`TApp (value, tyargs))
-            | `Coerce (var, datatype) ->
+               super#value (TApp (value, tyargs))
+            | Coerce (var, datatype) ->
                let (datatype, _) = type_visitor#typ datatype in
-               super#value (`Coerce (var, datatype))
-            | `Closure (var, tyargs, env) ->
+               super#value (Coerce (var, datatype))
+            | Closure (var, tyargs, env) ->
               let tyargs = List.map (fun targ -> fst (type_visitor#type_arg targ)) tyargs in
-              super#value (`Closure (var, tyargs, env))
+              super#value (Closure (var, tyargs, env))
             | other -> super#value other
 
           method! special = function
-            | `Wrong datatype ->
+            | Wrong datatype ->
                let (datatype, _) = type_visitor#typ datatype in
-               super#special (`Wrong datatype)
-            | `Table (v1, v2, v3, (t1, t2, t3)) ->
+               super#special (Wrong datatype)
+            | Table (v1, v2, v3, (t1, t2, t3)) ->
                let (t1, _) = type_visitor#typ t1 in
                let (t2, _) = type_visitor#typ t2 in
                let (t3, _) = type_visitor#typ t3 in
-               super#special (`Table (v1, v2, v3, (t1, t2, t3)))
-            | `Query (opt, computation, datatype) ->
+               super#special (Table (v1, v2, v3, (t1, t2, t3)))
+            | Query (opt, computation, datatype) ->
                let (datatype, _) = type_visitor#typ datatype in
-               super#special (`Query (opt, computation, datatype))
-            | `DoOperation (name, vallist, datatype) ->
+               super#special (Query (opt, computation, datatype))
+            | DoOperation (name, vallist, datatype) ->
                let (datatype, _) = type_visitor#typ datatype in
-               super#special (`DoOperation (name, vallist, datatype))
+               super#special (DoOperation (name, vallist, datatype))
             | other -> super#special other
 
           method! binder b =

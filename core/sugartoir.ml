@@ -232,7 +232,7 @@ struct
     in
       e
 
-  let dummy_computation = `Special (`Wrong `Not_typed)
+  let dummy_computation = Special (Wrong `Not_typed)
   let sem_type s =
     let (_, t) =
       s (fun (_, t) -> ([], dummy_computation), t)
@@ -298,7 +298,7 @@ struct
 
     let fun_binding (f_info, (tyvars, xsb, body), location) =
       let fb, f = Var.fresh_var f_info in
-        lift_binding (`Fun (fb, (tyvars, xsb, body), None, location)) f
+        lift_binding (Fun (fb, (tyvars, xsb, body), None, location)) f
 
     let rec_binding defs =
       let defs, fs =
@@ -309,7 +309,7 @@ struct
           defs ([], [])
       in
         lift_binding
-          (`Rec
+          (Rec
              (List.map
                 (fun (fb, (tyvars, xsb, body), none, location) ->
                   assert (none = None);
@@ -319,27 +319,27 @@ struct
 
     let alien_binding (x_info, raw_name, language) =
       let xb, x = Var.fresh_var x_info in
-        lift_binding (`Alien (xb, raw_name, language)) x
+        lift_binding (Alien (xb, raw_name, language)) x
 
     let value_of_untyped_var (s, t) =
-      M.bind s (fun x -> lift (`Variable x, t))
+      M.bind s (fun x -> lift (Variable x, t))
   end
   open S
 
   let value_of_comp s =
     bind s
       (function
-         | `Return v -> lift (v, sem_type s)
+         | Return v -> lift (v, sem_type s)
          | e ->
              let t = sem_type s in
                value_of_untyped_var (comp_binding (Var.info_of_type t, e), t))
 
   let comp_of_value s =
-    bind s (fun v -> lift (`Return v, sem_type s))
+    bind s (fun v -> lift (Return v, sem_type s))
 
   (* eval parameters *)
-  let constant c = lift (`Constant c, `Primitive (Constant.type_of c))
-  let var (x, t) = lift (`Variable x, t)
+  let constant c = lift (Constant c, `Primitive (Constant.type_of c))
+  let var (x, t) = lift (Variable x, t)
 
   let apply (s, ss) =
     let ss = lift_list ss in
@@ -347,7 +347,7 @@ struct
       bind s
         (fun v ->
            M.bind ss
-             (fun vs -> lift (`Apply (v, vs), t)))
+             (fun vs -> lift (Apply (v, vs), t)))
 
   let apply_pure (s, ss) =
     let ss = lift_list ss in
@@ -355,10 +355,10 @@ struct
       bind s
         (fun v ->
            M.bind ss
-             (fun vs -> lift (`ApplyPure (v, vs), t)))
+             (fun vs -> lift (ApplyPure (v, vs), t)))
 
   let condition (s, s1, s2) =
-    bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
+    bind s (fun v -> lift (If (v, reify s1, reify s2), sem_type s1))
 
   let concat (nil, append, ss) =
     match ss with
@@ -369,7 +369,7 @@ struct
 
   let string_concat (string_append, ss) =
     match ss with
-      | [] -> lift (`Constant (Constant.String ""), Types.string_type)
+      | [] -> lift (Constant (Constant.String ""), Types.string_type)
       | [s] -> s
       | s::ss ->
           List.fold_left (fun s s' -> apply_pure (string_append, [s; s'])) s ss
@@ -390,7 +390,7 @@ struct
            M.bind children
              (fun children ->
                 let attrs = StringMap.from_alist attrs in
-                  lift (`XmlNode (name, attrs, children), Types.xml_type)))
+                  lift (XmlNode (name, attrs, children), Types.xml_type)))
 
   let record (fields, r) =
     let field_types =
@@ -404,24 +404,24 @@ struct
             let t = Types.make_record_type field_types in
               M.bind s'
                 (fun fields ->
-                   lift (`Extend (StringMap.from_alist fields, None), t))
+                   lift (Extend (StringMap.from_alist fields, None), t))
         | Some s ->
             let t = `Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
               bind s
                 (fun r ->
                    M.bind s'
-                     (fun fields -> lift (`Extend (StringMap.from_alist fields, Some r), t)))
+                     (fun fields -> lift (Extend (StringMap.from_alist fields, Some r), t)))
 
   let project (s, name) =
     let t = TypeUtils.project_type name (sem_type s) in
-      bind s (fun v -> lift (`Project (name, v), t))
+      bind s (fun v -> lift (Project (name, v), t))
 
   let erase (s, names) =
     let t = TypeUtils.erase_type names (sem_type s) in
-      bind s (fun v -> lift (`Erase (names, v), t))
+      bind s (fun v -> lift (Erase (names, v), t))
 
   let coerce (s, t) =
-    bind s (fun v -> lift (`Coerce (v, t), sem_type s))
+    bind s (fun v -> lift (Coerce (v, t), sem_type s))
 
   (*
       (r : (l1:A1, ... li:Ai | R) with (l1=v1, ..., li=vi))
@@ -438,7 +438,7 @@ struct
     record (fields, Some (erase (s, names)))
 
   let inject (name, s, t) =
-      bind s (fun v -> lift (`Inject (name, v, t), t))
+      bind s (fun v -> lift (Inject (name, v, t), t))
 
   (* this isn't used... *)
   (* let case (s, name, (cinfo, cbody), default) = *)
@@ -458,10 +458,10 @@ struct
 
   let case_zero (s, t) =
     bind s (fun v ->
-              lift (`Case (v, StringMap.empty, None), t))
+              lift (Case (v, StringMap.empty, None), t))
 
   let database s =
-    bind s (fun v -> lift (`Special (`Database v), `Primitive Primitive.DB))
+    bind s (fun v -> lift (Special (Database v), `Primitive Primitive.DB))
 
   let table_handle (database, table, keys, (r, w, n)) =
     bind database
@@ -469,53 +469,53 @@ struct
          bind table
            (fun table ->
 	     bind keys
-		(fun keys ->  lift (`Special (`Table (database, table, keys, (r, w, n))),
+		(fun keys ->  lift (Special (Table (database, table, keys, (r, w, n))),
                                `Table (r, w, n)))))
 
   let lens_handle (table, sort) =
       bind table
         (fun table ->
-            lift (`Special (`Lens (table, sort)), `Lens (sort)))
+            lift (Special (Lens (table, sort)), `Lens (sort)))
 
   let lens_drop_handle (lens, drop, key, default, sort) =
       bind lens
         (fun lens ->
             bind default
             (fun default ->
-               lift (`Special (`LensDrop (lens, drop, key, default, sort)), `Lens (sort))))
+               lift (Special (LensDrop (lens, drop, key, default, sort)), `Lens (sort))))
 
   let lens_select_handle (lens, pred, sort) =
       bind lens
         (fun lens ->
-           lift (`Special (`LensSelect (lens, pred, sort)), `Lens (sort)))
+           lift (Special (LensSelect (lens, pred, sort)), `Lens (sort)))
 
   let lens_join_handle (lens1, lens2, on, left, right, sort) =
       bind lens1
         (fun lens1 ->
           bind lens2
           (fun lens2 ->
-            lift (`Special (`LensJoin (lens1, lens2, on, left, right, sort)), `Lens (sort))))
+            lift (Special (LensJoin (lens1, lens2, on, left, right, sort)), `Lens (sort))))
 
   let lens_get (lens, rtype) =
       bind lens
         (fun lens ->
-            lift (`Special (`LensGet (lens, rtype)), Types.make_list_type rtype))
+            lift (Special (LensGet (lens, rtype)), Types.make_list_type rtype))
 
   let lens_put (lens, data, rtype) =
       bind lens
         (fun lens ->
             bind data
                 (fun data ->
-                        lift (`Special (`LensPut (lens, data, rtype)), Types.make_list_type rtype)))
+                        lift (Special (LensPut (lens, data, rtype)), Types.make_list_type rtype)))
 
-  let wrong t = lift (`Special (`Wrong t), t)
+  let wrong t = lift (Special (Wrong t), t)
 
   let alien (x_info, raw_name, language, rest) =
     M.bind (alien_binding (x_info, raw_name, language)) rest
 
   let select (l, e) =
     let t = TypeUtils.select_type l (sem_type e) in
-      bind e (fun v -> lift (`Special (`Select (l, v)), t))
+      bind e (fun v -> lift (Special (Select (l, v)), t))
 
   let offer env (v, cases, t) =
     let cases =
@@ -525,7 +525,7 @@ struct
       bind v
         (fun e ->
            M.bind
-             (comp_binding (Var.info_of_type (sem_type v), `Return e))
+             (comp_binding (Var.info_of_type (sem_type v), Return e))
              (fun var ->
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
@@ -541,14 +541,14 @@ struct
            match where with
              | None ->
                  let body_type = sem_type body in
-                 let body = CompilePatterns.let_pattern env p (`Variable x, xt) (reify body, body_type) in
-                   lift (`Special (`Update ((xb, source), None, body)), Types.unit_type)
+                 let body = CompilePatterns.let_pattern env p (Variable x, xt) (reify body, body_type) in
+                   lift (Special (Update ((xb, source), None, body)), Types.unit_type)
              | Some where ->
                  let body_type = sem_type body in
-                 let wrap = CompilePatterns.let_pattern env p (`Variable x, xt) in
+                 let wrap = CompilePatterns.let_pattern env p (Variable x, xt) in
                  let where = wrap (reify where, Types.bool_type) in
                  let body = wrap (reify body, body_type) in
-                   lift (`Special (`Update ((xb, source), Some where, body)), Types.unit_type))
+                   lift (Special (Update ((xb, source), Some where, body)), Types.unit_type))
 
   let db_delete env (p, source, where) =
     let source_type = sem_type source in
@@ -558,22 +558,22 @@ struct
         (fun source ->
            match where with
              | None ->
-                 lift (`Special (`Delete ((xb, source), None)), Types.unit_type)
+                 lift (Special (Delete ((xb, source), None)), Types.unit_type)
              | Some where ->
-                 let where = CompilePatterns.let_pattern env p (`Variable x, xt) (reify where, Types.bool_type) in
-                   lift (`Special (`Delete ((xb, source), Some where)), Types.unit_type))
+                 let where = CompilePatterns.let_pattern env p (Variable x, xt) (reify where, Types.bool_type) in
+                   lift (Special (Delete ((xb, source), Some where)), Types.unit_type))
 
   let query (range, s) =
     let bs, e = reify s in
       match range with
         | None ->
-            lift (`Special (`Query (None, (bs, e), sem_type s)), sem_type s)
+            lift (Special (Query (None, (bs, e), sem_type s)), sem_type s)
         | Some (limit, offset) ->
             bind limit
               (fun limit ->
                  bind offset
                    (fun offset ->
-                      lift (`Special (`Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
+                      lift (Special (Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
 
   let letvar (x_info, s, body) =
     bind s
@@ -596,7 +596,7 @@ struct
     let body = reify body in
     let ft = `Function (Types.make_tuple_type [kt], eff, body_type) in
     let f_info = (ft, "", `Local) in
-    let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)),
+    let rest f : tail_computation sem = lift (Special (CallCC (Variable f)),
                                               body_type) in
       M.bind (fun_binding (f_info, ([], [kb], body), loc_unknown)) rest
 
@@ -625,7 +625,7 @@ struct
         (fun body p (xb : binder) ->
            let x  = Var.var_of_binder  xb in
            let xt = Var.type_of_binder xb in
-             CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
+             CompilePatterns.let_pattern env p (Variable x, xt) (body, body_type))
         (reify body)
         ps
         xsb
@@ -656,7 +656,7 @@ struct
                  (fun body p xb ->
                     let x  = Var.var_of_binder  xb in
                     let xt = Var.type_of_binder xb in
-                      CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
+                      CompilePatterns.let_pattern env p (Variable x, xt) (body, body_type))
                  (reify body)
                  ps
                  xsb
@@ -668,7 +668,7 @@ struct
 
   let do_operation (name, vs, t) =
     let vs = lift_list vs in
-    M.bind vs (fun vs -> lift (`Special (`DoOperation (name, vs, t)), t))
+    M.bind vs (fun vs -> lift (Special (DoOperation (name, vs, t)), t))
 
   let handle env (m, val_cases, eff_cases, params, desc) =
     let params =
@@ -695,7 +695,7 @@ struct
       bind v
         (fun e ->
            M.bind
-             (comp_binding (Var.info_of_type (sem_type v), `Return e))
+             (comp_binding (Var.info_of_type (sem_type v), Return e))
              (fun var ->
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
@@ -704,11 +704,11 @@ struct
 
   let tabstr (tyvars, s) =
     let t = Types.for_all (tyvars, sem_type s) in
-      bind s (fun v -> lift (`TAbs (tyvars, v), t))
+      bind s (fun v -> lift (TAbs (tyvars, v), t))
 
   let tappl (s, tyargs) =
     let t = Instantiate.apply_type (sem_type s) tyargs in
-      bind s (fun v -> lift (`TApp (v, tyargs), t))
+      bind s (fun v -> lift (TApp (v, tyargs), t))
 end
 
 
@@ -1173,11 +1173,11 @@ struct
         | b::bs ->
             begin
               match b with
-                | `Let ((x, (_xt, x_name, `Global)), _) ->
+                | Let ((x, (_xt, x_name, `Global)), _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (x_name, x)) bs
-                | `Fun ((f, (_ft, f_name, `Global)), _, _, _) ->
+                | Fun ((f, (_ft, f_name, `Global)), _, _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
-                | `Rec defs ->
+                | Rec defs ->
                   (* we depend on the invariant that mutually
                      recursive definitions all have the same scope *)
                     let scope, nenv =
@@ -1195,7 +1195,7 @@ struct
                           | `Local ->
                               partition (globals, b::locals, nenv) bs
                       end
-                | `Alien ((f, (_ft, f_name, `Global)), _, _) ->
+                | Alien ((f, (_ft, f_name, `Global)), _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
                 | _ -> partition (globals, b::locals, nenv) bs
             end in

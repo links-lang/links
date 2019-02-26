@@ -132,7 +132,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     let state_string = JsonState.to_string json_state in
 
     let printed_code =
-      let _venv, code = C.generate_program venv ([], `Return (`Extend (StringMap.empty, None))) in
+      let _venv, code = C.generate_program venv ([], Return (Extend (StringMap.empty, None))) in
       let code = f code in
       let code =
         let open Pervasives in
