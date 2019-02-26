@@ -32,7 +32,7 @@ struct
     | Variant  of name * t
     | Effect   of name * t list * t
     | Negative of StringSet.t
-    | Record   of (t StringMap.t) * t option
+    | Record   of t StringMap.t * t option
     | Constant of Constant.t
     | Variable of binder
     | As       of binder * t

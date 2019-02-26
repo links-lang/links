@@ -41,56 +41,56 @@ type location = CommonTypes.Location.t
 type value =
   | Constant of Constant.t
   | Variable of var
-  | Extend of (value name_map * value option)
-  | Project of (name * value)
-  | Erase of (name_set * value)
-  | Inject of (name * value * Types.datatype)
+  | Extend of value name_map * value option
+  | Project of name * value
+  | Erase of name_set * value
+  | Inject of name * value * Types.datatype
 
-  | TAbs of (tyvar list * value)
-  | TApp of (value * tyarg list)
+  | TAbs of tyvar list * value
+  | TApp of value * tyarg list
 
-  | XmlNode of (name * value name_map * value list)
-  | ApplyPure of (value * value list)
+  | XmlNode of name * value name_map * value list
+  | ApplyPure of value * value list
 
-  | Closure of (var * tyarg list * value)
+  | Closure of var * tyarg list * value
 
-  | Coerce of (value * Types.datatype)
+  | Coerce of value * Types.datatype
 and tail_computation =
-  | Return of (value)
-  | Apply of (value * value list)
+  | Return of value
+  | Apply of value * value list
   (* | ApplyClosure of (value * value list) *)
 
   | Special of special
 
-  | Case of (value * (binder * computation) name_map * (binder * computation) option)
-  | If of (value * computation * computation)
-and fun_def = (binder * (tyvar list * binder list * computation) * binder option * location)
+  | Case of value * (binder * computation) name_map * (binder * computation) option
+  | If of value * computation * computation
+and fun_def = binder * (tyvar list * binder list * computation) * binder option * location
 and binding =
-  | Let of (binder * (tyvar list * tail_computation))
+  | Let of binder * (tyvar list * tail_computation)
   | Fun of fun_def
   | Rec of fun_def list
-  | Alien of (binder * name * language)
-  | Module of (string * binding list option)
+  | Alien of binder * name * language
+  | Module of string * binding list option
 and special =
   | Wrong of Types.datatype
   | Database of value
-  | Lens of (value * Types.lens_sort)
-  | LensDrop of (value * string * string * value * Types.lens_sort)
-  | LensSelect of (value * Types.lens_phrase * Types.lens_sort)
-  | LensJoin of (value * value * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort)
-  | LensGet of (value * Types.datatype)
-  | LensPut of (value * value * Types.datatype)
-  | Table of ((value * value * value * (Types.datatype * Types.datatype * Types.datatype)))
-  | Query of ((value * value) option * computation * Types.datatype)
-  | Update of ((binder * value) * computation option * computation)
-  | Delete of ((binder * value) * computation option)
-  | CallCC of (value)
-  | Select of (name * value)
-  | Choice of (value * (binder * computation) name_map)
+  | Lens of value * Types.lens_sort
+  | LensDrop of value * string * string * value * Types.lens_sort
+  | LensSelect of value * Types.lens_phrase * Types.lens_sort
+  | LensJoin of value * value * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort
+  | LensGet of value * Types.datatype
+  | LensPut of value * value * Types.datatype
+  | Table of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
+  | Query of (value * value) option * computation * Types.datatype
+  | Update of (binder * value) * computation option * computation
+  | Delete of (binder * value) * computation option
+  | CallCC of value
+  | Select of name * value
+  | Choice of value * (binder * computation) name_map
   | Handle of handler
-  | DoOperation of (name * value list * Types.datatype)
-and computation = (binding list * tail_computation)
-and effect_case = (binder * binder * computation)
+  | DoOperation of name * value list * Types.datatype
+and computation = binding list * tail_computation
+and effect_case = binder * binder * computation
 and handler = {
     ih_comp: computation;
     ih_cases: effect_case name_map;
