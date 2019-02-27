@@ -129,7 +129,7 @@ let rec rename_binders_get_shadow_tbl module_table
 
     method! binder = function
       | bndr ->
-         let n = Binder.name bndr in
+         let n = Binder.to_name bndr in
          let fqn = make_path_string path n in
          (self#bind_shadow_term n fqn, Binder.set_name bndr fqn)
 
@@ -189,7 +189,7 @@ and perform_renaming module_table path term_ht type_ht =
 
     method! binder = function
       | bndr ->
-         let n = Binder.name bndr in
+         let n = Binder.to_name bndr in
          let fqn = make_path_string path n in
          (self#bind_shadow_term n fqn, Binder.set_name bndr fqn)
 

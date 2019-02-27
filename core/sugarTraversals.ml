@@ -50,8 +50,8 @@ class map =
 
     method binder : Binder.t -> Binder.t =
       fun bndr ->
-        let name = o#name (Binder.name bndr) in
-        let ty  = o#option (fun o -> o#unknown) (Binder.typ bndr) in
+        let name = o#name (Binder.to_name bndr) in
+        let ty  = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
         let pos = WithPos.pos bndr |> o#position in
         WithPos.make ~pos (name,ty)
 
@@ -760,8 +760,8 @@ class fold =
 
     method binder : Binder.t -> 'self_type =
       fun bndr ->
-        let o = o#name (Binder.name bndr) in
-        let o = o#option (fun o -> o#unknown) (Binder.typ bndr) in
+        let o = o#name (Binder.to_name bndr) in
+        let o = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
         let o = o#position (WithPos.pos bndr) in o
 
     method sentence : sentence -> 'self_type =

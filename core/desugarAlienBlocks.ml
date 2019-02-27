@@ -40,7 +40,7 @@ object(self)
   method! binding = function
     | {node=AlienBlock (lang, lib, decls); _} ->
         self#list (fun o ((bnd, dt)) ->
-          let name = Binder.name bnd in
+          let name = Binder.to_name bnd in
           o#add_binding (with_dummy_pos (Foreign (bnd, name, lang, lib, dt)))) decls
     | {node=Module (name, bindings); _} ->
         let flattened_bindings =

@@ -101,7 +101,7 @@ let get_pat_vars () =
       | Pattern.Record (ls, p_opt) ->
           let o1 = self#list (fun o (_, p) -> o#pattern p) ls in
           o1#option (fun o p -> o#pattern p) p_opt
-      | Pattern.Variable bndr -> self#add_binding (Binder.name bndr)
+      | Pattern.Variable bndr -> self#add_binding (Binder.to_name bndr)
       | p -> super#patternnode p
   end
 
@@ -173,7 +173,7 @@ let create_module_info_map program =
       | {node = Val (pat, _, _, _); _} :: bs ->
          (get_pattern_variables pat) @ get_binding_names bs
       | {node = Fun (bndr, _, _, _, _); _} :: bs ->
-         Binder.name bndr :: (get_binding_names bs)
+         Binder.to_name bndr :: (get_binding_names bs)
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 
     (* Getting type names -- we're interested in typename decls *)

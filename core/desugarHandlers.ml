@@ -32,12 +32,12 @@ let rec names : Pattern.with_pos -> string list
     | Record (name_pats,pat_opt) ->
        let optns = opt_app names [] pat_opt in
        (List.fold_left (fun ns p -> (names p) @ ns) [] (List.map snd name_pats)) @ optns
-    | Variable bndr              -> [Binder.name bndr]
+    | Variable bndr              -> [Binder.to_name bndr]
     | Cons (pat,pat')            -> (names pat) @ (names pat')
     | Tuple pats
     | List pats                  -> List.fold_left (fun ns pat -> (names pat) @ ns ) [] pats
     | Negative ns'               -> List.fold_left (fun ns n -> n :: ns) [] ns'
-    | As  (bndr,pat)             -> [Binder.name bndr] @ (names pat)
+    | As  (bndr,pat)             -> [Binder.to_name bndr] @ (names pat)
     | HasType (pat,_)            -> names pat
     | _                           -> []
 
@@ -55,7 +55,7 @@ let resolve_name_conflicts : Pattern.with_pos -> stringset -> Pattern.with_pos
           | Variant (label, pat_opt)    -> Variant (label, opt_map hide_names pat_opt)
           | Record (name_pats, pat_opt) -> Record  (List.map (fun (label, pat) -> (label, hide_names pat)) name_pats, opt_map hide_names pat_opt)
           | Variable bndr               ->
-             if StringSet.mem (Binder.name bndr) conflicts
+             if StringSet.mem (Binder.to_name bndr) conflicts
              then Pattern.Any
              else pat.node
           | Cons (pat, pat')            -> Cons (hide_names pat, hide_names pat')
@@ -63,7 +63,7 @@ let resolve_name_conflicts : Pattern.with_pos -> stringset -> Pattern.with_pos
           | List pats                   -> List (List.map hide_names pats)
           | Negative _                  -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
           | As (bndr,pat)               -> let {node;_} as pat = hide_names pat in
-                                            if StringSet.mem (Binder.name bndr) conflicts
+                                            if StringSet.mem (Binder.to_name bndr) conflicts
                                             then node
                                             else As (bndr, pat)
           | HasType (pat, t)            -> HasType (hide_names pat, t)
@@ -143,8 +143,8 @@ let rec phrase_of_pattern : Pattern.with_pos -> phrase
                                                ?exp:(opt_map phrase_of_pattern pat_opt)
       | Tuple ps                    -> tuple (List.map phrase_of_pattern ps)
       | Constant c                  -> constant c
-      | Variable b                  -> var (Binder.name b)
-      | As (b,_)                    -> var (Binder.name b)
+      | Variable b                  -> var (Binder.to_name b)
+      | As (b,_)                    -> var (Binder.to_name b)
       | HasType (p,t)               -> with_dummy_pos (TypeAnnotation (phrase_of_pattern p, t))
      end
 

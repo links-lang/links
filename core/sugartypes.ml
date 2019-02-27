@@ -7,14 +7,12 @@ open Utility
 
 type name = string [@@deriving show]
 
-
-
 module Binder : sig
   type t = (name * Types.datatype option) WithPos.t
       [@@deriving show]
 
-  val name : t -> name
-  val typ : t -> Types.datatype option
+  val to_name : t -> name
+  val to_type : t -> Types.datatype option
 
   val typ_exn : t -> Types.datatype
 
@@ -35,16 +33,16 @@ end = struct
   type t = (name * Types.datatype option) WithPos.t
   [@@deriving show]
 
-  let name b = let (n, _) = WithPos.node b in n
-  let typ b = let (_, ty) = WithPos.node b in ty
+  let to_name b = let (n, _ ) = WithPos.node b in n
+  let to_type b = let (_, ty) = WithPos.node b in ty
 
-  let typ_exn b = typ b |> OptionUtils.val_of
+  let typ_exn b = to_type b |> OptionUtils.val_of
 
   let set_name b name = WithPos.map ~f:(fun (_, ty) -> name, ty) b
   let set_type b typ = WithPos.map ~f:(fun (name, _) -> name, Some typ) b
 
   let erase_type b = WithPos.map ~f:(fun (name, _) -> name, None) b
-  let has_type b = typ b |> OptionUtils.is_some
+  let has_type b = to_type b |> OptionUtils.is_some
 
   let traverse_map b ~o ~f_pos ~f_name ~f_ty =
     WithPos.traverse_map b ~o ~f_pos ~f_node:(fun o (n, ty) ->
@@ -372,8 +370,8 @@ struct
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)
-    | Variable bndr         -> singleton (Binder.name bndr)
-    | As (bndr, pat)        -> add (Binder.name bndr) (pattern pat)
+    | Variable bndr         -> singleton (Binder.to_name bndr)
+    | As (bndr, pat)        -> add (Binder.to_name bndr) (pattern pat)
     | HasType (pat, _)      -> pattern pat
 
 
@@ -421,7 +419,7 @@ struct
     | Query (Some (limit, offset), p, _) ->
        union_all [phrase limit; phrase offset; phrase p]
 
-    | Escape (v, p) -> diff (phrase p) (singleton (Binder.name v))
+    | Escape (v, p) -> diff (phrase p) (singleton (Binder.to_name v))
     | FormletPlacement (p1, p2, p3)
     | Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | Block b -> block b
@@ -502,20 +500,20 @@ struct
     match WithPos.node binding with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
     | Handler (bndr, hnlit, _) ->
-       let name = singleton (Binder.name bndr) in
+       let name = singleton (Binder.to_name bndr) in
        name, (diff (handlerlit hnlit) name)
     | Fun (bndr, _, (_, fn), _, _) ->
-       let name = singleton (Binder.name bndr) in
+       let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
     | Funs funs ->
         let names, rhss =
           List.fold_right
             (fun (bndr, _, (_, rhs), _, _, _) (names, rhss) ->
-               (add (Binder.name bndr) names, rhs::rhss))
+               (add (Binder.to_name bndr) names, rhs::rhss))
             funs
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | Foreign (bndr, _, _, _, _) -> singleton (Binder.name bndr), empty
+    | Foreign (bndr, _, _, _, _) -> singleton (Binder.to_name bndr), empty
     | QualifiedImport _
     | Type _
     | Infix -> empty, empty
@@ -523,7 +521,7 @@ struct
     | AlienBlock (_, _, decls) ->
         let bound_foreigns =
           List.fold_left (fun acc (bndr, _) ->
-              StringSet.add (Binder.name bndr) acc)
+              StringSet.add (Binder.to_name bndr) acc)
             (StringSet.empty) decls in
         bound_foreigns, empty
         (* TODO: this needs to be implemented *)
@@ -556,20 +554,20 @@ struct
   and cp_phrase p = match WithPos.node p with
     | CPUnquote e -> block e
     | CPGrab ((c, _t), Some bndr, p) ->
-      union (singleton c) (diff (cp_phrase p) (singleton (Binder.name bndr)))
+      union (singleton c) (diff (cp_phrase p) (singleton (Binder.to_name bndr)))
     | CPGrab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
     | CPGive ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e)
                                                            (cp_phrase p))
-    | CPGiveNothing bndr -> singleton (Binder.name bndr)
+    | CPGiveNothing bndr -> singleton (Binder.to_name bndr)
     | CPSelect (bndr, _label, p) ->
-      union (singleton (Binder.name bndr)) (cp_phrase p)
+      union (singleton (Binder.to_name bndr)) (cp_phrase p)
     | CPOffer (bndr, cases) ->
-      union (singleton (Binder.name bndr))
+      union (singleton (Binder.to_name bndr))
             (union_map (fun (_label, p) -> cp_phrase p) cases)
     | CPLink (bndr1, bndr2) ->
-      union (singleton (Binder.name bndr1))
-            (singleton (Binder.name bndr2))
+      union (singleton (Binder.to_name bndr1))
+            (singleton (Binder.to_name bndr2))
     | CPComp (bndr, left, right) ->
        diff (union (cp_phrase left) (cp_phrase right))
-            (singleton (Binder.name bndr))
+            (singleton (Binder.to_name bndr))
 end

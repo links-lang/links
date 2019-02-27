@@ -59,7 +59,7 @@ let refine_bindings : binding list -> binding list =
         let defs = List.map
           (function
             | {node=Fun (bndr, _, (_, funlit), _, _); _} ->
-               (Binder.name bndr, funlit)
+               (Binder.to_name bndr, funlit)
             | _ -> assert false) defs in
         let names = StringSet.from_list (List.map fst defs) in
           List.map
@@ -77,7 +77,7 @@ let refine_bindings : binding list -> binding list =
       let find_fun name =
         List.find (function
                      | {node=Fun (bndr, _, _, _, _); _} ->
-                        name = Binder.name bndr
+                        name = Binder.to_name bndr
                      | _ -> false)
           funs in
       let graph = callgraph funs in
@@ -87,7 +87,7 @@ let refine_bindings : binding list -> binding list =
              let funs = List.map (find_fun ->- unFun) scc in
                match funs with
                  | [(bndr, lin, ((tyvars, _), body), location, dt, pos)]
-                     when not (StringSet.mem (Binder.name bndr)
+                     when not (StringSet.mem (Binder.to_name bndr)
                                              (Freevars.funlit body)) ->
                     WithPos.make ~pos (Fun (bndr, lin, (tyvars, body), location, dt))
                  | _ -> WithPos.dummy (Funs (funs)))

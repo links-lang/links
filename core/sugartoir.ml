@@ -772,7 +772,7 @@ struct
               cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff],
                                  [ev e; ev (WithPos.make ~pos (ListLit (es, Some t)))]))
           | Escape (bndr, body) when Binder.has_type bndr ->
-             let k  = Binder.name bndr in
+             let k  = Binder.to_name bndr in
              let kt = Binder.typ_exn bndr in
              I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | Section (Section.Minus) -> cofv (lookup_var "-")
@@ -1074,7 +1074,7 @@ struct
               match b with
                 | Val ({node=Pattern.Variable bndr; _}, (_, body), _, _)
                      when Binder.has_type bndr ->
-                    let x  = Binder.name bndr in
+                    let x  = Binder.to_name bndr in
                     let xt = Binder.typ_exn bndr in
                     let x_info = (xt, x, scope) in
                       I.letvar
@@ -1090,7 +1090,7 @@ struct
                       I.comp env (p, s, ss)
                 | Fun (bndr, _, (tyvars, ([ps], body)), location, _)
                      when Binder.has_type bndr ->
-                    let f  = Binder.name bndr in
+                    let f  = Binder.to_name bndr in
                     let ft = Binder.typ_exn bndr in
                     let ps, body_env =
                       List.fold_right
@@ -1110,7 +1110,7 @@ struct
                     let fs, inner_fts, outer_fts =
                       List.fold_right
                         (fun (bndr, _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
-                          let f = Binder.name bndr in
+                          let f = Binder.to_name bndr in
                           let outer  = Binder.typ_exn bndr in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
@@ -1120,7 +1120,7 @@ struct
                       List.map
                         (fun (bndr, _, ((tyvars, _), (pss, body)), location, _, _) ->
                           assert (List.length pss = 1);
-                          let f  = Binder.name bndr in
+                          let f  = Binder.to_name bndr in
                           let ft = Binder.typ_exn bndr in
                           let ps = List.hd pss in
                            let ps, body_env =
@@ -1137,7 +1137,7 @@ struct
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
                 | Foreign (bndr, raw_name, language, _file, _)
                      when Binder.has_type bndr ->
-                    let x  = Binder.name bndr in
+                    let x  = Binder.to_name bndr in
                     let xt = Binder.typ_exn bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Type _

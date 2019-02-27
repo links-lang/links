@@ -450,10 +450,10 @@ perhaps_name:
 
 cp_expression:
 | LBRACE block_contents RBRACE                                 { with_pos $loc (CPUnquote $2) }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (CPGrab ((Binder.name $1, None), $3, $6)) }
-| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (CPGrab ((Binder.name $1, None), $3, cp_unit $loc)) }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (CPGive ((Binder.name $1, None), Some $3, $6)) }
-| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (CPGive ((Binder.name $1, None), Some $3, cp_unit $loc)) }
+| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (CPGrab ((Binder.to_name $1, None), $3, $6)) }
+| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (CPGrab ((Binder.to_name $1, None), $3, cp_unit $loc)) }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (CPGive ((Binder.to_name $1, None), Some $3, $6)) }
+| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (CPGive ((Binder.to_name $1, None), Some $3, cp_unit $loc)) }
 | cp_name LBRACKET RBRACKET                                    { with_pos $loc (CPGiveNothing $1) }
 | OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (CPOffer ($2, $4)) }
 | cp_label cp_name DOT cp_expression                           { with_pos $loc (CPSelect ($2, $1, $4)) }

@@ -823,7 +823,7 @@ class transform (env : Types.typing_environment) =
     method binder : Binder.t -> ('self_type * Binder.t) =
       fun bndr ->
       assert (Binder.has_type bndr);
-      let var_env = TyEnv.bind var_env (Binder.name bndr, Binder.typ_exn bndr) in
+      let var_env = TyEnv.bind var_env (Binder.to_name bndr, Binder.typ_exn bndr) in
       ({< var_env=var_env >}, bndr)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =

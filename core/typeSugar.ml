@@ -1739,10 +1739,10 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
           List.fold_right (fun p binderss -> gather binderss p) ps binderss
       | Constant _ -> binderss
       | Variable bndr ->
-          add (Binder.name bndr) bndr binderss
+          add (Binder.to_name bndr) bndr binderss
       | As (bndr, p) ->
           let binderss = gather binderss p in
-            add (Binder.name bndr) bndr binderss
+            add (Binder.to_name bndr) bndr binderss
       | HasType (p, _) -> gather binderss p in
 
   let binderss =
@@ -1795,7 +1795,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
       | Variable bndr ->
         let xtype = Types.fresh_type_variable (lin_any, res_any) in
         (Variable (Binder.set_type bndr xtype),
-         Env.bind Env.empty (Binder.name bndr, xtype),
+         Env.bind Env.empty (Binder.to_name bndr, xtype),
          (xtype, xtype))
       | Cons (p1, p2) ->
         let p1 = tp p1
@@ -1844,10 +1844,10 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
            | Variable bndr ->
               let xtype = fresh_resumption_type () in
               ( with_pos pos' (Variable (Binder.set_type bndr xtype))
-              , Env.bind Env.empty (Binder.name bndr, xtype), (xtype, xtype))
+              , Env.bind Env.empty (Binder.to_name bndr, xtype), (xtype, xtype))
            | As (bndr, pat') ->
               let p = type_resumption_pat pat' in
-              let env' = Env.bind (env p) (Binder.name bndr, it p) in
+              let env' = Env.bind (env p) (Binder.to_name bndr, it p) in
               with_pos pos' (As ((Binder.set_type bndr (it p), erase p))), env', (ot p, it p)
            | HasType (p, (_, Some t)) ->
               let p = type_resumption_pat p in
@@ -1936,7 +1936,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
         Tuple (List.map erase ps'), env', (make_tuple ot, make_tuple it)
       | As (bndr, p) ->
         let p = tp p in
-        let env' = Env.bind (env p) (Binder.name bndr, it p) in
+        let env' = Env.bind (env p) (Binder.to_name bndr, it p) in
         As (Binder.set_type bndr (it p), erase p), env', (ot p, it p)
       | HasType (p, (_,Some t as t')) ->
         let p = tp p in
@@ -1985,7 +1985,7 @@ let update_pattern_vars env =
     fun n ->
       let open Pattern in
       let update bndr =
-        let ty = Env.lookup env (Binder.name bndr) in
+        let ty = Env.lookup env (Binder.to_name bndr) in
         Binder.set_type bndr ty
       in match n with
          | Variable b -> Variable (update b)
@@ -2992,7 +2992,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                (Also, should the mailbox type be generalised?)
             *)
-            let name = Binder.name bndr in
+            let name = Binder.to_name bndr in
             let f = Types.fresh_type_variable (lin_any, res_any) in
             let t = Types.fresh_type_variable (lin_any, res_any) in
 
@@ -3299,7 +3299,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                            (pat, env, effrow), (kpat, Env.empty, kt)
                         | As (bndr,_)
                         | Variable bndr ->
-                           let kname = Binder.name bndr in
+                           let kname = Binder.to_name bndr in
                            let kt =
                              let (fields,_,_) = TypeUtils.extract_row effrow in
                              let kt = find_effect_type effname (StringMap.to_alist fields) in
@@ -3323,7 +3323,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         match kpat.node with
                         | As (bndr,_)
                         | Variable bndr ->
-                           let kname = Binder.name bndr in
+                           let kname = Binder.to_name bndr in
                            let kt =
                              match Env.find env kname with
                              | Some t -> t
@@ -3616,7 +3616,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               var_env = penv},
             usage
       | Fun (bndr, lin, (_, (pats, body)), location, t) ->
-          let name = Binder.name bndr in
+          let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let pats = List.map (List.map tpc) pats in
 
@@ -3710,7 +3710,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let inner_env, patss =
             List.fold_left
               (fun (inner_env, patss) (bndr, lin, (_, (pats, _body)), _, t, pos) ->
-                 let name = Binder.name bndr in
+                 let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
                  let inner =
@@ -3755,7 +3755,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               (List.rev
                 (List.fold_left2
                    (fun defs_and_uses (bndr, lin, (_, (_, body)), location, t, pos) pats ->
-                      let name = Binder.name bndr in
+                      let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let context' = {context with var_env = Env.extend body_env pat_env} in
                       let effects = fresh_wild () in
@@ -3807,7 +3807,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             let defs, outer_env =
               List.fold_left2
                 (fun (defs, outer_env) (bndr, lin, (_, (_, body)), location, t, pos) pats ->
-                   let name = Binder.name bndr in
+                   let name = Binder.to_name bndr in
                    let inner = Env.lookup inner_env name in
                    let inner, outer, tyvars =
                      match inner with
@@ -3838,7 +3838,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             in
               List.rev defs, outer_env in
 
-          let defined = List.map (fun (bndr, _, _, _, _, _) -> Binder.name bndr) defs
+          let defined = List.map (fun (bndr, _, _, _, _, _) -> Binder.to_name bndr) defs
 
           in
             Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
@@ -3848,7 +3848,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
           let datatype = Instantiate.freshen_quantifiers datatype in
           (Foreign (Binder.set_type bndr datatype, raw_name, language, file, (dt1, Some datatype)),
-           (bind_var empty_context (Binder.name bndr, datatype)),
+           (bind_var empty_context (Binder.to_name bndr, datatype)),
            StringMap.empty)
       | Foreign _ -> assert false
       | Type (name, vars, (_, Some dt)) as t ->
@@ -3938,7 +3938,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let (p, pt, u) = type_cp (unbind_var context c) p in
        CPGrab ((c, Some (ctype, [])), None, p), pt, use c u
     | CPGrab ((c, _), Some bndr, p) ->
-       let x = Binder.name bndr in
+       let x = Binder.to_name bndr in
        let (_, t, _) = type_check context (with_pos pos (Var c)) in
        let a = Types.fresh_type_variable (lin_any, res_any) in
        let s = Types.fresh_session_variable lin_any in
@@ -3998,12 +3998,12 @@ and type_cp (context : context) = fun {node = p; pos} ->
          | _ -> assert false in
        CPGive ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
     | CPGiveNothing bndr ->
-       let c = Binder.name bndr in
+       let c = Binder.to_name bndr in
        let _, t, _ = type_check context (var c) in
        unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
        CPGiveNothing (Binder.set_type bndr t), t, StringMap.singleton c 1
     | CPSelect (bndr, label, p) ->
-       let c = Binder.name bndr in
+       let c = Binder.to_name bndr in
        let (_, t, _) = type_check context (var c) in
        let s = Types.fresh_session_variable lin_any in
        let r = Types.make_singleton_open_row (label, `Present s) (lin_any, res_session) in
@@ -4013,7 +4013,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) p) in
        CPSelect (Binder.set_type bndr ctype, label, p), t, use c u
     | CPOffer (bndr, branches) ->
-       let c = Binder.name bndr in
+       let c = Binder.to_name bndr in
        let (_, t, _) = type_check context (var c) in
        (*
        let crow = Types.make_empty_open_row (lin_any, res_session) in
@@ -4034,8 +4034,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
 
        CPOffer (Binder.set_type bndr t, List.map (fun (x, _, _) -> x) branches), t', use c u
     | CPLink (bndr1, bndr2) ->
-      let c = Binder.name bndr1 in
-      let d = Binder.name bndr2 in
+      let c = Binder.to_name bndr1 in
+      let d = Binder.to_name bndr2 in
       let (_, tc, uc) = type_check context (var c) in
       let (_, td, ud) = type_check context (var d) in
         unify ~pos:pos ~handle:Gripers.cp_link_session
@@ -4045,7 +4045,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
         unify ~pos:pos ~handle:Gripers.cp_link_dual (Types.dual_type tc, td);
         CPLink (Binder.set_type bndr1 tc, Binder.set_type bndr1 td), Types.make_endbang_type, merge_usages [uc; ud]
     | CPComp (bndr, left, right) ->
-       let c = Binder.name bndr in
+       let c = Binder.to_name bndr in
        let s = Types.fresh_session_variable lin_any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in
        let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Dual s)) right) in
