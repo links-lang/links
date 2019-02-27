@@ -377,9 +377,6 @@ struct
     | Let (x, body) -> Let (binder x, body)
     | Fun def -> Fun (fun_def def)
     | Rec defs -> Rec (List.map fun_def defs)
-    | Ir.Let (x, body) -> Ir.Let (binder x, body)
-    | Fun def -> Ir.Fun (fun_def def)
-    | Rec defs -> Ir.Rec (List.map fun_def defs)
     | Alien (x, n, language) -> Alien (binder x, n, language)
     | Module _ -> failwith "unimplemented"
   let bindings = List.map binding
