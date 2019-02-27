@@ -1,3 +1,4 @@
+open Links_core
 open Utility
 open Sqlite3
 
@@ -81,14 +82,39 @@ end
 
 class lite3_database file = object(self)
   inherit Value.database
+  val mutable _supports_shredding : bool option = None
   val connection = db_open file
   method exec query : Value.dbvalue =
+    Debug.print query;
     let stmt = prepare connection query in
       new lite3_result stmt
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
-  method quote_field = self#escape_string
+  method quote_field s = "\"" ^ self#escape_string s ^ "\""
   method driver_name () = "sqlite3"
+  method supports_shredding () =
+    match _supports_shredding with
+    | Some result -> result
+    | None ->
+       let stmt = prepare connection "SELECT sqlite_version()" in
+       let result = new lite3_result stmt in
+       match result#status with
+       | `QueryOk ->
+          let version = result#getvalue 0 0 in
+          let is_number str =
+            Str.string_match (Str.regexp "^[0-9]+$") str 0
+          in
+          begin match Str.split (Str.regexp "[0-9]\\.") version with
+          | major :: minor :: _ when is_number major && is_number minor ->
+             let nmajor = int_of_string major in
+             let nminor = int_of_string minor in
+             if nmajor >= 3 && nminor >= 25 then
+               (_supports_shredding <- Some true; true)
+             else
+               (_supports_shredding <- Some false; false)
+          | _ -> _supports_shredding <- Some false; false
+          end
+       | _ -> false
 end
 
 let driver_name = "sqlite3"

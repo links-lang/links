@@ -259,6 +259,7 @@ class mysql_database spec = object(self)
     fun (table_name, field_names, vss, _returning) ->
       [self#make_insert_query(table_name, field_names, vss);
        "select last_insert_id()"]
+  method supports_shredding () = false
 end
 
 let parse_args (args : string) : db =
