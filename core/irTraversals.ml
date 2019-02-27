@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 open Ir
 
 (** Traversal with type reconstruction
@@ -16,7 +17,7 @@ sig
     val tyenv : environment
 
     method lookup_type : var -> Types.datatype
-    method constant : constant -> (constant * Types.datatype * 'self_type)
+    method constant : Constant.t -> (Constant.t * Types.datatype * 'self_type)
     method optionu :
       'a.
       ('self_type -> 'a -> ('a * 'self_type)) ->
@@ -86,13 +87,13 @@ struct
     (* method private lookup_closure_type : var -> datatype = fun var -> *)
     (*   Env.lookup cenv var *)
 
-    method constant : constant -> (constant * datatype * 'self_type) = fun c ->
+    method constant : Constant.t -> (Constant.t * datatype * 'self_type) = fun c ->
       match c with
-        | `Bool _ -> c, bool_type, o
-        | `Int _ -> c, int_type, o
-        | `Char _ -> c, char_type, o
-        | `String _ -> c, string_type, o
-        | `Float _ -> c, float_type, o
+        | Constant.Bool   _ -> c, bool_type  , o
+        | Constant.Int    _ -> c, int_type   , o
+        | Constant.Char   _ -> c, char_type  , o
+        | Constant.String _ -> c, string_type, o
+        | Constant.Float  _ -> c, float_type , o
 
     method optionu :
       'a.
@@ -297,7 +298,7 @@ struct
         | `Wrong t -> `Wrong t, t, o
         | `Database v ->
             let v, _, o = o#value v in
-              `Database v, `Primitive `DB, o
+              `Database v, `Primitive Primitive.DB, o
         | `Table (db, table_name, keys, tt) ->
             let db, _, o = o#value db in
             let keys, _, o = o#value keys in

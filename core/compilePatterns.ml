@@ -21,7 +21,7 @@ type pattern = [
 | `Effect   of name * pattern list * pattern
 | `Negative of StringSet.t
 | `Record   of (pattern StringMap.t) * pattern option
-| `Constant of constant
+| `Constant of Constant.t
 | `Variable of binder
 | `As       of binder * pattern
 | `HasType  of pattern * Types.datatype
@@ -29,18 +29,18 @@ type pattern = [
     [@@deriving show]
 
 module Const = struct
-  type t = Constant.constant [@@deriving show]
+  type t = Constant.t [@@deriving show]
   let compare = Pervasives.compare
 end
 
-module type CONSTSET = Set with type elt = Constant.constant
+module type CONSTSET = Set with type elt = Constant.t
 module ConstSet = Set.Make(Const)
 module ConstMap = Map.Make(Const)
 
 type context =
     [ `Nil | `Cons
     | `Variant of string | `NVariant of StringSet.t
-    | `Constant of constant | `NConstant of ConstSet.t ]
+    | `Constant of Constant.t | `NConstant of ConstSet.t ]
 
 module NEnv = Env.String
 module TEnv = Env.Int

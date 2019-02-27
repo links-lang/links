@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 
 type query =
   [ `UnionAll of query list * int
@@ -6,7 +7,7 @@ type query =
   | `With of Var.var * query * Var.var * query ]
 and base =
   [ `Case of (base * base * base)
-  | `Constant of Constant.constant
+  | `Constant of Constant.t
   | `Project of Var.var * string
   | `Apply of string * base list
   | `Empty of query
@@ -132,7 +133,7 @@ let rec string_of_query db ignore_fields q =
         | _ -> " order by " ^ mapstrcat "," sb os in
     let where =
       match condition with
-        | `Constant (`Bool true) -> ""
+        | `Constant (Constant.Bool true) -> ""
         | _ ->  " where " ^ sb condition
     in
       "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
@@ -142,7 +143,7 @@ let rec string_of_query db ignore_fields q =
       | `UnionAll ([q], n) -> sq q ^ order_by_clause n
       | `UnionAll (qs, n) ->
         mapstrcat " union all " (fun q -> "(" ^ sq q ^ ")") qs ^ order_by_clause n
-      | `Select (fields, [], `Constant (`Bool true), _os) ->
+      | `Select (fields, [], `Constant (Constant.Bool true), _os) ->
           let fields = string_of_fields fields in
             "select " ^ fields
       | `Select (fields, [], condition, _os) ->
@@ -166,7 +167,7 @@ and string_of_base db one_table b =
     match b with
       | `Case (c, t, e) ->
           "case when " ^ sb c ^ " then " ^sb t ^ " else "^ sb e ^ " end"
-      | `Constant c -> Constant.string_of_constant c
+      | `Constant c -> Constant.to_string c
       | `Project (_var, _label as p) -> string_of_projection db one_table p
       | `Apply (op, [l; r]) when Arithmetic.is op
           -> Arithmetic.gen (sb l, op, sb r)

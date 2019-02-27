@@ -615,8 +615,8 @@ end = functor (K : CONTINUATION) -> struct
     | `Constant c ->
        begin
          match c with
-         | `Int v  -> Lit (string_of_int v)
-         | `Float v    ->
+         | Constant.Int v  -> Lit (string_of_int v)
+         | Constant.Float v    ->
             let s = string_of_float' v in
             let n = String.length s in
                     (* strip any trailing '.' *)
@@ -624,9 +624,9 @@ end = functor (K : CONTINUATION) -> struct
               Lit (String.sub s 0 (n-1))
             else
               Lit s
-         | `Bool v  -> Lit (string_of_bool v)
-         | `Char v     -> chrlit v
-         | `String v   -> chrlistlit v
+         | Constant.Bool v   -> Lit (string_of_bool v)
+         | Constant.Char v   -> chrlit v
+         | Constant.String v -> chrlistlit v
        end
     | `Variable var ->
           (* HACK *)
