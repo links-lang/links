@@ -53,7 +53,7 @@ struct
         let rec bind o =
           function
             | [] -> o
-            | (Ir.Let (x, _))::bs ->
+            | (Let (x, _))::bs ->
               o#bind_cont (x, (bs, main));
               bind o bs
             | _::bs -> bind o bs

@@ -374,6 +374,9 @@ struct
   let binder (x, (t, name, _)) = (x, (t, name, `Global))
   let fun_def (f, lam, z, location) = (binder f, lam, z, location)
   let binding = function
+    | Let (x, body) -> Let (binder x, body)
+    | Fun def -> Fun (fun_def def)
+    | Rec defs -> Rec (List.map fun_def defs)
     | Ir.Let (x, body) -> Ir.Let (binder x, body)
     | Fun def -> Ir.Fun (fun_def def)
     | Rec defs -> Ir.Rec (List.map fun_def defs)
@@ -388,7 +391,7 @@ module ClosureConvert =
 struct
 
   let close f zs tyargs =
-    Ir.Closure (f, tyargs, Ir.Extend (List.fold_right
+    Closure (f, tyargs, Extend (List.fold_right
                             (fun (zname, zv) fields ->
                                StringMap.add zname zv fields)
                             zs

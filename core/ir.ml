@@ -118,7 +118,6 @@ let tapp (v, tyargs) =
 
 let letm (b, tc) = Let (b, ([], tc))
 let letmv (b, v) = letm (b, Return v)
-(*let letv (b, v) = Let (b, Return v)*)
 
 let rec is_atom =
   function
