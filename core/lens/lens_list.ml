@@ -4,6 +4,9 @@ include List
 
 module Seq = Lens_seq
 
+let map t ~f =
+  map f t
+
 let rec filter_map t ~f =
   match t with
   | [] -> []

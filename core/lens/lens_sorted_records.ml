@@ -86,21 +86,21 @@ end
 
 let construct_cols ~columns ~records =
   let l = Value.unbox_list records in
-  let recs = List.map Value.unbox_record l in
+  let recs = List.map ~f:Value.unbox_record l in
   let col_val a r = try
       let (_,v) = List.find (fun (k,_) -> k = a) r in
       v
-    with NotFound _ -> Inconsistent_columns_error.E (columns, List.map (fun (k,_) -> k) r) |> raise in
+    with NotFound _ -> Inconsistent_columns_error.E (columns, List.map ~f:(fun (k,_) -> k) r) |> raise in
   let simpl_rec r =
     List.map2 (fun a (k,v) -> if a = k then v else col_val a r) columns r in
-  let plus_rows = Array.of_list (List.map simpl_rec recs) in
+  let plus_rows = Array.of_list (List.map ~f:simpl_rec recs) in
   Array.sort compare plus_rows;
   { columns; plus_rows; neg_rows = [| |]; }
 
 let construct ~records =
   let l = Value.unbox_list records in
-  let recs = List.map Value.unbox_record l in
-  let columns = List.map (fun (k,_v) -> k) (List.hd recs) in
+  let recs = List.map ~f:Value.unbox_record l in
+  let columns = List.map ~f:(fun (k,_v) -> k) (List.hd recs) in
   construct_cols ~columns ~records
 
 let sort rs =
@@ -182,7 +182,7 @@ let get_col_map rs ~column =
 
 let get_cols_map rs ~columns =
   let maps = List.filter_map ~f:(fun column -> get_col_map rs ~column) columns in
-  fun r -> List.map (fun mp -> mp r) maps
+  fun r -> List.map ~f:(fun mp -> mp r) maps
 
 let sort_uniq rs =
   let fn r = Array.of_list (List.sort_uniq compare (Array.to_list r)) in
@@ -287,10 +287,10 @@ let join left right ~on =
   let rjoinmap_right = get_cols_map right ~columns:(subtract_cols right_cols on_right) in
   let rjoinmap_right' = get_cols_map right ~columns:(subtract_cols right_cols on_right) in
   let join_list l1 l2 =
-    let joined = List.map (fun r1 ->
+    let joined = List.map ~f:(fun r1 ->
         let proj = lmap r1 in
         let matching = Simple_record.find_all_record l2 ~record:proj in
-        let joined = List.map (fun r2 ->
+        let joined = List.map ~f:(fun r2 ->
             List.flatten [r1; rjoinmap_right r2])
             (Array.to_list matching) in
         joined
@@ -307,7 +307,7 @@ let join left right ~on =
   let neg = List.sort compare neg in
   let (pos, neg) = zip_delta_merge pos neg in
   let l_map = StringMap.from_alist (List.zip_nofail on_left on_out) in
-  let l_cols = List.map (fun v -> StringMap.find_opt v l_map |> Option.value ~default:v) left.columns in
+  let l_cols = List.map ~f:(fun v -> StringMap.find_opt v l_map |> Option.value ~default:v) left.columns in
   let columns = List.flatten [l_cols; rjoinmap_right' right_cols] in
   { columns;
     plus_rows = Array.of_list pos;
@@ -348,10 +348,10 @@ let calculate_fd_changelist data ~fun_deps =
 
 let relational_update t ~fun_deps ~update_with =
   let changelist = calculate_fd_changelist ~fun_deps update_with in
-  let changes = List.map (fun ((cols_l,_cols_r),_l) ->
+  let changes = List.map ~f:(fun ((cols_l,_cols_r),_l) ->
       (* get a map from simp rec to col value *)
-      let col_maps = List.map (fun column -> get_col_map t ~column) cols_l in
-      let col_maps = List.flatten (List.map (fun mp -> match mp with None -> [] | Some a -> [a]) col_maps) in
+      let col_maps = List.map ~f:(fun column -> get_col_map t ~column) cols_l in
+      let col_maps = List.flatten (List.map ~f:(fun mp -> match mp with None -> [] | Some a -> [a]) col_maps) in
       (* get a function which compares column with change *)
       let comp record change_key =
         List.for_all2 (fun mp1 key -> mp1 record = key) col_maps change_key in
@@ -360,7 +360,7 @@ let relational_update t ~fun_deps ~update_with =
   (* each entry in changelist is a functional dependency, and then the corresponding records *)
   (* generate a function for every change list entry, which can replace the columns in the
    * right side of the functional dependency of a record in res *)
-  let apply_changes = List.map (fun ((_cols_l, cols_r),_l) ->
+  let apply_changes = List.map ~f:(fun ((_cols_l, cols_r),_l) ->
       (* upd cols returns a function which, given a record another record containing cols_r,
        * replaces every column value in the first record from that in the second record if it
        * matches *)
