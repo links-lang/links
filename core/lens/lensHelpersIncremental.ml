@@ -6,9 +6,9 @@ module Sorted = Lens_sorted_records
 
 let matches_change changes =
   let is_changed ((cols_l, _cols_r),(vals)) =
-    let vals_l = List.map (fun (left,_) -> left) vals in
+    let vals_l = List.map ~f:(fun (left,_) -> left) vals in
     Lens_phrase.Option.in_expr cols_l vals_l in
-  List.map is_changed changes |> Lens_phrase.List.fold_or_opt
+  List.map ~f:is_changed changes |> Lens_phrase.List.fold_or_opt
 
 let delta_merge_affected lens data =
   let sort = Lens_value.sort lens in
@@ -46,14 +46,14 @@ let lens_put_set_step lens delt (fn : Value.t -> Sorted.t -> unit) =
     let delt = Sorted.relational_extend delt ~key ~by:drop ~default ~data:relevant in
     fn l delt
   | `LensJoin (l1, l2, on, pd, qd, _sort)  ->
-    let cols_simp = List.map (fun (a,_,_) -> a) on in
+    let cols_simp = List.map ~f:(fun (a,_,_) -> a) on in
     let sort1 = Lens_value.sort l1 in
     let proj1 = Sorted.project_onto delt ~columns:(Sort.cols_present_aliases sort1) in
     let sort2 = Lens_value.sort l2 in
     let proj2 = Sorted.project_onto delt ~columns:(Sort.cols_present_aliases sort2) in
     let delta_m0 = delta_merge_affected l1 proj1 in
     let delta_n0 = delta_merge_affected l2 proj2 in
-    let on' = List.map (fun a -> a,a,a) cols_simp in
+    let on' = List.map ~f:(fun a -> a,a,a) cols_simp in
     let delta_l =
       Sorted.merge
         (Sorted.merge
@@ -121,7 +121,7 @@ let apply_delta t data =
   let columns, (insert_vals, update_vals, delete_vals) = Sorted.to_diff data ~key in
   let prepare_where row =
     List.zip_nofail key row
-    |> List.map (fun (k,v) -> Lens_phrase.equal (Lens_phrase.var k) (Lens_phrase.Constant.of_value v))
+    |> List.map ~f:(fun (k,v) -> Lens_phrase.equal (Lens_phrase.var k) (Lens_phrase.Constant.of_value v))
     |> Lens_phrase.List.fold_and in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
   let fmt_delete f row =
@@ -136,9 +136,9 @@ let apply_delta t data =
   let fmt_insert f values =
     let insert = { Lens_database.Insert. table; columns; values; db; } in
     Lens_database.Insert.fmt f insert in
-  let fmt_insert_cmds = List.map (fun v -> fmt_insert, v) insert_vals in
-  let fmt_delete_cmds = List.map (fun v -> fmt_delete, v) delete_vals in
-  let fmt_update_cmds = List.map (fun v -> fmt_update, v) update_vals in
+  let fmt_insert_cmds = List.map ~f:(fun v -> fmt_insert, v) insert_vals in
+  let fmt_delete_cmds = List.map ~f:(fun v -> fmt_delete, v) delete_vals in
+  let fmt_update_cmds = List.map ~f:(fun v -> fmt_update, v) update_vals in
   let fmt_fmt f (fmt, v) = fmt f v in
   let fmt_all f () = Format.pp_print_list ~pp_sep:fmt_cmd_sep fmt_fmt f @@
     List.flatten [fmt_insert_cmds; fmt_delete_cmds; fmt_update_cmds] in
@@ -154,7 +154,7 @@ let get_fds (fds : (string list * string list) list) (cols : Types.lens_col list
   List.iter (fun (left, right) -> check_col left; check_col right) fds;
   let fd_of (left, right) =
     Fun_dep.make (Alias.Set.of_list left) (Alias.Set.of_list right) in
-  Fun_dep.Set.of_list (List.map fd_of fds)
+  Fun_dep.Set.of_list (List.map ~f:fd_of fds)
 
 let lens_put (lens : Value.t) (data : Value.t) =
   let rec do_step_rec lens delt =

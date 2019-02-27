@@ -57,7 +57,7 @@ module List = struct
 
   let present t = List.filter present t
 
-  let aliases t = List.map alias t
+  let aliases t = List.map ~f:alias t
 
   let present_aliases t =
     present t |> aliases
@@ -70,7 +70,7 @@ module List = struct
 
   let colset t = Set.of_list t
 
-  let colmap t = List.map (fun t -> alias t, t) t |> Lens_alias.Map.from_alist
+  let colmap t = List.map ~f:(fun t -> alias t, t) t |> Lens_alias.Map.from_alist
 
   let record_type t =
     let map = present t

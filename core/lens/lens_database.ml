@@ -41,7 +41,7 @@ let fmt_cols ~db f cols =
 let rec fmt_phrase ~db ~map f expr =
   let pp_sep f () = Format.fprintf f ", " in
   let fmt = fmt_phrase ~db ~map in
-  match expr with
+  match Lens_phrase.node expr with
   | Constant c -> Format.fprintf f "%a" Constant.fmt c
   | Var v -> Format.fprintf f "%s" (map v)
   | InfixAppl (op, a1, a2) -> Format.fprintf f "%a %a %a" fmt a1 Binary.fmt op fmt a2
@@ -94,9 +94,9 @@ module Select = struct
     let predicate = Lens_sort.predicate sort in
     let cols = Lens_sort.cols sort in
     let tables =
-      List.map Lens_column.table cols
+      List.map ~f:Lens_column.table cols
       |> List.sort_uniq String.compare
-      |> List.map (fun c -> (c,c)) in
+      |> List.map ~f:(fun c -> (c,c)) in
     {
       predicate;
       cols;
