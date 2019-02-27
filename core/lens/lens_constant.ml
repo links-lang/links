@@ -1,22 +1,23 @@
-type t = Constant.constant
+open CommonTypes
 
-let bool v = `Bool v
+type t = Constant.t
 
-let int v = `Int v
+let bool v = Constant.Bool v
 
-let fmt f v = Format.fprintf f "%s" (Constant.string_of_constant v)
+let int v = Constant.Int v
+
+let fmt f v = Format.fprintf f "%s" (Constant.to_string v)
 
 let to_value = function
-    | `Int a -> `Int a
-    | `Float f -> `Float f
-    | `String s -> `String s
-    | `Bool b -> `Bool b
+    | Constant.Int a    -> `Int a
+    | Constant.Float f  -> `Float f
+    | Constant.String s -> `String s
+    | Constant.Bool b   -> `Bool b
     | _ -> failwith "Unsupported constant type."
 
 let of_value = function
-    | `Int a -> `Int a
-    | `Float f -> `Float f
-    | `String s -> `String s
-    | `Bool b -> `Bool b
+    | `Int a    -> Constant.Int a
+    | `Float f  -> Constant.Float f
+    | `String s -> Constant.String s
+    | `Bool b   -> Constant.Bool b
     | _ -> failwith "Unsupported value type."
-

@@ -253,12 +253,42 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   (* Conversions (any missing?) *)
-  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:Value.unbox_int ~conv:string_of_int ~box:Value.box_string ~into:Types.string_type PURE;
-  "stringToInt",   conversion_op ~from:Types.string_type ~unbox:Value.unbox_string ~conv:int_of_string ~box:Value.box_int ~into:(`Primitive `Int) IMPURE;
-  "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:Value.unbox_int ~conv:float_of_int ~box:Value.box_float ~into:(`Primitive `Float) PURE;
-  "floatToInt",    conversion_op ~from:(`Primitive `Float) ~unbox:Value.unbox_float ~conv:int_of_float ~box:Value.box_int ~into:(`Primitive `Int) PURE;
-  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:Value.unbox_float ~conv:string_of_float' ~box:Value.box_string ~into:Types.string_type PURE;
-  "stringToFloat", conversion_op ~from:Types.string_type ~unbox:Value.unbox_string ~conv:float_of_string ~box:Value.box_float ~into:(`Primitive `Float) IMPURE;
+  "intToString",   conversion_op ~from:(`Primitive Primitive.Int)
+                                 ~unbox:Value.unbox_int
+                                 ~conv:string_of_int
+                                 ~box:Value.box_string
+                                 ~into:Types.string_type
+                                 PURE;
+  "stringToInt",   conversion_op ~from:Types.string_type
+                                 ~unbox:Value.unbox_string
+                                 ~conv:int_of_string
+                                 ~box:Value.box_int
+                                 ~into:(`Primitive Primitive.Int)
+                                 IMPURE;
+  "intToFloat",    conversion_op ~from:(`Primitive Primitive.Int)
+                                 ~unbox:Value.unbox_int
+                                 ~conv:float_of_int
+                                 ~box:Value.box_float
+                                 ~into:(`Primitive Primitive.Float)
+                                 PURE;
+  "floatToInt",    conversion_op ~from:(`Primitive Primitive.Float)
+                                 ~unbox:Value.unbox_float
+                                 ~conv:int_of_float
+                                 ~box:Value.box_int
+                                 ~into:(`Primitive Primitive.Int)
+                                 PURE;
+  "floatToString", conversion_op ~from:(`Primitive Primitive.Float)
+                                 ~unbox:Value.unbox_float
+                                 ~conv:string_of_float'
+                                 ~box:Value.box_string
+                                 ~into:Types.string_type
+                                 PURE;
+  "stringToFloat", conversion_op ~from:Types.string_type
+                                 ~unbox:Value.unbox_string
+                                 ~conv:float_of_string
+                                 ~box:Value.box_float
+                                 ~into:(`Primitive Primitive.Float)
+                                 IMPURE;
 
   "stringToXml",
   ((p1 string_to_xml),

@@ -251,7 +251,7 @@ let parseRegexFlags f =
 %type <Sugartypes.phrase> postfix_expression
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
-%type <Sugartypes.constant> constant
+%type <Constant.t> constant
 %type <(string * Sugartypes.phrase list) list> attr_list
 %type <Sugartypes.phrase list> attr_val
 %type <Sugartypes.binding> binding
@@ -402,12 +402,12 @@ perhaps_location:
 | /* empty */                                                  { loc_unknown }
 
 constant:
-| UINTEGER                                                     { `Int    $1  }
-| UFLOAT                                                       { `Float  $1  }
-| STRING                                                       { `String $1  }
-| TRUE                                                         { `Bool true  }
-| FALSE                                                        { `Bool false }
-| CHAR                                                         { `Char $1    }
+| UINTEGER                                                     { Constant.Int    $1  }
+| UFLOAT                                                       { Constant.Float  $1  }
+| STRING                                                       { Constant.String $1  }
+| TRUE                                                         { Constant.Bool true  }
+| FALSE                                                        { Constant.Bool false }
+| CHAR                                                         { Constant.Char $1    }
 
 qualified_name:
 | CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
@@ -520,7 +520,7 @@ postfix_expression:
 | primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 }
 | block                                                        { $1 }
 | QUERY block                                                  { query ~ppos:$loc None $2 }
-| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (`Int 0)))) $5 }
+| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
@@ -830,8 +830,8 @@ lens_expression:
 | LENSSELECT FROM exp BY exp                                   { with_pos $loc (LensSelectLit ($3, $5, None)) }
 | LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { with_pos $loc (LensJoinLit ($2, $4, $6, $9, $11, None)) }
 | LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { with_pos $loc (LensJoinLit ($2, $4, $6,
-                                                                                       with_pos $loc (Constant (`Bool true )),
-                                                                                       with_pos $loc (Constant (`Bool false)), None)) }
+                                                                                       with_pos $loc (Constant (Constant.Bool true )),
+                                                                                       with_pos $loc (Constant (Constant.Bool false)), None)) }
 | LENSGET exp                                                  { with_pos $loc (LensGetLit ($2, None)) }
 | LENSPUT exp WITH exp                                         { with_pos $loc (LensPutLit ($2, $4, None)) }
 
@@ -972,12 +972,12 @@ primary_datatype:
 | kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { let open Datatype in
                                                                  match $1 with
-                                                                   | "Bool"    -> Primitive `Bool
-                                                                   | "Int"     -> Primitive `Int
-                                                                   | "Char"    -> Primitive `Char
-                                                                   | "Float"   -> Primitive `Float
-                                                                   | "XmlItem" -> Primitive `XmlItem
-                                                                   | "String"  -> Primitive `String
+                                                                   | "Bool"    -> Primitive Primitive.Bool
+                                                                   | "Int"     -> Primitive Primitive.Int
+                                                                   | "Char"    -> Primitive Primitive.Char
+                                                                   | "Float"   -> Primitive Primitive.Float
+                                                                   | "XmlItem" -> Primitive Primitive.XmlItem
+                                                                   | "String"  -> Primitive Primitive.String
                                                                    | "Database"-> DB
                                                                    | t         -> TypeApplication (t, [])
                                                                }

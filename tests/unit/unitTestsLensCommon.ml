@@ -6,6 +6,7 @@ open Links_core
 open Types
 open Value
 open Utility
+open CommonTypes
 
 (* ensure links configuration is loaded *)
 let _ = OptionUtils.opt_iter (Links_core.Settings.load_file false) Links_core.Basicsettings.config_file_path
@@ -75,7 +76,7 @@ module LensTestHelpers = struct
     let cols = Lens.Fun_dep.Set.fold (fun fd fld -> Lens.Alias.Set.union_all [Lens.Fun_dep.left fd; Lens.Fun_dep.right fd; fld]) fd_set Lens.Alias.Set.empty in
     let cols = Lens.Alias.Set.elements cols in
     let colFn tbl name = {
-      alias = name; name = name; table = tbl; typ = `Primitive `Int; present = true
+      alias = name; name = name; table = tbl; typ = `Primitive Primitive.Int; present = true
     } in
     let l1 = `LensMem ((`List data), (fd_set, None, List.map (colFn name) cols)) in
     l1
@@ -196,10 +197,10 @@ module LensTestHelpers = struct
 
   let create_lens_db db tablename fd (key : string list) (cols : string list) =
     let colFn tbl name = {
-      alias = name; name = name; table = tbl; typ = `Primitive `Int; present = true
+      alias = name; name = name; table = tbl; typ = `Primitive Primitive.Int; present = true
     } in
     (* table is `Table of (database * db : str) * tablename : str * keys : string list list * row type *)
-    let colst = List.map (fun a -> a, `Primitive `Int) cols in
+    let colst = List.map (fun a -> a, `Primitive Primitive.Int) cols in
     let `Record recordType = create_record_type colst in
     let table = ((db, ""), tablename, [key], recordType) in
     let fds = Lens.Fun_dep.Set.singleton fd in

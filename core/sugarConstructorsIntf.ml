@@ -70,9 +70,9 @@ module type SugarConstructorsSig = sig
     ?ppos:t -> ?body:phrase -> ?ty:Types.datatype -> name -> phrase
 
   (* Constants *)
-  val constant      : ?ppos:t -> constant -> phrase
-  val constant_str  : ?ppos:t -> string   -> phrase
-  val constant_char : ?ppos:t -> char     -> phrase
+  val constant      : ?ppos:t -> Constant.t -> phrase
+  val constant_str  : ?ppos:t -> string     -> phrase
+  val constant_char : ?ppos:t -> char       -> phrase
 
   (* Binders *)
   val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> binder

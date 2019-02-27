@@ -1,3 +1,8 @@
+(* This module contains common datatypes used in ASTs in both the frontend
+   (Sugartypes) and typechecker (Types). *)
+
+open Utility
+
 module Linearity = struct
   type t = Any | Unl
     [@@deriving eq,show]
@@ -73,6 +78,9 @@ let res_base    = Restriction.Base
 let res_session = Restriction.Session
 let res_effect  = Restriction.Effect
 
+type subkind = Linearity.t * Restriction.t
+    [@@deriving eq,show]
+
 module PrimaryKind = struct
   type t =
     | Type
@@ -123,3 +131,50 @@ let loc_client  = Location.Client
 let loc_server  = Location.Server
 let loc_native  = Location.Native
 let loc_unknown = Location.Unknown
+
+type freedom = [`Flexible | `Rigid]
+    [@@deriving show]
+
+module Primitive = struct
+  type t = Bool | Int | Char | Float | XmlItem | DB | String
+    [@@deriving show]
+
+  let to_string = function
+    | Bool    -> "Bool"
+    | Int     -> "Int"
+    | Char    -> "Char"
+    | Float   -> "Float"
+    | XmlItem -> "XmlItem"
+    | DB      -> "Database"
+    | String  -> "String"
+end
+
+module Constant = struct
+  type t =
+    | Float  of float
+    | Int    of int
+    | Bool   of bool
+    | String of string
+    | Char   of char
+      [@@deriving show]
+
+  let type_of = function
+    | Float  _ -> Primitive.Float
+    | Int    _ -> Primitive.Int
+    | Bool   _ -> Primitive.Bool
+    | Char   _ -> Primitive.Char
+    | String _ -> Primitive.String
+
+  (* SQL standard for escaping single quotes in a string *)
+  let escape_string s =
+    Str.global_replace (Str.regexp "'") "''" s
+
+  (* This function is actually specific to database query generation; it should
+     be moved to the database module(s). *)
+  let to_string = function
+    | Bool value  -> string_of_bool value
+    | Int value   -> string_of_int value
+    | Char c      -> "'"^ Char.escaped c ^"'"
+    | String s    -> "'" ^ escape_string s ^ "'"
+    | Float value -> string_of_float' value
+end

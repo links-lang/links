@@ -90,7 +90,7 @@ let desugar_lnames (p : phrasenode) : phrasenode * (string * string) StringMap.t
   let lnames = ref StringMap.empty in
   let add lname (id,name) = lnames := StringMap.add lname (id,name) !lnames in
   let attr : string * phrase list -> (string * phrase list) list = function
-    | "l:name", [{node=Constant (`String v); _}] ->
+    | "l:name", [{node=Constant (Constant.String v); _}] ->
         let id, name = fresh_names () in
           add v (id,name);
           [("name", [constant_str name]);
