@@ -156,7 +156,7 @@ module Constant = struct
     | Bool   of bool
     | String of string
     | Char   of char
-      [@@deriving show]
+      [@@deriving show, ord]
 
   let type_of = function
     | Float  _ -> Primitive.Float

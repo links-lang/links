@@ -13,14 +13,9 @@ open Utility
 open Ir
 open SugarConstructors.DummyPositions
 
-module Const = struct
-  type t = Constant.t [@@deriving show]
-  let compare = Pervasives.compare
-end
-
 module type CONSTSET = Set with type elt = Constant.t
-module ConstSet = Set.Make(Const)
-module ConstMap = Map.Make(Const)
+module ConstSet = Set.Make(Constant)
+module ConstMap = Map.Make(Constant)
 
 module Pattern =
 struct
