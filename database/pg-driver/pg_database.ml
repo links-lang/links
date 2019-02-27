@@ -158,6 +158,8 @@ class pg_database host port dbname user password = object(self)
       [self#make_insert_query(table_name,
                               field_names,
                               vss) ^ " returning " ^ self#quote_field returning]
+
+  method supports_shredding () = true
 end
 
 let driver_name = "postgresql"

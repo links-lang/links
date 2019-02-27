@@ -674,29 +674,31 @@ struct
          | Some (limit, offset) ->
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
        if Settings.get_value Basicsettings.Shredding.shredding then
-         begin
-           match EvalNestedQuery.compile_shredded env (range, e) with
-           | None -> computation env cont e
-           | Some (db, p) ->
-             begin
-               if db#driver_name() <> "postgresql"
-                 then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
-               let get_fields t =
-                             match t with
-                             | `Record fields ->
-                                 StringMap.to_list (fun name p -> (name, `Primitive p)) fields
-                             | _ -> assert false
-               in
-               let execute_shredded_raw (q, t) =
-                 Database.execute_select_result (get_fields t) q db, t in
-               let raw_results =
-                 EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-               let mapped_results =
-                 EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-                 apply_cont cont env
-                 (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
-             end
-         end
+         match EvalNestedQuery.compile_shredded env (range, e) with
+         | None -> computation env cont e
+         | Some (db, p) ->
+            if db#supports_shredding () then
+              let get_fields t =
+                match t with
+                | `Record fields ->
+                   StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                | _ -> assert false
+              in
+              let execute_shredded_raw (q, t) =
+                Database.execute_select_result (get_fields t) q db, t in
+              let raw_results =
+                EvalNestedQuery.Shred.pmap execute_shredded_raw p in
+              let mapped_results =
+                EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+              apply_cont cont env
+                (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+            else
+              let error_msg =
+                Printf.sprintf
+                  "The database driver '%s' does not support shredding."
+                  (db#driver_name ())
+              in
+              raise (Errors.Runtime_error error_msg)
        else (* shredding disabled *)
          begin
            match EvalQuery.compile env (range, e) with
