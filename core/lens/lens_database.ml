@@ -19,6 +19,7 @@ class dummy_database = object(_self)
     "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
   method! make_insert_returning_query : (string * string list * string list list * string) -> string list =
     failwith "Dummy database make_insert_returning_query not supported"
+  method supports_shredding () = false
 end
 
 let fmt_comma_seperated v =

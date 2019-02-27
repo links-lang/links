@@ -25,7 +25,7 @@ create-startup-script:
 	ln -fs links linx
 
 build-dev-all: dune dune-project
-	$(BUILD) --only-packages links,links-postgresql $(DEV_FLAGS) @install
+	$(BUILD) --only-packages links,links-postgresql,links-sqlite3 $(DEV_FLAGS) @install
 
 build-dev-nodb: dune dune-project
 	$(BUILD) --only-packages links $(DEV_FLAGS) @install
