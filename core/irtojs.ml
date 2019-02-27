@@ -233,10 +233,9 @@ end
 
 (** Create a JS string literal, quoting special characters *)
 let string_js_quote s =
-  let substitutions =
-    [("'", "\\'"); ("\n", "\\n"); ("\r", "\\r"); ("\\", "\\\\\\\\")] in
-  let sub old repl s = Str.global_replace (Str.regexp old) repl s in
-  "'" ^ List.fold_right (fun (s_old, s_new) acc -> sub s_old s_new acc) substitutions s ^ "'"
+  String.escaped s
+    |> Str.global_replace (Str.regexp "'") "\\'"
+    |> Printf.sprintf "'%s'"
 
 (** Return a JS literal string from an OCaml int. *)
 let intlit i = Lit (string_of_int i)
