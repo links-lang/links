@@ -3,6 +3,7 @@
 
 open CommonTypes
 open Operators
+open SourceCode
 open Sugartypes
 
 (* An abstract type of positions and operations on them.  The core type of
@@ -16,9 +17,9 @@ module type Pos = sig
   (* Type of positions. *)
   type t
   (* Convert a position to Sugartypes.position. *)
-  val pos      : t -> Sugartypes.position
+  val pos      : t -> Position.t
   (* Produce a syntax tree node with a position attached. *)
-  val with_pos : t -> 'a -> 'a Sugartypes.with_pos
+  val with_pos : t -> 'a -> 'a WithPos.t
   (* Default (dummy) position *)
   val dp       : t
 end
@@ -31,12 +32,12 @@ module type SugarConstructorsSig = sig
   (* Positions and functions on them.  Repeated here to avoid need for name
      qualification and additional module opens. *)
   type t
-  val pos      : t -> Sugartypes.position
-  val with_pos : t -> 'a -> 'a with_pos
+  val pos      : t -> Position.t
+  val with_pos : t -> 'a -> 'a WithPos.t
   val dp       : t
 
   (* Attach a dummy position to a node. *)
-  val with_dummy_pos : 'a -> 'a with_pos
+  val with_dummy_pos : 'a -> 'a WithPos.t
 
   (* Fresh type variables. *)
   val fresh_type_variable           : unit -> Datatype.t
@@ -51,10 +52,10 @@ module type SugarConstructorsSig = sig
   type name_or_pat = PatName of name
                    | Pat     of Pattern.with_pos
 
-  type signature   = Sig of (name with_pos * datatype') with_pos
+  type signature   = Sig of (name WithPos.t * datatype') WithPos.t
                    | NoSig
 
-  val sig_of_opt : (name with_pos * datatype') with_pos option -> signature
+  val sig_of_opt : (name WithPos.t * datatype') WithPos.t option -> signature
 
   (* Common stuff *)
   val var         : ?ppos:t -> name -> phrase
@@ -75,7 +76,7 @@ module type SugarConstructorsSig = sig
   val constant_char : ?ppos:t -> char       -> phrase
 
   (* Binders *)
-  val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> binder
+  val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> Binder.t
 
   (* Patterns *)
   val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> Pattern.with_pos
@@ -121,7 +122,7 @@ module type SugarConstructorsSig = sig
      -> binding
   val fun_binding'
       : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list
-     -> ?location:Location.t -> ?annotation:datatype' -> binder -> funlit
+     -> ?location:Location.t -> ?annotation:datatype' -> Binder.t -> funlit
      -> binding
   val handler_binding
       : ?ppos:t -> signature -> (name * handlerlit)

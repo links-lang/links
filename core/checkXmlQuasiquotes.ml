@@ -1,3 +1,5 @@
+open SourceCode
+open SourceCode.WithPos
 open Sugartypes
 
 (* check that:
@@ -36,7 +38,7 @@ let check mode pos e =
         | _ -> o
     end
   in
-  let o = checker#phrase {node=e; pos} in
+  let o = WithPos.make ~pos e |> checker#phrase in
   let kind =
     match mode with
     | `Xml -> "XML"
@@ -46,13 +48,13 @@ let check mode pos e =
     match o#get_error with
     | None -> ()
     | Some (`FormletBinding, pos') ->
-      let (_, _, expr) = SourceCode.resolve_pos pos' in
+      let expr = Position.resolve_expression pos' in
         raise (Errors.SugarError (pos, "Formlet binding " ^ expr ^ " in " ^ kind ^ " quasiquote"))
     | Some (`FormletPlacement, pos') ->
-      let (_, _, expr) = SourceCode.resolve_pos pos' in
+      let expr = Position.resolve_expression pos' in
         raise (Errors.SugarError (pos, "Formlet placement " ^ expr ^ " in " ^ kind ^ " quasiquote"))
     | Some (`PagePlacement, pos') ->
-      let (_, _, expr) = SourceCode.resolve_pos pos' in
+      let expr = Position.resolve_expression pos' in
         raise (Errors.SugarError (pos, "Page placement " ^ expr ^ " in " ^ kind ^ " quasiquote"))
 
 (* traverse a whole tree searching for and then checking quasiquotes *)

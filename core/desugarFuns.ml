@@ -1,6 +1,7 @@
 open CommonTypes
 open Operators
 open Utility
+open SourceCode.WithPos
 open Sugartypes
 open SugarConstructors.DummyPositions
 
