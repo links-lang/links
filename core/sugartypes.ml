@@ -7,29 +7,7 @@ open Utility
 
 type name = string [@@deriving show]
 
-module Binder : sig
-  type t = (name * Types.datatype option) WithPos.t
-      [@@deriving show]
-
-  val to_name : t -> name
-  val to_type : t -> Types.datatype option
-
-  val typ_exn : t -> Types.datatype
-
-  val set_name : t -> name -> t
-  val set_type : t -> Types.datatype -> t
-
-  val erase_type : t -> t
-  val has_type : t -> bool
-
-  val traverse_map :
-    t ->
-    o:'o ->
-    f_pos:('o -> Position.t -> 'a * Position.t) ->
-    f_name:('a -> name -> 'b * name) ->
-    f_ty:('b -> Types.datatype option -> 'c * Types.datatype option) ->
-    'c * t
-end = struct
+module Binder = struct
   type t = (name * Types.datatype option) WithPos.t
   [@@deriving show]
 
@@ -42,12 +20,15 @@ end = struct
   let set_type b typ = WithPos.map ~f:(fun (name, _) -> name, Some typ) b
 
   let erase_type b = WithPos.map ~f:(fun (name, _) -> name, None) b
-  let has_type b = to_type b |> OptionUtils.is_some
+  let has_type   b = to_type b |> OptionUtils.is_some
 
-  let traverse_map b ~o ~f_pos ~f_name ~f_ty =
+  let traverse_map : t -> o:'o -> f_pos:('o -> Position.t -> 'a * Position.t)
+            -> f_name:('a -> name -> 'b * name)
+            -> f_ty:('b -> Types.datatype option -> 'c * Types.datatype option)
+            -> 'c * t = fun b ~o ~f_pos ~f_name ~f_ty ->
     WithPos.traverse_map b ~o ~f_pos ~f_node:(fun o (n, ty) ->
-        let o, name = f_name o n in
-        let o, typ = f_ty o ty in
+        let o, name = f_name o n  in
+        let o, typ  = f_ty   o ty in
         o, (name, typ)
       )
 end
