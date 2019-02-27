@@ -282,7 +282,7 @@ struct
                | Closed, [] -> op
                | Open _, []
                | Recursive _, [] -> (* might need an extra check on recursive rows *)
-                  (name, Present (WithPos.make ~pos @@ Function (domain, ([], Closed), codomain)))
+                  (name, Present (WithPos.make ~pos (Function (domain, ([], Closed), codomain))))
                | _,_ -> raise (UnexpectedOperationEffects name)
                end
             | x -> x)
