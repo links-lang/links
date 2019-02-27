@@ -56,6 +56,10 @@ struct
     | SVariable
     | SEffect
 
+  type annotation_element =
+    | Binder of binder
+    | Type of Types.datatype
+
 end
 
 
@@ -235,7 +239,7 @@ open CompileEq
 
 let show_pattern_compilation = Basicsettings.CompilePatterns.show_pattern_compilation
 
-type annotation = [`Binder of binder | `Type of Types.datatype] list
+type annotation = Pattern.annotation_element list
 type annotated_pattern = annotation * Pattern.t
 
 type raw_clause = Pattern.t list * raw_bound_computation
@@ -336,10 +340,10 @@ let get_clauses_pattern_sort : clause list -> Pattern.sort =
 let rec reduce_pattern : Pattern.t -> annotated_pattern = function
   | Pattern.As (binder, pattern) ->
       let annotations, pattern = reduce_pattern pattern in
-        `Binder binder :: annotations, pattern
+        Pattern.Binder binder :: annotations, pattern
   | Pattern.HasType (pattern, t) ->
       let annotations, pattern = reduce_pattern pattern in
-      `Type t :: annotations, pattern
+      Pattern.Type t :: annotations, pattern
   | pattern -> [], pattern
 
 (* reduce a raw clause to a clause  *)
@@ -459,12 +463,12 @@ let apply_annotation : value -> annotation * bound_computation -> bound_computat
       List.fold_right
         (fun a (env, bs) ->
            match a with
-             | `Binder b ->
+             | Pattern.Binder b ->
                  let var = Var.var_of_binder b in
                  let t = Var.type_of_binder b in
                  let v = massage t v in
                    bind_type var t env, letmv (b, v)::bs
-             | `Type t ->
+             | Pattern.Type t ->
                  let v = massage t v in
                    env, (letmv (dummy t, Coerce (v, t)))::bs)
         annotation
