@@ -565,7 +565,7 @@ struct
             computation env cont (bs, tailcomp)
           | Module _ -> failwith "Not implemented interpretation of modules yet"
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
-    | Ir.Return v      -> apply_cont cont env (value env v)
+    | Ir.Return v   -> apply_cont cont env (value env v)
     | Apply (f, ps) -> apply cont env (value env f, List.map (value env) ps)
     | Special s     -> special env cont s
     | Case (v, cases, default) ->

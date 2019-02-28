@@ -10,22 +10,22 @@ sig
       [@@deriving show]
 
   type t =
-      | For of tag option * (Var.var * t) list * t list * t
-      | If of t * t * t
-      | Table of Value.table
-      | Database of (Value.database * string)
+      | For       of tag option * (Var.var * t) list * t list * t
+      | If        of t * t * t
+      | Table     of Value.table
+      | Database  of (Value.database * string)
       | Singleton of t
-      | Concat of t list
-      | Record of t StringMap.t
-      | Project of t * string
-      | Erase of t * StringSet.t
-      | Variant of string * t
-      | XML of Value.xmlitem
-      | Apply of string * t list
-      | Closure of (Ir.var list * Ir.computation) * env
+      | Concat    of t list
+      | Record    of t StringMap.t
+      | Project   of t * string
+      | Erase     of t * StringSet.t
+      | Variant   of string * t
+      | XML       of Value.xmlitem
+      | Apply     of string * t list
+      | Closure   of (Ir.var list * Ir.computation) * env
       | Primitive of string
-      | Var of Var.var * Types.datatype StringMap.t
-      | Constant of Constant.t
+      | Var       of Var.var * Types.datatype StringMap.t
+      | Constant  of Constant.t
   and env = Value.env * t Env.Int.t
       [@@deriving show]
 

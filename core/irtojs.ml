@@ -109,7 +109,7 @@ let __kappa = "__kappa"
   _plus, _minus, etc.
     curried function versions of the standard arithmetic operators
   LINKS.XML(tag, attrs, children)
-    create a DOM node with name tag'
+    create a DOM node with name `tag'
                        and attributes `attrs' (a dictionary)
                        and children `children' (a sequence of DOM nodes and strings)
   LINKS.union(r, s)

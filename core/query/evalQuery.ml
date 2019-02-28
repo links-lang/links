@@ -52,13 +52,13 @@ struct
      e.g. by converting tail generators to non-tail generators. *)
 
   type order_index =
-    | Val of QL.t
-    | Gen of gen
-    | TailGen of gen
-    | DefVal of Primitive.t
-    | DefGen of gen
+    | Val        of QL.t
+    | Gen        of gen
+    | TailGen    of gen
+    | DefVal     of Primitive.t
+    | DefGen     of gen
     | DefTailGen of gen
-    | Branch of int
+    | Branch     of int
 
   (* TODO:
 

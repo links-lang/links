@@ -2,16 +2,16 @@ open Utility
 open CommonTypes
 
 type query =
-  | UnionAll of query list * int
-  | Select of (base * string) list * (string * Var.var) list * base * base list
-  | With of Var.var * query * Var.var * query
+  | UnionAll  of query list * int
+  | Select    of (base * string) list * (string * Var.var) list * base * base list
+  | With      of Var.var * query * Var.var * query
 and base =
-  | Case of base * base * base
-  | Constant of Constant.t
-  | Project of Var.var * string
-  | Apply of string * base list
-  | Empty of query
-  | Length of query
+  | Case      of base * base * base
+  | Constant  of Constant.t
+  | Project   of Var.var * string
+  | Apply     of string * base list
+  | Empty     of query
+  | Length    of query
   | RowNumber of (Var.var * string) list
     [@@deriving show]
 
@@ -210,4 +210,3 @@ let string_of_query db range q =
       | Some (limit, offset) -> " limit " ^string_of_int limit^" offset "^string_of_int offset
   in
     string_of_query db false q ^ range
-
