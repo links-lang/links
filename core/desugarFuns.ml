@@ -78,13 +78,11 @@ object (o : 'self_type)
             argss
             rt in
         let f = gensym ~prefix:"_fun_" () in
-        let e =
-          block_node
-            ([with_dummy_pos (Fun (unwrap_def ( binder ~ty:ft f, lin, ([], lam)
-                                              , location, None)))],
-             var f)
-        in
-          (o, e, ft)
+        let (bndr, lin, tvs, loc, ty) =
+          unwrap_def ( binder ~ty:ft f, lin, ([], lam), location, None) in
+        let e = block_node ([with_dummy_pos (Fun (bndr, lin, tvs, loc, ty))],
+                            var f)
+        in (o, e, ft)
     | Section (Section.Project name) ->
         let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
         let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
@@ -111,7 +109,10 @@ object (o : 'self_type)
         let (o, b) = super#bindingnode b in
           begin
             match b with
-              | Fun r -> (o, Fun (unwrap_def r))
+              | Fun (bndr, lin, tvs, loc, ty) ->
+                 let (bndr', lin', tvs', loc', ty') =
+                   unwrap_def (bndr, lin, tvs, loc, ty) in
+                 (o, Fun (bndr', lin', tvs', loc', ty'))
               | _ -> assert false
           end
     | Funs _ as b ->

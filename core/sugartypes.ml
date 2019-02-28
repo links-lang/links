@@ -69,7 +69,7 @@ type fieldconstraint = Readonly | Default
 module Datatype = struct
   type t =
     | TypeVar         of known_type_variable
-    | QualifiedTypeApplication of (name list * type_arg list)
+    | QualifiedTypeApplication of name list * type_arg list
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
     | Mu              of name * with_pos
@@ -81,7 +81,7 @@ module Datatype = struct
     | Effect          of row
     | Table           of with_pos * with_pos * with_pos
     | List            of with_pos
-    | TypeApplication of (string * type_arg list)
+    | TypeApplication of string * type_arg list
     | Primitive       of Primitive.t
     | DB
     | Input           of with_pos * with_pos
@@ -147,42 +147,42 @@ and given_spawn_location =
   | SpawnClient (* spawnClient function *)
   | NoSpawnLocation (* spawn function *)
 and regex =
-  | Range     of (char * char)
+  | Range     of char * char
   | Simply    of string
   | Quote     of regex
   | Any
   | StartAnchor
   | EndAnchor
   | Seq       of regex list
-  | Alternate of (regex * regex)
+  | Alternate of regex * regex
   | Group     of regex
-  | Repeat    of (Regex.repeat * regex)
+  | Repeat    of Regex.repeat * regex
   | Splice    of phrase
-  | Replace   of (regex * replace_rhs)
+  | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
 and funlit = Pattern.with_pos list list * phrase
 and handlerlit =
   handler_depth * Pattern.with_pos * clause list *
     Pattern.with_pos list list option (* computation arg, cases, parameters *)
-and handler = {
-  sh_expr: phrase;
-  sh_effect_cases: clause list;
-  sh_value_cases: clause list;
-  sh_descr: handler_descriptor
-}
-and handler_descriptor = {
-  shd_depth: handler_depth;
-  shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
-  shd_raw_row: Types.row;
-  shd_params: handler_parameterisation option
-}
-and handler_parameterisation = {
-  shp_bindings: (phrase * Pattern.with_pos) list;
-  shp_types: Types.datatype list
-}
+and handler =
+  { sh_expr         : phrase
+  ; sh_effect_cases : clause list
+  ; sh_value_cases  : clause list
+  ; sh_descr        : handler_descriptor
+  }
+and handler_descriptor =
+  { shd_depth   : handler_depth
+  ; shd_types   : Types.row * Types.datatype * Types.row * Types.datatype
+  ; shd_raw_row : Types.row
+  ; shd_params  : handler_parameterisation option
+  }
+and handler_parameterisation =
+  { shp_bindings : (phrase * Pattern.with_pos) list
+  ; shp_types    : Types.datatype list
+  }
 and iterpatt =
-  | List  of (Pattern.with_pos * phrase)
-  | Table of (Pattern.with_pos * phrase)
+  | List  of Pattern.with_pos * phrase
+  | Table of Pattern.with_pos * phrase
 and phrasenode =
   | Constant         of Constant.t
   | Var              of name
@@ -196,7 +196,7 @@ and phrasenode =
                           Types.row option
   | Query            of (phrase * phrase) option * phrase *
                           Types.datatype option
-  | RangeLit         of (phrase * phrase)
+  | RangeLit         of phrase * phrase
   | ListLit          of phrase list * Types.datatype option
   | Iteration        of iterpatt list * phrase
                         * (*where:*)   phrase option
@@ -258,41 +258,41 @@ and phrasenode =
   | Offer            of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
   | CP               of cp_phrase
-  | TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase *
-                           Types.datatype option)
+  | TryInOtherwise   of phrase * Pattern.with_pos * phrase * phrase *
+                          Types.datatype option
   | Raise
 and phrase = phrasenode WithPos.t
 and bindingnode =
-  | Val     of (Pattern.with_pos * (tyvar list * phrase) * Location.t *
-                  datatype' option)
-  | Fun     of (Binder.t * DeclaredLinearity.t * (tyvar list * funlit) * Location.t *
-                  datatype' option)
+  | Val     of Pattern.with_pos * (tyvar list * phrase) * Location.t *
+                 datatype' option
+  | Fun     of Binder.t * DeclaredLinearity.t * (tyvar list * funlit) *
+                 Location.t * datatype' option
   | Funs    of (Binder.t * DeclaredLinearity.t *
                   ((tyvar list *
                    (Types.datatype * Types.quantifier option list) option)
                    * funlit) * Location.t * datatype' option * Position.t) list
-  | Handler of (Binder.t * handlerlit * datatype' option)
-  | Foreign of (Binder.t * name * name * name * datatype')
+  | Handler of Binder.t * handlerlit * datatype' option
+  | Foreign of Binder.t * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
-  | Type    of (name * (quantifier * tyvar option) list * datatype')
+  | Type    of name * (quantifier * tyvar option) list * datatype'
   | Infix
   | Exp     of phrase
-  | Module  of (name * binding list)
-  | AlienBlock of (name * name * ((Binder.t * datatype') list))
+  | Module  of name * binding list
+  | AlienBlock of name * name * ((Binder.t * datatype') list)
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
-  | CPUnquote     of (binding list * phrase)
+  | CPUnquote     of binding list * phrase
   | CPGrab        of (string * (Types.datatype * tyarg list) option) *
                        Binder.t option * cp_phrase
   | CPGive        of (string * (Types.datatype * tyarg list) option) *
                        phrase option * cp_phrase
   | CPGiveNothing of Binder.t
-  | CPSelect      of (Binder.t * string * cp_phrase)
-  | CPOffer       of (Binder.t * (string * cp_phrase) list)
-  | CPLink        of (Binder.t * Binder.t)
-  | CPComp        of (Binder.t * cp_phrase * cp_phrase)
+  | CPSelect      of Binder.t * string * cp_phrase
+  | CPOffer       of Binder.t * (string * cp_phrase) list
+  | CPLink        of Binder.t * Binder.t
+  | CPComp        of Binder.t * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
                   [@@deriving show]
 
@@ -533,7 +533,7 @@ struct
     | Replace (r, Literal _) -> regex r
     | Replace (r, SpliceExpr p) -> union (regex r) (phrase p)
   and cp_phrase p = match WithPos.node p with
-    | CPUnquote e -> block e
+    | CPUnquote (binds, expr) -> block (binds, expr)
     | CPGrab ((c, _t), Some bndr, p) ->
       union (singleton c) (diff (cp_phrase p) (singleton (Binder.to_name bndr)))
     | CPGrab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
