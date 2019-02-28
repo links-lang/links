@@ -27,6 +27,7 @@ open Utility
 open Operators
 open Sugartypes
 open Printf
+open SourceCode.WithPos
 open ModuleUtils
 
 let _print_shadow_table st =
@@ -128,16 +129,16 @@ let rec rename_binders_get_shadow_tbl module_table
 
     method! binder = function
       | bndr ->
-         let n = name_of_binder bndr in
+         let n = Binder.to_name bndr in
          let fqn = make_path_string path n in
-         (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
+         (self#bind_shadow_term n fqn, Binder.set_name bndr fqn)
 
     method! bindingnode = function
       | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           let (o, bnd') = self#binder bnd in
           (o, Fun (bnd', lin, (tvs, fnlit), loc, dt_opt))
-      | Type t -> (self, Type t)
-      | Val v -> (self, Val v)
+      | (Type _) as ty -> (self, ty)
+      | (Val  _) as v  -> (self, v )
       | Exp b -> (self, Exp b)
       | Foreign (bnd, raw_name, lang, ext_file, dt) ->
           let (o, bnd') = self#binder bnd in
@@ -188,9 +189,9 @@ and perform_renaming module_table path term_ht type_ht =
 
     method! binder = function
       | bndr ->
-         let n = name_of_binder bndr in
+         let n = Binder.to_name bndr in
          let fqn = make_path_string path n in
-         (self#bind_shadow_term n fqn, set_binder_name bndr fqn)
+         (self#bind_shadow_term n fqn, Binder.set_name bndr fqn)
 
     method! patternnode = function
       | Pattern.Variant (n, p_opt) ->
@@ -209,11 +210,9 @@ and perform_renaming module_table path term_ht type_ht =
           (self, (xs', rv'))
 
     method! bindingnode = function
-      | Module (n, bs) ->
-          (self, Module (n, bs))
-      | AlienBlock ab ->
-          (self, AlienBlock ab)
-      | Foreign f -> (self, Foreign f)
+      | (Module     _) as m  -> (self, m )
+      | (AlienBlock _) as ab -> (self, ab)
+      | (Foreign    _) as f  -> (self, f )
       | Type (n, tvs, dt) ->
           (* Add type binding *)
           let fqn = make_path_string path n in

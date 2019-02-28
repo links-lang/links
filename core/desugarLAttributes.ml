@@ -3,6 +3,8 @@ open CommonTypes
 open Sugartypes
 open List
 open SugarConstructors.SugartypesPositions
+open SourceCode
+open SourceCode.WithPos
 
 (* TODO:
 
@@ -126,13 +128,13 @@ let bind_lname_vars lnames = function
 
 let desugar_form : phrasenode -> phrasenode = function
   | Xml (("form"|"FORM") as form, attrs, attrexp, children) ->
-      let children, poss   = List.split (List.map tuple_of_with_pos children) in
+      let children, poss   = List.split (List.map (fun t -> t.node, t.pos)
+                                                  children) in
       let children, lnames = List.split (List.map desugar_lnames    children) in
       let lnames =
         try List.fold_left StringMap.union_disjoint StringMap.empty lnames
         with StringMap.Not_disjoint (item, _) ->
-          raise (Errors.SugarError (dummy_position, "Duplicate l:name binding: "
-                                                    ^ item)) in
+          raise (Errors.SugarError (Position.dummy, "Duplicate l:name binding: " ^ item)) in
       let attrs = List.map (bind_lname_vars lnames) attrs in
         Xml (form, attrs, attrexp, Utility.zip_with with_pos poss children)
   | e -> e
@@ -143,8 +145,7 @@ let replace_lattrs : phrasenode -> phrasenode =
      if (has_lattrs xml) then
        match xml with
          | Xml (_tag, _attributes, _, _) ->
-             raise (Errors.SugarError (dummy_position,
-                                       "Illegal l: attribute in XML node"))
+             raise (Errors.SugarError (Position.dummy, "Illegal l: attribute in XML node"))
          | _ -> assert false
      else
        xml)

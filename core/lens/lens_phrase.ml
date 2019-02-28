@@ -1,5 +1,6 @@
 open Utility
 open Types
+open SourceCode
 open Lens_operators
 open Lens_utility
 
@@ -24,13 +25,13 @@ let tuple v = TupleLit v
 let tuple_singleton v = tuple [v]
 
 let name_of_var expr =
-  match expr.Sugartypes.node with
+  match WithPos.node expr with
   | Sugartypes.Var n -> n
   | _ -> failwith "Expected var."
 
 let of_phrase p =
   let rec f p =
-    match p.Sugartypes.node with
+    match WithPos.node p with
     | Sugartypes.Constant c -> Constant c
     | Sugartypes.Var v -> Var v
     | Sugartypes.UnaryAppl ((_, op), phrase) -> UnaryAppl (Unary.from_links op, f phrase)

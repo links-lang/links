@@ -9,9 +9,9 @@
 *)
 
 open CommonTypes
+open SourceCode
 open Utility
 open Ir
-open SugarConstructors.DummyPositions
 
 module type CONSTSET = Set with type elt = Constant.t
 module ConstSet = Set.Make(Constant)
@@ -94,14 +94,14 @@ let lookup_name name (nenv, _tenv, _eff, _penv) =
 let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 
 let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t * raw_env =
-  fun scope {Sugartypes.node=p; _} ->
+  fun scope {WithPos.node=p; pos} ->
     let desugar_pat = desugar_pattern scope in
     let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
     let fresh_binder (nenv, tenv, eff) bndr =
-      assert (Sugartypes.binder_has_type bndr);
-      let name = Sugartypes.name_of_binder bndr in
-      let t = Sugartypes.type_of_binder_exn bndr in
+      assert (Sugartypes.Binder.has_type bndr);
+      let name = Sugartypes.Binder.to_name bndr in
+      let t = Sugartypes.Binder.to_type_exn bndr in
       let xb, x = Var.fresh_var (t, name, scope) in
       xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
     in
@@ -113,10 +113,10 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t *
             let p, env = desugar_pat p in
             let ps, env' = desugar_pat ps in
               Pattern.Cons (p, ps), env ++ env'
-        | List [] -> desugar_pat (with_dummy_pos Nil)
+        | List [] -> desugar_pat (WithPos.make ~pos Nil)
         | List (p::ps) ->
             let p, env = desugar_pat p in
-            let ps, env' = desugar_pat (with_dummy_pos (List ps)) in
+            let ps, env' = desugar_pat (WithPos.make ~pos (List ps)) in
               Pattern.Cons (p, ps), env ++ env'
         | Variant (name, None) -> Pattern.Variant (name, Pattern.Any), empty
         | Variant (name, Some p) ->
@@ -151,7 +151,7 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t *
               Pattern.Record (bs, p), env
         | Tuple ps ->
             let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
-              desugar_pat (with_dummy_pos (Record (bs, None)))
+              desugar_pat (WithPos.make ~pos (Record (bs, None)))
         | Constant constant ->
             Pattern.Constant constant, empty
         | Variable b ->

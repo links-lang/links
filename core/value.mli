@@ -1,8 +1,6 @@
 (* Values and environments *)
 open ProcessTypes
 
-[@@@ocaml.warning "-3"] (** disables deprecation warnings **)
-
 class type otherfield
  = object method show : string end
 
