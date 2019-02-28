@@ -449,7 +449,7 @@ perhaps_name:
 | cp_name?                                                     { $1 }
 
 cp_expression:
-| LBRACE block_contents RBRACE                                 { with_pos $loc (CPUnquote $2) }
+| LBRACE block_contents RBRACE                                 { with_pos $loc (CPUnquote (fst $2, snd $2)) }
 | cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (CPGrab ((Binder.to_name $1, None), $3, $6)) }
 | cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (CPGrab ((Binder.to_name $1, None), $3, cp_unit $loc)) }
 | cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (CPGive ((Binder.to_name $1, None), Some $3, $6)) }
@@ -741,8 +741,8 @@ perhaps_generators:
 | separated_list(COMMA, generator)                             { $1 }
 
 generator:
-| list_generator                                               { List $1  }
-| table_generator                                              { Table $1 }
+| list_generator                                               { List  (fst $1, snd $1)  }
+| table_generator                                              { Table (fst $1, snd $1) }
 
 list_generator:
 | pattern LARROW exp                                           { ($1, $3) }
@@ -1122,7 +1122,7 @@ regex_replace:
 | block                                                        { SpliceExpr $1 }
 
 regex_pattern:
-| RANGE                                                        { Range $1 }
+| RANGE                                                        { Range (fst $1, snd $1) }
 | STRING                                                       { Simply $1 }
 | QUOTEDMETA                                                   { Quote (Simply $1) }
 | DOT                                                          { Any }

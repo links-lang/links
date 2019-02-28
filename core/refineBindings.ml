@@ -321,9 +321,9 @@ module RefineTypeBindings = struct
       let ht = Hashtbl.create 30 in
       List.iter (fun {node = bind; pos} ->
         match bind with
-          | Type (name, _, _ as tyTy) ->
-              let refs = typeReferences tyTy typeHt in
-              let referencesSelf = refersToSelf tyTy refs in
+          | Type (name, tvs, ty) ->
+              let refs = typeReferences (name, tvs, ty) typeHt in
+              let referencesSelf = refersToSelf (name, tvs, ty) refs in
               Hashtbl.add ht name (refs, referencesSelf, pos)
           | _ -> assert false;
       ) binds;
@@ -393,8 +393,8 @@ module RefineTypeBindings = struct
       binding list =
     fun ri ht sccs ->
       List.map (fun name ->
-        let res = refineType (Hashtbl.find ht name) [] ht sccs ri in
-        WithPos.dummy (Type res)
+        let (name, tvs, ty) = refineType (Hashtbl.find ht name) [] ht sccs ri in
+        WithPos.dummy (Type (name, tvs, ty))
       ) sccs
 
   let isTypeGroup : binding list -> bool = function
@@ -408,8 +408,8 @@ module RefineTypeBindings = struct
       let ht = Hashtbl.create 30 in
       List.iter (fun {node; _} ->
         match node with
-          | Type (name, _, _ as tyTy) ->
-            Hashtbl.add ht name tyTy;
+          | Type (name, tvs, ty) ->
+            Hashtbl.add ht name (name, tvs, ty);
           | _ -> assert false;
       ) binds;
       let refInfoTable = referenceInfo binds ht in
