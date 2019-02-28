@@ -3,7 +3,6 @@ open Notfound
 open ProcessTypes
 
 [@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
-[@@@ocaml.warning "-3"] (** disables deprecation warnings **)
 
 let _ = ParseSettings.config_file
 

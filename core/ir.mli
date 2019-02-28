@@ -1,8 +1,6 @@
 (** Monadic IR *)
 open CommonTypes
 
-[@@@ocaml.warning "-3"] (** disables deprecation warnings **)
-
 type scope = Var.scope
   [@@deriving show]
 
