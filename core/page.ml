@@ -77,6 +77,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       script_tag("  var cgiEnv = {" ^
                     mapstrcat "," (fun (name, value) -> "'" ^ name ^ "':'" ^ value ^ "'") cgi_env ^
                     "};\n  _makeCgiEnvironment();\n") in
+    "<!DOCTYPE html>\n" ^
     in_tag "html" (in_tag "head"
                      (  debug_flag (Settings.get_value Debug.debugging_enabled)
                         ^ ext_script_tag "jslib.js" ^ "\n"
