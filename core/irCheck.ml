@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Ir
 
@@ -164,7 +165,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
               begin match t2 with
                 `MetaTypeVar rpoint ->
                 begin match lpoint_cont, Unionfind.find rpoint with
-                | `Var lv, `Var rv ->  handle_variable `Type lv rv context
+                | `Var lv, `Var rv ->  handle_variable pk_type lv rv context
                 | `Body _, `Body _ -> failwith "Should have  removed `Body by now"
                 | _ -> (context, false)
                 end
@@ -281,7 +282,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `Var lpoint, `Var rpoint -> begin match Unionfind.find lpoint, Unionfind.find rpoint with
                                     | `Body _,  _
                                     | _, `Body _ -> failwith "should have removed all `Body variants by now"
-                                    |  `Var lv, `Var rv -> handle_variable `Presence lv rv context
+                                    |  `Var lv, `Var rv -> handle_variable pk_presence lv rv context
                                     end
       | _, _ -> (context, false)
     and eq_field_envs  (context, lfield_env, rfield_env) =
@@ -295,7 +296,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
     and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | `Closed, `Closed ->  (context, true)
-      | `Var lv, `Var rv ->   handle_variable `Row lv rv context
+      | `Var lv, `Var rv ->   handle_variable pk_row lv rv context
       | `Recursive _, _
       | _, `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; (context, true)
       | _ ->  (context, false)
@@ -467,7 +468,7 @@ struct
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
 
-            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive `String) t (`Value orig)) attribute_types in
+            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive Primitive.String) t (`Value orig)) attribute_types in
             let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t (`Value orig)) children_types in
               `XmlNode (tag, attributes, children), Types.xml_type, o
 
@@ -625,7 +626,7 @@ struct
             let v, vt, o = o#value v in
             let left, lt, o = o#computation left in
             let right, rt, o = o#computation right in
-            o#check_eq_types vt (`Primitive `Bool) (`TC orig);
+            o#check_eq_types vt (`Primitive Primitive.Bool) (`TC orig);
             o#check_eq_types lt rt (`TC orig);
             `If (v, left, right), lt, o
 
@@ -638,7 +639,7 @@ struct
             List.iter (fun field ->
                 o#check_eq_types (project_type field vt) Types.string_type (`Special special)
               ) ["name"; "args"; "driver"];
-            `Database v, `Primitive `DB, o
+            `Database v, `Primitive Primitive.DB, o
 
         | `Table (db, table_name, keys, tt) ->
             let db, db_type, o = o#value db in

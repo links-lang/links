@@ -11,21 +11,22 @@
  *)
 
 open Utility
+open SourceCode.WithPos
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 let rec flatten_simple = fun () ->
 object(self)
   inherit SugarTraversals.map as super
 
   method! phrasenode : phrasenode -> phrasenode = function
-    | `Block (bs, phr) ->
+    | Block (bs, phr) ->
         let flattened_bindings =
           List.concat (
             List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
           ) in
         let flattened_phrase = self#phrase phr in
-        `Block (flattened_bindings, flattened_phrase)
+        Block (flattened_bindings, flattened_phrase)
     | x -> super#phrasenode x
 end
 and flatten_bindings = fun () ->
@@ -37,16 +38,16 @@ object(self)
   method get_bindings = List.rev bindings
 
   method! binding = function
-    | {node=`AlienBlock (lang, lib, decls); _} ->
+    | {node=AlienBlock (lang, lib, decls); _} ->
         self#list (fun o ((bnd, dt)) ->
-          let name = name_of_binder bnd in
-          o#add_binding (with_dummy_pos (`Foreign (bnd, name, lang, lib, dt)))) decls
-    | {node=`Module (name, bindings); _} ->
+          let name = Binder.to_name bnd in
+          o#add_binding (with_dummy_pos (Foreign (bnd, name, lang, lib, dt)))) decls
+    | {node=Module (name, bindings); _} ->
         let flattened_bindings =
           List.concat (
             List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bindings
           ) in
-        self#add_binding (with_dummy_pos (`Module (name, flattened_bindings)))
+        self#add_binding (with_dummy_pos (Module (name, flattened_bindings)))
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
   method! program = function

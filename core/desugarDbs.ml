@@ -1,4 +1,6 @@
-open SugarConstructors.Make
+open CommonTypes
+open Sugartypes
+open SugarConstructors.DummyPositions
 
 (*
   Desugaring database stuff
@@ -46,7 +48,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | `DBInsert (table, _labels, rows, returning) ->
+    | DBInsert (table, _labels, rows, returning) ->
       (* TODO: work out how to type this properly *)
         let eff = o#lookup_effects in
         let o, table, table_type = o#phrase table in
@@ -62,7 +64,7 @@ object (o : 'self_type)
            from well-typed insert expressions. An alternative approach
            would be to maintain some kind of insert expression in the
            IR. *)
-        let value_type = `Record (Types.make_empty_open_row (`Any, `Any)) in
+        let value_type = `Record (Types.make_empty_open_row (lin_any, res_any)) in
         let o, rows, _ = o#phrase rows in
         let tyvars = [`Type read_type; `Type write_type; `Type needed_type;
                       `Type value_type; `Row eff] in
@@ -87,6 +89,6 @@ object
   method satisfied = has_no_dbs
 
   method! phrasenode = function
-    | `DBInsert _ -> {< has_no_dbs = false >}
+    | DBInsert _ -> {< has_no_dbs = false >}
     | e -> super#phrasenode e
 end

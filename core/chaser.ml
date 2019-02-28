@@ -1,5 +1,7 @@
 open Utility
+open SourceCode
 open ModuleUtils
+open Sugartypes
 
 (* Helper functions *)
 (* Helper function: given top-level module name, maps to expected filename *)
@@ -37,7 +39,7 @@ object(self)
     {< shadow_table = shadow_table >}
 
   method! bindingnode = function
-    | `QualifiedImport ns ->
+    | QualifiedImport ns ->
         (* Try to resolve the import; if not, add to ICs list *)
         let lookup_ref = List.hd ns in
         (try
@@ -45,7 +47,7 @@ object(self)
            self
          with
            _ -> self#add_import_candidate lookup_ref)
-    | `Module (n, bs) ->
+    | Module (n, bs) ->
         let new_path = path @ [n] in
         let fqn = lst_to_path new_path in
         let o = self#bind_shadow n fqn in
@@ -71,7 +73,7 @@ let rec add_module_bindings deps dep_map =
     | [module_name]::ys ->
       (try
         let (bindings, _) = StringMap.find module_name dep_map in
-        Sugartypes.with_dummy_pos (`Module (module_name, bindings)) :: (add_module_bindings ys dep_map)
+        WithPos.make (Module (module_name, bindings)) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
         (failwith (Printf.sprintf "Trying to find %s in dep map containing keys: %s\n"
           module_name (print_list (List.map fst (StringMap.bindings dep_map))))));
@@ -109,7 +111,7 @@ let add_dependencies module_prog =
   let sorted_deps = Graph.topo_sort_sccs deps in
   (* Each entry should be *precisely* one element (otherwise we have cycles) *)
   assert_no_cycles sorted_deps;
-  (* Now, build up binding list where each opened dependency is mapped to a `Module containing
+  (* Now, build up binding list where each opened dependency is mapped to a Module containing
    * its list of inner bindings. *)
   (* FIXME: This isn't reassigning positions! What we'll want is to retain the positions, but modify
    * the position data type to keep track of the module filename we're importing from. *)

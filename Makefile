@@ -3,7 +3,9 @@ ROOT:=$(shell pwd)
 BUILD_DIR:=$(ROOT)/_build
 # The build command and some standard build system flags
 BUILD=dune build
-FLAGS=--build-dir=$(BUILD_DIR) --profile=development
+COMMON_FLAGS=--build-dir=$(BUILD_DIR)
+DEV_FLAGS=$(COMMON_FLAGS) --profile=development
+REL_FLAGS=$(COMMON_FLAGS) --profile=release
 
 .PHONY: build-dev-nodb build-dev clean install nc native rule-check tests uninstall
 .DEFAULT_GOAL: nc
@@ -23,13 +25,13 @@ create-startup-script:
 	ln -fs links linx
 
 build-dev-all: dune dune-project
-	$(BUILD) --only-packages links,links-postgresql $(FLAGS) @install
+	$(BUILD) --only-packages links,links-postgresql,links-sqlite3 $(DEV_FLAGS) @install
 
 build-dev-nodb: dune dune-project
-	$(BUILD) --only-packages links $(FLAGS) @install
+	$(BUILD) --only-packages links $(DEV_FLAGS) @install
 
 build-release-all:
-	$(BUILD) -p links,links-postgresql @install
+	$(BUILD) --only-packages links,links-postgresql $(REL_FLAGS) @install
 
 install:
 	dune install

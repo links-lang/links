@@ -1,3 +1,4 @@
+open CommonTypes
 open Webserver_types
 open Ir
 open Lwt
@@ -68,14 +69,14 @@ struct
     | Some (finfo, _, None, location) ->
       begin
         match location with
-        | `Server | `Unknown ->
+        | Location.Server | Location.Unknown ->
           (* TODO: perhaps we should actually use env here - and make
              sure we only call this function when it is sufficiently
              small *)
           Some (`FunctionPtr (f, None))
-        | `Client ->
+        | Location.Client ->
           Some (`ClientFunction (Js.var_name_binder (f, finfo)))
-        | `Native -> assert false
+        | Location.Native -> assert false
       end
     | _ -> assert false
 
@@ -137,11 +138,11 @@ struct
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t = function
-    | `Constant `Bool b -> `Bool b
-    | `Constant `Int n -> `Int n
-    | `Constant `Char c -> `Char c
-    | `Constant `String s -> Value.box_string s
-    | `Constant `Float f -> `Float f
+    | `Constant (Constant.Bool   b) -> `Bool b
+    | `Constant (Constant.Int    n) -> `Int n
+    | `Constant (Constant.Char   c) -> `Char c
+    | `Constant (Constant.String s) -> Value.box_string s
+    | `Constant (Constant.Float  f) -> `Float f
     | `Variable var -> lookup_var var env
 (*
         begin
@@ -594,29 +595,31 @@ struct
     | `Wrong _                    -> raise Exceptions.Wrong
     | `Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
     | `Lens (table, sort) ->
+      let open Lens in
       begin
-          let typ = Lens.Helpers.Record.get_lens_sort_row_type sort in
+          let typ = Sort.record_type sort in
           match value env table, (TypeUtils.concrete_type typ) with
-            | `Table ((_, tableName, _, _) as tinfo), `Record _row ->
-                 apply_cont cont env (`Lens (tinfo, Lens.Helpers.Record.set_lens_sort_table_name sort tableName))
+            | `Table ((_, table, _, _) as tinfo), `Record _row ->
+                 apply_cont cont env (`Lens (tinfo, Sort.update_table_name sort ~table))
             | `List records, `Record _row -> apply_cont cont env (`LensMem (`List records, sort))
             | _ -> failwith ("Unsupported underlying lens value.")
       end
     | `LensDrop (lens, drop, key, def, _sort) ->
+        let open Lens in
         let lens = value env lens in
         let def = value env def in
         let sort =
-          Lens.Types.drop_lens_sort
-            (Lens.Helpers.Lens'.sort lens)
-            (Lens.Utility.ColSet.singleton drop)
-            (Lens.Utility.ColSet.singleton key)
+          Types.drop_lens_sort
+            (Lens.Value.sort lens)
+            (Alias.Set.singleton drop)
+            (Alias.Set.singleton key)
         in
         apply_cont cont env (`LensDrop (lens, drop, key, def, sort))
     | `LensSelect (lens, pred, _sort) ->
         let lens = value env lens in
         let sort =
           Lens.Types.select_lens_sort
-            (Lens.Helpers.Lens'.sort lens)
+            (Lens.Value.sort lens)
             pred
         in
         apply_cont cont env (`LensSelect (lens, pred, sort))
@@ -624,22 +627,22 @@ struct
         let lens1 = value env lens1 in
         let lens2 = value env lens2 in
         let lens1, lens2 =
-          if Lens.Helpers.join_lens_should_swap
-               (Lens.Helpers.Lens'.sort lens1)
-               (Lens.Helpers.Lens'.sort lens2) on
+          if Lens.Sort.join_lens_should_swap
+               (Lens.Value.sort lens1)
+               (Lens.Value.sort lens2) ~on
           then lens2, lens1
           else lens1, lens2
         in
         let sort, on =
-          Lens.Helpers.join_lens_sort
-            (Lens.Helpers.Lens'.sort lens1)
-            (Lens.Helpers.Lens'.sort lens2) on
+          Lens.Sort.join_lens_sort
+            (Lens.Value.sort lens1)
+            (Lens.Value.sort lens2) ~on
         in
         apply_cont cont env (`LensJoin (lens1, lens2, on, left, right, sort))
     | `LensGet (lens, _rtype) ->
         let lens = value env lens in
         (* let callfn = fun fnptr -> fnptr in *)
-        let res = Lens.Helpers.lens_get lens () in
+        let res = Lens.Value.lens_get lens in
           apply_cont cont env res
     | `LensPut (lens, data, _rtype) ->
         let lens = value env lens in
@@ -671,29 +674,31 @@ struct
          | Some (limit, offset) ->
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
        if Settings.get_value Basicsettings.Shredding.shredding then
-         begin
-           match EvalNestedQuery.compile_shredded env (range, e) with
-           | None -> computation env cont e
-           | Some (db, p) ->
-             begin
-               if db#driver_name() <> "postgresql"
-                 then raise (Errors.Runtime_error "Only PostgreSQL database driver supports shredding");
-               let get_fields t =
-                             match t with
-                             | `Record fields ->
-                                 StringMap.to_list (fun name p -> (name, `Primitive p)) fields
-                             | _ -> assert false
-               in
-               let execute_shredded_raw (q, t) =
-                 Database.execute_select_result (get_fields t) q db, t in
-               let raw_results =
-                 EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-               let mapped_results =
-                 EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-                 apply_cont cont env
-                 (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
-             end
-         end
+         match EvalNestedQuery.compile_shredded env (range, e) with
+         | None -> computation env cont e
+         | Some (db, p) ->
+            if db#supports_shredding () then
+              let get_fields t =
+                match t with
+                | `Record fields ->
+                   StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                | _ -> assert false
+              in
+              let execute_shredded_raw (q, t) =
+                Database.execute_select_result (get_fields t) q db, t in
+              let raw_results =
+                EvalNestedQuery.Shred.pmap execute_shredded_raw p in
+              let mapped_results =
+                EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+              apply_cont cont env
+                (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+            else
+              let error_msg =
+                Printf.sprintf
+                  "The database driver '%s' does not support shredding."
+                  (db#driver_name ())
+              in
+              raise (Errors.Runtime_error error_msg)
        else (* shredding disabled *)
          begin
            match EvalQuery.compile env (range, e) with
@@ -722,7 +727,7 @@ struct
                                         | _ -> assert false) fields)
           | _ -> assert false in
       let update_query =
-        EvalQuery.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
+        Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
         apply_cont cont env (`Record [])
     | `Delete ((xb, source), where) ->
@@ -734,7 +739,7 @@ struct
                                         | _ -> assert false) fields)
           | _ -> assert false in
       let delete_query =
-        EvalQuery.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
+        Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
     | `CallCC f ->

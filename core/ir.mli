@@ -1,4 +1,5 @@
 (** Monadic IR *)
+open CommonTypes
 
 type scope = Var.scope
   [@@deriving show]
@@ -31,16 +32,13 @@ type 'a var_map = 'a Utility.intmap
 type language = string
   [@@deriving show]
 
-type constant = Constant.constant
-  [@@deriving show]
-
-type location = Sugartypes.location
+type location = CommonTypes.Location.t
   [@@deriving show]
 
 (* INVARIANT: all IR binders have unique names *)
 
 type value =
-  [ `Constant of constant                     (* constant: c *)
+  [ `Constant of Constant.t                   (* constant: c *)
   | `Variable of var                          (* variable use: x *)
   | `Extend of value name_map * value option  (* record extension: (l1=v1, ..., lk=vk|r) or (l1=v1, ..., lk=vk) *)
   | `Project of name * value                  (* record projection: r.l *)

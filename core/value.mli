@@ -29,6 +29,7 @@ class virtual database :
     method virtual exec : string -> dbvalue
     method make_insert_query : (string * string list * string list list) -> string
     method make_insert_returning_query : (string * string list * string list list * string) -> string list
+    method virtual supports_shredding : unit -> bool
   end
 
 

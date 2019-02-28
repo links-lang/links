@@ -36,6 +36,7 @@
 open Lexing
 open Utility
 open Parser
+open Operators
 
 (* Constructors are not first class in OCaml *)
 let infix0  x = INFIX0  x
@@ -131,13 +132,13 @@ object
     try List.assoc name optable name
     with NotFound _ -> default_precedence name
 
-  method setprec (assoc : [`None|`Left|`Right|`Pre|`Post]) level name =
+  method setprec (assoc : Associativity.t) level name =
     let value = match List.nth precs level, assoc with
-      | (a,_,_), `None -> a
-      | (_,a,_), `Left -> a
-      | (_,_,a), `Right -> a
-      | _,       `Pre -> prefix
-      | _,       `Post -> postfix
+      | (a,_,_), Associativity.None -> a
+      | (_,a,_), Associativity.Left -> a
+      | (_,_,a), Associativity.Right -> a
+      | _,       Associativity.Pre -> prefix
+      | _,       Associativity.Post -> postfix
     in
       optable <- (name, value) :: optable
 
@@ -145,7 +146,7 @@ object
     Stack.push lexer lexers
 
   method pop_lexer =
-    Stack.pop lexers
+    let _ = Stack.pop lexers in ()
 
   method next_lexer =
     Stack.top lexers
@@ -426,7 +427,10 @@ and regexrepl ctxt nl = parse
   | '/' (regex_flags as f)              { ctxt#pop_lexer; ctxt#pop_lexer; SLASHFLAGS (f) }
 
 {
- let lexer ctxt ~newline_hook =
+ let lexer : lexer_context
+         -> newline_hook:(unit -> unit)
+         -> (Lexing.lexbuf -> Parser.token) =
+fun ctxt ~newline_hook ->
    ctxt#push_lexer (lex ctxt newline_hook);
    fun lexbuf -> ctxt#next_lexer lexbuf
 }

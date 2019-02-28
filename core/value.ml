@@ -68,7 +68,8 @@ class virtual database = object(self)
         String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
   method make_insert_returning_query : (string * string list * string list list * string) -> string list =
     fun _ ->
-      failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
+    failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
+  method virtual supports_shredding : unit -> bool
 end
 
 let equal_database db1 db2 = db1 == db2
@@ -138,6 +139,7 @@ object
   method exec _query : dbvalue = assert false
   method escape_string = assert false
   method quote_field = assert false
+  method supports_shredding () = assert false
 end
 
 let _ = register_driver ("null", fun args -> new null_database, reconstruct_db_string ("null", args))

@@ -1,8 +1,10 @@
 (* This module contains module signatures used by SugarConstructors module.
    Putting them here allows to avoid repetition. *)
 
-open Sugartypes
+open CommonTypes
 open Operators
+open SourceCode
+open Sugartypes
 
 (* An abstract type of positions and operations on them.  The core type of
    positions used in the compilation pipeline is Sugartypes.position, which
@@ -15,9 +17,9 @@ module type Pos = sig
   (* Type of positions. *)
   type t
   (* Convert a position to Sugartypes.position. *)
-  val pos      : t -> Sugartypes.position
+  val pos      : t -> Position.t
   (* Produce a syntax tree node with a position attached. *)
-  val with_pos : t -> 'a -> 'a Sugartypes.with_pos
+  val with_pos : t -> 'a -> 'a WithPos.t
   (* Default (dummy) position *)
   val dp       : t
 end
@@ -30,36 +32,36 @@ module type SugarConstructorsSig = sig
   (* Positions and functions on them.  Repeated here to avoid need for name
      qualification and additional module opens. *)
   type t
-  val pos      : t -> Sugartypes.position
-  val with_pos : t -> 'a -> 'a with_pos
+  val pos      : t -> Position.t
+  val with_pos : t -> 'a -> 'a WithPos.t
   val dp       : t
 
   (* Attach a dummy position to a node. *)
-  val with_dummy_pos : 'a -> 'a with_pos
+  val with_dummy_pos : 'a -> 'a WithPos.t
 
   (* Fresh type variables. *)
-  val fresh_type_variable           : unit -> datatypenode
-  val fresh_rigid_type_variable     : unit -> datatypenode
-  val fresh_row_variable            : unit -> row_var
-  val fresh_rigid_row_variable      : unit -> row_var
-  val fresh_presence_variable       : unit -> fieldspec
-  val fresh_rigid_presence_variable : unit -> fieldspec
+  val fresh_type_variable           : unit -> Datatype.t
+  val fresh_rigid_type_variable     : unit -> Datatype.t
+  val fresh_row_variable            : unit -> Datatype.row_var
+  val fresh_rigid_row_variable      : unit -> Datatype.row_var
+  val fresh_presence_variable       : unit -> Datatype.fieldspec
+  val fresh_rigid_presence_variable : unit -> Datatype.fieldspec
 
   (* Helper data types and functions for passing arguments to smart
      constructors.  *)
-  type name_or_pat = Name of name
-                   | Pat  of pattern
+  type name_or_pat = PatName of name
+                   | Pat     of Pattern.with_pos
 
-  type signature   = Sig of (name with_pos * datatype') with_pos
+  type signature   = Sig of (name WithPos.t * datatype') WithPos.t
                    | NoSig
 
-  val sig_of_opt : (name with_pos * datatype') with_pos option -> signature
+  val sig_of_opt : (name WithPos.t * datatype') WithPos.t option -> signature
 
   (* Common stuff *)
   val var         : ?ppos:t -> name -> phrase
   val block       : ?ppos:t -> block_body -> phrase
   val block_node  :            block_body -> phrasenode
-  val datatype    : datatype -> datatype * 'a option
+  val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
   val cp_unit     : t -> cp_phrase
   val record      : ?ppos:t -> ?exp:phrase -> (name * phrase) list -> phrase
   val tuple       : ?ppos:t -> phrase list -> phrase
@@ -69,33 +71,35 @@ module type SugarConstructorsSig = sig
     ?ppos:t -> ?body:phrase -> ?ty:Types.datatype -> name -> phrase
 
   (* Constants *)
-  val constant      : ?ppos:t -> constant -> phrase
-  val constant_str  : ?ppos:t -> string   -> phrase
-  val constant_char : ?ppos:t -> char     -> phrase
+  val constant      : ?ppos:t -> Constant.t -> phrase
+  val constant_str  : ?ppos:t -> string     -> phrase
+  val constant_char : ?ppos:t -> char       -> phrase
 
   (* Binders *)
-  val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> binder
+  val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> Binder.t
 
   (* Patterns *)
-  val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> pattern
-  val tuple_pat    : ?ppos:t -> pattern list -> pattern
-  val any_pat      : t -> pattern
+  val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> Pattern.with_pos
+  val tuple_pat    : ?ppos:t -> Pattern.with_pos list -> Pattern.with_pos
+  val any_pat      : t -> Pattern.with_pos
 
   (* Fieldspec *)
-  val present : fieldspec
+  val present : Datatype.fieldspec
 
   (* Rows *)
-  val fresh_row         : unit -> row
-  val row_with_wp       : row -> row
-  val hear_arrow_prefix : datatype -> row -> row
+  val fresh_row         : unit -> Datatype.row
+  val row_with_wp       : Datatype.row -> Datatype.row
+  val hear_arrow_prefix : Datatype.with_pos -> Datatype.row -> Datatype.row
 
   (* Various phrases *)
   val fun_lit
       : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
-     -> ?location:location -> declared_linearity -> pattern list list -> phrase
+     -> ?location:Location.t -> DeclaredLinearity.t
+     -> Pattern.with_pos list list -> phrase
      -> phrase
   val hnlit_arg
-      : [`Deep | `Shallow ] -> pattern -> clause list * pattern list list option
+      : handler_depth -> Pattern.with_pos
+     -> clause list * Pattern.with_pos list list option
      -> handlerlit
   val handler_lit
       : ?ppos:t -> handlerlit -> phrase
@@ -113,20 +117,21 @@ module type SugarConstructorsSig = sig
   (* Bindings *)
   val fun_binding
       : ?ppos:t -> signature
-     -> (declared_linearity * name * pattern list list * location * phrase)
+     -> (DeclaredLinearity.t * name * Pattern.with_pos list list * Location.t *
+           phrase)
      -> binding
   val fun_binding'
-      : ?ppos:t -> ?linearity:declared_linearity -> ?tyvars:tyvar list
-     -> ?location:location -> ?annotation:datatype' -> binder -> funlit
+      : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list
+     -> ?location:Location.t -> ?annotation:datatype' -> Binder.t -> funlit
      -> binding
   val handler_binding
       : ?ppos:t -> signature -> (name * handlerlit)
      -> binding
   val val_binding'
-      : ?ppos:t -> signature -> (name_or_pat * phrase * location)
+      : ?ppos:t -> signature -> (name_or_pat * phrase * Location.t)
      -> binding
   val val_binding
-      : ?ppos:t -> pattern -> phrase
+      : ?ppos:t -> Pattern.with_pos -> phrase
      -> binding
 
   (* Database queries *)
@@ -139,9 +144,9 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> (phrase * phrase) option -> phrase -> phrase
 
   (* Operator applications *)
-  val infix_appl' : ?ppos:t -> phrase -> binop    -> phrase -> phrase
-  val infix_appl  : ?ppos:t -> phrase -> string   -> phrase -> phrase
-  val unary_appl  : ?ppos:t ->           unary_op -> phrase -> phrase
+  val infix_appl' : ?ppos:t -> phrase -> BinaryOp.t -> phrase -> phrase
+  val infix_appl  : ?ppos:t -> phrase -> string     -> phrase -> phrase
+  val unary_appl  : ?ppos:t ->           UnaryOp.t  -> phrase -> phrase
 
   (* XML *)
   val xml
@@ -151,7 +156,8 @@ module type SugarConstructorsSig = sig
 
   (* Handlers *)
   val untyped_handler
-      : ?val_cases:(clause list) -> ?parameters:((phrase * pattern) list)
-     -> phrase -> clause list -> [`Deep | `Shallow]
+      : ?val_cases:(clause list)
+     -> ?parameters:((phrase * Pattern.with_pos) list)
+     -> phrase -> clause list -> handler_depth
      -> handler
 end

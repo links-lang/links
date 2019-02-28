@@ -1,5 +1,7 @@
+open Operators
+open SourceCode.WithPos
 open Sugartypes
-open SugarConstructors.Make
+open SugarConstructors.DummyPositions
 
 (* String constants used in regular expressions.  These should probably be
    reused in linksregexes.ml *)
@@ -37,27 +39,27 @@ let desugar_regex phrase regex_type regex : phrase =
       end in
   let rec aux : regex -> phrase =
     function
-      | `Range (f, t) ->
-         constructor' ~body:(tuple [constant_char f; constant_char t]) range_str
-      | `Simply s           -> constructor' simply_str ~body:(constant_str s)
-      | `Quote s            -> constructor' quote_str  ~body:(aux s)
-      | `Any                -> constructor' any_str
-      | `StartAnchor        -> constructor' start_anchor_str
-      | `EndAnchor          -> constructor' end_anchor_str
-      | `Seq rs             ->
-         constructor' seq_str ~body:(list ~ty:(Types.make_list_type regex_type)
-                                          (List.map (fun s -> aux s) rs))
-      | `Alternate (r1, r2) ->
-         constructor' alternative_str ~body:(tuple [aux r1; aux r2])
-      | `Group s ->
-         constructor' group_str ~body:(aux s)
-      | `Repeat (rep, r) ->
-         constructor' repeat_str ~body:(tuple [desugar_repeat rep; aux r])
-      | `Splice e ->
-         constructor' quote_str ~body:(constructor' ~body:(expr e) simply_str)
-      | `Replace (re, (`Literal tmpl)) ->
-         constructor' replace_str ~body:(tuple [aux re; constant_str tmpl])
-      | `Replace (re, (`Splice e)) ->
+      | Range (f, t) ->
+        constructor' ~body:(tuple [constant_char f; constant_char t]) range_str
+      | Simply s           -> constructor' simply_str ~body:(constant_str s)
+      | Quote s            -> constructor' quote_str  ~body:(aux s)
+      | Any                -> constructor' any_str
+      | StartAnchor        -> constructor' start_anchor_str
+      | EndAnchor          -> constructor' end_anchor_str
+      | Seq rs             ->
+        constructor' seq_str ~body:(list ~ty:(Types.make_list_type regex_type)
+                                         (List.map (fun s -> aux s) rs))
+      | Alternate (r1, r2) ->
+        constructor' alternative_str ~body:(tuple [aux r1; aux r2])
+      | Group s ->
+        constructor' group_str ~body:(aux s)
+      | Repeat (rep, r) ->
+        constructor' repeat_str ~body:(tuple [desugar_repeat rep; aux r])
+      | Splice e ->
+        constructor' quote_str ~body:(constructor' ~body:(expr e) simply_str)
+      | Replace (re, (Literal tmpl)) ->
+        constructor' replace_str ~body:(tuple [aux re; constant_str tmpl])
+      | Replace (re, (SpliceExpr e)) ->
          constructor' replace_str ~body:(tuple [aux re; expr e])
   in block (List.map (fun (v, e1, t) ->
                 val_binding (variable_pat ~ty:t v) e1) !exprs,
@@ -65,22 +67,21 @@ let desugar_regex phrase regex_type regex : phrase =
 
 let desugar_regexes env =
 object(self)
-  (*  inherit SugarTraversals.map as super*)
   inherit (TransformSugar.transform env) as super
 
   val regex_type = Instantiate.alias "Regex" [] env.Types.tycon_env
 
   method! phrase ({node=p; pos} as ph) = match p with
-    | `InfixAppl ((tyargs, `RegexMatch flags), e1, {node=`Regex((`Replace(_,_) as r)); _}) ->
+    | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex((Replace(_,_) as r)); _}) ->
         let libfn =
-          if List.exists ((=)`RegexNative) flags
+          if List.exists ((=)RegexNative) flags
           then "sntilde"
           else "stilde" in
           self#phrase (fn_appl libfn tyargs
                             [e1; desugar_regex self#phrase regex_type r])
-    | `InfixAppl ((tyargs, `RegexMatch flags), e1, {node=`Regex r; _}) ->
-        let nativep = List.exists ((=) `RegexNative) flags
-        and listp   = List.exists ((=) `RegexList)   flags in
+    | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex r; _}) ->
+        let nativep = List.exists ((=) RegexNative) flags
+        and listp   = List.exists ((=) RegexList)   flags in
         let libfn = match listp, nativep with
           | true, true   -> "lntilde"
           | true, false  -> "ltilde"
@@ -88,7 +89,7 @@ object(self)
           | false, true  -> "ntilde" in
           self#phrase (fn_appl libfn tyargs
                             [e1; desugar_regex self#phrase regex_type r])
-    | `InfixAppl ((_tyargs, `RegexMatch _), _, _) ->
+    | InfixAppl ((_tyargs, BinaryOp.RegexMatch _), _, _) ->
         raise (Errors.SugarError (pos, "Internal error: unexpected rhs of regex operator"))
     | _ -> super#phrase ph
 end

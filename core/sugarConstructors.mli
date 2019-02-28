@@ -1,3 +1,5 @@
+open SourceCode
+
 (* Import module signatures. *)
 module type Pos                  = SugarConstructorsIntf.Pos
 module type SugarConstructorsSig = SugarConstructorsIntf.SugarConstructorsSig
@@ -6,5 +8,9 @@ module type SugarConstructorsSig = SugarConstructorsIntf.SugarConstructorsSig
 module SugarConstructors (Position : Pos)
        : (SugarConstructorsSig with type t := Position.t)
 
-(* Module for making nodes using Sugartypes positions. *)
-module Make : (SugarConstructorsSig with type t := unit)
+(* Module for making nodes with dummy positions. *)
+module DummyPositions : (SugarConstructorsSig with type t := unit)
+
+(* Module for making nodes with concrete Sugartypes positions. *)
+module SugartypesPositions : (SugarConstructorsSig with
+   type t := Position.t)

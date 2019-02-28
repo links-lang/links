@@ -1,4 +1,5 @@
 open Utility
+open CommonTypes
 
 type base_type = [ `Bool | `Char | `Float | `Int | `String ]
 
@@ -17,7 +18,7 @@ type t =
     | `Apply of string * t list
     | `Closure of (Ir.var list * Ir.computation) * env
     | `Primitive of string
-    | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.constant ]
+    | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.t ]
 and env = Value.env * t Env.Int.t
     [@@deriving show]
 
@@ -44,12 +45,12 @@ let rec unbox_list =
 
 let unbox_string =
   function
-    | `Constant (`String s) -> s
+    | `Constant (Constant.String s) -> s
     | (`Concat _ | `Singleton _) as v ->
         implode
           (List.map
              (function
-                | `Constant (`Char c) -> c
+                | `Constant (Constant.Char c) -> c
                 | _ -> failwith ("failed to unbox string"))
              (unbox_list v))
     | _ -> failwith ("failed to unbox string")
@@ -101,7 +102,7 @@ struct
     | `Apply of string * pt list
     | `Lam of Ir.var list * Ir.computation
     | `Primitive of string
-    | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.constant ]
+    | `Var of (Var.var * Types.datatype StringMap.t) | `Constant of Constant.t ]
       [@@deriving show]
 
   let rec pt_of_t : t -> pt = fun v ->
@@ -153,11 +154,11 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       | `Record fields -> record fields
       | `If (_, t, _) -> te t
       | `Table (_, _, _, row) -> `Record row
-      | `Constant (`Bool   _) -> Types.bool_type
-      | `Constant (`Int    _) -> Types.int_type
-      | `Constant (`Char   _) -> Types.char_type
-      | `Constant (`Float  _) -> Types.float_type
-      | `Constant (`String _) -> Types.string_type
+      | `Constant (Constant.Bool   _) -> Types.bool_type
+      | `Constant (Constant.Int    _) -> Types.int_type
+      | `Constant (Constant.Char   _) -> Types.char_type
+      | `Constant (Constant.Float  _) -> Types.float_type
+      | `Constant (Constant.String _) -> Types.string_type
       | `Project (`Var (_, field_types), name) -> StringMap.find name field_types
       | `Apply ("Empty", _) -> Types.bool_type (* HACK *)
       | `Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
@@ -165,12 +166,12 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
 
 let default_of_base_type =
   function
-    | `Bool   -> `Constant (`Bool false)
-    | `Int    -> `Constant (`Int 42)
-    | `Char   -> `Constant (`Char '?')
-    | `Float  -> `Constant (`Float 0.0)
-    | `String -> `Constant (`String "")
-    | _       -> assert false
+    | Primitive.Bool   -> `Constant (Constant.Bool false)
+    | Primitive.Int    -> `Constant (Constant.Int 42)
+    | Primitive.Char   -> `Constant (Constant.Char '?')
+    | Primitive.Float  -> `Constant (Constant.Float 0.0)
+    | Primitive.String -> `Constant (Constant.String "")
+    | _                -> assert false
 
 let rec value_of_expression = fun v ->
   let ve = value_of_expression in
@@ -180,11 +181,11 @@ let rec value_of_expression = fun v ->
       | _ -> assert false
   in
     match v with
-      | `Constant (`Bool b) -> `Bool b
-      | `Constant (`Int i) -> `Int i
-      | `Constant (`Char c) -> `Char c
-      | `Constant (`Float f) -> `Float f
-      | `Constant (`String s) -> Value.box_string s
+      | `Constant (Constant.Bool   b) -> `Bool b
+      | `Constant (Constant.Int    i) -> `Int i
+      | `Constant (Constant.Char   c) -> `Char c
+      | `Constant (Constant.Float  f) -> `Float f
+      | `Constant (Constant.String s) -> Value.box_string s
       | `Table t -> `Table t
       | `Concat vs -> `List (List.map value_of_singleton vs)
       | `Variant (name, v) -> `Variant (name, ve v)
@@ -301,16 +302,16 @@ struct
         | _ ->
           begin
             match location with
-            | `Server | `Unknown ->
+            | Location.Server | Location.Unknown ->
                 let env =
                   match z, fvs with
                   | None, None       -> Value.Env.empty
                   | Some z, Some fvs -> Value.Env.bind z (fvs, `Local) Value.Env.empty
                   | _, _ -> assert false in
                 `Closure ((xs, body), env_of_value_env env)
-            | `Client ->
+            | Location.Client ->
               failwith ("Attempt to use client function: " ^ Js.var_name_binder (f, finfo) ^ " in query")
-            | `Native ->
+            | Location.Native ->
               failwith ("Attempt to use native function: " ^ Var.show_binder (f, finfo) ^ " in query")
           end
       end
@@ -324,11 +325,11 @@ struct
 
   let rec expression_of_value : Value.t -> t =
     function
-      | `Bool b -> `Constant (`Bool b)
-      | `Int i -> `Constant (`Int i)
-      | `Char c -> `Constant (`Char c)
-      | `Float f -> `Constant (`Float f)
-      | `String s -> `Constant (`String s)
+      | `Bool b   -> `Constant (Constant.Bool b)
+      | `Int i    -> `Constant (Constant.Int i)
+      | `Char c   -> `Constant (Constant.Char c)
+      | `Float f  -> `Constant (Constant.Float f)
+      | `String s -> `Constant (Constant.String s)
       | `Table t -> `Table t
       | `Database db -> `Database db
       | `List vs ->
@@ -608,7 +609,7 @@ struct
               | `Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | `Fun (_, _, _, (`Client | `Native)) ->
+              | `Fun (_, _, _, (Location.Client | Location.Native)) ->
                   eval_error "Client function"
               | `Fun ((f, _), _, _, _) ->
                 (* This should never happen now that we have closure conversion*)
@@ -723,8 +724,8 @@ struct
       | _                         -> `For (None, gs, os, body)
   and reduce_if_condition (c, t, e) =
     match c with
-      | `Constant (`Bool true) -> t
-      | `Constant (`Bool false) -> e
+      | `Constant (Constant.Bool true) -> t
+      | `Constant (Constant.Bool false) -> e
       | `If (c', t', _) ->
         reduce_if_body
           (reduce_or (reduce_and (c', t'),
@@ -743,8 +744,8 @@ struct
   and reduce_where_then (c, t) =
     match t with
       (* optimisation *)
-      | `Constant (`Bool true) -> t
-      | `Constant (`Bool false) -> `Concat []
+      | `Constant (Constant.Bool true) -> t
+      | `Constant (Constant.Bool false) -> `Concat []
 
       | `Concat vs ->
         reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
@@ -774,9 +775,9 @@ struct
       | _ ->
         begin
           match t, e with
-            | `Constant (`Bool true), _ ->
+            | `Constant (Constant.Bool true), _ ->
               reduce_or (c, e)
-            | _, `Constant (`Bool false) ->
+            | _, `Constant (Constant.Bool false) ->
               reduce_and (c, t)
             | _ ->
               `If (c, t, e)
@@ -784,39 +785,39 @@ struct
   (* simple optimisations *)
   and reduce_and (a, b) =
     match a, b with
-      | `Constant (`Bool true), x
-      | x, `Constant (`Bool true)
-      | (`Constant (`Bool false) as x), _
-      | _, (`Constant (`Bool false) as x) -> x
+      | `Constant (Constant.Bool true), x
+      | x, `Constant (Constant.Bool true)
+      | (`Constant (Constant.Bool false) as x), _
+      | _, (`Constant (Constant.Bool false) as x) -> x
       | _ -> `Apply ("&&", [a; b])
   and reduce_or (a, b) =
     match a, b with
-      | (`Constant (`Bool true) as x), _
-      | _, (`Constant (`Bool true) as x)
-      | `Constant (`Bool false), x
-      | x, `Constant (`Bool false) -> x
+      | (`Constant (Constant.Bool true) as x), _
+      | _, (`Constant (Constant.Bool true) as x)
+      | `Constant (Constant.Bool false), x
+      | x, `Constant (Constant.Bool false) -> x
       | _ -> `Apply ("||", [a; b])
   and reduce_not a =
     match a with
-      | `Constant (`Bool false) -> `Constant (`Bool true)
-      | `Constant (`Bool true)  -> `Constant (`Bool false)
+      | `Constant (Constant.Bool false) -> `Constant (Constant.Bool true)
+      | `Constant (Constant.Bool true)  -> `Constant (Constant.Bool false)
       | _                       -> `Apply ("not", [a])
   and reduce_eq (a, b) =
-    let bool x = `Constant (`Bool x) in
+    let bool x = `Constant (Constant.Bool x) in
     let eq_constant =
       function
-        | (`Bool a  , `Bool b)   -> bool (a = b)
-        | (`Int a   , `Int b)    -> bool (a = b)
-        | (`Float a , `Float b)  -> bool (a = b)
-        | (`Char a  , `Char b)   -> bool (a = b)
-        | (`String a, `String b) -> bool (a = b)
+        | (Constant.Bool a  , Constant.Bool b)   -> bool (a = b)
+        | (Constant.Int a   , Constant.Int b)    -> bool (a = b)
+        | (Constant.Float a , Constant.Float b)  -> bool (a = b)
+        | (Constant.Char a  , Constant.Char b)   -> bool (a = b)
+        | (Constant.String a, Constant.String b) -> bool (a = b)
         | (a, b)                 -> `Apply ("==", [`Constant a; `Constant b])
     in
       match a, b with
         | (`Constant a, `Constant b) -> eq_constant (a, b)
         | (`Variant (s1, a), `Variant (s2, b)) ->
           if s1 <> s2 then
-            `Constant (`Bool false)
+            `Constant (Constant.Bool false)
           else
             reduce_eq (a, b)
         | (`Record lfields, `Record rfields) ->
@@ -825,10 +826,286 @@ struct
               reduce_and (reduce_eq (v1, v2), e))
             (StringMap.to_alist lfields)
             (StringMap.to_alist rfields)
-            (`Constant (`Bool true))
+            (`Constant (Constant.Bool true))
         | (a, b) -> `Apply ("==", [a; b])
 
   let eval env e =
 (*    Debug.print ("e: "^Ir.show_computation e); *)
     computation (env_of_value_env env) e
 end
+
+let prepare_clauses : t -> t list =
+  function
+    | `Concat vs -> vs
+    | v -> [v]
+
+type index = (Var.var * string) list
+
+
+let gens_index gs  =
+  let all_fields t =
+    let field_types = table_field_types t in
+    labels_of_field_types field_types
+  in
+ (* Use keys if available *)
+  let key_fields t =
+    match t with
+      (_, _, (ks::_), _) -> StringSet.from_list ks
+    |	_ -> all_fields t
+  in
+  let table_index get_fields (x, source) =
+    let t = match source with `Table t -> t | _ -> assert false in
+    let labels = get_fields t in
+      List.rev
+        (StringSet.fold
+           (fun name ps -> (x, name) :: ps)
+           labels
+           [])
+  in
+  if Settings.get_value Basicsettings.use_keys_in_shredding
+  then concat_map (table_index key_fields) gs
+  else concat_map (table_index all_fields) gs
+
+let outer_index gs_out = gens_index gs_out
+let inner_index z gs_in =
+  (* it's just a dynamic index! *)
+  (z, "2") :: gens_index gs_in
+
+let extract_gens =
+  function
+    | `For (_, gs, _, _) -> gs
+    | _ -> assert false
+
+type let_clause = Var.var * t * Var.var * t
+type let_query = let_clause list
+
+let rec let_clause : Value.database -> let_clause -> Sql.query =
+  fun db (q, outer, z, inner) ->
+    let gs_out = extract_gens outer in
+    let gs_in = extract_gens inner in
+      `With (q,
+             clause db (outer_index gs_out) false outer,
+             z,
+             clause db (inner_index z gs_in) false inner)
+and clause : Value.database -> index -> bool -> t -> Sql.query = fun db index unit_query v ->
+  (*  Debug.print ("clause: "^string_of_t v); *)
+  match v with
+    | `Concat _ -> assert false
+    | `For (_, [], _, body) ->
+        clause db index unit_query body
+    | `For (_, (x, `Table (_db, table, _keys, _row))::gs, os, body) ->
+        let body = clause db index unit_query (`For (None, gs, [], body)) in
+        let os = List.map (base db index) os in
+          begin
+            match body with
+              | `Select (fields, tables, condition, []) ->
+                  `Select (fields, (table, x)::tables, condition, os)
+              | _ -> assert false
+          end
+    | `If (c, body, `Concat []) ->
+      (* Turn conditionals into where clauses. We might want to do
+         this earlier on.  *)
+      let c = base db index c in
+      let body = clause db index unit_query body in
+        begin
+          match body with
+            | `Select (fields, tables, c', os) ->
+              let c =
+                match c, c' with
+                  (* optimisations *)
+                  | `Constant (Constant.Bool true), c
+                  | c, `Constant (Constant.Bool true) -> c
+                  | `Constant (Constant.Bool false), _
+                  | _, `Constant (Constant.Bool false) ->
+                     `Constant (Constant.Bool false)
+                  (* default case *)
+                  | c, c' -> `Apply ("&&", [c; c'])
+              in
+                `Select (fields, tables, c, os)
+            | _ -> assert false
+        end
+    | `Table (_db, table, _keys, (fields, _, _)) ->
+      (* eta expand tables. We might want to do this earlier on.  *)
+      (* In fact this should never be necessary as it is impossible
+         to produce non-eta expanded tables. *)
+      let var = Sql.fresh_table_var () in
+      let fields =
+        List.rev
+          (StringMap.fold
+             (fun name _ fields ->
+               (`Project (var, name), name)::fields)
+             fields
+             [])
+      in
+        `Select (fields, [(table, var)], `Constant (Constant.Bool true), [])
+    | `Singleton _ when unit_query ->
+      (* If we're inside an `Empty or a `Length it's safe to ignore
+         any fields here. *)
+      (* We currently detect this earlier, so the unit_query stuff here
+         is redundant. *)
+      `Select ([], [], `Constant (Constant.Bool true), [])
+    | `Singleton (`Record fields) ->
+      let fields =
+        List.rev
+          (StringMap.fold
+             (fun name v fields ->
+               (base db index v, name)::fields)
+             fields
+             [])
+      in
+        `Select (fields, [], `Constant (Constant.Bool true), [])
+    | _ -> assert false
+and base : Value.database -> index -> t -> Sql.base = fun db index ->
+  function
+    | `If (c, t, e) ->
+      `Case (base db index c, base db index t, base db index e)
+    | `Apply ("tilde", [s; r]) ->
+      begin
+        match likeify r with
+          | Some r ->
+            `Apply ("LIKE", [base db index s; `Constant (Constant.String r)])
+          | None ->
+            let r =
+                  (* HACK:
+
+                     this only works if the regexp doesn't include any variables bound by the query
+                  *)
+                  `Constant (Constant.String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
+                in
+                  `Apply ("RLIKE", [base db index s; r])
+        end
+    | `Apply ("Empty", [v]) ->
+        `Empty (unit_query db v)
+    | `Apply ("length", [v]) ->
+        `Length (unit_query db v)
+    | `Apply (f, vs) ->
+        `Apply (f, List.map (base db index) vs)
+    | `Project (`Var (x, _field_types), name) ->
+        `Project (x, name)
+    | `Constant c -> `Constant c
+    | `Primitive "index" -> `RowNumber index
+    | e ->
+      Debug.print ("Not a base expression: " ^ show e);
+      assert false
+
+(* convert a regexp to a like if possible *)
+and likeify v =
+  let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+    match v with
+      | `Variant ("Repeat", pair) ->
+          begin
+            match unbox_pair pair with
+              | `Variant ("Star", _), `Variant ("Any", _) -> Some ("%")
+              | _ -> None
+          end
+      | `Variant ("Simply", `Constant (Constant.String s)) -> Some (quote s)
+      | `Variant ("Quote", `Variant ("Simply", v)) ->
+          (* TODO:
+
+             detect variables and convert to a concatenation operation
+             (this needs to happen in RLIKE compilation as well)
+          *)
+         let rec string =
+            function
+              | `Constant (Constant.String s) -> Some s
+              | `Singleton (`Constant (Constant.Char c)) -> Some (string_of_char c)
+              | `Concat vs ->
+                  let rec concat =
+                    function
+                      | [] -> Some ""
+                      | v::vs ->
+                          begin
+                            match string v with
+                              | None -> None
+                              | Some s ->
+                                  begin
+                                    match concat vs with
+                                      | None -> None
+                                      | Some s' -> Some (s ^ s')
+                                  end
+                          end
+                  in
+                    concat vs
+              | _ -> None
+          in
+            opt_map quote (string v)
+      | `Variant ("Seq", rs) ->
+          let rec seq =
+            function
+              | [] -> Some ""
+              | r::rs ->
+                  begin
+                    match likeify r with
+                      | None -> None
+                      | Some s ->
+                          begin
+                            match seq rs with
+                              | None -> None
+                              | Some s' -> Some (s^s')
+                          end
+                  end
+          in
+            seq (unbox_list rs)
+      | `Variant ("StartAnchor", _) -> Some ""
+      | `Variant ("EndAnchor", _) -> Some ""
+      | _ -> assert false
+and unit_query db v =
+  (* queries passed to Empty and Length
+     (where we don't care about what data they return)
+  *)
+  `UnionAll (List.map (clause db [] true) (prepare_clauses v), 0)
+
+and query : Value.database -> let_query -> Sql.query =
+  fun db cs ->
+    `UnionAll (List.map (let_clause db) cs, 0)
+
+let update db ((_, table), where, body) =
+  Sql.reset_dummy_counter ();
+  let base = (base db []) ->- (Sql.string_of_base db true) in
+  let where =
+    match where with
+      | None -> ""
+      | Some where ->
+          " where (" ^ base where ^ ")" in
+  let fields =
+    match body with
+      | `Record fields ->
+          String.concat ","
+            (List.map
+               (fun (label, v) -> db#quote_field label ^ " = " ^ base v)
+               (StringMap.to_alist fields))
+      | _ -> assert false
+  in
+    "update "^table^" set "^fields^where
+
+let delete db ((_, table), where) =
+  Sql.reset_dummy_counter ();
+  let base = base db [] ->- (Sql.string_of_base db true) in
+  let where =
+    match where with
+      | None -> ""
+      | Some where ->
+          " where (" ^ base where ^ ")"
+  in
+    "delete from "^table^where
+
+let compile_update : Value.database -> Value.env ->
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
+  fun db env ((x, table, field_types), where, body) ->
+    let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
+(*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
+    let where = opt_map (Eval.computation env) where in
+(*       Debug.print ("body: "^Ir.show_computation body); *)
+    let body = Eval.computation env body in
+    let q = update db ((x, table), where, body) in
+      Debug.print ("Generated update query: "^q);
+      q
+
+let compile_delete : Value.database -> Value.env ->
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
+  fun db env ((x, table, field_types), where) ->
+    let env = Eval.bind (Eval.env_of_value_env env) (x, `Var (x, field_types)) in
+    let where = opt_map (Eval.computation env) where in
+    let q = delete db ((x, table), where) in
+      Debug.print ("Generated update query: "^q);
+      q

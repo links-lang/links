@@ -5,45 +5,58 @@
      && ||  have special evaluation
      ::     is also used in patterns
      ~      triggers a lexer state switch
+
+   Operators were extracted from Sugartypes to their own module to avoid import
+   cycle with lens code.  If, at any point in the future, the import cycle no
+   longer exists this module can be merged back into Sugartypes.
 *)
 
 type name = string [@@deriving show]
 
-type unary_op = [
-| `Minus
-| `FloatMinus
-| `Name of name
-]
-and regexflag = [`RegexList | `RegexNative | `RegexGlobal | `RegexReplace ]
-    [@@deriving show]
-type logical_binop = [`And | `Or ]
-    [@@deriving show]
-type binop = [ `Minus | `FloatMinus | `RegexMatch of regexflag list | logical_binop | `Cons | `Name of name ]
-    [@@deriving show]
-type operator = [ unary_op | binop | `Project of name ]
+type regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
     [@@deriving show]
 
-let string_of_unary_op =
-  function
-    | `Minus -> "-"
-    | `FloatMinus -> ".-"
-    | `Name name -> name
+module Associativity = struct
+  type t = Left | Right | None | Pre | Post
+    [@@deriving show]
+end
 
-let string_of_binop =
-  function
-    | `Minus -> "-"
-    | `FloatMinus -> ".-"
-    | `RegexMatch _ -> "<some regex nonsense>"
-    | `And -> "&&"
-    | `Or -> "||"
-    | `Cons -> "::"
-    | `Name name -> name
+module UnaryOp = struct
+  type t =
+    | Minus
+    | FloatMinus
+    | Name of name
+    [@@deriving show]
 
-let binop_of_string : string -> binop =
-   function
-      | "-" -> `Minus
-      | ".-" -> `FloatMinus
-      | "&&" -> `And
-      | "||" -> `Or
-      | "::" -> `Cons
-      | name -> `Name name
+  let to_string = function
+    | Minus      -> "-"
+    | FloatMinus -> ".-"
+    | Name name  -> name
+end
+
+module BinaryOp = struct
+  type t =
+    | Minus
+    | FloatMinus
+    | RegexMatch of regexflag list
+    | And
+    | Or
+    | Cons
+    | Name of name
+    [@@deriving show]
+
+  let to_string = function
+    | Minus        -> "-"
+    | FloatMinus   -> ".-"
+    | RegexMatch _ -> "<some regex nonsense>"
+    | And          -> "&&"
+    | Or           -> "||"
+    | Cons         -> "::"
+    | Name name    -> name
+end
+
+(* Operator section *)
+module Section = struct
+  type t = Minus | FloatMinus | Project of name | Name of name
+    [@@deriving show]
+end

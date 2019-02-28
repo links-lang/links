@@ -1,6 +1,8 @@
+open CommonTypes
 open Types
+open SourceCode
+open SourceCode.WithPos
 open Sugartypes
-open Operators
 open Utility
 open List
 open Errors
@@ -20,7 +22,7 @@ object (self)
     | _ -> self
 
   method! phrasenode = function
-    | `TableLit (_, (_, None), _, _, _) -> {< all_desugared = false >}
+    | TableLit (_, (_, None), _, _, _) -> {< all_desugared = false >}
     | p -> super#phrasenode p
 end
 
@@ -74,32 +76,27 @@ object (self)
   method! bindingnode = function
     (* type declarations bind variables; exclude those from the
        analysis. *)
-    | `Type _    -> self
-    | b          -> super#bindingnode b
+    | Type _    -> self
+    | b         -> super#bindingnode b
 
-  method! datatypenode = function
-    | `TypeVar (x, k, freedom) -> self#add (x, (`Type, k), freedom)
-    | `Mu (v, t)       -> let o = self#bind (v, (`Type, None), `Rigid) in o#datatype t
-    | `Forall (qs, t)  ->
-        let o =
-          List.fold_left
-            (fun o q ->
-               o#bind (rigidify q))
-            self
-            qs
-        in
-          o#datatype t
-    | dt                  -> super#datatypenode dt
+  method! datatypenode = let open Datatype in
+    function
+    | TypeVar (x, k, freedom) -> self#add (x, (pk_type, k), freedom)
+    | Mu (v, t)       -> let o = self#bind (v, (pk_type, None), `Rigid) in o#datatype t
+    | Forall (qs, t)  ->
+        let o = List.fold_left (fun o q -> o#bind (rigidify q)) self qs in
+        o#datatype t
+    | dt -> super#datatypenode dt
 
-  method! row_var = function
-    | `Closed               -> self
-    | `Open (x, k, freedom) -> self#add (x, (`Row, k), freedom)
-    | `Recursive (s, r)     -> let o = self#bind (s, (`Row, None), `Rigid) in o#row r
+  method! row_var = let open Datatype in function
+    | Closed               -> self
+    | Open (x, k, freedom) -> self#add (x, (pk_row, k), freedom)
+    | Recursive (s, r)     -> let o = self#bind (s, (pk_row, None), `Rigid) in o#row r
 
-  method! fieldspec = function
-    | `Absent -> self
-    | `Present t -> self#datatype t
-    | `Var (x, k, freedom) -> self#add (x, (`Presence, k), freedom)
+  method! fieldspec = let open Datatype in function
+    | Absent -> self
+    | Present t -> self#datatype t
+    | Var (x, k, freedom) -> self#add (x, (pk_presence, k), freedom)
 end
 
 type var_env = { tenv : Types.meta_type_var StringMap.t;
@@ -118,44 +115,45 @@ struct
     match t' with
     | {node = t; pos} ->
       let lookup_type t = StringMap.find t var_env.tenv in
+      let open Datatype in
       match t with
-        | `TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
+        | TypeVar (s, _, _) -> (try `MetaTypeVar (lookup_type s)
                                 with NotFound _ -> raise (UnexpectedFreeVar s))
-        | `QualifiedTypeApplication _ -> assert false (* will have been erased *)
-        | `Function (f, e, t) ->
+        | QualifiedTypeApplication _ -> assert false (* will have been erased *)
+        | Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
-                       effect_row var_env alias_env e,
-                       datatype var_env t)
-        | `Lolli (f, e, t) ->
+                      effect_row var_env alias_env e,
+                      datatype var_env t)
+        | Lolli (f, e, t) ->
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
                        effect_row var_env alias_env e,
                        datatype var_env t)
-        | `Mu (name, t) ->
+        | Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
             (* FIXME: shouldn't we support other subkinds for recursive types? *)
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tenv = StringMap.add name point var_env.tenv in
             let _ = Unionfind.change point (`Recursive (var, datatype {var_env with tenv=tenv} t)) in
               `MetaTypeVar point
-        | `Forall (qs, t) ->
+        | Forall (qs, t) ->
             let desugar_quantifier (var_env, qs) =
               fun (name, kind, _freedom) ->
                 match kind with
-                | `Type, subkind ->
+                | PrimaryKind.Type, subkind ->
                     let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = (var, subkind, `Type point) in
                     let var_env = {var_env with tenv=StringMap.add name point var_env.tenv} in
                       var_env, q::qs
-                | `Row, subkind ->
+                | PrimaryKind.Row, subkind ->
                     let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     let q = (var, subkind, `Row point) in
                     let var_env = {var_env with renv=StringMap.add name point var_env.renv} in
                       var_env, q::qs
-                | `Presence, subkind ->
+                | PrimaryKind.Presence, subkind ->
                     let subkind = concrete_subkind subkind in
                     let var = Types.fresh_raw_variable () in
                     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
@@ -168,35 +166,36 @@ struct
             let qs = List.rev qs in
             let t = datatype var_env t in
               `ForAll (Types.box_quantifiers qs, t)
-        | `Unit -> Types.unit_type
-        | `Tuple ks ->
+        | Unit -> Types.unit_type
+        | Tuple ks ->
             let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) in
             let unit = Types.make_empty_closed_row () in
             let present (s, x) = (s, `Present x)
             in
               `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
-        | `Record r -> `Record (row var_env alias_env r)
-        | `Variant r -> `Variant (row var_env alias_env r)
-        | `Effect r -> `Effect (row var_env alias_env r)
-        | `Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
-        | `List k -> `Application (Types.list, [`Type (datatype var_env k)])
-        | `TypeApplication (tycon, ts) ->
+        | Record r -> `Record (row var_env alias_env r)
+        | Variant r -> `Variant (row var_env alias_env r)
+        | Effect r -> `Effect (row var_env alias_env r)
+        | Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
+        | List k -> `Application (Types.list, [`Type (datatype var_env k)])
+        | TypeApplication (tycon, ts) ->
             begin match SEnv.find alias_env tycon with
               | None -> raise (UnboundTyCon (pos,tycon))
               | Some (`Alias (qs, _dt)) ->
                  let exception Kind_mismatch (* TODO add more information *) in
                  let match_kinds (q, t) =
-                   let primary_kind_of_type_arg : Sugartypes.type_arg -> primary_kind = function
-                     | `Type _ -> `Type
-                     | `Row _ -> `Row
-                     | `Presence _ -> `Presence
+                   let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t =
+                     function
+                     | Datatype.Type     _ -> pk_type
+                     | Datatype.Row      _ -> pk_row
+                     | Datatype.Presence _ -> pk_presence
                    in
                    if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
                      raise Kind_mismatch
                    else (q, t)
                  in
                  let type_arg' var_env alias_env = function
-                   | `Row r -> `Row (effect_row var_env alias_env r)
+                   | Row r -> `Row (effect_row var_env alias_env r)
                    | t -> type_arg var_env alias_env t
                  in
                  begin try
@@ -205,7 +204,7 @@ struct
                            (fun (q,t) ->
                              let (q, t) = match_kinds (q, t) in
                              match subkind_of_quantifier q with
-                             | (_, `Effect) -> type_arg' var_env alias_env t
+                             | (_, Restriction.Effect) -> type_arg' var_env alias_env t
                              | _ -> type_arg var_env alias_env t)
                            ts
                          in
@@ -220,38 +219,27 @@ struct
                   (* TODO: check that the kinds match up *)
                   `Application (abstype, List.map (type_arg var_env alias_env) ts)
             end
-        | `Primitive k -> `Primitive k
-        | `DB -> `Primitive `DB
-        | (`Input _ | `Output _ | `Select _ | `Choice _ | `Dual _ | `End) as s -> session_type var_env alias_env s
+        | Primitive k -> `Primitive k
+        | DB -> `Primitive Primitive.DB
+        | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s -> session_type var_env alias_env s
   and session_type var_env alias_env =
     (* let lookup_type t = StringMap.find t var_env.tenv in  -- used only in commented code *)
     (* HACKY *)
+    let open Datatype in
     function
-    | `Input (t, s) -> `Input (datatype var_env alias_env t, datatype var_env alias_env s)
-    | `Output (t, s) -> `Output (datatype var_env alias_env t, datatype var_env alias_env s)
-    | `Select r -> `Select (row var_env alias_env r)
-    | `Choice r -> `Choice (row var_env alias_env r)
-    (* | `TypeVar (name, _, _) -> *)
-    (*   begin *)
-    (*     try `MetaSessionVar (lookup_type name) *)
-    (*     with NotFound _ -> raise (UnexpectedFreeVar name) *)
-    (*   end *)
-    (* | `Mu (name, s) -> *)
-    (*   let var = Types.fresh_raw_variable () in *)
-    (*   let point = Unionfind.fresh (`Var (var, (`Any, `Session), `Flexible)) in *)
-    (*   let tenv = StringMap.add name point var_env.tenv in *)
-    (*   let _ = Unionfind.change point (`Recursive (var, *)
-    (*                                               `Session (session_type {var_env with tenv=tenv} alias_env s))) in *)
-    (*     `MetaSessionVar point *)
-    | `Dual s -> `Dual (datatype var_env alias_env s)
-    | `End -> `End
+    | Input (t, s)  -> `Input (datatype var_env alias_env t, datatype var_env alias_env s)
+    | Output (t, s) -> `Output (datatype var_env alias_env t, datatype var_env alias_env s)
+    | Select r      -> `Select (row var_env alias_env r)
+    | Choice r      -> `Choice (row var_env alias_env r)
+    | Dual s        -> `Dual (datatype var_env alias_env s)
+    | End           -> `End
     | _ -> assert false
   and fieldspec var_env alias_env =
     let lookup_flag = flip StringMap.find var_env.penv in
-      function
-        | `Absent -> `Absent
-        | `Present t -> `Present (datatype var_env alias_env t)
-        | `Var (name, _, _) ->
+      let open Datatype in function
+        | Absent -> `Absent
+        | Present t -> `Present (datatype var_env alias_env t)
+        | Var (name, _, _) ->
             begin
               try `Var (lookup_flag name)
               with NotFound _ -> raise (UnexpectedFreeVar name)
@@ -259,14 +247,15 @@ struct
   and row var_env alias_env (fields, rv) =
     let lookup_row = flip StringMap.find var_env.renv in
     let seed =
+      let open Datatype in
       match rv with
-        | `Closed -> Types.make_empty_closed_row ()
-        | `Open (rv, _, _) ->
+        | Closed -> Types.make_empty_closed_row ()
+        | Open (rv, _, _) ->
             begin
               try (StringMap.empty, lookup_row rv, false)
               with NotFound _ -> raise (UnexpectedFreeVar rv)
             end
-        | `Recursive (name, r) ->
+        | Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let renv = StringMap.add name point var_env.renv in
@@ -285,15 +274,15 @@ struct
          operations. Note any row which can be closed will have an
          unbound effect variable.  *)
       try List.map
-            (function
-            | (name, `Present { node = `Function (domain, (fields, rv), codomain); pos}) as op
+            (let open Datatype in function
+            | (name, Present { node = Function (domain, (fields, rv), codomain); pos}) as op
                 when not (TypeUtils.is_builtin_effect name) ->
                (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
                begin match rv, fields with
-               | `Closed, [] -> op
-               | `Open _, []
-               | (`Recursive _), [] -> (* might need an extra check on recursive rows *)
-                  (name, `Present { node = `Function (domain, ([], `Closed), codomain); pos})
+               | Closed, [] -> op
+               | Open _, []
+               | Recursive _, [] -> (* might need an extra check on recursive rows *)
+                  (name, Present (WithPos.make ~pos (Function (domain, ([], Closed), codomain))))
                | _,_ -> raise (UnexpectedOperationEffects name)
                end
             | x -> x)
@@ -312,26 +301,15 @@ struct
              (* Elaborates `Op : a' to `Op : () {}-> a' *)
              let eff = Types.make_empty_closed_row () in
              `Present (Types.make_function_type [] eff t)
-          (* | `Present t *)
-          (*     when not (TypeUtils.is_builtin_effect name) && TypeUtils.is_function_type t -> *)
-          (*    let domain = TypeUtils.arg_types t in *)
-          (*    let eff = TypeUtils.effect_row t in *)
-          (*    let codomain = TypeUtils.return_type t in *)
-          (*    let t = *)
-          (*      if Types.is_empty_row eff *)
-          (*      then Types.make_function_type domain (Types.make_empty_closed_row ()) codomain *)
-          (*      else t *)
-          (*    in *)
-          (*    `Present t *)
           | t -> t)
         fields
     in
     (fields, rho, dual)
   and type_arg var_env alias_env =
-    function
-      | `Type t -> `Type (datatype var_env alias_env t)
-      | `Row r -> `Row (row var_env alias_env r)
-      | `Presence f -> `Presence (fieldspec var_env alias_env f)
+    let open Datatype in function
+    | Type t -> `Type (datatype var_env alias_env t)
+    | Row r -> `Row (row var_env alias_env r)
+    | Presence f -> `Presence (fieldspec var_env alias_env f)
 
   (* pre condition: all subkinds have been filled in *)
   let generate_var_mapping (vars : type_variable list) : (Types.quantifier list * var_env) =
@@ -344,13 +322,13 @@ struct
            let var = Types.fresh_raw_variable () in
              fun (x, kind, freedom) ->
              match (kind, freedom) with
-             | (`Type, Some subkind), freedom ->
+             | (PrimaryKind.Type, Some subkind), freedom ->
                let t = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Type t)::vars, addt x t envs
-             | (`Row, Some subkind), freedom ->
+             | (PrimaryKind.Row, Some subkind), freedom ->
                let r = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Row r)::vars, addr x r envs
-             | (`Presence, Some subkind), freedom ->
+             | (PrimaryKind.Presence, Some subkind), freedom ->
                let f = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Presence f)::vars, addf x f envs
              | (_, None), _ ->
@@ -376,17 +354,17 @@ struct
             ~f:(fun (q, _) (args, {tenv=tenv; renv=renv; penv=penv}) ->
                   let var = Types.fresh_raw_variable () in
                     match q with
-                      | (name, (`Type, subkind), _freedom) ->
+                      | (name, (PrimaryKind.Type, subkind), _freedom) ->
                           let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Type point))::args,
                              {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
-                      | (name, (`Row, subkind), _freedom) ->
+                      | (name, (PrimaryKind.Row, subkind), _freedom) ->
                           let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Row point))::args,
                              {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
-                      | (name, (`Presence, subkind), _freedom) ->
+                      | (name, (PrimaryKind.Presence, subkind), _freedom) ->
                           let subkind = concrete_subkind subkind in
                           let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                             ((q, Some (var, subkind, `Presence point))::args,
@@ -418,7 +396,7 @@ struct
              (fun label t (write, needed) ->
               match lookup label constraints with
               | Some cs ->
-                 if List.exists ((=) `Readonly) cs then
+                 if List.exists ((=) Readonly) cs then
                    (write, needed)
                  else (* if List.exists ((=) `Default) cs then *)
                    (Types.row_with (label, t) write, needed)
@@ -446,14 +424,14 @@ object (self)
   val alias_env = initial_alias_env
 
   method! patternnode = function
-    | `HasType (pat, dt) ->
+    | Pattern.HasType (pat, dt) ->
         let o, pat = self#pattern pat in
-          o, `HasType (pat, Desugar.datatype' map alias_env dt)
+          o, Pattern.HasType (pat, Desugar.datatype' map alias_env dt)
     | p -> super#patternnode p
 
 
   method! phrasenode = function
-    | `Block (bs, p) ->
+    | Block (bs, p) ->
         (* aliases bound in `bs'
            should not escape the scope of the block *)
         let o       = {<>} in
@@ -462,25 +440,25 @@ object (self)
           (* NB: we return `self' rather than `_o' in order to return
              to the outer scope; any aliases bound in _o are
              unreachable from outside the block *)
-          self, `Block (bs, p)
-    | `TypeAnnotation (p, dt) ->
+          self, Block (bs, p)
+    | TypeAnnotation (p, dt) ->
         let o, p = self#phrase p in
-          o, `TypeAnnotation (p, Desugar.datatype' map self#aliases dt)
-    | `Upcast (p, dt1, dt2) ->
+          o, TypeAnnotation (p, Desugar.datatype' map self#aliases dt)
+    | Upcast (p, dt1, dt2) ->
         let o, p = self#phrase p in
-          o, `Upcast (p, Desugar.datatype' map alias_env dt1, Desugar.datatype' map alias_env dt2)
-    | `TableLit (t, (dt, _), cs, keys, p) ->
+          o, Upcast (p, Desugar.datatype' map alias_env dt1, Desugar.datatype' map alias_env dt2)
+    | TableLit (t, (dt, _), cs, keys, p) ->
         let read, write, needed = Desugar.tableLit alias_env cs dt in
         let o, t = self#phrase t in
 	let o, keys = o#phrase keys in
         let o, p = o#phrase p in
-          o, `TableLit (t, (dt, Some (read, write, needed)), cs, keys, p)
+          o, TableLit (t, (dt, Some (read, write, needed)), cs, keys, p)
     (* Switch and receive type annotations are never filled in by
        this point, so we ignore them.  *)
     | p -> super#phrasenode p
 
   method! bindingnode = function
-    | `Type (t, args, dt) ->
+    | Type (t, args, dt) ->
         let args, dt' = Desugar.typename alias_env t args dt in
         let (name, vars) = (t, args) in
         let (t, dt) =
@@ -490,19 +468,19 @@ object (self)
           (* NB: type aliases are scoped; we allow shadowing.
              We also allow type aliases to shadow abstract types. *)
           ({< alias_env = SEnv.bind alias_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) >},
-           `Type (name, vars, (t, Some dt)))
+           Type (name, vars, (t, Some dt)))
 
-    | `Val (pat, (tyvars, p), loc, dt) ->
+    | Val (pat, (tyvars, p), loc, dt) ->
         let o, pat = self#pattern pat in
         let o, p   = o#phrase p in
         let o, loc = o#location loc in
-          o, `Val (pat, (tyvars, p), loc, opt_map (Desugar.datatype' map alias_env) dt)
-    | `Fun (bind, lin, (tyvars, fl), loc, dt) ->
+          o, Val (pat, (tyvars, p), loc, opt_map (Desugar.datatype' map alias_env) dt)
+    | Fun (bind, lin, (tyvars, fl), loc, dt) ->
         let o, bind = self#binder bind in
         let o, fl   = o#funlit fl in
         let o, loc  = o#location loc in
-          o, `Fun (bind, lin, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
-    | `Funs binds ->
+          o, Fun (bind, lin, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
+    | Funs binds ->
         let o, binds =
           super#list
             (fun o (bind, lin, (tyvars, fl), loc, dt, pos) ->
@@ -513,11 +491,11 @@ object (self)
                let o, pos  = o#position pos
                in (o, (bind, lin, (tyvars, fl), loc, dt, pos)))
             binds
-        in o, `Funs binds
-    | `Foreign (bind, raw_name, lang, file, dt) ->
+        in o, Funs binds
+    | Foreign (bind, raw_name, lang, file, dt) ->
         let _, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
-        self, `Foreign (bind, raw_name, lang, file, dt')
+        self, Foreign (bind, raw_name, lang, file, dt')
     | b -> super#bindingnode b
 
   method! sentence =
@@ -559,12 +537,12 @@ let program alias_env (bindings, p : Sugartypes.program) : Sugartypes.program =
     (bindings, opt_map (phrase alias_env ->- snd) p)
 
 let sentence typing_env = function
-  | `Definitions bs ->
+  | Definitions bs ->
       let alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
-        {typing_env with tycon_env = alias_env}, `Definitions bs'
-  | `Expression  p  -> let o, p = phrase typing_env.tycon_env p in
-      {typing_env with tycon_env = o#aliases}, `Expression p
-  | `Directive   d  -> typing_env, `Directive d
+        {typing_env with tycon_env = alias_env}, Definitions bs'
+  | Expression  p  -> let o, p = phrase typing_env.tycon_env p in
+      {typing_env with tycon_env = o#aliases}, Expression p
+  | Directive   d  -> typing_env, Directive d
 
 let read ~aliases s =
   let dt, _ = Parse.parse_string ~in_context:(Parse.fresh_context ()) Parse.datatype s in

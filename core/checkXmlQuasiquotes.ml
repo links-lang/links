@@ -1,3 +1,5 @@
+open SourceCode
+open SourceCode.WithPos
 open Sugartypes
 
 (* check that:
@@ -16,19 +18,19 @@ let check mode pos e =
 
       method! phrase = fun ({node=e; pos} as phrase) ->
         match e with
-        | `Xml (_, _, _, children) ->
+        | Xml (_, _, _, children) ->
           o#list (fun o -> o#phrase) children
-        | `FormBinding _ ->
+        | FormBinding _ ->
           if mode <> `Formlet then
             {< error = Some (`FormletBinding, pos) >}
           else
             super#phrase phrase
-        | `FormletPlacement _ ->
+        | FormletPlacement _ ->
           if mode <> `Page then
             {< error = Some (`FormletPlacement, pos) >}
           else
             super#phrase phrase
-        | `PagePlacement _ ->
+        | PagePlacement _ ->
           if mode <> `Page then
             {< error = Some (`PagePlacement, pos) >}
           else
@@ -36,7 +38,7 @@ let check mode pos e =
         | _ -> o
     end
   in
-  let o = checker#phrase {node=e; pos} in
+  let o = WithPos.make ~pos e |> checker#phrase in
   let kind =
     match mode with
     | `Xml -> "XML"
@@ -46,13 +48,13 @@ let check mode pos e =
     match o#get_error with
     | None -> ()
     | Some (`FormletBinding, pos') ->
-      let (_, _, expr) = SourceCode.resolve_pos pos' in
+      let expr = Position.resolve_expression pos' in
         raise (Errors.SugarError (pos, "Formlet binding " ^ expr ^ " in " ^ kind ^ " quasiquote"))
     | Some (`FormletPlacement, pos') ->
-      let (_, _, expr) = SourceCode.resolve_pos pos' in
+      let expr = Position.resolve_expression pos' in
         raise (Errors.SugarError (pos, "Formlet placement " ^ expr ^ " in " ^ kind ^ " quasiquote"))
     | Some (`PagePlacement, pos') ->
-      let (_, _, expr) = SourceCode.resolve_pos pos' in
+      let expr = Position.resolve_expression pos' in
         raise (Errors.SugarError (pos, "Page placement " ^ expr ^ " in " ^ kind ^ " quasiquote"))
 
 (* traverse a whole tree searching for and then checking quasiquotes *)
@@ -72,18 +74,18 @@ object (o)
 
   method! phrase = fun ({node=e; pos} as phrase) ->
     match e with
-    | `Xml _ when mode = `Quasi ->
+    | Xml _ when mode = `Quasi ->
       super#phrase phrase
-    | `Xml _ when mode = `Exp ->
+    | Xml _ when mode = `Exp ->
       check `Xml pos e;
       o#phrase_with `Quasi phrase
-    | `Formlet (body, yields) when mode = `Exp ->
+    | Formlet (body, yields) when mode = `Exp ->
       check `Formlet pos body.node;
       (o#phrase_with `Quasi body)#phrase yields
-    | `Page body when mode = `Exp ->
+    | Page body when mode = `Exp ->
       check `Page pos body.node;
       o#phrase_with `Quasi body
-    | (`Formlet _ | `Page _) when mode = `Quasi ->
+    | (Formlet _ | Page _) when mode = `Quasi ->
       (* The parser should prevent this from ever happening *)
       raise (Errors.SugarError (pos, "Malformed quasiquote (internal error)"))
     | _ when mode = `Quasi ->

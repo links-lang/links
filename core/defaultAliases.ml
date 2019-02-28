@@ -1,3 +1,5 @@
+open CommonTypes
+
 (* Alias environment *)
 module AliasEnv = Env.String
 
@@ -6,8 +8,8 @@ let alias_env : Types.tycon_environment =
     AliasEnv.bind
     AliasEnv.empty
     [
-      (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive `Char)])); *)
-      "Xml"     , `Alias ([], `Application (Types.list, [`Type (`Primitive `XmlItem)]));
+      (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.Char)])); *)
+      "Xml"     , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.XmlItem)]));
       "Event"   , `Abstract Types.event;
       "List"    , `Abstract Types.list;
       "Process" , `Abstract Types.process;

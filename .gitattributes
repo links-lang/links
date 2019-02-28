@@ -1,0 +1,10 @@
+# Checkout files in repository using UNIX line endings
+* text eol=lf
+
+# Some file extensions are binary and should not be modified in any way
+*.pdf binary
+*.zip binary
+
+# An important exception is a file for testing Links' support for DOS line
+# endings
+tests/dos-newlines.links text=auto eol=crlf

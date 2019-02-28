@@ -130,7 +130,10 @@ let load_driver driver_name =
   let driver_files = List.map (fun f -> Filename.concat f (driver_file_name driver_name)) search_paths in
   try
     dynload_first_existing_file driver_files
-  with | No_such_file -> failwith (Printf.sprintf "Could not find file for driver %s" driver_name)
+  with | No_such_file ->
+          Debug.print ("Potential paths for driver file we've tried:");
+          List.iter (Debug.print) driver_files;
+          failwith (Printf.sprintf "Could not find file for driver %s" driver_name)
        | Dynlink_Error (f, e) -> failwith (Printf.sprintf "Error while loading driver file %s:\n%s" f (Dynlink.error_message e))
 
 let load driver_name =

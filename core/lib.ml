@@ -1,6 +1,8 @@
+open CommonTypes
 open List
 
 (*open Value*)
+open SourceCode
 open Types
 open Utility
 open Proc
@@ -71,7 +73,7 @@ let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = f
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (fun _ x -> conversion_op' ~unbox:unbox ~conv:conv ~box:box x) : located_primitive),
-   (let q, r = Types.fresh_row_quantifier (`Any, `Any) in
+   (let q, r = Types.fresh_row_quantifier (lin_any, res_any) in
       (`ForAll (Types.box_quantifiers [q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
    pure)
 
@@ -252,12 +254,42 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   (* Conversions (any missing?) *)
-  "intToString",   conversion_op ~from:(`Primitive `Int) ~unbox:Value.unbox_int ~conv:string_of_int ~box:Value.box_string ~into:Types.string_type PURE;
-  "stringToInt",   conversion_op ~from:Types.string_type ~unbox:Value.unbox_string ~conv:int_of_string ~box:Value.box_int ~into:(`Primitive `Int) IMPURE;
-  "intToFloat",    conversion_op ~from:(`Primitive `Int) ~unbox:Value.unbox_int ~conv:float_of_int ~box:Value.box_float ~into:(`Primitive `Float) PURE;
-  "floatToInt",    conversion_op ~from:(`Primitive `Float) ~unbox:Value.unbox_float ~conv:int_of_float ~box:Value.box_int ~into:(`Primitive `Int) PURE;
-  "floatToString", conversion_op ~from:(`Primitive `Float) ~unbox:Value.unbox_float ~conv:string_of_float' ~box:Value.box_string ~into:Types.string_type PURE;
-  "stringToFloat", conversion_op ~from:Types.string_type ~unbox:Value.unbox_string ~conv:float_of_string ~box:Value.box_float ~into:(`Primitive `Float) IMPURE;
+  "intToString",   conversion_op ~from:(`Primitive Primitive.Int)
+                                 ~unbox:Value.unbox_int
+                                 ~conv:string_of_int
+                                 ~box:Value.box_string
+                                 ~into:Types.string_type
+                                 PURE;
+  "stringToInt",   conversion_op ~from:Types.string_type
+                                 ~unbox:Value.unbox_string
+                                 ~conv:int_of_string
+                                 ~box:Value.box_int
+                                 ~into:(`Primitive Primitive.Int)
+                                 IMPURE;
+  "intToFloat",    conversion_op ~from:(`Primitive Primitive.Int)
+                                 ~unbox:Value.unbox_int
+                                 ~conv:float_of_int
+                                 ~box:Value.box_float
+                                 ~into:(`Primitive Primitive.Float)
+                                 PURE;
+  "floatToInt",    conversion_op ~from:(`Primitive Primitive.Float)
+                                 ~unbox:Value.unbox_float
+                                 ~conv:int_of_float
+                                 ~box:Value.box_int
+                                 ~into:(`Primitive Primitive.Int)
+                                 PURE;
+  "floatToString", conversion_op ~from:(`Primitive Primitive.Float)
+                                 ~unbox:Value.unbox_float
+                                 ~conv:string_of_float'
+                                 ~box:Value.box_string
+                                 ~into:Types.string_type
+                                 PURE;
+  "stringToFloat", conversion_op ~from:Types.string_type
+                                 ~unbox:Value.unbox_string
+                                 ~conv:float_of_string
+                                 ~box:Value.box_float
+                                 ~into:(`Primitive Primitive.Float)
+                                 IMPURE;
 
   "stringToXml",
   ((p1 string_to_xml),
@@ -1481,9 +1513,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   try
                     let ts = DumpTypes.program (val_of (!prelude_tyenv)) (Value.unbox_string code) in
 
-                    let line ({Lexing.pos_lnum=l; _}, _, _) = l in
-                    let start ({Lexing.pos_bol=b; Lexing.pos_cnum=c; _ }, _, _) = c-b in
-                    let finish (_, {Lexing.pos_bol=b; Lexing.pos_cnum=c; _}, _) = c-b in
+                    let line {Lexing.pos_lnum=l; _} = l in
+                    let start {Lexing.pos_bol=b; Lexing.pos_cnum=c; _ } = c-b in
+                    let finish {Lexing.pos_bol=b; Lexing.pos_cnum=c; _} = c-b in
 
                     let resolve (name, t, pos) =
                       (* HACK: we need to be more principled about foralls  *)
@@ -1494,9 +1526,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                       in
                         `Record [("name", Value.box_string name);
                                  ("t", Value.box_string (Types.string_of_datatype t));
-                                 ("pos", `Record [("line", Value.box_int (line pos));
-                                                  ("start", Value.box_int (start pos));
-                                                  ("finish", Value.box_int (finish pos))])]
+                                 ("pos", `Record [("line", Value.box_int (Position.start pos |> line));
+                                                  ("start", Value.box_int (Position.start pos |> start));
+                                                  ("finish", Value.box_int (Position.finish pos |> finish))])]
                     in
                       `Variant ("Success", Value.box_list (List.map resolve ts))
                   with e ->
@@ -1655,9 +1687,9 @@ let primitive_name = Env.Int.lookup venv
 
 let primitive_location (name:string) =
   match fst3 (List.assoc name env) with
-    | `Client ->  `Client
-    | `Server _ -> `Server
-    | #primitive -> `Unknown
+    | `Client    -> Location.Client
+    | `Server _  -> Location.Server
+    | #primitive -> Location.Unknown
 
 let rec function_arity =
   function

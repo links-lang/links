@@ -1,6 +1,7 @@
 
 (** JavaScript generation *)
 open Utility
+open CommonTypes
 
 let _ = ParseSettings.config_file
 
@@ -232,8 +233,9 @@ end
 
 (** Create a JS string literal, quoting special characters *)
 let string_js_quote s =
-  let sub old repl s = Str.global_replace (Str.regexp old) repl s in
-    "'" ^ sub "'" "\\'" (sub "\n" "\\n" (sub "\\" "\\\\\\\\" s)) ^ "'"
+  String.escaped s
+    |> Str.global_replace (Str.regexp "'") "\\'"
+    |> Printf.sprintf "'%s'"
 
 (** Return a JS literal string from an OCaml int. *)
 let intlit i = Lit (string_of_int i)
@@ -613,8 +615,8 @@ end = functor (K : CONTINUATION) -> struct
     | `Constant c ->
        begin
          match c with
-         | `Int v  -> Lit (string_of_int v)
-         | `Float v    ->
+         | Constant.Int v  -> Lit (string_of_int v)
+         | Constant.Float v    ->
             let s = string_of_float' v in
             let n = String.length s in
                     (* strip any trailing '.' *)
@@ -622,9 +624,9 @@ end = functor (K : CONTINUATION) -> struct
               Lit (String.sub s 0 (n-1))
             else
               Lit s
-         | `Bool v  -> Lit (string_of_bool v)
-         | `Char v     -> chrlit v
-         | `String v   -> chrlistlit v
+         | Constant.Bool v   -> Lit (string_of_bool v)
+         | Constant.Char v   -> chrlit v
+         | Constant.String v -> chrlistlit v
        end
     | `Variable var ->
           (* HACK *)
@@ -690,7 +692,7 @@ end = functor (K : CONTINUATION) -> struct
               | _ ->
                  if Lib.is_primitive f_name
                    && not (List.mem f_name cps_prims)
-                   && Lib.primitive_location f_name <> `Server
+                   && not (Location.is_server (Lib.primitive_location f_name))
                  then
                    Call (Var ("_" ^ f_name), List.map gv vs)
                  else
@@ -743,7 +745,7 @@ end = functor (K : CONTINUATION) -> struct
          advantage of dynamic scoping *)
 
         match location with
-        | `Client | `Native | `Unknown ->
+        | Location.Client | Location.Native | Location.Unknown ->
            let xs_names'' = xs_names'@[__kappa] in
            LetFun ((Js.var_name_binder fb,
                     xs_names'',
@@ -751,7 +753,7 @@ end = functor (K : CONTINUATION) -> struct
                           List.map (fun x -> Var x) xs_names''),
                     location),
                    code)
-        | `Server ->
+        | Location.Server ->
            LetFun ((Js.var_name_binder fb,
                     xs_names'@[__kappa],
                     generate_remote_call f_var xs_names env,
@@ -786,7 +788,7 @@ end = functor (K : CONTINUATION) -> struct
           (Env.Int.fold
              (fun var _v funcs ->
                let name = Lib.primitive_name var in
-               if Lib.primitive_location name = `Server then
+               if Location.is_server (Lib.primitive_location name) then
                  (name, var)::funcs
                else
                  funcs)
@@ -811,7 +813,7 @@ end = functor (K : CONTINUATION) -> struct
             ((name,
               args @ [__kappa],
               body,
-              `Server),
+              loc_server),
              code))
         prim_server_calls
         code
@@ -843,7 +845,7 @@ end = functor (K : CONTINUATION) -> struct
                 | _ ->
                    if Lib.is_primitive f_name
                      && not (List.mem f_name cps_prims)
-                     && Lib.primitive_location f_name <> `Server
+                     && not (Location.is_server (Lib.primitive_location f_name))
                    then
                      let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
                      K.apply ~strategy:`Direct kappa arg
@@ -1159,21 +1161,19 @@ end = functor (K : CONTINUATION) -> struct
       let body_env = List.fold_left VEnv.bind env (fs @ bs) in
       let body =
         match location with
-        | `Client | `Unknown ->
+        | Location.Client | Location.Unknown ->
            snd (generate_computation body_env body (K.reflect (Var __kappa)))
-        | `Server -> generate_remote_call f xs_names (Dict [])
-        | `Native -> failwith ("Not implemented native calls yet")
+        | Location.Server -> generate_remote_call f xs_names (Dict [])
+        | Location.Native -> failwith ("Not implemented native calls yet")
       in
       (f_name,
        xs_names @ [__kappa],
        body,
        location)
   and generate_cancel_stub env (action: code -> code) (kappa: K.t)  =
-    let open Pervasives in
     (* Compile a thunk to be invoked if the operation fails *)
     let cancellation_thunk_name =
       gensym ~prefix:"cancellation_thunk" () in
-    let () = Debug.print ("Kappa in GCS: " ^ K.to_string kappa) in
     (* Grab affected variables from the continuation *)
     let affected_vars_name = gensym ~prefix:"affected_vars" () in
     let fresh_var = Var.fresh_raw_var () in

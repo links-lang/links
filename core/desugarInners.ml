@@ -1,4 +1,6 @@
 open Utility
+open Operators
+open SourceCode.WithPos
 open Sugartypes
 
 (* Recursive functions must be used monomorphically inside their
@@ -34,29 +36,26 @@ object (o : 'self_type)
     {< extra_env = StringMap.remove f extra_env >}
 
   method! phrasenode = function
-    | `TAppl ({node=`Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
+    | TAppl ({node=Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`TAppl (phn, tyargs))
-    | `InfixAppl ((tyargs, `Name name), e1, e2) when StringMap.mem name extra_env ->
+          super#phrasenode (TAppl (phn, tyargs))
+    | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`InfixAppl ((tyargs, `Name name), e1, e2))
-    | `UnaryAppl ((tyargs, `Name name), e) when StringMap.mem name extra_env ->
+          super#phrasenode (InfixAppl ((tyargs, BinaryOp.Name name), e1, e2))
+    | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
         let extras = StringMap.find name extra_env in
         let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (`UnaryAppl ((tyargs, `Name name), e))
+          super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
             (* HACK: manage the lexical scope of extras *)
-    | `Spawn _ as e ->
-        let extra_env = extra_env in
+    | Spawn _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
-    | `Escape _ as e ->
-        let extra_env = extra_env in
+    | Escape _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
-    | `Block _ as e ->
-        let extra_env = extra_env in
+    | Block _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e
@@ -64,12 +63,11 @@ object (o : 'self_type)
   method! funlit =
     (* HACK: manage the lexical scope of extras *)
     fun inner_mb lam ->
-      let extra_env = extra_env in
       let (o, lam, t) = super#funlit inner_mb lam in
         (o#with_extra_env extra_env, lam, t)
 
   method! bindingnode = function
-    | `Funs defs ->
+    | Funs defs ->
         (* put the outer bindings in the environment *)
         let o, defs = o#rec_activate_outer_bindings defs in
 
@@ -78,7 +76,7 @@ object (o : 'self_type)
           List.fold_left
             (fun o (bndr, _, ((_tyvars, dt_opt), _), _, _, _) ->
                match dt_opt with
-                 | Some (_, extras) -> o#bind (name_of_binder bndr) extras
+                 | Some (_, extras) -> o#bind (Binder.to_name bndr) extras
                  | None -> assert false
             )
             o defs in
@@ -110,16 +108,16 @@ object (o : 'self_type)
         let o =
           List.fold_left
             (fun o (bndr, _, ((_tyvars, _), _), _, _, _) ->
-               o#unbind (name_of_binder bndr))
+               o#unbind (Binder.to_name bndr))
             o defs
         in
-          (o, (`Funs defs))
+          (o, (Funs defs))
     | b -> super#bindingnode b
 
-  method! binder : binder -> ('self_type * binder) = function
+  method! binder : Binder.t -> ('self_type * Binder.t) = function
       | {node=_, None; _} -> assert false
       | bndr ->
-         let var_env = Env.String.bind var_env (name_of_binder bndr, type_of_binder_exn bndr) in
+         let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in
          ({< var_env=var_env; extra_env=extra_env >}, bndr)
 end
 
@@ -133,7 +131,7 @@ object
   method satisfied = has_no_inners
 
   method! bindingnode = function
-    | `Funs defs ->
+    | Funs defs ->
         {< has_no_inners =
             List.for_all
               (fun (_f, _, ((_tyvars, dt_opt), _), _, _, _) ->

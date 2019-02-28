@@ -28,7 +28,7 @@ val apply_pfun_by_code : Var.var -> Value.t list -> RequestData.request_data -> 
 val primitive_stub_by_code : Var.var -> Value.t
 
 val primitive_name : Var.var -> string
-val primitive_location : string -> Sugartypes.location
+val primitive_location : string -> CommonTypes.Location.t
 val primitive_arity : string -> int option
 
 val cohttp_server_response : (string * string) list -> string -> RequestData.request_data -> (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t

@@ -1,5 +1,5 @@
 open List
-
+open CommonTypes
 open Utility
 
 type database = Value.database
@@ -12,7 +12,7 @@ end
 
 let value_of_db_string (value:string) t =
   match TypeUtils.concrete_type t with
-    | `Primitive `Bool ->
+    | `Primitive Primitive.Bool ->
         (* HACK:
 
            This should probably be part of the database driver as
@@ -22,11 +22,12 @@ let value_of_db_string (value:string) t =
            mysql appears to use 0/1 and postgres f/t
         *)
         Value.box_bool (value = "1" || value = "t" || value = "true")
-    | `Primitive `Char -> Value.box_char (String.get value 0)
-    | `Primitive `String -> Value.box_string value
-    | `Primitive `Int  -> Value.box_int (int_of_string value)
-    | `Primitive `Float -> (if value = "" then Value.box_float 0.00      (* HACK HACK *)
-                            else Value.box_float (float_of_string value))
+    | `Primitive Primitive.Char -> Value.box_char (String.get value 0)
+    | `Primitive Primitive.String -> Value.box_string value
+    | `Primitive Primitive.Int  -> Value.box_int (int_of_string value)
+    | `Primitive Primitive.Float ->
+       if value = "" then Value.box_float 0.00      (* HACK HACK *)
+       else Value.box_float (float_of_string value)
     | t -> failwith ("value_of_db_string: unsupported datatype: '" ^
                         Types.string_of_datatype t ^"'")
 

@@ -3,7 +3,7 @@
 type 'result grammar
 
 (* Grammar for types *)
-val datatype    :  Sugartypes.datatype grammar
+val datatype    :  Sugartypes.Datatype.with_pos grammar
 (* Grammar for interactive shell *)
 val interactive : Sugartypes.sentence grammar
 (* Grammar for programs stored in files etc. *)
