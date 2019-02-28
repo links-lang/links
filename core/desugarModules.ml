@@ -137,8 +137,8 @@ let rec rename_binders_get_shadow_tbl module_table
       | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           let (o, bnd') = self#binder bnd in
           (o, Fun (bnd', lin, (tvs, fnlit), loc, dt_opt))
-      | Type (name, tvs, ty) -> (self, Type (name, tvs, ty))
-      | Val (pat, tvs, loc, ty) -> (self, Val (pat, tvs, loc, ty))
+      | (Type _) as ty -> (self, ty)
+      | (Val  _) as v  -> (self, v )
       | Exp b -> (self, Exp b)
       | Foreign (bnd, raw_name, lang, ext_file, dt) ->
           let (o, bnd') = self#binder bnd in
@@ -210,12 +210,9 @@ and perform_renaming module_table path term_ht type_ht =
           (self, (xs', rv'))
 
     method! bindingnode = function
-      | Module (n, bs) ->
-          (self, Module (n, bs))
-      | AlienBlock (lang, lib, decls) ->
-          (self, AlienBlock (lang, lib, decls))
-      | Foreign (bndr, fname, lang, file, ty) ->
-         (self, Foreign (bndr, fname, lang, file, ty))
+      | (Module     _) as m  -> (self, m )
+      | (AlienBlock _) as ab -> (self, ab)
+      | (Foreign    _) as f  -> (self, f )
       | Type (n, tvs, dt) ->
           (* Add type binding *)
           let fqn = make_path_string path n in
