@@ -72,14 +72,11 @@ object (o : 'self_type)
         let inner_mb = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("!"^s))) in
         let (o, lam, rt) = o#funlit inner_mb lam in
         let ft =
-          List.fold_right
-            (fun (args, mb) rt ->
-               `Function (args, mb, rt))
-            argss
-            rt in
+          List.fold_right (fun (args, mb) rt -> `Function (args, mb, rt))
+                          argss rt in
         let f = gensym ~prefix:"_fun_" () in
         let (bndr, lin, tvs, loc, ty) =
-          unwrap_def ( binder ~ty:ft f, lin, ([], lam), location, None) in
+          unwrap_def (binder ~ty:ft f, lin, ([], lam), location, None) in
         let e = block_node ([with_dummy_pos (Fun (bndr, lin, tvs, loc, ty))],
                             var f)
         in (o, e, ft)

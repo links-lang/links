@@ -741,7 +741,7 @@ perhaps_generators:
 | separated_list(COMMA, generator)                             { $1 }
 
 generator:
-| list_generator                                               { List  (fst $1, snd $1)  }
+| list_generator                                               { List  (fst $1, snd $1) }
 | table_generator                                              { Table (fst $1, snd $1) }
 
 list_generator:
