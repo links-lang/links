@@ -18,6 +18,7 @@
 
 ;; Make Query modules available.
 (copy_files# query/*.ml)
+(copy_files# query/*.mli)
 
 ;; Make Lens modules available.
 (copy_files# lens/*.ml)

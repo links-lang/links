@@ -623,7 +623,7 @@ module Eff_Handler_Continuation = struct
         { env = Env.uncompress uncompress_val globals (fst h);
         cases = StringMap.empty;
         return =
-          (xb, ([], `Return (`Variable x)));
+          (xb, ([], Ir.Return (Ir.Variable x)));
         depth = snd h; }
   end
 

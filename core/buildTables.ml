@@ -1,4 +1,5 @@
 open Utility
+open Ir
 
 module FunDefs =
 struct
@@ -12,12 +13,12 @@ struct
       let f = Var.var_of_binder (Ir.binder_of_fun_def def) in
       Hashtbl.add fs f (make_eval_def def)
 
-  let binding fs = function
-    | `Let _ -> ()
-    | `Fun def -> add fs def
-    | `Rec defs -> List.iter (add fs) defs
-    | `Alien _ -> ()
-    | `Module _ -> failwith "Not implemented"
+  let binding fs : Ir.binding -> unit = function
+    | Let _ -> ()
+    | Fun def -> add fs def
+    | Rec defs -> List.iter (add fs) defs
+    | Alien _ -> ()
+    | Module _ -> failwith "Not implemented"
 
   let bindings fs = List.iter (binding fs)
 
@@ -52,7 +53,7 @@ struct
         let rec bind o =
           function
             | [] -> o
-            | (`Let (x, _))::bs ->
+            | (Let (x, _))::bs ->
               o#bind_cont (x, (bs, main));
               bind o bs
             | _::bs -> bind o bs
@@ -153,7 +154,7 @@ end
 module ClosureTable =
 struct
   class visitor tyenv bound_vars cont_vars =
-  object (o)
+  object (o : 'self_type)
     inherit IrTraversals.Transform.visitor(tyenv) as super
 
     val globals = bound_vars
@@ -182,16 +183,16 @@ struct
        The list of bindings is in reverse order in order to make
        things both easier to express and more efficient.
     *)
-    method close_cont fvs =
+    method close_cont fvs : Ir.binding list -> 'self_type =
       function
         | [] -> o
-        | `Let (x, (_tyvars, body))::bs ->
+        | Let (x, (_tyvars, body))::bs ->
             let fvs = IntSet.remove (Var.var_of_binder x) fvs in
             let fvs' = FreeVars.tail_computation o#get_type_environment globals body in
             (* we record the relevant free variables of the body *)
             o#close x fvs;
             o#close_cont (IntSet.union fvs fvs') bs
-        | `Fun (f, (_tyvars, xs, body), z, _)::bs ->
+        | Fun (f, (_tyvars, xs, body), z, _)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
             let xs = match z with None -> xs | Some z -> z :: xs in
             let bound_vars =
@@ -202,7 +203,7 @@ struct
                 globals in
             let fvs' = FreeVars.computation o#get_type_environment bound_vars body in
             o#close_cont (IntSet.union fvs fvs') bs
-        | `Rec defs::bs ->
+        | Rec defs::bs ->
             let fvs, bound_vars =
               List.fold_right
                 (fun (f, (_tyvars, xs, _body), z, _) (fvs, bound_vars) ->
@@ -227,10 +228,10 @@ struct
                 defs in
 
             o#close_cont (IntSet.union fvs fvs') bs
-        | `Alien (f, _, _language)::bs ->
+        | Alien (f, _, _language)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
               o#close_cont fvs bs
-        | `Module _::_ ->
+        | Module _::_ ->
             assert false
 
     method! computation : Ir.computation -> (Ir.computation * Types.datatype * 'self_type) =
@@ -245,7 +246,7 @@ struct
 
   let bindings tyenv bound_vars cont_vars bs =
     let o = new visitor tyenv bound_vars cont_vars in
-    let _ = o#computation (bs, `Return (`Extend (StringMap.empty, None))) in ()
+    let _ = o#computation (bs, Return (Extend (StringMap.empty, None))) in ()
 
   let program tyenv bound_vars cont_vars e =
     let _ = (new visitor tyenv bound_vars cont_vars)#computation e in ()

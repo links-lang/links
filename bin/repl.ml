@@ -204,7 +204,7 @@ let evaluate_parse_result envs parse_result =
           Driver.process_program
             true
             envs
-            (defs, `Return (`Extend (StringMap.empty, None)))
+            (defs, Ir.Return (Ir.Extend (StringMap.empty, None)))
             [] in
 
           Env.String.fold (* TBD: Make Env.String.foreach. *)

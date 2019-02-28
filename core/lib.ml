@@ -1755,7 +1755,7 @@ let is_pure_primitive name =
 
 (** Construct IR for application of the primitive [name] to the
     arguments [args]. *)
-let prim_appln name args = `Apply(`Variable(Env.String.lookup nenv name),
+let prim_appln name args = Ir.Apply( Ir.Variable(Env.String.lookup nenv name),
                                   args)
 
 let cohttp_server_response headers body req_data =
