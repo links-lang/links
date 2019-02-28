@@ -40,6 +40,7 @@ or Menhir it is no longer necessary.
 open CommonTypes
 open Utility
 open Operators
+open SourceCode
 open Sugartypes
 open SugarConstructors
 
@@ -50,17 +51,18 @@ struct
   module SugarConstructors = SugarConstructors
   module Types             = Types
   module Operators         = Operators
+  module SourceCode        = SourceCode
 end
 
 (* Construction of nodes using positions produced by Menhir parser *)
 module ParserPosition
-       : Pos with type t = (SourceCode.lexpos * SourceCode.lexpos) = struct
+       : Pos with type t = (SourceCode.Lexpos.t * SourceCode.Lexpos.t) = struct
   (* parser position produced by Menhir *)
-  type t = SourceCode.lexpos * SourceCode.lexpos
-  (* Convert position produced by a parser to Sugartypes position *)
-  let pos (start_pos, end_pos) = (start_pos, end_pos, None)
-  (* Construct a node by converting parsers position. *)
-  let with_pos p node = {node; pos = pos p}
+  type t = SourceCode.Lexpos.t * SourceCode.Lexpos.t
+  (* Convert position produced by a parser to SourceCode position *)
+  let pos (start, finish) = SourceCode.Position.make ~start ~finish ~code:None
+  (* Wrapper around SourceCode.WithPos.make.  Accepts parser positions. *)
+  let with_pos p v = SourceCode.WithPos.make ~pos:(pos p) v
   (* Default (dummy) parser position *)
   let dp = (Lexing.dummy_pos, Lexing.dummy_pos)
 end
@@ -308,7 +310,7 @@ nofun_declaration:
                                                                           (Foreign (binder ~ppos:$loc($4) $4,
                                                                                      $4, $2, $3, datatype $6)) }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                 set assoc (from_option default_fixity $2) ($3.node);
+                                                                 set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
@@ -353,8 +355,8 @@ linearity:
 | LINFUN                                                       { dl_lin }
 
 tlfunbinding:
-| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                 }
-| OP pattern op pattern perhaps_location block                 { (dl_unl, $3.node, [[$2; $4]], $5, $6) }
+| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                }
+| OP pattern op pattern perhaps_location block                 { (dl_unl, WithPos.node $3, [[$2; $4]], $5, $6) }
 | OP PREFIXOP pattern perhaps_location block                   { (dl_unl, $2, [[$3]], $4, $5)          }
 | OP pattern POSTFIXOP perhaps_location block                  { (dl_unl, $3, [[$2]], $4, $5)          }
 
@@ -448,10 +450,10 @@ perhaps_name:
 
 cp_expression:
 | LBRACE block_contents RBRACE                                 { with_pos $loc (CPUnquote $2) }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (CPGrab ((name_of_binder $1, None), $3, $6)) }
-| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (CPGrab ((name_of_binder $1, None), $3, cp_unit $loc)) }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (CPGive ((name_of_binder $1, None), Some $3, $6)) }
-| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (CPGive ((name_of_binder $1, None), Some $3, cp_unit $loc)) }
+| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (CPGrab ((Binder.to_name $1, None), $3, $6)) }
+| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (CPGrab ((Binder.to_name $1, None), $3, cp_unit $loc)) }
+| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (CPGive ((Binder.to_name $1, None), Some $3, $6)) }
+| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (CPGive ((Binder.to_name $1, None), Some $3, cp_unit $loc)) }
 | cp_name LBRACKET RBRACKET                                    { with_pos $loc (CPGiveNothing $1) }
 | OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (CPOffer ($2, $4)) }
 | cp_label cp_name DOT cp_expression                           { with_pos $loc (CPSelect ($2, $1, $4)) }
@@ -483,17 +485,17 @@ constructor_expression:
 | CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
 
 parenthesized_thing:
-| LPAREN binop_section RPAREN                                  { with_pos $loc (Section $2)                   }
-| LPAREN DOT record_label RPAREN                               { with_pos $loc (Section (Section.Project $3)) }
-| LPAREN RPAREN                                                { record ~ppos:$loc []                         }
-| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3                 }
-| LPAREN exps RPAREN                                           { with_pos $loc (TupleLit ($2))                }
-| LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (With ($2, $4))                }
+| LPAREN binop RPAREN                                          { with_pos $loc (Section $2)              }
+| LPAREN DOT record_label RPAREN                               { with_pos $loc (Section (Section.Project $3))   }
+| LPAREN RPAREN                                                { record ~ppos:$loc []                     }
+| LPAREN labeled_exps preceded(VBAR, exp)? RPAREN              { record ~ppos:$loc $2 ?exp:$3             }
+| LPAREN exps RPAREN                                           { with_pos $loc (TupleLit ($2))           }
+| LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (With ($2, $4))           }
 
-binop_section:
+binop:
 | MINUS                                                        { Section.Minus          }
 | MINUSDOT                                                     { Section.FloatMinus     }
-| op                                                           { Section.Name ($1.node) }
+| op                                                           { Section.Name (WithPos.node $1) }
 
 op:
 | INFIX0 | INFIXL0 | INFIXR0
@@ -961,7 +963,7 @@ primary_datatype:
 | TILDE primary_datatype_pos                                   { Datatype.Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> Datatype.Unit
-                                                                   | [{node;_}] -> node
+                                                                   | [n] -> WithPos.node n
                                                                    | ts  -> Datatype.Tuple ts }
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
 | TABLEHANDLE

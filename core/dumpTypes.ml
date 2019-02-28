@@ -8,6 +8,9 @@
   anyway as the type checker ensures the program is well-typed and in
   particular that there are no free variables.
 *)
+
+open SourceCode.WithPos
+
 let program =
   fun ({Types.var_env=env; Types.tycon_env=_; effect_row=_} as tyenv) code ->
     let dumper = object (o)
@@ -30,14 +33,14 @@ let program =
         Env.String.lookup env x
 
       method! binder =
-        fun {Sugartypes.node=x,t; Sugartypes.pos} ->
+        fun {node=x,t; pos} ->
           o#option
             (fun o t -> o#bind (x, t, pos))
             t
 
       method! phrase =
         function
-          | {Sugartypes.node=Sugartypes.Var x; Sugartypes.pos} when o#bound x ->
+          | {node=Sugartypes.Var x; pos} when o#bound x ->
               o#use (x, o#lookup x, pos)
           | e -> super#phrase e
     end in

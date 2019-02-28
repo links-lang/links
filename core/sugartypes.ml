@@ -1,42 +1,37 @@
 open CommonTypes
 open Operators
+open SourceCode
 open Utility
 
 (** The syntax tree created by the parser. *)
 
 type name = string [@@deriving show]
 
-type position = SourceCode.pos
-let dummy_position = SourceCode.dummy_pos
+module Binder = struct
+  type t = (name * Types.datatype option) WithPos.t
+  [@@deriving show]
 
-let pp_position : Format.formatter -> position -> unit =
-  fun fmt _ -> Utility.format_omission fmt
+  let to_name b = let (n, _ ) = WithPos.node b in n
+  let to_type b = let (_, ty) = WithPos.node b in ty
 
-type 'a with_pos = { node : 'a
-                   ; pos  : position }
-                     [@@deriving show]
-let with_pos   pos node = { node; pos }
-let with_dummy_pos node = { node; pos = dummy_position }
-let tuple_of_with_pos {node; pos} = (node, pos)
+  let typ_exn b = to_type b |> OptionUtils.val_of
 
-(* A type alias to be used inside modules that define a node t and a with_pos
-   type, which is a node with attached position.  Alias is required due to
-   with_pos name inside the module overlapping with top-level with_pos type. *)
-module WithPos = struct
-  type 'a t = 'a with_pos [@@deriving show]
+  let set_name b name = WithPos.map ~f:(fun (_, ty) -> name, ty) b
+  let set_type b typ = WithPos.map ~f:(fun (name, _) -> name, Some typ) b
+
+  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, None) b
+  let has_type   b = to_type b |> OptionUtils.is_some
+
+  let traverse_map : t -> o:'o -> f_pos:('o -> Position.t -> 'a * Position.t)
+            -> f_name:('a -> name -> 'b * name)
+            -> f_ty:('b -> Types.datatype option -> 'c * Types.datatype option)
+            -> 'c * t = fun b ~o ~f_pos ~f_name ~f_ty ->
+    WithPos.traverse_map b ~o ~f_pos ~f_node:(fun o (n, ty) ->
+        let o, name = f_name o n  in
+        let o, typ  = f_ty   o ty in
+        o, (name, typ)
+      )
 end
-
-type binder = (name * Types.datatype option) with_pos
-    [@@deriving show]
-
-let name_of_binder     {node=(n,_ );_} = n
-let type_of_binder     {node=(_,ty);_} = ty
-let type_of_binder_exn {node=(_,ty);_} =
-  OptionUtils.val_of ty (* raises exception when ty = None *)
-let set_binder_name    {node=(_   ,ty); pos} name = with_pos pos (name, ty     )
-let set_binder_type    {node=(name,_ ); pos} ty   = with_pos pos (name, Some ty)
-let erase_binder_type  {node=(name,_ ); pos}      = with_pos pos (name, None   )
-let binder_has_type    {node=(_   ,ty); _  }      = OptionUtils.is_some ty
 
 (* type variables *)
 type tyvar = Types.quantifier
@@ -128,8 +123,8 @@ module Pattern = struct
     | Record   of (name * with_pos) list * with_pos option
     | Tuple    of with_pos list
     | Constant of Constant.t
-    | Variable of binder
-    | As       of binder * with_pos
+    | Variable of Binder.t
+    | As       of Binder.t * with_pos
     | HasType  of with_pos * datatype'
   and with_pos = t WithPos.t
    [@@deriving show]
@@ -206,7 +201,7 @@ and phrasenode =
   | Iteration        of iterpatt list * phrase
                         * (*where:*)   phrase option
                         * (*orderby:*) phrase option
-  | Escape           of binder * phrase
+  | Escape           of Binder.t * phrase
   | Section          of Section.t
   | Conditional      of phrase * phrase * phrase
   | Block            of block_body
@@ -266,39 +261,39 @@ and phrasenode =
   | TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase *
                            Types.datatype option)
   | Raise
-and phrase = phrasenode with_pos
+and phrase = phrasenode WithPos.t
 and bindingnode =
   | Val     of (Pattern.with_pos * (tyvar list * phrase) * Location.t *
                   datatype' option)
-  | Fun     of (binder * DeclaredLinearity.t * (tyvar list * funlit) * Location.t *
+  | Fun     of (Binder.t * DeclaredLinearity.t * (tyvar list * funlit) * Location.t *
                   datatype' option)
-  | Funs    of (binder * DeclaredLinearity.t *
+  | Funs    of (Binder.t * DeclaredLinearity.t *
                   ((tyvar list *
                    (Types.datatype * Types.quantifier option list) option)
-                   * funlit) * Location.t * datatype' option * position) list
-  | Handler of (binder * handlerlit * datatype' option)
-  | Foreign of (binder * name * name * name * datatype')
+                   * funlit) * Location.t * datatype' option * Position.t) list
+  | Handler of (Binder.t * handlerlit * datatype' option)
+  | Foreign of (Binder.t * name * name * name * datatype')
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
   | Type    of (name * (quantifier * tyvar option) list * datatype')
   | Infix
   | Exp     of phrase
   | Module  of (name * binding list)
-  | AlienBlock of (name * name * ((binder * datatype') list))
-and binding = bindingnode with_pos
+  | AlienBlock of (name * name * ((Binder.t * datatype') list))
+and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
   | CPUnquote     of (binding list * phrase)
   | CPGrab        of (string * (Types.datatype * tyarg list) option) *
-                       binder option * cp_phrase
+                       Binder.t option * cp_phrase
   | CPGive        of (string * (Types.datatype * tyarg list) option) *
                        phrase option * cp_phrase
-  | CPGiveNothing of binder
-  | CPSelect      of (binder * string * cp_phrase)
-  | CPOffer       of (binder * (string * cp_phrase) list)
-  | CPLink        of (binder * binder)
-  | CPComp        of (binder * cp_phrase * cp_phrase)
-and cp_phrase = cp_phrasenode with_pos
+  | CPGiveNothing of Binder.t
+  | CPSelect      of (Binder.t * string * cp_phrase)
+  | CPOffer       of (Binder.t * (string * cp_phrase) list)
+  | CPLink        of (Binder.t * Binder.t)
+  | CPComp        of (Binder.t * cp_phrase * cp_phrase)
+and cp_phrase = cp_phrasenode WithPos.t
                   [@@deriving show]
 
 type directive = string * string list
@@ -308,6 +303,7 @@ type sentence =
   | Definitions of binding list
   | Expression  of phrase
   | Directive   of directive
+
     [@@deriving show]
 
 type program = binding list * phrase option
@@ -318,19 +314,19 @@ type program = binding list * phrase option
    PatternDuplicateNameError and
    RedundantPatternMatch take resolved positions?
 *)
-exception ConcreteSyntaxError of (string * position)
-exception PatternDuplicateNameError of (SourceCode.pos * string)
-exception RedundantPatternMatch of SourceCode.pos
+exception ConcreteSyntaxError of (string * Position.t)
+exception PatternDuplicateNameError of (Position.t * string)
+exception RedundantPatternMatch of Position.t
 
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
-    | _  -> TAbstr (Types.box_quantifiers tyvars, with_dummy_pos e)
+    | _  -> TAbstr (Types.box_quantifiers tyvars, WithPos.make e)
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
-    | _  -> TAppl (with_dummy_pos e, tys)
+    | _  -> TAppl (WithPos.make e, tys)
 
 module Freevars =
 struct
@@ -340,9 +336,9 @@ struct
   let union_map f = union_all -<- List.map f
   let option_map f = opt_app f empty
 
-  let rec pattern ({node; _} : Pattern.with_pos) : StringSet.t =
+  let rec pattern (phrase : Pattern.with_pos) : StringSet.t =
     let open Pattern in
-    match node with
+    match WithPos.node phrase with
     | Any
     | Nil
     | Constant _
@@ -355,18 +351,18 @@ struct
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)
-    | Variable bndr         -> singleton (name_of_binder bndr)
-    | As (bndr, pat)        -> add (name_of_binder bndr) (pattern pat)
+    | Variable bndr         -> singleton (Binder.to_name bndr)
+    | As (bndr, pat)        -> add (Binder.to_name bndr) (pattern pat)
     | HasType (pat, _)      -> pattern pat
 
 
-  let rec formlet_bound ({node; _} : phrase) : StringSet.t = match node with
+  let rec formlet_bound (phrase : phrase) : StringSet.t = match WithPos.node phrase with
     | Xml (_, _, _, children) -> union_map formlet_bound children
     | FormBinding (_, pat) -> pattern pat
     | _ -> empty
 
   let rec phrase (p : phrase) : StringSet.t =
-    let p = p.node in
+    let p = WithPos.node p in
     match p with
     | Var v -> singleton v
     | Section (Section.Name n) -> singleton n
@@ -404,7 +400,7 @@ struct
     | Query (Some (limit, offset), p, _) ->
        union_all [phrase limit; phrase offset; phrase p]
 
-    | Escape (v, p) -> diff (phrase p) (singleton (name_of_binder v))
+    | Escape (v, p) -> diff (phrase p) (singleton (Binder.to_name v))
     | FormletPlacement (p1, p2, p3)
     | Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | Block b -> block b
@@ -479,26 +475,26 @@ struct
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
     | Raise -> empty
-  and binding ({node = binding; _}: binding)
+  and binding (binding: binding)
       : StringSet.t (* vars bound in the pattern *)
       * StringSet.t (* free vars in the rhs *) =
-    match binding with
+    match WithPos.node binding with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
     | Handler (bndr, hnlit, _) ->
-       let name = singleton (name_of_binder bndr) in
+       let name = singleton (Binder.to_name bndr) in
        name, (diff (handlerlit hnlit) name)
     | Fun (bndr, _, (_, fn), _, _) ->
-       let name = singleton (name_of_binder bndr) in
+       let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
     | Funs funs ->
         let names, rhss =
           List.fold_right
             (fun (bndr, _, (_, rhs), _, _, _) (names, rhss) ->
-               (add (name_of_binder bndr) names, rhs::rhss))
+               (add (Binder.to_name bndr) names, rhs::rhss))
             funs
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
-    | Foreign (bndr, _, _, _, _) -> singleton (name_of_binder bndr), empty
+    | Foreign (bndr, _, _, _, _) -> singleton (Binder.to_name bndr), empty
     | QualifiedImport _
     | Type _
     | Infix -> empty, empty
@@ -506,7 +502,7 @@ struct
     | AlienBlock (_, _, decls) ->
         let bound_foreigns =
           List.fold_left (fun acc (bndr, _) ->
-              StringSet.add (name_of_binder bndr) acc)
+              StringSet.add (Binder.to_name bndr) acc)
             (StringSet.empty) decls in
         bound_foreigns, empty
         (* TODO: this needs to be implemented *)
@@ -536,23 +532,23 @@ struct
     | Splice p -> phrase p
     | Replace (r, Literal _) -> regex r
     | Replace (r, SpliceExpr p) -> union (regex r) (phrase p)
-  and cp_phrase {node = p; _ } = match p with
+  and cp_phrase p = match WithPos.node p with
     | CPUnquote e -> block e
     | CPGrab ((c, _t), Some bndr, p) ->
-      union (singleton c) (diff (cp_phrase p) (singleton (name_of_binder bndr)))
+      union (singleton c) (diff (cp_phrase p) (singleton (Binder.to_name bndr)))
     | CPGrab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
     | CPGive ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e)
                                                            (cp_phrase p))
-    | CPGiveNothing bndr -> singleton (name_of_binder bndr)
+    | CPGiveNothing bndr -> singleton (Binder.to_name bndr)
     | CPSelect (bndr, _label, p) ->
-      union (singleton (name_of_binder bndr)) (cp_phrase p)
+      union (singleton (Binder.to_name bndr)) (cp_phrase p)
     | CPOffer (bndr, cases) ->
-      union (singleton (name_of_binder bndr))
+      union (singleton (Binder.to_name bndr))
             (union_map (fun (_label, p) -> cp_phrase p) cases)
     | CPLink (bndr1, bndr2) ->
-      union (singleton (name_of_binder bndr1))
-            (singleton (name_of_binder bndr2))
+      union (singleton (Binder.to_name bndr1))
+            (singleton (Binder.to_name bndr2))
     | CPComp (bndr, left, right) ->
        diff (union (cp_phrase left) (cp_phrase right))
-            (singleton (name_of_binder bndr))
+            (singleton (Binder.to_name bndr))
 end

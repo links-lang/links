@@ -1,4 +1,5 @@
 open Lexing
+open SourceCode
 
 (*
    This module is a copied, pasted and hacked version of parse.ml
@@ -35,7 +36,8 @@ fun ~context ?nlhook ~parse ~infun ~name ->
                   Errors.message = "";
                   Errors.linetext = line;
                   Errors.marker = String.make column ' ' ^ "^" })
-      | Sugartypes.ConcreteSyntaxError (msg, (start, finish, _)) ->
+      | Sugartypes.ConcreteSyntaxError (msg, pos) ->
+          let start, finish = Position.start pos, Position.finish pos in
           let linespec =
             if start.pos_lnum = finish.pos_lnum
             then string_of_int start.pos_lnum

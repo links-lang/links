@@ -1,4 +1,5 @@
 (* Some of the errors that Links produces, and ways of displaying them. *)
+open SourceCode
 
 type synerrspec = {filename : string; linespec : string;
                    message : string; linetext : string;
@@ -9,11 +10,11 @@ exception Runtime_error of string
 exception UndefinedVariable of string
 
 exception MultiplyDefinedToplevelNames of
-  ((SourceCode.pos list) Utility.stringmap)
-exception Type_error of (SourceCode.pos * string)
+  ((Position.t list) Utility.stringmap)
+exception Type_error of (Position.t * string)
 exception RichSyntaxError of synerrspec
-exception SugarError of (SourceCode.pos * string)
-exception UnboundTyCon of (SourceCode.pos * string)
+exception SugarError of (Position.t * string)
+exception UnboundTyCon of (Position.t * string)
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string
