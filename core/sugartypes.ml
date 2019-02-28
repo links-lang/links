@@ -14,7 +14,7 @@ module Binder = struct
   let to_name b = let (n, _ ) = WithPos.node b in n
   let to_type b = let (_, ty) = WithPos.node b in ty
 
-  let typ_exn b = to_type b |> OptionUtils.val_of
+  let to_type_exn b = to_type b |> OptionUtils.val_of
 
   let set_name b name = WithPos.map ~f:(fun (_, ty) -> name, ty) b
   let set_type b typ = WithPos.map ~f:(fun (name, _) -> name, Some typ) b

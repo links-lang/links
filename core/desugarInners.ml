@@ -117,7 +117,7 @@ object (o : 'self_type)
   method! binder : Binder.t -> ('self_type * Binder.t) = function
       | {node=_, None; _} -> assert false
       | bndr ->
-         let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.typ_exn bndr) in
+         let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in
          ({< var_env=var_env; extra_env=extra_env >}, bndr)
 end
 

@@ -783,7 +783,7 @@ class transform (env : Types.typing_environment) =
       | Fun (bndr, lin, (tyvars, lam), location, t) when Binder.has_type bndr ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let inner_effects = fun_effects (Binder.typ_exn bndr) (fst lam) in
+         let inner_effects = fun_effects (Binder.to_type_exn bndr) (fst lam) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, bndr) = o#binder bndr in
@@ -823,7 +823,7 @@ class transform (env : Types.typing_environment) =
     method binder : Binder.t -> ('self_type * Binder.t) =
       fun bndr ->
       assert (Binder.has_type bndr);
-      let var_env = TyEnv.bind var_env (Binder.to_name bndr, Binder.typ_exn bndr) in
+      let var_env = TyEnv.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in
       ({< var_env=var_env >}, bndr)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
