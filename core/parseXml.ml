@@ -27,7 +27,7 @@ fun ~context ?nlhook ~parse ~infun ~name ->
         (p, code)
 
     with
-      | Parsing.Parse_error ->
+      | Parser.Error ->
           let line, column = code#find_line lexbuf.lex_curr_p in
             raise
               (Errors.RichSyntaxError
