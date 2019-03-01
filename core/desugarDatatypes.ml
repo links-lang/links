@@ -6,6 +6,7 @@ open Sugartypes
 open Utility
 open List
 open Errors
+open Parse
 
 module SEnv = Env.String
 
@@ -545,7 +546,7 @@ let sentence typing_env = function
   | Directive   d  -> typing_env, Directive d
 
 let read ~aliases s =
-  let dt, _ = Parse.parse_string ~in_context:(Parse.fresh_context ()) Parse.datatype s in
+  let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
   let () = List.iter Generalise.rigidify_quantifier vars in
     (Types.for_all (vars, Desugar.datatype var_env aliases dt))
