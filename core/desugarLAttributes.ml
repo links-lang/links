@@ -153,10 +153,12 @@ let replace_lattrs : phrasenode -> phrasenode =
 let desugar_lattributes =
 object
   inherit SugarTraversals.map as super
-  method! phrasenode = function
-    | Xml _ as x when has_lattrs x ->
-        super#phrasenode (replace_lattrs x)
-    | e -> super#phrasenode e
+  method! phrase = function
+    | {node=Xml _ as x; pos} when has_lattrs x ->
+       let x' = WithPos.make ~pos (replace_lattrs x) in
+       let () = validate_xml x' in
+       super#phrase x'
+    | e -> super#phrase e
 end
 
 let has_no_lattributes =

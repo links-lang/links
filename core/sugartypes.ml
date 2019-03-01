@@ -309,14 +309,9 @@ type sentence =
 type program = binding list * phrase option
   [@@deriving show]
 
-(* Why does ConcreteSyntaxError take an
-   unresolved position and yet
-   PatternDuplicateNameError and
-   RedundantPatternMatch take resolved positions?
-*)
-exception ConcreteSyntaxError of (string * Position.t)
+exception ConcreteSyntaxError       of (string * Position.t)
 exception PatternDuplicateNameError of (Position.t * string)
-exception RedundantPatternMatch of Position.t
+exception RedundantPatternMatch     of  Position.t
 
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with

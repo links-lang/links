@@ -3,7 +3,7 @@ open Operators
 open SourceCode
 open SourceCode.WithPos
 open Sugartypes
-open Utility.OptionUtils
+open Utility
 
 (* Import module signatures. *)
 module type Pos                  = SugarConstructorsIntf.Pos
@@ -71,8 +71,8 @@ module SugarConstructors (Position : Pos)
        (* Ensure that name in a signature matches name in a declaration. *)
        if signame <> name then
          raise (ConcreteSyntaxError
-               ("Signature for `" ^ signame ^ "' should precede definition of `"
-                ^ signame ^ "', not `" ^ name ^ "'.", pos));
+               (Printf.sprintf "Signature for `%s' should precede definition of `%s', not `%s'."
+                  signame signame name, pos));
        Some datatype
     | NoSig -> None
 
@@ -250,17 +250,36 @@ module SugarConstructors (Position : Pos)
     with_pos ppos (UnaryAppl (([], op), arg))
 
   (** XML *)
+  let validate_xml ?tags e = match e with
+    | {node=Xml (name, attr_list, blk_opt, _); pos} ->
+       (* check whether opening and closing tags match *)
+       let () = match tags with
+         | Some (opening, closing) when opening = closing -> ()
+         | Some (opening, closing) ->
+            raise (ConcreteSyntaxError (
+                Printf.sprintf "Closing tag '%s' does not match start tag '%s'."
+                  closing opening, pos))
+         | _ -> () in
+       (* Check uniqueness of attributes *)
+       let () =
+         let attr_names = fst (List.split attr_list) in
+         if ListUtils.has_duplicates attr_names then
+           raise (Errors.SugarError (pos,
+                   Printf.sprintf "XML tag '%s' has duplicate attributes" name))
+         else () in
+       (* Check that XML forests don't have attributes *)
+       if name = "#" && (List.length attr_list != 0 || blk_opt <> None) then
+         raise (Errors.SugarError (pos,
+                  "XML forest literals cannot have attributes"))
+       else ()
+    | _ -> assert false
+
   (* Create an XML tree.  Raise an exception if opening and closing tags don't
      match. *)
   let xml ?(ppos=dp) ?tags name attr_list blk_opt contents =
-    let () = match tags with
-      | Some (opening, closing) when opening = closing -> ()
-      | Some (opening, closing) ->
-         raise (ConcreteSyntaxError
-                  ("Closing tag '" ^ closing ^ "' does not match start tag '"
-                   ^ opening ^ "'.", pos ppos))
-      | _ -> () in
-    with_pos ppos (Xml (name, attr_list, blk_opt, contents))
+    let node = with_pos ppos (Xml (name, attr_list, blk_opt, contents)) in
+    let ()   = validate_xml ?tags node in
+    node
 
   (** Handlers *)
   let untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =

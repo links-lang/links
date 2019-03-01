@@ -949,41 +949,23 @@ struct
           | TableLit (name, (_, Some (readtype, writetype, neededtype)), _constraints, keys, db) ->
               I.table_handle (ev db, ev name, ev keys, (readtype, writetype, neededtype))
           | Xml (tag, attrs, attrexp, children) ->
-              (* check for duplicates *)
-              let () =
-                let rec dup_check names =
-                  function
-                    | [] -> ()
-                    | (name, _) :: attrs ->
-                        if StringSet.mem name names then
-                          raise (Errors.SugarError (pos,
-                                                 "XML attribute '"^name^"' is defined more than once"))
-                        else
-                          dup_check (StringSet.add name names) attrs
-                in
-                  dup_check StringSet.empty attrs
-              in
-                if tag = "#" then
-                  if List.length attrs != 0 || attrexp <> None then
-                    raise (Errors.SugarError (pos,
-                                           "XML forest literals cannot have attributes"))
-                  else
-                    cofv
-                      (I.concat (instantiate "Nil" [`Type (`Primitive Primitive.XmlItem)],
-                                 instantiate "Concat" [`Type (`Primitive Primitive.XmlItem); `Row eff],
+               if tag = "#" then
+                 cofv (I.concat (instantiate "Nil"
+                                   [`Type (`Primitive Primitive.XmlItem)],
+                                 instantiate "Concat"
+                                   [ `Type (`Primitive Primitive.XmlItem)
+                                   ; `Row eff],
                                  List.map ev children))
                 else
-                  let attrs = alistmap (List.map ev) attrs in
+                  let attrs    = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
-                  let body =
-                         I.xml (instantiate "^^" [`Row eff],
-                                tag, attrs, children)
-                  in
-                    begin match attrexp with
-                      | None -> cofv body
-                      | Some e ->
-                          cofv (I.apply_pure (instantiate_mb "addAttributes", [body; ev e]))
-                    end
+                  let body     = I.xml (instantiate "^^" [`Row eff], tag, attrs,
+                                        children) in
+                  begin match attrexp with
+                  | None   -> cofv body
+                  | Some e -> cofv (I.apply_pure (instantiate_mb "addAttributes",
+                                                 [body; ev e]))
+                  end
           | TextNode name ->
               cofv
                 (I.apply_pure

@@ -406,6 +406,11 @@ struct
     else if less l r then -1
     else 0
 
+  (** Checks whether list contains duplicates *)
+  let rec has_duplicates = function
+    | []        -> false
+    | (x :: xs) -> List.mem x xs || has_duplicates xs
+
   (** Remove duplicates from a list, using the given relation to
       determine `duplicates' *)
   let rec unduplicate equal = function
