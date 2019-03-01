@@ -70,9 +70,9 @@ module SugarConstructors (Position : Pos)
     | Sig {node=({node=signame; _}, datatype); pos} ->
        (* Ensure that name in a signature matches name in a declaration. *)
        if signame <> name then
-         raise (ConcreteSyntaxError
-               (Printf.sprintf "Signature for `%s' should precede definition of `%s', not `%s'."
-                  signame signame name, pos));
+         raise (ConcreteSyntaxError (pos,
+               Printf.sprintf "Signature for `%s' should precede definition of `%s', not `%s'."
+                  signame signame name));
        Some datatype
     | NoSig -> None
 
@@ -225,9 +225,9 @@ module SugarConstructors (Position : Pos)
      *)
   let db_insert ?(ppos=dp) ins_exp lbls exps var_opt =
     if is_empty_db_exps exps && var_opt == None then
-      raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^
-          " a nonempty list of labeled expression or a return variable.",
-           pos ppos));
+      raise (ConcreteSyntaxError (pos ppos, "Invalid insert statement. " ^
+          "Either provide a nonempty list of labeled expression or a return " ^
+          "variable."));
     with_pos ppos (DBInsert (ins_exp, lbls, exps,
        opt_map (fun name -> constant_str ~ppos name) var_opt))
 
@@ -256,22 +256,23 @@ module SugarConstructors (Position : Pos)
        let () = match tags with
          | Some (opening, closing) when opening = closing -> ()
          | Some (opening, closing) ->
-            raise (ConcreteSyntaxError (
+            raise (ConcreteSyntaxError (pos,
                 Printf.sprintf "Closing tag '%s' does not match start tag '%s'."
-                  closing opening, pos))
+                  closing opening))
          | _ -> () in
        (* Check uniqueness of attributes *)
        let () =
          let attr_names = fst (List.split attr_list) in
          if ListUtils.has_duplicates attr_names then
            raise (Errors.SugarError (pos,
-                   Printf.sprintf "XML tag '%s' has duplicate attributes" name))
-         else () in
+                  Printf.sprintf "XML tag '%s' has duplicate attributes"
+                    name)); in
        (* Check that XML forests don't have attributes *)
-       if name = "#" && (List.length attr_list != 0 || blk_opt <> None) then
-         raise (Errors.SugarError (pos,
-                  "XML forest literals cannot have attributes"))
-       else ()
+       let () =
+         if name = "#" && (List.length attr_list != 0 || blk_opt <> None) then
+           raise (Errors.SugarError (pos,
+                    "XML forest literals cannot have attributes")); in
+       ()
     | _ -> assert false
 
   (* Create an XML tree.  Raise an exception if opening and closing tags don't

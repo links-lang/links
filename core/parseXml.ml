@@ -36,7 +36,7 @@ fun ~context ?nlhook ~parse ~infun ~name ->
                   Errors.message = "";
                   Errors.linetext = line;
                   Errors.marker = String.make column ' ' ^ "^" })
-      | Sugartypes.ConcreteSyntaxError (msg, pos) ->
+      | Sugartypes.ConcreteSyntaxError (pos, msg) ->
           let start, finish = Position.start pos, Position.finish pos in
           let linespec =
             if start.pos_lnum = finish.pos_lnum

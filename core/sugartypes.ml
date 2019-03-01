@@ -309,7 +309,7 @@ type sentence =
 type program = binding list * phrase option
   [@@deriving show]
 
-exception ConcreteSyntaxError       of (string * Position.t)
+exception ConcreteSyntaxError       of (Position.t * string)
 exception PatternDuplicateNameError of (Position.t * string)
 exception RedundantPatternMatch     of  Position.t
 

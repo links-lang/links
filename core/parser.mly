@@ -80,14 +80,14 @@ let primary_kind_of_string p =
   | "Row"      -> pk_row
   | "Presence" -> pk_presence
   | pk         ->
-     raise (ConcreteSyntaxError ("Invalid primary kind: " ^ pk, pos p))
+     raise (ConcreteSyntaxError (pos p, "Invalid primary kind: " ^ pk))
 
 let linearity_of_string p =
   function
   | "Any" -> lin_any
   | "Unl" -> lin_unl
   | lin   ->
-     raise (ConcreteSyntaxError ("Invalid kind linearity: " ^ lin, pos p))
+     raise (ConcreteSyntaxError (pos p, "Invalid kind linearity: " ^ lin))
 
 let restriction_of_string p =
   function
@@ -95,7 +95,7 @@ let restriction_of_string p =
   | "Base"    -> res_base
   | "Session" -> res_session
   | rest      ->
-     raise (ConcreteSyntaxError ("Invalid kind restriction: " ^ rest, pos p))
+     raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
 
 let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
@@ -128,7 +128,7 @@ let kind_of p =
   | "Base"     -> (pk_type, Some (lin_unl, res_base))
   | "Session"  -> (pk_type, Some (lin_any, res_session))
   | "Eff"      -> (pk_row , Some (lin_unl, res_effect))
-  | k          -> raise (ConcreteSyntaxError ("Invalid kind: " ^ k, pos p))
+  | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
   function
@@ -137,7 +137,7 @@ let subkind_of p =
   | "Base"    -> Some (lin_unl, res_base)
   | "Session" -> Some (lin_any, res_session)
   | "Eff"     -> Some (lin_unl, res_effect)
-  | sk        -> raise (ConcreteSyntaxError ("Invalid subkind: " ^ sk, pos p))
+  | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
 let attach_kind (t, k) = (t, k, `Rigid)
 
