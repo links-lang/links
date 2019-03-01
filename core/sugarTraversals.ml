@@ -48,7 +48,7 @@ class map =
     method tyunary_op : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t =
       fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
 
-    method binder : Binder.t -> Binder.t =
+    method binder : Binder.with_pos -> Binder.with_pos =
       fun bndr ->
         let name = o#name (Binder.to_name bndr) in
         let ty  = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
@@ -755,7 +755,7 @@ class fold =
     method tyunary_op : tyarg list * UnaryOp.t -> 'self_type =
       fun (_x, _x_i1) -> o#unary_op _x_i1
 
-    method binder : Binder.t -> 'self_type =
+    method binder : Binder.with_pos -> 'self_type =
       fun bndr ->
         let o = o#name (Binder.to_name bndr) in
         let o = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
@@ -2159,7 +2159,7 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
 
-    method binder : Binder.t -> ('self_type * Binder.t) =
+    method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       Binder.traverse_map
         ~o
         ~f_pos:(fun o v -> o#position v)

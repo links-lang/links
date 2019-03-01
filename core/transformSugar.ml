@@ -722,10 +722,12 @@ class transform (env : Types.typing_environment) =
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
 
     method rec_bodies :
-
-      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-      ('self_type *
-         (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list) =
+    (Binder.with_pos * DeclaredLinearity.t *
+     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     Location.t * datatype' option * Position.t) list ->
+    ('self * (Binder.with_pos * DeclaredLinearity.t *
+              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              Location.t * datatype' option * Position.t) list) =
       let outer_tyvars = o#backup_quantifiers in
       let rec list o =
         function
@@ -742,10 +744,12 @@ class transform (env : Types.typing_environment) =
       in
         list o
 
-    method rec_activate_outer_bindings :
-      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-      ('self_type *
-         (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list) =
+    method rec_activate_outer_bindings : (Binder.with_pos * DeclaredLinearity.t *
+     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     Location.t * datatype' option * Position.t) list ->
+     ('self * (Binder.with_pos * DeclaredLinearity.t *
+              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              Location.t * datatype' option * Position.t) list) =
       let rec list o =
         function
           | [] -> o, []
@@ -757,9 +761,9 @@ class transform (env : Types.typing_environment) =
       in
         list o
 
-    method rec_activate_inner_bindings :
-      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-      'self_type =
+    method rec_activate_inner_bindings : (Binder.with_pos * DeclaredLinearity.t *
+        ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+        Location.t * datatype' option * Position.t) list -> 'self_type =
       let rec list o =
         function
           | [] -> o
@@ -820,7 +824,7 @@ class transform (env : Types.typing_environment) =
         ~f_pos:(fun o v -> o, v)
         ~f_node:(fun _ v -> o#bindingnode v)
 
-    method binder : Binder.t -> ('self_type * Binder.t) =
+    method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       fun bndr ->
       assert (Binder.has_type bndr);
       let var_env = TyEnv.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in

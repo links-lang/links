@@ -114,7 +114,7 @@ object (o : 'self_type)
           (o, (Funs defs))
     | b -> super#bindingnode b
 
-  method! binder : Binder.t -> ('self_type * Binder.t) = function
+  method! binder : Binder.with_pos -> ('self_type * Binder.with_pos) = function
       | {node=_, None; _} -> assert false
       | bndr ->
          let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in

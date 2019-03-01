@@ -8,7 +8,8 @@ open Utility
 type name = string [@@deriving show]
 
 module Binder = struct
-  type t = (name * Types.datatype option) WithPos.t
+  type t = name * Types.datatype option
+  and with_pos = t WithPos.t
   [@@deriving show]
 
   let to_name b = let (n, _ ) = WithPos.node b in n
@@ -16,16 +17,17 @@ module Binder = struct
 
   let to_type_exn b = to_type b |> OptionUtils.val_of
 
-  let set_name b name = WithPos.map ~f:(fun (_, ty) -> name, ty) b
-  let set_type b typ = WithPos.map ~f:(fun (name, _) -> name, Some typ) b
+  let set_name b name = WithPos.map ~f:(fun (_   , ty) -> name, ty      ) b
+  let set_type b typ  = WithPos.map ~f:(fun (name, _ ) -> name, Some typ) b
 
   let erase_type b = WithPos.map ~f:(fun (name, _) -> name, None) b
   let has_type   b = to_type b |> OptionUtils.is_some
 
-  let traverse_map : t -> o:'o -> f_pos:('o -> Position.t -> 'a * Position.t)
+  let traverse_map : with_pos -> o:'o
+            -> f_pos:('o -> Position.t -> 'a * Position.t)
             -> f_name:('a -> name -> 'b * name)
             -> f_ty:('b -> Types.datatype option -> 'c * Types.datatype option)
-            -> 'c * t = fun b ~o ~f_pos ~f_name ~f_ty ->
+            -> 'c * with_pos = fun b ~o ~f_pos ~f_name ~f_ty ->
     WithPos.traverse_map b ~o ~f_pos ~f_node:(fun o (n, ty) ->
         let o, name = f_name o n  in
         let o, typ  = f_ty   o ty in
@@ -123,8 +125,8 @@ module Pattern = struct
     | Record   of (name * with_pos) list * with_pos option
     | Tuple    of with_pos list
     | Constant of Constant.t
-    | Variable of Binder.t
-    | As       of Binder.t * with_pos
+    | Variable of Binder.with_pos
+    | As       of Binder.with_pos * with_pos
     | HasType  of with_pos * datatype'
   and with_pos = t WithPos.t
    [@@deriving show]
@@ -201,7 +203,7 @@ and phrasenode =
   | Iteration        of iterpatt list * phrase
                         * (*where:*)   phrase option
                         * (*orderby:*) phrase option
-  | Escape           of Binder.t * phrase
+  | Escape           of Binder.with_pos * phrase
   | Section          of Section.t
   | Conditional      of phrase * phrase * phrase
   | Block            of block_body
@@ -265,34 +267,34 @@ and phrase = phrasenode WithPos.t
 and bindingnode =
   | Val     of Pattern.with_pos * (tyvar list * phrase) * Location.t *
                  datatype' option
-  | Fun     of Binder.t * DeclaredLinearity.t * (tyvar list * funlit) *
+  | Fun     of Binder.with_pos * DeclaredLinearity.t * (tyvar list * funlit) *
                  Location.t * datatype' option
-  | Funs    of (Binder.t * DeclaredLinearity.t *
+  | Funs    of (Binder.with_pos * DeclaredLinearity.t *
                   ((tyvar list *
                    (Types.datatype * Types.quantifier option list) option)
                    * funlit) * Location.t * datatype' option * Position.t) list
-  | Handler of Binder.t * handlerlit * datatype' option
-  | Foreign of Binder.t * name * name * name * datatype'
+  | Handler of Binder.with_pos * handlerlit * datatype' option
+  | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
   | Type    of name * (quantifier * tyvar option) list * datatype'
   | Infix
   | Exp     of phrase
   | Module  of name * binding list
-  | AlienBlock of name * name * ((Binder.t * datatype') list)
+  | AlienBlock of name * name * ((Binder.with_pos * datatype') list)
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
   | CPUnquote     of binding list * phrase
   | CPGrab        of (string * (Types.datatype * tyarg list) option) *
-                       Binder.t option * cp_phrase
+                       Binder.with_pos option * cp_phrase
   | CPGive        of (string * (Types.datatype * tyarg list) option) *
                        phrase option * cp_phrase
-  | CPGiveNothing of Binder.t
-  | CPSelect      of Binder.t * string * cp_phrase
-  | CPOffer       of Binder.t * (string * cp_phrase) list
-  | CPLink        of Binder.t * Binder.t
-  | CPComp        of Binder.t * cp_phrase * cp_phrase
+  | CPGiveNothing of Binder.with_pos
+  | CPSelect      of Binder.with_pos * string * cp_phrase
+  | CPOffer       of Binder.with_pos * (string * cp_phrase) list
+  | CPLink        of Binder.with_pos * Binder.with_pos
+  | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
                   [@@deriving show]
 

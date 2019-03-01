@@ -39,17 +39,17 @@ object ('self)
   method get_tycon_env   : unit -> Types.tycon_environment
   method get_formlet_env : unit -> Types.environment
 
-  method backup_envs     : Types.environment * Types.tycon_environment * Types.environment * Types.row
+  method backup_envs     :  Types.environment * Types.tycon_environment * Types.environment * Types.row
   method restore_envs    : (Types.environment * Types.tycon_environment * Types.environment * Types.row) -> 'self
 
-  method with_var_env : Types.environment -> 'self
+  method with_var_env     : Types.environment -> 'self
   method with_formlet_env : Types.environment -> 'self
 
   method lookup_type     : name -> Types.datatype
   method lookup_effects  : Types.row
   method with_effects    : Types.row -> 'self
 
-  method binder          : Binder.t -> 'self * Binder.t
+  method binder          : Binder.with_pos -> 'self * Binder.with_pos
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
   method binop           : BinaryOp.t -> 'self * BinaryOp.t * Types.datatype
@@ -63,17 +63,25 @@ object ('self)
   method restore_quantifiers : Utility.IntSet.t -> 'self
 
   method rec_bodies :
+    (Binder.with_pos * DeclaredLinearity.t *
+     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     Location.t * datatype' option * Position.t) list ->
+    ('self * (Binder.with_pos * DeclaredLinearity.t *
+              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              Location.t * datatype' option * Position.t) list)
 
-    (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-    ('self *
-       (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list)
   method rec_activate_outer_bindings :
-    (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-    ('self *
-       (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list)
+    (Binder.with_pos * DeclaredLinearity.t *
+     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     Location.t * datatype' option * Position.t) list ->
+    ('self * (Binder.with_pos * DeclaredLinearity.t *
+              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              Location.t * datatype' option * Position.t) list)
+
   method rec_activate_inner_bindings :
-    (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-    'self
+    (Binder.with_pos * DeclaredLinearity.t *
+     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     Location.t * datatype' option * Position.t) list -> 'self
 
   method sugar_datatype   : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatype         : Types.datatype -> 'self * Types.datatype
