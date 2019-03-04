@@ -2403,13 +2403,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens (sort), merge_usages [usages lens; usages default]
         | LensSelectLit (lens, predicate, _) ->
            let lens = tc lens in
-           let lens_sort = Lens.Type.sort (typ lens) in
-               LensSelectLit(erase lens, predicate, Some (lens_sort)), `Lens(lens_sort), merge_usages [usages lens]
+           let sort = Lens.Type.sort (typ lens) in
+           let lpredicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
+           if Lens_phrase_typesugar.tc_sort ~sort lpredicate <> Lens_phrase_type.Bool then
+             Gripers.die pos "Lens select predicate does not evaluate to a boolean value.";
+               LensSelectLit(erase lens, predicate, Some (sort)), `Lens(sort), merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
            let lens1 = tc lens1
            and lens2 = tc lens2 in
            let sort1 = Lens.Type.sort (typ lens1) in
            let sort2 = Lens.Type.sort (typ lens2) in
+           let lleft = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
+           let lright = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
+           if Lens_phrase_typesugar.tc_sort ~sort:sort1 lleft <> Lens_phrase_type.Bool then
+             Gripers.die pos "Lens join left predicate does not evaluate to a boolean value.";
+           if Lens_phrase_typesugar.tc_sort ~sort:sort2 lright <> Lens_phrase_type.Bool then
+             Gripers.die pos "Lens join right predicate does not evaluate to a boolean value.";
            let sort, _ =
              Lens.Sort.join_lens_sort
                sort1
@@ -2420,15 +2429,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | LensGetLit (lens, _) ->
            let lens = tc lens in
            let sort = Lens.Type.sort (typ lens) in
-           let trowtype = Lens.Sort.record_type sort in
+           let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | LensPutLit (lens, data, _) ->
            let make_tuple_type = Types.make_tuple_type in
            let lens = tc lens in
-           let sort = Lens.Type.sort (typ lens) in
-           let trowtype = Lens.Sort.record_type sort in
            let data = tc data in
-           LensPutLit (erase lens, erase data, Some trowtype), make_tuple_type [], merge_usages [usages lens; usages data]
+           LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], merge_usages [usages lens; usages data]
         | DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in

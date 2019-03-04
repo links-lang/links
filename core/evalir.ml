@@ -598,11 +598,12 @@ struct
     | Lens (table, sort) ->
       let open Lens in
       begin
-          let typ = Sort.record_type sort in
+          let typ = Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
           match value env table, (TypeUtils.concrete_type typ) with
             | `Table ((_, table, _, _) as tinfo), `Record _row ->
                  apply_cont cont env (`Lens (tinfo, Sort.update_table_name sort ~table))
-            | `List records, `Record _row -> apply_cont cont env (`LensMem (`List records, sort))
+            | `List records, `Record _row -> apply_cont cont env (`LensMem (
+                List.map Lens_value_conv.lens_phrase_value_of_value records, sort))
             | _ -> failwith ("Unsupported underlying lens value.")
       end
     | LensDrop (lens, drop, key, def, _sort) ->
@@ -644,10 +645,12 @@ struct
         let lens = value env lens in
         (* let callfn = fun fnptr -> fnptr in *)
         let res = Lens.Value.lens_get lens in
+        let res = List.map Lens_value_conv.value_of_lens_phrase_value res |> Value.box_list in
           apply_cont cont env res
     | LensPut (lens, data, _rtype) ->
         let lens = value env lens in
-        let data = value env data in
+        let data = value env data |> Value.unbox_list in
+        let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let classic = Settings.get_value Basicsettings.RelationalLenses.classic_lenses in
         if classic then
             Lens.Helpers.Classic.lens_put lens data

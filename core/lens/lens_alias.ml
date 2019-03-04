@@ -1,6 +1,7 @@
 open Lens_utility
 
 type t = string
+  [@@deriving show]
 
 module Map = struct
   include Utility.StringMap

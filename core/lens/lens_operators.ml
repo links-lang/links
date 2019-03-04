@@ -9,83 +9,78 @@ open Operators
      ~      triggers a lexer state switch
 *)
 
-type name = string [@@deriving show]
-
 module Unary = struct
-  type t =
-    | Minus
-    | Not
-    | Name of name
-    [@@deriving show]
+  type t = Minus | Not [@@deriving show]
 
-  let from_links v =
+  let of_sugartype_op v =
     match v with
-    | UnaryOp.Minus -> Minus
-    | UnaryOp.FloatMinus -> Minus
-    | UnaryOp.Name name -> Name name
+    | UnaryOp.Minus -> Some Minus
+    | UnaryOp.FloatMinus -> Some Minus
+    | _ -> None
 
-  let to_string =
-  function
-    | Minus -> "-"
-    | Name name -> name
-    | Not -> "!"
+  let to_string = function Minus -> "-" | Not -> "!"
 
-  let fmt f v =
-    Format.fprintf f "%s" (to_string v)
-end
-
-module Logical_binop = struct
-  type t =
-    | And
-    | Or
-    [@@deriving show]
-
-  let to_string =
-    function
-    | And -> "AND"
-    | Or -> "OR"
-
-  let fmt f v =
-    Format.fprintf f "%s" (to_string v)
+  let fmt f v = Format.fprintf f "%s" (to_string v)
 end
 
 module Binary = struct
   type t =
+    | Plus
     | Minus
+    | Multiply
+    | Divide
+    | Greater
+    | GreaterEqual
+    | Less
+    | LessEqual
     | Equal
-    | Cons
-    | Logical of Logical_binop.t
-    | Name of name
-    [@@deriving show]
+    | LogicalAnd
+    | LogicalOr
+  [@@deriving show]
 
-  let of_supertype_operator v =
+  let of_sugartype_op v =
     match v with
-    | BinaryOp.Minus -> Minus
-    | BinaryOp.FloatMinus -> Minus
-    | BinaryOp.Cons -> Cons
-    | BinaryOp.And -> Logical Logical_binop.And
-    | BinaryOp.Or -> Logical Logical_binop.Or
-    | BinaryOp.Name "==" -> Equal
-    | BinaryOp.Name name -> Name name
-    | BinaryOp.RegexMatch _ -> failwith "Regex not supported in relational lenses."
+    | BinaryOp.Minus -> Some Minus
+    | BinaryOp.FloatMinus -> Some Minus
+    | BinaryOp.And -> Some LogicalAnd
+    | BinaryOp.Or -> Some LogicalOr
+    | BinaryOp.Name "+" -> Some Plus
+    | BinaryOp.Name "*" -> Some Multiply
+    | BinaryOp.Name "/" -> Some Divide
+    | BinaryOp.Name ">" -> Some Greater
+    | BinaryOp.Name "<" -> Some Less
+    | BinaryOp.Name ">=" -> Some GreaterEqual
+    | BinaryOp.Name "<=" -> Some LessEqual
+    | BinaryOp.Name "==" -> Some Equal
+    | _ -> None
 
-  let to_string =
-    function
+  let to_string = function
+    | Plus -> "+"
     | Minus -> "-"
-    | Cons -> "::"
+    | Multiply -> "*"
+    | Divide -> "/"
     | Equal -> "="
-    | Name name -> name
-    | Logical l -> Logical_binop.to_string l
+    | Greater -> ">"
+    | GreaterEqual -> ">="
+    | Less -> "<"
+    | LessEqual -> "<="
+    | LogicalAnd -> "AND"
+    | LogicalOr -> "OR"
 
-  let of_string : string -> t =
-    function
+  let of_string : string -> t = function
     | "-" -> Minus
-    | "&&" -> Logical Logical_binop.And
-    | "||" -> Logical Logical_binop.Or
-    | "::" -> Cons
+    | "*" -> Multiply
+    | "/" -> Divide
+    | "&&" -> LogicalAnd
+    | "||" -> LogicalOr
     | "=" -> Equal
-    | name -> Name name
+    | "+" -> Plus
+    | ">" -> Greater
+    | ">=" -> GreaterEqual
+    | "<" -> Less
+    | "<=" -> LessEqual
+    | _ as op ->
+        failwith @@ "Operator " ^ op ^ " not supported by BinaryOp.of_string."
 
-  let fmt f v =
-    Format.fprintf f "%s" (to_string v)
+  let fmt f v = Format.fprintf f "%s" (to_string v)
 end

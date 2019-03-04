@@ -2,17 +2,19 @@ open Utility
 open Lens_types
 open Lens_utility
 
+module Value = Lens_phrase_value
+
 module Simple_record = struct
   (** simplified record type drops column names for efficiency *)
   type t = Value.t list
 
   let compare_val a b =
     match a, b with
-    | `Bool b1, `Bool b2 -> compare b1 b2
-    | `Char c1, `Char c2 -> compare c1 c2
-    | `Float f1, `Float f2 -> compare f1 f2
-    | `Int i1 , `Int i2 -> compare i1 i2
-    | `String i1 , `String i2 -> compare i1 i2
+    | Value.Bool b1, Value.Bool b2 -> compare b1 b2
+    | Value.Char c1, Value.Char c2 -> compare c1 c2
+    | Value.Float f1, Value.Float f2 -> compare f1 f2
+    | Value.Int i1 , Value.Int i2 -> compare i1 i2
+    | Value.String i1 , Value.String i2 -> compare i1 i2
     | _, _ -> failwith "Unsupported comparison types."
 
   let equal_val a b = compare_val a b = 0
@@ -85,8 +87,7 @@ module Inconsistent_columns_error = struct
 end
 
 let construct_cols ~columns ~records =
-  let l = Value.unbox_list records in
-  let recs = List.map ~f:Value.unbox_record l in
+  let recs = List.map ~f:Value.unbox_record records in
   let col_val a r = try
       let (_,v) = List.find (fun (k,_) -> k = a) r in
       v
@@ -98,8 +99,7 @@ let construct_cols ~columns ~records =
   { columns; plus_rows; neg_rows = [| |]; }
 
 let construct ~records =
-  let l = Value.unbox_list records in
-  let recs = List.map ~f:Value.unbox_record l in
+  let recs = List.map ~f:Value.unbox_record records in
   let columns = List.map ~f:(fun (k,_v) -> k) (List.hd recs) in
   construct_cols ~columns ~records
 
@@ -126,9 +126,11 @@ let total_size a =
 
 let pp_value f v =
   match v with
-  | `String s -> Format.fprintf f "\"%s\"" s
-  | `Int i -> Format.fprintf f "%d" i
-  | `Float v -> Format.fprintf f "%f" v
+  | Value.String s -> Format.fprintf f "\"%s\"" s
+  | Value.Int i -> Format.fprintf f "%d" i
+  | Value.Float v -> Format.fprintf f "%f" v
+  | Value.Bool b -> Format.fprintf f "%b" b
+  | Value.Char c -> Format.fprintf f "%c" c
   | _ -> Value.pp f v
 
 let pp b rs =
@@ -317,7 +319,6 @@ let to_value ts =
   if is_positive ts then
     Array.map (Simple_record.to_value ~columns:ts.columns) ts.plus_rows
     |> Array.to_list
-    |> Value.box_list
   else failwith "Cannot convert a non positive delta to a value type."
 
 let project_fun_dep ts ~fun_dep =

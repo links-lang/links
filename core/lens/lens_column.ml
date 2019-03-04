@@ -1,48 +1,52 @@
-open Types
 open Lens_utility
 
-type t = Types.lens_col
+module Type = Lens_phrase_type
+
+type t =
+  { table: string
+  ; name: string
+  ; alias: string
+  ; typ: Type.t
+  ; present: bool }
+  [@@deriving show]
+
+let make ~table ~name ~alias ~typ ~present = { table; name; alias; typ; present }
 
 let name t = t.name
+
 let alias t = t.alias
+
 let present t = t.present
+
 let typ t = t.typ
 
 let table t = t.table
 
-let hide t =
-    { t with present = false }
+let hide t = {t with present= false}
 
-let rename t ~alias =
-    { t with alias }
+let rename t ~alias = {t with alias}
 
 let equal c1 c2 =
   (* Equality in this case can be the simple structural equality *)
   c1 = c2
 
+let set_table t ~table = {t with table}
+
 module Compare = struct
-  type t = Types.lens_col [@@deriving show]
+  type elt = t [@@deriving show]
+  type t = elt [@@deriving show]
 
   let compare t1 t2 = String.compare (alias t1) (alias t2)
 end
 
-
 module Set = struct
   include Set.Make (Compare)
 
-  let dummy_alias alias = {
-    alias;
-    present = true;
-    table = "";
-    name = "";
-    typ = `Not_typed
-  }
+  let dummy_alias alias =
+    {alias; present= true; table= ""; name= ""; typ= Lens_phrase_type.Bool}
 
   let alias_set t =
-    to_seq t
-    |> Seq.filter present
-    |> Seq.map alias
-    |> Lens_alias.Set.of_seq
+    to_seq t |> Seq.filter present |> Seq.map alias |> Lens_alias.Set.of_seq
 
   let mem_alias t ~alias = mem (dummy_alias alias) t
 
@@ -53,27 +57,30 @@ end
 
 module List = struct
   type elt = t
+
   type t = elt list
 
   let present t = List.filter present t
 
   let aliases t = List.map ~f:alias t
 
-  let present_aliases t =
-    present t |> aliases
+  let present_aliases t = present t |> aliases
 
-  let find_alias t ~alias =
-    List.find_opt (fun c -> c.alias = alias) t
+  let find_alias t ~alias = List.find_opt (fun c -> c.alias = alias) t
 
-  let mem_alias t ~alias =
-    find_alias t ~alias |> Option.is_some
+  let mem_alias t ~alias = find_alias t ~alias |> Option.is_some
 
   let colset t = Set.of_list t
 
-  let colmap t = List.map ~f:(fun t -> alias t, t) t |> Lens_alias.Map.from_alist
+  let colmap t =
+    List.map ~f:(fun t -> (alias t, t)) t |> Lens_alias.Map.from_alist
 
   let record_type t =
-    let map = present t
-              |> List.fold_left (fun acc v -> String.Map.add v.alias (`Present v.typ) acc) String.Map.empty in
-    `Record (map, Unionfind.fresh `Closed, false)
+    let map =
+      present t
+      |> List.fold_left
+           (fun acc v -> String.Map.add v.alias v.typ acc)
+           String.Map.empty
+    in
+    Type.Record map
 end

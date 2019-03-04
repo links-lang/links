@@ -5,6 +5,7 @@ open SourceCode
 open Sugartypes
 
 module Phrase = Lens_phrase
+module PT = Lens_phrase_type
 
 let unpack_field_spec (typ : Types.field_spec) =
     match typ with
@@ -19,23 +20,25 @@ let extract_record_type (t : Types.typ) =
     | _ -> failwith ("LensTypes does not type.") (* TODO: display incorrectly expected type **)
 
 (** Returns the columns of a `Record type. **)
-let record_fields (rt : Types.typ) =
+let record_fields (rt : Lens_phrase_type.t) =
     match rt with
-    | `Record (fields, _row_var, _dual) -> fields
+    | PT.Record fields -> fields
     | _ -> failwith "Expected a record type." (* TODO: display incorrectly expected type **)
 
-let sort_cols_of_record (tableName : string) (typ : Types.typ) =
+let sort_cols_of_record (table : string) (typ : Lens_phrase_type.t) =
     let fields = record_fields typ in
-    let cols = StringMap.to_list (fun k v -> {table = tableName; name = k; alias = k; typ = unpack_field_spec v; present = true;}) fields in
+    let cols = StringMap.to_list (fun name typ ->
+        let alias = name in
+        Lens_column.make ~table ~name ~alias ~typ ~present:true) fields in
     cols
 
-let cols_of_record (typ: Types.typ) =
+let cols_of_record (typ: Lens_phrase_type.t) =
     let fields = record_fields typ in
     StringMap.to_list (fun k _v -> k) fields
 
 (** Generate a sort for a table with the given type **)
 let sort_cols_of_table (tableName : string) (t : Types.typ) =
-    let rt = extract_record_type t in
+    let rt = extract_record_type t |> Lens_type_conv.lens_phrase_type_of_type in
     sort_cols_of_record tableName rt
 
 let var_name (var : phrase) =
@@ -49,12 +52,12 @@ let cols_of_phrase (key : phrase) : string list =
     | Var name -> [name]
     | _ -> failwith "Expected a tuple or a variable."
 
-let select_lens_sort (sort : Lens_sort.t) (pred : lens_phrase) : Lens_sort.t =
+let select_lens_sort (sort : Lens_sort.t) (pred : Phrase.t) : Lens_sort.t =
     let oldPred = Lens_sort.predicate sort in
     let predicate = Phrase.Option.combine_and oldPred (Some pred) in
     Lens_sort.update_predicate sort ~predicate
 
-let drop_lens_sort (sort : Types.lens_sort) (drop : Alias.Set.t) (cols : Alias.Set.t) =
+let drop_lens_sort (sort : Lens_sort.t) (drop : Alias.Set.t) (cols : Alias.Set.t) =
     (* Verify that the functional dependencies contain X \to A *)
     if Alias.Set.subset drop (Fun_dep.Set.transitive_closure ~cols (Lens_sort.fds sort)) |> not then
         failwith "The dropped columns must be defined by the key";

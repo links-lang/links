@@ -1,6 +1,6 @@
-open Value
 open Utility
 open Lens_types
+open Lens_phrase_value
 open LensHelpersIncremental
 
 module Sorted = Lens_sorted_records
@@ -15,7 +15,8 @@ let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
     let r = get l in
     let columns = Lens_value.cols_present_aliases lens in
     let nplus = Sorted.minus data (Sorted.project_onto r ~columns) in
-    let a = Sorted.construct ~records:(box_list [box_record [drop, default]]) in
+    let default = Lens_value_conv.lens_phrase_value_of_value default in
+    let a = Sorted.construct ~records:([box_record [drop, default]]) in
     let on_left = List.map (fun v -> v,v,v) columns in
     let m = Sorted.merge (Sorted.join r data ~on:on_left) (Sorted.join nplus a ~on:[]) in
     let res = Sorted.relational_update ~fun_deps:(Fun_dep.Set.of_lists [[key], [drop]]) m ~update_with:r in
@@ -57,23 +58,25 @@ let apply_table_data t data =
   let cmd = "delete from " ^ db#quote_field table ^ " where TRUE" in
   let _ = exec cmd in
   if show_query then print_endline cmd else ();
-  let cols = Sorted.columns data in
-  let insert_vals = List.map (fun row ->
-      List.map (db_string_of_value db) row) (Sorted.plus_rows data |> Array.to_list) in
-  if insert_vals <> [] then
+  let columns = Sorted.columns data in
+  let values = Sorted.plus_rows data |> Array.to_list in
+  let fmt_insert f values =
+    let insert = { Lens_database.Insert. table; columns; values; db; } in
+    Lens_database.Insert.fmt f insert in
+  let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
+  let fmt_all f () = Format.pp_print_list ~pp_sep:fmt_cmd_sep fmt_insert f values in
+  let cmds = Format.asprintf "%a" fmt_all () in
+  if String.equal "" cmds |> not then
     begin
-      let insert_cmd = db#make_insert_query (table, cols, insert_vals) in
-      if show_query then print_endline insert_cmd else ();
-      let _ = exec insert_cmd in
-      ()
-    end;
-  ()
+      if show_query then print_endline cmds;
+      exec cmds |> ignore
+    end
 
 let lens_put_step lens data (fn : Value.t -> Sorted.t -> unit) =
   let data = Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records:data in
   lens_put_set_step lens data fn
 
-let lens_put (lens : Value.t) (data : Value.t) =
+let lens_put (lens : Value.t) (data : Lens_phrase_value.t list) =
   let rec do_step_rec lens data =
     match lens with
     | `Lens (t,_) -> apply_table_data t data

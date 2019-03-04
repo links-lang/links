@@ -88,7 +88,7 @@ object ('self)
   method sugar_datatype   : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatype         : Types.datatype -> 'self * Types.datatype
   method datatype'        : datatype' -> 'self * datatype'
-  method lens_sort        : Types.lens_sort -> 'self * Types.lens_sort
+  method lens_sort        : Lens_sort.t -> 'self * Lens_sort.t
   method row              : Types.row -> 'self * Types.row
 
   method patternnode     : Pattern.t -> 'self * Pattern.t

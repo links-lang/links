@@ -777,14 +777,14 @@ module Continuation
 
 type t = [
 | primitive_value
-| `Lens of table * Types.lens_sort
-| `LensMem of t * Types.lens_sort
+| `Lens of table * Lens_sort.t
+| `LensMem of Lens_phrase_value.t list * Lens_sort.t
 (* lens select: lens, predicate, sort *)
-| `LensSelect of t * Types.lens_phrase * Types.lens_sort
+| `LensSelect of t * Lens_phrase.t * Lens_sort.t
 (* lens join: left lens, right lens, column maps (left, right to out?), delete left phrase, delete right phrase, sort *)
-| `LensJoin of t * t * (string * string * string) list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort
+| `LensJoin of t * t * (string * string * string) list * Lens_phrase.t * Lens_phrase.t * Lens_sort.t
 (* lens drop: lens, drop, key (defined by), default, sort *)
-| `LensDrop of t * string * string * t * Types.lens_sort
+| `LensDrop of t * string * string * t * Lens_sort.t
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t

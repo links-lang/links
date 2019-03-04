@@ -1,4 +1,5 @@
 type t = string
+  [@@deriving show]
 
 module Map : sig
   include Map.S with type key = t

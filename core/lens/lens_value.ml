@@ -165,7 +165,7 @@ let query_exists lens phrase =
   let sort = LensTypes.select_lens_sort sort phrase in
   if is_memory_lens lens then
     let res = lens_get (`LensSelect (lens, phrase, sort)) in
-    unbox_list res <> []
+    res <> []
   else
     let database = database lens in
     let query = Lens_database.Select.of_sort database ~sort in

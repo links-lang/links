@@ -25,9 +25,9 @@ let value v ~default =
   | None -> default
   | Some v -> v
 
-let value_exn v =
+let value_exn ?(exn = Failure "Tried to unpack option") v =
   match v with
-  | None -> failwith "Tried to unpack option"
+  | None -> raise exn
   | Some v -> v
 
 let return v = Some v

@@ -1,4 +1,4 @@
-type t = Value.database
+type t = Links_core__Value.database
 
 val fmt_col : db:t -> Format.formatter -> Lens_column.t -> unit
 
@@ -35,7 +35,7 @@ module Select : sig
 
   val fmt : Format.formatter -> t -> unit
 
-  val execute : t -> database:db -> field_types:(string * Types.datatype) list -> Value.t
+  val execute : t -> database:db -> field_types:(string * Lens_phrase_type.t) list -> Lens_phrase_value.t list
 
   val query_exists : t -> database:db -> bool
 end
@@ -58,7 +58,7 @@ module Update : sig
   type t = {
     table : string;
     predicate : Lens_phrase.Option.t;
-    set : (string * Value.t) list;
+    set : (string * Lens_phrase_value.t) list;
     db : db;
   }
 
@@ -71,7 +71,7 @@ module Insert : sig
   type t = {
     table : string;
     columns : string list;
-    values : Value.t list;
+    values : Lens_phrase_value.t list;
     db : db;
   }
 

@@ -156,13 +156,13 @@ sig
 
   val table_handle : value sem * value sem * value sem * (datatype * datatype * datatype) -> tail_computation sem
 
-  val lens_handle : value sem * Types.lens_sort -> tail_computation sem
+  val lens_handle : value sem * Lens_sort.t -> tail_computation sem
 
-  val lens_drop_handle : value sem * string * string * value sem * Types.lens_sort -> tail_computation sem
+  val lens_drop_handle : value sem * string * string * value sem * Lens_sort.t -> tail_computation sem
 
-  val lens_select_handle : value sem * Types.lens_phrase * Types.lens_sort -> tail_computation sem
+  val lens_select_handle : value sem * Lens_phrase.t * Lens_sort.t -> tail_computation sem
 
-  val lens_join_handle : value sem * value sem * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort -> tail_computation sem
+  val lens_join_handle : value sem * value sem * string list * Lens_phrase.t * Lens_phrase.t * Lens_sort.t -> tail_computation sem
 
   val lens_get : value sem * datatype -> tail_computation sem
 
@@ -924,14 +924,14 @@ struct
                 I.lens_drop_handle (lens, drop, key, default, t)
           | LensSelectLit (lens, pred, Some t) ->
               let lens = ev lens in
-              let pred = Lens.Phrase.of_phrase pred in
+              let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
                 I.lens_select_handle (lens, pred, t)
           | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
               let on = Lens.Types.cols_of_phrase on in
-              let left = Lens.Phrase.of_phrase left in
-              let right = Lens.Phrase.of_phrase right in
+              let left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left |> Lens.Phrase.of_sugar in
+              let right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right |> Lens.Phrase.of_sugar in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
           | LensGetLit (lens, Some t) ->
               let lens = ev lens in

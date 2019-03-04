@@ -14,7 +14,7 @@ val combine : 'a t -> 'a t -> f:('a -> 'a -> 'a) -> 'a option
 val value : 'a t -> default:'a -> 'a
 
 (** Unpack the option value or throw an exception if it is [None]. *)
-val value_exn : 'a t -> 'a
+val value_exn : ?exn:exn -> 'a t -> 'a
 
 (** Return a constant value as a [Some]. *)
 val return : 'a -> 'a t

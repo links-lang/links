@@ -1,4 +1,8 @@
-type t = Types.lens_col
+[@@@ocamlformat "doc-comments=before"]
+
+type t [@@deriving show]
+
+val make : table:string -> name:string -> alias:string -> typ:Lens_phrase_type.t -> present:bool -> t
 
 (** Return the name of the column as the column would be bound in the user program. *)
 val alias : t -> string
@@ -10,7 +14,7 @@ val name : t -> string
 val table : t -> string
 
 (** Return the column type. *)
-val typ : t -> Types.typ
+val typ : t -> Lens_phrase_type.t
 
 (** Determine if the column is present. *)
 val present : t -> bool
@@ -20,6 +24,8 @@ val hide : t -> t
 val rename : t -> alias:string -> t
 
 val equal : t -> t -> bool
+
+val set_table : t -> table:string -> t
 
 module Set : sig
   include Lens_set.S with type elt = t
@@ -42,6 +48,7 @@ end
 
 module List : sig
   type elt = t
+
   type t = elt list
 
   (** Filter out all non present columns. *)
@@ -66,6 +73,5 @@ module List : sig
   val find_alias : t -> alias:string -> elt option
 
   (** Convert a list of records to a Links type. *)
-  val record_type : t -> Types.typ
+  val record_type : t -> Lens_phrase_type.t
 end
-

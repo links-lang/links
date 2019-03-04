@@ -43,6 +43,7 @@ let lens_put_set_step lens delt (fn : Value.t -> Sorted.t -> unit) =
   | `Lens _ -> fn lens delt
   | `LensDrop (l, drop, key, default, _sort) ->
     let relevant = query_project_records l delt [key] [drop] in
+    let default = Lens_value_conv.lens_phrase_value_of_value default in
     let delt = Sorted.relational_extend delt ~key ~by:drop ~default ~data:relevant in
     fn l delt
   | `LensJoin (l1, l2, on, pd, qd, _sort)  ->
@@ -149,14 +150,14 @@ let apply_delta t data =
       exec cmds |> ignore
     end
 
-let get_fds (fds : (string list * string list) list) (cols : Types.lens_col list) : Fun_dep.Set.t =
+let get_fds (fds : (string list * string list) list) (cols : Lens_column.t list) : Fun_dep.Set.t =
   let check_col xs = List.iter (fun alias -> if not (Column.List.mem_alias cols ~alias) then failwith ("The column " ^ alias ^ " does not exist.")) xs in
   List.iter (fun (left, right) -> check_col left; check_col right) fds;
   let fd_of (left, right) =
     Fun_dep.make (Alias.Set.of_list left) (Alias.Set.of_list right) in
   Fun_dep.Set.of_list (List.map ~f:fd_of fds)
 
-let lens_put (lens : Value.t) (data : Value.t) =
+let lens_put (lens : Value.t) (data : Lens_phrase_value.t list) =
   let rec do_step_rec lens delt =
     match lens with
     | `Lens (t,_) -> apply_delta t delt
