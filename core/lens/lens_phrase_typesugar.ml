@@ -1,10 +1,12 @@
 open CommonTypes
 open Lens_operators
-open SourceCode
 open Lens_utility
-module Sugartypes = Lens_phrase_sugartypes
+open Result.O
+module Sugar = Lens_phrase_sugar
 module Phrase = Lens_phrase
 module Types = Lens_phrase_type
+
+type 'a error = {msg: string; data: 'a}
 
 let typ_constant constant =
   match constant with
@@ -14,65 +16,57 @@ let typ_constant constant =
   | Constant.String _ -> Types.String
   | Constant.Char _ -> Types.Char
 
-let die ~pos msg = Errors.Type_error (pos, msg) |> raise
+let rec tc_infix ~env ~data ~op p q =
+  tc ~env p
+  >>= fun p ->
+  tc ~env q
+  >>= fun q ->
+  match op with
+  | Binary.LogicalAnd | Binary.LogicalOr -> (
+    match (p, q) with
+    | Types.Bool, Types.Bool -> Result.return Types.Bool
+    | _ ->
+        Result.error {data; msg= "Logical operator requires boolean operands."}
+    )
+  | Binary.Greater | Binary.GreaterEqual | Binary.Less | Binary.LessEqual
+   |Binary.Equal ->
+      if Types.equal p q then Result.return Types.Bool
+      else Result.error {data; msg= "Types do not match."}
+  | Binary.Minus | Binary.Plus | Binary.Multiply | Binary.Divide -> (
+    match (p, q) with
+    | Types.Int, Types.Int -> Types.Int |> Result.return
+    | Types.Float, Types.Float -> Types.Float |> Result.return
+    | _ -> Result.error {data; msg= "Incorrect or unmatching numeric types."} )
 
-let error ~pos msg = Errors.Type_error (pos, msg)
+and tc_unary ~env ~data ~op p =
+  tc ~env p
+  >>= fun p ->
+  match op with
+  | Unary.Not -> (
+    match p with
+    | Types.Bool -> Result.return Types.Bool
+    | _ -> Result.error {msg= "Unsupported unary negation operand."; data} )
+  | Unary.Minus -> (
+    match p with
+    | Types.Int -> Result.Ok Types.Int
+    | Types.Float -> Result.Ok Types.Float
+    | _ -> Result.Error {msg= "Unsuported unary minus operand."; data} )
 
-let rec tc_infix ~env ~pos ~op p q =
-  let s = tc ~env p in
-  let t = tc ~env q in
-  let typ =
-    match op with
-    | Binary.LogicalAnd | Binary.LogicalOr -> (
-      match (s, t) with
-      | Types.Bool, Types.Bool -> Types.Bool
-      | _ ->
-          die ~pos
-            (Format.asprintf "Logical operator requires boolean operands.") )
-    | Binary.Greater | Binary.GreaterEqual | Binary.Less | Binary.LessEqual
-     |Binary.Equal ->
-        if Types.equal s t then Types.Bool else die ~pos "Types do not match."
-    | Binary.Minus | Binary.Plus | Binary.Multiply | Binary.Divide -> (
-      match (s, t) with
-      | Types.Int, Types.Int -> Types.Int
-      | Types.Float, Types.Float -> Types.Float
-      | _ -> die ~pos "" )
-  in
-  typ
-
-and tc_unary ~env ~pos ~op p =
-  let t = tc ~env p in
-  let typ =
-    match op with
-    | Unary.Not -> (
-      match t with
-      | Types.Bool -> Types.Bool
-      | _ -> die ~pos "Unsupported unary negation operand." )
-    | Unary.Minus -> (
-      match t with
-      | Types.Int -> Types.Int
-      | Types.Float -> Types.Float
-      | _ -> die ~pos "Unsuported unary minus operand." )
-  in
-  typ
-
-and tc ~env phrase =
-  let pos = WithPos.pos phrase in
-  match WithPos.node phrase with
-  | Sugartypes.Constant c -> typ_constant c
-  | Sugartypes.Var v ->
+and tc ~env (data, phrase) =
+  match phrase with
+  | Sugar.Constant c -> typ_constant c |> Result.return
+  | Sugar.Var v ->
       let res = Lens_alias.Map.find ~key:v env in
-      let typ =
-        Option.value_exn
-          ~exn:(error ~pos @@ Format.asprintf "Column '%s' not bound." v)
-          res
-      in
-      typ
-  | Sugartypes.InfixAppl (op, p, q) -> tc_infix ~env ~pos ~op p q
-  | Sugartypes.UnaryAppl (op, p) -> tc_unary ~env ~pos ~op p
+      Result.of_option res ~error:(fun _ ->
+          let msg = Format.asprintf "Column '%s' is not bound." v in
+          Result.error {data; msg} )
+  | Sugar.InfixAppl (op, p, q) -> tc_infix ~env ~data ~op p q
+  | Sugar.UnaryAppl (op, p) -> tc_unary ~env ~data ~op p
 
 let tc_sort ~sort phrase =
-  let env = Lens_sort.cols sort
-  |> List.map ~f:(fun c -> (Lens_column.alias c, Lens_column.typ c))
-  |> Lens_alias.Map.from_alist in
+  let env =
+    Lens_sort.cols sort
+    |> List.map ~f:(fun c -> (Lens_column.alias c, Lens_column.typ c))
+    |> Lens_alias.Map.from_alist
+  in
   tc ~env phrase

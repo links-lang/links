@@ -1,4 +1,23 @@
-type t = Value.t
+type t =
+  | Lens of {table: Lens_database.Table.t; database: Lens_database.t; sort: Lens_sort.t}
+  | LensMem of {records: Lens_phrase_value.t list; sort: Lens_sort.t}
+  | LensSelect of {lens: t; predicate: Lens_phrase.t; sort: Lens_sort.t}
+  | LensJoin of
+      { left: t
+      ; right: t
+      ; on: (string * string * string) list
+      ; del_left: Lens_phrase.t
+      ; del_right: Lens_phrase.t
+      ; sort: Lens_sort.t }
+  | LensDrop of
+      { lens: t
+      ; drop: string
+      ; key: string
+      ; default: Lens_phrase_value.t
+      ; sort: Lens_sort.t }
+      [@@deriving show]
+
+val string_of_value : t -> string
 
 val sort : t -> Lens_sort.t
 

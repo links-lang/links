@@ -1,36 +1,34 @@
 open Utility
 open Lens_operators
 open Lens_utility
-open CommonTypes
 
 module Phrase = Lens_phrase
 module Column = Lens_column
 module Constant = Lens_constant
 module Sort = Lens_sort
 
-type t = Links_core__Value.database
+type t = {
+  driver_name : unit -> string;
+  escape_string : string -> string;
+  quote_field : string -> string;
+  execute : string -> unit;
+  execute_select : string -> field_types:(string * Lens_phrase_type.t) list -> Lens_phrase_value.t list;
+}
 
-class dummy_database =
-  object (_self)
-    inherit Links_core__Value.database
+module Table = struct
+  type t = {
+    name : string;
+    keys : string list list;
+  }
+end
 
-    method driver_name () = "dummy"
-
-    method exec _query : Links_core__Value.dbvalue =
-      failwith "Dummy database exec not supported."
-
-    method escape_string str =
-      "'" ^ Str.global_replace (Str.regexp "'") "''" str ^ "'"
-
-    method quote_field f =
-      "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
-
-    method! make_insert_returning_query
-        : string * string list * string list list * string -> string list =
-      failwith "Dummy database make_insert_returning_query not supported"
-
-    method supports_shredding () = false
-  end
+let dummy_database =
+  let driver_name () = "dummy" in
+  let escape_string str = "'" ^ Str.global_replace (Str.regexp "'") "''" str ^ "'" in
+  let quote_field f = "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`" in
+  let execute _ = failwith "Dummy database exec not supported." in
+  let execute_select _ ~field_types:_ = failwith "Dummy database exec not supported." in
+  { driver_name; escape_string; quote_field; execute; execute_select; }
 
 let fmt_comma_seperated v =
   let pp_sep f () = Format.fprintf f ", " in
@@ -38,12 +36,12 @@ let fmt_comma_seperated v =
 
 let fmt_col ~db f col =
   Format.fprintf f "%s.%s AS %s"
-    (Column.table col |> db#quote_field)
-    (Column.name col |> db#quote_field)
-    (Column.alias col |> db#quote_field)
+    (Column.table col |> db.quote_field)
+    (Column.name col |> db.quote_field)
+    (Column.alias col |> db.quote_field)
 
 let fmt_table ~db f (table, alias) =
-  Format.fprintf f "%s AS %s" (db#quote_field table) (db#quote_field alias)
+  Format.fprintf f "%s AS %s" (db.quote_field table) (db.quote_field alias)
 
 let fmt_tables ~db f tables =
   Format.fprintf f "%a" (fmt_table ~db |> fmt_comma_seperated) tables
@@ -91,8 +89,8 @@ let rec fmt_phrase ~db ~map f expr =
         f (Format.pp_print_list ~pp_sep fmt_case) cases fmt otherwise
 
 let fmt_phrase_dummy f expr =
-  let db = new dummy_database in
-  let map a = db#quote_field a in
+  let db = dummy_database in
+  let map a = db.quote_field a in
   fmt_phrase ~db ~map f expr
 
 let to_string_dummy expr = Format.asprintf "%a" fmt_phrase_dummy expr
@@ -114,14 +112,14 @@ module Select = struct
       |> List.sort_uniq String.compare
       |> List.map ~f:(fun c -> (c, c))
     in
-    {predicate; cols; tables; db= t}
+    {predicate; cols; tables; db = t}
 
   let fmt f v =
     let db = v.db in
     let map a =
       let col = List.find (fun c -> Lens_column.alias c = a) v.cols in
-      Format.sprintf "%s.%s" (Lens_column.table col |> db#quote_field)
-        (Lens_column.name col |> db#quote_field)
+      Format.sprintf "%s.%s" (Lens_column.table col |> db.quote_field)
+        (Lens_column.name col |> db.quote_field)
     in
     let cols = v.cols |> Lens_column.List.present in
     match v.predicate with
@@ -132,25 +130,17 @@ module Select = struct
         Format.fprintf f "SELECT %a FROM %a WHERE %a" (fmt_cols ~db) cols
           (fmt_tables ~db) v.tables (fmt_phrase ~db ~map) pred
 
-  let execute query ~(database : db) ~field_types =
+  let execute query ~database ~field_types =
     let query = Format.asprintf "%a" fmt query in
-    let field_types = List.map ~f:(fun (n,v) -> n, Lens_type_conv.type_of_lens_phrase_type v) field_types in
-    let result, rs =
-      Database.execute_select_result field_types query database
-    in
-    Database.build_result (result, rs)
-    |> Value.unbox_list
-    |> List.map ~f:(Lens_value_conv.lens_phrase_value_of_value)
+    database.execute_select query ~field_types
 
-  let query_exists query ~(database : db) =
+  let query_exists query ~database =
     let sql = Format.asprintf "SELECT EXISTS (%a) AS t" fmt query in
-    let mappings = [("t", `Primitive Primitive.Bool)] in
-    let res = Database.execute_select_result mappings sql database in
-    let res = Database.build_result res in
-    let _, v =
-      Value.unbox_record (List.hd (Value.unbox_list res)) |> List.hd
-    in
-    Value.unbox_bool v
+    let field_types = [("t", Lens_phrase_type.Bool)] in
+    let res = database.execute_select sql ~field_types in
+    match res with
+    | [ Lens_phrase_value.Record [_, Lens_phrase_value.Bool b] ] -> b
+    | _ -> failwith "Expected singleton value."
 end
 
 module Delete = struct
@@ -158,11 +148,11 @@ module Delete = struct
 
   type t = {table: string; predicate: Lens_phrase.t option; db: db}
 
-  let fmt_table ~(db : db) f v = Format.fprintf f "%s" @@ db#quote_field v
+  let fmt_table ~(db : db) f v = Format.fprintf f "%s" @@ db.quote_field v
 
   let fmt f v =
     let db = v.db in
-    let map col = Format.sprintf "%s" (db#quote_field col) in
+    let map col = Format.sprintf "%s" (db.quote_field col) in
     match v.predicate with
     | None -> Format.fprintf f "DELETE FROM %a" (fmt_table ~db) v.table
     | Some pred ->
@@ -179,18 +169,18 @@ module Update = struct
     ; set: (string * Lens_phrase_value.t) list
     ; db: db }
 
-  let fmt_set_value ~(db : db) f (key, value) =
-    Format.fprintf f "%s = %a" (db#quote_field key) Constant.fmt
+  let fmt_set_value ~db f (key, value) =
+    Format.fprintf f "%s = %a" (db.quote_field key) Constant.fmt
       (Constant.of_value value)
 
-  let fmt_set_values ~(db : db) f vs =
+  let fmt_set_values ~db f vs =
     Format.pp_comma_list (fmt_set_value ~db) f vs
 
-  let fmt_table ~(db : db) f v = Format.fprintf f "%s" @@ db#quote_field v
+  let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 
   let fmt f v =
     let db = v.db in
-    let map col = Format.sprintf "%s" (db#quote_field col) in
+    let map col = Format.sprintf "%s" (db.quote_field col) in
     match v.predicate with
     | None ->
         Format.fprintf f "UPDATE %a SET %a" (fmt_table ~db) v.table
@@ -205,9 +195,9 @@ module Insert = struct
 
   type t = {table: string; columns: string list; values: Lens_phrase_value.t list; db: db}
 
-  let fmt_table ~(db : db) f v = Format.fprintf f "%s" @@ db#quote_field v
+  let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 
-  let fmt_col ~(db : db) f v = Format.pp_print_string f (db#quote_field v)
+  let fmt_col ~db f v = Format.pp_print_string f (db.quote_field v)
 
   let fmt_val ~db:_ f v = Constant.fmt f (Constant.of_value v)
 

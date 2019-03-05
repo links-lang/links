@@ -3,9 +3,9 @@ open Lens_format
 module Unary : sig
   type t = Minus | Not [@@deriving show]
 
-  val of_sugartype_op : Operators.UnaryOp.t -> t option
-
   val to_string : t -> string
+
+  val of_string : string -> t
 
   val fmt : t fmt_fn
 end
@@ -25,9 +25,9 @@ module Binary : sig
     | LogicalOr
   [@@deriving show]
 
-  val of_sugartype_op : Operators.BinaryOp.t -> t option
-
   val to_string : t -> string
+
+  val of_string : string -> t
 
   val fmt : t fmt_fn
 end

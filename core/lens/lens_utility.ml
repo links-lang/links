@@ -9,3 +9,5 @@ module List = Lens_list
 module Seq = Lens_seq
 
 module Set = Lens_set
+
+module Result = Lens_result

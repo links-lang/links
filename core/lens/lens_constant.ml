@@ -23,3 +23,4 @@ let of_value = function
   | Value.Bool b -> Constant.Bool b
   | Value.Char c -> Constant.Char c
   | Value.Tuple _ -> failwith "Tuples not supported by Lens_constant.of_value."
+  | Value.Record _ -> failwith "Records are not supported by lens_constant.of_value."

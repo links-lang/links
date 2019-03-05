@@ -8,7 +8,6 @@ module Value = Lens_value
 module Database = Lens_database
 module Statistics = Lens_statistics
 module Sorted_records = Lens_sorted_records
-module Record = Lens_record
 
 module Helpers = struct
   module Classic = LensHelpersClassic

@@ -54,7 +54,7 @@ val rename_var : t -> replace:string Lens_alias.Map.t -> t
 (** Replace all variable nodes with nodes by the given map. *)
 val replace_var : t -> replace:Value.t Lens_alias.Map.t -> t
 
-val of_sugar : Lens_phrase_sugartypes.phrase -> t
+val of_sugar : 'a Lens_phrase_sugar.phrase -> t
 
 module Constant : sig
   (** Create a constant bool phrase *)

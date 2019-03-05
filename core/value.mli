@@ -196,11 +196,7 @@ type t = [
 | primitive_value
 | `List of t list
 | `Record of (string * t) list
-| `Lens of table * Lens_sort.t
-| `LensMem of Lens_phrase_value.t list * Lens_sort.t
-| `LensDrop of t * string * string * t * Lens_sort.t
-| `LensSelect of t * Lens_phrase.t * Lens_sort.t
-| `LensJoin of t * t * (string * string * string) list * Lens_phrase.t * Lens_phrase.t * Lens_sort.t
+| `Lens of Lens_value.t 
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option

@@ -589,6 +589,7 @@ struct
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
   and special env (cont : continuation) : Ir.special -> result =
+    let get_lens l = match l with | `Lens l -> l | _ -> failwith "Expected a lens." in
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
         [], `Not_typed)) in
@@ -600,35 +601,41 @@ struct
       begin
           let typ = Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
           match value env table, (TypeUtils.concrete_type typ) with
-            | `Table ((_, table, _, _) as tinfo), `Record _row ->
-                 apply_cont cont env (`Lens (tinfo, Sort.update_table_name sort ~table))
-            | `List records, `Record _row -> apply_cont cont env (`LensMem (
-                List.map Lens_value_conv.lens_phrase_value_of_value records, sort))
+            | `Table (((db,_), table, _, _) as tinfo), `Record _row ->
+              let database = Lens_database_conv.lens_db_of_db db in
+              let sort = Sort.update_table_name sort ~table in
+              let table = Lens_database_conv.lens_table_of_table tinfo in
+                 apply_cont cont env (`Lens (Value.Lens { sort; database; table; }))
+            | `List records, `Record _row ->
+              let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
+              apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
             | _ -> failwith ("Unsupported underlying lens value.")
       end
     | LensDrop (lens, drop, key, def, _sort) ->
         let open Lens in
-        let lens = value env lens in
-        let def = value env def in
+        let lens = value env lens |> get_lens in
+        let default = value env def |> Lens_value_conv.lens_phrase_value_of_value in
         let sort =
           Types.drop_lens_sort
             (Lens.Value.sort lens)
             (Alias.Set.singleton drop)
             (Alias.Set.singleton key)
         in
-        apply_cont cont env (`LensDrop (lens, drop, key, def, sort))
-    | LensSelect (lens, pred, _sort) ->
-        let lens = value env lens in
+        apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
+    | LensSelect (lens, predicate, _sort) ->
+        let open Lens in
+        let lens = value env lens |> get_lens in
         let sort =
           Lens.Types.select_lens_sort
             (Lens.Value.sort lens)
-            pred
+            predicate
         in
-        apply_cont cont env (`LensSelect (lens, pred, sort))
-    | LensJoin (lens1, lens2, on, left, right, _sort) ->
-        let lens1 = value env lens1 in
-        let lens2 = value env lens2 in
-        let lens1, lens2 =
+        apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
+    | LensJoin (lens1, lens2, on, del_left, del_right, _sort) ->
+        let open Lens in
+        let lens1 = value env lens1 |> get_lens in
+        let lens2 = value env lens2 |> get_lens in
+        let left, right=
           if Lens.Sort.join_lens_should_swap
                (Lens.Value.sort lens1)
                (Lens.Value.sort lens2) ~on
@@ -640,15 +647,15 @@ struct
             (Lens.Value.sort lens1)
             (Lens.Value.sort lens2) ~on
         in
-        apply_cont cont env (`LensJoin (lens1, lens2, on, left, right, sort))
+        apply_cont cont env (`Lens (Value.LensJoin {left; right; on; del_left; del_right; sort}))
     | LensGet (lens, _rtype) ->
-        let lens = value env lens in
+        let lens = value env lens |> get_lens in
         (* let callfn = fun fnptr -> fnptr in *)
         let res = Lens.Value.lens_get lens in
         let res = List.map Lens_value_conv.value_of_lens_phrase_value res |> Value.box_list in
           apply_cont cont env res
     | LensPut (lens, data, _rtype) ->
-        let lens = value env lens in
+        let lens = value env lens |> get_lens in
         let data = value env data |> Value.unbox_list in
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let classic = Settings.get_value Basicsettings.RelationalLenses.classic_lenses in

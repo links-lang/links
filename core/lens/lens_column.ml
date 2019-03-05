@@ -36,6 +36,8 @@ module Compare = struct
   type elt = t [@@deriving show]
   type t = elt [@@deriving show]
 
+  let _ = show_elt
+
   let compare t1 t2 = String.compare (alias t1) (alias t2)
 end
 

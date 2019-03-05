@@ -2,7 +2,6 @@ open CommonTypes
 open Utility
 open Lens_operators
 open Lens_utility
-open SourceCode
 module Value = Lens_phrase_value
 module Alias = Lens_alias
 
@@ -34,9 +33,9 @@ let tuple v = TupleLit v
 
 let tuple_singleton v = tuple [v]
 
-let rec of_sugar phrase =
-  let module LPS = Lens_phrase_sugartypes in
-  match WithPos.node phrase with
+let rec of_sugar (_, phrase) =
+  let module LPS = Lens_phrase_sugar in
+  match phrase with
   | LPS.Constant c -> Constant c
   | LPS.InfixAppl (op, p, q) -> InfixAppl (op, of_sugar p, of_sugar q)
   | LPS.UnaryAppl (op, p) -> UnaryAppl (op, of_sugar p)
@@ -144,10 +143,11 @@ let rec eval expr get_val =
       | Binary.Equal -> val_typ_cmp ( = ) ( = ) ( = ) ( = ) ( = ) a1 a2
       | Binary.LogicalAnd -> box_bool (unbox_bool a1 && unbox_bool a2)
       | Binary.LogicalOr -> box_bool (unbox_bool a1 || unbox_bool a2)
-      | Binary.Plus -> val_numeric (+) (+.) a1 a2
-      | Binary.Multiply -> val_numeric (fun v v' -> v * v') (fun v v' -> v *. v') a1 a2
-      | Binary.Minus -> val_numeric (-) (-.) a1 a2
-      | Binary.Divide -> val_numeric (/) (/.) a1 a2 )
+      | Binary.Plus -> val_numeric ( + ) ( +. ) a1 a2
+      | Binary.Multiply ->
+          val_numeric (fun v v' -> v * v') (fun v v' -> v *. v') a1 a2
+      | Binary.Minus -> val_numeric ( - ) ( -. ) a1 a2
+      | Binary.Divide -> val_numeric ( / ) ( /. ) a1 a2 )
   | TupleLit l -> eval (List.hd l) get_val
   | UnaryAppl (op, arg) -> (
     match op with
@@ -164,8 +164,7 @@ let rec eval expr get_val =
             failwith
               (Format.asprintf
                  "Value '%a' does not support the unary minus operator."
-                 Value.pp res) )
-    | op -> failwith ("Unsupported unary operation " ^ Unary.to_string op) )
+                 Value.pp res) ) )
   | In (names, vals) ->
       let find = List.map ~f:get_val names in
       let vals = List.map ~f:(List.map ~f:Lens_constant.to_value) vals in

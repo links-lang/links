@@ -70,11 +70,7 @@ let rec string_listify : string list -> string = function
 
 let rec jsonize_value' : Value.t -> json_string =
   function
-  | `Lens _
-  | `LensJoin _
-  | `LensSelect _
-  | `LensDrop _
-  | `LensMem _ -> failwith "relational lens serialization not supported"
+  | `Lens _ -> failwith "relational lens serialization not supported"
   | `PrimitiveFunction _
   | `Resumption _
   | `Continuation _

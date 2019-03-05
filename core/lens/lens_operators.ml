@@ -1,5 +1,3 @@
-open Operators
-
 (* The operators named here are the ones that it is difficult or
    impossible to define as "user" infix operators:
 
@@ -12,13 +10,14 @@ open Operators
 module Unary = struct
   type t = Minus | Not [@@deriving show]
 
-  let of_sugartype_op v =
-    match v with
-    | UnaryOp.Minus -> Some Minus
-    | UnaryOp.FloatMinus -> Some Minus
-    | _ -> None
-
   let to_string = function Minus -> "-" | Not -> "!"
+
+  let of_string s =
+    match s with
+    | "-" -> Minus
+    | "!" -> Not
+    | _ as op ->
+        failwith @@ "Operator " ^ op ^ " not supported by Unary.of_string."
 
   let fmt f v = Format.fprintf f "%s" (to_string v)
 end
@@ -37,22 +36,6 @@ module Binary = struct
     | LogicalAnd
     | LogicalOr
   [@@deriving show]
-
-  let of_sugartype_op v =
-    match v with
-    | BinaryOp.Minus -> Some Minus
-    | BinaryOp.FloatMinus -> Some Minus
-    | BinaryOp.And -> Some LogicalAnd
-    | BinaryOp.Or -> Some LogicalOr
-    | BinaryOp.Name "+" -> Some Plus
-    | BinaryOp.Name "*" -> Some Multiply
-    | BinaryOp.Name "/" -> Some Divide
-    | BinaryOp.Name ">" -> Some Greater
-    | BinaryOp.Name "<" -> Some Less
-    | BinaryOp.Name ">=" -> Some GreaterEqual
-    | BinaryOp.Name "<=" -> Some LessEqual
-    | BinaryOp.Name "==" -> Some Equal
-    | _ -> None
 
   let to_string = function
     | Plus -> "+"
@@ -80,7 +63,7 @@ module Binary = struct
     | "<" -> Less
     | "<=" -> LessEqual
     | _ as op ->
-        failwith @@ "Operator " ^ op ^ " not supported by BinaryOp.of_string."
+        failwith @@ "Operator " ^ op ^ " not supported by Binary.of_string."
 
   let fmt f v = Format.fprintf f "%s" (to_string v)
 end

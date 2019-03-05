@@ -1,4 +1,3 @@
-open Lens_phrase
 open Lens_utility
 module Column = Lens_column
 module Phrase = Lens_phrase

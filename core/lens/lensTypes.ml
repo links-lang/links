@@ -1,4 +1,3 @@
-open Types
 open Utility
 open Lens_types
 open SourceCode

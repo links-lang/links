@@ -2,7 +2,7 @@ open Lens_operators
 open Operators
 open SourceCode
 open Lens_utility
-module LPS = Lens_phrase_sugartypes
+module LPS = Lens_phrase_sugar
 module S = Sugartypes
 
 let unary_of_sugartype_op v =
@@ -45,4 +45,4 @@ let rec lens_sugar_phrase_of_sugar p =
   | S.Constant c -> LPS.Constant c
   | S.Var v -> LPS.Var v
   | _ -> failwith "Unsupported sugar phrase.")
-  |> WithPos.make ~pos
+  |> fun v -> (pos, v)

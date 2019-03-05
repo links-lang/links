@@ -1,4 +1,17 @@
-type t = Links_core__Value.database
+type t =  {
+  driver_name : unit -> string;
+  escape_string : string -> string;
+  quote_field : string -> string;
+  execute : string -> unit;
+  execute_select : string -> field_types:(string * Lens_phrase_type.t) list -> Lens_phrase_value.t list;
+}
+
+module Table : sig
+  type t = {
+    name : string;
+    keys : string list list;
+  }
+end
 
 val fmt_col : db:t -> Format.formatter -> Lens_column.t -> unit
 
