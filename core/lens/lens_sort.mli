@@ -40,6 +40,12 @@ val update_table_name : t -> table:string -> t
 (** Determines if the lenses should be swapped, because the right lens defines the left lens. *)
 val join_lens_should_swap : t -> t -> on:string list -> bool
 
+(** Create a selection lens using the specified predicate to filter records. *)
+val select_lens_sort : t -> predicate:Lens_phrase.t -> t
+
+(** Create a drop lens sort. *)
+val drop_lens_sort : t -> drop:Lens_alias.Set.t -> key:Lens_alias.Set.t -> t
+
 (** Create a sort as the join of two other sorts on the columns specified by [on] *)
 val join_lens_sort :
   t -> t -> on:string list -> t * (string * string * string) list

@@ -616,19 +616,19 @@ struct
         let lens = value env lens |> get_lens in
         let default = value env def |> Lens_value_conv.lens_phrase_value_of_value in
         let sort =
-          Types.drop_lens_sort
+          Lens.Sort.drop_lens_sort
             (Lens.Value.sort lens)
-            (Alias.Set.singleton drop)
-            (Alias.Set.singleton key)
+            ~drop:(Alias.Set.singleton drop)
+            ~key:(Alias.Set.singleton key)
         in
         apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
     | LensSelect (lens, predicate, _sort) ->
         let open Lens in
         let lens = value env lens |> get_lens in
         let sort =
-          Lens.Types.select_lens_sort
+          Lens.Sort.select_lens_sort
             (Lens.Value.sort lens)
-            predicate
+            ~predicate
         in
         apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
     | LensJoin (lens1, lens2, on, del_left, del_right, _sort) ->

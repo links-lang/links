@@ -478,26 +478,26 @@ struct
   let lens_handle (table, sort) =
       bind table
         (fun table ->
-            lift (Special (Lens (table, sort)), `Lens (sort)))
+            lift (Special (Lens (table, sort)), `Lens (Lens.Type.Lens sort)))
 
   let lens_drop_handle (lens, drop, key, default, sort) =
       bind lens
         (fun lens ->
             bind default
             (fun default ->
-               lift (Special (LensDrop (lens, drop, key, default, sort)), `Lens (sort))))
+               lift (Special (LensDrop (lens, drop, key, default, sort)), `Lens (Lens.Type.Lens sort))))
 
   let lens_select_handle (lens, pred, sort) =
       bind lens
         (fun lens ->
-           lift (Special (LensSelect (lens, pred, sort)), `Lens (sort)))
+           lift (Special (LensSelect (lens, pred, sort)), `Lens (Lens.Type.Lens sort)))
 
   let lens_join_handle (lens1, lens2, on, left, right, sort) =
       bind lens1
         (fun lens1 ->
           bind lens2
           (fun lens2 ->
-            lift (Special (LensJoin (lens1, lens2, on, left, right, sort)), `Lens (sort))))
+            lift (Special (LensJoin (lens1, lens2, on, left, right, sort)), `Lens (Lens.Type.Lens sort))))
 
   let lens_get (lens, rtype) =
       bind lens
@@ -929,7 +929,7 @@ struct
           | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
-              let on = Lens.Types.cols_of_phrase on in
+              let on = Lens_sugar_conv.cols_of_phrase on in
               let left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left |> Lens.Phrase.of_sugar in
               let right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right |> Lens.Phrase.of_sugar in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)

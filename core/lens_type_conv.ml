@@ -37,3 +37,36 @@ let lens_phrase_type_of_type t =
       failwith
       @@ Format.asprintf "Unsupported type %a in lens_phrase-type_of_type."
            Types.pp_typ t
+
+let lens_type_of_type t =
+  match t with
+  | `Lens l -> l
+  | _ -> failwith "Expected a lens type."
+
+let sort_cols_of_table t ~table =
+  let record_fields rt =
+    match rt with
+    | LPT.Record fields -> fields
+    | _ -> failwith "Expected a record type."
+  in
+  let sort_cols_of_record t =
+    let fields = record_fields t in
+    let cols =
+      String.Map.to_list
+        (fun name typ ->
+          let alias = name in
+          Lens_column.make ~table ~name ~alias ~typ ~present:true )
+        fields
+    in
+    cols
+  in
+  (* get the underlying record type of either a table, a record or an application *)
+  let extract_record_type t =
+    match t with
+    | `Record _ as r -> r
+    | `Application (_, [`Type (`Record _ as r)]) -> r
+    | `Table (r, _, _) -> r
+    | _ -> failwith "LensTypes does not type."
+  in
+  let rt = extract_record_type t |> lens_phrase_type_of_type in
+  sort_cols_of_record rt

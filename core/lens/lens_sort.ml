@@ -8,7 +8,7 @@ type t =
   { fds: Lens_fun_dep.Set.t
   ; predicate: Lens_phrase.t option
   ; cols: Lens_column.t list }
-  [@@deriving show]
+[@@deriving show]
 
 let fds t = t.fds
 
@@ -40,8 +40,7 @@ let equal sort1 sort2 =
   let cols_equal = Lens_column.Set.equal (colset sort1) (colset sort2) in
   fd_equal && pred_equal && cols_equal
 
-let record_type t =
-  cols t |> Lens_column.List.record_type
+let record_type t = cols t |> Lens_column.List.record_type
 
 let join_lens_should_swap sort1 sort2 ~on:on_columns =
   let fds1 = fds sort1 in
@@ -55,6 +54,29 @@ let join_lens_should_swap sort1 sort2 ~on:on_columns =
   if covers fds2 sort2 then false
   else if covers fds1 sort1 then true
   else failwith "One of the tables needs to be defined by the join column set."
+
+let select_lens_sort sort ~predicate:pred =
+  let oldPred = predicate sort in
+  let predicate = Phrase.Option.combine_and oldPred (Some pred) in
+  update_predicate sort ~predicate
+
+let drop_lens_sort sort ~drop ~key =
+  (* Verify that the functional dependencies contain X \to A *)
+  if
+    Alias.Set.subset drop
+      (Fun_dep.Set.transitive_closure ~cols:key (fds sort))
+    |> not
+  then failwith "The dropped columns must be defined by the key" ;
+  let fds = Fun_dep.Set.remove_defines (fds sort) ~cols:drop in
+  let cols =
+    List.map
+      ~f:(fun c ->
+        if Alias.Set.mem (Lens_column.alias c) drop then Lens_column.hide c
+        else c )
+      (cols sort)
+  in
+  let predicate = predicate sort in
+  make ~fds ~predicate cols
 
 let join_lens_sort sort1 sort2 ~on =
   (* helper function to find new alias, e.g. for 'name' it will find 'name_1', 'name_2' etc. *)

@@ -1,3 +1,5 @@
+open Utility
+
 type t = string
   [@@deriving show]
 

@@ -311,18 +311,18 @@ struct
               Table (db, table_name, keys, tt), `Table tt, o
         | Lens (table, rtype) ->
             let table, _, o = o#value table in
-              Lens (table, rtype), `Lens (rtype), o
+              Lens (table, rtype), `Lens (Lens.Type.Lens rtype), o
         | LensDrop (lens, drop, key, default, rtype) ->
             let lens, _, o = o#value lens in
             let default, _, o = o#value default in
-              LensDrop (lens, drop, key, default, rtype), `Lens (rtype), o
+              LensDrop (lens, drop, key, default, rtype), `Lens (Lens.Type.Lens rtype), o
         | LensSelect (lens, pred, sort) ->
             let lens, _, o = o#value lens in
-              LensSelect (lens, pred, sort), `Lens (sort), o
+              LensSelect (lens, pred, sort), `Lens (Lens.Type.Lens sort), o
         | LensJoin (lens1, lens2, on, left, right, sort) ->
             let lens1, _, o = o#value lens1 in
             let lens2, _, o = o#value lens2 in
-              LensJoin (lens1, lens2, on, left, right, sort), `Lens (sort), o
+              LensJoin (lens1, lens2, on, left, right, sort), `Lens (Lens.Type.Lens sort), o
         | LensGet (lens, rtype) ->
             let lens, _, o = o#value lens in
               LensGet (lens, rtype), Types.make_list_type rtype, o

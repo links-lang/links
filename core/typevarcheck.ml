@@ -149,7 +149,7 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | `Effect row
         | `Variant row -> isnr row
         | `Table (f, d, r) -> isn f || isn d || isn r
-        | `Lens sort -> is_negative_lens_sort bound_vars expanded_apps var sort
+        | `Lens typ -> is_negative_lens_type bound_vars expanded_apps var typ
         | `Alias (_, t) -> isn t
         | `Application (_, ts) ->
             List.exists (is_negative_type_arg bound_vars expanded_apps var) ts
@@ -197,8 +197,9 @@ and is_negative_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> boo
       | `Type t -> is_negative bound_vars expanded_apps var t
       | `Row r -> is_negative_row bound_vars expanded_apps var r
       | `Presence _ -> false
-and is_negative_lens_sort : TypeVarSet.t -> StringSet.t -> -> int -> Lens_sort.t -> bool =
-  fun bound_vars expanded_apps var sort ->
+and is_negative_lens_type : TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t -> bool =
+  fun bound_vars expanded_apps var typ ->
+    let sort = Lens.Type.sort typ in
     let cols = Lens.Sort.cols sort in
     List.exists (Lens.Column.typ ->-
                  Lens_type_conv.type_of_lens_phrase_type ->-
@@ -234,7 +235,7 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | `Effect row
         | `Variant row -> ispr row
         | `Table (f, d, r) -> isp f || isp d || isp r
-        | `Lens sort -> is_positive_lens_sort bound_vars expanded_apps var sort
+        | `Lens typ -> is_positive_lens_typ bound_vars expanded_apps var typ
         | `Alias (_, t) -> isp t
         | `Application (_, ts) ->
             List.exists (is_positive_type_arg bound_vars expanded_apps var) ts
@@ -290,8 +291,9 @@ and is_positive_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> boo
       | `Type t -> is_positive bound_vars expanded_apps var t
       | `Row r -> is_positive_row bound_vars expanded_apps var r
       | `Presence f -> is_positive_presence bound_vars expanded_apps var f
-and is_positive_lens_sort : TypeVarSet.t -> StringSet.t -> int -> Lens_sort.t -> bool =
-  fun bound_vars expanded_apps var sort ->
+and is_positive_lens_typ: TypeVarSet.t  -> StringSet.t-> int -> Lens.Type.t -> bool =
+  fun bound_vars expanded_apps var typ ->
+    let sort = Lens.Type.sort typ in
     let cols = Lens.Sort.cols sort in
     List.exists (Lens.Column.typ ->-
                  Lens_type_conv.type_of_lens_phrase_type ->-

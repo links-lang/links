@@ -106,7 +106,7 @@ and typ =
     | `Variant of row
     | `Effect of row
     | `Table of typ * typ * typ
-    | `Lens of Lens_sort.t
+    | `Lens of Lens_type.t
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl

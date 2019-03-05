@@ -1,4 +1,4 @@
-type t = Types.typ
+type t = Lens of Lens_sort.t [@@deriving show]
 
 val sort : t -> Lens_sort.t
 
