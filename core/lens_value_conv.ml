@@ -1,7 +1,15 @@
+open CommonTypes
 open Lens_utility
-
 module V = Value
 module LPV = Lens_phrase_value
+
+let lens_phrase_value_of_constant c =
+  match c with
+  | Constant.Bool b -> LPV.Bool b
+  | Constant.Int i -> LPV.Int i
+  | Constant.Char c -> LPV.Char c
+  | Constant.Float f -> LPV.Float f
+  | Constant.String s -> LPV.String s
 
 let rec lens_phrase_value_of_value t =
   match t with
@@ -10,7 +18,9 @@ let rec lens_phrase_value_of_value t =
   | `Char c -> LPV.Char c
   | `String s -> LPV.String s
   | `Record l ->
-      let l = List.map ~f:(fun (n, v) -> (n, lens_phrase_value_of_value v)) l in
+      let l =
+        List.map ~f:(fun (n, v) -> (n, lens_phrase_value_of_value v)) l
+      in
       LPV.Record l
   | _ ->
       failwith

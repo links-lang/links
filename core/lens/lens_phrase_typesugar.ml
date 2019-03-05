@@ -1,20 +1,22 @@
-open CommonTypes
 open Lens_operators
 open Lens_utility
 open Result.O
 module Sugar = Lens_phrase_sugar
 module Phrase = Lens_phrase
 module Types = Lens_phrase_type
+module Value = Lens_phrase_value
 
 type 'a error = {msg: string; data: 'a}
 
-let typ_constant constant =
+let rec typ_constant constant =
   match constant with
-  | Constant.Bool _ -> Types.Bool
-  | Constant.Int _ -> Types.Int
-  | Constant.Float _ -> Types.Float
-  | Constant.String _ -> Types.String
-  | Constant.Char _ -> Types.Char
+  | Value.Bool _ -> Types.Bool
+  | Value.Int _ -> Types.Int
+  | Value.Float _ -> Types.Float
+  | Value.String _ -> Types.String
+  | Value.Char _ -> Types.Char
+  | Value.Tuple v -> Types.Tuple (List.map ~f:typ_constant v)
+  | _ -> failwith "Unsupported constant."
 
 let rec tc_infix ~env ~data ~op p q =
   tc ~env p

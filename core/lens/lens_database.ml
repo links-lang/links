@@ -1,34 +1,36 @@
 open Utility
 open Lens_operators
 open Lens_utility
-
+module LPV = Lens_phrase_value
 module Phrase = Lens_phrase
 module Column = Lens_column
-module Constant = Lens_constant
 module Sort = Lens_sort
 
-type t = {
-  driver_name : unit -> string;
-  escape_string : string -> string;
-  quote_field : string -> string;
-  execute : string -> unit;
-  execute_select : string -> field_types:(string * Lens_phrase_type.t) list -> Lens_phrase_value.t list;
-}
+type t =
+  { driver_name: unit -> string
+  ; escape_string: string -> string
+  ; quote_field: string -> string
+  ; execute: string -> unit
+  ; execute_select:
+         string
+      -> field_types:(string * Lens_phrase_type.t) list
+      -> Lens_phrase_value.t list }
 
 module Table = struct
-  type t = {
-    name : string;
-    keys : string list list;
-  }
+  type t = {name: string; keys: string list list}
 end
 
 let dummy_database =
   let driver_name () = "dummy" in
-  let escape_string str = "'" ^ Str.global_replace (Str.regexp "'") "''" str ^ "'" in
+  let escape_string str =
+    "'" ^ Str.global_replace (Str.regexp "'") "''" str ^ "'"
+  in
   let quote_field f = "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`" in
   let execute _ = failwith "Dummy database exec not supported." in
-  let execute_select _ ~field_types:_ = failwith "Dummy database exec not supported." in
-  { driver_name; escape_string; quote_field; execute; execute_select; }
+  let execute_select _ ~field_types:_ =
+    failwith "Dummy database exec not supported."
+  in
+  {driver_name; escape_string; quote_field; execute; execute_select}
 
 let fmt_comma_seperated v =
   let pp_sep f () = Format.fprintf f ", " in
@@ -49,22 +51,35 @@ let fmt_tables ~db f tables =
 let fmt_cols ~db f cols =
   Format.fprintf f "%a" (fmt_col ~db |> fmt_comma_seperated) cols
 
+let fmt_phrase_value ~db f v =
+  Format.fprintf f "%s"
+    ( match v with
+    | LPV.Bool b -> string_of_bool b
+    | LPV.Int v -> string_of_int v
+    | LPV.String v -> db.escape_string v
+    | LPV.Char c -> db.escape_string (string_of_char c)
+    | LPV.Float v -> string_of_float' v
+    | _ -> failwith "Unexpected phrase value." )
+
 let rec fmt_phrase ~db ~map f expr =
   let pp_sep f () = Format.fprintf f ", " in
   let fmt = fmt_phrase ~db ~map in
   match expr with
-  | Phrase.Constant c -> Format.fprintf f "%a" Constant.fmt c
+  | Phrase.Constant c -> fmt_phrase_value ~db f c
   | Phrase.Var v -> Format.fprintf f "%s" (map v)
   | Phrase.InfixAppl (op, a1, a2) ->
       Format.fprintf f "%a %a %a" fmt a1 Binary.fmt op fmt a2
-  | Phrase.TupleLit l -> Format.fprintf f "(%a)" (Format.pp_print_list ~pp_sep fmt) l
+  | Phrase.TupleLit l ->
+      Format.fprintf f "(%a)" (Format.pp_print_list ~pp_sep fmt) l
   | Phrase.UnaryAppl (op, a) ->
       let op = match op with Unary.Not -> "NOT" | _ -> Unary.to_string op in
       Format.fprintf f "%s (%a)" op fmt a
   | Phrase.In (names, vals) -> (
       let fmt_name f v = Format.fprintf f "%s" (map v) in
       let fmt_val f v =
-        Format.fprintf f "(%a)" (Format.pp_print_list ~pp_sep Constant.fmt) v
+        Format.fprintf f "(%a)"
+          (Format.pp_print_list ~pp_sep (fmt_phrase_value ~db))
+          v
       in
       match vals with
       | [] -> Format.fprintf f "FALSE"
@@ -112,13 +127,14 @@ module Select = struct
       |> List.sort_uniq String.compare
       |> List.map ~f:(fun c -> (c, c))
     in
-    {predicate; cols; tables; db = t}
+    {predicate; cols; tables; db= t}
 
   let fmt f v =
     let db = v.db in
     let map a =
       let col = List.find (fun c -> Lens_column.alias c = a) v.cols in
-      Format.sprintf "%s.%s" (Lens_column.table col |> db.quote_field)
+      Format.sprintf "%s.%s"
+        (Lens_column.table col |> db.quote_field)
         (Lens_column.name col |> db.quote_field)
     in
     let cols = v.cols |> Lens_column.List.present in
@@ -139,7 +155,7 @@ module Select = struct
     let field_types = [("t", Lens_phrase_type.Bool)] in
     let res = database.execute_select sql ~field_types in
     match res with
-    | [ Lens_phrase_value.Record [_, Lens_phrase_value.Bool b] ] -> b
+    | [Lens_phrase_value.Record [(_, Lens_phrase_value.Bool b)]] -> b
     | _ -> failwith "Expected singleton value."
 end
 
@@ -170,11 +186,10 @@ module Update = struct
     ; db: db }
 
   let fmt_set_value ~db f (key, value) =
-    Format.fprintf f "%s = %a" (db.quote_field key) Constant.fmt
-      (Constant.of_value value)
+    Format.fprintf f "%s = %a" (db.quote_field key) (fmt_phrase_value ~db)
+      value
 
-  let fmt_set_values ~db f vs =
-    Format.pp_comma_list (fmt_set_value ~db) f vs
+  let fmt_set_values ~db f vs = Format.pp_comma_list (fmt_set_value ~db) f vs
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 
@@ -193,19 +208,21 @@ end
 module Insert = struct
   type db = t
 
-  type t = {table: string; columns: string list; values: Lens_phrase_value.t list; db: db}
+  type t =
+    { table: string
+    ; columns: string list
+    ; values: Lens_phrase_value.t list
+    ; db: db }
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 
   let fmt_col ~db f v = Format.pp_print_string f (db.quote_field v)
-
-  let fmt_val ~db:_ f v = Constant.fmt f (Constant.of_value v)
 
   let fmt f v =
     let db = v.db in
     Format.fprintf f "INSERT INTO %a (%a) VALUES (%a)" (fmt_table ~db) v.table
       (fmt_col ~db |> Format.pp_comma_list)
       v.columns
-      (fmt_val ~db |> Format.pp_comma_list)
+      (fmt_phrase_value ~db |> Format.pp_comma_list)
       v.values
 end
