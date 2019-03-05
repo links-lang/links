@@ -141,7 +141,6 @@ type fn_dep = string * string
 type handler_depth = Deep | Shallow
     [@@deriving show]
 
-<<<<<<< HEAD
 type replace_rhs =
   | Literal     of string
   | SpliceExpr  of phrase
@@ -490,11 +489,11 @@ struct
         let names, fnlits, hlits =
           List.fold_right
             (fun b (names, fnlits, handlerlits) ->
-              match b with
-                | {node=(`Fun (bndr, _, (_, rhs), _, _)); _ } ->
-                   (add (name_of_binder bndr) names, rhs::fnlits, handlerlits)
-                | {node=(`Handler (bndr, hl, _)); _ } ->
-                   (add (name_of_binder bndr) names, fnlits, hl::handlerlits)
+              match WithPos.node b with
+                | (Fun (bndr, _, (_, rhs), _, _)) ->
+                   (add (Binder.to_name bndr) names, rhs::fnlits, handlerlits)
+                | (Handler (bndr, hl, _)) ->
+                   (add (Binder.to_name bndr) names, fnlits, hl::handlerlits)
                 | _ -> (names, fnlits, handlerlits))
             bnds (empty, [], []) in
         let fnlit_fvs = union_map (fun fnlit -> funlit fnlit) fnlits in
@@ -511,7 +510,7 @@ struct
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Foreign (bndr, _, _, _, _) -> singleton (Binder.to_name bndr), empty
     | QualifiedImport _
-    | Type _
+    | Typenames _
     | Infix -> empty, empty
     | Exp p -> empty, phrase p
     | AlienBlock (_, _, decls) ->

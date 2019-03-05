@@ -413,8 +413,8 @@ let recursive_application name qs tyargs body =
             "Argument '%s' to type alias '%s' has the wrong kind ('%s' instead of '%s')"
             (Types.string_of_type_arg arg)
             name
-            (Types.string_of_primary_kind (primary_kind_of_type_arg arg))
-            (Types.string_of_primary_kind (primary_kind_of_quantifier q)));
+            (PrimaryKind.to_string (primary_kind_of_type_arg arg))
+            (PrimaryKind.to_string (primary_kind_of_quantifier q)));
         let x = var_of_quantifier q in
           match arg with
           | `Type t ->
