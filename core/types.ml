@@ -2305,7 +2305,7 @@ let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t
             ((ftv d)::(List.map (tyarg_flexible_type_vars bound_vars) ts))
       | `Application (_name, tyargs) ->
           TypeVarMap.union_all (List.map (tyarg_flexible_type_vars bound_vars) tyargs)
-      | `RecursiveApplication (name, tyargs, _) ->
+      | `RecursiveApplication (_name, tyargs, _) ->
           TypeVarMap.union_all (List.map (tyarg_flexible_type_vars bound_vars) tyargs)
       | `Input (t, s)
       | `Output (t, s) -> TypeVarMap.union_all [flexible_type_vars bound_vars t; flexible_type_vars bound_vars s]

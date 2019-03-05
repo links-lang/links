@@ -3873,6 +3873,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
       | Handler _
       | QualifiedImport _
       | AlienBlock _
+      | SugarFuns _
       | Module _ -> assert false
     in
       WithPos.make ~pos typed, ctxt, usage

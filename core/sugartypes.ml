@@ -278,7 +278,7 @@ and bindingnode =
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
-  | Typenames of name * (quantifier * tyvar option) list * datatype'
+  | Typenames of (name * (quantifier * tyvar option) list * datatype') list
   | Infix
   | Exp     of phrase
   | Module  of name * binding list

@@ -689,7 +689,7 @@ class map =
           let _xs = o#list (fun o -> o#name) _xs in
           QualifiedImport _xs
       | Typenames (ts) ->
-          let ts = List.map (fun (_x, _x_i1, _x_i2) ->
+          let ts = o#list (fun o (_x, _x_i1, _x_i2) ->
             let _x = o#name _x in
             let _x_i1 =
               o#list

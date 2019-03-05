@@ -179,12 +179,16 @@ let create_module_info_map program =
     (* Getting type names -- we're interested in typename decls *)
     let rec get_type_names = function
       | [] -> []
-      | { node = Types ts; _} :: bs ->
-          let ns =
-            List.fold_left (fun ns_rev (n, _, _) -> n :: ns_rev) [] ts
-            |> List.rev in
-          ns @ (get_type_names bs)
-      | _ :: bs -> get_type_names bs in
+      | b :: bs ->
+          begin
+            match node b with
+              | Typenames ts ->
+                  let ns =
+                    List.fold_left (fun ns_rev (n, _, _) -> n :: ns_rev) [] ts
+                    |> List.rev in
+                  ns @ (get_type_names bs)
+              | _ -> get_type_names bs
+          end in
 
     (* Gets data constructors for variants *)
     let get_constrs bs = ((get_data_constructors StringSet.empty)#list

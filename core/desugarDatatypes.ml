@@ -77,7 +77,7 @@ object (self)
   method! bindingnode = function
     (* type declarations bind variables; exclude those from the
        analysis. *)
-    | Types _    -> self
+    | Typenames _    -> self
     | b         -> super#bindingnode b
 
   method! datatypenode = let open Datatype in
@@ -120,17 +120,17 @@ struct
       ~f:(fun q (args, {tenv=tenv; renv=renv; penv=penv}) ->
             let var = Types.fresh_raw_variable () in
             match q with
-              | (name, (`Type, subkind), _freedom) ->
+              | (name, (PrimaryKind.Type, subkind), _freedom) ->
                   let subkind = concrete_subkind subkind in
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     ((var, subkind, `Type point)::args,
                      {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
-              | (name, (`Row, subkind), _freedom) ->
+              | (name, (PrimaryKind.Row, subkind), _freedom) ->
                   let subkind = concrete_subkind subkind in
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     ((var, subkind, `Row point)::args,
                      {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
-              | (name, (`Presence, subkind), _freedom) ->
+              | (name, (PrimaryKind.Presence, subkind), _freedom) ->
                   let subkind = concrete_subkind subkind in
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     ((var, subkind, `Presence point))::args,
@@ -183,17 +183,17 @@ struct
              * Returns Types.type_args based on the given frontend type arguments. *)
             let match_quantifiers qs =
               let match_kinds (q, t) =
-                let primary_kind_of_type_arg : Sugartypes.type_arg -> primary_kind = function
-                  | `Type _ -> `Type
-                  | `Row _ -> `Row
-                  | `Presence _ -> `Presence
+                let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
+                  | Type _ -> PrimaryKind.Type
+                  | Row _ -> PrimaryKind.Row
+                  | Presence _ -> PrimaryKind.Presence
                 in
                 if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
                   raise Kind_mismatch
                 else (q, t)
               in
               let type_arg' var_env alias_env = function
-                | `Row r -> `Row (effect_row var_env alias_env r)
+                | Row r -> `Row (effect_row var_env alias_env r)
                 | t -> type_arg var_env alias_env t
               in
               begin
