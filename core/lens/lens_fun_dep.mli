@@ -1,4 +1,4 @@
-open Utility
+open Lens_utility
 
 module Alias = Lens_alias
 

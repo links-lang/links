@@ -1,4 +1,3 @@
-open Utility
 open Lens_types
 open Lens_utility
 
@@ -91,7 +90,7 @@ let construct_cols ~columns ~records =
   let col_val a r = try
       let (_,v) = List.find (fun (k,_) -> k = a) r in
       v
-    with NotFound _ -> Inconsistent_columns_error.E (columns, List.map ~f:(fun (k,_) -> k) r) |> raise in
+    with Not_found -> Inconsistent_columns_error.E (columns, List.map ~f:(fun (k,_) -> k) r) |> raise in
   let simpl_rec r =
     List.map2 (fun a (k,v) -> if a = k then v else col_val a r) columns r in
   let plus_rows = Array.of_list (List.map ~f:simpl_rec recs) in
@@ -308,8 +307,8 @@ let join left right ~on =
     ] in
   let neg = List.sort compare neg in
   let (pos, neg) = zip_delta_merge pos neg in
-  let l_map = StringMap.from_alist (List.zip_nofail on_left on_out) in
-  let l_cols = List.map ~f:(fun v -> StringMap.find_opt v l_map |> Option.value ~default:v) left.columns in
+  let l_map = String.Map.from_alist (List.zip_nofail on_left on_out) in
+  let l_cols = List.map ~f:(fun v -> String.Map.find_opt v l_map |> Option.value ~default:v) left.columns in
   let columns = List.flatten [l_cols; rjoinmap_right' right_cols] in
   { columns;
     plus_rows = Array.of_list pos;
@@ -336,7 +335,7 @@ let calculate_fd_changelist data ~fun_deps =
     if Fun_dep.Set.is_empty fds then
       []
     else
-      let fun_dep = Fun_dep.Set.root_fd fds |> OptionUtils.val_of in
+      let fun_dep = Fun_dep.Set.root_fd fds |> (fun v -> Option.value_exn v) in
       let cols, changeset_pos, _ = project_fun_dep data ~fun_dep in
       let changeset = Array.to_list changeset_pos in
       (* remove duplicates and sort *)

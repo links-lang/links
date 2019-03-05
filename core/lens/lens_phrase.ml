@@ -1,4 +1,3 @@
-open Utility
 open Lens_operators
 open Lens_utility
 module Value = Lens_phrase_value
@@ -57,7 +56,7 @@ let rec traverse expr ~f =
         let x = fn x in
         TupleLit [x]
     | Case (phr, cases, otherwise) ->
-        let phr = OptionUtils.opt_map fn phr in
+        let phr = Option.map ~f:fn phr in
         let cases = List.map ~f:(fun (inp, lst) -> (fn inp, fn lst)) cases in
         let otherwise = fn otherwise in
         Case (phr, cases, otherwise)
@@ -129,7 +128,7 @@ let rec eval expr get_val =
   match expr with
   | Constant c -> c
   | Var v -> (
-    try get_val v with NotFound _ ->
+    try get_val v with Not_found ->
       failwith ("Could not find column " ^ v ^ ".") )
   | InfixAppl (op, a1, a2) -> (
       let a1 = eval a1 get_val in
@@ -178,7 +177,7 @@ let rec eval expr get_val =
         let _k, v = List.find (fun (k, _v) -> eval k get_val = inp) cases in
         eval v get_val
       with
-      | NotFound _ -> eval otherwise get_val
+      | Not_found -> eval otherwise get_val
       | _ -> failwith "Unknown phrasenode for calculate_predicate." )
 
 module Option = struct

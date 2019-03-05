@@ -1,4 +1,3 @@
-open Utility
 open Lens_operators
 open Lens_utility
 module LPV = Lens_phrase_value
@@ -57,8 +56,10 @@ let fmt_phrase_value ~db f v =
     | LPV.Bool b -> string_of_bool b
     | LPV.Int v -> string_of_int v
     | LPV.String v -> db.escape_string v
-    | LPV.Char c -> db.escape_string (string_of_char c)
-    | LPV.Float v -> string_of_float' v
+    | LPV.Char c -> db.escape_string (String.make 1 c)
+    | LPV.Float v ->
+        let s = string_of_float v in
+        if s.[String.length s - 1] = '.' then s ^ "0" else s
     | _ -> failwith "Unexpected phrase value." )
 
 let rec fmt_phrase ~db ~map f expr =

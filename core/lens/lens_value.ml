@@ -1,4 +1,3 @@
-open Utility
 module Sort = Lens_sort
 module Column = Lens_column
 module Phrase = Lens_phrase
@@ -146,7 +145,7 @@ let rec generate_query lens =
             try
               let _tbl = List.find (fun (n1, _al1) -> n1 = n2) q1.tables in
               failwith "Cannot reuse a table twice in a join query!"
-            with NotFound _ -> (n2, al2) )
+            with Not_found -> (n2, al2) )
           q2.tables
       in
       let tables = List.append q1.tables q2.tables in

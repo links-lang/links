@@ -1,4 +1,4 @@
-open Utility
+open Lens_utility
 
 module Alias = Lens_alias
 
@@ -39,7 +39,7 @@ module Set = struct
   include Set.Make(Compare)
 
   let of_lists (fds : (string list * string list) list) : t =
-    let fds = List.map of_lists fds in
+    let fds = List.map ~f:of_lists fds in
     of_list fds
 
   let remove_defines t ~cols =
@@ -114,11 +114,11 @@ module Tree = struct
     ) fds in
     let remaining = Alias.Set.filter (fun col ->
       not (Set.exists (fun fd2 -> Alias.Set.mem col (left fd2)) subfds)) (right fd) in
-    let subfds = List.map (fd_subnodes fds) (Set.elements subfds) in
+    let subfds = List.map ~f:(fd_subnodes fds) (Set.elements subfds) in
     let subfds = if Alias.Set.is_empty remaining then subfds else FDNode (remaining, []) :: subfds in
       FDNode (left fd, subfds)
 
   let of_fds fds =
     let root = Set.root_fd fds in
-    OptionUtils.opt_map (fd_subnodes fds) root
+    Option.map ~f:(fd_subnodes fds) root
 end

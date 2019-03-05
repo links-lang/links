@@ -1,4 +1,3 @@
-open Utility
 open Lens_value
 open Lens_types
 open Lens_phrase_value
