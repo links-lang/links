@@ -132,7 +132,10 @@ type lens_phrase =
 (* End of Lenses *)
 
 (* Type groups *)
-type tygroup_ref = ((quantifier list * typ) StringMap.t) ref
+type tygroup = {
+  id: int;
+  type_map: ((quantifier list * typ) StringMap.t);
+}
 
 and typ =
     [ `Not_typed
@@ -146,7 +149,7 @@ and typ =
     | `Lens of lens_sort
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
-    | `RecursiveApplication of (string * type_arg list * tygroup_ref)
+    | `RecursiveApplication of (string * type_arg list * tygroup ref)
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
@@ -190,26 +193,8 @@ type alias_type = quantifier list * typ [@@deriving show]
 type tycon_spec = [
   | `Alias of alias_type
   | `Abstract of Abstype.t
-  | `Mutual of (quantifier list * tygroup_ref) (* Type in same recursive group *)
+  | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
 ] [@@deriving show]
-
-(* To allow shadowing, each group of recursive types has a unique
- * identifier.
- * Since type aliases cannot be abstract, and `Mutual bindings are
- * only used when desugaring recursive groups, it makes sense that
- * we need only store the alias types.
- * Within each group, we have a map from type alias names to alias
- * types, which can be used during unification. *)
-type recty_environment = alias_type StringMap.t [@@deriving show]
-type tygroup_environment = recty_environment IntMap.t [@@deriving show]
-
-(* Generation of fresh tygroup names *)
-(*
-let tygroup_counter = ref 0
-let fresh_tygroup_name : unit -> tygroup_id =
-  function () ->
-    incr tygroup_counter; !tygroup_counter
-    *)
 
 let unbox_quantifiers = (!)
 let box_quantifiers = ref

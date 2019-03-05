@@ -10,6 +10,13 @@ open Parse
 
 module SEnv = Env.String
 
+
+let tygroup_counter = ref 0
+let fresh_tygroup_id = function () ->
+  let ret = !tygroup_counter in
+  tygroup_counter := ret + 1;
+  ret
+
 (* Check that no datatype is left undesugared. *)
 let all_datatypes_desugared =
 object (self)
@@ -222,11 +229,11 @@ struct
               | Some (`Abstract abstype) ->
                   (* TODO: check that the kinds match up *)
                   `Application (abstype, List.map (type_arg var_env alias_env) ts)
-              | Some (`Mutual (qs, tymap_ref)) ->
+              | Some (`Mutual (qs, tygroup_ref)) ->
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
                   let ts = match_quantifiers qs in
-                  `RecursiveApplication (tycon, ts, tymap_ref)
+                  `RecursiveApplication (tycon, ts, tygroup_ref)
             end
         | Primitive k -> `Primitive k
         | DB -> `Primitive Primitive.DB
@@ -437,10 +444,15 @@ object (self)
 
   method! bindingnode = function
     | Typenames ts ->
-        (* Maps types in the recursive group to their denotations. *)
+        (* Maps syntactic types in the recursive group to semantic types. *)
         (* This must be empty to start off with, because there's a cycle
-         * in calculating the denotations. We then later populate it. *)
-        let tymap_ref = ref StringMap.empty in
+         * in calculating the semantic types: we need the alias environment 
+         * populated with all types in the group in order to calculate a
+         * semantic type. We populate the reference in a later pass. *)
+        let tygroup_ref = ref {
+          id = fresh_tygroup_id ();
+          type_map = StringMap.empty
+        } in
 
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
@@ -448,7 +460,7 @@ object (self)
           List.fold_left (fun (alias_env, var_env) (t, args, _) ->
             let qs = List.map (fst) args in
             let qs, var_env =  Desugar.desugar_quantifiers var_env qs in
-            (SEnv.bind alias_env (t, `Mutual (qs, tymap_ref)), var_env) )
+            (SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)), var_env) )
             (alias_env, empty_env) ts in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
@@ -490,7 +502,9 @@ object (self)
             let semantic_qs = List.map (snd ->- val_of) args in
             let alias_env =
               SEnv.bind alias_env (t, `Alias (List.map (snd ->- val_of) args, dt)) in
-            tymap_ref := StringMap.add t (semantic_qs, dt) !tymap_ref;
+            tygroup_ref :=
+              { !tygroup_ref with
+                  type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map ) };
             alias_env
         ) alias_env desugared_mutuals in
 

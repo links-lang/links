@@ -104,7 +104,7 @@ let rec eq_types : (datatype * datatype) -> bool =
               `RecursiveApplication (name', args', tymap_ref') ->
                 name = name' &&
                 List.for_all2 (Utility.curry eq_type_args) args args' &&
-                tymap_ref = tymap_ref'
+                !tymap_ref.id = !tymap_ref'.id
             | _ -> false
           end
       | `ForAll (qs, t) ->
@@ -175,17 +175,8 @@ and eq_type_args =
 *)
 type unify_type_env = (datatype list) IntMap.t
 type unify_row_env = (row list) IntMap.t
+type unify_recty_env = (datatype list) StringMap.t
 
-(* When expanding (mutually)-recursive defined as self- or mutual-references,
- * as opposed to structurally (i.e., with explicit "mu" binders references),
- * we need to ensure that there are no cycles. We do this in a similar way to
- * `unify_type_env`, but need to record both the group ID and the name.
- * Alas, this means some gymnastics to define IntStringPair maps. *)
-module IntStringPair = struct
-  type t = int * string [@@deriving show]
-  let compare = Pervasives.compare
-end
-module IntStringMap = Map.Make(IntStringPair)
 type quantifier_stack = int * int IntMap.t * int IntMap.t
 
 let compatible_quantifiers (lvar, rvar) (_, lenv, renv) =
@@ -196,7 +187,8 @@ let compatible_quantifiers (lvar, rvar) (_, lenv, renv) =
 type unify_env =
   {tenv: unify_type_env;
    renv: unify_row_env;
-   qstack: quantifier_stack
+   qstack: quantifier_stack;
+   recty_env: unify_recty_env
   }
 
 let rec unify' : unify_env -> (datatype * datatype) -> unit =
@@ -204,6 +196,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
   fun rec_env ->
   let rec_types = rec_env.tenv in
   let qstack = rec_env.qstack in
+  let recty_env = rec_env.recty_env in
 
   let is_unguarded_recursive t =
     let rec is_unguarded rec_types t =
@@ -259,15 +252,13 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
   (* Unification of recursive applications in the same recursive group.
    * Similar to above, but uses a different environment. *)
   let unify_recty (name, args, tygroup_ref) t =
-    let (qs, body) = StringMap.find name !tygroup_ref in
+    let unique_id = name ^ (string_of_int !tygroup_ref.id) in
+    let (qs, body) = StringMap.find name !tygroup_ref.type_map in
     let body = Instantiate.recursive_application name qs args body in
-    (* TODO: Cycle detection. Each recursive application needs a unique ID, consisting
-     * of the type name, and an ID referring to the shadowing level *)
-
-    (*
+    (* Cycle detection, based on unique IDs. *)
     let ts =
-      if IntStringMap.mem (tygroup_id, tyname) recty_env then
-        IntStringMap.find (tygroup_id, tyname) recty_env
+      if StringMap.mem unique_id recty_env then
+        StringMap.find unique_id recty_env
       else
         [body]
     in
@@ -276,10 +267,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
       ()
     else
       let new_recty_env =
-        IntStringMap.add (tygroup_id, tyname) (t :: ts) recty_env in
+        StringMap.add unique_id (t :: ts) recty_env in
       unify' {rec_env with recty_env = new_recty_env} (body, t) in
-  *)
-    unify' rec_env (body, t) in
 
   (* introduce a recursive type
      give an error if it is non-well-founded and
@@ -840,8 +829,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        end
     | `End, `End -> ()
     | _, _ ->
+        (*
         let () = Printf.printf "Match fail in unify: \n%s \n and \n%s"
           (Types.show_typ t1) (Types.show_typ t2) in
+        *)
        raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)))
   end;
   counter := !counter-1;
@@ -1317,14 +1308,16 @@ let unify (t1, t2) =
   unify'
     {tenv=IntMap.empty;
      renv=IntMap.empty;
-     qstack=(0, IntMap.empty, IntMap.empty) } (t1, t2)
+     qstack=(0, IntMap.empty, IntMap.empty);
+     recty_env=StringMap.empty} (t1, t2)
 
 (* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
 and unify_rows (row1, row2) =
   unify_rows'
     {tenv=IntMap.empty;
      renv=IntMap.empty;
-     qstack=(0, IntMap.empty, IntMap.empty)} (row1, row2)
+     qstack=(0, IntMap.empty, IntMap.empty);
+     recty_env=StringMap.empty} (row1, row2)
 
 (* external interface *)
 let datatypes = unify
