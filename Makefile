@@ -8,10 +8,8 @@
 
 # LATEST STABLE RELEASE
 # =====================
-# To install the latest stable release of Links please use opam, e.g.
-# $ opam install links
-# .. and to enable database support
-# $ opam install links-postgresql
+# To install the latest stable release of Links please see the INSTALL
+# file.
 
 # To build the bleeding-edge version of Links please refer to the
 # instructions below.
@@ -27,8 +25,8 @@
 # NOTE: The rule `all' may skip the building the database drivers if
 # the necessary system prerequisites are absent.
 
-# The following command builds Links in development mode with database
-# support
+# The following command builds Links in development mode without
+# database support
 # $ make no-db
 
 # RELEASE
