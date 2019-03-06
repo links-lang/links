@@ -303,7 +303,7 @@ declarations:
 | declaration                                                  { [$1] }
 
 declaration:
-| fun_declaration | nofun_declaration                          { $1 }
+| fun_declaration | rec_fun_declarations | nofun_declaration   { $1 }
 
 nofun_declaration:
 | alien_block                                                  { $1 }
