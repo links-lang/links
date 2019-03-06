@@ -84,7 +84,7 @@ module Insert : sig
   type t = {
     table : string;
     columns : string list;
-    values : Lens_phrase_value.t list;
+    values : Lens_phrase_value.t list list;
     db : db;
   }
 

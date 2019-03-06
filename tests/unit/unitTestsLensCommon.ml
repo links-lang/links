@@ -145,7 +145,7 @@ module LensTestHelpers = struct
     List.map ~f:fst (Phrase.Value.unbox_record r)
 
   let row_values _db data =
-    List.map ~f:(Phrase.Value.unbox_record >> List.map ~f:snd >> Phrase.Value.box_tuple) data
+    List.map ~f:(Phrase.Value.unbox_record >> List.map ~f:snd) data
 
   let box_int_record_list cols data =
     List.map ~f:(List.map ~f:Phrase.Value.box_int) data

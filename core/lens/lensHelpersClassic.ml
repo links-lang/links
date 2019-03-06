@@ -62,6 +62,7 @@ let apply_table_data ~table ~database data =
   let columns = Sorted.columns data in
   let values = Sorted.plus_rows data |> Array.to_list in
   let fmt_insert f values =
+    let values = [values] in
     let insert = { Lens_database.Insert. table; columns; values; db; } in
     Lens_database.Insert.fmt f insert in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in

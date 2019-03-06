@@ -128,6 +128,7 @@ let apply_delta ~table ~database:db data =
     let update = { Lens_database.Update. table; predicate; db; set; } in
     Lens_database.Update.fmt f update in
   let fmt_insert f values =
+    let values = [values] in
     let insert = { Lens_database.Insert. table; columns; values; db; } in
     Lens_database.Insert.fmt f insert in
   let fmt_insert_cmds = List.map ~f:(fun v -> fmt_insert, v) insert_vals in

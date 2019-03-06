@@ -212,7 +212,7 @@ module Insert = struct
   type t =
     { table: string
     ; columns: string list
-    ; values: Lens_phrase_value.t list
+    ; values: Lens_phrase_value.t list list
     ; db: db }
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
@@ -221,9 +221,12 @@ module Insert = struct
 
   let fmt f v =
     let db = v.db in
+    let fmt_vals f v = Format.fprintf f "(%a)"
+      (fmt_phrase_value ~db |> Format.pp_comma_list)
+      v in
     Format.fprintf f "INSERT INTO %a (%a) VALUES (%a)" (fmt_table ~db) v.table
       (fmt_col ~db |> Format.pp_comma_list)
       v.columns
-      (fmt_phrase_value ~db |> Format.pp_comma_list)
+      (fmt_vals |> Format.pp_comma_list)
       v.values
 end
