@@ -31,6 +31,15 @@ typename Continuation(a, e::Row, r) = (a) { |e}~> r;
 typename Status(e::Row, a) = mu r . [|Done:()
                                      |Yielded:(a, Continuation((), { |e}, r))|];
 
+# Pauses evaluation of a computation whenever Yield occurs
+sig step : (Comp({ Yield:(a) {}-> () |e}, ())) -> (()) {Yield{p} |e}~> Status({ Yield{p} |e}, a)
+fun step(f)(()) {
+  handle (f()) {
+    case Return(()) -> Done(())
+    case Yield(v,k) -> Yielded(v,k)
+  }
+}
+
 # Facilitates communication between two cooperative tree traversals
 sig sameFringe : (Tree(a), Tree(a)) ~> Bool
 fun sameFringe(x, y) {
@@ -46,16 +55,6 @@ fun sameFringe(x, y) {
   var sameFringe_aux = gen2(sameFringe_aux);
   sameFringe_aux(step(walkTree(x)), step(walkTree(y)))
 }
-
-# Pauses evaluation of a computation whenever Yield occurs
-sig step : (Comp({ Yield:(a) {}-> () |e}, ())) -> (()) {Yield{p} |e}~> Status({ Yield{p} |e}, a)
-fun step(f)(()) {
-  handle (f()) {
-    case Return(()) -> Done(())
-    case Yield(v,k) -> Yielded(v,k)
-  }
-}
-
 # Examples
 var t1 = Leaf(42);
 var t2 = Leaf(-42);

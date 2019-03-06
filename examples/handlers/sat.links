@@ -136,7 +136,7 @@ fun simplify(expr) {
          }
       case Or(e1,e2) ->
         var exprs = filter(not -<- isConstFalse, [simplify(e1),simplify(e2)]);
-        if (any(isConstTrue, exprs)) { Const(true) }
+        if (anyTrue(isConstTrue, exprs)) { Const(true) }
         else {
           switch (exprs) {
             case [] -> Const(false)
@@ -146,7 +146,7 @@ fun simplify(expr) {
         }
       case And(e1,e2) ->
         var exprs = filter(not -<- isConstTrue, [simplify(e1),simplify(e2)]);
-        if (any(isConstFalse, exprs)) { Const(false) }
+        if (anyTrue(isConstFalse, exprs)) { Const(false) }
         else {
           switch (exprs) {
             case [] -> Const(true)
@@ -369,7 +369,7 @@ fun parseE() {
   expr
 }
 
-sig parseOr : ExprParser
+and sig parseOr : ExprParser
 fun parseOr() {
   var lhs = parseAnd();
 
@@ -385,7 +385,7 @@ fun parseOr() {
   }
 }
 
-sig parseAnd : ExprParser
+and sig parseAnd : ExprParser
 fun parseAnd() {
   var lhs = parseNeg();
 
@@ -401,7 +401,7 @@ fun parseAnd() {
   }
 }
 
-sig parseNeg : ExprParser
+and sig parseNeg : ExprParser
 fun parseNeg() {
   switch (peek()) {
     case Nothing -> fail()
@@ -417,7 +417,7 @@ fun parseNeg() {
   }
 }
 
-sig parseAtomicExpr : ExprParser
+and sig parseAtomicExpr : ExprParser
 fun parseAtomicExpr() {
   var name = parseName();
   ignore(whitespace());
@@ -428,13 +428,13 @@ fun parseAtomicExpr() {
   }
 }
 
-sig parseParenthesisedOrAtomicExpr : ExprParser
+and sig parseParenthesisedOrAtomicExpr : ExprParser
 fun parseParenthesisedOrAtomicExpr() {
   if (choose()) parens(parseOr)()
   else parseAtomicExpr()
 }
 
-sig parse : (Parser({ |e}, a), [Char]) -> Comp({Choose-,Satisfies-,Peek-,Fail: Zero |e}, a)
+and sig parse : (Parser({ |e}, a), [Char]) -> Comp({Choose-,Satisfies-,Peek-,Fail: Zero |e}, a)
 fun parse(m, input)() {
   handle(m())(input -> tokens) {
     case Return(x) -> x
