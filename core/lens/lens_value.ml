@@ -113,7 +113,7 @@ let rec compute_memory_sorted lens =
   | LensSelect {lens; predicate; _ } ->
       let records = compute_memory_sorted lens in
       Lens_sorted_records.filter records ~predicate
-  | LensJoin { left; right; on; _ } -> 
+  | LensJoin { left; right; on; _ } ->
       let records1 = compute_memory_sorted left in
       let records2 = compute_memory_sorted right in
       Lens_sorted_records.join records1 records2 ~on
