@@ -1,5 +1,11 @@
 type 'a t = 'a option
 
+
+let iter v ~f =
+  match v with
+  | Some v -> f v
+  | None -> ()
+
 let bind v ~f =
   match v with
   | None -> None

@@ -4,10 +4,10 @@ open UnitTestsLensCommon
 open OUnit2
 
 open Links_core
-open Types
-open Value
 open Utility
-open CommonTypes
+open Links_core.Lens
+
+open Phrase.Value
 
 module Fun_dep = Lens.Fun_dep
 
@@ -23,7 +23,7 @@ let dat_closure = LensTestHelpers.colset_of_string "C D E F G"
 
 let dat_fd_set_2 = LensTestHelpers.fundepset_of_string "A -> B; B -> C"
 
-let rec_constr (cols : string list) (vals : int list) = Value.box_record (List.map2 (fun c v -> (c, box_int v)) cols vals)
+let rec_constr (cols : string list) (vals : int list) = box_record (List.map2 (fun c v -> (c, box_int v)) cols vals)
 let delt_constr (cols : string list) (vals, m : int list * int) = rec_constr cols vals, m
 
 (* Tests *)
@@ -45,9 +45,8 @@ let test_transitive_closure _test_ctx =
 let construct_join_lens fd_set name data =
   let cols = Fun_dep.Set.fold (fun fd fld -> Lens.Alias.Set.union_all [Fun_dep.left fd; Fun_dep.right fd; fld]) fd_set Lens.Alias.Set.empty in
   let cols = Lens.Alias.Set.elements cols in
-  let colFn tbl name = {
-    alias = name;  name = name; table = tbl; typ = `Primitive Primitive.Int; present = true
-  } in
+  let colFn table name =
+    Lens.Column.make ~alias:name ~name ~table ~typ:Lens.Phrase.Type.Int ~present:true in
   let l1 = `LensMem ((`List data), (fd_set, None, List.map (colFn name) cols)) in
   l1
 
@@ -78,7 +77,7 @@ let test_calculate_fd_changelist test_ctx =
   let changeset = Lens.Sorted_records.calculate_fd_changelist ~fun_deps:fds data in
   let _ = List.map (fun ((cols_l, cols_r),changes) ->
       let _ = LensTestHelpers.print_verbose test_ctx (LensTestHelpers.col_list_to_string cols_l " " ^ " -> " ^ LensTestHelpers.col_list_to_string cols_r " ") in
-      let strfn dat = if dat = [] then "" else  List.fold_left (fun a b -> a ^ ", " ^ string_of_value b) (string_of_value (List.hd dat)) (List.tl dat) in
+      let strfn dat = if dat = [] then "" else  List.fold_left (fun a b -> a ^ ", " ^ show b) (show (List.hd dat)) (List.tl dat) in
       let _ = List.map (fun (chl, chr) ->
           LensTestHelpers.print_verbose test_ctx ("  " ^ strfn chl ^ " -> " ^ strfn chr)
         ) changes in

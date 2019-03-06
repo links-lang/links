@@ -168,7 +168,7 @@ let rec eval expr get_val =
   | In (names, vals) ->
       let find = List.map ~f:get_val names in
       let equal s t = List.for_all2_exn ~f:Lens_phrase_value.equal s t in
-      let res = List.mem ~equal:equal vals find in
+      let res = List.mem ~equal vals find in
       box_bool res
   | Case (inp, cases, otherwise) -> (
       let inp =
@@ -225,7 +225,8 @@ module Record = struct
       List.fold_left
         (fun phrase on ->
           let term =
-            Some (equal (var on) (Record.get_exn row ~key:on |> Constant.of_value))
+            Some
+              (equal (var on) (Record.get_exn row ~key:on |> Constant.of_value))
           in
           Option.combine_and phrase term )
         None (Alias.Set.elements on)
@@ -254,4 +255,57 @@ module List = struct
     match ored with None -> Some (Constant.bool false) | _ -> ored
 
   let fold_or_opt l = List.filter_opt l |> fold_or
+end
+
+module O = struct
+  let ( > ) a b = infix (Lens_operators.Binary.of_string ">") a b
+
+  let ( < ) a b = infix (Lens_operators.Binary.of_string "<") a b
+
+  let ( = ) a b = infix (Lens_operators.Binary.of_string "=") a b
+
+  let ( && ) a b =
+    infix Binary.LogicalAnd a b
+
+  let ( || ) a b =
+    infix Binary.LogicalOr a b
+
+  let v a = var a
+
+  let i v = Constant.int v
+
+  let b b = Constant.bool b
+end
+
+module Grouped_variables = struct
+  type phrase = t
+
+  module Inner = Alias.Set
+  include Set.Make (Inner)
+
+  let times s1 s2 = fold (fun e acc -> map (Inner.union e) acc) s1 s2
+
+  let of_lists l = Lens_list.map ~f:Inner.of_list l |> of_list
+
+  let rec gtv p =
+    match p with
+    | Var v -> Inner.singleton v |> singleton
+    | Constant _ -> singleton Inner.empty
+    | InfixAppl (Binary.LogicalAnd, p1, p2) ->
+        let s1 = gtv p1 in
+        let s2 = gtv p2 in
+        union s1 s2
+    | InfixAppl (_, p1, p2) ->
+        let s1 = gtv p1 in
+        let s2 = gtv p2 in
+        times s1 s2
+    | _ -> failwith "Grouped type variables does not support this operator."
+
+  let has_partial_overlaps t ~cols =
+    exists
+      (fun gr ->
+        let int_not_empty = Inner.inter gr cols |> Inner.is_empty |> not in
+        let diff_not_empty = Inner.diff gr cols |> Inner.is_empty |> not in
+        int_not_empty && diff_not_empty )
+      t
 end

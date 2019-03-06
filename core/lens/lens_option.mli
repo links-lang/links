@@ -1,5 +1,7 @@
 type 'a t = 'a option
 
+val iter : 'a t -> f:('a -> unit) -> unit
+
 val bind : 'a t -> f:('a -> 'b t) -> 'b t
 
 val map : 'a t -> f:('a -> 'b) -> 'b t

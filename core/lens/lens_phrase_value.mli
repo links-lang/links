@@ -1,4 +1,3 @@
-
 type t =
   | Bool of bool
   | Int of int
@@ -8,6 +7,8 @@ type t =
   | Tuple of t list
   | Record of (string * t) list
 [@@deriving show]
+
+type values = t list [@@deriving show]
 
 val equal : t -> t -> bool
 
@@ -36,16 +37,15 @@ val box_record : (string * t) list -> t
 val unbox_record : t -> (string * t) list
 
 module Record : sig
-  (** Get a record values field [key]. Returns [None] if the field is not found. *)
   val get : t -> key:string -> t option
+  (** Get a record values field [key]. Returns [None] if the field is not found. *)
 
-  (** Get a record values field [key]. Throw an exception if the field is not found. *)
   val get_exn : t -> key:string -> t
+  (** Get a record values field [key]. Throw an exception if the field is not found. *)
 
-  (** Set a record values [field] to [value]. *)
   val set : t -> key:string -> value:t -> t
+  (** Set a record values [field] to [value]. *)
 
-  (** Determine if two records have the same values for the fields specified in [on]. *)
   val match_on : t -> t -> on:string list -> bool
+  (** Determine if two records have the same values for the fields specified in [on]. *)
 end
-
