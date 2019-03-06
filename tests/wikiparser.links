@@ -57,7 +57,7 @@ fun eatWhitespace(n) server {
 
 }
 
-sig makeSentenceBlock : (String) ~> (ParseResult, String)
+and sig makeSentenceBlock : (String) ~> (ParseResult, String)
 fun makeSentenceBlock(text) server {
     var word = (text =~ /^([^{"\x0d\x0a!"}\\<\\_\\^\\=~\\[\\#\\*-])+/l); #includes trailing punctuation like commas etc.
     switch (word) {
@@ -70,7 +70,7 @@ fun makeSentenceBlock(text) server {
 }
 
 
-sig makeWordBlock : (String) ~> (ParseResult, String)
+and sig makeWordBlock : (String) ~> (ParseResult, String)
 fun makeWordBlock(text) server {
     fun mwb(text, wbs : [ParseTree]) {
       var word = (text =~ /^([^\ {"\x0d\x0a"}\\<\\_\\^\\~\\[\\#\\*-])+(\ |\\b)/l); #includes trailing punctuation like commas etc.
@@ -106,7 +106,7 @@ fun nth(n, l) server {
   }
 }
 
-sig makeFormattedBlock : (String) ~> (ParseResult, String)
+and sig makeFormattedBlock : (String) ~> (ParseResult, String)
 fun makeFormattedBlock(text) server {
    fun matchNth(f :[String], p) {
         switch(p) {
@@ -153,7 +153,7 @@ fun makeFormattedBlock(text) server {
 
 }
 
-sig makeHref : (String) ~> (ParseResult, String)
+and sig makeHref : (String) ~> (ParseResult, String)
 fun makeHref(text) server {
         #[Link text]  (http://foobar.com)  ... or <http://foobar.com/>
     var h =(text =~ /^{"["}(.*){"]"}\ *{"("}([^\ ]*){")"}|{"<"}([^\ <>]*){">"}/l);
@@ -172,7 +172,7 @@ fun makeHref(text) server {
     }
 }
 
-sig makeImageLink : (String) ~> (ParseResult, String)
+and sig makeImageLink : (String) ~> (ParseResult, String)
 fun makeImageLink(text) server {
     #![Alt Text](http://foobar.com/image.gif)
     var h =(text =~ /^{"!["}(.*){"]"}\ *{"("}([^\ ]*){")"}/l);
@@ -186,7 +186,7 @@ fun makeImageLink(text) server {
 
 }
 
-sig makeList : (String) ~> (ParseResult, String)
+and sig makeList : (String) ~> (ParseResult, String)
 fun makeList(text) server {
    fun allListLines(t, lines) {
 
@@ -223,7 +223,7 @@ fun makeList(text) server {
    allListLines(text, [])
 }
 
-sig makeBlockQuote : (String) ~> (ParseResult, String)
+and sig makeBlockQuote : (String) ~> (ParseResult, String)
 fun makeBlockQuote(text) server {
    fun allQuoteLines(text, lines) {
         var bql = (text =~ /^({"\x0a"}\ *>(.*)){"\x0a"}/l);
@@ -246,7 +246,7 @@ fun makeBlockQuote(text) server {
 }
 
 
-sig textToBlock : (String) ~> (ParseResult, String)
+and sig textToBlock : (String) ~> (ParseResult, String)
 fun textToBlock(text) server {
      fun tryAllParsers(parsers, text) {
         switch(parsers) {
