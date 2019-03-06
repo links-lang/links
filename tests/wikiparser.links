@@ -319,8 +319,7 @@ fun blockToText(b) {
             case LabeledBlock(None, _, lb) -> b2t(t,lb)
         }
     }
-
-    fun fb2t(tag : FormatType, fb : ParseTree, t : String) {
+    and fun fb2t(tag : FormatType, fb : ParseTree, t : String) {
         fun ntimes(n, s) {#not tail recursive
             switch (n) {
                 case 0 ->  ""
