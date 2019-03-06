@@ -1,7 +1,7 @@
 open CommonTypes
 open Lens_utility
 module V = Value
-module LPV = Lens_phrase_value
+module LPV = Lens.Phrase.Value
 
 let lens_phrase_value_of_constant c =
   match c with

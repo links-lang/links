@@ -156,13 +156,13 @@ sig
 
   val table_handle : value sem * value sem * value sem * (datatype * datatype * datatype) -> tail_computation sem
 
-  val lens_handle : value sem * Lens_sort.t -> tail_computation sem
+  val lens_handle : value sem * Lens.Sort.t -> tail_computation sem
 
-  val lens_drop_handle : value sem * string * string * value sem * Lens_sort.t -> tail_computation sem
+  val lens_drop_handle : value sem * string * string * value sem * Lens.Sort.t -> tail_computation sem
 
-  val lens_select_handle : value sem * Lens_phrase.t * Lens_sort.t -> tail_computation sem
+  val lens_select_handle : value sem * Lens.Phrase.t * Lens.Sort.t -> tail_computation sem
 
-  val lens_join_handle : value sem * value sem * string list * Lens_phrase.t * Lens_phrase.t * Lens_sort.t -> tail_computation sem
+  val lens_join_handle : value sem * value sem * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Sort.t -> tail_computation sem
 
   val lens_get : value sem * datatype -> tail_computation sem
 

@@ -1,7 +1,7 @@
 open Lens_utility
 module T = Types
 module PT = CommonTypes.Primitive
-module LPT = Lens_phrase_type
+module LPT = Lens.Phrase.Type
 
 let primitive t = `Primitive t
 

@@ -1,8 +1,8 @@
-open Lens_operators
+open Lens.Operators
 open Operators
 open SourceCode
 open Lens_utility
-module LPS = Lens_phrase_sugar
+module LPS = Lens.Phrase.Sugar
 module S = Sugartypes
 
 let unary_of_sugartype_op v =

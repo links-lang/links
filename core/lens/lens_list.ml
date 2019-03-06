@@ -4,8 +4,24 @@ include List
 
 module Seq = Lens_seq
 
+let rec mem t v ~equal =
+  match t with
+  | [] -> false
+  | x :: xs -> if equal x v then true else mem xs v ~equal
+
 let map t ~f =
   map f t
+
+let rec find t ~f =
+  match t with
+  | [] -> None
+  | x :: xs -> if f x then Some x else find xs ~f
+
+let find_exn t ~f =
+  find t ~f |> fun v -> Lens_option.value_exn v
+
+let for_all t ~f =
+  for_all f t
 
 let rec filter_map t ~f =
   match t with
@@ -34,6 +50,8 @@ let rec drop l ~n =
   | _ :: xs, n -> drop xs ~n:(n-1)
   | [], _ -> []
 
+let zip_exn = combine
+
 let rec zip_nofail l1 l2 =
   match l1, l2 with
   | x :: xs, y :: ys -> (x,y) :: zip_nofail xs ys
@@ -43,3 +61,5 @@ let rec to_seq l () =
   match l with
   | [] -> Seq.Nil
   | x :: xs -> Seq.Cons (x, to_seq xs)
+
+let for_all2_exn s t ~f = for_all2 f s t

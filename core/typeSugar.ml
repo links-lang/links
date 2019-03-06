@@ -2409,11 +2409,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let lens = tc lens in
            let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
            let lpredicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
-           (match Lens_phrase_typesugar.tc_sort ~sort lpredicate with
-           | Result.Ok Lens_phrase_type.Bool -> ()
+           (match Lens.Phrase.Typesugar.tc_sort ~sort lpredicate with
+           | Result.Ok Lens.Phrase.Type.Bool -> ()
            | Result.Ok _ ->
              Gripers.die pos "Lens select predicate does not evaluate to a boolean value."
-           | Result.Error { Lens_phrase_typesugar. msg; data } -> Gripers.die data msg);
+           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
            let typ = Lens.Type.Lens sort in
                LensSelectLit(erase lens, predicate, Some (sort)), `Lens typ, merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
@@ -2423,16 +2423,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let sort2 = Lens.Type.sort (typ lens2 |> Lens_type_conv.lens_type_of_type) in
            let lleft = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
            let lright = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
-           (match Lens_phrase_typesugar.tc_sort ~sort:sort1 lleft with
-           | Result.Ok Lens_phrase_type.Bool -> ()
+           (match Lens.Phrase.Typesugar.tc_sort ~sort:sort1 lleft with
+           | Result.Ok Lens.Phrase.Type.Bool -> ()
            | Result.Ok _ ->
              Gripers.die pos "Lens join left predicate does not evaluate to a boolean value."
-           | Result.Error { Lens_phrase_typesugar. msg; data } -> Gripers.die data msg);
-           (match Lens_phrase_typesugar.tc_sort ~sort:sort2 lright with
-           | Result.Ok Lens_phrase_type.Bool -> ()
+           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
+           (match Lens.Phrase.Typesugar.tc_sort ~sort:sort2 lright with
+           | Result.Ok Lens.Phrase.Type.Bool -> ()
            | Result.Ok _ ->
              Gripers.die pos "Lens join right predicate does not evaluate to a boolean value."
-           | Result.Error { Lens_phrase_typesugar. msg; data } -> Gripers.die data msg);
+           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
            let sort, _ =
              Lens.Sort.join_lens_sort
                sort1

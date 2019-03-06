@@ -167,18 +167,16 @@ let rec eval expr get_val =
                  Value.pp res) ) )
   | In (names, vals) ->
       let find = List.map ~f:get_val names in
-      let res = List.mem find vals in
+      let equal s t = List.for_all2_exn ~f:Lens_phrase_value.equal s t in
+      let res = List.mem ~equal:equal vals find in
       box_bool res
   | Case (inp, cases, otherwise) -> (
       let inp =
         match inp with None -> Value.Bool true | Some inp -> eval inp get_val
       in
-      try
-        let _k, v = List.find (fun (k, _v) -> eval k get_val = inp) cases in
-        eval v get_val
-      with
-      | Not_found -> eval otherwise get_val
-      | _ -> failwith "Unknown phrasenode for calculate_predicate." )
+      match List.find ~f:(fun (k, _v) -> eval k get_val = inp) cases with
+      | Some (_, v) -> eval v get_val
+      | None -> eval otherwise get_val )
 
 module Option = struct
   type elt = t
@@ -209,7 +207,7 @@ module Record = struct
   module Record = Value.Record
 
   let eval t r =
-    let get_val key = Record.get ~key r in
+    let get_val key = Record.get_exn ~key r in
     eval t get_val
 
   let matching_cols_simp on row =
@@ -218,7 +216,7 @@ module Record = struct
         (fun phrase (on, v) ->
           let term = Some (equal (var on) (Constant.of_value v)) in
           Option.combine_and phrase term )
-        None (List.combine on row)
+        None (List.zip_exn on row)
     in
     phrase
 
@@ -227,7 +225,7 @@ module Record = struct
       List.fold_left
         (fun phrase on ->
           let term =
-            Some (equal (var on) (Record.get row ~key:on |> Constant.of_value))
+            Some (equal (var on) (Record.get_exn row ~key:on |> Constant.of_value))
           in
           Option.combine_and phrase term )
         None (Alias.Set.elements on)

@@ -9,6 +9,8 @@ module Phrase = struct
   module Sugar = Lens_phrase_sugar
 
   module Type = Lens_phrase_type
+
+  module Typesugar = Lens_phrase_typesugar
 end
 
 module Operators = Lens_operators

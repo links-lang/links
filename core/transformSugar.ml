@@ -175,7 +175,7 @@ class transform (env : Types.typing_environment) =
         let (o, t) = optionu o (fun o -> o#datatype) t in
           (o, (s, t))
 
-    method lens_sort : Lens_sort.t -> ('self_type * Lens_sort.t) =
+    method lens_sort : Lens.Sort.t -> ('self_type * Lens.Sort.t) =
       fun sort ->
             (o, sort)
 

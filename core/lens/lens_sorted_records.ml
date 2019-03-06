@@ -65,7 +65,7 @@ module Simple_record = struct
     Array.sub rs b (e + 1 - b)
 
   let to_value t ~columns =
-    Value.box_record (List.combine columns t)
+    Value.box_record (List.zip_exn columns t)
 
   let equal v1 v2 = List.for_all2 equal_val v1 v2
 end
@@ -88,9 +88,9 @@ end
 let construct_cols ~columns ~records =
   let recs = List.map ~f:Value.unbox_record records in
   let col_val a r = try
-      let (_,v) = List.find (fun (k,_) -> k = a) r in
+      let (_, v) = List.find_exn ~f:(fun (k,_) -> k = a) r in
       v
-    with Not_found -> Inconsistent_columns_error.E (columns, List.map ~f:(fun (k,_) -> k) r) |> raise in
+    with _ -> Inconsistent_columns_error.E (columns, List.map ~f:(fun (k,_) -> k) r) |> raise in
   let simpl_rec r =
     List.map2 (fun a (k,v) -> if a = k then v else col_val a r) columns r in
   let plus_rows = Array.of_list (List.map ~f:simpl_rec recs) in
@@ -135,7 +135,7 @@ let pp_value f v =
 let pp b rs =
   let cols = rs.columns in
   let pp_val b (k,v) = Format.fprintf b "%s: %a" k pp_value v in
-  let pp_record b row = Format.fprintf b "(%a)" (Format.pp_comma_list pp_val) (List.combine cols row) in
+  let pp_record b row = Format.fprintf b "(%a)" (Format.pp_comma_list pp_val) (List.zip_exn cols row) in
   Format.fprintf b "%a" (Format.pp_newline_list pp_record) (rs.plus_rows |> Array.to_list)
 
 let pp_tabular f rs =
@@ -213,7 +213,7 @@ let filter rs ~predicate =
 
 (* ensures that all columns in contains are in cols *)
 let cols_contain cols contains =
-  List.for_all (fun a -> List.mem a cols) contains
+  List.for_all ~f:(List.mem ~equal:String.equal cols) contains
 
 
 let zip_delta_merge left right =
@@ -270,7 +270,7 @@ let minus rs1 rs2 =
 let reorder_cols cols ~first =
   if not (cols_contain cols first) then
     failwith "Columns do not contain all reorder keys.";
-  let rest = List.filter (fun a -> not (List.mem a first)) cols in
+  let rest = List.filter (fun a -> not (List.mem ~equal:String.equal first a)) cols in
   List.append first rest
 
 let reorder t ~first =
@@ -278,7 +278,7 @@ let reorder t ~first =
   project_onto t ~columns
 
 let subtract_cols cols remove =
-  List.filter (fun a -> not (List.mem a remove)) cols
+  List.filter (fun a -> not (List.mem ~equal:String.equal remove a)) cols
 
 let join left right ~on =
   let on_out, on_left, on_right = List.unzip3 on in
@@ -381,11 +381,11 @@ let relational_update t ~fun_deps ~update_with =
     ) changelist in
   let update arr = Array.map (fun r ->
       let r' = List.fold_left (fun r ((check, update),(_, changes)) ->
-          let upd = List.find_opt (fun (left, _right) -> check r left) changes in
+          let upd = List.find ~f:(fun (left, _right) -> check r left) changes in
           match upd with
           | None -> r
           | Some (_left, right) -> update r right
-        ) r (List.combine (List.combine changes apply_changes) changelist) in
+        ) r (List.zip_exn (List.zip_exn changes apply_changes) changelist) in
       r'
     ) arr in
   let plus_rows = update t.plus_rows in

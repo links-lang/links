@@ -133,7 +133,7 @@ module Select = struct
   let fmt f v =
     let db = v.db in
     let map a =
-      let col = List.find (fun c -> Lens_column.alias c = a) v.cols in
+      let col = List.find_exn ~f:(fun c -> Lens_column.alias c = a) v.cols in
       Format.sprintf "%s.%s"
         (Lens_column.table col |> db.quote_field)
         (Lens_column.name col |> db.quote_field)

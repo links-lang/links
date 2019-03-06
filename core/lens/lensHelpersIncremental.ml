@@ -124,7 +124,7 @@ let apply_delta ~table ~database:db data =
     Lens_database.Delete.fmt f delete in
   let fmt_update f row =
     let predicate = prepare_where row in
-    let set = List.combine columns row |> List.drop ~n:(List.length key) in
+    let set = List.zip_exn columns row |> List.drop ~n:(List.length key) in
     let update = { Lens_database.Update. table; predicate; db; set; } in
     Lens_database.Update.fmt f update in
   let fmt_insert f values =

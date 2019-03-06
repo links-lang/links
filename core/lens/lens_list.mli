@@ -4,6 +4,16 @@ include module type of List
 
 module Seq = Lens_seq
 
+val mem : 'a list -> 'a -> equal:('a -> 'a -> bool) -> bool
+
+val find : 'a list -> f:('a -> bool) -> 'a option
+
+val find_exn : 'a list -> f:('a -> bool) -> 'a
+
+val for_all2_exn : 'a list -> 'b list -> f:('a -> 'b -> bool) -> bool
+
+val for_all : 'a list -> f:('a -> bool) -> bool
+
 val map : 'a list -> f:('a -> 'b) -> 'b list
 
 val filter_map : 'a list -> f:('a -> 'b option) -> 'b list
@@ -22,3 +32,6 @@ val zip_nofail : 'a list -> 'b list -> ('a * 'b) list
 
 (** Turn a list into a lazily evaluated sequence. This is for ocaml 4.06 compatibility. *)
 val to_seq : 'a list -> 'a Seq.t
+
+(** Create a tuple using the elements of two lists. Requires lists to be of equal length or fail. *)
+val zip_exn : 'a list -> 'b list -> ('a * 'b) list

@@ -2150,11 +2150,11 @@ struct
                datatype bound_vars p n ^ ")"
           | `Lens typ ->
             let sort = Lens.Type.sort typ in
-            let cols = Lens_sort.cols sort in
+            let cols = Lens.Sort.cols sort in
             let pp_col f col =
               Format.fprintf f "%s : %a"
-                (Lens_column.alias col)
-                Lens_phrase_type.pp (Lens_column.typ col) in
+                (Lens.Column.alias col)
+                Lens.Phrase.Type.pp (Lens.Column.typ col) in
             Format.asprintf "Lens(%a)"
               (Lens_utility.Format.pp_comma_list pp_col) cols
           | `Alias ((s,[]), _) ->  s

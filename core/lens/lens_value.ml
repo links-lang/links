@@ -1,3 +1,5 @@
+open Lens_utility
+
 module Sort = Lens_sort
 module Column = Lens_column
 module Phrase = Lens_phrase
@@ -141,11 +143,10 @@ let rec generate_query lens =
       (* all table names must be unique, rename them *)
       let _tables2 =
         List.map
-          (fun (n2, al2) ->
-            try
-              let _tbl = List.find (fun (n1, _al1) -> n1 = n2) q1.tables in
-              failwith "Cannot reuse a table twice in a join query!"
-            with Not_found -> (n2, al2) )
+          ~f:(fun (n2, al2) ->
+              match List.find ~f:(fun (n1, _al1) -> n1 = n2) q1.tables with
+              | Some _ -> failwith "Cannot reuse a table twice in a join query!"
+              | None -> (n2, al2) )
           q2.tables
       in
       let tables = List.append q1.tables q2.tables in
@@ -163,7 +164,7 @@ let get_query lens =
   let query = Lens_database.Select.of_sort database ~sort in
   let sql = Format.asprintf "%a" Lens_database.Select.fmt query in
   let field_types =
-    List.map (fun c -> (Lens_column.alias c, Lens_column.typ c)) cols
+    List.map ~f:(fun c -> (Lens_column.alias c, Lens_column.typ c)) cols
   in
   let _ = Debug.print sql in
   let res =

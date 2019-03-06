@@ -10,6 +10,8 @@ type t =
   | Record of (string * t) list
 [@@deriving show]
 
+let equal v1 v2 = v1 = v2
+
 let unbox_error typ = Format.asprintf "Type error unboxing %s." typ |> failwith
 
 let box_bool b = Bool b
@@ -39,8 +41,11 @@ let unbox_record v = match v with Record v -> v | _ -> unbox_error "Record"
 module Record = struct
   let get t ~key =
     unbox_record t
-    |> List.find (fun (k,_) -> k = key)
-    |> (fun (_,v) -> v)
+    |> List.find ~f:(fun (k,_) -> k = key)
+    |> Option.map ~f:(fun (_,v) -> v)
+
+  let get_exn t ~key =
+    get t ~key |> (fun v -> Option.value_exn v)
 
   let set t ~key ~value =
     unbox_record t
@@ -48,5 +53,5 @@ module Record = struct
     |> box_record
 
   let match_on t1 t2 ~on =
-    List.for_all (fun key -> get t1 ~key = get t2 ~key) on
+    List.for_all ~f:(fun key -> equal (get t1 ~key) (get t2 ~key)) on
 end

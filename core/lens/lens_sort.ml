@@ -89,7 +89,7 @@ let join_lens_sort sort1 sort2 ~on =
   (* verify both sorts have all columns in on_columns and that the types match *)
   let on_match =
     List.for_all
-      (fun onc ->
+      ~f:(fun onc ->
         let c1 = find_col_alias ~alias:onc sort1 in
         let c2 = find_col_alias ~alias:onc sort2 in
         match (c1, c2) with
@@ -110,7 +110,7 @@ let join_lens_sort sort1 sort2 ~on =
         else
           (* is the column a join column *)
           let new_alias = get_new_alias (Lens_column.alias c) output 1 in
-          if List.mem (Column.alias c) on then
+          if List.mem ~equal:String.equal on (Column.alias c) then
             (* then renamed column and hide it *)
             ( (c |> Column.rename ~alias:new_alias |> Column.hide) :: output
             , (Lens_column.alias c, new_alias) :: jrs )
@@ -147,7 +147,7 @@ let join_lens_sort sort1 sort2 ~on =
     List.map
       ~f:(fun on ->
         let left = on in
-        let _, right = List.find (fun (a, _) -> a = on) join_renames in
+        let _, right = List.find_exn ~f:(fun (a, _) -> a = on) join_renames in
         (on, left, right) )
       on
   in
