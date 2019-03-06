@@ -19,7 +19,7 @@ let rec type_of_lens_phrase_type t =
       let ts = String.Map.map type_of_lens_phrase_type r in
       T.make_record_type ts
 
-let lens_phrase_type_of_type t =
+let rec lens_phrase_type_of_type t =
   match t with
   | `Primitive p -> (
     match p with
@@ -33,15 +33,26 @@ let lens_phrase_type_of_type t =
         @@ Format.asprintf
              "Unsupported primitive type %a in lens_phrase_type_of_type."
              Types.pp_typ t )
+  | `Record (r, _, _) ->
+      let fields =
+        String.Map.map
+          (fun v ->
+            match v with
+            | `Present t -> lens_phrase_type_of_type t
+            | _ ->
+                failwith
+                  "lens_phrase_type_of_type only works on records with \
+                   present types." )
+          r
+      in
+      LPT.Record fields
   | _ ->
       failwith
-      @@ Format.asprintf "Unsupported type %a in lens_phrase-type_of_type."
+      @@ Format.asprintf "Unsupported type %a in lens_phrase_type_of_type."
            Types.pp_typ t
 
 let lens_type_of_type t =
-  match t with
-  | `Lens l -> l
-  | _ -> failwith "Expected a lens type."
+  match t with `Lens l -> l | _ -> failwith "Expected a lens type."
 
 let sort_cols_of_table t ~table =
   let record_fields rt =
