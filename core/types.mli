@@ -94,7 +94,11 @@ type tygroup = {
 }
 
 (* Types *)
-
+and rec_appl = {
+  r_name: string;
+  r_unique_name: string;
+  r_args: type_arg list;
+  r_unwind: (type_arg list) -> typ }
 and typ =
     [ `Not_typed
     | `Primitive of Primitive.t
@@ -107,7 +111,7 @@ and typ =
     | `Lens of lens_sort
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
-    | `RecursiveApplication of (string * type_arg list * tygroup ref)
+    | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]

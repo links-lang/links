@@ -68,10 +68,12 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
         | `Table (f, d, r) -> isg f && isg d && isg r
         | `Lens _sort -> true (* does not contain type variables *)
         | `Alias (_, t) -> is_guarded bound_vars var t
-        | `Application (_, ts)
-        | `RecursiveApplication (_, ts, _) ->
-            (* don't treat abstract / recursive type constructors as guards *)
+        | `Application (_, ts) ->
+            (* don't treat abstract type constructors as guards *)
             List.for_all (is_guarded_type_arg bound_vars var) ts
+        | `RecursiveApplication { r_args ; _ } ->
+            (* FIXME: Guardedness checks for recursive applications aren't there yet. *)
+            List.for_all (is_guarded_type_arg bound_vars var) r_args
         | `Input (t, s)
         | `Output (t, s) -> isg t && isg s
         | `Select row
@@ -136,9 +138,10 @@ let rec is_negative : TypeVarSet.t -> int -> datatype -> bool =
         | `Table (f, d, r) -> isn f || isn d || isn r
         | `Lens sort -> is_negative_lens_sort bound_vars var sort
         | `Alias (_, t) -> isn t
-        | `Application (_, ts)
-        | `RecursiveApplication (_, ts, _) ->
+        | `Application (_, ts) ->
             List.exists (is_negative_type_arg bound_vars var) ts
+        | `RecursiveApplication { r_args ; _ } ->
+            List.exists (is_negative_type_arg bound_vars var) r_args
         | `Input (t, s)
         | `Output (t, s) -> isn t && isn s
         | `Select row -> isnr row
@@ -206,9 +209,10 @@ and is_positive : TypeVarSet.t -> int -> datatype -> bool =
         | `Table (f, d, r) -> isp f || isp d || isp r
         | `Lens sort -> is_positive_lens_sort bound_vars var sort
         | `Alias (_, t) -> isp t
-        | `Application (_, ts)
-        | `RecursiveApplication (_, ts, _) ->
+        | `Application (_, ts) ->
             List.exists (is_positive_type_arg bound_vars var) ts
+        | `RecursiveApplication { r_args ; _ } ->
+            List.exists (is_positive_type_arg bound_vars var) r_args
         | `Input (t, s)
         | `Output (t, s) -> isp t && isp s
         | `Select row -> ispr row

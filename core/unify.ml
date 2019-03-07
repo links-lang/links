@@ -99,12 +99,11 @@ let rec eq_types : (datatype * datatype) -> bool =
                 s = s' && List.for_all2 (Utility.curry eq_type_args) ts ts'
             | _ -> false
           end
-      | `RecursiveApplication (name, args, tymap_ref) ->
+      | `RecursiveApplication a1 ->
           begin match unalias t2 with
-              `RecursiveApplication (name', args', tymap_ref') ->
-                name = name' &&
-                List.for_all2 (Utility.curry eq_type_args) args args' &&
-                !tymap_ref.id = !tymap_ref'.id
+              `RecursiveApplication a2 ->
+                a1.r_unique_name = a2.r_unique_name &&
+                List.for_all2 (Utility.curry eq_type_args) a1.r_args a2.r_args
             | _ -> false
           end
       | `ForAll (qs, t) ->
@@ -251,14 +250,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
 
   (* Unification of recursive applications in the same recursive group.
    * Similar to above, but uses a different environment. *)
-  let unify_recty (name, args, tygroup_ref) t =
-    let unique_id = name ^ (string_of_int !tygroup_ref.id) in
-    let (qs, body) = StringMap.find name !tygroup_ref.type_map in
-    let body = Instantiate.recursive_application name qs args body in
+  let unify_recty { r_unique_name; r_args; r_unwind; _ } t =
+    let body = r_unwind r_args in
     (* Cycle detection, based on unique IDs. *)
     let ts =
-      if StringMap.mem unique_id recty_env then
-        StringMap.find unique_id recty_env
+      if StringMap.mem r_unique_name recty_env then
+        StringMap.find r_unique_name recty_env
       else
         [body]
     in
@@ -267,7 +264,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
       ()
     else
       let new_recty_env =
-        StringMap.add unique_id (t :: ts) recty_env in
+        StringMap.add r_unique_name (t :: ts) recty_env in
       unify' {rec_env with recty_env = new_recty_env} (body, t) in
 
   (* introduce a recursive type

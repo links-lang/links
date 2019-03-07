@@ -232,8 +232,15 @@ struct
               | Some (`Mutual (qs, tygroup_ref)) ->
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
-                  let ts = match_quantifiers qs in
-                  `RecursiveApplication (tycon, ts, tygroup_ref)
+                  let r_args = match_quantifiers qs in
+
+                  let r_unwind args =
+                    let (_, body) = StringMap.find tycon !tygroup_ref.type_map in
+                    Instantiate.recursive_application tycon qs args body in
+
+                  let r_unique_name = tycon ^ (string_of_int !tygroup_ref.id) in
+
+                  `RecursiveApplication { r_name = tycon; r_unique_name; r_args; r_unwind }
             end
         | Primitive k -> `Primitive k
         | DB -> `Primitive Primitive.DB

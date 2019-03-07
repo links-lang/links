@@ -214,13 +214,14 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
               (context, Types.Abstype.equal s s') ts ts'
          | _ -> (context, false)
          end
-      | `RecursiveApplication (s, ts, r) ->
+      | `RecursiveApplication a1 ->
+         let open Types in
          begin match t2 with
-         | `RecursiveApplication (s', ts', r') ->
+         | `RecursiveApplication a2->
             List.fold_left2 (fun (context, prev_equal) larg rarg  ->
                 let context, eq = eq_type_args (context, larg, rarg) in
                 context, prev_equal && eq)
-              (context, s = s' && r = r') ts ts'
+              (context, a1.r_unique_name = a2.r_unique_name) a1.r_args a2.r_args
          | _ -> (context, false)
          end
       | `ForAll (qs, t) ->
