@@ -105,10 +105,11 @@ let rec skip (l : 'a list) (n : int) =
   | _ -> skip (List.tl l) (n - 1)
 
 let apply_delta ~table ~database:db data =
-  let open Lens_database in
   let show_query = Settings.get_value Basicsettings.RelationalLenses.debug in
   let { Lens_database.Table. name = table; keys } = table in
   let exec cmd =
+    let open Lens_database in
+    if show_query then print_endline cmd;
     Lens_statistics.time_query (fun () -> db.execute cmd) in
   (* get the first key, otherwise return an empty key *)
   let key = match keys with [] -> Sorted.columns data | _ -> List.hd keys in
@@ -139,10 +140,7 @@ let apply_delta ~table ~database:db data =
     List.flatten [fmt_insert_cmds; fmt_delete_cmds; fmt_update_cmds] in
   let cmds = Format.asprintf "%a" fmt_all () in
   if String.equal "" cmds |> not then
-    begin
-      if show_query then print_endline cmds;
-      exec cmds |> ignore
-    end
+      exec cmds
 
 let get_fds (fds : (string list * string list) list) (cols : Lens_column.t list) : Fun_dep.Set.t =
   let check_col xs = List.iter (fun alias -> if not (Column.List.mem_alias cols ~alias) then failwith ("The column " ^ alias ^ " does not exist.")) xs in

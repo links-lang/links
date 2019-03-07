@@ -224,7 +224,7 @@ module Insert = struct
     let fmt_vals f v = Format.fprintf f "(%a)"
       (fmt_phrase_value ~db |> Format.pp_comma_list)
       v in
-    Format.fprintf f "INSERT INTO %a (%a) VALUES (%a)" (fmt_table ~db) v.table
+    Format.fprintf f "INSERT INTO %a (%a) VALUES %a" (fmt_table ~db) v.table
       (fmt_col ~db |> Format.pp_comma_list)
       v.columns
       (fmt_vals |> Format.pp_comma_list)
