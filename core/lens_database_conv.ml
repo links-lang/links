@@ -3,7 +3,7 @@ open Lens_utility
 let lens_db_of_db (db : Value.database) =
   let driver_name = db#driver_name in
   let escape_string s = "\"" ^ db#escape_string s ^ "\"" in
-  let quote_field s = "\"" ^ db#quote_field s ^ "\"" in
+  let quote_field s = db#quote_field s in
   let execute query = db#exec query |> ignore in
   let execute_select query ~field_types =
     let field_types = List.map ~f:(fun (n,v) -> n, Lens_type_conv.type_of_lens_phrase_type v) field_types in
