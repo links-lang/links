@@ -7,8 +7,8 @@ open Links_core
 module Sorted = Lens.Sorted_records
 module Phrase = Lens.Phrase
 
-open Links_core.Lens_utility
-open Links_core.Lens_utility.O
+open Lens.Utility
+open Lens.Utility.O
 open Lens.Phrase.Value
 
 (* define composition operator *)
@@ -101,11 +101,11 @@ let test_put test_ctx lens res =
   let benchmark_opt = UnitTestsLensCommon.benchmark_opt test_ctx in
 
   let step = if classic_opt then
-      LensHelpersClassic.lens_put_step lens res
+      Lens.Helpers.Classic.lens_put_step lens res
     else
-      let data = LensHelpersIncremental.lens_get_delta lens res in
+      let data = Lens.Helpers.Incremental.lens_get_delta lens res in
       LensTestHelpers.print_verbose test_ctx ("Delta Size: " ^ string_of_int (Lens.Sorted_records.total_size data));
-      LensHelpersIncremental.lens_put_set_step lens data in
+      Lens.Helpers.Incremental.lens_put_set_step lens data in
 
   let run () = step (fun _ res ->
       LensTestHelpers.print_verbose test_ctx ("Delta Size (output): " ^ string_of_int (Sorted.total_size res));
@@ -124,9 +124,9 @@ let test_put test_ctx lens res =
 
     (* perform full update *)
     let put = if classic_opt then
-        LensHelpersClassic.lens_put
+        Lens.Helpers.Classic.lens_put
       else
-        LensHelpersIncremental.lens_put in
+        Lens.Helpers.Incremental.lens_put in
     put lens res;
 
     (* double check results *)
@@ -190,7 +190,7 @@ let test_select_lens_3 n test_ctx =
   let res = ref (Lens.Value.lens_get l4) in
   let n = ref 0 in
   let changed () =
-    let del = LensHelpersIncremental.lens_get_delta l4 !res in
+    let del = Lens.Helpers.Incremental.lens_get_delta l4 !res in
     Sorted.total_size del in
   while changed () < UnitTestsLensCommon.set_upto_opt test_ctx && !n < upto do
     n := !n + 100;
@@ -211,7 +211,7 @@ let test_get_delta test_ctx =
   let l3 = LensTestHelpers.join_lens_dl l1 l2 ["b"] in
   let res = Query.map_records (Query.set "d" (Query.ifcol "b" (Query.band (Query.gt 0) (Query.lt 10)) (box_int 5))) (Lens.Value.lens_get l3) in
   let run () =
-    let _data = LensHelpersIncremental.lens_get_delta l3 res in
+    let _data = Lens.Helpers.Incremental.lens_get_delta l3 res in
     () in
   let runs = initlist 20 (fun _i -> LensTestHelpers.time_op run) in
   let (qts, tts) = List.split runs in
@@ -250,12 +250,12 @@ let test_put_delta test_ctx =
   let run = if classic_opt then
       let cols = Lens.Value.cols_present_aliases l1 in
       let data = Sorted.construct_cols ~columns:cols ~records:res in
-      let run () = LensHelpersClassic.apply_table_data ~table ~database:db data in
+      let run () = Lens.Helpers.Classic.apply_table_data ~table ~database:db data in
       run
     else
-      let delta = LensHelpersIncremental.lens_get_delta l1 res in
+      let delta = Lens.Helpers.Incremental.lens_get_delta l1 res in
       LensTestHelpers.print_verbose test_ctx ("Delta Size: " ^ string_of_int (Sorted.total_size delta));
-      let run () = LensHelpersIncremental.apply_delta ~table ~database:db delta in
+      let run () = Lens.Helpers.Incremental.apply_delta ~table ~database:db delta in
       run in
   let runs = initlist 20 (fun _i -> LensTestHelpers.time_op run) in
   let (qts, tts) = List.split runs in
@@ -294,10 +294,10 @@ let test_join_lens_2 n test_ctx =
   let res = Query.filter (Query.lt 40 << Query.col "b") (Lens.Value.lens_get l3) in
   LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3));
   LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);
-  LensHelpersIncremental.lens_put_step l3 res (fun _ res ->
+  Lens.Helpers.Incremental.lens_put_step l3 res (fun _ res ->
       LensTestHelpers.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)
     );
-  LensHelpersIncremental.lens_put l3 res;
+  Lens.Helpers.Incremental.lens_put l3 res;
   let upd = Lens.Value.lens_get l3 in
   LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values upd);
   LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);
@@ -314,10 +314,10 @@ let test_join_lens_dr_2 n test_ctx =
   let res = Query.filter (Query.lt 20 << Query.col "c") (Lens.Value.lens_get l3) in
   LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3));
   LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);
-  LensHelpersIncremental.lens_put_step l3 res (fun _ res ->
+  Lens.Helpers.Incremental.lens_put_step l3 res (fun _ res ->
       LensTestHelpers.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)
     );
-  LensHelpersIncremental.lens_put l3 res;
+  Lens.Helpers.Incremental.lens_put l3 res;
   let upd = Lens.Value.lens_get l3 in
   LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values upd);
   LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);

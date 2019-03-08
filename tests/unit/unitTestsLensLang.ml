@@ -1,6 +1,6 @@
 open OUnit2
 
-module Phrase = Links_core.Lens.Phrase
+module Phrase = Lens.Phrase
 
 module GV = Phrase.Grouped_variables
 
@@ -11,7 +11,7 @@ let assert_gtv_equal l1 l2 =
     l1 cmp_to
 
 let assert_partial_overlaps l1 ~cols v =
-  let cols = Links_core.Lens_alias.Set.of_list cols in
+  let cols = Lens.Alias.Set.of_list cols in
   let res = GV.has_partial_overlaps l1 ~cols in
   assert_equal res v
 

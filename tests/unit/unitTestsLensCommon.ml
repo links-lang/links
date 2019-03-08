@@ -7,11 +7,10 @@ module Settings = Links_core.Settings
 module Basicsettings = Links_core.Basicsettings
 module Links_value = Links_core.Value
 
-module Lens = Links_core.Lens
 
 open Lens
-open Links_core.Lens_utility
-open Links_core.Lens_utility.O
+open Lens.Utility
+open Lens.Utility.O
 open Links_core.CommonTypes
 
 (* ensure links configuration is loaded *)
@@ -233,14 +232,14 @@ module LensTestHelpers = struct
 
   let time_query _in_mem fn =
     Lens.Statistics.reset ();
-    let res = Debug.debug_time_out fn (fun time -> print_endline ("Total Time: " ^ string_of_int time)) in
+    let res = Lens.Statistics.debug_time_out fn (fun time -> print_endline ("Total Time: " ^ string_of_int time)) in
     print_query_time ();
     res
 
   let time_op fn =
     Lens.Statistics.reset ();
     let ttime = ref 0 in
-    let _ = Debug.debug_time_out fn (fun time -> ttime := time) in
+    let _ = Lens.Statistics.debug_time_out fn (fun time -> ttime := time) in
     (Lens.Statistics.get_query_time (), !ttime)
 
   let time_query_both fn =

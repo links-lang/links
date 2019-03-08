@@ -83,7 +83,7 @@ let test_calculate_fd_changelist test_ctx =
         ) changes in
       ()
     ) changeset in
-  let phrase = LensHelpersIncremental.matches_change changeset in
+  let phrase = Lens.Helpers.Incremental.matches_change changeset in
   let str = match phrase with None -> "None" | Some phrase -> Format.asprintf "%a" Lens.Database.fmt_phrase_dummy phrase in
   LensTestHelpers.print_verbose test_ctx str;
   ()

@@ -16,6 +16,8 @@ module Make (Ord : OrderedShow) = struct
 
   let to_seq s = elements s |> Lens_list.to_seq
 
+  let union_all s = List.fold_right union s empty
+
   let pp formatter set =
     Format.pp_open_box formatter 0;
     Format.pp_print_string formatter "{";

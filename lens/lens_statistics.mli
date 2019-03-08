@@ -10,3 +10,5 @@ val reset : unit -> unit
 val get_query_time : unit -> int
 
 val get_query_count : unit -> int
+
+val debug_time_out : (unit -> 'a) -> (int -> unit) -> 'a
