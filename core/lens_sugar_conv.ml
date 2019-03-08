@@ -1,7 +1,7 @@
 open Lens.Operators
 open Operators
 open SourceCode
-open Lens_utility
+open Lens.Utility
 module LPS = Lens.Phrase.Sugar
 module S = Sugartypes
 

@@ -1,5 +1,3 @@
-open Utility
-
 include module type of List
 
 module Seq = Lens_seq
@@ -15,6 +13,8 @@ val for_all2_exn : 'a list -> 'b list -> f:('a -> 'b -> bool) -> bool
 val for_all : 'a list -> f:('a -> bool) -> bool
 
 val map : 'a list -> f:('a -> 'b) -> 'b list
+
+val filter_opt : 'a option list -> 'a list
 
 val filter_map : 'a list -> f:('a -> 'b option) -> 'b list
 

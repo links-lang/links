@@ -6,7 +6,7 @@ open Utility
 module SettingsMap = Utility.StringMap
 
 type mode = [`User | `System]
-type 'a setting = {mutable value: 'a; name: string; mode: mode}
+type 'a setting = {mutable value: 'a; name: string; mode: mode; hook: 'a -> unit }
 (*
 [SUGGESTION]
   add an optional function to each setting
@@ -17,7 +17,7 @@ type 'a setting = {mutable value: 'a; name: string; mode: mode}
 let get_value setting = setting.value
 let get_name setting = setting.name
 
-let set_value setting v = setting.value <- v
+let set_value setting v = setting.value <- v; setting.hook v
 
 type universal = [
 | `Bool of bool setting
@@ -106,16 +106,16 @@ let add : string -> universal -> unit = fun name universal_setting ->
   else
     (settings := SettingsMap.add name universal_setting (!settings))
 
-let add_bool (name, value, mode) =
-  let setting = {value=value; name=name; mode=mode} in
+let add_bool ?(hook=ignore) (name, value, mode) =
+  let setting = {value; name; mode; hook} in
     add name (`Bool setting);
     setting
-let add_int (name, value, mode) =
-  let setting : int setting = {value=value; name=name; mode=mode} in
+let add_int ?(hook=ignore) (name, value, mode) =
+  let setting : int setting = {value; name; mode; hook} in
     add name (`Int setting);
     setting
-let add_string (name, value, mode) =
-  let setting = {value=value; name=name; mode=mode} in
+let add_string ?(hook=ignore) (name, value, mode) =
+  let setting = {value; name; mode; hook} in
     add name (`String setting);
     setting
 

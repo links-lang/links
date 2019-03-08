@@ -105,11 +105,10 @@ let rec skip (l : 'a list) (n : int) =
   | _ -> skip (List.tl l) (n - 1)
 
 let apply_delta ~table ~database:db data =
-  let show_query = Settings.get_value Basicsettings.RelationalLenses.debug in
   let { Lens_database.Table. name = table; keys } = table in
   let exec cmd =
     let open Lens_database in
-    if show_query then print_endline cmd;
+    Debug.print cmd;
     Lens_statistics.time_query (fun () -> db.execute cmd) in
   (* get the first key, otherwise return an empty key *)
   let key = match keys with [] -> Sorted.columns data | _ -> List.hd keys in

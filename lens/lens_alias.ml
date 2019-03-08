@@ -4,7 +4,7 @@ type t = string
   [@@deriving show]
 
 module Map = struct
-  include Utility.StringMap
+  include String.Map
 
   let find t ~key =
     find_opt key t

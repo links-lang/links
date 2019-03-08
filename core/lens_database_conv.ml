@@ -1,4 +1,4 @@
-open Lens_utility
+open Lens.Utility
 
 let lens_db_of_db (db : Value.database) =
   let driver_name = db#driver_name in

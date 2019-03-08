@@ -2156,7 +2156,7 @@ struct
                 (Lens.Column.alias col)
                 Lens.Phrase.Type.pp (Lens.Column.typ col) in
             Format.asprintf "Lens(%a)"
-              (Lens_utility.Format.pp_comma_list pp_col) cols
+              (Lens.Utility.Format.pp_comma_list pp_col) cols
           | `Alias ((s,[]), _) ->  s
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg bound_vars p) elems ^"]"

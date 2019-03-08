@@ -1,9 +1,14 @@
-open Lens_utility
+open Lens.Utility
 module T = Types
 module PT = CommonTypes.Primitive
 module LPT = Lens.Phrase.Type
 
 let primitive t = `Primitive t
+
+let to_links_map m =
+  String.Map.fold
+    (fun k v m -> Utility.StringMap.add k v m)
+    m Utility.StringMap.empty
 
 let rec type_of_lens_phrase_type t =
   match t with
@@ -17,7 +22,7 @@ let rec type_of_lens_phrase_type t =
       failwith "Tuple type not yet supported."
   | LPT.Record r ->
       let ts = String.Map.map type_of_lens_phrase_type r in
-      T.make_record_type ts
+      T.make_record_type (to_links_map ts)
 
 let rec lens_phrase_type_of_type t =
   match t with
@@ -35,15 +40,15 @@ let rec lens_phrase_type_of_type t =
              Types.pp_typ t )
   | `Record (r, _, _) ->
       let fields =
-        String.Map.map
-          (fun v ->
-            match v with
-            | `Present t -> lens_phrase_type_of_type t
-            | _ ->
-                failwith
-                  "lens_phrase_type_of_type only works on records with \
-                   present types." )
-          r
+        Utility.StringMap.to_alist r
+        |> String.Map.from_alist
+        |> String.Map.map (fun v ->
+               match v with
+               | `Present t -> lens_phrase_type_of_type t
+               | _ ->
+                   failwith
+                     "lens_phrase_type_of_type only works on records with \
+                      present types." )
       in
       LPT.Record fields
   | _ ->
@@ -66,7 +71,7 @@ let sort_cols_of_table t ~table =
       String.Map.to_list
         (fun name typ ->
           let alias = name in
-          Lens_column.make ~table ~name ~alias ~typ ~present:true )
+          Lens.Column.make ~table ~name ~alias ~typ ~present:true )
         fields
     in
     cols

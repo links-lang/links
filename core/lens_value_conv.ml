@@ -1,5 +1,5 @@
 open CommonTypes
-open Lens_utility
+open Lens.Utility
 module V = Value
 module LPV = Lens.Phrase.Value
 

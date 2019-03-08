@@ -1,5 +1,3 @@
-open Utility
-
 include List
 
 module Seq = Lens_seq
@@ -22,6 +20,12 @@ let find_exn t ~f =
 
 let for_all t ~f =
   for_all f t
+
+let rec filter_opt t =
+  match t with
+  | [] -> []
+  | Some x :: xs -> x :: filter_opt xs
+  | None :: xs -> filter_opt xs
 
 let rec filter_map t ~f =
   match t with

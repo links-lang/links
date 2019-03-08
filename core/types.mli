@@ -106,13 +106,14 @@ and typ =
     | `Variant of row
     | `Effect of row
     | `Table of typ * typ * typ
-    | `Lens of Lens_type.t
+    | `Lens of Lens.Type.t
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
-    | (typ, row) session_type_basis ]and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
+    | (typ, row) session_type_basis ]
+and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
 and row_var = meta_row_var
 and row = field_spec_map * row_var * bool
