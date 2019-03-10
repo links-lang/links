@@ -393,6 +393,11 @@ examples/handlers/unhandled.links
 filemode : args
 args : --config=tests/typecheck_examples.tests.config
 
+Typecheck example file examples/handlers/u2_puzzle.links
+examples/handlers/u2_puzzle.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
+
 Typecheck example file examples/href-test.links
 examples/href-test.links
 filemode : args
