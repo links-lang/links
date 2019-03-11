@@ -105,9 +105,9 @@ let rec skip (l : 'a list) (n : int) =
   | _ -> skip (List.tl l) (n - 1)
 
 let apply_delta ~table ~database:db data =
-  let { Lens_database.Table. name = table; keys } = table in
+  let { Database.Table. name = table; keys } = table in
   let exec cmd =
-    let open Lens_database in
+    let open Database in
     Debug.print cmd;
     Lens_statistics.time_query (fun () -> db.execute cmd) in
   (* get the first key, otherwise return an empty key *)
@@ -120,17 +120,17 @@ let apply_delta ~table ~database:db data =
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
   let fmt_delete f row =
     let predicate = prepare_where row in
-    let delete = { Lens_database.Delete. table; predicate; db; } in
-    Lens_database.Delete.fmt f delete in
+    let delete = { Database.Delete. table; predicate; db; } in
+    Database.Delete.fmt f delete in
   let fmt_update f row =
     let predicate = prepare_where row in
     let set = List.zip_exn columns row |> List.drop ~n:(List.length key) in
-    let update = { Lens_database.Update. table; predicate; db; set; } in
-    Lens_database.Update.fmt f update in
+    let update = { Database.Update. table; predicate; db; set; } in
+    Database.Update.fmt f update in
   let fmt_insert f values =
     let values = [values] in
-    let insert = { Lens_database.Insert. table; columns; values; db; } in
-    Lens_database.Insert.fmt f insert in
+    let insert = { Database.Insert. table; columns; values; db; } in
+    Database.Insert.fmt f insert in
   let fmt_insert_cmds = List.map ~f:(fun v -> fmt_insert, v) insert_vals in
   let fmt_delete_cmds = List.map ~f:(fun v -> fmt_delete, v) delete_vals in
   let fmt_update_cmds = List.map ~f:(fun v -> fmt_update, v) update_vals in

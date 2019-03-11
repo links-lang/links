@@ -1,5 +1,5 @@
 type t =
-  | Lens of {table: Lens_database.Table.t; database: Lens_database.t; sort: Lens_sort.t}
+  | Lens of {table: Database.Table.t; database: Database.t; sort: Lens_sort.t}
   | LensMem of {records: Lens_phrase_value.t list; sort: Lens_sort.t}
   | LensSelect of {lens: t; predicate: Lens_phrase.t; sort: Lens_sort.t}
   | LensJoin of
@@ -36,7 +36,7 @@ val predicate : t -> Lens_phrase.t option
 
 val get_primary_key : t -> Alias.Set.t
 
-val generate_query : t -> Lens_database.Select.t
+val generate_query : t -> Database.Select.t
 
 (** Fetch the records of a lens from the database. *)
 val lens_get : t -> Lens_phrase_value.t list

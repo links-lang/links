@@ -5,7 +5,7 @@ module Phrase = Lens_phrase
 module Fun_dep = Lens_fun_dep
 
 type t =
-  | Lens of {table: Lens_database.Table.t; database: Lens_database.t; sort: Lens_sort.t}
+  | Lens of {table: Database.Table.t; database: Database.t; sort: Lens_sort.t}
   | LensMem of {records: Lens_phrase_value.t list; sort: Lens_sort.t}
   | LensSelect of {lens: t; predicate: Lens_phrase.t; sort: Lens_sort.t}
   | LensJoin of
@@ -120,11 +120,11 @@ let get_memory lens =
   compute_memory_sorted lens |> Lens_sorted_records.to_value
 
 let rec generate_query lens =
-  let open Lens_database.Select in
+  let open Database.Select in
   match lens with
   | Lens { database = db; table; sort; } ->
       let cols = Lens_sort.cols sort in
-      let open Lens_database.Table in
+      let open Database.Table in
       let table = table.name in
       {tables= [(table, table)]; cols; predicate= None; db }
   | LensSelect { lens; predicate; _ } ->
@@ -159,15 +159,15 @@ let get_query lens =
   let sort = sort lens in
   let database = database lens in
   let cols = Lens_sort.cols sort |> Column.List.present in
-  let query = Lens_database.Select.of_sort database ~sort in
-  let sql = Format.asprintf "%a" Lens_database.Select.fmt query in
+  let query = Database.Select.of_sort database ~sort in
+  let sql = Format.asprintf "%a" Database.Select.fmt query in
   let field_types =
     List.map ~f:(fun c -> (Column.alias c, Column.typ c)) cols
   in
   let _ = Debug.print sql in
   let res =
     Lens_statistics.time_query (fun () ->
-        Lens_database.Select.execute query ~field_types ~database )
+        Database.Select.execute query ~field_types ~database )
   in
   res
 
@@ -194,9 +194,9 @@ let query_exists lens predicate =
     res <> []
   else
     let database = database lens in
-    let query = Lens_database.Select.of_sort database ~sort in
+    let query = Database.Select.of_sort database ~sort in
     let res =
       Lens_statistics.time_query (fun () ->
-          Lens_database.Select.query_exists query ~database )
+          Database.Select.query_exists query ~database )
     in
     res

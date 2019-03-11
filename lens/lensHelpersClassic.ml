@@ -50,8 +50,8 @@ let lens_put_set_step lens data (fn : Lens_value.t -> Sorted.t -> unit) =
   | _ -> ()
 
 let apply_table_data ~table ~database data =
-  let open Lens_database in
-  let open Lens_database.Table in
+  let open Database in
+  let open Database.Table in
   let table = table.name in
   let db = database in
   let show_query = false in
@@ -63,8 +63,8 @@ let apply_table_data ~table ~database data =
   let values = Sorted.plus_rows data |> Array.to_list in
   let fmt_insert f values =
     let values = [values] in
-    let insert = { Lens_database.Insert. table; columns; values; db; } in
-    Lens_database.Insert.fmt f insert in
+    let insert = { Database.Insert. table; columns; values; db; } in
+    Database.Insert.fmt f insert in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
   let fmt_all f () = Format.pp_print_list ~pp_sep:fmt_cmd_sep fmt_insert f values in
   let cmds = Format.asprintf "%a" fmt_all () in

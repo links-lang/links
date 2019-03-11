@@ -19,7 +19,7 @@ module Operators = Lens_operators
 
 module Type = Lens_type
 module Value = Lens_value
-module Database = Lens_database
+module Database = Database
 module Statistics = Lens_statistics
 module Sorted_records = Lens_sorted_records
 
