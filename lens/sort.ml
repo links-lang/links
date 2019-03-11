@@ -1,10 +1,9 @@
 open Lens_utility
 module Column = Column
 module Phrase = Lens_phrase
-module Fun_dep = Lens_fun_dep
 
 type t =
-  { fds: Lens_fun_dep.Set.t
+  { fds: Fun_dep.Set.t
   ; predicate: Lens_phrase.t option
   ; cols: Column.t list }
 [@@deriving show]
@@ -22,7 +21,7 @@ let colset t = t.cols |> Column.Set.of_list
 let present_colset t =
   t.cols |> Column.List.present |> Column.Set.of_list
 
-let make ?(fds = Lens_fun_dep.Set.empty) ?(predicate = None) cols =
+let make ?(fds = Fun_dep.Set.empty) ?(predicate = None) cols =
   {fds; predicate; cols}
 
 let find_col_alias t ~alias = Column.List.find_alias ~alias t.cols
@@ -34,7 +33,7 @@ let update_table_name t ~table =
 let update_predicate t ~predicate = {t with predicate}
 
 let equal sort1 sort2 =
-  let fd_equal = Lens_fun_dep.Set.equal (fds sort1) (fds sort2) in
+  let fd_equal = Fun_dep.Set.equal (fds sort1) (fds sort2) in
   let pred_equal = predicate sort1 = predicate sort2 in
   let cols_equal = Column.Set.equal (colset sort1) (colset sort2) in
   fd_equal && pred_equal && cols_equal

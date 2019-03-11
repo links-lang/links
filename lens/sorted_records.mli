@@ -108,23 +108,23 @@ val to_value : t -> Lens_phrase_value.t list
 
 val project_fun_dep :
   t
-  -> fun_dep:Lens_fun_dep.t
+  -> fun_dep:Fun_dep.t
   -> (string list * string list) * (Simple_record.t * Simple_record.t) array * (Simple_record.t * Simple_record.t) array
 
 val calculate_fd_changelist :
   t
-  -> fun_deps:Lens_fun_dep.Set.t
+  -> fun_deps:Fun_dep.Set.t
   -> ((string list * string list) * (Simple_record.t * Simple_record.t) list) list
 
 val relational_update :
   t
-  -> fun_deps:Lens_fun_dep.Set.t
+  -> fun_deps:Fun_dep.Set.t
   -> update_with:t
   -> t
 
 val relational_merge :
   t
-  -> fun_deps:Lens_fun_dep.Set.t
+  -> fun_deps:Fun_dep.Set.t
   -> update_with:t
   -> t
 

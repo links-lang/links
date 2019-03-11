@@ -30,7 +30,7 @@ val cols_present_aliases : t -> string list
 
 val colset : t -> Column.Set.t
 
-val fundeps : t -> Lens_fun_dep.Set.t
+val fundeps : t -> Fun_dep.Set.t
 
 val predicate : t -> Lens_phrase.t option
 

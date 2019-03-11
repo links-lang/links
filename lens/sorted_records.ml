@@ -1,4 +1,3 @@
-open Lens_types
 open Lens_utility
 open Lens_utility.O
 

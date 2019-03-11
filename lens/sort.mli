@@ -4,7 +4,7 @@ type t
   [@@deriving show]
 
 (** Get the functional dependencies *)
-val fds : t -> Lens_fun_dep.Set.t
+val fds : t -> Fun_dep.Set.t
 
 (** Get the predicate which defines all valid possible tuples *)
 val predicate : t -> Lens_phrase.t option
@@ -23,7 +23,7 @@ val present_colset : t -> Column.Set.t
 
 (** Construct a lens sort *)
 val make :
-     ?fds:Lens_fun_dep.Set.t
+     ?fds:Fun_dep.Set.t
   -> ?predicate:Lens_phrase.t option
   -> Column.t list
   -> t

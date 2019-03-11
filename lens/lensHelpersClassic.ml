@@ -1,5 +1,4 @@
 open Lens_value
-open Lens_types
 open Lens_phrase_value
 
 module Sorted = Sorted_records

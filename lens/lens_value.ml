@@ -1,7 +1,7 @@
 open Lens_utility
 
 module Phrase = Lens_phrase
-module Fun_dep = Lens_fun_dep
+module Fun_dep = Fun_dep
 
 type t =
   | Lens of {table: Database.Table.t; database: Database.t; sort: Sort.t}
@@ -76,13 +76,13 @@ let rec get_primary_key lens =
   match lens with
   | Lens { sort; _ } ->
       let fds = Sort.fds sort in
-      let fd = Lens_fun_dep.Set.min_elt fds in
-      let left = Lens_fun_dep.left fd in
+      let fd = Fun_dep.Set.min_elt fds in
+      let left = Fun_dep.left fd in
       left
   | LensMem { sort; _ } ->
       let fds = Sort.fds sort in
-      let fd = Lens_fun_dep.Set.min_elt fds in
-      let left = Lens_fun_dep.left fd in
+      let fd = Fun_dep.Set.min_elt fds in
+      let left = Fun_dep.left fd in
       left
   | LensDrop { lens; _ } -> get_primary_key lens
   | LensSelect { lens; _ } -> get_primary_key lens

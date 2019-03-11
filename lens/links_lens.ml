@@ -2,7 +2,7 @@ module Debug = Debug
 
 module Column = Column
 module Sort = Sort
-module Fun_dep = Lens_fun_dep
+module Fun_dep = Fun_dep
 module Alias = Alias
 
 module Phrase = struct
