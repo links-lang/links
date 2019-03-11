@@ -54,7 +54,7 @@ let apply_table_data ~table ~database data =
   let table = table.name in
   let db = database in
   let show_query = false in
-  let exec cmd = Lens_statistics.time_query (fun () -> database.execute cmd) in
+  let exec cmd = Statistics.time_query (fun () -> database.execute cmd) in
   let cmd = "delete from " ^ database.quote_field table ^ " where TRUE" in
   let _ = exec cmd in
   if show_query then print_endline cmd else ();

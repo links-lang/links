@@ -14,8 +14,8 @@ let test_create_table test_ctx =
 
 let test_create_table_rand test_ctx =
     let db = H.get_db test_ctx in
-    let _ = H.drop_if_exists test_ctx db "MyTableRand" in
-    let _ = H.create_table_easy test_ctx db "MyTableRand" "key1 key2 -> value1 value2 value3" in
+    H.drop_if_exists test_ctx db "MyTableRand";
+    H.create_table_easy test_ctx db "MyTableRand" "key1 key2 -> value1 value2 value3";
     let testData = H.gen_data [`Seq; `Constant 1; `RandTo 15; `Rand; `Rand] 100 in
     let testData = H.box_int_record_list (H.colslist_of_string "key1 key2 value1 value2 value3") testData in
     let _ = H.insert_rows db "MyTableRand" testData in

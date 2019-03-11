@@ -108,7 +108,7 @@ let apply_delta ~table ~database:db data =
   let exec cmd =
     let open Database in
     Debug.print cmd;
-    Lens_statistics.time_query (fun () -> db.execute cmd) in
+    Statistics.time_query (fun () -> db.execute cmd) in
   (* get the first key, otherwise return an empty key *)
   let key = match keys with [] -> Sorted.columns data | _ -> List.hd keys in
   let columns, (insert_vals, update_vals, delete_vals) = Sorted.to_diff data ~key in

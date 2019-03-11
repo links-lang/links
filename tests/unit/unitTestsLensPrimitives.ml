@@ -220,6 +220,8 @@ let test_get_delta test_ctx =
   prlist qts; prlist tts;
   ()
 
+let () = Lens.Debug.set_debug true
+
 let test_put_delta test_ctx =
   let n = override_n 10000 test_ctx in
   let classic_opt = UnitTestsLensCommon.classic_opt test_ctx in
@@ -247,17 +249,19 @@ let test_put_delta test_ctx =
         )
     ) in
   let table = match l1 with Lens.Value.Lens {table; _} -> table | _ -> assert false in
-  let run = if classic_opt then
+  let run, revert = if classic_opt then
       let cols = Lens.Value.cols_present_aliases l1 in
       let data = Sorted.construct_cols ~columns:cols ~records:res in
       let run () = Lens.Helpers.Classic.apply_table_data ~table ~database:db data in
-      run
+      run, fun () -> ()
     else
       let delta = Lens.Helpers.Incremental.lens_get_delta l1 res in
+      let neg = Lens.Sorted_records.negate delta in
       LensTestHelpers.print_verbose test_ctx ("Delta Size: " ^ string_of_int (Sorted.total_size delta));
       let run () = Lens.Helpers.Incremental.apply_delta ~table ~database:db delta in
-      run in
-  let runs = initlist 20 (fun _i -> LensTestHelpers.time_op run) in
+      let revert () = Lens.Helpers.Incremental.apply_delta ~table ~database:db neg in
+      run, revert in
+  let runs = initlist 20 (fun _i -> let r = LensTestHelpers.time_op run in revert (); r) in
   let (qts, tts) = List.split runs in
   print_endline "query times";
   let prlist = print_endline << Phrase.Value.show_values << List.map ~f:box_int in

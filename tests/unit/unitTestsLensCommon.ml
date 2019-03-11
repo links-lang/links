@@ -46,9 +46,12 @@ module LensTestHelpers = struct
 
   let print_verbose test_ctx message =
     if verbose_opt test_ctx then
-      print_endline message
+      Printf.printf "%s\n%!" message
     else
       ()
+
+  let print_table_query test_ctx message =
+    if display_table_query_opt test_ctx then Printf.printf "%s\n%!" message
 
   let colslist_of_string str =
     let cols = String.split_on_char ' ' str in
@@ -117,13 +120,15 @@ module LensTestHelpers = struct
     Lens.Value.lens_get_select_opt l ~predicate
 
   let create_table test_ctx db tablename (primary_key : string list) (fields : string list) =
-    let colfn col = col ^ " INTEGER NOT NULL" in
-    let query = "CREATE TABLE " ^ tablename ^ " ( "
-                ^ List.fold_left (fun a b -> a ^ colfn b ^ ", ") "" fields
-                ^ "CONSTRAINT \"PK_" ^ tablename ^ "\" PRIMARY KEY ("
-                ^ List.fold_left (fun a b -> a ^ ", " ^ b) (List.hd primary_key) (List.tl primary_key)
-                ^ "));" in
-    let _ = if display_table_query_opt test_ctx then Debug.print query else () in
+    let colfn col = let open Database in db.quote_field col ^ " INTEGER NOT NULL" in
+    let query =
+      let open Database in
+      "CREATE TABLE " ^ db.quote_field tablename ^ " ( "
+      ^ List.fold_left (fun a b -> a ^ colfn b ^ ", ") "" fields
+      ^ "CONSTRAINT " ^ db.quote_field ("PK_" ^ tablename) ^ " PRIMARY KEY ("
+      ^ List.fold_left (fun a b -> a ^ ", " ^ b) (List.hd primary_key) (List.tl primary_key)
+      ^ "));" in
+    print_table_query test_ctx query;
     let open Database in
     db.execute query
 
@@ -161,9 +166,9 @@ module LensTestHelpers = struct
     db.execute insert
 
   let drop_if_exists test_ctx (db : Database.t) table =
-    let query = "DROP TABLE IF EXISTS " ^ table in
-    let _ = if display_table_query_opt test_ctx then Debug.print query else () in
     let open Database in
+    let query = "DROP TABLE IF EXISTS " ^ db.quote_field table in
+    print_table_query test_ctx query;
     db.execute query
 
   let drop_if_cleanup test_ctx (db : Database.t) table =

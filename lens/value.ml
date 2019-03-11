@@ -162,7 +162,7 @@ let get_query lens =
   in
   let _ = Debug.print sql in
   let res =
-    Lens_statistics.time_query (fun () ->
+    Statistics.time_query (fun () ->
         Database.Select.execute query ~field_types ~database )
   in
   res
@@ -192,7 +192,7 @@ let query_exists lens predicate =
     let database = database lens in
     let query = Database.Select.of_sort database ~sort in
     let res =
-      Lens_statistics.time_query (fun () ->
+      Statistics.time_query (fun () ->
           Database.Select.query_exists query ~database )
     in
     res

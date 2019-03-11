@@ -20,7 +20,7 @@ module Operators = Operators
 module Type = Type
 module Value = Value
 module Database = Database
-module Statistics = Lens_statistics
+module Statistics = Statistics
 module Sorted_records = Sorted_records
 
 
