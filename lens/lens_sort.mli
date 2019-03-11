@@ -44,7 +44,7 @@ val join_lens_should_swap : t -> t -> on:string list -> bool
 val select_lens_sort : t -> predicate:Lens_phrase.t -> t
 
 (** Create a drop lens sort. *)
-val drop_lens_sort : t -> drop:Lens_alias.Set.t -> key:Lens_alias.Set.t -> t
+val drop_lens_sort : t -> drop:Alias.Set.t -> key:Alias.Set.t -> t
 
 (** Create a sort as the join of two other sorts on the columns specified by [on] *)
 val join_lens_sort :

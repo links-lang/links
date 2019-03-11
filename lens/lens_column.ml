@@ -48,7 +48,7 @@ module Set = struct
     {alias; present= true; table= ""; name= ""; typ= Lens_phrase_type.Bool}
 
   let alias_set t =
-    to_seq t |> Seq.filter present |> Seq.map alias |> Lens_alias.Set.of_seq
+    to_seq t |> Seq.filter present |> Seq.map alias |> Alias.Set.of_seq
 
   let mem_alias t ~alias = mem (dummy_alias alias) t
 
@@ -75,7 +75,7 @@ module List = struct
   let colset t = Set.of_list t
 
   let colmap t =
-    List.map ~f:(fun t -> (alias t, t)) t |> Lens_alias.Map.from_alist
+    List.map ~f:(fun t -> (alias t, t)) t |> Alias.Map.from_alist
 
   let record_type t =
     let map =

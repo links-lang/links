@@ -1,7 +1,6 @@
 open Lens_operators
 open Lens_utility
 module Value = Lens_phrase_value
-module Alias = Lens_alias
 
 type t =
   | Constant of Lens_phrase_value.t

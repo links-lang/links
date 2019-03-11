@@ -1,7 +1,5 @@
 open Lens_utility
 
-module Alias = Lens_alias
-
 type t [@@deriving show]
 
 val make : Alias.Set.t -> Alias.Set.t -> t

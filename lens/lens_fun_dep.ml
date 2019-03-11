@@ -1,7 +1,5 @@
 open Lens_utility
 
-module Alias = Lens_alias
-
 type t = Alias.Set.t * Alias.Set.t
   [@@deriving show]
 

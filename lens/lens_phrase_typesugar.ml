@@ -58,7 +58,7 @@ and tc ~env (data, phrase) =
   match phrase with
   | Sugar.Constant c -> typ_constant c |> Result.return
   | Sugar.Var v ->
-      let res = Lens_alias.Map.find ~key:v env in
+      let res = Alias.Map.find ~key:v env in
       Result.of_option res ~error:(fun _ ->
           let msg = Format.asprintf "Column '%s' is not bound." v in
           Result.error {data; msg} )
@@ -69,6 +69,6 @@ let tc_sort ~sort phrase =
   let env =
     Lens_sort.cols sort
     |> List.map ~f:(fun c -> (Lens_column.alias c, Lens_column.typ c))
-    |> Lens_alias.Map.from_alist
+    |> Alias.Map.from_alist
   in
   tc ~env phrase

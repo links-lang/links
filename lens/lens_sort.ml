@@ -1,7 +1,6 @@
 open Lens_utility
 module Column = Lens_column
 module Phrase = Lens_phrase
-module Alias = Lens_alias
 module Fun_dep = Lens_fun_dep
 
 type t =

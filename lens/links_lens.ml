@@ -3,7 +3,7 @@ module Debug = Debug
 module Column = Lens_column
 module Sort = Lens_sort
 module Fun_dep = Lens_fun_dep
-module Alias = Lens_alias
+module Alias = Alias
 
 module Phrase = struct
   include Lens_phrase

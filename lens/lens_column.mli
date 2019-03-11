@@ -37,7 +37,7 @@ module Set : sig
   val mem_alias : t -> alias:string -> bool
 
   (** Convert to an alias set. *)
-  val alias_set : t -> Lens_alias.Set.t
+  val alias_set : t -> Alias.Set.t
 
   (** Find the column with the given alias. *)
   val find_alias : t -> alias:string -> elt
@@ -67,7 +67,7 @@ module List : sig
   val colset : t -> Set.t
 
   (** Convert the list of columns into a map from the alias to the column. *)
-  val colmap : t -> elt Lens_alias.Map.t
+  val colmap : t -> elt Alias.Map.t
 
   (** Find the column with [alias]. *)
   val find_alias : t -> alias:string -> elt option

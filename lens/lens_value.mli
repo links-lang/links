@@ -34,7 +34,7 @@ val fundeps : t -> Lens_fun_dep.Set.t
 
 val predicate : t -> Lens_phrase.t option
 
-val get_primary_key : t -> Lens_alias.Set.t
+val get_primary_key : t -> Alias.Set.t
 
 val generate_query : t -> Lens_database.Select.t
 
