@@ -15,89 +15,6 @@ typename Supervisor =
 sig sap : AP(Supervisor)
 var sap = new();
 
-# Main supervisor loop, containing server state. Awaits
-# (non-session) control messages to update the state, or broadcast
-# instructions to send things along session channels.
-sig supervisor : (Topic, [Nickname], LinList(WorkerSend)) ~> ()
-fun supervisor(topic, nicks, cs) {
-  var s = accept(sap);
-  offer(s) {
-    case Join(s) ->
-      var (d, s) = receive(s);
-      close(s);
-      var (name, d) = receive(d);
-      switch (filter(fun (nick) {nick == name}, nicks)) {
-        case [] ->
-          var workerSend = linFork(
-            linfun (clientReceive) {
-              worker(name,
-                     send((topic, nicks, clientReceive),
-                          select Join d))
-          });
-          var cs = linMap(
-            fun(c) {
-              var c = select Join c;
-              send (name, c)
-            }, cs);
-          supervisor(topic, name :: nicks, LinCons(workerSend, cs))
-        case _ ->
-          close(select Nope d);
-          supervisor(topic, nicks, cs)
-      }
-    case Chat(s) ->
-      var ((nick, msg), s) = receive(s);
-      close(s);
-      var cs = linMap(
-        fun(c) {
-          var c = select Chat c;
-          send ((nick, msg), c)
-        }, cs);
-      supervisor(topic, nicks, cs)
-    case NewTopic(s) ->
-      var (newTopic, s) = receive(s);
-      close(s);
-      var cs = linMap(
-        fun(c) {
-          var c = select NewTopic c;
-          send (newTopic, c)
-        }, cs);
-      supervisor(newTopic, nicks, cs)
-    case Leave(s) ->
-      var (nick, s) = receive(s);
-      close(s);
-      var (nicks, cs) = disconnect(nick, nicks, cs);
-      var cs = linMap(
-        fun(c) {
-          var c = select Leave c;
-          send(nick, c)
-        }, cs);
-      supervisor(topic, nicks, cs)
-  }
-}
-
-# reads incoming requests from the client, dispatches each command
-# to the supervisor loop which will broadcast to other session
-# clients
-sig worker : (Nickname, WorkerReceive) ~> ()
-fun worker(nick, c) {
-  try {
-    offer(c) {
-      case Chat(c) ->
-        var (msg, c) = receive(c);
-        chat(nick, msg);
-        c
-      case NewTopic(c) ->
-        var (topic, c) = receive(c);
-        newTopic(topic);
-        c
-    }
-  } as (c) in {
-    worker(nick, c)
-  } otherwise {
-    leave(nick)
-  }
-}
-
 sig disconnect :
   (Nickname, [Nickname], LinList(WorkerSend)) ~>
   ([Nickname], LinList(WorkerSend))
@@ -140,6 +57,90 @@ fun acceptor() {
   var c = accept(wap);
   ignore(spawn {join(c)});
   acceptor()
+}
+
+# reads incoming requests from the client, dispatches each command
+# to the supervisor loop which will broadcast to other session
+# clients
+sig worker : (Nickname, WorkerReceive) ~> ()
+fun worker(nick, c) {
+  try {
+    offer(c) {
+      case Chat(c) ->
+        var (msg, c) = receive(c);
+        chat(nick, msg);
+        c
+      case NewTopic(c) ->
+        var (topic, c) = receive(c);
+        newTopic(topic);
+        c
+    }
+  } as (c) in {
+    worker(nick, c)
+  } otherwise {
+    leave(nick)
+  }
+}
+
+# Main supervisor loop, containing server state. Awaits
+# (non-session) control messages to update the state, or broadcast
+# instructions to send things along session channels.
+sig supervisor : (Topic, [Nickname], LinList(WorkerSend)) ~> ()
+fun supervisor(topic, nicks, cs) {
+  var s = accept(sap);
+  offer(s) {
+    case Join(s) ->
+      var (d, s) = receive(s);
+      close(s);
+      var (name, d) = receive(d);
+      switch (filter(fun (nick) {nick == name}, nicks)) {
+        case [] ->
+          var workerSend = linFork(
+            linfun (clientReceive) {
+              worker(name,
+                     send((topic, nicks, clientReceive),
+                          select Join d))
+          });
+          var cs = linMap(
+            fun(c) {
+              var c = select Join c;
+              send (name, c)
+            }, cs);
+          supervisor(topic, name :: nicks, LinCons(workerSend, cs))
+        case _ ->
+          close(select Nope d);
+          supervisor(topic, nicks, cs)
+      }
+    case Chat(s) ->
+      var ((nick, msg), s) = receive(s);
+      close(s);
+      var cs = linMap(
+        fun(c) {
+          var c = select Chat c;
+          send ((nick, msg), c)
+        }, cs);
+      supervisor(topic, nicks, cs)
+    case NewTopic(s) ->
+      var newTopic = "hello";
+#      var (newTopic, s) = receive(s);
+      close(s);
+      var cs = linMap(
+        fun(c) {
+          var c = select NewTopic c;
+          send (newTopic, c)
+        }, cs);
+      supervisor(newTopic, nicks, cs)
+    case Leave(s) ->
+      var (nick, s) = receive(s);
+      close(s);
+      var (nicks, cs) = disconnect(nick, nicks, cs);
+      var cs = linMap(
+        fun(c) {
+          var c = select Leave c;
+          send(nick, c)
+        }, cs);
+      supervisor(topic, nicks, cs)
+  }
 }
 
 sig main : () ~> ()

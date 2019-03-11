@@ -873,18 +873,25 @@ let is_sessionable_point : (var_set -> 'a -> bool) -> var_set -> [< 'a meta_max_
     | `Recursive (var, t) ->
       check_rec var rec_vars true (flip f t)
 
-let rec is_sessionable_type : var_set -> typ -> bool =
-  fun rec_vars ->
+let rec is_sessionable_type : StringSet.t -> var_set -> typ -> bool =
+  fun rec_appls rec_vars ->
     function
     | #session_type -> true
-    | `Alias (_, t) -> is_sessionable_type rec_vars t
-    | `MetaTypeVar point -> is_sessionable_point is_sessionable_type rec_vars point
+    | `Alias (_, t) -> is_sessionable_type rec_appls rec_vars t
+    | `RecursiveApplication { r_unique_name; r_args; r_dual; r_unwind; _ } ->
+        if StringSet.mem r_unique_name rec_appls  then
+          true
+        else
+          let body = r_unwind r_args r_dual in
+          is_sessionable_type (StringSet.add r_unique_name rec_appls) rec_vars body
+    | `MetaTypeVar point ->
+        is_sessionable_point (is_sessionable_type rec_appls) rec_vars point
     | _ -> false
 
 let rec is_sessionable_field rec_vars =
   function
   | `Absent -> true
-  | `Present t -> is_sessionable_type rec_vars t
+  | `Present t -> is_sessionable_type StringSet.empty rec_vars t
   | `Var point -> is_sessionable_point is_sessionable_field rec_vars point
 
 let rec is_sessionable_row rec_vars (fields, row_var, _) =
@@ -913,6 +920,7 @@ let rec sessionify_type : var_set -> typ -> unit =
   fun rec_vars ->
     function
     | #session_type -> ()
+    | `RecursiveApplication _ -> ()
     | `Alias (_, t) -> sessionify_type rec_vars t
     | `MetaTypeVar point -> sessionify_point sessionify_type rec_vars point
     | _ -> assert false
@@ -932,7 +940,7 @@ let rec sessionify_row rec_vars (fields, row_var, _) =
 let is_session_type = is_session_type IntSet.empty
 let is_session_row = is_session_row IntSet.empty
 
-let is_sessionable_type = is_sessionable_type IntSet.empty
+let is_sessionable_type = is_sessionable_type StringSet.empty IntSet.empty
 let is_sessionable_row = is_sessionable_row IntSet.empty
 
 let sessionify_type = sessionify_type IntSet.empty
