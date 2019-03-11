@@ -172,10 +172,8 @@ and eq_type_args =
   unification environment:
     for stopping cycles during unification
 *)
-type unify_type_env = (datatype list) IntMap.t
+type unify_type_env = (datatype list) RecIdMap.t
 type unify_row_env = (row list) IntMap.t
-type unify_recty_env = (datatype list) StringMap.t
-
 type quantifier_stack = int * int IntMap.t * int IntMap.t
 
 let compatible_quantifiers (lvar, rvar) (_, lenv, renv) =
@@ -187,7 +185,6 @@ type unify_env =
   {tenv: unify_type_env;
    renv: unify_row_env;
    qstack: quantifier_stack;
-   recty_env: unify_recty_env
   }
 
 let rec unify' : unify_env -> (datatype * datatype) -> unit =
@@ -195,7 +192,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
   fun rec_env ->
   let rec_types = rec_env.tenv in
   let qstack = rec_env.qstack in
-  let recty_env = rec_env.recty_env in
 
   let is_unguarded_recursive t =
     let rec is_unguarded rec_types t =
@@ -212,10 +208,15 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     in
     is_unguarded IntSet.empty t in
 
-  let unify_rec ((var, body), t) =
+  let unify_rec unifier t =
+    let (key, body) =
+      match unifier with
+        | MuBound (i, typ) -> (MuBoundId i, typ)
+        | RecAppl { r_unique_name; r_args; r_unwind ; _ } -> 
+            (NominalId r_unique_name, r_unwind r_args) in
     let ts =
-      if IntMap.mem var rec_types then
-        IntMap.find var rec_types
+      if RecIdMap.mem key rec_types then
+        RecIdMap.find key rec_types
       else
         [body]
     in
@@ -223,18 +224,23 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     if List.exists (fun t' -> eq_types (t, t')) ts then
       ()
     else
-      unify' {rec_env with tenv=IntMap.add var (t::ts) rec_types} (body, t) in
+      unify' {rec_env with tenv=RecIdMap.add key (t::ts) rec_types} (body, t) in
 
+  (* Unification of two mu-bound recursive types.
+   * This extra machinery is not needed for the more nominal-style
+   * recursive types, since only names need to be compared. *)
   let unify_rec2 ((lvar, lbody), (rvar, rbody)) =
+    let lkey = MuBoundId lvar in
+    let rkey = MuBoundId rvar in
     let lts =
-      if IntMap.mem lvar rec_types then
-        IntMap.find lvar rec_types
+      if RecIdMap.mem lkey rec_types then
+        RecIdMap.find lkey rec_types
       else
         [lbody] in
 
     let rts =
-      if IntMap.mem rvar rec_types then
-        IntMap.find rvar rec_types
+      if RecIdMap.mem rkey rec_types then
+        RecIdMap.find rkey rec_types
       else
         [rbody]
     in
@@ -244,28 +250,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
       ()
     else
       unify' {rec_env with
-        tenv=(IntMap.add lvar (rbody::lts)
-              ->- IntMap.add rvar (lbody::rts)) rec_types} (lbody, rbody) in
-
-
-  (* Unification of recursive applications in the same recursive group.
-   * Similar to above, but uses a different environment. *)
-  let unify_recty { r_unique_name; r_args; r_unwind; _ } t =
-    let body = r_unwind r_args in
-    (* Cycle detection, based on unique IDs. *)
-    let ts =
-      if StringMap.mem r_unique_name recty_env then
-        StringMap.find r_unique_name recty_env
-      else
-        [body]
-    in
-    (* break cycles *)
-    if List.exists (fun t' -> eq_types (t, t')) ts then
-      ()
-    else
-      let new_recty_env =
-        StringMap.add r_unique_name (t :: ts) recty_env in
-      unify' {rec_env with recty_env = new_recty_env} (body, t) in
+        tenv=(RecIdMap.add lkey (rbody::lts)
+              ->- RecIdMap.add rkey (lbody::rts)) rec_types} (lbody, rbody) in
 
   (* introduce a recursive type
      give an error if it is non-well-founded and
@@ -504,7 +490,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                                           string_of_datatype (`MetaTypeVar lpoint) ^
                                             " with the non-recursive type "^ string_of_datatype (`MetaTypeVar rpoint))))
                 else
-                  unify_rec ((var, t'), t)
+                  unify_rec (MuBound (var, t')) t
               end;
               (*
                           it is critical that the arguments to Unionfind.union are in this order
@@ -520,7 +506,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                                           string_of_datatype (`MetaTypeVar rpoint) ^
                                             " with the non-recursive type "^ string_of_datatype (`MetaTypeVar lpoint))))
                 else
-                  unify_rec ((var, t'), t)
+                  unify_rec (MuBound (var, t')) t
               end;
               Unionfind.union lpoint rpoint
            | `Body t, `Body t' ->
@@ -591,7 +577,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                                         string_of_datatype (`MetaTypeVar point) ^
                                           " with the non-recursive type "^ string_of_datatype t)))
               else
-                unify_rec ((var, t'), t)
+                unify_rec (MuBound (var, t')) t
             end
          (* It's tempting to try to do this, but it isn't sound
                           as point may appear inside t
@@ -623,10 +609,19 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                          "' with abstract type '"^string_of_datatype t2^"'")))
     | `Application (_, ls), `Application (_, rs) ->
        List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) ls rs
+    | `RecursiveApplication a1, `RecursiveApplication a2 ->
+        let (n1, args1) = (a1.r_unique_name, a1.r_args) in
+        let (n2, args2) = (a2.r_unique_name, a2.r_args) in
+        if n1 <> n2 then
+          raise (Failure
+                  (`Msg ("Cannot unify recursive type '"^string_of_datatype t1^
+                           "' with recursive type '"^string_of_datatype t2^"'")))
+        else
+           List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) args1 args2
     | `RecursiveApplication appl, t2 ->
-       unify_recty appl t2
+       unify_rec (RecAppl appl) t2
     |  t1, `RecursiveApplication appl->
-       unify_recty appl t1
+       unify_rec (RecAppl appl) t1
     | `ForAll (lsref, lbody), `ForAll (rsref, rbody) ->
        (* Check that all quantifiers that were originally rigid
                  are still distinct *)
@@ -1303,18 +1298,16 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
 
 let unify (t1, t2) =
   unify'
-    {tenv=IntMap.empty;
+    {tenv=RecIdMap.empty;
      renv=IntMap.empty;
-     qstack=(0, IntMap.empty, IntMap.empty);
-     recty_env=StringMap.empty} (t1, t2)
+     qstack=(0, IntMap.empty, IntMap.empty) } (t1, t2)
 
 (* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
 and unify_rows (row1, row2) =
   unify_rows'
-    {tenv=IntMap.empty;
+    {tenv=RecIdMap.empty;
      renv=IntMap.empty;
-     qstack=(0, IntMap.empty, IntMap.empty);
-     recty_env=StringMap.empty} (row1, row2)
+     qstack=(0, IntMap.empty, IntMap.empty)} (row1, row2)
 
 (* external interface *)
 let datatypes = unify

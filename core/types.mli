@@ -88,6 +88,14 @@ type lens_phrase =
 (* End Lenses *)
 
 (* Type groups *)
+
+type rec_id =
+  | MuBoundId of int
+  | NominalId of string [@@deriving show]
+
+module type RECIDMAP = Utility.Map with type key = rec_id
+module RecIdMap : RECIDMAP
+
 type tygroup = {
   id: int;
   type_map: ((quantifier list * typ) Utility.StringMap.t);
@@ -99,6 +107,9 @@ and rec_appl = {
   r_unique_name: string;
   r_args: type_arg list;
   r_unwind: (type_arg list) -> typ }
+and rec_unifier =
+  | RecAppl of rec_appl
+  | MuBound of (int * typ)
 and typ =
     [ `Not_typed
     | `Primitive of Primitive.t
@@ -143,6 +154,8 @@ and type_arg =
 type session_type = (typ, row) session_type_basis
 
 type datatype = typ
+
+val unifier_key : rec_unifier -> rec_id
 
 (* base kind stuff *)
 val is_base_type : datatype -> bool

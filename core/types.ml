@@ -131,6 +131,17 @@ type lens_phrase =
 
 (* End of Lenses *)
 
+type rec_id =
+  | MuBoundId of int
+  | NominalId of string [@@deriving show]
+
+module RecId = struct
+  type t = rec_id [@@deriving show]
+  let compare = Pervasives.compare
+end
+module type RECIDMAP = Utility.Map with type key = rec_id
+module RecIdMap = Map.Make(RecId)
+
 type tygroup = {
   id: int;
   type_map: ((quantifier list * typ) Utility.StringMap.t);
@@ -142,6 +153,9 @@ and rec_appl = {
   r_unique_name: string;
   r_args: type_arg list;
   r_unwind: (type_arg list) -> typ }
+and rec_unifier =
+  | RecAppl of rec_appl
+  | MuBound of (int * typ)
 and typ =
     [ `Not_typed
     | `Primitive of Primitive.t
@@ -185,6 +199,10 @@ and type_arg =
 
 type session_type = (typ, row) session_type_basis
   [@@deriving show]
+
+let unifier_key = function
+  | RecAppl { r_unique_name; _ } -> NominalId r_unique_name
+  | MuBound (i, _) -> MuBoundId i
 
 let dummy_type = `Primitive Primitive.Int
 
