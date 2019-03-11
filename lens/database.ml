@@ -1,4 +1,4 @@
-open Lens_operators
+open Operators
 open Lens_utility
 module LPV = Lens_phrase_value
 module Phrase = Lens_phrase

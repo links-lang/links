@@ -15,9 +15,9 @@ module Phrase = struct
   module Typesugar = Lens_phrase_typesugar
 end
 
-module Operators = Lens_operators
+module Operators = Operators
 
-module Type = Lens_type
+module Type = Type
 module Value = Lens_value
 module Database = Database
 module Statistics = Lens_statistics

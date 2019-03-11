@@ -1,4 +1,4 @@
-open Lens_operators
+open Operators
 open Lens_utility
 open Result.O
 module Sugar = Lens_phrase_sugar
