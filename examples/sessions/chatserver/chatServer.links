@@ -121,8 +121,7 @@ fun supervisor(topic, nicks, cs) {
         }, cs);
       supervisor(topic, nicks, cs)
     case NewTopic(s) ->
-      var newTopic = "hello";
-#      var (newTopic, s) = receive(s);
+      var (newTopic, s) = receive(s);
       close(s);
       var cs = linMap(
         fun(c) {
