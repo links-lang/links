@@ -12,23 +12,23 @@ let error t = raise (TypeDestructionError t)
     (perhaps we can use this version of concrete_type everywhere)
 *)
 let concrete_type t =
-  let rec ct rec_names recty_names t : datatype =
+  let rec ct rec_names t : datatype =
     match t with
-      | `Alias (_, t) -> ct rec_names recty_names t
+      | `Alias (_, t) -> ct rec_names t
       | `MetaTypeVar point ->
           begin
             match Unionfind.find point with
-              | `Body t -> ct rec_names recty_names t
+              | `Body t -> ct rec_names t
               | `Recursive (var, t) ->
-                  if IntSet.mem var rec_names then
+                  if RecIdSet.mem (MuBoundId var) rec_names then
                     `MetaTypeVar point
                   else
-                    ct (IntSet.add var rec_names) recty_names t
+                    ct (RecIdSet.add (MuBoundId var) rec_names) t
               | _ -> t
           end
       | `ForAll (qs, t) ->
           begin
-            match ct rec_names recty_names t with
+            match ct rec_names t with
               | `ForAll (qs', t') ->
                   `ForAll (box_quantifiers (unbox_quantifiers qs @ unbox_quantifiers qs'), t')
               | t ->
@@ -39,15 +39,15 @@ let concrete_type t =
                   end
           end
       | `Dual s -> dual_type s
-      | `RecursiveApplication appl ->
-          if (StringSet.mem appl.r_unique_name recty_names) then
+      | `RecursiveApplication ({ r_unique_name; r_args; r_unwind ; _ } as appl) ->
+          if (RecIdSet.mem (NominalId r_unique_name) rec_names) then
             `RecursiveApplication appl
           else
-            let body = appl.r_unwind appl.r_args in
-            ct rec_names (StringSet.add appl.r_unique_name recty_names) body
+            let body = r_unwind r_args in
+            ct (RecIdSet.add (NominalId r_unique_name) rec_names) body
       | _ -> t
   in
-    ct (IntSet.empty) (StringSet.empty) t
+    ct RecIdSet.empty t
 
 let extract_row t = match concrete_type t with
   | `Effect row

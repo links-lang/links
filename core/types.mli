@@ -95,6 +95,9 @@ type rec_id =
 
 module type RECIDMAP = Utility.Map with type key = rec_id
 module RecIdMap : RECIDMAP
+module type RECIDSET = Utility.Set with type elt = rec_id
+module RecIdSet : RECIDSET
+
 
 type tygroup = {
   id: int;

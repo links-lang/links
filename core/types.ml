@@ -142,6 +142,10 @@ end
 module type RECIDMAP = Utility.Map with type key = rec_id
 module RecIdMap = Map.Make(RecId)
 
+module type RECIDSET = Utility.Set with type elt = rec_id
+module RecIdSet : RECIDSET = Set.Make(RecId)
+
+
 type tygroup = {
   id: int;
   type_map: ((quantifier list * typ) Utility.StringMap.t);
