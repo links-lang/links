@@ -39,11 +39,11 @@ let concrete_type t =
                   end
           end
       | `Dual s -> dual_type s
-      | `RecursiveApplication ({ r_unique_name; r_args; r_unwind ; _ } as appl) ->
+      | `RecursiveApplication ({ r_unique_name; r_dual; r_args; r_unwind ; _ } as appl) ->
           if (RecIdSet.mem (NominalId r_unique_name) rec_names) then
             `RecursiveApplication appl
           else
-            let body = r_unwind r_args in
+            let body = r_unwind r_args r_dual in
             ct (RecIdSet.add (NominalId r_unique_name) rec_names) body
       | _ -> t
   in

@@ -154,9 +154,10 @@ type tygroup = {
 (* Types *)
 and rec_appl = {
   r_name: string;
+  r_dual: bool;
   r_unique_name: string;
   r_args: type_arg list;
-  r_unwind: (type_arg list) -> typ }
+  r_unwind: type_arg list -> bool -> typ }
 and rec_unifier =
   | RecAppl of rec_appl
   | MuBound of (int * typ)
@@ -1346,6 +1347,8 @@ let rec dual_type : var_map -> datatype -> datatype =
       | `Dual s ->
         (* TODO: is this correct? *)
         sdt s
+      | `RecursiveApplication appl ->
+          `RecursiveApplication { appl with r_dual = (not appl.r_dual) }
       | `End -> `End
       (* it sometimes seems tempting to preserve aliases here, but it
          won't always work - e.g. when we use dual_type to expose a
@@ -1386,6 +1389,8 @@ and subst_dual_type : var_map -> datatype -> datatype =
         | `Alias (_, t) -> sdt t
         | `Application (abs, ts) -> `Application (abs, List.map (subst_dual_type_arg rec_points) ts)
         | `RecursiveApplication app ->
+            (* I don't think we need to do anything with the dualisation flag
+             * here -- this should be sorted by `dual_type` above. *)
             `RecursiveApplication { app with r_args = 
               List.map (subst_dual_type_arg rec_points) app.r_args }
         | `ForAll (qs, body) -> `ForAll (qs, sdt body)
@@ -1401,7 +1406,9 @@ and subst_dual_type : var_map -> datatype -> datatype =
               else
                 let var' = fresh_raw_variable () in
                 let point = Unionfind.fresh (`Recursive (var', dummy_type)) in
-                  Unionfind.change point (`Recursive (var', subst_dual_type (TypeVarMap.add var (false, point) rec_points) t));
+                  Unionfind.change point (`Recursive (var',
+                    subst_dual_type
+                      (TypeVarMap.add var (false, point) rec_points) t));
                   `MetaTypeVar point
             | `Body s -> sdt s
           end

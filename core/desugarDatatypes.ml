@@ -234,13 +234,14 @@ struct
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers qs in
 
-                  let r_unwind args =
+                  let r_unwind args dual =
                     let (_, body) = StringMap.find tycon !tygroup_ref.type_map in
-                    Instantiate.recursive_application tycon qs args body in
+                    let body = Instantiate.recursive_application tycon qs args body in
+                    if dual then dual_type body else body in
 
                   let r_unique_name = tycon ^ (string_of_int !tygroup_ref.id) in
 
-                  `RecursiveApplication { r_name = tycon; r_unique_name; r_args; r_unwind }
+                  `RecursiveApplication { r_name = tycon; r_dual = false; r_unique_name; r_args; r_unwind }
             end
         | Primitive k -> `Primitive k
         | DB -> `Primitive Primitive.DB

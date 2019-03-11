@@ -107,9 +107,10 @@ type tygroup = {
 (* Types *)
 and rec_appl = {
   r_name: string;
+  r_dual: bool;
   r_unique_name: string;
   r_args: type_arg list;
-  r_unwind: (type_arg list) -> typ }
+  r_unwind: type_arg list -> bool -> typ }
 and rec_unifier =
   | RecAppl of rec_appl
   | MuBound of (int * typ)

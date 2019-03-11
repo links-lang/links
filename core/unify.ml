@@ -212,8 +212,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     let (key, body) =
       match unifier with
         | MuBound (i, typ) -> (MuBoundId i, typ)
-        | RecAppl { r_unique_name; r_args; r_unwind ; _ } -> 
-            (NominalId r_unique_name, r_unwind r_args) in
+        | RecAppl { r_unique_name; r_dual; r_args; r_unwind ; _ } -> 
+            (NominalId r_unique_name, r_unwind r_args r_dual) in
     let ts =
       if RecIdMap.mem key rec_types then
         RecIdMap.find key rec_types
@@ -616,6 +616,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
           raise (Failure
                   (`Msg ("Cannot unify recursive type '"^string_of_datatype t1^
                            "' with recursive type '"^string_of_datatype t2^"'")))
+        else if a1.r_dual <> a2.r_dual then
+          raise (Failure
+                  (`Msg ("Cannot unify recursive session type '"^string_of_datatype t1^
+                           "' with its dual")))
         else
            List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) args1 args2
     | `RecursiveApplication appl, t2 ->
