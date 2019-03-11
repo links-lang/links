@@ -1,10 +1,9 @@
 open Lens_utility
 module Column = Column
-module Phrase = Lens_phrase
 
 type t =
   { fds: Fun_dep.Set.t
-  ; predicate: Lens_phrase.t option
+  ; predicate: Phrase.t option
   ; cols: Column.t list }
 [@@deriving show]
 

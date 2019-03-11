@@ -1,4 +1,4 @@
-open Lens_value
+open Value
 open Lens_utility
 
 module Sorted = Sorted_records
@@ -6,17 +6,17 @@ module Sorted = Sorted_records
 let matches_change changes =
   let is_changed ((cols_l, _cols_r),(vals)) =
     let vals_l = List.map ~f:(fun (left,_) -> left) vals in
-    Lens_phrase.Option.in_expr cols_l vals_l in
-  List.map ~f:is_changed changes |> Lens_phrase.List.fold_or_opt
+    Phrase.Option.in_expr cols_l vals_l in
+  List.map ~f:is_changed changes |> Phrase.List.fold_or_opt
 
 let delta_merge_affected lens data =
-  let sort = Lens_value.sort lens in
+  let sort = Value.sort lens in
   let fun_deps = Sort.fds sort in
   let changelist = Sorted.calculate_fd_changelist data ~fun_deps in
   (* query relevant rows in database *)
   let predicate = matches_change changelist in
-  let res = Lens_value.lens_get_select_opt lens ~predicate in
-  let res = Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records:res in
+  let res = Value.lens_get_select_opt lens ~predicate in
+  let res = Sorted.construct_cols ~columns:(Value.cols_present_aliases lens) ~records:res in
   (* perform relational update *)
   let rel_merge = Sorted_records.relational_merge res ~update_with:data ~fun_deps in
   Sorted.merge rel_merge (Sorted.negate res)
@@ -24,20 +24,20 @@ let delta_merge_affected lens data =
 let query_join_records lens set on =
   let proj = Sorted.project_onto set ~columns:on in
   let recs = Sorted.all_values proj in
-  let predicate = Lens_phrase.Option.in_expr on recs in
-  let records = Lens_value.lens_get_select_opt lens ~predicate in
-  Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records
+  let predicate = Phrase.Option.in_expr on recs in
+  let records = Value.lens_get_select_opt lens ~predicate in
+  Sorted.construct_cols ~columns:(Value.cols_present_aliases lens) ~records
 
 let query_project_records lens set key drop =
   let set = Sorted.force_positive set in
   let proj = Sorted.project_onto set ~columns:key in
   let recs = Sorted.all_values proj in
-  let predicate = Lens_phrase.Option.in_expr key recs in
-  let records = Lens_value.lens_get_select_opt lens ~predicate in
-  let records = Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records in
+  let predicate = Phrase.Option.in_expr key recs in
+  let records = Value.lens_get_select_opt lens ~predicate in
+  let records = Sorted.construct_cols ~columns:(Value.cols_present_aliases lens) ~records in
   Sorted.project_onto records ~columns:(List.append key drop)
 
-let lens_put_set_step lens delt (fn : Lens_value.t -> Sorted.t -> unit) =
+let lens_put_set_step lens delt (fn : Value.t -> Sorted.t -> unit) =
   match lens with
   | Lens _ -> fn lens delt
   | LensDrop {lens = l; drop; key; default; _ } ->
@@ -46,9 +46,9 @@ let lens_put_set_step lens delt (fn : Lens_value.t -> Sorted.t -> unit) =
     fn l delt
   | LensJoin {left; right; on; del_left; del_right; _ } ->
     let cols_simp = List.map ~f:(fun (a,_,_) -> a) on in
-    let sort1 = Lens_value.sort left in
+    let sort1 = Value.sort left in
     let proj1 = Sorted.project_onto delt ~columns:(Sort.cols_present_aliases sort1) in
-    let sort2 = Lens_value.sort right in
+    let sort2 = Value.sort right in
     let proj2 = Sorted.project_onto delt ~columns:(Sort.cols_present_aliases sort2) in
     let delta_m0 = delta_merge_affected left proj1 in
     let delta_n0 = delta_merge_affected right proj2 in
@@ -75,7 +75,7 @@ let lens_put_set_step lens delt (fn : Lens_value.t -> Sorted.t -> unit) =
     fn left delta_m;
     fn right delta_n
   | LensSelect {lens; predicate; _ } ->
-    let delta_m1 = Sorted.merge (delta_merge_affected (Lens_value.lens_select lens ~predicate:(Lens_phrase.not' predicate)) delt)
+    let delta_m1 = Sorted.merge (delta_merge_affected (Value.lens_select lens ~predicate:(Phrase.not' predicate)) delt)
         (Sorted.negative delt) in
     let m1_cap_P = Sorted.filter delta_m1 ~predicate in
     let delta_nhash = Sorted.merge (m1_cap_P) (Sorted.negate delt) in
@@ -84,12 +84,12 @@ let lens_put_set_step lens delt (fn : Lens_value.t -> Sorted.t -> unit) =
   | _ -> failwith "Unsupport lens."
 
 let lens_get_delta lens data =
-  let columns = Lens_value.cols_present_aliases lens in
-  let orig = Sorted.construct_cols ~columns ~records:(Lens_value.lens_get lens) in
+  let columns = Value.cols_present_aliases lens in
+  let orig = Sorted.construct_cols ~columns ~records:(Value.lens_get lens) in
   let data = Sorted.merge (Sorted.construct_cols ~columns ~records:data) (Sorted.negate orig) in
   data
 
-let lens_put_step lens data (fn : Lens_value.t -> Sorted.t -> unit) =
+let lens_put_step lens data (fn : Value.t -> Sorted.t -> unit) =
   let data = lens_get_delta lens data in
   lens_put_set_step lens data fn
 
@@ -114,8 +114,8 @@ let apply_delta ~table ~database:db data =
   let columns, (insert_vals, update_vals, delete_vals) = Sorted.to_diff data ~key in
   let prepare_where row =
     List.zip_nofail key row
-    |> List.map ~f:(fun (k,v) -> Lens_phrase.equal (Lens_phrase.var k) (Lens_phrase.Constant.of_value v))
-    |> Lens_phrase.List.fold_and in
+    |> List.map ~f:(fun (k,v) -> Phrase.equal (Phrase.var k) (Phrase.Constant.of_value v))
+    |> Phrase.List.fold_and in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
   let fmt_delete f row =
     let predicate = prepare_where row in
@@ -147,7 +147,7 @@ let get_fds (fds : (string list * string list) list) (cols : Column.t list) : Fu
     Fun_dep.make (Alias.Set.of_list left) (Alias.Set.of_list right) in
   Fun_dep.Set.of_list (List.map ~f:fd_of fds)
 
-let lens_put (lens : Lens_value.t) (data : Lens_phrase_value.t list) =
+let lens_put (lens : Value.t) (data : Phrase_value.t list) =
   let rec do_step_rec lens delt =
     match lens with
     | Lens { table; database; _ } -> apply_delta ~table ~database delt

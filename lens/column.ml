@@ -1,6 +1,6 @@
 open Lens_utility
 
-module Type = Lens_phrase_type
+module Type = Phrase_type
 
 type t =
   { table: string
@@ -45,7 +45,7 @@ module Set = struct
   include Set.Make (Compare)
 
   let dummy_alias alias =
-    {alias; present= true; table= ""; name= ""; typ= Lens_phrase_type.Bool}
+    {alias; present= true; table= ""; name= ""; typ= Phrase_type.Bool}
 
   let alias_set t =
     to_seq t |> Seq.filter present |> Seq.map alias |> Alias.Set.of_seq

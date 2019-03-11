@@ -7,7 +7,7 @@ type t
 val fds : t -> Fun_dep.Set.t
 
 (** Get the predicate which defines all valid possible tuples *)
-val predicate : t -> Lens_phrase.t option
+val predicate : t -> Phrase.t option
 
 (** Get the list of columns belonging to the lens sort *)
 val cols : t -> Column.List.t
@@ -24,7 +24,7 @@ val present_colset : t -> Column.Set.t
 (** Construct a lens sort *)
 val make :
      ?fds:Fun_dep.Set.t
-  -> ?predicate:Lens_phrase.t option
+  -> ?predicate:Phrase.t option
   -> Column.t list
   -> t
 
@@ -32,7 +32,7 @@ val make :
 val find_col_alias : t -> alias:string -> Column.t option
 
 (** Replace the predicate *)
-val update_predicate : t -> predicate:Lens_phrase.t option -> t
+val update_predicate : t -> predicate:Phrase.t option -> t
 
 (** Update all columns with a table name *)
 val update_table_name : t -> table:string -> t
@@ -41,7 +41,7 @@ val update_table_name : t -> table:string -> t
 val join_lens_should_swap : t -> t -> on:string list -> bool
 
 (** Create a selection lens using the specified predicate to filter records. *)
-val select_lens_sort : t -> predicate:Lens_phrase.t -> t
+val select_lens_sort : t -> predicate:Phrase.t -> t
 
 (** Create a drop lens sort. *)
 val drop_lens_sort : t -> drop:Alias.Set.t -> key:Alias.Set.t -> t
@@ -51,6 +51,6 @@ val join_lens_sort :
   t -> t -> on:string list -> t * (string * string * string) list
 
 (** Convert the sort into a phrase type. *)
-val record_type : t -> Lens_phrase_type.t
+val record_type : t -> Phrase_type.t
 
 val equal : t -> t -> bool

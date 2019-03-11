@@ -5,7 +5,7 @@
     `var "A" > 7 && var "B" < 20` using this row as the context. Expressions are
     translatable to SQL*)
 
-module Value = Lens_phrase_value
+module Value = Phrase_value
 
 type t =
   | Constant of Value.t
@@ -58,7 +58,7 @@ val rename_var : t -> replace:string Alias.Map.t -> t
 (** Replace all variable nodes with nodes by the given map. *)
 val replace_var : t -> replace:Value.t Alias.Map.t -> t
 
-val of_sugar : 'a Lens_phrase_sugar.phrase -> t
+val of_sugar : 'a Phrase_sugar.phrase -> t
 
 module Constant : sig
   (** Create a constant bool phrase *)

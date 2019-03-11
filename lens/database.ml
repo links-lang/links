@@ -1,7 +1,6 @@
 open Operators
 open Lens_utility
-module LPV = Lens_phrase_value
-module Phrase = Lens_phrase
+module LPV = Phrase_value
 
 type t =
   { driver_name: unit -> string
@@ -10,8 +9,8 @@ type t =
   ; execute: string -> unit
   ; execute_select:
          string
-      -> field_types:(string * Lens_phrase_type.t) list
-      -> Lens_phrase_value.t list }
+      -> field_types:(string * Phrase_type.t) list
+      -> Phrase_value.t list }
 
 module Table = struct
   type t = {name: string; keys: string list list}
@@ -115,7 +114,7 @@ module Select = struct
   type t =
     { tables: (string * string) list
     ; cols: Column.t list
-    ; predicate: Lens_phrase.t option
+    ; predicate: Phrase.t option
     ; db: db }
 
   let of_sort t ~sort =
@@ -151,17 +150,17 @@ module Select = struct
 
   let query_exists query ~database =
     let sql = Format.asprintf "SELECT EXISTS (%a) AS t" fmt query in
-    let field_types = [("t", Lens_phrase_type.Bool)] in
+    let field_types = [("t", Phrase_type.Bool)] in
     let res = database.execute_select sql ~field_types in
     match res with
-    | [Lens_phrase_value.Record [(_, Lens_phrase_value.Bool b)]] -> b
+    | [Phrase_value.Record [(_, Phrase_value.Bool b)]] -> b
     | _ -> failwith "Expected singleton value."
 end
 
 module Delete = struct
   type db = t
 
-  type t = {table: string; predicate: Lens_phrase.t option; db: db}
+  type t = {table: string; predicate: Phrase.t option; db: db}
 
   let fmt_table ~(db : db) f v = Format.fprintf f "%s" @@ db.quote_field v
 
@@ -180,8 +179,8 @@ module Update = struct
 
   type t =
     { table: string
-    ; predicate: Lens_phrase.t option
-    ; set: (string * Lens_phrase_value.t) list
+    ; predicate: Phrase.t option
+    ; set: (string * Phrase_value.t) list
     ; db: db }
 
   let fmt_set_value ~db f (key, value) =
@@ -210,7 +209,7 @@ module Insert = struct
   type t =
     { table: string
     ; columns: string list
-    ; values: Lens_phrase_value.t list list
+    ; values: Phrase_value.t list list
     ; db: db }
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v

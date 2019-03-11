@@ -2,7 +2,7 @@
 
 type t [@@deriving show]
 
-val make : table:string -> name:string -> alias:string -> typ:Lens_phrase_type.t -> present:bool -> t
+val make : table:string -> name:string -> alias:string -> typ:Phrase_type.t -> present:bool -> t
 
 (** Return the name of the column as the column would be bound in the user program. *)
 val alias : t -> string
@@ -14,7 +14,7 @@ val name : t -> string
 val table : t -> string
 
 (** Return the column type. *)
-val typ : t -> Lens_phrase_type.t
+val typ : t -> Phrase_type.t
 
 (** Determine if the column is present. *)
 val present : t -> bool
@@ -73,5 +73,5 @@ module List : sig
   val find_alias : t -> alias:string -> elt option
 
   (** Convert a list of records to a Links type. *)
-  val record_type : t -> Lens_phrase_type.t
+  val record_type : t -> Phrase_type.t
 end

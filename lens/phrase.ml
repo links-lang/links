@@ -1,9 +1,9 @@
 open Operators
 open Lens_utility
-module Value = Lens_phrase_value
+module Value = Phrase_value
 
 type t =
-  | Constant of Lens_phrase_value.t
+  | Constant of Value.t
   | Var of Alias.t
   | InfixAppl of Operators.Binary.t * t * t
   | UnaryAppl of Operators.Unary.t * t
@@ -31,7 +31,7 @@ let tuple v = TupleLit v
 let tuple_singleton v = tuple [v]
 
 let rec of_sugar (_, phrase) =
-  let module LPS = Lens_phrase_sugar in
+  let module LPS = Phrase_sugar in
   match phrase with
   | LPS.Constant c -> Constant c
   | LPS.InfixAppl (op, p, q) -> InfixAppl (op, of_sugar p, of_sugar q)
@@ -84,13 +84,13 @@ let rename_var expr ~replace =
       | _ -> expr )
 
 module Constant = struct
-  let bool v = Constant (Lens_phrase_value.Bool v)
+  let bool v = Constant (Value.Bool v)
 
-  let int v = Constant (Lens_phrase_value.Int v)
+  let int v = Constant (Value.Int v)
 
-  let float v = Constant (Lens_phrase_value.Float v)
+  let float v = Constant (Value.Float v)
 
-  let string v = Constant (Lens_phrase_value.String v)
+  let string v = Constant (Value.String v)
 
   let of_value v = Constant v
 end
@@ -166,7 +166,7 @@ let rec eval expr get_val =
                  Value.pp res) ) )
   | In (names, vals) ->
       let find = List.map ~f:get_val names in
-      let equal s t = List.for_all2_exn ~f:Lens_phrase_value.equal s t in
+      let equal s t = List.for_all2_exn ~f:Value.equal s t in
       let res = List.mem ~equal vals find in
       box_bool res
   | Case (inp, cases, otherwise) -> (

@@ -6,19 +6,19 @@ module Fun_dep = Fun_dep
 module Alias = Alias
 
 module Phrase = struct
-  include Lens_phrase
+  include Phrase
 
-  module Sugar = Lens_phrase_sugar
+  module Sugar = Phrase_sugar
 
-  module Type = Lens_phrase_type
+  module Type = Phrase_type
 
-  module Typesugar = Lens_phrase_typesugar
+  module Typesugar = Phrase_typesugar
 end
 
 module Operators = Operators
 
 module Type = Type
-module Value = Lens_value
+module Value = Value
 module Database = Database
 module Statistics = Lens_statistics
 module Sorted_records = Sorted_records

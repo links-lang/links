@@ -1,7 +1,7 @@
 open Lens_utility
 open Lens_utility.O
 
-module Value = Lens_phrase_value
+module Value = Phrase_value
 
 module Simple_record = struct
   (** simplified record type drops column names for efficiency *)
@@ -202,7 +202,7 @@ let filter rs ~predicate =
     | Some a -> a row
     | None -> failwith ("Column " ^ col ^ " not in record set.") in
   let filter rows = Array.of_list (List.filter (
-      fun r -> Lens_phrase.eval predicate (get_col_val r) = Value.box_bool true)
+      fun r -> Phrase.eval predicate (get_col_val r) = Value.box_bool true)
       (Array.to_list rows)) in
   {
     columns = rs.columns;

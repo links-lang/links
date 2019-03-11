@@ -1,24 +1,21 @@
 open Lens_utility
 
-module Phrase = Lens_phrase
-module Fun_dep = Fun_dep
-
 type t =
   | Lens of {table: Database.Table.t; database: Database.t; sort: Sort.t}
-  | LensMem of {records: Lens_phrase_value.t list; sort: Sort.t}
-  | LensSelect of {lens: t; predicate: Lens_phrase.t; sort: Sort.t}
+  | LensMem of {records: Phrase_value.t list; sort: Sort.t}
+  | LensSelect of {lens: t; predicate: Phrase.t; sort: Sort.t}
   | LensJoin of
       { left: t
       ; right: t
       ; on: (string * string * string) list
-      ; del_left: Lens_phrase.t
-      ; del_right: Lens_phrase.t
+      ; del_left: Phrase.t
+      ; del_right: Phrase.t
       ; sort: Sort.t }
   | LensDrop of
       { lens: t
       ; drop: string
       ; key: string
-      ; default: Lens_phrase_value.t
+      ; default: Phrase_value.t
       ; sort: Sort.t }
 
 let show v =

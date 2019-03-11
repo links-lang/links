@@ -5,9 +5,9 @@
 open Lens_utility
 
 module Simple_record : sig
-  type t = Lens_phrase_value.t list
+  type t = Phrase_value.t list
 
-  val compare_val: Lens_phrase_value.t -> Lens_phrase_value.t -> int
+  val compare_val: Phrase_value.t -> Phrase_value.t -> int
 
   val compare :  t -> t -> int
 
@@ -32,9 +32,9 @@ end
 
 type t
 
-val construct : records:Lens_phrase_value.t list -> t
+val construct : records:Phrase_value.t list -> t
 
-val construct_cols : columns:string list -> records:Lens_phrase_value.t list -> t
+val construct_cols : columns:string list -> records:Phrase_value.t list -> t
 
 val construct_full : columns:string list -> plus:Simple_record.t list -> neg:Simple_record.t list -> t
 
@@ -80,7 +80,7 @@ val project_onto : t -> columns:string list -> t
 val project_onto_set : t -> onto:t -> t
 
 (** Filter out all records that don't match predicate. *)
-val filter : t -> predicate:Lens_phrase.t -> t
+val filter : t -> predicate:Phrase.t -> t
 
 (** Perform a delta merge (\oplus) between two record sets. *)
 val merge : t -> t -> t
@@ -104,7 +104,7 @@ val negative : t -> t
 val minus : t -> t -> t
 
 (** Convert a positive delta set into a value type. *)
-val to_value : t -> Lens_phrase_value.t list
+val to_value : t -> Phrase_value.t list
 
 val project_fun_dep :
   t
@@ -136,7 +136,7 @@ val relational_extend :
   -> key:string
   -> by:string
   -> data:t
-  -> default:Lens_phrase_value.t
+  -> default:Phrase_value.t
   -> t
 
 (** Get all distinct values of both positive and negative records in this set in a sorted list. *)

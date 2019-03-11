@@ -1,17 +1,17 @@
-open Lens_value
-open Lens_phrase_value
+open Value
+open Phrase_value
 
 module Sorted = Sorted_records
 
-let lens_put_set_step lens data (fn : Lens_value.t -> Sorted.t -> unit) =
+let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
   let get l =
-    let dat = Lens_value.lens_get l in
-    Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases l) ~records:dat in
+    let dat = Value.lens_get l in
+    Sorted.construct_cols ~columns:(Value.cols_present_aliases l) ~records:dat in
   match lens with
   | Lens _ -> fn lens data
   | LensDrop { lens = l; drop; key; default; _ } ->
     let r = get l in
-    let columns = Lens_value.cols_present_aliases lens in
+    let columns = Value.cols_present_aliases lens in
     let nplus = Sorted.minus data (Sorted.project_onto r ~columns) in
     let a = Sorted.construct ~records:([box_record [drop, default]]) in
     let on_left = List.map (fun v -> v,v,v) columns in
@@ -19,8 +19,8 @@ let lens_put_set_step lens data (fn : Lens_value.t -> Sorted.t -> unit) =
     let res = Sorted.relational_update ~fun_deps:(Fun_dep.Set.of_lists [[key], [drop]]) m ~update_with:r in
     fn l res
   | LensJoin {left; right; on; del_left; del_right; _} ->
-    let getfds l = Lens_value.fundeps l in
-    let cols l = Lens_value.cols_present_aliases l in
+    let getfds l = Value.fundeps l in
+    let cols l = Value.cols_present_aliases l in
     let r = get left in
     let s = get right in
     let m0 = Sorted.relational_update
@@ -40,7 +40,7 @@ let lens_put_set_step lens data (fn : Lens_value.t -> Sorted.t -> unit) =
     fn left m;
     fn right n
   | LensSelect { lens = l; predicate; _ } ->
-    let sort = Lens_value.sort l in
+    let sort = Value.sort l in
     let r = get l in
     let m1 = Sorted.relational_update ~fun_deps:(Sort.fds sort) ~update_with:data (Sorted.filter r ~predicate) in
     let nh = Sorted.minus (Sorted.filter m1 ~predicate) data in
@@ -73,13 +73,13 @@ let apply_table_data ~table ~database data =
       exec cmds |> ignore
     end
 
-let lens_put_step lens data (fn : Lens_value.t -> Sorted.t -> unit) =
-  let data = Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records:data in
+let lens_put_step lens data (fn : Value.t -> Sorted.t -> unit) =
+  let data = Sorted.construct_cols ~columns:(Value.cols_present_aliases lens) ~records:data in
   lens_put_set_step lens data fn
 
-let lens_put (lens : Lens_value.t) (data : Lens_phrase_value.t list) =
+let lens_put (lens : Value.t) (data : Phrase_value.t list) =
   let rec do_step_rec lens data =
     match lens with
     | Lens { table; database; _ } -> apply_table_data ~table ~database data
     | _ -> lens_put_set_step lens data do_step_rec in
-  do_step_rec lens (Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records:data)
+  do_step_rec lens (Sorted.construct_cols ~columns:(Value.cols_present_aliases lens) ~records:data)

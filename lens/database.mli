@@ -3,7 +3,7 @@ type t =  {
   escape_string : string -> string;
   quote_field : string -> string;
   execute : string -> unit;
-  execute_select : string -> field_types:(string * Lens_phrase_type.t) list -> Lens_phrase_value.t list;
+  execute_select : string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
 }
 
 module Table : sig
@@ -25,13 +25,13 @@ val fmt_tables : db:t -> Format.formatter -> (string * string) list -> unit
 val fmt_cols : db:t -> Format.formatter -> Column.t list -> unit
 
 (** Format a phrase. *)
-val fmt_phrase : db:t -> map:(string -> string) -> Format.formatter -> Lens_phrase.t -> unit
+val fmt_phrase : db:t -> map:(string -> string) -> Format.formatter -> Phrase.t -> unit
 
 (** Formats a phrase using a dummy db driver. This should only be used for debugging. *)
-val fmt_phrase_dummy : Format.formatter -> Lens_phrase.t -> unit
+val fmt_phrase_dummy : Format.formatter -> Phrase.t -> unit
 
 (** Convert the phrase to a string using a dummy db driver. This should only be used for debugging. *)
-val to_string_dummy : Lens_phrase.t -> string
+val to_string_dummy : Phrase.t -> string
 
 module Select : sig
   type db = t
@@ -39,7 +39,7 @@ module Select : sig
   type t = {
     tables : (string * string) list;
     cols : Column.t list;
-    predicate : Lens_phrase.Option.t;
+    predicate : Phrase.Option.t;
     db : db;
   }
 
@@ -48,7 +48,7 @@ module Select : sig
 
   val fmt : Format.formatter -> t -> unit
 
-  val execute : t -> database:db -> field_types:(string * Lens_phrase_type.t) list -> Lens_phrase_value.t list
+  val execute : t -> database:db -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list
 
   val query_exists : t -> database:db -> bool
 end
@@ -58,7 +58,7 @@ module Delete : sig
 
   type t = {
     table : string;
-    predicate : Lens_phrase.Option.t;
+    predicate : Phrase.Option.t;
     db : db;
   }
 
@@ -70,8 +70,8 @@ module Update : sig
 
   type t = {
     table : string;
-    predicate : Lens_phrase.Option.t;
-    set : (string * Lens_phrase_value.t) list;
+    predicate : Phrase.Option.t;
+    set : (string * Phrase_value.t) list;
     db : db;
   }
 
@@ -84,7 +84,7 @@ module Insert : sig
   type t = {
     table : string;
     columns : string list;
-    values : Lens_phrase_value.t list list;
+    values : Phrase_value.t list list;
     db : db;
   }
 
