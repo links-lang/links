@@ -1,5 +1,6 @@
 open Lens_types
 open Lens_utility
+open Lens_utility.O
 
 module Value = Lens_phrase_value
 
@@ -88,9 +89,8 @@ end
 let construct_cols ~columns ~records =
   let recs = List.map ~f:Value.unbox_record records in
   let col_val a r = try
-      let (_, v) = List.find_exn ~f:(fun (k,_) -> k = a) r in
-      v
-    with _ -> Inconsistent_columns_error.E (columns, List.map ~f:(fun (k,_) -> k) r) |> raise in
+      List.find_exn ~f:(fst >> (=) a) r |> snd
+    with _ -> Inconsistent_columns_error.E (columns, List.map ~f:fst r) |> raise in
   let simpl_rec r =
     List.map2 (fun a (k,v) -> if a = k then v else col_val a r) columns r in
   let plus_rows = Array.of_list (List.map ~f:simpl_rec recs) in

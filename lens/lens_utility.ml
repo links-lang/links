@@ -11,3 +11,5 @@ module O = struct
 
   let ( >> ) f g x = g (f x)
 end
+
+include Common
