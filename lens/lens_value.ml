@@ -1,9 +1,7 @@
 open Lens_utility
 
 module Sort = Lens_sort
-module Column = Lens_column
 module Phrase = Lens_phrase
-module Alias = Lens_alias
 module Fun_dep = Lens_fun_dep
 
 type t =
@@ -61,7 +59,7 @@ let columns lens =
 
 let cols_present_aliases (lens : t) =
   let cols = columns lens in
-  Lens_column.List.present_aliases cols
+  Column.List.present_aliases cols
 
 let colset (lens : t) =
   let sort = sort lens in
@@ -135,7 +133,7 @@ let rec generate_query lens =
   (* get_lens_sort_row_type sort *)
   | LensDrop { lens; drop; _ } ->
       let query = generate_query lens in
-      let cols = List.filter (fun c -> Lens_column.alias c != drop) query.cols in
+      let cols = List.filter (fun c -> Column.alias c != drop) query.cols in
       { query with cols }
   | LensJoin { left; right; sort; _ } ->
       let q1 = generate_query left in
@@ -160,11 +158,11 @@ let get_query lens =
   let _ = Debug.print "getting tables" in
   let sort = sort lens in
   let database = database lens in
-  let cols = Lens_sort.cols sort |> Lens_column.List.present in
+  let cols = Lens_sort.cols sort |> Column.List.present in
   let query = Lens_database.Select.of_sort database ~sort in
   let sql = Format.asprintf "%a" Lens_database.Select.fmt query in
   let field_types =
-    List.map ~f:(fun c -> (Lens_column.alias c, Lens_column.typ c)) cols
+    List.map ~f:(fun c -> (Column.alias c, Column.typ c)) cols
   in
   let _ = Debug.print sql in
   let res =

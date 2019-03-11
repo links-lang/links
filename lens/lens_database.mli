@@ -13,7 +13,7 @@ module Table : sig
   }
 end
 
-val fmt_col : db:t -> Format.formatter -> Lens_column.t -> unit
+val fmt_col : db:t -> Format.formatter -> Column.t -> unit
 
 (** Format a pair of table and alias values. *)
 val fmt_table : db:t -> Format.formatter -> string * string -> unit
@@ -22,7 +22,7 @@ val fmt_table : db:t -> Format.formatter -> string * string -> unit
 val fmt_tables : db:t -> Format.formatter -> (string * string) list -> unit
 
 (** Format a list of columns. *)
-val fmt_cols : db:t -> Format.formatter -> Lens_column.t list -> unit
+val fmt_cols : db:t -> Format.formatter -> Column.t list -> unit
 
 (** Format a phrase. *)
 val fmt_phrase : db:t -> map:(string -> string) -> Format.formatter -> Lens_phrase.t -> unit
@@ -38,7 +38,7 @@ module Select : sig
 
   type t = {
     tables : (string * string) list;
-    cols : Lens_column.t list;
+    cols : Column.t list;
     predicate : Lens_phrase.Option.t;
     db : db;
   }

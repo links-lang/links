@@ -10,26 +10,26 @@ val fds : t -> Lens_fun_dep.Set.t
 val predicate : t -> Lens_phrase.t option
 
 (** Get the list of columns belonging to the lens sort *)
-val cols : t -> Lens_column.List.t
+val cols : t -> Column.List.t
 
 (** Gets a list of the aliases of all present columns *)
 val cols_present_aliases : t -> string list
 
 (** Get the columns as a set *)
-val colset : t -> Lens_column.Set.t
+val colset : t -> Column.Set.t
 
 (** Get a set of the present columns *)
-val present_colset : t -> Lens_column.Set.t
+val present_colset : t -> Column.Set.t
 
 (** Construct a lens sort *)
 val make :
      ?fds:Lens_fun_dep.Set.t
   -> ?predicate:Lens_phrase.t option
-  -> Lens_column.t list
+  -> Column.t list
   -> t
 
 (** Find the column with the specified alias *)
-val find_col_alias : t -> alias:string -> Lens_column.t option
+val find_col_alias : t -> alias:string -> Column.t option
 
 (** Replace the predicate *)
 val update_predicate : t -> predicate:Lens_phrase.t option -> t

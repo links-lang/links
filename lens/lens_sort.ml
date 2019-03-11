@@ -1,12 +1,12 @@
 open Lens_utility
-module Column = Lens_column
+module Column = Column
 module Phrase = Lens_phrase
 module Fun_dep = Lens_fun_dep
 
 type t =
   { fds: Lens_fun_dep.Set.t
   ; predicate: Lens_phrase.t option
-  ; cols: Lens_column.t list }
+  ; cols: Column.t list }
 [@@deriving show]
 
 let fds t = t.fds
@@ -15,20 +15,20 @@ let predicate t = t.predicate
 
 let cols t = t.cols
 
-let cols_present_aliases t = Lens_column.List.present_aliases t.cols
+let cols_present_aliases t = Column.List.present_aliases t.cols
 
-let colset t = t.cols |> Lens_column.Set.of_list
+let colset t = t.cols |> Column.Set.of_list
 
 let present_colset t =
-  t.cols |> Lens_column.List.present |> Lens_column.Set.of_list
+  t.cols |> Column.List.present |> Column.Set.of_list
 
 let make ?(fds = Lens_fun_dep.Set.empty) ?(predicate = None) cols =
   {fds; predicate; cols}
 
-let find_col_alias t ~alias = Lens_column.List.find_alias ~alias t.cols
+let find_col_alias t ~alias = Column.List.find_alias ~alias t.cols
 
 let update_table_name t ~table =
-  let cols = t.cols |> List.map ~f:(Lens_column.set_table ~table) in
+  let cols = t.cols |> List.map ~f:(Column.set_table ~table) in
   {t with cols}
 
 let update_predicate t ~predicate = {t with predicate}
@@ -36,10 +36,10 @@ let update_predicate t ~predicate = {t with predicate}
 let equal sort1 sort2 =
   let fd_equal = Lens_fun_dep.Set.equal (fds sort1) (fds sort2) in
   let pred_equal = predicate sort1 = predicate sort2 in
-  let cols_equal = Lens_column.Set.equal (colset sort1) (colset sort2) in
+  let cols_equal = Column.Set.equal (colset sort1) (colset sort2) in
   fd_equal && pred_equal && cols_equal
 
-let record_type t = cols t |> Lens_column.List.record_type
+let record_type t = cols t |> Column.List.record_type
 
 let join_lens_should_swap sort1 sort2 ~on:on_columns =
   let fds1 = fds sort1 in
@@ -70,7 +70,7 @@ let drop_lens_sort sort ~drop ~key =
   let cols =
     List.map
       ~f:(fun c ->
-        if Alias.Set.mem (Lens_column.alias c) drop then Lens_column.hide c
+        if Alias.Set.mem (Column.alias c) drop then Column.hide c
         else c )
       (cols sort)
   in
@@ -108,11 +108,11 @@ let join_lens_sort sort1 sort2 ~on =
           (c :: output, jrs)
         else
           (* is the column a join column *)
-          let new_alias = get_new_alias (Lens_column.alias c) output 1 in
+          let new_alias = get_new_alias (Column.alias c) output 1 in
           if List.mem ~equal:String.equal on (Column.alias c) then
             (* then renamed column and hide it *)
             ( (c |> Column.rename ~alias:new_alias |> Column.hide) :: output
-            , (Lens_column.alias c, new_alias) :: jrs )
+            , (Column.alias c, new_alias) :: jrs )
           else
             (* otherwise just rename the column *)
             ((c |> Column.rename ~alias:new_alias) :: output, jrs) )

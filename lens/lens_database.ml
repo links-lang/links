@@ -2,7 +2,6 @@ open Lens_operators
 open Lens_utility
 module LPV = Lens_phrase_value
 module Phrase = Lens_phrase
-module Column = Lens_column
 module Sort = Lens_sort
 
 type t =
@@ -116,7 +115,7 @@ module Select = struct
 
   type t =
     { tables: (string * string) list
-    ; cols: Lens_column.t list
+    ; cols: Column.t list
     ; predicate: Lens_phrase.t option
     ; db: db }
 
@@ -124,7 +123,7 @@ module Select = struct
     let predicate = Lens_sort.predicate sort in
     let cols = Lens_sort.cols sort in
     let tables =
-      List.map ~f:Lens_column.table cols
+      List.map ~f:Column.table cols
       |> List.sort_uniq String.compare
       |> List.map ~f:(fun c -> (c, c))
     in
@@ -133,12 +132,12 @@ module Select = struct
   let fmt f v =
     let db = v.db in
     let map a =
-      let col = List.find_exn ~f:(fun c -> Lens_column.alias c = a) v.cols in
+      let col = List.find_exn ~f:(fun c -> Column.alias c = a) v.cols in
       Format.sprintf "%s.%s"
-        (Lens_column.table col |> db.quote_field)
-        (Lens_column.name col |> db.quote_field)
+        (Column.table col |> db.quote_field)
+        (Column.name col |> db.quote_field)
     in
-    let cols = v.cols |> Lens_column.List.present in
+    let cols = v.cols |> Column.List.present in
     match v.predicate with
     | None ->
         Format.fprintf f "SELECT %a FROM %a" (fmt_cols ~db) cols

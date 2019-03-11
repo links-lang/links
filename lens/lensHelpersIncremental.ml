@@ -141,7 +141,7 @@ let apply_delta ~table ~database:db data =
   if String.equal "" cmds |> not then
       exec cmds
 
-let get_fds (fds : (string list * string list) list) (cols : Lens_column.t list) : Fun_dep.Set.t =
+let get_fds (fds : (string list * string list) list) (cols : Column.t list) : Fun_dep.Set.t =
   let check_col xs = List.iter (fun alias -> if not (Column.List.mem_alias cols ~alias) then failwith ("The column " ^ alias ^ " does not exist.")) xs in
   List.iter (fun (left, right) -> check_col left; check_col right) fds;
   let fd_of (left, right) =
