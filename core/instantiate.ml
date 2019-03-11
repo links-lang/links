@@ -305,6 +305,22 @@ let datatype = instantiate_datatype
 
 module SEnv = Env.String
 
+let populate_instantiation_maps dt_str qs tyargs =
+  List.fold_right2
+    (fun var tyarg (tenv, renv, penv) ->
+       match (var, tyarg) with
+         | (var, _subkind, `Type _), `Type t ->
+             (IntMap.add var t tenv, renv, penv)
+         | (var, _subkind, `Row _), `Row row ->
+             (tenv, IntMap.add var row renv, penv)
+         | (var, _, `Presence _), `Presence f ->
+             (tenv, renv, IntMap.add var f penv)
+         | _ ->
+           failwith("Kind mismatch in type application: " ^
+                    dt_str ^ " applied to type arguments: " ^
+                    mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs))
+    qs tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
+
 let instantiation_maps_of_type_arguments :
       bool -> Types.datatype -> Types.type_arg list -> (datatype * instantiation_maps) =
   fun must_instantiate_all_quantifiers pt tyargs ->
@@ -331,22 +347,7 @@ let instantiation_maps_of_type_arguments :
         vars, []
       else
         (take tyargs_length vars, drop tyargs_length vars) in
-    let tenv, renv, penv =
-      List.fold_right2
-        (fun var tyarg (tenv, renv, penv) ->
-           match (var, tyarg) with
-             | (var, _subkind, `Type _), `Type t ->
-                 (IntMap.add var t tenv, renv, penv)
-             | (var, _subkind, `Row _), `Row row ->
-                 (tenv, IntMap.add var row renv, penv)
-             | (var, _, `Presence _), `Presence f ->
-                 (tenv, renv, IntMap.add var f penv)
-             | _ ->
-               failwith("Kind mismatch in type application: " ^
-                        Types.string_of_datatype pt ^ " applied to type arguments: " ^
-                        mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs))
-        vars tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
-    in
+    let tenv, renv, penv = populate_instantiation_maps (Types.string_of_datatype pt) vars tyargs in
     match remaining_quantifiers with
       | [] -> t, (tenv, renv, penv)
       | _ -> `ForAll (Types.box_quantifiers remaining_quantifiers, t),  (tenv, renv, penv)
@@ -404,33 +405,7 @@ let replace_quantifiers t qs' =
     | t -> t
 
 let recursive_application name qs tyargs body =
-  (*FIXME: DUPLICATE CODE*)
-  let tenv, renv, penv =
-    List.fold_right2
-      (fun q arg (tenv, renv, penv) ->
-        if not (primary_kind_of_quantifier q = primary_kind_of_type_arg arg)
-        then failwith
-          (Printf.sprintf
-            "Argument '%s' to type alias '%s' has the wrong kind ('%s' instead of '%s')"
-            (Types.string_of_type_arg arg)
-            name
-            (PrimaryKind.to_string (primary_kind_of_type_arg arg))
-            (PrimaryKind.to_string (primary_kind_of_quantifier q)));
-        let x = var_of_quantifier q in
-          match arg with
-          | `Type t ->
-            IntMap.add x t tenv, renv, penv
-          | `Row row ->
-            tenv, IntMap.add x row renv, penv
-          | `Presence f  ->
-            tenv, renv, IntMap.add x f penv)
-      qs
-      tyargs
-      (IntMap.empty, IntMap.empty, IntMap.empty) in
-
-  (* instantiate the type variables bound by the alias
-     definition with the type arguments *and* instantiate any
-     top-level quantifiers *)
+  let tenv, renv, penv = populate_instantiation_maps name qs tyargs in
   let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
   body
 
@@ -451,27 +426,7 @@ let alias name tyargs env =
                     "Type alias %s applied with incorrect arity (%d instead of %d)"
                     name (List.length tyargs) (List.length vars))
     | Some (`Alias (vars, body)) ->
-        let tenv, renv, penv =
-          List.fold_right2
-            (fun q arg (tenv, renv, penv) ->
-              if not (primary_kind_of_quantifier q = primary_kind_of_type_arg arg)
-              then failwith (Printf.sprintf
-                 "Argument '%s' to type alias '%s' has the wrong kind ('%s' instead of '%s')"
-                 (Types.string_of_type_arg arg) name
-                 (PrimaryKind.to_string (primary_kind_of_type_arg arg))
-                 (PrimaryKind.to_string (primary_kind_of_quantifier q)));
-              let x = var_of_quantifier q in
-                match arg with
-                | `Type t ->
-                  IntMap.add x t tenv, renv, penv
-                | `Row row ->
-                  tenv, IntMap.add x row renv, penv
-                | `Presence f  ->
-                  tenv, renv, IntMap.add x f penv)
-            vars
-            tyargs
-            (IntMap.empty, IntMap.empty, IntMap.empty) in
-
+        let tenv, renv, penv = populate_instantiation_maps name vars tyargs in
         (* instantiate the type variables bound by the alias
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)
