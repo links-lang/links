@@ -2,7 +2,6 @@ open Lens_operators
 open Lens_utility
 module LPV = Lens_phrase_value
 module Phrase = Lens_phrase
-module Sort = Lens_sort
 
 type t =
   { driver_name: unit -> string
@@ -120,8 +119,8 @@ module Select = struct
     ; db: db }
 
   let of_sort t ~sort =
-    let predicate = Lens_sort.predicate sort in
-    let cols = Lens_sort.cols sort in
+    let predicate = Sort.predicate sort in
+    let cols = Sort.cols sort in
     let tables =
       List.map ~f:Column.table cols
       |> List.sort_uniq String.compare

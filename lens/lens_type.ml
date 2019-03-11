@@ -1,4 +1,4 @@
-type t = Lens of Lens_sort.t
+type t = Lens of Sort.t
 
 let pp f _ = Format.fprintf f "Lens"
 
@@ -10,4 +10,4 @@ let sort v =
 
 let equal t1 t2 =
   match t1, t2 with
-  | Lens sort1, Lens sort2 -> Lens_sort.equal sort1 sort2
+  | Lens sort1, Lens sort2 -> Sort.equal sort1 sort2

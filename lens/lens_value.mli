@@ -1,25 +1,25 @@
 type t =
-  | Lens of {table: Database.Table.t; database: Database.t; sort: Lens_sort.t}
-  | LensMem of {records: Lens_phrase_value.t list; sort: Lens_sort.t}
-  | LensSelect of {lens: t; predicate: Lens_phrase.t; sort: Lens_sort.t}
+  | Lens of {table: Database.Table.t; database: Database.t; sort: Sort.t}
+  | LensMem of {records: Lens_phrase_value.t list; sort: Sort.t}
+  | LensSelect of {lens: t; predicate: Lens_phrase.t; sort: Sort.t}
   | LensJoin of
       { left: t
       ; right: t
       ; on: (string * string * string) list
       ; del_left: Lens_phrase.t
       ; del_right: Lens_phrase.t
-      ; sort: Lens_sort.t }
+      ; sort: Sort.t }
   | LensDrop of
       { lens: t
       ; drop: string
       ; key: string
       ; default: Lens_phrase_value.t
-      ; sort: Lens_sort.t }
+      ; sort: Sort.t }
       [@@deriving show]
 
 val string_of_value : t -> string
 
-val sort : t -> Lens_sort.t
+val sort : t -> Sort.t
 
 val is_memory_lens : t -> bool
 

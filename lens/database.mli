@@ -44,7 +44,7 @@ module Select : sig
   }
 
   (** Construct a select query from a lens sort. *)
-  val of_sort : db -> sort:Lens_sort.t -> t
+  val of_sort : db -> sort:Sort.t -> t
 
   val fmt : Format.formatter -> t -> unit
 

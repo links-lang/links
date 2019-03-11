@@ -1,5 +1,5 @@
-type t = Lens of Lens_sort.t [@@deriving show]
+type t = Lens of Sort.t [@@deriving show]
 
-val sort : t -> Lens_sort.t
+val sort : t -> Sort.t
 
 val equal : t -> t -> bool

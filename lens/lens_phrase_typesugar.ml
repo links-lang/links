@@ -67,7 +67,7 @@ and tc ~env (data, phrase) =
 
 let tc_sort ~sort phrase =
   let env =
-    Lens_sort.cols sort
+    Sort.cols sort
     |> List.map ~f:(fun c -> (Column.alias c, Column.typ c))
     |> Alias.Map.from_alist
   in

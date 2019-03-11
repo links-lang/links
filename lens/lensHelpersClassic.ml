@@ -2,7 +2,7 @@ open Lens_value
 open Lens_types
 open Lens_phrase_value
 
-module Sorted = Lens_sorted_records
+module Sorted = Sorted_records
 
 let lens_put_set_step lens data (fn : Lens_value.t -> Sorted.t -> unit) =
   let get l =

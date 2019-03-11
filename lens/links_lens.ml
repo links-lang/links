@@ -1,7 +1,7 @@
 module Debug = Debug
 
 module Column = Column
-module Sort = Lens_sort
+module Sort = Sort
 module Fun_dep = Lens_fun_dep
 module Alias = Alias
 
@@ -21,7 +21,7 @@ module Type = Lens_type
 module Value = Lens_value
 module Database = Database
 module Statistics = Lens_statistics
-module Sorted_records = Lens_sorted_records
+module Sorted_records = Sorted_records
 
 
 module Helpers = struct

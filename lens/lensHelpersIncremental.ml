@@ -2,7 +2,7 @@ open Lens_value
 open Lens_types
 open Lens_utility
 
-module Sorted = Lens_sorted_records
+module Sorted = Sorted_records
 
 let matches_change changes =
   let is_changed ((cols_l, _cols_r),(vals)) =
@@ -19,7 +19,7 @@ let delta_merge_affected lens data =
   let res = Lens_value.lens_get_select_opt lens ~predicate in
   let res = Sorted.construct_cols ~columns:(Lens_value.cols_present_aliases lens) ~records:res in
   (* perform relational update *)
-  let rel_merge = Lens_sorted_records.relational_merge res ~update_with:data ~fun_deps in
+  let rel_merge = Sorted_records.relational_merge res ~update_with:data ~fun_deps in
   Sorted.merge rel_merge (Sorted.negate res)
 
 let query_join_records lens set on =
