@@ -58,8 +58,8 @@ let lens_put_set_step lens delt (fn : Value.t -> Sorted.t -> unit) =
         (Sorted.merge
            (Sorted.join delta_m0 delta_n0 ~on:on')
            (Sorted.merge
-              (Sorted.join delta_m0 (query_join_records left delta_m0 cols_simp) ~on:on')
-              (Sorted.join delta_n0 (query_join_records right delta_n0 cols_simp) ~on:on')
+              (Sorted.join delta_m0 (query_join_records right delta_m0 cols_simp) ~on:on')
+              (Sorted.join delta_n0 (query_join_records left delta_n0 cols_simp) ~on:on')
            )
         )
         (Sorted.negate delt) in
