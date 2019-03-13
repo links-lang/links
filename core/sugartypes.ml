@@ -389,8 +389,7 @@ struct
     | TupleLit ps -> union_map phrase ps
 
     | LensLit (l, _) -> phrase l
-    (* this should be converted to `LensLit during typeSugar *)
-    | LensFunDepsLit _ -> assert false
+    | LensFunDepsLit (l, _, _) -> phrase l
     | LensKeysLit (l, _, _) -> phrase l
     | LensSelectLit (l, _, _) -> phrase l
     | LensDropLit (l, _, _, _, _) -> phrase l
