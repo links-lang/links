@@ -10,7 +10,7 @@ type synerrspec = {filename : string; linespec : string;
 exception UndefinedVariable of string
 
 exception Type_error of (Position.t * string)
-exception MultiplyDefinedToplevelNames of ((Position.t list) stringmap)
+exception MultiplyDefinedMutualNames of ((Position.t list) stringmap)
 exception RichSyntaxError of synerrspec
 exception SugarError of (Position.t * string)
 exception Runtime_error of string
@@ -62,8 +62,8 @@ let format_exception =
           "%s:%d: Syntax Error: Duplicate name `%s' in pattern\n  %s\nIn expression: %s"
           pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "*** Fatal error : " ^ msg
-  | MultiplyDefinedToplevelNames duplicates ->
-      "Duplicate top-level bindings\n" ^
+  | MultiplyDefinedMutualNames duplicates ->
+      "Duplicate mutually-defined bindings\n" ^
         StringMap.fold (fun name positions message ->
                           message^" "^name^":\n  "^
 			    (mapstrcat "\n  " show_pos (List.rev positions)))
@@ -93,12 +93,12 @@ let format_exception_html = function
       let pos, _ = Position.resolve_start_expr pos in
         Printf.sprintf ("<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>Unbound type constructor:</p>\n<pre>%s</pre>\n")
           pos.pos_fname pos.pos_lnum tycon
-  | MultiplyDefinedToplevelNames duplicates ->
+  | MultiplyDefinedMutualNames duplicates ->
       let show_pos : Position.t -> string = fun pos ->
         let pos, _ = Position.resolve_start_expr pos in
         Printf.sprintf "file <code>%s</code>, line %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
       in
-        "<h1>Links Syntax Error</h1><p>Duplicate top-level bindings:</p><ul>" ^
+        "<h1>Links Syntax Error</h1><p>Duplicate mutual bindings:</p><ul>" ^
           (StringMap.fold (fun name positions message -> message ^ "<li>" ^
                                      name ^ ":<ul>" ^
 			             (mapstrcat "\n"

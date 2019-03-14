@@ -274,7 +274,7 @@ and bindingnode =
                    (Types.datatype * Types.quantifier option list) option)
                    * funlit) * Location.t * datatype' option * Position.t) list
   | Handler of Binder.with_pos * handlerlit * datatype' option
-  | SugarFuns of binding list
+  | Mutual of binding list
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
@@ -484,7 +484,7 @@ struct
     | Fun (bndr, _, (_, fn), _, _) ->
        let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
-    | SugarFuns bnds ->
+    | Mutual bnds ->
         (* Traverse, get names and RHSes *)
         let names, fnlits, hlits =
           List.fold_right

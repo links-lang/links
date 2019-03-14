@@ -827,7 +827,7 @@ class transform (env : Types.typing_environment) =
       | AlienBlock _ -> assert false
       | Module _ -> assert false
       | QualifiedImport _ -> assert false
-      | SugarFuns _ -> assert false
+      | Mutual _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
       WithPos.traverse_map

@@ -57,8 +57,8 @@ struct
        ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
-       ->- DesugarSugarFuns.desugar_sugarfuns#program
-       ->- DesugarSugarFuns.lift_funs#program
+       ->- DesugarMutual.desugar_sugarfuns#program
+       ->- DesugarMutual.lift_funs#program
        ->- DesugarDatatypes.program tyenv
        ->- uncurry TypeSugar.Check.program
         (*->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)*)
@@ -83,8 +83,8 @@ struct
       ( ExperimentalExtensions.check#sentence
        ->- DesugarHandlers.desugar_handlers_early#sentence
        ->- DesugarLAttributes.desugar_lattributes#sentence
-       ->- DesugarSugarFuns.desugar_sugarfuns#sentence
-       ->- DesugarSugarFuns.lift_funs#sentence
+       ->- DesugarMutual.desugar_sugarfuns#sentence
+       ->- DesugarMutual.lift_funs#sentence
        ->- DesugarDatatypes.sentence tyenv
        ->- uncurry TypeSugar.Check.sentence
         (*  ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#sentence ->- snd)*)

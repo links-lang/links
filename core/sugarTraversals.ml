@@ -670,9 +670,9 @@ class map =
                  in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
           in Funs _x
-      | SugarFuns (bs) ->
+      | Mutual (bs) ->
           let bs = o#list (fun o -> o#binding) bs in
-          SugarFuns (bs)
+          Mutual (bs)
       | Handler (b, hnlit, t) ->
           let b = o#binder b in
           let hnlit = o#handlerlit hnlit in
@@ -1333,7 +1333,7 @@ class fold =
                  let o = o#position _x_i5 in o)
               _x
           in o
-      | SugarFuns (bs) ->
+      | Mutual (bs) ->
           let o = o#list (fun o -> o#binding) bs in
           o
       | Handler (b, hnlit, t) ->
@@ -2121,9 +2121,9 @@ class fold_map =
                  in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
           in (o, (Funs _x))
-      | SugarFuns (bs) ->
+      | Mutual (bs) ->
           let (o,bs) = o#list (fun o b -> o#binding b) bs in
-          (o, SugarFuns bs)
+          (o, Mutual bs)
       | Handler (b, hnlit, t) ->
           let (o, b) = o#binder b in
           let (o, hnlit) = o#handlerlit hnlit in

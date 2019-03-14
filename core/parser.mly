@@ -212,7 +212,7 @@ let parseRegexFlags f =
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG OPEN
-%token MODULE
+%token MODULE MUTUAL
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
@@ -220,7 +220,7 @@ let parseRegexFlags f =
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
-%token TYPENAME AND
+%token TYPENAME
 %token TYPE ROW PRESENCE
 %token TRY OTHERWISE RAISE
 %token <string> PREFIXOP POSTFIXOP
@@ -269,8 +269,7 @@ let parseRegexFlags f =
 
 interactive:
 | nofun_declaration                                            { Definitions [$1] }
-| fun_declaration SEMICOLON                                    { Definitions [$1] }
-| rec_fun_declarations SEMICOLON                               { Definitions [$1] }
+| fun_declarations SEMICOLON                                   { Definitions $1   }
 | SEMICOLON                                                    { Definitions []   }
 | exp SEMICOLON                                                { Expression $1    }
 | directive                                                    { Directive $1     }
@@ -303,7 +302,7 @@ declarations:
 | declaration                                                  { [$1] }
 
 declaration:
-| fun_declaration | rec_fun_declarations | nofun_declaration   { $1 }
+| fun_declaration | nofun_declaration                          { $1 }
 
 nofun_declaration:
 | alien_block                                                  { $1 }
@@ -314,7 +313,11 @@ nofun_declaration:
                                                                  set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
-| typedecls SEMICOLON | links_module | links_open SEMICOLON    { $1 }
+| typedecl SEMICOLON | links_module | links_open SEMICOLON    
+| mutual_declarations                                          { $1 }
+
+mutual_declarations:
+| MUTUAL LBRACE declaration+ RBRACE                            { with_pos $loc (Mutual $3) }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -331,11 +334,8 @@ alien_block:
 module_name:
 | CONSTRUCTOR                                                  { $1 }
 
-rec_fun_declarations:
-| fun_declaration and_fun_declaration+                         { with_pos $loc (SugarFuns ($1 :: $2)) }
-
-and_fun_declaration:
-| AND fun_declaration                                          { $2 }
+fun_declarations:
+| fun_declaration+                                             { $1 }
 
 fun_declaration:
 | tlfunbinding                                                 { fun_binding     ~ppos:$loc      NoSig   $1 }
@@ -371,14 +371,8 @@ signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
 | SIG op COLON datatype                                        { with_pos $loc ($2, datatype $4) }
 
-typedecls:
-| typedecl and_typedecl*                                       { with_pos $loc (Typenames ($1 :: $2)) }
-
-and_typedecl:
-| AND typedecl                                                 { $2 }
-
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { ($2, $3, datatype $5) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5)]) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -854,25 +848,14 @@ record_labels:
 links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (QualifiedImport $2) }
 
-function_binding:
-| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
-| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
-| typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
-
-and_function_binding:
-| AND function_binding                                         { $2 }
-
-rec_fun_bindings:
-| function_binding and_function_binding+                       { with_pos $loc (SugarFuns ( $1 :: $2)) }
-
-
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| rec_fun_bindings                                             { $1 }
-| function_binding                                             { $1 }
-| typedecls SEMICOLON | links_module | alien_block
-| links_open SEMICOLON                                         { $1 }
+| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
+| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
+| typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
+| typedecl SEMICOLON | links_module | alien_block
+| links_open SEMICOLON | mutual_block                          { $1 }
 
 bindings:
 | binding                                                      { [$1]      }
@@ -892,6 +875,12 @@ block_contents:
                                                                   record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
+
+bindings_block:
+| LBRACE bindings RBRACE                                       { $2 }
+
+mutual_block:
+| MUTUAL bindings_block                                        { with_pos $loc (Mutual $2) }
 
 labeled_exps:
 | separated_nonempty_list(COMMA,

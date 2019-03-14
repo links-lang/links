@@ -528,7 +528,7 @@ object (self)
          * 1. If any type in a SCC is linear, then all types in that SCC must
          *    also be linear.
          * 2. If a type depends on a linear type, then it must also be linear.
-         * 3. Otherwise, the type is be unrestricted.
+         * 3. Otherwise, the type is unrestricted.
          *
          * Given that we have a topo-sorted graph, as soon as we come across a
          * linear SCC, we know that the remaining types are also linear. *)

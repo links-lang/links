@@ -114,7 +114,7 @@ struct
     | Module _
     | Fun _
     | Funs _
-    | SugarFuns _
+    | Mutual _
     | Infix
     | Typenames _
     | Handler _
@@ -3873,7 +3873,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
       | Handler _
       | QualifiedImport _
       | AlienBlock _
-      | SugarFuns _
+      | Mutual _
       | Module _ -> assert false
     in
       WithPos.make ~pos typed, ctxt, usage
