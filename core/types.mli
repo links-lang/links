@@ -102,6 +102,7 @@ module RecIdSet : RECIDSET
 type tygroup = {
   id: int;
   type_map: ((quantifier list * typ) Utility.StringMap.t);
+  linearity_map: bool Utility.StringMap.t
 }
 
 (* Types *)
@@ -110,7 +111,9 @@ and rec_appl = {
   r_dual: bool;
   r_unique_name: string;
   r_args: type_arg list;
-  r_unwind: type_arg list -> bool -> typ }
+  r_unwind: type_arg list -> bool -> typ;
+  r_linear: unit -> bool option
+}
 and rec_unifier =
   | RecAppl of rec_appl
   | MuBound of (int * typ)

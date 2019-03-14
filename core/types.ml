@@ -149,6 +149,7 @@ module RecIdSet : RECIDSET = Set.Make(RecId)
 type tygroup = {
   id: int;
   type_map: ((quantifier list * typ) Utility.StringMap.t);
+  linearity_map: bool Utility.StringMap.t
 }
 
 (* Types *)
@@ -157,7 +158,9 @@ and rec_appl = {
   r_dual: bool;
   r_unique_name: string;
   r_args: type_arg list;
-  r_unwind: type_arg list -> bool -> typ }
+  r_unwind: type_arg list -> bool -> typ;
+  r_linear: unit -> bool option
+}
 and rec_unifier =
   | RecAppl of rec_appl
   | MuBound of (int * typ)
@@ -703,14 +706,14 @@ let rec is_unl_type : (var_set * var_set) -> typ -> bool =
          but we'd need to replace hd and tl with a split operation. *)
       (* | `Application ({Abstype.id="List"}, [`Type t]) -> is_unl_type (rec_vars, quant_vars) t  *)
       | `Application _ -> true (* TODO: change this if we add linear abstract types *)
-      | `RecursiveApplication _ ->
+      | `RecursiveApplication { r_linear ; _ } ->
           (* An application is linear if the type it refers to is
-           * also linear. We don't have this information. What we will
-           * need to do is a pass to check whether each application (recursive
-           * applications notwithstanding) is linear. For now, we are saying that all recursive
-           * applications can be unrestricted. This is incorrect and unsound, and *must* be fixed
-           * before considering a merge. *)
-          true
+           * also linear. We calculate this information in two stages.
+           * The first pass (if r_linear () returns None) calculates linearity
+           * *up to recursive applications*, under the assumption that every type in the
+           * block is unrestricted. With this in hand, we can calculate
+           * linearity information, meaning that (r_linear ()) will return (Some lin). *)
+          OptionUtils.from_option true (r_linear ())
       | `MetaTypeVar point -> is_unl_point is_unl_type (rec_vars, quant_vars) point
       | `ForAll (qs, t) -> is_unl_type (rec_vars, add_quantified_vars !qs quant_vars) t
       | `Dual s -> is_unl_type (rec_vars, quant_vars) s
@@ -761,7 +764,10 @@ let rec type_can_be_unl : var_set * var_set -> typ -> bool =
          but we'd need to replace hd and tl with a split operation. *)
     (* | `Application ({Abstype.id="List"}, [`Type t]) -> tcu t *)
     | `Application _ -> true (* TODO: change this if we add linear abstract types *)
-    | `RecursiveApplication _ -> true (* FIXME: This *must* be fixed before merging. *)
+    | `RecursiveApplication { r_linear; _ } ->
+        (* This will have been set during desugaring, far
+         * before `type_can_be_unl` is called *)
+        OptionUtils.val_of (r_linear ())
     | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
     | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
     | `Dual s -> type_can_be_unl vars s
@@ -802,7 +808,7 @@ let rec make_type_unl : var_set * var_set -> typ -> unit =
     function
     | `Not_typed -> assert false
     | `Primitive _ | `Function _ | `Table _ | `End | `Application _ | `Effect _ | `Lens _ -> ()
-    | `RecursiveApplication _ -> () (* FIXME: Temporary *)
+    | `RecursiveApplication _ -> ()
     | `Record r | `Variant r -> make_row_unl vars r
     | `Alias (_, t) -> make_type_unl vars t
     | `ForAll (qs, t) -> make_type_unl (rec_vars, add_quantified_vars !qs quant_vars) t
@@ -880,7 +886,7 @@ let rec is_sessionable_type : StringSet.t -> var_set -> typ -> bool =
     | `Alias (_, t) -> is_sessionable_type rec_appls rec_vars t
     | `RecursiveApplication { r_unique_name; r_args; r_dual; r_unwind; _ } ->
         if StringSet.mem r_unique_name rec_appls  then
-          true
+          false
         else
           let body = r_unwind r_args r_dual in
           is_sessionable_type (StringSet.add r_unique_name rec_appls) rec_vars body

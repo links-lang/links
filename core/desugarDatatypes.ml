@@ -238,10 +238,16 @@ struct
                     let (_, body) = StringMap.find tycon !tygroup_ref.type_map in
                     let body = Instantiate.recursive_application tycon qs args body in
                     if dual then dual_type body else body in
-
                   let r_unique_name = tycon ^ (string_of_int !tygroup_ref.id) in
-
-                  `RecursiveApplication { r_name = tycon; r_dual = false; r_unique_name; r_args; r_unwind }
+                  let r_linear () =
+                    StringMap.lookup tycon !tygroup_ref.linearity_map in
+                  `RecursiveApplication
+                    { r_name = tycon;
+                      r_dual = false;
+                      r_unique_name;
+                      r_args;
+                      r_unwind;
+                      r_linear }
             end
         | Primitive k -> `Primitive k
         | DB -> `Primitive Primitive.DB
@@ -459,7 +465,8 @@ object (self)
          * semantic type. We populate the reference in a later pass. *)
         let tygroup_ref = ref {
           id = fresh_tygroup_id ();
-          type_map = StringMap.empty
+          type_map = StringMap.empty;
+          linearity_map = StringMap.empty
         } in
 
         (* Add all type declarations in the group to the alias
