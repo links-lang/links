@@ -506,6 +506,40 @@ object (self)
             (name, args, (t, Some dt))
           ) ts in
 
+        (* Given the desugared datatypes, we now need to handle linearity. *)
+        (* First, calculate linearity up to recursive application, and a
+         * dependency graph. *)
+        let (linearity_env, dep_graph) =
+          List.fold_left (fun (lin_map, dep_graph) (name, _, (_, dt)) ->
+            let dt = OptionUtils.val_of dt in
+            let lin_map = StringMap.add name (not @@ is_unl_type dt) lin_map in
+            let deps = recursive_applications dt in
+            let dep_graph = (name, deps) :: dep_graph in
+            (lin_map, dep_graph)
+          ) (StringMap.empty, []) desugared_mutuals in
+        (* Next, topo-sort the dependency graph. We need to reverse since we
+         * propagate linearity information downwards from the SCCs which everything
+         * depends on, rather than upwards. *)
+        let sorted_graph = Graph.topo_sort_sccs dep_graph |> List.rev in
+        (* Next, propagate the linearity information through the graph,
+           in order to construct the final linearity map.
+         * Given the topo-sorted dependency graph, we propagate linearity based
+         * on the following rules:
+         * 1. If any type in a SCC is linear, then all types in that SCC must
+         *    also be linear.
+         * 2. If a type depends on a linear type, then it must also be linear.
+         * 3. Otherwise, the type is be unrestricted.
+         *
+         * Given that we have a topo-sorted graph, as soon as we come across a
+         * linear SCC, we know that the remaining types are also linear. *)
+        let (linearity_map, _) =
+          List.fold_left (fun (acc, lin_found) scc ->
+            let scc_linear =
+              lin_found || List.exists (fun x -> StringMap.find x linearity_env) scc in
+            let acc =
+              List.fold_left (fun acc x -> StringMap.add x scc_linear acc) acc scc in
+            (acc, scc_linear)) (StringMap.empty, false) sorted_graph in
+
         (* Finally, construct a new alias environment, and populate the map from
          * strings to the desugared datatypes which in turn allows recursive type
          * unwinding in unification. *)
@@ -519,7 +553,8 @@ object (self)
               SEnv.bind alias_env (t, `Alias (List.map (snd ->- val_of) args, dt)) in
             tygroup_ref :=
               { !tygroup_ref with
-                  type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map ) };
+                  type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map);
+                  linearity_map };
             alias_env
         ) alias_env desugared_mutuals in
 
