@@ -1621,7 +1621,11 @@ let patch_prelude_funs tyenv =
   {tyenv with
      var_env =
       List.fold_right
-        (fun (name, t) env -> Env.String.bind env (name, t))
+        (fun (name, t) env ->
+          if Env.String.has env name then
+            Env.String.bind env (name, t)
+          else
+            env)
         [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
          ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
          ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
