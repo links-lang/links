@@ -1,2 +1,2 @@
-val desugar_sugarfuns : SugarTraversals.map
+val desugar_mutual : SugarTraversals.map
 val lift_funs : SugarTraversals.map

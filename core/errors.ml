@@ -11,6 +11,7 @@ exception UndefinedVariable of string
 
 exception Type_error of (Position.t * string)
 exception MultiplyDefinedMutualNames of ((Position.t list) stringmap)
+exception InvalidMutualBinding of Position.t
 exception RichSyntaxError of synerrspec
 exception SugarError of (Position.t * string)
 exception Runtime_error of string
@@ -68,6 +69,11 @@ let format_exception =
                           message^" "^name^":\n  "^
 			    (mapstrcat "\n  " show_pos (List.rev positions)))
           duplicates ""
+  | InvalidMutualBinding pos ->
+      let pos, expr = Position.resolve_start_expr pos in
+      Printf.sprintf
+        "%s:%d: Mutual blocks can only contain `fun` and `typename` bindings, but the block contained: %s.\n"
+        pos.pos_fname pos.pos_lnum expr
   | Sys.Break -> "Caught interrupt"
   | exn -> "*** Error: " ^ Printexc.to_string exn
 
@@ -107,6 +113,12 @@ let format_exception_html = function
                                      ^ "</ul></li>\n")
              duplicates "") ^ "</ul>"
 
+  | InvalidMutualBinding pos ->
+      let pos, expr = Position.resolve_start_expr pos in
+      ("<h1>Links mutual binding error</h1>\n<p>"
+         ^ "<code>" ^ expr ^ "</code> was contained in a mutual block, however "
+         ^ "mutual blocks may only contain function and typename bindings."
+         ^ "(at line " ^ string_of_int pos.pos_lnum ^ ")</p>\n")
   | Runtime_error s -> "<h1>Links Runtime Error</h1> " ^ s
   | Position.ASTSyntaxError (pos, s) ->
       let pos, expr = Position.resolve_start_expr pos in

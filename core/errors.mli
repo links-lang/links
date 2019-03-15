@@ -9,8 +9,9 @@ type synerrspec = {filename : string; linespec : string;
 exception Runtime_error of string
 exception UndefinedVariable of string
 
-exception MultiplyDefinedToplevelNames of
+exception MultiplyDefinedMutualNames of
   ((Position.t list) Utility.stringmap)
+exception InvalidMutualBinding of Position.t
 exception Type_error of (Position.t * string)
 exception RichSyntaxError of synerrspec
 exception SugarError of (Position.t * string)

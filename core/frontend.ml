@@ -57,7 +57,7 @@ struct
        ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
-       ->- DesugarMutual.desugar_sugarfuns#program
+       ->- DesugarMutual.desugar_mutual#program
        ->- DesugarMutual.lift_funs#program
        ->- DesugarDatatypes.program tyenv
        ->- uncurry TypeSugar.Check.program
@@ -83,7 +83,7 @@ struct
       ( ExperimentalExtensions.check#sentence
        ->- DesugarHandlers.desugar_handlers_early#sentence
        ->- DesugarLAttributes.desugar_lattributes#sentence
-       ->- DesugarMutual.desugar_sugarfuns#sentence
+       ->- DesugarMutual.desugar_mutual#sentence
        ->- DesugarMutual.lift_funs#sentence
        ->- DesugarDatatypes.sentence tyenv
        ->- uncurry TypeSugar.Check.sentence

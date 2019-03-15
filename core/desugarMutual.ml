@@ -46,65 +46,61 @@ object ((self : 'self_type))
       | _ -> super#binding b
 end
 
-(* Desugars Mutual blocks *)
-(*
-let desugar_sugarfuns =
-object ((o : 'self_type))
-  inherit SugarTraversals.map as super
-  method! binding = fun b ->
-    match WithPos.node b with
-    (* Empty or singleton Mutual should not have been constructed. *)
-    | Mutual [] -> assert false
-    | Mutual [_] -> assert false
-    | Mutual bs ->
-        (* Recursively apply *)
-        let bs = o#list (fun o -> o#binding) bs in
-        (* All contained bindings must be of the form `Fun x. Extract these,
-         * and turn them into the right form for Funs blocks. *)
-        let fs =
-          List.map (fun f ->
-            match WithPos.node f with
-            | Fun (bnd, lin, (tvs, fnlit), loc, dt) ->
-                (bnd, lin, ((tvs, None), fnlit), loc, dt, WithPos.pos f)
-            (* Due to parser construction and the fact we've desugared handlers
-             * into `Funs already, something must have gone seriously wrong if
-             * the block contains anything but `Funs. *)
-            | _ -> assert false) bs in
-        WithPos.(make ~pos:(pos b) (Funs fs))
-    | _ -> super#binding b
-end
-*)
-
 let check_dups funs tys =
   (* Check to see whether there are any duplicate names, and report
    * an error if so. *)
   let assoc_to_list_map get_name xs =
-    List.fold_left (fun acc (x, pos)) ->
+    List.fold_left (fun acc (x, pos) ->
       let name = get_name x in
-      StringMap.update (fun x_opt ->
+      StringMap.update name (fun x_opt ->
         OptionUtils.opt_app
           (fun positions -> Some (pos :: positions))
-          (Some [pos])) acc in
+          (Some [pos]) x_opt) acc) StringMap.empty xs in
+
   let funs_map =
     assoc_to_list_map
       (fun (bndr, _, _, _, _) -> Binder.to_name bndr) funs in
   let tys_map = assoc_to_list_map (fst3) tys in
-  let dups =
-    StringMap.filter (fun _ poss -> List.length poss > 1) map in
-  if StringMap.cardinal dups > 0 then
-    raise MultiplyDefinedMutualNames dups
-  else ()
+  let check map =
+    let dups =
+      StringMap.filter (fun _ poss -> List.length poss > 1) map in
+    if StringMap.cardinal dups > 0 then
+      raise (MultiplyDefinedMutualNames dups)
+    else () in
+  check funs_map; check tys_map
 
-let rec desugar_mutual () =
+
+let rec flatten_simple = fun () ->
+object(self)
+  inherit SugarTraversals.map as super
+
+  method flatten_block (bs, p) =
+    let bs =
+      List.concat (
+        List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
+      ) in
+  let p = self#phrase p in
+  (bs, p)
+
+  method! phrasenode : phrasenode -> phrasenode = function
+    | Block (bs, phr) -> Block (self#flatten_block (bs, phr))
+    | x -> super#phrasenode x
+
+  method! program : program -> program = fun prog ->
+    let (_, phr) = prog in
+    let o = (flatten_bindings())#program prog in
+    (o#get_bindings, phr)
+end
+and flatten_bindings = fun () ->
 let open WithPos in
 object (o: 'self_type')
-  inherit SugarTraversals.fold as super
-  val ty_bindings = [];
-  val fun_bindings = [];
-  method get_ty_bindings = ty_bindings
-  method get_fun_bindings = fun_bindings
+  inherit SugarTraversals.fold
+    val bindings = []
+    method add_binding x = {< bindings = x :: bindings>}
+    method get_bindings = List.rev bindings
 
-  method! binding b =
+    method! binding b =
+    let mutual_pos = WithPos.pos b in
     match WithPos.node b with
       | Mutual [] -> assert false
       | Mutual bs ->
@@ -116,12 +112,38 @@ object (o: 'self_type')
             List.fold_left (fun (funs, tys) x ->
               begin
                 match x with
-                  | { node = Fun f; pos } -> ((f, pos) :: funs, tys)
+                  | { node = (Fun (f1, f2, f3, f4, f5)); pos } ->
+                      (((f1, f2, f3, f4, f5), pos) :: funs, tys)
                   | { node = Typenames [t]; pos } -> (funs, (t, pos) :: tys)
-                  | b -> raise InvalidMutualBinding (b, pos)
+                  | { node = _; pos } -> raise (InvalidMutualBinding pos)
               end
             ) ([], []) bs in
           let (funs, tys) = (List.rev funs_rev, List.rev tys_rev) in
           (* Check for duplicates, and report an error if so. *)
           check_dups funs tys;
-
+          (* Order matters here: the types must be in scope before the functions, otherwise
+           * things get weird with alias preservation. *)
+          let o =
+            if not (ListUtils.empty tys) then
+              o#add_binding (WithPos.make ~pos:mutual_pos (Typenames (List.map fst tys)))
+            else o in
+          (* We must take care to preserve non-recursive functions *)
+          begin
+          match funs with
+            | [] -> o
+            | [f] ->
+                let ((bnd, lin, (tvs, fl), loc, dt), pos) = f in 
+                let fl = (flatten_simple())#funlit fl in
+                let f = Fun (bnd, lin, (tvs, fl), loc, dt) in 
+                o#add_binding (WithPos.make ~pos f)
+            | fs ->
+                let fs =
+                  List.map (fun ((bnd, lin, (tvs, fl), loc, dt), pos) ->
+                    let fl = (flatten_simple())#funlit fl in
+                    (bnd, lin, ((tvs, None), fl), loc, dt, pos)
+                  ) fs in
+                o#add_binding (WithPos.make ~pos:mutual_pos (Funs fs))
+          end
+      | _ -> o#add_binding ((flatten_simple ())#binding b)
+end
+let desugar_mutual = (flatten_simple() :> SugarTraversals.map)
