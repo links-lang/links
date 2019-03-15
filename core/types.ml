@@ -734,11 +734,11 @@ let rec is_unl_type : (var_set * var_set) -> typ -> bool =
            * *up to recursive applications*, under the assumption that every type in the
            * block is unrestricted. With this in hand, we can calculate
            * linearity information, meaning that (r_linear ()) will return (Some lin). *)
-          OptionUtils.from_option true (r_linear ())
+          OptionUtils.opt_app (not) true (r_linear ())
       | `MetaTypeVar point -> is_unl_point is_unl_type (rec_vars, quant_vars) point
       | `ForAll (qs, t) -> is_unl_type (rec_vars, add_quantified_vars !qs quant_vars) t
       | `Dual s -> is_unl_type (rec_vars, quant_vars) s
-      | `End -> true
+      | `End -> false
       | #session_type -> false
 and is_unl_field vars =
   function
@@ -788,7 +788,7 @@ let rec type_can_be_unl : var_set * var_set -> typ -> bool =
     | `RecursiveApplication { r_linear; _ } ->
         (* This will have been set during desugaring, far
          * before `type_can_be_unl` is called *)
-        OptionUtils.val_of (r_linear ())
+        not (OptionUtils.val_of (r_linear ()))
     | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
     | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
     | `Dual s -> type_can_be_unl vars s

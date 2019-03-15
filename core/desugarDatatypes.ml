@@ -533,12 +533,12 @@ object (self)
          * Given that we have a topo-sorted graph, as soon as we come across a
          * linear SCC, we know that the remaining types are also linear. *)
         let (linearity_map, _) =
-          List.fold_left (fun (acc, lin_found) scc ->
+          List.fold_right (fun scc (acc, lin_found) ->
             let scc_linear =
               lin_found || List.exists (fun x -> StringMap.find x linearity_env) scc in
             let acc =
               List.fold_left (fun acc x -> StringMap.add x scc_linear acc) acc scc in
-            (acc, scc_linear)) (StringMap.empty, false) sorted_graph in
+            (acc, scc_linear)) sorted_graph (StringMap.empty, false) in
 
         (* Finally, construct a new alias environment, and populate the map from
          * strings to the desugared datatypes which in turn allows recursive type
