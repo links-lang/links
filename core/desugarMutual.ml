@@ -84,11 +84,13 @@ object(self)
 
   method! phrasenode : phrasenode -> phrasenode = function
     | Block (bs, phr) -> Block (self#flatten_block (bs, phr))
+    | Module
     | x -> super#phrasenode x
 
   method! program : program -> program = fun prog ->
     let (_, phr) = prog in
     let o = (flatten_bindings())#program prog in
+    let phr = OptionUtils.opt_map (self#phrase) phr in
     (o#get_bindings, phr)
 end
 and flatten_bindings = fun () ->
