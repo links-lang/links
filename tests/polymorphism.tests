@@ -26,19 +26,19 @@ stderr : @..*
 exit : 1
 
 Polymorphic mutual recursion [1]
-sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } and sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } f
+mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } } f
 stdout : @fun : \(_\) ~> Int
 
 Polymorphic mutual recursion [2]
-sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } and sig g : (a) ~> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 } f
+mutual { sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 } } f
 stdout : @fun : \(_\) ~> Int
 
 Polymorphic mutual recursion [3]
-sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } and sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } f
+mutual { sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } } f
 stdout : @fun : \(_\) ~> Int
 
 Polymorphic mutual recursion [4]
-sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } and sig g : (a) ~> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } f
+mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } } f
 stderr : @..*
 exit : 1
 

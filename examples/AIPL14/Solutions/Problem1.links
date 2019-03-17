@@ -14,6 +14,14 @@ typename SMTPServer =
                                ACCEPT:!Accept.
                                       [&|DATA:?Message.!Accept.EndBang |&] |+] |&] |+] |&];
 
+# Returns true, if the given String is a valid e-mail address.
+# The bit before @ has to be a single word!
+sig valid : (String) ~> Bool
+fun valid(address) {
+  address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
+}
+
+
 sig mailServer : (SMTPServer) ~> EndBang
 fun mailServer(s) {
   offer(s) {
@@ -45,13 +53,6 @@ fun mailServer(s) {
         s
       }
   }
-}
-
-# Returns true, if the given String is a valid e-mail address.
-# The bit before @ has to be a single word!
-sig valid : (String) ~> Bool
-fun valid(address) {
-  address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
 }
 
 sig mailClient : (~SMTPServer) ~> ()

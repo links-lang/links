@@ -61,7 +61,7 @@ fun all(p, l) {
    }
 }
 
-fun allTrue(l) {
+fun and(l) {
   all(fun(x) { x }, l)
 }
 
@@ -72,10 +72,10 @@ fun or(l) {
    }
 }
 
-fun anyTrue(p, l) {
+fun any(p, l) {
    switch (l) {
      case [] -> false
-     case x::xs -> p(x) || anyTrue(p, xs)
+     case x::xs -> p(x) || any(p, xs)
    }
 }
 
