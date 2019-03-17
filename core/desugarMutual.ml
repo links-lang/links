@@ -37,11 +37,10 @@ object ((self : 'self_type))
       let position = WithPos.pos b in
       match WithPos.node b with
       |  Fun (bndr, lin, (tvs, fnlit), location, dt) ->
+          let fnlit = self#funlit fnlit in
           if is_recursive bndr fnlit then
-            let fnlit = self#funlit fnlit in
             WithPos.make ~pos:position (Funs [(bndr, lin, ((tvs, None), fnlit), location, dt, position)])
           else
-            let fnlit = self#funlit fnlit in
             WithPos.make ~pos:position (Fun (bndr, lin, (tvs, fnlit), location, dt))
       | _ -> super#binding b
 end
@@ -74,24 +73,27 @@ let rec flatten_simple = fun () ->
 object(self)
   inherit SugarTraversals.map as super
 
+  method flatten_bindings bs =
+    List.concat (
+      List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
+    )
+
   method flatten_block (bs, p) =
-    let bs =
-      List.concat (
-        List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
-      ) in
-  let p = self#phrase p in
-  (bs, p)
+    let bs = self#flatten_bindings bs in
+    let p = self#phrase p in
+    (bs, p)
 
   method! phrasenode : phrasenode -> phrasenode = function
-    | Block (bs, phr) -> Block (self#flatten_block (bs, phr))
-    | Module
+    | Block (bs, phr) ->
+        let bs = self#flatten_bindings bs in
+        let phr = self#phrase phr in
+        Block (bs, phr)
     | x -> super#phrasenode x
 
-  method! program : program -> program = fun prog ->
-    let (_, phr) = prog in
-    let o = (flatten_bindings())#program prog in
+  method! program : program -> program = fun (bs, phr) ->
+    let bs = self#flatten_bindings bs in
     let phr = OptionUtils.opt_map (self#phrase) phr in
-    (o#get_bindings, phr)
+    (bs, phr)
 end
 and flatten_bindings = fun () ->
 let open WithPos in
