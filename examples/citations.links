@@ -16,6 +16,21 @@ var paperId = "paper";
 var authorLabel = "Author";
 var paperLabel = "Paper";
 
+sig distinct : ([(id:Int|r)]) ~> [(id:Int|r)]
+fun distinct(xs) {
+  fold_left(
+    fun (ys, x) {
+       switch (ys) {
+         case [] -> [x]
+         case (y::ys) ->
+           if(x.id == y.id) {y::ys} else {x::y::ys}
+       }
+    },
+    [],
+    xs)
+}
+
+
 sig header : (String) ~> Xml
 fun header(title) {
   <head>
@@ -26,31 +41,6 @@ fun header(title) {
                      background-color:#ccccff }}
    </style>
   </head>
-}
-
-sig suggest : (String, String) ~> ()
-fun suggest(authorPrefix, paperPrefix) client {
-  var (authorList, paperList) = completions(authorPrefix, paperPrefix);
-  domReplaceChildren(
-    authorList,
-    getNodeById(authorId)
-  );
-  domReplaceChildren(
-    paperList,
-    getNodeById(paperId)
-  )
-}
-
-sig formatAuthorList : ([Author]) ~> Xml
-fun formatAuthorList(authors) server {
-  for (a <- authors)
-    <#><a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/></#>
-}
-
-sig formatPaperList : ([Paper]) ~> Xml
-fun formatPaperList(papers) server {
-  for (p <- papers)
-    <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
 }
 
 sig getPapersAndCollaborators : (Author) ~> ([Paper], [Author])
@@ -114,26 +104,6 @@ fun getPapersAndCollaborators(author) server {
   (papers, distinct(collaborators))
 }
 
-sig showAuthorInfo : (Author) ~> Page
-fun showAuthorInfo(author) server {
-  var (papers, collaborators) = getPapersAndCollaborators(author);
-
-  page
-   <html>
-    {header(author.name)}
-    <body>
-     <h1>{stringToXml(author.name)}</h1>
-     <form l:action="{updateAuthor((id=author.id, name=authorName))}" method="POST">
-       <input type="text" class="input" l:name="authorName" value="{author.name}"/>
-       <button type="submit">update name</button>
-     </form>
-     <h2>Papers</h2>
-     <div class="suggestions">{formatPaperList(papers)}</div>
-     <h2>Collaborators</h2>
-     <div class="suggestions">{formatAuthorList(collaborators)}</div>
-    </body>
-   </html>
-}
 
 sig getAuthors : (Paper) -> [Author]
 fun getAuthors(paper) server {
@@ -146,40 +116,76 @@ fun getAuthors(paper) server {
   }
 }
 
-fun updatePaper(paper) server {
-  update (p <-- papersTable)
-   where (p.id == paper.id)
-   set (title=paper.title);
+mutual {
+  sig formatPaperList : ([Paper]) ~> Xml
+  fun formatPaperList(papers) server {
+    for (p <- papers)
+      <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
+  }
 
-  showPaperInfo(paper)
+  fun updateAuthor(author) server {
+    update (a <-- authorsTable)
+     where (a.id == author.id)
+     set (name=author.name);
+
+    showAuthorInfo(author)
+  }
+
+  sig showAuthorInfo : (Author) ~> Page
+  fun showAuthorInfo(author) server {
+    var (papers, collaborators) = getPapersAndCollaborators(author);
+
+    page
+     <html>
+      {header(author.name)}
+      <body>
+       <h1>{stringToXml(author.name)}</h1>
+       <form l:action="{updateAuthor((id=author.id, name=authorName))}" method="POST">
+         <input type="text" class="input" l:name="authorName" value="{author.name}"/>
+         <button type="submit">update name</button>
+       </form>
+       <h2>Papers</h2>
+       <div class="suggestions">{formatPaperList(papers)}</div>
+       <h2>Collaborators</h2>
+       <div class="suggestions">{formatAuthorList(collaborators)}</div>
+      </body>
+     </html>
+  }
+
+  fun updatePaper(paper) server {
+    update (p <-- papersTable)
+     where (p.id == paper.id)
+     set (title=paper.title);
+
+    showPaperInfo(paper)
+  }
+
+  sig showPaperInfo : (Paper) ~> Page
+  fun showPaperInfo(paper) server {
+    var authors = getAuthors(paper);
+
+    page
+     <html>
+      {header(paper.title)}
+      <body>
+       <h1>{stringToXml(paper.title)}</h1>
+       <form l:action="{updatePaper((id=paper.id, title=paperTitle))}" method="POST">
+         <input type="text" class="input" l:name="paperTitle" value="{paper.title}"/>
+         <button type="submit">update title</button>
+       </form>
+       <h2>Authors</h2>
+       <div class="suggestions">{formatAuthorList(authors)}</div>
+      </body>
+     </html>
+  }
+
+  sig formatAuthorList : ([Author]) ~> Xml
+  fun formatAuthorList(authors) server {
+    for (a <- authors)
+      <#><a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/></#>
+  }
 }
 
-fun updateAuthor(author) server {
-  update (a <-- authorsTable)
-   where (a.id == author.id)
-   set (name=author.name);
-
-  showAuthorInfo(author)
-}
-
-sig showPaperInfo : (Paper) ~> Page
-fun showPaperInfo(paper) server {
-  var authors = getAuthors(paper);
-
-  page
-   <html>
-    {header(paper.title)}
-    <body>
-     <h1>{stringToXml(paper.title)}</h1>
-     <form l:action="{updatePaper((id=paper.id, title=paperTitle))}" method="POST">
-       <input type="text" class="input" l:name="paperTitle" value="{paper.title}"/>
-       <button type="submit">update title</button>
-     </form>
-     <h2>Authors</h2>
-     <div class="suggestions">{formatAuthorList(authors)}</div>
-    </body>
-   </html>
-}
 
 sig completions : (String, String) ~> (Xml, Xml)
 fun completions(authorPrefix, paperPrefix) server {
@@ -235,18 +241,17 @@ fun completions(authorPrefix, paperPrefix) server {
   (formatAuthorList(authors), formatPaperList(papers))
 }
 
-sig distinct : ([(id:Int|r)]) ~> [(id:Int|r)]
-fun distinct(xs) {
-  fold_left(
-    fun (ys, x) {
-       switch (ys) {
-         case [] -> [x]
-         case (y::ys) ->
-           if(x.id == y.id) {y::ys} else {x::y::ys}
-       }
-    },
-    [],
-    xs)
+sig suggest : (String, String) ~> ()
+fun suggest(authorPrefix, paperPrefix) client {
+  var (authorList, paperList) = completions(authorPrefix, paperPrefix);
+  domReplaceChildren(
+    authorList,
+    getNodeById(authorId)
+  );
+  domReplaceChildren(
+    paperList,
+    getNodeById(paperId)
+  )
 }
 
 fun main () {

@@ -21,7 +21,6 @@ fun valid(address) {
   address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
 }
 
-
 sig mailServer : (SMTPServer) ~> EndBang
 fun mailServer(s) {
   offer(s) {
