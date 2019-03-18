@@ -1,23 +1,25 @@
-typename Wait = [&|MouseDown:?DomNode.Drag|&];
-typename Drag = [&|MouseOut:?DomNode.Drag, MouseUp:Wait|&];
+mutual {
+  typename Wait = [&|MouseDown:?DomNode.Drag|&];
+  typename Drag = [&|MouseOut:?DomNode.Drag, MouseUp:Wait|&];
 
-sig waiting : (String, Wait) ~> ()
-fun waiting(id, s) client {
-  offer (s) {
-    case MouseDown(s) ->
-      var (elem, s) = receive(s);
-      dragging(id, elem, s)
+  sig waiting : (String, Wait) ~> ()
+  fun waiting(id, s) client {
+    offer (s) {
+      case MouseDown(s) ->
+        var (elem, s) = receive(s);
+        dragging(id, elem, s)
+    }
   }
-}
 
-sig dragging : (String, DomNode, Drag) ~> ()
-fun dragging(id, elem, s) {
-  offer(s) {
-    case MouseUp(s)   -> waiting(id, s)
-    case MouseOut(s)  -> {
-      var (toElem, s) = receive(s);
-      swapNodes(elem, toElem);
-      dragging(id, elem, s)
+  sig dragging : (String, DomNode, Drag) ~> ()
+  fun dragging(id, elem, s) {
+    offer(s) {
+      case MouseUp(s)   -> waiting(id, s)
+      case MouseOut(s)  -> {
+        var (toElem, s) = receive(s);
+        swapNodes(elem, toElem);
+        dragging(id, elem, s)
+      }
     }
   }
 }
@@ -33,30 +35,32 @@ fun draggableList(loc, id, items)
 {
   var ap = newAP(loc);
   var manager = spawnAt(loc, {
-    fun wait(c) {
-      var s = accept(ap);
-      <|offer s {
-        case MouseUp -> {wait(c)}
-        case MouseDown -> s(elem).{
-          if (isElementNode(elem) && (parentNode(elem) == getNodeById(id))) {
-            <|MouseDown c.c[elem].{drag(c)}|>
-          } else {
-            wait(c)
-          }}
-        case MouseOut -> s(elem).{wait(c)}
-      }|>
-    }
+    mutual {
+      fun wait(c) {
+        var s = accept(ap);
+        <|offer s {
+          case MouseUp -> {wait(c)}
+          case MouseDown -> s(elem).{
+            if (isElementNode(elem) && (parentNode(elem) == getNodeById(id))) {
+              <|MouseDown c.c[elem].{drag(c)}|>
+            } else {
+              wait(c)
+            }}
+          case MouseOut -> s(elem).{wait(c)}
+        }|>
+      }
 
-    fun drag(c) {
-      offer(accept(ap)) {
-        case MouseUp(s)   -> <|MouseUp c.{wait(c)}|>
-        case MouseDown(s) -> <|s(elem).{drag(c)}|>
-        case MouseOut(s)  -> <|s(toElem).{
-          if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
-            <| MouseOut c.c[toElem].{drag(c)} |>
-          } else {
-            drag(c)
-          }}|>
+      fun drag(c) {
+        offer(accept(ap)) {
+          case MouseUp(s)   -> <|MouseUp c.{wait(c)}|>
+          case MouseDown(s) -> <|s(elem).{drag(c)}|>
+          case MouseOut(s)  -> <|s(toElem).{
+            if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
+              <| MouseOut c.c[toElem].{drag(c)} |>
+            } else {
+              drag(c)
+            }}|>
+        }
       }
     }
 
