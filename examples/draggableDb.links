@@ -1,3 +1,11 @@
+fun draw(id, items) {
+ domReplaceChildren(
+  for (item <- items)
+   <li class="draggable_element">{stringToXml(item)}</li>,
+  getNodeById(id)
+ )
+}
+
 fun step(state, id, items) client {
  receive {
   case GetList(pid)     -> pid ! items; step(state, id, items)
@@ -23,14 +31,6 @@ fun step(state, id, items) client {
      } else step(Dragging(elem), id, items)
    }
  }
-}
-
-fun draw(id, items) {
- domReplaceChildren(
-  for (item <- items)
-   <li class="draggable_element">{stringToXml(item)}</li>,
-  getNodeById(id)
- )
 }
 
 fun draggableList(id, items)
