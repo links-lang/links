@@ -510,6 +510,10 @@ struct
       method get_applications = rec_appls
 
       method! typ = function
+        | `Alias _ as a ->
+            (* Don't expand aliases -- RecursiveApplications to previous type
+             * groups are not of interest in this pass *)
+            (a, o)
         | `RecursiveApplication { r_name; r_args; _ } as ra ->
             let apps =
               List.fold_left (fun acc x ->
