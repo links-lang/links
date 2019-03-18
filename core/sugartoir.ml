@@ -4,6 +4,7 @@ open Utility
 open SourceCode
 open SourceCode.WithPos
 open Ir
+open Var
 
 (* {0 Sugar To IR}
 
@@ -597,7 +598,7 @@ struct
     let body_type = sem_type body in
     let body = reify body in
     let ft = `Function (Types.make_tuple_type [kt], eff, body_type) in
-    let f_info = (ft, "", `Local) in
+    let f_info = (ft, "", Scope.Local) in
     let rest f : tail_computation sem = lift (Special (CallCC (Variable f)),
                                               body_type) in
       M.bind (fun_binding (f_info, ([], [kb], body), loc_unknown)) rest
@@ -774,7 +775,7 @@ struct
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
              let kt = Binder.to_type_exn bndr in
-             I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
+             I.escape ((kt, k, Scope.Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | Section (Section.Minus) -> cofv (lookup_var "-")
           | Section (Section.FloatMinus) -> cofv (lookup_var "-.")
           | Section (Section.Name name) -> cofv (lookup_var name)
@@ -879,7 +880,7 @@ struct
                    let env, bindings =
                      List.fold_left2
                        (fun (env, bindings) (body, p) t ->
-                         let p, penv = CompilePatterns.desugar_pattern `Local p in
+                         let p, penv = CompilePatterns.desugar_pattern p in
                          let bindings = ((fun env -> eval env body), p, t) :: bindings in
                          ((env ++ penv), bindings))
                        (empty_env, []) bindings types
@@ -889,14 +890,14 @@ struct
              let eff_cases =
                List.map
                  (fun (p, body) ->
-                   let p, penv = CompilePatterns.desugar_pattern `Local p in
+                   let p, penv = CompilePatterns.desugar_pattern p in
                    (p, fun env -> eval ((env ++ henv) ++ penv) body))
                  sh_effect_cases
              in
              let val_cases =
                 List.map
                   (fun (p, body) ->
-                    let p, penv = CompilePatterns.desugar_pattern `Local p in
+                    let p, penv = CompilePatterns.desugar_pattern p in
                     (p, fun env -> eval ((env ++ henv) ++ penv) body))
                   sh_value_cases
              in
@@ -905,7 +906,7 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern `Local p in
+                     let p, penv = CompilePatterns.desugar_pattern p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -971,12 +972,12 @@ struct
                 (I.apply_pure
                    (instantiate_mb "stringToXml",
                     [ev (WithPos.make ~pos (Sugartypes.Constant (Constant.String name)))]))
-          | Block (bs, e) -> eval_bindings `Local env bs e
+          | Block (bs, e) -> eval_bindings Scope.Local env bs e
           | Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
 
           | DBUpdate (p, source, where, fields) ->
-              let p, penv = CompilePatterns.desugar_pattern `Local p in
+              let p, penv = CompilePatterns.desugar_pattern p in
               let env' = env ++ penv in
               let source = ev source in
               let where =
@@ -986,7 +987,7 @@ struct
               let body = eval env' (WithPos.make ~pos (RecordLit (fields, None))) in
                 I.db_update env (p, source, where, body)
           | DBDelete (p, source, where) ->
-              let p, penv = CompilePatterns.desugar_pattern `Local p in
+              let p, penv = CompilePatterns.desugar_pattern p in
               let env' = env ++ penv in
               let source = ev source in
               let where =
@@ -1002,7 +1003,7 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern `Local p in
+                     let p, penv = CompilePatterns.desugar_pattern p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -1066,7 +1067,7 @@ struct
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Val (p, (_, body), _, _) ->
-                    let p, penv = CompilePatterns.desugar_pattern scope p in
+                    let p, penv = CompilePatterns.desugar_pattern p in
                     let env' = env ++ penv in
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
@@ -1078,7 +1079,7 @@ struct
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
-                           let p, penv = CompilePatterns.desugar_pattern `Local p in
+                           let p, penv = CompilePatterns.desugar_pattern p in
                              p::ps, body_env ++ penv)
                         ps
                         ([], env) in
@@ -1109,7 +1110,7 @@ struct
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
-                                  let p, penv = CompilePatterns.desugar_pattern `Local p in
+                                  let p, penv = CompilePatterns.desugar_pattern p in
                                     p::ps, body_env ++ penv)
                                ps
                                ([], env) in
@@ -1156,9 +1157,9 @@ struct
         | b::bs ->
             begin
               match b with
-                | Let ((x, (_xt, x_name, `Global)), _) ->
+                | Let ((x, (_xt, x_name, Scope.Global)), _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (x_name, x)) bs
-                | Fun ((f, (_ft, f_name, `Global)), _, _, _) ->
+                | Fun ((f, (_ft, f_name, Scope.Global)), _, _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
                 | Rec defs ->
                   (* we depend on the invariant that mutually
@@ -1167,18 +1168,18 @@ struct
                       List.fold_left
                         (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _, _) ->
                            match f_scope with
-                             | `Global -> `Global, Env.String.bind nenv (f_name, f)
-                             | `Local -> scope, nenv)
-                        (`Local, nenv) defs
+                             | Scope.Global -> Scope.Global, Env.String.bind nenv (f_name, f)
+                             | Scope.Local -> scope, nenv)
+                        (Scope.Local, nenv) defs
                     in
                       begin
                         match scope with
-                          | `Global ->
+                          | Scope.Global ->
                               partition (b::locals @ globals, [], nenv) bs
-                          | `Local ->
+                          | Scope.Local ->
                               partition (globals, b::locals, nenv) bs
                       end
-                | Alien ((f, (_ft, f_name, `Global)), _, _) ->
+                | Alien ((f, (_ft, f_name, Scope.Global)), _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
                 | _ -> partition (globals, b::locals, nenv) bs
             end in
@@ -1193,7 +1194,7 @@ struct
       match body with
         | None -> WithPos.dummy (Sugartypes.RecordLit ([], None))
         | Some body -> body in
-      let s = eval_bindings `Global env bindings body in
+      let s = eval_bindings Scope.Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
           Debug.if_set show_compiled_ir (fun () -> Ir.string_of_program r);

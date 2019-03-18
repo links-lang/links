@@ -2,12 +2,23 @@
 
 open Utility
 
-type scope = [ `Local | `Global ]
+module Scope = struct
+  type t = Local | Global
   [@@deriving show]
+
+  let isGlobal = function
+    | Global -> true
+    | _      -> false
+
+  let isLocal = function
+    | Local -> true
+    | _     -> false
+end
+
 (** Term variables *)
 type var = int
   [@@deriving show,eq,yojson]
-type var_info = Types.datatype * string * scope
+type var_info = Types.datatype * string * Scope.t
   [@@deriving show]
 type binder = var * var_info
   [@@deriving show]
@@ -40,10 +51,10 @@ let fresh_var : var_info -> binder * var =
 (** {0 Manipulate binder metadata} *)
 
 let info_type (t, _, _) = t
-let info_of_type t = (t, "", `Local)
+let info_of_type t = (t, "", Scope.Local)
 
-let make_local_info (t, name) = (t, name, `Local)
-let make_global_info (t, name) = (t, name, `Global)
+let make_local_info  (t, name) = (t, name, Scope.Local)
+let make_global_info (t, name) = (t, name, Scope.Global)
 
 let update_type newtype (var, (_, name, scope)) = (var, (newtype, name, scope))
 
