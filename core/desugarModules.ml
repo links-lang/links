@@ -89,19 +89,6 @@ let resolve name ht =
      * better integrated with the module system. *)
     name
 
-(* group_bindings : binding list -> binding list list *)
-(* Groups lists of bindings to bindings that are in the same scope. *)
-let group_bindings : binding list -> binding list list = fun bindings ->
-  let rec group_bindings_inner acc ret = function
-    | [] when acc = [] -> List.rev ret
-    | [] -> List.rev ((List.rev acc) :: ret)
-    | ({node=Fun (_, _, _, _, _); _} as bnd) :: bs ->
-        group_bindings_inner (bnd :: acc) ret bs
-    | b :: bs ->
-        (* End block of functions, need to start a new scope *)
-        group_bindings_inner [] ([b] :: (List.rev acc) :: ret) bs in
-  group_bindings_inner [] [] bindings
-
 (* Come across binding list:
   * - Group bindings into list of lists
   * - Get shadow table for the binding list
@@ -312,29 +299,39 @@ and perform_renaming module_table path term_ht type_ht =
     string list -> string list stringmap -> string list stringmap ->
       (string list stringmap * string list stringmap * binding list) =
           fun binding_list mt path term_ht type_ht ->
-    (* Group bindings *)
-    let binding_group_list = group_bindings binding_list in
     (* For each binding group, get the shadowing table, and then use the shadowing
      * table to do the renaming *)
+    (* let (term_ht, type_ht, bnds_rev) = *)
+    let process_bindings term_ht type_ht bnds =
+      (* Rename functions and create shadow table *)
+      let (o, bnds') =
+        (rename_binders_get_shadow_tbl mt path
+            term_ht type_ht)#list (fun o -> o#binding) bnds in
+      (* Get shadow tables *)
+      let term_ht = o#get_term_shadow_table in
+      let type_ht = o#get_type_shadow_table in
+      (* Rename each of the bindings *)
+      let (o, bnds') =
+        (perform_renaming mt path
+            term_ht type_ht)#list (fun o -> o#binding) bnds' in
+      (* Get final shadow tables *)
+      let term_ht = o#get_term_shadow_table in
+      let type_ht = o#get_type_shadow_table in
+      (term_ht, type_ht, bnds') in
+
     let (term_ht, type_ht, bnds_rev) =
-        List.fold_left (fun (term_ht, type_ht, bnd_acc) bnds ->
-          (* Rename functions and create shadow table *)
-          let (o, bnds') =
-            (rename_binders_get_shadow_tbl mt path
-                term_ht type_ht)#list (fun o -> o#binding) bnds in
-          (* Get shadow tables *)
-          let term_ht = o#get_term_shadow_table in
-          let type_ht = o#get_type_shadow_table in
-          (* Rename each of the bindings *)
-          let (o, bnds') =
-            (perform_renaming mt path
-                term_ht type_ht)#list (fun o -> o#binding) bnds' in
-          (* Get final shadow tables *)
-          let term_ht = o#get_term_shadow_table in
-          let type_ht = o#get_type_shadow_table in
-          (* Keep everything in reverse order -- more efficient *)
-          (term_ht, type_ht, (List.rev bnds') @ bnd_acc))
-      (term_ht, type_ht, []) binding_group_list in
+      List.fold_left (fun (term_ht, type_ht, acc) bnd ->
+        match bnd with
+          | { node = Mutual bs; pos } ->
+              let (term_ht, type_ht, bnds) =
+                process_bindings term_ht type_ht bs in
+              let new_mutual = SourceCode.WithPos.make ~pos (Mutual bnds) in
+              (term_ht, type_ht, new_mutual :: acc)
+          | b -> 
+              let (term_ht, type_ht, bnds) =
+                process_bindings term_ht type_ht [b] in
+              (term_ht, type_ht, bnds @ acc)
+        ) (term_ht, type_ht, []) binding_list in
     (term_ht, type_ht, List.rev bnds_rev)
 
 let rename mt (bindings, phr_opt) =
