@@ -80,11 +80,11 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
   fun context (t1, t2) ->
     let lookupVar lvar map =
       match IntMap.find_opt lvar map with
-      | Some rvar' -> (map, rvar')
-      | None -> (map, lvar) in
+      | Some rvar' -> rvar'
+      | None       -> lvar in
     let handle_variable primary_kind (lid, lsk, lfd) (rid, rsk, rfd) ctx =
       let subst_map, kind_env = ctx.typevar_subst, ctx.tyenv in
-      let (_, rvar') = lookupVar lid subst_map in
+      let rvar' = lookupVar lid subst_map in
       let is_equal = rid = rvar' && lsk = rsk && lfd = rfd in
       begin
         if is_equal then
