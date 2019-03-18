@@ -189,6 +189,12 @@ struct
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
             let match_quantifiers qs =
+              Printf.printf
+                "%s: matching quantifiers %s against type args %s\n"
+                tycon
+                (List.map (Types.show_quantifier) qs |> String.concat ", ")
+                (List.map (Sugartypes.Datatype.show_type_arg) ts |> String.concat ", ");
+
               let match_kinds (q, t) =
                 let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
                   | Type _ -> PrimaryKind.Type
@@ -196,6 +202,10 @@ struct
                   | Presence _ -> PrimaryKind.Presence
                 in
                 if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
+                  let () = Printf.printf
+                      "Could not match quantifier %s against type arg %s\n"
+                      (Types.show_quantifier q)
+                      (Sugartypes.Datatype.show_type_arg t) in
                   raise Kind_mismatch
                 else (q, t)
               in
@@ -469,14 +479,24 @@ object (self)
           linearity_map = StringMap.empty
         } in
 
+        (* Each type will have its own variable environment, used in
+         * later passes.*)
+        let venvs_map = StringMap.empty in
+
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
-        let (mutual_env, var_env) =
-          List.fold_left (fun (alias_env, var_env) (t, args, _) ->
+        let (mutual_env, venvs_map) =
+          List.fold_left (fun (alias_env, venvs_map) (t, args, _) ->
             let qs = List.map (fst) args in
-            let qs, var_env =  Desugar.desugar_quantifiers var_env qs in
-            (SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)), var_env) )
-            (alias_env, empty_env) ts in
+            Printf.printf "Sugared quantifiers: %s\n"
+                (List.map (Sugartypes.show_quantifier) qs |> String.concat ", ");
+
+            let qs, var_env =  Desugar.desugar_quantifiers empty_env qs in
+            let venvs_map = StringMap.add t var_env venvs_map in
+            Printf.printf "Desugared quantifiers: %s\n"
+                (List.map (Types.show_quantifier) qs |> String.concat ", ");
+            (SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)), venvs_map) )
+            (alias_env, venvs_map) ts in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
         let desugared_mutuals =
@@ -497,6 +517,7 @@ object (self)
                 |> List.map (fun (sq, q) -> (sq, Some(q))) in
 
             (* Desugar the datatype *)
+            let var_env = StringMap.find name venvs_map in
             let dt' = Desugar.datatype' var_env mutual_env dt in
             (* Check if the datatype has actually been desugared *)
             let (t, dt) =
