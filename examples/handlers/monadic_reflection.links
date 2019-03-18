@@ -8,6 +8,9 @@ typename State (e::Row,a,s) = (s) { |e}~> (s,a);
 sig return : (a) -e-> State({ |e}, a, s)
 fun return(v)(st) {(st, v)}
 
+sig run : (State({ |e}, a, s), s) ~e~> (s, a)
+fun run(m,st) {m(st)}
+
 sig bind : (State({ |e}, a, s), (a) ~e~> State({ |e}, b, s)) -> State({ |e}, b, s)
 fun bind(m,k)(st) {
   var (st1, x) = run(m, st);
@@ -22,9 +25,6 @@ fun get(s) {(s,s)}
 
 sig put : (s) -> State({ |e}, Unit, s)
 fun put(s)(_) {(s, Unit)}
-
-sig run : (State({ |e}, a, s), s) ~e~> (s, a)
-fun run(m,st) {m(st)}
 
 # Reify reflect
 sig reify : (Comp({ Reflect:(State({ Reflect{p} |e}, a, s)) {}-> a |e}, b)) { Reflect{p} |e}~> State({ Reflect{p} |e}, b, s)

@@ -88,73 +88,6 @@ fun move(pl, n){
     do Move(pl, n)
 }
 
-sig game: () {Get: GameState, Move: (Player, Int) -> Int, hear: Cmd |e}~> Player
-fun game(){
-    var st = do Get;
-    renderView(Game(st), self());
-    turn(st.player.1, st.player.2, st.heap)
-}
-
-sig turn: (Player, Player, Int) {Move: (Player, Int) -> Int|e}~> Player
-fun turn(current, opp, n){
-    if(n<= 0){
-        current                                 # Returns the winner
-    } else{
-        var rest = move(current, n);
-        updateView(n, {if(rest >= 0) rest else 0}, current);
-        turn(opp, current, rest)
-    }
-}
-
-
-# Strategies
-
-sig hard: (Player, Int) -> Int
-fun hard(pl, n){
-    maximum(1, (n-1) `mod` 4)                   # Perfect strategy
-}
-
-sig medium: (Player, Int) ~> Int
-fun medium(pl, n){
-    chooseRandom(validMoves(n))                 # Take randomly 1,2, or 3 sticks
-}
-
-sig easy: (Player, Int) -> Int
-fun easy(pl, n){
-    1
-}
-
-sig prepareGame: () ~%~> (Player, GameState)
-fun prepareGame(){
-    var pl1 = stringToPlayer(getField("pl1"));
-    var pl2 = stringToPlayer(getField("pl2"));
-    var check = stringToBool(getField("check"));
-    var level = stringToLevel(getField("level"));
-    var heap = stringToInt(getField("heap"));
-    var state = (player=(pl1, pl2), level=level, cheat=check, heap=heap);
-    var moveHandler = switch(state.level){
-        case Easy -> fun(game){moveHandler(game, easy)}
-        case Medium -> fun(game){moveHandler(game, medium)}
-        case Hard -> fun(game){moveHandler(game, hard)}
-    };
-    restartHandler(runState(moveHandler(game), state))
-}
-
-sig gameProcess : () {Get-,Move-,Restart{_},Set-,hear:Cmd|_}~> (Player, GameState)
-fun gameProcess(){
-    var (winner, st) = receive {
-        case YourMove(_) -> error("Unexpected input")                       # Move button is clicked
-        case StartGame -> prepareGame()                                     # Start button is clicked, start the game
-        case Restart ->  error("Restart not possible from setUp page")      # Restart button is clicked
-    };
-    finishGame(winner, self()) ;
-    gameProcess()
-}
-
-sig validMoves : (Int) -> [Int]
-fun validMoves(n)
- { filter(fun(m) {m <= n}, [1,2,3]) }
-
 sig chooseRandom: ([Int]) ~> Int
 fun chooseRandom(numbers){
     switch(numbers){
@@ -177,17 +110,26 @@ fun chooseRandom(numbers){
     }
 }
 
-#handler
+sig validMoves : (Int) -> [Int]
+fun validMoves(n)
+ { filter(fun(m) {m <= n}, [1,2,3]) }
 
-sig runState : (() {Get:s, Set:(s) -> () |e}~> a, s) -> () {Get-, Set- |e}~> (a, s)
-fun runState(f, st0)(){
-    handle(f())(st0 -> st){
-        case Return(x) -> (x, st)
-        case Set(st1, resume) -> resume((), st1)
-        case Get(resume) -> resume(st, st)
-    }
+# Strategies
+
+sig hard: (Player, Int) -> Int
+fun hard(pl, n){
+    maximum(1, (n-1) `mod` 4)                   # Perfect strategy
 }
 
+sig medium: (Player, Int) ~> Int
+fun medium(pl, n){
+    chooseRandom(validMoves(n))                 # Take randomly 1,2, or 3 sticks
+}
+
+sig easy: (Player, Int) -> Int
+fun easy(pl, n){
+    1
+}
 # () for the suspended computation -> moveHandler returns a value so we need to thunk it. same as
 # var pId = spawnClient{runState(fun(){moveHandler(gameProcess)}, (player=(Alice,Bob), level=Easy, cheat=false))};
 sig moveHandler: (() {Move: (Player, Int) -> Int, Restart: Zero, hear:Cmd|e}~> a, (Player, Int) ~%~> Int) -> () {Move-, hear:Cmd, Restart: Zero|e}~> a
@@ -208,31 +150,48 @@ fun moveHandler(f, s)(){
     }
 }
 
-sig restartHandler: (() ~%~> (Player, GameState)) ~%~> (Player, GameState)
-fun restartHandler(f){
-    handle(f()){
-        case Return(x) -> x
-        case Restart(k) -> restart(self()); gameProcess()
+sig resetField: (Player, Player, Level, Bool, Int) ~> ()
+fun resetField(pl1, pl2, lev, check, n){
+    setField(pl1, "pl1", playerToString);
+    setField(pl2, "pl2", playerToString);
+    setField(lev, "level", levelToString);
+    setField(check, "check", boolToString);
+    setField(n, "heap", intToString)
+}
+
+sig getWinnerXml: (Process({hear:Cmd |e}), Player) ~> Xml
+fun getWinnerXml(pId, pl){
+    <#>
+        <div class="width-list center margin-10">
+            <p class="winner-heading">
+            {
+                switch(pl){
+                    case You -> stringToXml("You have won!")
+                    case _ -> stringToXml(playerToString(pl)^^ " has won!")
+                }
+            }
+            </p>
+        </div>
+    </#>
+}
+
+sig buttonChosen: (String, String) ~> ()
+fun buttonChosen(nodeId, data){
+    var prevId = domGetAttributeFromRef(getNodeById(data), "value");
+    if(prevId == nodeId) ()
+    else if (prevId ==""){
+        var node = getNodeById(nodeId);
+        domAddStyleClassToRef(node, "selected-button");
+        domSetAttributeFromRef(getNodeById(data), "value", nodeId)
+    } else{
+        var prevButton = getNodeById(prevId);
+        domRemoveStyleClassFromRef(prevButton, "selected-button");
+        #domSetStyleAttrFromRef(prevButton, "background-color", "#a6d8cc");
+        var node = getNodeById(nodeId);
+        domAddStyleClassToRef(node, "selected-button");
+        domSetAttributeFromRef(getNodeById(data), "value", nodeId)
     }
 
-}
-
-sig setPlayer : (Player, Player) {Get: GameState, Set: (GameState) -> () |e}~> ()
-fun setPlayer(pl1, pl2){
-    var st = do Get;
-    do Set((st with player=(pl1, pl2)))
-}
-
-sig setLevel : (Level) {Get:GameState, Set: (GameState) -> () |e}~> ()
-fun setLevel(lev){
-    var st = do Get;
-    do Set((st with level=lev))
-}
-
-sig setChecker : (Bool) {Get:GameState, Set: (GameState) -> () |e}~> ()
-fun setChecker(check){
-    var st = do Get;
-    do Set((st with cheat=check))
 }
 
 sig parseNat: (String) ~> Option(Int)
@@ -249,13 +208,10 @@ fun parseNat(n){
     }
 }
 
-sig sendInput: (Process({ hear:Cmd |e})) {hear:Cmd |f}~> ()
-fun sendInput(pId){
-    var n = getInputValue("your-move");
-    switch(parseNat(n)){
-        case None -> displayErrorMessage("game-error-message", "Please enter a stack size in numbers into the field.")
-        case Some(m) -> pId ! YourMove(m)
-    }
+sig displayErrorMessage: (String, String) ~> ()
+fun displayErrorMessage(id, msg){
+    var messageNode = getNodeById(id);
+    domReplaceChildren(stringToXml(msg), messageNode)
 }
 
 sig start: (Process ({ hear:Cmd | e})) ~> ()
@@ -272,145 +228,6 @@ fun start(pId){
             pId ! StartGame
         }
     }
-}
-
-sig displayErrorMessage: (String, String) ~> ()
-fun displayErrorMessage(id, msg){
-    var messageNode = getNodeById(id);
-    domReplaceChildren(stringToXml(msg), messageNode)
-}
-
-sig resetField: (Player, Player, Level, Bool, Int) ~> ()
-fun resetField(pl1, pl2, lev, check, n){
-    setField(pl1, "pl1", playerToString);
-    setField(pl2, "pl2", playerToString);
-    setField(lev, "level", levelToString);
-    setField(check, "check", boolToString);
-    setField(n, "heap", intToString)
-}
-
-sig restart: (Process({hear:Cmd |e})) ~> ()
-fun restart(pId){
-    resetField(Alice,You,Easy,false, 8);
-    renderView(RestartSetUp, pId);
-}
-
-sig finishGame: (Player, Process({hear:Cmd|e})) ~> ()
-fun finishGame(winner, pId){
-    #add gif in background
-    switch(winner){
-        case You -> addWinnerGif()
-        case (_) -> ()
-    };
-    renderView(Winner(winner), pId);
-    renderView(SetUp, pId)
-}
-
-sig addWinnerGif: () ~> ()
-fun addWinnerGif(){
-    var background = getNodeById("background");
-    var body = getNodeById("body");
-    domSetStyleAttrFromRef(body, "background-image", "url('https://media.giphy.com/media/IjmMzurYulKEw/giphy.gif')");
-    domSetStyleAttrFromRef(body, "background-size", "cover");
-    domSetStyleAttrFromRef(background, "background-color", "transparent");
-    domAddStyleClassToRef(getNodeById("setUp"), "background-base");
-    domAddStyleClassToRef(getNodeById("setUp"), "background-setup");
-    domAddStyleClassToRef(getNodeById("setUp"), "rounded-corners")
-
-}
-
-sig removeWinnerGif: () ~> ()
-fun removeWinnerGif(){
-    var background = getNodeById("background");
-    var body = getNodeById("body");
-    domRemoveAttributeFromRef(body, "style");
-    domSetStyleAttrFromRef(background, "background-color", "#f4f4f4");
-    domRemoveStyleClassFromRef(getNodeById("setUp"), "background-setup");
-    domRemoveStyleClassFromRef(getNodeById("setUp"), "background-base");
-}
-
-sig renderView: (ViewState, Process({hear:Cmd |e})) ~> ()
-fun renderView(view, pId){
-    var gameview = getNodeById("game");
-    var winner = getNodeById("winner");
-    var setup = getNodeById("setUp");
-    switch(view){
-        case RestartSetUp -> domReplaceChildren(<#></#>, gameview); domReplaceChildren(getSetUpXml(pId), setup)
-        case Game(state) ->  domReplaceChildren(<#></#>, setup); domReplaceChildren(<#></#>, winner); removeWinnerGif(); domReplaceChildren(getGameXml(pId, state), gameview)
-        case SetUp -> domReplaceChildren(getSetUpXml(pId), setup)
-        case Winner(pl) -> {
-            domReplaceChildren(getWinnerXml(pId, pl), winner);
-            domSetStyleAttrFromRef(getNodeById("game-head"), "display", "none");
-            domSetStyleAttrFromRef(getNodeById("restart-button"), "display", "none")
-            #domReplaceChildren(stringToXml("Play Again"), getNodeById("restart-button"))
-        }
-    }
-}
-
-sig updateView: (Int, Int, Player) ~> ()
-fun updateView(n, rest, current){
-    domReplaceChildren(intToXml(rest), getNodeById("left-sticks"));
-    var step = {
-        if(rest<=0){
-            <#>
-                <div>
-                    <p class="steps centered-text bold font-10"> {stringToXml("End of Game.")}</p>
-                </div>
-            </#>
-        } else{
-            switch(current){
-                case You -> {<#>
-                        <div>
-                            <p class="steps centered-text font-10"> {stringToXml("You take "^^ intToString(n-rest)^^".")}</p>
-                        </div>
-                        <hr class="thin-grey width-90 center"/>
-                    </#>}
-                case _ -> {<#>
-                        <div>
-                            <p class="steps centered-text font-10"> {stringToXml(playerToString(current) ^^" takes "^^ intToString(n-rest)^^".")}</p>
-                        </div>
-                        <hr class="thin-grey width-90 center"/>
-                    </#>}
-            }
-        }
-    };
-    appendChildren(step, getNodeById("game-steps"))
-}
-
-sig getGameXml: (Process ({hear:Cmd |e}) , GameState) ~%~> Xml
-fun getGameXml(pId, gameState){
-        <#>
-
-            <div class="field rounded-corners width-list center margin-10">
-                <div id="game-head" class="game-head center">
-                    <div class="margin-10 width-90 center display-flex">
-                        <span class="margin-10">Enter your Move </span>
-                        <input class="input-field rounded-corners margin-10 font-10" placeholder="Enter your move" id="your-move" type="text" />
-                        <button class="move-button rounded-corners font-10 color-sec margin-10" l:onclick="{sendInput(pId)}">Move</button>
-                    </div>
-                    <p class="error-message centered-text center margin-10" id="game-error-message"></p>
-                    <hr class="thin-grey width-100 center"/>
-                </div>
-                <div class="game-view margin-10">
-                    <div class="game-left game-boxes">
-                        <div class="view-heading centered-text game-head-height"> Game Stats </div>
-                        <p class="margin-left-25 sub-text font-10"> Players: {stringToXml(playerToString(gameState.player.1))} and {stringToXml(playerToString(gameState.player.2))}.</p>
-                                                <hr class="thin-grey width-90 center"/>
-
-                        <p class="margin-left-25 sub-text font-10"> Level: {stringToXml(levelToString(gameState.level))}</p>
-                                                <hr class="thin-grey width-90 center"/>
-
-                        <p class="margin-left-25 sub-text font-10"> Starting heap size: {intToXml(gameState.heap)}</p>
-                    </div>
-                    <div class="game-right game-boxes">
-                        <div id="left-sticks" class="left-sticks centered-text game-head-height">{intToXml(gameState.heap)}</div>
-
-                        <div id="game-steps" class="block"></div>
-                    </div>
-                </div>
-            </div>
-            <button id="restart-button" class="rounded-corners button block font-10 center" l:onclick="{pId ! Restart}"> Restart </button>
-        </#>
 }
 
 sig getSetUpXml: (Process({hear:Cmd |e})) ~> Xml
@@ -504,39 +321,234 @@ fun getSetUpXml(pId){
         </#>
 }
 
-sig getWinnerXml: (Process({hear:Cmd |e}), Player) ~> Xml
-fun getWinnerXml(pId, pl){
-    <#>
-        <div class="width-list center margin-10">
-            <p class="winner-heading">
-            {
-                switch(pl){
-                    case You -> stringToXml("You have won!")
-                    case _ -> stringToXml(playerToString(pl)^^ " has won!")
-                }
-            }
-            </p>
-        </div>
-    </#>
+sig addWinnerGif: () ~> ()
+fun addWinnerGif(){
+    var background = getNodeById("background");
+    var body = getNodeById("body");
+    domSetStyleAttrFromRef(body, "background-image", "url('https://media.giphy.com/media/IjmMzurYulKEw/giphy.gif')");
+    domSetStyleAttrFromRef(body, "background-size", "cover");
+    domSetStyleAttrFromRef(background, "background-color", "transparent");
+    domAddStyleClassToRef(getNodeById("setUp"), "background-base");
+    domAddStyleClassToRef(getNodeById("setUp"), "background-setup");
+    domAddStyleClassToRef(getNodeById("setUp"), "rounded-corners")
+
 }
 
-sig buttonChosen: (String, String) ~> ()
-fun buttonChosen(nodeId, data){
-    var prevId = domGetAttributeFromRef(getNodeById(data), "value");
-    if(prevId == nodeId) ()
-    else if (prevId ==""){
-        var node = getNodeById(nodeId);
-        domAddStyleClassToRef(node, "selected-button");
-        domSetAttributeFromRef(getNodeById(data), "value", nodeId)
-    } else{
-        var prevButton = getNodeById(prevId);
-        domRemoveStyleClassFromRef(prevButton, "selected-button");
-        #domSetStyleAttrFromRef(prevButton, "background-color", "#a6d8cc");
-        var node = getNodeById(nodeId);
-        domAddStyleClassToRef(node, "selected-button");
-        domSetAttributeFromRef(getNodeById(data), "value", nodeId)
-    }
+sig removeWinnerGif: () ~> ()
+fun removeWinnerGif(){
+    var background = getNodeById("background");
+    var body = getNodeById("body");
+    domRemoveAttributeFromRef(body, "style");
+    domSetStyleAttrFromRef(background, "background-color", "#f4f4f4");
+    domRemoveStyleClassFromRef(getNodeById("setUp"), "background-setup");
+    domRemoveStyleClassFromRef(getNodeById("setUp"), "background-base");
+}
 
+sig sendInput: (Process({ hear:Cmd |e})) {hear:Cmd |f}~> ()
+fun sendInput(pId){
+    var n = getInputValue("your-move");
+    switch(parseNat(n)){
+        case None -> displayErrorMessage("game-error-message", "Please enter a stack size in numbers into the field.")
+        case Some(m) -> pId ! YourMove(m)
+    }
+}
+
+sig getGameXml: (Process ({hear:Cmd |e}) , GameState) ~%~> Xml
+fun getGameXml(pId, gameState){
+        <#>
+
+            <div class="field rounded-corners width-list center margin-10">
+                <div id="game-head" class="game-head center">
+                    <div class="margin-10 width-90 center display-flex">
+                        <span class="margin-10">Enter your Move </span>
+                        <input class="input-field rounded-corners margin-10 font-10" placeholder="Enter your move" id="your-move" type="text" />
+                        <button class="move-button rounded-corners font-10 color-sec margin-10" l:onclick="{sendInput(pId)}">Move</button>
+                    </div>
+                    <p class="error-message centered-text center margin-10" id="game-error-message"></p>
+                    <hr class="thin-grey width-100 center"/>
+                </div>
+                <div class="game-view margin-10">
+                    <div class="game-left game-boxes">
+                        <div class="view-heading centered-text game-head-height"> Game Stats </div>
+                        <p class="margin-left-25 sub-text font-10"> Players: {stringToXml(playerToString(gameState.player.1))} and {stringToXml(playerToString(gameState.player.2))}.</p>
+                                                <hr class="thin-grey width-90 center"/>
+
+                        <p class="margin-left-25 sub-text font-10"> Level: {stringToXml(levelToString(gameState.level))}</p>
+                                                <hr class="thin-grey width-90 center"/>
+
+                        <p class="margin-left-25 sub-text font-10"> Starting heap size: {intToXml(gameState.heap)}</p>
+                    </div>
+                    <div class="game-right game-boxes">
+                        <div id="left-sticks" class="left-sticks centered-text game-head-height">{intToXml(gameState.heap)}</div>
+
+                        <div id="game-steps" class="block"></div>
+                    </div>
+                </div>
+            </div>
+            <button id="restart-button" class="rounded-corners button block font-10 center" l:onclick="{pId ! Restart}"> Restart </button>
+        </#>
+}
+
+sig renderView: (ViewState, Process({hear:Cmd |e})) ~> ()
+fun renderView(view, pId){
+    var gameview = getNodeById("game");
+    var winner = getNodeById("winner");
+    var setup = getNodeById("setUp");
+    switch(view){
+        case RestartSetUp -> domReplaceChildren(<#></#>, gameview); domReplaceChildren(getSetUpXml(pId), setup)
+        case Game(state) ->  domReplaceChildren(<#></#>, setup); domReplaceChildren(<#></#>, winner); removeWinnerGif(); domReplaceChildren(getGameXml(pId, state), gameview)
+        case SetUp -> domReplaceChildren(getSetUpXml(pId), setup)
+        case Winner(pl) -> {
+            domReplaceChildren(getWinnerXml(pId, pl), winner);
+            domSetStyleAttrFromRef(getNodeById("game-head"), "display", "none");
+            domSetStyleAttrFromRef(getNodeById("restart-button"), "display", "none")
+            #domReplaceChildren(stringToXml("Play Again"), getNodeById("restart-button"))
+        }
+    }
+}
+
+sig restart: (Process({hear:Cmd |e})) ~> ()
+fun restart(pId){
+    resetField(Alice,You,Easy,false, 8);
+    renderView(RestartSetUp, pId);
+}
+
+sig updateView: (Int, Int, Player) ~> ()
+fun updateView(n, rest, current){
+    domReplaceChildren(intToXml(rest), getNodeById("left-sticks"));
+    var step = {
+        if(rest<=0){
+            <#>
+                <div>
+                    <p class="steps centered-text bold font-10"> {stringToXml("End of Game.")}</p>
+                </div>
+            </#>
+        } else{
+            switch(current){
+                case You -> {<#>
+                        <div>
+                            <p class="steps centered-text font-10"> {stringToXml("You take "^^ intToString(n-rest)^^".")}</p>
+                        </div>
+                        <hr class="thin-grey width-90 center"/>
+                    </#>}
+                case _ -> {<#>
+                        <div>
+                            <p class="steps centered-text font-10"> {stringToXml(playerToString(current) ^^" takes "^^ intToString(n-rest)^^".")}</p>
+                        </div>
+                        <hr class="thin-grey width-90 center"/>
+                    </#>}
+            }
+        }
+    };
+    appendChildren(step, getNodeById("game-steps"))
+}
+
+sig turn: (Player, Player, Int) {Move: (Player, Int) -> Int|e}~> Player
+fun turn(current, opp, n){
+    if(n<= 0){
+        current                                 # Returns the winner
+    } else{
+        var rest = move(current, n);
+        updateView(n, {if(rest >= 0) rest else 0}, current);
+        turn(opp, current, rest)
+    }
+}
+sig game: () {Get: GameState, Move: (Player, Int) -> Int, hear: Cmd |e}~> Player
+fun game(){
+    var st = do Get;
+    renderView(Game(st), self());
+    turn(st.player.1, st.player.2, st.heap)
+}
+
+sig runState : (() {Get:s, Set:(s) -> () |e}~> a, s) -> () {Get-, Set- |e}~> (a, s)
+fun runState(f, st0)(){
+    handle(f())(st0 -> st){
+        case Return(x) -> (x, st)
+        case Set(st1, resume) -> resume((), st1)
+        case Get(resume) -> resume(st, st)
+    }
+}
+
+sig finishGame: (Player, Process({hear:Cmd|e})) ~> ()
+fun finishGame(winner, pId){
+    #add gif in background
+    switch(winner){
+        case You -> addWinnerGif()
+        case (_) -> ()
+    };
+    renderView(Winner(winner), pId);
+    renderView(SetUp, pId)
+}
+
+mutual {
+  sig prepareGame: () ~%~> (Player, GameState)
+  fun prepareGame(){
+      var pl1 = stringToPlayer(getField("pl1"));
+      var pl2 = stringToPlayer(getField("pl2"));
+      var check = stringToBool(getField("check"));
+      var level = stringToLevel(getField("level"));
+      var heap = stringToInt(getField("heap"));
+      var state = (player=(pl1, pl2), level=level, cheat=check, heap=heap);
+      var moveHandler = switch(state.level){
+          case Easy -> fun(game){moveHandler(game, easy)}
+          case Medium -> fun(game){moveHandler(game, medium)}
+          case Hard -> fun(game){moveHandler(game, hard)}
+      };
+      restartHandler(runState(moveHandler(game), state))
+  }
+
+  sig gameProcess : () {Get-,Move-,Restart{_},Set-,hear:Cmd|_}~> (Player, GameState)
+  fun gameProcess(){
+      var (winner, st) = receive {
+          case YourMove(_) -> error("Unexpected input")                       # Move button is clicked
+          case StartGame -> prepareGame()                                     # Start button is clicked, start the game
+          case Restart ->  error("Restart not possible from setUp page")      # Restart button is clicked
+      };
+      finishGame(winner, self()) ;
+      gameProcess()
+  }
+
+  sig restartHandler: (() ~%~> (Player, GameState)) ~%~> (Player, GameState)
+  fun restartHandler(f){
+      handle(f()){
+          case Return(x) -> x
+          case Restart(k) -> restart(self()); gameProcess()
+      }
+  }
+}
+#handler
+sig setPlayer : (Player, Player) {Get: GameState, Set: (GameState) -> () |e}~> ()
+fun setPlayer(pl1, pl2){
+    var st = do Get;
+    do Set((st with player=(pl1, pl2)))
+}
+
+sig setLevel : (Level) {Get:GameState, Set: (GameState) -> () |e}~> ()
+fun setLevel(lev){
+    var st = do Get;
+    do Set((st with level=lev))
+}
+
+sig setChecker : (Bool) {Get:GameState, Set: (GameState) -> () |e}~> ()
+fun setChecker(check){
+    var st = do Get;
+    do Set((st with cheat=check))
+}
+
+sig start: (Process ({ hear:Cmd | e})) ~> ()
+fun start(pId){
+    var num = parseNat(getInputValue("start-number"));
+    switch(num){
+        case None -> {
+            var heap = getField("heap");
+            if(heap=="") displayErrorMessage("start-error-message", "Please enter a stack size in numbers into the field.")
+            else pId ! StartGame
+        }
+        case Some(n) -> {
+            setField(n, "heap", intToString);
+            pId ! StartGame
+        }
+    }
 }
 
 sig main_page : (_) ~> Page
@@ -808,7 +820,6 @@ fun main_page(_) {
     </body>
     </html>
 }
-
 
 sig main: () ~> ()
 fun main() {

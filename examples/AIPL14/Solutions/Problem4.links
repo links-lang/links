@@ -90,71 +90,72 @@ mutual {
   }
 }
 
-
-sig mailClient : (~SMTPServer) ~> ()
-fun mailClient(c) {
-  outerClient(c)
-}
-
-
-fun outerClient(c) {
-  var c = send("starlight@domain.com", select MAIL c);
-  offer (c) {
-    case REJECT(c) ->
-      var (error, c) = receive(c);
-      println("C: client sent MAIL, server replied: " ^^ error);
-      outerClient(c)
-
-    case ACCEPT(c) ->
-      var (reply, c) = receive(c);
-      println("C: client sent MAIL, server replied: " ^^ reply);
-      rcptLoopClient(c)
+mutual {
+  sig mailClient : (~SMTPServer) ~> ()
+  fun mailClient(c) {
+    outerClient(c)
   }
-}
 
-fun innerClient(c, addRcpt) {
-  # Either one more recipient or data
-  if (addRcpt) {
-    addRecipient(c)
+
+  fun outerClient(c) {
+    var c = send("starlight@domain.com", select MAIL c);
+    offer (c) {
+      case REJECT(c) ->
+        var (error, c) = receive(c);
+        println("C: client sent MAIL, server replied: " ^^ error);
+        outerClient(c)
+
+      case ACCEPT(c) ->
+        var (reply, c) = receive(c);
+        println("C: client sent MAIL, server replied: " ^^ reply);
+        rcptLoopClient(c)
+    }
   }
-  else {
-    addData(c)
+
+  fun innerClient(c, addRcpt) {
+    # Either one more recipient or data
+    if (addRcpt) {
+      addRecipient(c)
+    }
+    else {
+      addData(c)
+    }
   }
-}
 
-fun addData(c) {
-  var c = send("Hello to bravest warriors!", select DATA c);
-  var (reply, c) = receive(c);
-  println("C: client sent DATA, server replied: " ^^ reply);
-  var c = select QUIT c;
-  wait(c);
-  ()
-}
-
-fun addRecipient(c) {
-  var c = send("pink@cloud", select RCPT c);
-  offer (c) {
-    case REJECT(c) ->
-      var (error, c) = receive(c);
-      println(error);
-      innerClient(c, false)
-    case ACCEPT(c) ->
-      var (reply, c) = receive(c);
-      println("C: client sent RCPT, server replied: " ^^ reply);
-      innerClient(c, false)
+  fun addData(c) {
+    var c = send("Hello to bravest warriors!", select DATA c);
+    var (reply, c) = receive(c);
+    println("C: client sent DATA, server replied: " ^^ reply);
+    var c = select QUIT c;
+    wait(c);
+    ()
   }
-}
 
-fun rcptLoopClient(c) {
-  var c = send("friend@galaxy.com", select RCPT c);
-  offer(c) {
-    case REJECT(c) ->
-      var (error, c) = receive(c);
-      rcptLoopClient(c)
-    case ACCEPT(c) ->
-      var (reply, c) = receive(c);
-      println("C: client sent RCPT, server replied: " ^^ reply);
-      innerClient(c, true)
+  fun addRecipient(c) {
+    var c = send("pink@cloud", select RCPT c);
+    offer (c) {
+      case REJECT(c) ->
+        var (error, c) = receive(c);
+        println(error);
+        innerClient(c, false)
+      case ACCEPT(c) ->
+        var (reply, c) = receive(c);
+        println("C: client sent RCPT, server replied: " ^^ reply);
+        innerClient(c, false)
+    }
+  }
+
+  fun rcptLoopClient(c) {
+    var c = send("friend@galaxy.com", select RCPT c);
+    offer(c) {
+      case REJECT(c) ->
+        var (error, c) = receive(c);
+        rcptLoopClient(c)
+      case ACCEPT(c) ->
+        var (reply, c) = receive(c);
+        println("C: client sent RCPT, server replied: " ^^ reply);
+        innerClient(c, true)
+    }
   }
 }
 
