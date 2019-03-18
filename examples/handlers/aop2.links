@@ -81,7 +81,7 @@ fun showExpr(e) {
 }
 
 typename SComp(e::Eff, a) =
-  Comp ({Suspend:(Expr, SComp(e, a)) {}-> a|e}, a);
+  Comp ({Suspend:(Expr, SComp({ |e}, a)) {}-> a|e}, a);
 
 sig suspend :
   forall e::Row, a.
