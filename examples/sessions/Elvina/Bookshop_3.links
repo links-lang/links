@@ -28,6 +28,52 @@ typename SonSelect = [&|Choice:!Product.End|&];
 typename SonOffer  = [+|Choice:?Product.End|+];
 
 
+# A shipper. Is sent a channel to reach a customer, receives their address.
+fun shipper(s) client
+{
+	var (address, s) = receive(s);
+	var addressFull = "Street: " ^^ address.street ^^ ", House number: " ^^ intToString(address.houseNo) ^^ ", City: " ^^ address.city;
+	(addressFull, s)
+}
+
+
+# Convinces Links that any Product is also a String.
+fun turnProductToString(product) client
+{
+	switch(product) {
+		case Book(s) -> s
+		case Audio_Visual(s) -> s
+		case Gadget(s) -> s
+	}
+}
+
+# Turns a list of products into a single string.
+sig concatenateProducts : ([Product], String) ~> (String)
+fun concatenateProducts(products, fullList) client
+{
+	switch(products) {
+		case [] -> fullList
+		case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
+	}
+}
+
+# Turns order summary into a single readable string.
+sig summariseOrder : (Int, String, [Product], String) ~> ([String])
+fun summariseOrder(card, address, products, removed) client
+{
+	[concatenateProducts(products, ""), removed, intToString(card), address]
+}
+
+# Removes sendn element.
+sig removeProduct : (Product, [Product]) ~> ([Product])
+fun removeProduct(item, products) client
+{
+	switch (products) {
+     		case []    -> []
+     		case x::xs -> if (item == x) xs
+                   	      else x::removeProduct(item, xs)
+  }
+}
 
 # A shop. Accepts orders and allows checkout.
 sig waitForClient : (ShopOffer, [Product], String) ~> ()
@@ -58,56 +104,6 @@ case Checkout(s) ->
 	close(send(summary, s));
 	}
 }
-
-# Turns order summary into a single readable string.
-sig summariseOrder : (Int, String, [Product], String) ~> ([String])
-fun summariseOrder(card, address, products, removed) client
-{
-	[concatenateProducts(products, ""), removed, intToString(card), address]
-}
-
-
-# Turns a list of products into a single string.
-sig concatenateProducts : ([Product], String) ~> (String)
-fun concatenateProducts(products, fullList) client
-{
-	switch(products) {
-		case [] -> fullList
-		case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
-	}
-}
-
-# Convinces Links that any Product is also a String.
-fun turnProductToString(product) client
-{
-	switch(product) {
-		case Book(s) -> s
-		case Audio_Visual(s) -> s
-		case Gadget(s) -> s
-	}
-}
-
-# A shipper. Is sent a channel to reach a customer, receives their address.
-fun shipper(s) client
-{
-	var (address, s) = receive(s);
-	var addressFull = "Street: " ^^ address.street ^^ ", House number: " ^^ intToString(address.houseNo) ^^ ", City: " ^^ address.city;
-	(addressFull, s)
-}
-
-
-
-# Removes sendn element.
-sig removeProduct : (Product, [Product]) ~> ([Product])
-fun removeProduct(item, products) client
-{
-	switch (products) {
-     		case []    -> []
-     		case x::xs -> if (item == x) xs
-                   	      else x::removeProduct(item, xs)
-  }
-}
-
 
 # Waits for signal to be able to choose and picks out the product.
 sig waitForSon : (SonSelect) ~> ()

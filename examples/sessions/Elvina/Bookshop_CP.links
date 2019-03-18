@@ -28,6 +28,54 @@ typename SonSelect = [&|Choice:!Product.End|&];
 typename SonOffer  = [+|Choice:?Product.End|+];
 
 
+# Removes given element.
+sig removeProduct : (Product, [Product]) ~> ([Product])
+fun removeProduct(item, products) client
+{
+	switch (products) {
+     		case []    -> []
+     		case x::xs -> if (item == x) xs
+                   	      else x::removeProduct(item, xs)
+  }
+}
+
+
+# Convinces Links that any Product is also a String.
+fun turnProductToString(product) client
+{
+	switch(product) {
+		case Book(s) -> s
+		case Audio_Visual(s) -> s
+		case Gadget(s) -> s
+	}
+}
+
+# Turns a list of products into a single string.
+sig concatenateProducts : ([Product], String) ~> (String)
+fun concatenateProducts(products, fullList) client
+{
+	switch(products) {
+		case [] -> fullList
+		case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
+	}
+}
+
+# Turns order summary into a single readable string.
+sig summariseOrder : (Int, String, [Product], String) ~> ([String])
+fun summariseOrder(card, address, products, removed) client
+{
+	[concatenateProducts(products, ""), removed, intToString(card), address]
+}
+
+#sig shipper : (?(?String.c).!String.!c.End) ~> ()
+fun shipper(c) {
+  <| c(s).s(address).
+     c["Street: " ^^ address.street ^^ ", House number: " ^^
+intToString(address.houseNo) ^^ ", City: " ^^ address.city].
+     c[s].c[] |>
+}
+
+
 # A shop. Accepts orders and allows checkout.
 #sig waitForClient : (ShopOffer, [Product], String) ~> ()
 fun waitForClient(s, orderedProducts, removedProducts) client
@@ -49,54 +97,6 @@ fun waitForClient(s, orderedProducts, removedProducts) client
 	        s[summariseOrder(card, addressFull, orderedProducts, removedProducts)].
 	        c().s[])
 	 } |>
-}
-
-#sig shipper : (?(?String.c).!String.!c.End) ~> ()
-fun shipper(c) {
-  <| c(s).s(address).
-     c["Street: " ^^ address.street ^^ ", House number: " ^^
-intToString(address.houseNo) ^^ ", City: " ^^ address.city].
-     c[s].c[] |>
-}
-
-
-# Turns order summary into a single readable string.
-sig summariseOrder : (Int, String, [Product], String) ~> ([String])
-fun summariseOrder(card, address, products, removed) client
-{
-	[concatenateProducts(products, ""), removed, intToString(card), address]
-}
-
-
-# Turns a list of products into a single string.
-sig concatenateProducts : ([Product], String) ~> (String)
-fun concatenateProducts(products, fullList) client
-{
-	switch(products) {
-		case [] -> fullList
-		case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
-	}
-}
-
-# Convinces Links that any Product is also a String.
-fun turnProductToString(product) client
-{
-	switch(product) {
-		case Book(s) -> s
-		case Audio_Visual(s) -> s
-		case Gadget(s) -> s
-	}
-}
-
-# Removes given element.
-sig removeProduct : (Product, [Product]) ~> ([Product])
-fun removeProduct(item, products) client
-{
-	switch (products) {
-     		case []    -> []
-     		case x::xs -> if (item == x) xs
-                   	      else x::removeProduct(item, xs)
-  }
 }
 
 
