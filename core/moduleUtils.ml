@@ -174,6 +174,8 @@ let create_module_info_map program =
          (get_pattern_variables pat) @ get_binding_names bs
       | {node = Fun (bndr, _, _, _, _); _} :: bs ->
          Binder.to_name bndr :: (get_binding_names bs)
+      | {node = Mutual ms ; _ } :: bs ->
+          get_binding_names ms @ get_binding_names bs
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 
     (* Getting type names -- we're interested in typename decls *)
@@ -187,6 +189,8 @@ let create_module_info_map program =
                     List.fold_left (fun ns_rev (n, _, _) -> n :: ns_rev) [] ts
                     |> List.rev in
                   ns @ (get_type_names bs)
+              | Mutual ms ->
+                  get_type_names ms @ get_type_names bs
               | _ -> get_type_names bs
           end in
 

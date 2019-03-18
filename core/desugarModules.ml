@@ -301,7 +301,6 @@ and perform_renaming module_table path term_ht type_ht =
           fun binding_list mt path term_ht type_ht ->
     (* For each binding group, get the shadowing table, and then use the shadowing
      * table to do the renaming *)
-    (* let (term_ht, type_ht, bnds_rev) = *)
     let process_bindings term_ht type_ht bnds =
       (* Rename functions and create shadow table *)
       let (o, bnds') =
