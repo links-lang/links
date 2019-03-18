@@ -1,6 +1,7 @@
 open Utility
 open Notfound
 open ProcessTypes
+open Var
 
 [@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
 
@@ -266,9 +267,9 @@ module Env = struct
   let bind name (v,scope) env =
     (* Maintains globals as submap of global bindings. *)
     match scope with
-      `Local ->
+      Scope.Local ->
       { env with all = IntMap.add name (v,scope) env.all }
-    | `Global ->
+    | Scope.Global ->
        { env with
          all = IntMap.add name (v,scope) env.all;
          globals = IntMap.add name (v,scope) env.globals;
@@ -297,9 +298,9 @@ module Env = struct
       (fun name locals ->
         match lookupS name env with
         | None
-          | Some (_, `Global) -> locals
-        | Some (v, `Local) ->
-           bind name (v, `Local) locals)
+          | Some (_, Scope.Global) -> locals
+        | Some (v, Scope.Local) ->
+           bind name (v, Scope.Local) locals)
       (Tables.find Tables.cont_vars var)
       empty
 
@@ -310,7 +311,7 @@ module Env = struct
     List.rev
     (fold
        (fun name (v, scope) compressed ->
-          if scope = `Global then
+          if Scope.isGlobal scope then
             compressed
           else
             (name, compress_val v)::compressed)
@@ -353,7 +354,7 @@ module Frame = struct
 
   let make scope var env comp = (scope, var, env, comp)
   let of_expr env tc =
-    make (`Local : Ir.scope) (Var.dummy_var : Ir.var) env (([], tc) : Ir.computation)
+    make (Scope.Local : Ir.scope) (Var.dummy_var : Ir.var) env (([], tc) : Ir.computation)
 
   (** Compression **)
   type 'cv compressed_t = Ir.var * 'cv Env.compressed_t
@@ -638,7 +639,7 @@ module Eff_Handler_Continuation = struct
 
       let return k h v =
         let ((var,_), comp) = h.return in
-        E.computation (Env.bind var (v, `Local) h.env) k comp
+        E.computation (Env.bind var (v, Scope.Local) h.env) k comp
 
       let rec apply ~env k v =
         match k with
@@ -663,7 +664,7 @@ module Eff_Handler_Continuation = struct
                       let params =
                         List.fold_left2
                           (fun acc x v ->
-                            Env.bind x (v, `Local) acc)
+                            Env.bind x (v, Scope.Local) acc)
                           Env.empty xs vs
                       in
                       let env = Env.shadow h.env ~by:params in
@@ -695,7 +696,7 @@ module Eff_Handler_Continuation = struct
              | Some ((var, _), _, comp)
                   when session_exn_enabled && opname = session_exception_operation ->
                 let continuation_thunk =
-                  fun () -> E.computation (Env.bind var (arg, `Local) h.env) k comp
+                  fun () -> E.computation (Env.bind var (arg, Scope.Local) h.env) k comp
                 in
                 let comps = List.map (fun (_, _, _, c) -> c) pk in
                 SessionTrap ({
@@ -710,8 +711,8 @@ module Eff_Handler_Continuation = struct
                     | `Shallow -> Shallow (pk, List.rev k')
                     | `Deep _ -> Deep ((User_defined h,pk) :: k')
                   in
-                  let env = Env.bind var (arg, `Local) h.env in
-                  Env.bind (Var.var_of_binder resumeb) (E.reify resume, `Local) env
+                  let env = Env.bind var (arg, Scope.Local) h.env in
+                  Env.bind (Var.var_of_binder resumeb) (E.reify resume, Scope.Local) env
                 in
                 Trap (fun () -> E.computation env k comp)
              | None -> handle ((User_defined h, pk) :: k') k

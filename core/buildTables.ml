@@ -1,5 +1,6 @@
 open Utility
 open Ir
+open Var
 
 module FunDefs =
 struct
@@ -62,7 +63,7 @@ struct
   end
 
   let primitives scopes =
-    IntSet.iter (fun x -> Hashtbl.add scopes x `Global) Lib.primitive_vars
+    IntSet.iter (fun x -> Hashtbl.add scopes x Scope.Global) Lib.primitive_vars
 
   let bindings tyenv scopes cont_defs bs =
     let _ = (new visitor tyenv scopes cont_defs)#bindings bs in ()
@@ -169,7 +170,7 @@ struct
 
     method! binder b =
       let b, o = super#binder b in
-        if Var.scope_of_binder b = `Global then
+        if Scope.isGlobal (Var.scope_of_binder b) then
           b, o#global (Var.var_of_binder b)
         else
           b, o

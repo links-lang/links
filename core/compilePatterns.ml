@@ -12,6 +12,7 @@ open CommonTypes
 open SourceCode
 open Utility
 open Ir
+open Var
 
 module type CONSTSET = Set with type elt = Constant.t
 module ConstSet = Set.Make(Constant)
@@ -1100,7 +1101,7 @@ let match_choices : var -> clause list -> bound_computation =
                                       | Pattern.Variant (name, Pattern.Variable b) -> (name, b)
                                       | Pattern.Variant (name, Pattern.Any)        ->
                                         let bt = TypeUtils.choice_at name t in
-                                        (name, Var.fresh_binder (bt, "_", `Local))
+                                        (name, Var.fresh_binder (bt, "_", Scope.Local))
                                       | _ ->
                                         (* TODO: give a more useful error message - including the position
                                            (it may be necessary to detect the error earlier on) *)

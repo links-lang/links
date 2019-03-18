@@ -1,6 +1,7 @@
 open Utility
 open CommonTypes
 open Ir
+open Var
 
 (** Traversal with type reconstruction
 
@@ -525,7 +526,7 @@ struct
             let b, o = o#binding b in
               begin
                 match b with
-                  | Let ((x, (_, _, `Local)), (tyvars, Return v)) when is_inlineable_value v ->
+                  | Let ((x, (_, _, Scope.Local)), (tyvars, Return v)) when is_inlineable_value v ->
                       let v =
                         match tyvars with
                           | [] -> v
