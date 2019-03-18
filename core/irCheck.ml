@@ -9,7 +9,7 @@ exception IRTypeError of string
 
 let raise_ir_type_error msg occurrence =
   let occurrence_string = match occurrence with
-    | `TC tc -> "\noccuring in tail computation: " ^  Ir.string_of_tail_computation tc
+    | `TC tc -> "\noccuring in tail computation: " ^ Ir.string_of_tail_computation tc
     | `Value v -> "\noccuring in value: " ^ Ir.string_of_value v
     | `Special s -> "\noccuring in special tail computation: " ^ Ir.string_of_special s
     | `Binding b -> "\noccuring in binding: " ^ Ir.string_of_binding b
@@ -69,7 +69,7 @@ struct
 
   let is_recursive t =
     let o = new visitor in
-    let o' =  snd (o#typ t) in
+    let o' = snd (o#typ t) in
     o'#get_result ()
 
 end
@@ -77,24 +77,24 @@ end
 
 
 let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
-  fun  context (t1, t2) ->
-    let lookupVar lvar map  =
+  fun context (t1, t2) ->
+    let lookupVar lvar map =
       match IntMap.find_opt lvar map with
       | Some rvar' -> (map, rvar')
-      | None -> (map, lvar)  in
-    let handle_variable primary_kind (lid, lsk, lfd)  (rid, rsk, rfd) ctx =
-      let subst_map, kind_env = ctx.typevar_subst, ctx.tyenv  in
-      let (_, rvar') = lookupVar lid subst_map  in
+      | None -> (map, lvar) in
+    let handle_variable primary_kind (lid, lsk, lfd) (rid, rsk, rfd) ctx =
+      let subst_map, kind_env = ctx.typevar_subst, ctx.tyenv in
+      let (_, rvar') = lookupVar lid subst_map in
       let is_equal = rid = rvar' && lsk = rsk && lfd = rfd in
       begin
         if is_equal then
          match Env.find kind_env rid with
           | Some (primary_kind_env, subkind_env) ->
             ensure
-              (primary_kind = primary_kind_env &&  rsk = subkind_env)
+              (primary_kind = primary_kind_env && rsk = subkind_env)
               "Mismatch between (sub) kind information in variable vs stored in kind environment"
               `None
-          | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurrence
+          | None -> raise_ir_type_error ("Type variable " ^ (string_of_int rid) ^ " is unbound") occurrence
         end;
       (ctx, is_equal) in
     let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
@@ -150,7 +150,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       match t1 with
       | `Not_typed ->
           begin match t2 with
-              `Not_typed -> (context,  true)
+              `Not_typed -> (context, true)
             | _          -> (context, false)
           end
       | `Primitive x ->
@@ -165,8 +165,8 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
               begin match t2 with
                 `MetaTypeVar rpoint ->
                 begin match lpoint_cont, Unionfind.find rpoint with
-                | `Var lv, `Var rv ->  handle_variable pk_type lv rv context
-                | `Body _, `Body _ -> failwith "Should have  removed `Body by now"
+                | `Var lv, `Var rv -> handle_variable pk_type lv rv context
+                | `Body _, `Body _ -> failwith "Should have removed `Body by now"
                 | _ -> (context, false)
                 end
                 | _                   -> (context, false)
@@ -175,18 +175,18 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `Function (lfrom, lm, lto) ->
           begin match t2 with
             `Function (rfrom, rm, rto) ->
-             let (context, r1) = eqt (context, lfrom, rfrom) in
-             let (context, r2) =  eqt (context, lto,   rto) in
-             let (context, r3) = eq_rows  (context, lm, rm) in
+             let (context, r1) = eqt     (context, lfrom, rfrom) in
+             let (context, r2) = eqt     (context, lto  , rto  ) in
+             let (context, r3) = eq_rows (context, lm   , rm   ) in
              (context, r1 && r2 && r3)
             | _                          -> (context, false)
           end
       | `Lolli (lfrom, lm, lto) ->
           begin match t2 with
             `Function (rfrom, rm, rto) ->
-             let (context, r1) = eqt (context, lfrom, rfrom) in
-             let (context, r2) = eqt (context, lto,   rto) in
-             let (context, r3) = eq_rows  (context, lm, rm) in
+             let (context, r1) = eqt     (context, lfrom, rfrom) in
+             let (context, r2) = eqt     (context, lto  , rto  ) in
+             let (context, r3) = eq_rows (context, lm   , rm   ) in
              (context, r1 && r2 && r3)
             | _                          -> (context, false)
           end
@@ -196,7 +196,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | _         -> (context, false)
          end
       | `Variant l ->
-         begin match  t2 with
+         begin match t2 with
            `Variant r -> eq_rows (context, l, r)
          | _          -> (context, false)
          end
@@ -208,10 +208,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `Application (s, ts) ->
          begin match t2 with
          | `Application (s', ts') ->
-            List.fold_left2 (fun (context, prev_equal) larg rarg  ->
+            List.fold_left2 (fun (context, prev_equal) larg rarg ->
                 let context, eq = eq_type_args (context, larg, rarg) in
                 context, prev_equal && eq)
-              (context, Types.Abstype.equal s  s') ts ts'
+              (context, Types.Abstype.equal s s') ts ts'
          | _ -> (context, false)
          end
       | `ForAll (qs, t) ->
@@ -234,18 +234,18 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | _ -> (context, false)
          end
       | #Types.session_type as l ->
-         begin match  t2 with
+         begin match t2 with
          | #Types.session_type as r -> eq_sessions (context, l, r)
          | _          -> (context, false)
          end
 
-      | `Alias  (_, t1_inner) ->
+      | `Alias (_, t1_inner) ->
         begin match t2 with
-          | `Alias  (_, t2_inner) -> eqt (context, t1_inner, t2_inner)
+          | `Alias (_, t2_inner) -> eqt (context, t1_inner, t2_inner)
           | t2 -> eqt (context, t1_inner, t2)
         end
 
-      | `Table (lt1, lt2, lt3)  ->
+      | `Table (lt1, lt2, lt3) ->
          begin match t2 with
          | `Table (rt1, rt2, rt3) ->
             let (context, r1) = eqt (context, lt1, rt1) in
@@ -257,7 +257,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `Lens _ -> failwith "The IR type equality check does not support lenses (yet)"
       end
 
-    and eq_sessions (context, l, r)  =
+    and eq_sessions (context, l, r) =
       match (l,r) with
       | `Input (lt, _), `Input (rt, _)
         | `Output (lt, _), `Output (rt, _) ->
@@ -269,30 +269,30 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          eqt (context, l, r)
       | `End, `End -> (context, true)
       | _, _ -> (context, false)
-    and eq_rows  (context, r1, r2)  =
+    and eq_rows (context, r1, r2) =
       let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
       let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
-      let  (context, r1) = eq_field_envs (context, lfield_env, rfield_env) in
-      let  (context, r2) = eq_row_vars (context, lrow_var, rrow_var) in
+      let (context, r1) = eq_field_envs (context, lfield_env, rfield_env) in
+      let (context, r2) = eq_row_vars (context, lrow_var, rrow_var) in
         (context, r1 && r2 && ldual=rdual)
     and eq_presence (context, l, r) =
       match l, r with
-      | `Absent, `Absent ->  (context, true)
+      | `Absent, `Absent -> (context, true)
       | `Present lt, `Present rt -> eqt (context, lt, rt)
       | `Var lpoint, `Var rpoint -> begin match Unionfind.find lpoint, Unionfind.find rpoint with
-                                    | `Body _,  _
+                                    | `Body _, _
                                     | _, `Body _ -> failwith "should have removed all `Body variants by now"
-                                    |  `Var lv, `Var rv -> handle_variable pk_presence lv rv context
+                                    | `Var lv, `Var rv -> handle_variable pk_presence lv rv context
                                     end
       | _, _ -> (context, false)
-    and eq_field_envs  (context, lfield_env, rfield_env) =
-      StringMap.fold (fun field lp (context, prev_eq)  ->
+    and eq_field_envs (context, lfield_env, rfield_env) =
+      StringMap.fold (fun field lp (context, prev_eq) ->
                            match StringMap.find_opt field rfield_env with
                            | Some rp -> let (context, eq) =
                                           eq_presence (context, lp, rp) in
                                             (context, eq && prev_eq)
                            | None -> (context, false)
-                          ) lfield_env  (context, StringMap.cardinal lfield_env = StringMap.cardinal rfield_env)
+                          ) lfield_env (context, StringMap.cardinal lfield_env = StringMap.cardinal rfield_env)
     and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | `Closed, `Closed ->  (context, true)
