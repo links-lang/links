@@ -38,15 +38,6 @@ module ClientCommon {
 module Pinger {
   open ClientCommon;
 
-  sig commThread : (AP(PingPong)) ~%e~> ()
-  fun commThread(ap) {
-    # Request a channel from the access point
-    var ch = request(ap);
-    logMessage("Established session connection with ponger!");
-    enableButton();
-    commLoop(ch)
-  }
-
   ## Why does this need this annotation?
   sig commLoop : (~PingPong) ~%e~>()
   fun commLoop(ch) {
@@ -61,6 +52,15 @@ module Pinger {
         commLoop(ch)
     }
   }
+  sig commThread : (AP(PingPong)) ~%e~> ()
+  fun commThread(ap) {
+    # Request a channel from the access point
+    var ch = request(ap);
+    logMessage("Established session connection with ponger!");
+    enableButton();
+    commLoop(ch)
+  }
+
 
   fun setup(srvAP) {
     # Spawn a thread on the client to request a channel from
@@ -73,14 +73,6 @@ module Pinger {
 
 module Ponger {
   open ClientCommon;
-
-  sig commThread : (AP(PingPong)) ~%e~> ()
-  fun commThread(ap) {
-    # Accept a channel from the access point
-    var ch = accept(ap);
-    logMessage("Established session connection with pinger!");
-    commLoop(ch)
-  }
 
   sig commLoop : (PingPong) ~%e~>()
   fun commLoop(ch) {
@@ -95,6 +87,15 @@ module Ponger {
         commLoop(ch)
     }
   }
+
+  sig commThread : (AP(PingPong)) ~%e~> ()
+  fun commThread(ap) {
+    # Accept a channel from the access point
+    var ch = accept(ap);
+    logMessage("Established session connection with pinger!");
+    commLoop(ch)
+  }
+
 
   fun setup(srvAP) {
     # Spawn a thread on the client to request a channel from
