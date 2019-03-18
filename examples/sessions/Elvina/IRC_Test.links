@@ -1,5 +1,24 @@
 # Ping - pong test cannot work, because the real server replies to it rather than my bot.
 
+# Reads the server's answer to queries.
+sig readServer : (Socket, Int, Int) ~> ()
+fun readServer(rs, time, timeout) {
+  if   (serverTime() >= time + timeout) () # Timeout.
+  else {
+         var copyRs = rs;
+         switch(readFromSocket(rs)) {
+           case Just(rs) -> println(rs); readServer(copyRs, time, timeout)
+           case Nothing  -> readServer(rs, time, timeout)
+          }
+        }
+}
+
+# Writes LinksCalc: and given expression to socket; prints it.
+fun writeExpressionToSocket(message, rs) {
+    writeToSocket("PRIVMSG #irchacks : LinksCalc:" ^^ message ^^ "\n", rs);
+    println("PRIVMSG #irchacks : LinksCalc:" ^^ message)
+}
+
 fun connectToIRCServer() {
     var rs = connectSocket("irc.freenode.net", 6667);
     var rs = fromJust(rs);
@@ -125,24 +144,5 @@ fun connectToIRCServer() {
     println("QUIT");
     closeSocket(rs);
     ()
-}
-
-# Writes LinksCalc: and given expression to socket; prints it.
-fun writeExpressionToSocket(message, rs) {
-    writeToSocket("PRIVMSG #irchacks : LinksCalc:" ^^ message ^^ "\n", rs);
-    println("PRIVMSG #irchacks : LinksCalc:" ^^ message)
-}
-
-# Reads the server's answer to queries.
-sig readServer : (Socket, Int, Int) ~> ()
-fun readServer(rs, time, timeout) {
-  if   (serverTime() >= time + timeout) () # Timeout.
-  else {
-         var copyRs = rs;
-         switch(readFromSocket(rs)) {
-           case Just(rs) -> println(rs); readServer(copyRs, time, timeout)
-           case Nothing  -> readServer(rs, time, timeout)
-          }
-        }
 }
 connectToIRCServer()
