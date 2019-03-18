@@ -117,6 +117,19 @@ fun yield(){
     do Yield
 }
 
+sig makeDot: (Int, Int, Int) {Gensym: Int|e}~> ()
+fun makeDot(x, y, startTime) {
+    var nodeId = "dot-" ^^ intToString(do Gensym);
+    fun g(draw)() {
+        fun f(draw)(){
+            draw(x, y, nodeId):()
+        }
+        setIntervalForF(1000, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
+        f(draw)();                      # Draw the initial triangle
+        setIntervalForF(95, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
+    }
+    sysEnqueue(makeFiber(High, g(drawDot)))
+}
 sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ()) -> Fiber0({ |e})
 fun makeFiber(prio, f){
     (prio= prio, f=f)
@@ -128,6 +141,7 @@ fun forever(){ yield(); forever()}
 sig schedule: (Fiber0({ |e})) {Yield-, Fork- | e}~> ()
 fun schedule(main){
 
+  mutual {
     fun runNext(q){
         switch(fiberDequeue(q)){
             case (None, _) -> ()
@@ -186,8 +200,9 @@ fun schedule(main){
         var enqueue = map(fiber0ToFiber, sysDequeue());
         fiberBulkEnqueue(enqueue, q)
     }
+  }
 
-    runFiber(main, emptyPrioQueue())
+  runFiber(main, emptyPrioQueue())
 }
 
 fun gensymHandler(f){
@@ -323,20 +338,6 @@ fun prepareTick(nodeId){
     fun(){
         tick(nodeId)
     }
-}
-
-sig makeDot: (Int, Int, Int) {Gensym: Int|e}~> ()
-fun makeDot(x, y, startTime) {
-    var nodeId = "dot-" ^^ intToString(do Gensym);
-    fun g(draw)() {
-        fun f(draw)(){
-            draw(x, y, nodeId):()
-        }
-        setIntervalForF(1000, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
-        f(draw)();                      # Draw the initial triangle
-        setIntervalForF(95, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
-    }
-    sysEnqueue(makeFiber(High, g(drawDot)))
 }
 
 fun start(){

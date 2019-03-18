@@ -2,20 +2,14 @@ typename Card = Int;
 typename PIN = Int;
 typename Money = Int;
 
-typename ATM = ?Card.?PIN.[+|Accept:Menu, Reject:!Card.End|+];
 typename Menu = [&|Withdraw:?Int.[+|Accept:!Card.!Money.End,
                                     Reject:!Card.End|+],
                    Balance:!Int.!Card.End|&];
+typename ATM = ?Card.?PIN.[+|Accept:Menu, Reject:!Card.End|+];
 
-sig atm : (Money, ATM) ~> ()
-fun atm(balance, c) {
-  var (card, c) = receive(c);
-  var (pin, c) = receive(c);
-  if(check(card, pin)) {
-    menu(card, balance, select Accept c)
-  } else {
-    close(send(card, select Reject c))
-  }
+sig check : (Card, PIN) ~> Bool
+fun check(card, pin) {
+  (card == 16777216) && (pin == 1024)
 }
 
 sig menu : (Card, Money, Menu) ~> ()
@@ -33,9 +27,15 @@ fun menu(card, balance, c) {
   }
 }
 
-sig check : (Card, PIN) ~> Bool
-fun check(card, pin) {
-  (card == 16777216) && (pin == 1024)
+sig atm : (Money, ATM) ~> ()
+fun atm(balance, c) {
+  var (card, c) = receive(c);
+  var (pin, c) = receive(c);
+  if(check(card, pin)) {
+    menu(card, balance, select Accept c)
+  } else {
+    close(send(card, select Reject c))
+  }
 }
 
 sig user1 : (~ATM) ~> Int

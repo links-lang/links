@@ -140,19 +140,21 @@ fun exchange(f, g) {
 typename Consumer(a, e::Eff, b) = (a) {Abort:Zero, Await:a |e}~> b;
 typename Producer(a, e::Eff, b) = () {Abort:Zero, Yield:(a) -> () |e}~> b;
 
-sig pipe : (Producer(a, { Await{p} |e}, _), Comp({Abort:Zero, Await:a, Yield{q} |e}, b)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
-fun pipe(sender, receiver) {
-  shallowhandle(receiver()) {
-    case Return(x) -> x
-    case Await(resume) -> copipe(resume, sender)
+mutual {
+  sig copipe : (Consumer(a, { Yield{q} |e}, b), Producer(a, { Await{p} |e}, _)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+  fun copipe(receiver, sender) {
+    shallowhandle(sender()) {
+      case Return(_) -> abort()
+      case Yield(x, resume) -> pipe(fun() { resume(()) }, fun() { receiver(x) })
+    }
   }
-}
 
-sig copipe : (Consumer(a, { Yield{q} |e}, b), Producer(a, { Await{p} |e}, _)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
-fun copipe(receiver, sender) {
-  shallowhandle(sender()) {
-    case Return(_) -> abort()
-    case Yield(x, resume) -> pipe(fun() { resume(()) }, fun() { receiver(x) })
+  sig pipe : (Producer(a, { Await{p} |e}, _), Comp({Abort:Zero, Await:a, Yield{q} |e}, b)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+  fun pipe(sender, receiver) {
+    shallowhandle(receiver()) {
+      case Return(x) -> x
+      case Await(resume) -> copipe(resume, sender)
+    }
   }
 }
 
