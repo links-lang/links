@@ -880,7 +880,7 @@ struct
                    let env, bindings =
                      List.fold_left2
                        (fun (env, bindings) (body, p) t ->
-                         let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+                         let p, penv = CompilePatterns.desugar_pattern p in
                          let bindings = ((fun env -> eval env body), p, t) :: bindings in
                          ((env ++ penv), bindings))
                        (empty_env, []) bindings types
@@ -890,14 +890,14 @@ struct
              let eff_cases =
                List.map
                  (fun (p, body) ->
-                   let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+                   let p, penv = CompilePatterns.desugar_pattern p in
                    (p, fun env -> eval ((env ++ henv) ++ penv) body))
                  sh_effect_cases
              in
              let val_cases =
                 List.map
                   (fun (p, body) ->
-                    let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+                    let p, penv = CompilePatterns.desugar_pattern p in
                     (p, fun env -> eval ((env ++ henv) ++ penv) body))
                   sh_value_cases
              in
@@ -906,7 +906,7 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+                     let p, penv = CompilePatterns.desugar_pattern p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -977,7 +977,7 @@ struct
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
 
           | DBUpdate (p, source, where, fields) ->
-              let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+              let p, penv = CompilePatterns.desugar_pattern p in
               let env' = env ++ penv in
               let source = ev source in
               let where =
@@ -987,7 +987,7 @@ struct
               let body = eval env' (WithPos.make ~pos (RecordLit (fields, None))) in
                 I.db_update env (p, source, where, body)
           | DBDelete (p, source, where) ->
-              let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+              let p, penv = CompilePatterns.desugar_pattern p in
               let env' = env ++ penv in
               let source = ev source in
               let where =
@@ -1003,7 +1003,7 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+                     let p, penv = CompilePatterns.desugar_pattern p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -1067,7 +1067,7 @@ struct
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Val (p, (_, body), _, _) ->
-                    let p, penv = CompilePatterns.desugar_pattern scope p in
+                    let p, penv = CompilePatterns.desugar_pattern p in
                     let env' = env ++ penv in
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
@@ -1079,7 +1079,7 @@ struct
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
-                           let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+                           let p, penv = CompilePatterns.desugar_pattern p in
                              p::ps, body_env ++ penv)
                         ps
                         ([], env) in
@@ -1110,7 +1110,7 @@ struct
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
-                                  let p, penv = CompilePatterns.desugar_pattern Scope.Local p in
+                                  let p, penv = CompilePatterns.desugar_pattern p in
                                     p::ps, body_env ++ penv)
                                ps
                                ([], env) in

@@ -94,16 +94,15 @@ let lookup_name name (nenv, _tenv, _eff, _penv) =
 
 let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 
-let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t * raw_env =
-  fun scope {WithPos.node=p; pos} ->
-    let desugar_pat = desugar_pattern scope in
+let rec desugar_pattern : Sugartypes.Pattern.with_pos -> Pattern.t * raw_env =
+  fun {WithPos.node=p; pos} ->
     let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
     let fresh_binder (nenv, tenv, eff) bndr =
       assert (Sugartypes.Binder.has_type bndr);
       let name = Sugartypes.Binder.to_name bndr in
       let t = Sugartypes.Binder.to_type_exn bndr in
-      let xb, x = Var.fresh_var (t, name, scope) in
+      let xb, x = Var.fresh_var (t, name, Scope.Local) in
       xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
     in
       let open Sugartypes.Pattern in
@@ -111,34 +110,34 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t *
         | Any -> Pattern.Any, empty
         | Nil -> Pattern.Nil, empty
         | Cons (p, ps) ->
-            let p, env = desugar_pat p in
-            let ps, env' = desugar_pat ps in
+            let p, env = desugar_pattern p in
+            let ps, env' = desugar_pattern ps in
               Pattern.Cons (p, ps), env ++ env'
-        | List [] -> desugar_pat (WithPos.make ~pos Nil)
+        | List [] -> desugar_pattern (WithPos.make ~pos Nil)
         | List (p::ps) ->
-            let p, env = desugar_pat p in
-            let ps, env' = desugar_pat (WithPos.make ~pos (List ps)) in
+            let p, env = desugar_pattern p in
+            let ps, env' = desugar_pattern (WithPos.make ~pos (List ps)) in
               Pattern.Cons (p, ps), env ++ env'
         | Variant (name, None) -> Pattern.Variant (name, Pattern.Any), empty
         | Variant (name, Some p) ->
-            let p, env = desugar_pat p in
+            let p, env = desugar_pattern p in
             Pattern.Variant (name, p), env
         | Effect (name, ps, k) ->
            let ps, env =
              List.fold_right
                (fun p (ps, env) ->
-                 let p', env' = desugar_pat p in
+                 let p', env' = desugar_pattern p in
                  (p' :: ps, env ++ env'))
                ps ([], empty)
            in
-           let k, env' = desugar_pat k in
+           let k, env' = desugar_pattern k in
            Pattern.Effect (name, ps, k), env ++ env'
         | Negative names -> Pattern.Negative (StringSet.from_list names), empty
         | Record (bs, p) ->
             let bs, env =
               List.fold_right
                 (fun (name, p) (bs, env) ->
-                   let p, env' = desugar_pat p in
+                   let p, env' = desugar_pattern p in
                      StringMap.add name p bs, env ++ env')
                 bs
                 (StringMap.empty, empty) in
@@ -146,13 +145,13 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t *
               match p with
                 | None -> None, env
                 | Some p ->
-                    let p, env' = desugar_pat p in
+                    let p, env' = desugar_pattern p in
                       Some p, env ++ env'
             in
               Pattern.Record (bs, p), env
         | Tuple ps ->
             let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
-              desugar_pat (WithPos.make ~pos (Record (bs, None)))
+              desugar_pattern (WithPos.make ~pos (Record (bs, None)))
         | Constant constant ->
             Pattern.Constant constant, empty
         | Variable b ->
@@ -160,10 +159,10 @@ let rec desugar_pattern : Ir.scope -> Sugartypes.Pattern.with_pos -> Pattern.t *
               Pattern.Variable xb, env
         | As (b, p) ->
             let xb, env = fresh_binder empty b in
-            let p, env' = desugar_pat p in
+            let p, env' = desugar_pattern p in
               Pattern.As (xb, p), env ++ env'
         | HasType (p, (_, Some t)) ->
-            let p, env = desugar_pat p in
+            let p, env = desugar_pattern p in
               Pattern.HasType (p, t), env
         | HasType (_, (_, None)) -> assert false
 

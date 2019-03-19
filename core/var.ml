@@ -11,6 +11,10 @@ module Scope = struct
   let isGlobal = function
     | Global -> true
     | _      -> false
+
+  let isLocal = function
+    | Local -> true
+    | _     -> false
 end
 
 (** Term variables *)
