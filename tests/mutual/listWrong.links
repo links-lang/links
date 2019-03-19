@@ -1,0 +1,8 @@
+typename List(a) = [| Cons:(a, List(a)) | Nil |];
+
+sig example : () -> List(String)
+fun example() {
+    Cons(1, Cons(2, Cons(3, Nil)))
+}
+
+example()
