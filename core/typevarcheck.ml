@@ -72,7 +72,6 @@ let rec is_guarded : TypeVarSet.t -> int -> datatype -> bool =
             (* don't treat abstract type constructors as guards *)
             List.for_all (is_guarded_type_arg bound_vars var) ts
         | `RecursiveApplication { r_args ; _ } ->
-            (* FIXME: Guardedness checks for recursive applications aren't there yet. *)
             List.for_all (is_guarded_type_arg bound_vars var) r_args
         | `Input (t, s)
         | `Output (t, s) -> isg t && isg s
