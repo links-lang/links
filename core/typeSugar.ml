@@ -2138,7 +2138,7 @@ let resolve_qualified_name pos context qname
           | Some t -> t
         end
       | `Dot (m_name, remainder) ->
-        begin match StringMap.find_opt m_name current_module_type.modules with
+        begin match StringMap.find_opt m_name current_module_type.Types.modules with
           | None ->
             let module_path_until_failure = QualifiedName.prefix (count+1) qname in
             Gripers.unknown_module pos module_path_until_failure
@@ -2166,10 +2166,10 @@ let resolve_qualified_name pos context qname
    1. The call of resolve_qualified_name (always)
    2. The call of the extractor function once the `Ident is reached (only if the whole name is not just immediately an `Ident) *)
 let resolve_qualified_variable_name pos context qname : (QualifiedName.t * Types.datatype) =
-  resolve_qualified_name pos context qname context.var_env (fun moodule -> moodule.fields) Gripers.unknown_variable
+  resolve_qualified_name pos context qname context.FrontendTypeEnv.var_env (fun moodule -> moodule.Types.fields) Gripers.unknown_variable
 
 let resolve_qualified_module_name pos context qname : (QualifiedName.t * Types.module_t) =
-  resolve_qualified_name pos context qname context.module_env (fun moodule -> moodule.modules) Gripers.unknown_module
+  resolve_qualified_name pos context qname context.FrontendTypeEnv.module_env (fun moodule -> moodule.Types.modules) Gripers.unknown_module
 
 
 
@@ -4003,8 +4003,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                StringMap.add name v map
              ) env StringMap.empty in
          let module_type : Types.module_t = {
-             fields  = env_to_stringmap module_ctx.var_env ;
-             modules = env_to_stringmap module_ctx.module_env ;
+             Types.fields  = env_to_stringmap module_ctx.var_env ;
+             Types.modules = env_to_stringmap module_ctx.module_env ;
          } in
          let context' = {empty_context with module_env = Env.bind Env.empty (name, (None, module_type)) } in
          let module_usages = usage_builder StringMap.empty in
@@ -4015,8 +4015,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
             (fun key value env ->
               Env.bind env (key, (Some full_path, value))) new_map Env.empty in
          let context' = { empty_context with
-            var_env = augment_with_path module_type.fields ;
-            module_env = augment_with_path module_type.modules ; } in
+            var_env = augment_with_path module_type.Types.fields ;
+            module_env = augment_with_path module_type.Types.modules ; } in
          Import full_path, context', StringMap.empty
     in
       WithPos.make ~pos typed, ctxt, usage
