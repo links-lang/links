@@ -2,13 +2,6 @@ fun computeStep(count) server {
  count+1
 }
 
-fun compute(count, total) client {
- if (count < total) {
-  showProgress(count, total);
-  compute(computeStep(count), total)
- } else "done counting to " ^^ intToString(total)
-}
-
 fun showProgress(count, total) client {
  var percent = 100.0 *. intToFloat(count) /. intToFloat(total);
  replaceNode(
@@ -17,6 +10,13 @@ fun showProgress(count, total) client {
                     background-color: black">|</div>,
         getNodeById("bar")
  )
+}
+
+fun compute(count, total) client {
+ if (count < total) {
+  showProgress(count, total);
+  compute(computeStep(count), total)
+ } else "done counting to " ^^ intToString(total)
 }
 
 fun showAnswer(answer) client {
