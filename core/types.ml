@@ -518,7 +518,7 @@ struct
             let apps =
               List.fold_left (fun acc x ->
                 let (_, o) = o#type_arg x in
-                let apps = o#get_applications in 
+                let apps = o#get_applications in
                 StringSet.union acc apps) StringSet.empty r_args in
             let apps = StringSet.(union apps (singleton r_name)) in
             (ra, {< rec_appls = apps >})
@@ -1430,7 +1430,7 @@ and subst_dual_type : var_map -> datatype -> datatype =
         | `RecursiveApplication app ->
             (* I don't think we need to do anything with the dualisation flag
              * here -- this should be sorted by `dual_type` above. *)
-            `RecursiveApplication { app with r_args = 
+            `RecursiveApplication { app with r_args =
               List.map (subst_dual_type_arg rec_points) app.r_args }
         | `ForAll (qs, body) -> `ForAll (qs, sdt body)
         | `MetaTypeVar point ->
@@ -2814,7 +2814,7 @@ let recursive_applications t =
   let o = new GetRecursiveApplications.visitor in
   let (_, o) = o#typ t in
   o#get_applications |> StringSet.elements
- 
+
 (* We replace some of the generated printing functions here such that
    they may use our own printing functions instead. If the generated functions are
    to be used, we remove potential cycles arising from recursive types/rows first.

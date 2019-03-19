@@ -136,9 +136,9 @@ object (o: 'self_type')
           match funs with
             | [] -> o
             | [f] ->
-                let ((bnd, lin, (tvs, fl), loc, dt), pos) = f in 
+                let ((bnd, lin, (tvs, fl), loc, dt), pos) = f in
                 let fl = (flatten_simple())#funlit fl in
-                let f = Fun (bnd, lin, (tvs, fl), loc, dt) in 
+                let f = Fun (bnd, lin, (tvs, fl), loc, dt) in
                 o#add_binding (WithPos.make ~pos f)
             | fs ->
                 let fs =

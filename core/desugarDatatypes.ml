@@ -460,7 +460,7 @@ object (self)
     | Typenames ts ->
         (* Maps syntactic types in the recursive group to semantic types. *)
         (* This must be empty to start off with, because there's a cycle
-         * in calculating the semantic types: we need the alias environment 
+         * in calculating the semantic types: we need the alias environment
          * populated with all types in the group in order to calculate a
          * semantic type. We populate the reference in a later pass. *)
         let tygroup_ref = ref {

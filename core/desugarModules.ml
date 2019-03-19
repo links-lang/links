@@ -326,7 +326,7 @@ and perform_renaming module_table path term_ht type_ht =
                 process_bindings term_ht type_ht bs in
               let new_mutual = SourceCode.WithPos.make ~pos (Mutual bnds) in
               (term_ht, type_ht, new_mutual :: acc)
-          | b -> 
+          | b ->
               let (term_ht, type_ht, bnds) =
                 process_bindings term_ht type_ht [b] in
               (term_ht, type_ht, bnds @ acc)

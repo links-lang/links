@@ -1366,7 +1366,7 @@ fun main() {
                 case _ ->
                     gameState
             }
-        } 
+        }
 
         #
         # PROCESSES

@@ -268,7 +268,7 @@ fun main() {
         }
 
         fold_left(foldStep, ([], []), blockStates)
-    } 
+    }
 
 
     #
@@ -380,7 +380,7 @@ fun main() {
                 case _ -> gs
             }
         }
-    } 
+    }
     #
     # PROCESSES
     #

@@ -212,7 +212,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     let (key, body) =
       match unifier with
         | MuBound (i, typ) -> (MuBoundId i, typ)
-        | RecAppl { r_unique_name; r_dual; r_args; r_unwind ; _ } -> 
+        | RecAppl { r_unique_name; r_dual; r_args; r_unwind ; _ } ->
             (NominalId r_unique_name, r_unwind r_args r_dual) in
     let ts =
       if RecIdMap.mem key rec_types then

@@ -313,7 +313,7 @@ nofun_declaration:
                                                                  set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
-| typedecl SEMICOLON | links_module | links_open SEMICOLON    
+| typedecl SEMICOLON | links_module | links_open SEMICOLON
 | mutual_declarations                                          { $1 }
 
 mutual_declarations:
