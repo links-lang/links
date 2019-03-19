@@ -63,3 +63,15 @@ Linearity (3)
 ./tests/mutual/linearity3.links
 filemode : true
 stdout : () : ()
+
+Duplicate type bindings disallowed
+./tests/mutual/duplicateType.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Duplicate function bindings disallowed
+./tests/mutual/duplicateType.links
+filemode : true
+stderr : @.*
+exit : 1
