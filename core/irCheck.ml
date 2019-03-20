@@ -86,17 +86,19 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       let subst_map, kind_env = ctx.typevar_subst, ctx.tyenv in
       let rvar' = lookupVar lid subst_map in
       let is_equal = rid = rvar' && lsk = rsk && lfd = rfd in
-      begin
-        if is_equal then
-         match Env.find kind_env rid with
-          | Some (primary_kind_env, subkind_env) ->
-            ensure
-              (primary_kind = primary_kind_env && rsk = subkind_env)
-              "Mismatch between (sub) kind information in variable vs stored in kind environment"
-              `None
-          | None -> raise_ir_type_error ("Type variable " ^ (string_of_int rid) ^ " is unbound") occurrence
-        end;
-      (ctx, is_equal) in
+      match is_equal, lfd with
+        | true, `Flexible -> ctx, true
+        | true, `Rigid ->
+           begin match Env.find kind_env rid with
+             | Some (primary_kind_env, subkind_env) ->
+                ensure
+                  (primary_kind = primary_kind_env &&  rsk = subkind_env)
+                  "Mismatch between (sub) kind information in variable vs stored in kind environment"
+                  `None;
+                ctx, true
+             | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurrence
+           end
+        | false, _ -> (ctx, false) in
     let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
       | `ForAll (qs, t) ->
         begin match collapse_toplevel_forall t with
