@@ -655,10 +655,12 @@ struct
               Table (db, table_name, keys, tt), `Table tt, o
 
         | Query (range, e, original_t) ->
-            o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
             let range, o =
               o#optionu
                 (fun o (limit, offset) ->
+                   (* Query blocks themselves only have the wild effect when they have a range *)
+                   o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
+
                    let limit, ltype, o = o#value limit in
                    let offset, otype, o = o#value offset in
                       o#check_eq_types ltype Types.int_type (`Special special);
