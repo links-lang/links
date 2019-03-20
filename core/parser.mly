@@ -313,10 +313,7 @@ nofun_declaration:
                                                                  set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
-| typedecl SEMICOLON | links_module | links_open SEMICOLON
-| mutual_declarations                                          { $1 }
-
-mutual_declarations:
+| typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 | MUTUAL LBRACE declaration+ RBRACE                            { with_pos $loc (Mutual $3) }
 
 alien_datatype:
@@ -855,7 +852,8 @@ binding:
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
 | typedecl SEMICOLON | links_module | alien_block
-| links_open SEMICOLON | mutual_block                          { $1 }
+| links_open SEMICOLON                                         { $1 }
+| MUTUAL LBRACE bindings RBRACE                                { with_pos $loc (Mutual $3) }
 
 bindings:
 | binding                                                      { [$1]      }
@@ -875,12 +873,6 @@ block_contents:
                                                                   record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
-
-bindings_block:
-| LBRACE bindings RBRACE                                       { $2 }
-
-mutual_block:
-| MUTUAL bindings_block                                        { with_pos $loc (Mutual $2) }
 
 labeled_exps:
 | separated_nonempty_list(COMMA,

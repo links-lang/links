@@ -2306,13 +2306,7 @@ struct
               | [] -> datatype bvs p body
               | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ datatype bvs p body
           end
-      | `Mutual (tyvars, _) ->
-          begin
-            match tyvars with
-              | [] -> "mutual "
-              | _ ->
-                  mapstrcat "," (quantifier p) tyvars ^ ". mutual "
-          end
+      | `Mutual _ -> "mutual"
       | `Abstract _ -> "abstract"
 
   let strip_quantifiers =
