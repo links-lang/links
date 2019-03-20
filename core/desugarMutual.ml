@@ -74,9 +74,8 @@ object(self)
   inherit SugarTraversals.map as super
 
   method flatten_bindings bs =
-    List.concat (
-      List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
-    )
+    ListUtils.concat_map
+      (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
 
   method flatten_block (bs, p) =
     let bs = self#flatten_bindings bs in

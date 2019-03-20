@@ -6,8 +6,10 @@ open SugarConstructors.SugartypesPositions
 open SourceCode
 open SourceCode.WithPos
 
-(* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
+let internal_error message =
+  raise (Errors.InternalError { filename = "typeSugar.ml"; message })
 
+(* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
 let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
@@ -3860,7 +3862,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               match dt' with
                 | Some dt ->
                     bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
-                | None -> failwith "typeSugar.ml: unannotated type"
+                | None -> internal_error "typeSugar.ml: unannotated type"
             end
           ) empty_context ts in
           (Typenames ts, env, StringMap.empty)

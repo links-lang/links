@@ -84,8 +84,8 @@ object (self)
   method! bindingnode = function
     (* type declarations bind variables; exclude those from the
        analysis. *)
-    | Typenames _    -> self
-    | b         -> super#bindingnode b
+    | Typenames _  -> self
+    | b            -> super#bindingnode b
 
   method! datatypenode = let open Datatype in
     function
@@ -124,24 +124,23 @@ struct
   let desugar_quantifiers (var_env: var_env) (qs: Sugartypes.quantifier list) :
       (Types.quantifier list * var_env) =
       ListLabels.fold_right ~init:([], var_env) qs
-      ~f:(fun q (args, {tenv=tenv; renv=renv; penv=penv}) ->
+      ~f:(fun (name, (primarykind, subkind), _freedom)
+              (args, {tenv; renv; penv}) ->
             let var = Types.fresh_raw_variable () in
-            match q with
-              | (name, (PrimaryKind.Type, subkind), _freedom) ->
-                  let subkind = concrete_subkind subkind in
+            let subkind = concrete_subkind subkind in
+            match primarykind with
+              | PrimaryKind.Type ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     ((var, subkind, `Type point)::args,
-                     {tenv=StringMap.add name point tenv; renv=renv; penv=penv})
-              | (name, (PrimaryKind.Row, subkind), _freedom) ->
-                  let subkind = concrete_subkind subkind in
+                     {tenv=StringMap.add name point tenv; renv; penv})
+              | PrimaryKind.Row ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     ((var, subkind, `Row point)::args,
-                     {tenv=tenv; renv=StringMap.add name point renv; penv=penv})
-              | (name, (PrimaryKind.Presence, subkind), _freedom) ->
-                  let subkind = concrete_subkind subkind in
+                     {tenv; renv=StringMap.add name point renv; penv})
+              | PrimaryKind.Presence ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                     ((var, subkind, `Presence point))::args,
-                     {tenv=tenv; renv=renv; penv=StringMap.add name point penv})
+                     {tenv; renv; penv=StringMap.add name point penv})
 
   let rec datatype var_env (alias_env : Types.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
@@ -185,18 +184,21 @@ struct
         | Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
         | List k -> `Application (Types.list, [`Type (datatype var_env k)])
         | TypeApplication (tycon, ts) ->
-            let exception Kind_mismatch (* TODO add more information *) in
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
             let match_quantifiers qs =
-              let match_kinds (q, t) =
+              let match_kinds i (q, t) =
                 let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
                   | Type _ -> PrimaryKind.Type
                   | Row _ -> PrimaryKind.Row
                   | Presence _ -> PrimaryKind.Presence
                 in
-                if primary_kind_of_quantifier q <> primary_kind_of_type_arg t then
-                  raise Kind_mismatch
+                let q_kind = primary_kind_of_quantifier q in
+                let t_kind = primary_kind_of_type_arg t in
+                if q_kind <> t_kind then
+                  raise (TyAppKindMismatch {pos; name=tycon; tyarg_number=i;
+                    expected=PrimaryKind.to_string q_kind;
+                    provided=PrimaryKind.to_string t_kind})
                 else (q, t)
               in
               let type_arg' var_env alias_env = function
@@ -206,19 +208,16 @@ struct
               begin
                 try
                   let ts = ListUtils.zip' qs ts in
-                  List.map
-                    (fun (q,t) ->
-                      let (q, t) = match_kinds (q, t) in
+                  List.mapi
+                    (fun i (q,t) ->
+                      let (q, t) = match_kinds i (q, t) in
                       match subkind_of_quantifier q with
                       | (_, Restriction.Effect) -> type_arg' var_env alias_env t
                       | _ -> type_arg var_env alias_env t) ts
                 with
                 | ListUtils.Lists_length_mismatch ->
-                   failwith (Printf.sprintf
-                     "Arity mismatch: the type constructor %s expects %d arguments, but %d arguments were provided"
-                     tycon (List.length qs) (List.length ts))
-                | Kind_mismatch ->
-                   failwith "Kind mismatch"
+                    raise (TyAppArityMismatch {pos; name=tycon;
+                      expected=(List.length qs); provided=(List.length ts)})
               end in
 
             begin match SEnv.find alias_env tycon with

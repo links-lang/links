@@ -123,7 +123,6 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
         in (field_env', row_var, dual)
       else row in
 
-
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
     let rec eqt ((context, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
 
@@ -208,20 +207,16 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `Application (s, ts) ->
          begin match t2 with
          | `Application (s', ts') ->
-            List.fold_left2 (fun (context, prev_equal) larg rarg ->
-                let context, eq = eq_type_args (context, larg, rarg) in
-                context, prev_equal && eq)
-              (context, Types.Abstype.equal s s') ts ts'
+             let (context, args_ok) = check_type_args context ts ts' in
+             (context, Types.Abstype.equal s s' && args_ok)
          | _ -> (context, false)
          end
       | `RecursiveApplication a1 ->
          let open Types in
          begin match t2 with
          | `RecursiveApplication a2->
-            List.fold_left2 (fun (context, prev_equal) larg rarg  ->
-                let context, eq = eq_type_args (context, larg, rarg) in
-                context, prev_equal && eq)
-              (context, a1.r_unique_name = a2.r_unique_name) a1.r_args a2.r_args
+             let (context, args_ok) = check_type_args context a1.r_args a2.r_args in
+             (context, a1.r_unique_name = a2.r_unique_name && args_ok)
          | _ -> (context, false)
          end
       | `ForAll (qs, t) ->
@@ -310,6 +305,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `Recursive _, _
       | _, `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; (context, true)
       | _ ->  (context, false)
+    and check_type_args context args1 args2 =
+      List.fold_left2 (fun (context, prev_equal) larg rarg  ->
+        let context, eq = eq_type_args (context, larg, rarg) in
+        context, prev_equal && eq) (context, true) args1 args2
     and eq_type_args  (context, l, r)  =
       match l,r with
       | `Type lt, `Type rt -> eqt (context, lt, rt)
@@ -467,7 +466,7 @@ struct
                 let t = Instantiate.apply_type t ts in
                   TApp (v, ts), t, o
               with
-                  Instantiate.ArityMismatch ->
+                  Instantiate.ArityMismatch _ ->
                     let msg = ("Arity mismatch in type application (Ir.Transform)")
                     ^ ("expression: "^string_of_value (TApp (v, ts)))
                     ^ ("type: "^Types.string_of_datatype t)

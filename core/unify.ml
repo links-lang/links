@@ -830,10 +830,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        end
     | `End, `End -> ()
     | _, _ ->
-        (*
-        let () = Printf.printf "Match fail in unify: \n%s \n and \n%s"
-          (Types.show_typ t1) (Types.show_typ t2) in
-        *)
        raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)))
   end;
   counter := !counter-1;

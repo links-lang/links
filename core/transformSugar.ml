@@ -7,6 +7,9 @@ open Utility
 
 module TyEnv = Env.String
 
+let internal_error message =
+  raise (Errors.InternalError { filename = "transformSugar.ml"; message })
+
 let type_section env =
   let open Section in function
   | Minus -> TyEnv.lookup env "-"
@@ -120,11 +123,11 @@ let check_type_application (e, t) k =
   begin
     try
       k ()
-    with Instantiate.ArityMismatch ->
+    with Instantiate.ArityMismatch (exp, prov) ->
       prerr_endline ("Arity mismatch in type application");
       prerr_endline ("Expression: " ^ show_phrasenode e);
       prerr_endline ("Type: "^Types.string_of_datatype t);
-      raise Instantiate.ArityMismatch
+      raise (Instantiate.ArityMismatch (exp, prov))
   end
 
 class transform (env : Types.typing_environment) =
@@ -624,7 +627,7 @@ class transform (env : Types.typing_environment) =
          let o = o#with_formlet_env formlet_env in
          (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
          (o, FormBinding (f, p), Types.xml_type)
-      | e -> failwith ("oops: "^show_phrasenode  e)
+      | e -> internal_error ("oops: "^show_phrasenode  e)
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun {node; pos} ->
@@ -694,7 +697,7 @@ class transform (env : Types.typing_environment) =
         (o, (pss, e), t)
 
     method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun _ _ -> failwith "transformSugar.ml: method handlerlit not yet implemented!" (*
+      fun _ _ -> internal_error "transformSugar.ml: method handlerlit not yet implemented!" (*
       let envs = o#backup_envs in
       let (o, m) =
 	match m with
@@ -796,7 +799,7 @@ class transform (env : Types.typing_environment) =
          let (o, bndr) = o#binder bndr in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Fun (bndr, lin, (tyvars, lam), location, t))
-      | Fun _ -> failwith "Unannotated non-recursive function binding"
+      | Fun _ -> internal_error "Unannotated non-recursive function binding"
       | Funs defs ->
          (* put the inner bindings in the environment *)
          let o = o#rec_activate_inner_bindings defs in
@@ -819,7 +822,7 @@ class transform (env : Types.typing_environment) =
                    let o = o#bind_tycon name
                      (`Alias (List.map (snd ->- val_of) vars, dt)) in
                    (o, (name, vars, (x, dt')))
-                | None -> failwith "transformSugar.ml: Unannotated type alias"
+                | None -> internal_error "Unannotated type alias"
             end) ts in
           (o, Typenames ts)
       | Infix -> (o, Infix)
@@ -877,8 +880,8 @@ class transform (env : Types.typing_environment) =
          let o, c = o#binder c in
          let o = o#restore_envs envs in
          o, CPGiveNothing c, Types.make_endbang_type
-      | CPGrab _ -> failwith "Malformed grab in TransformSugar"
-      | CPGive _ -> failwith "Malformed give in TransformSugar"
+      | CPGrab _ -> internal_error "Malformed grab in TransformSugar"
+      | CPGive _ -> internal_error "Malformed give in TransformSugar"
       | CPSelect (b, label, p) ->
          let envs = o#backup_envs in
          let o, b = o#binder b in

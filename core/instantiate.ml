@@ -2,6 +2,11 @@ open CommonTypes
 open Utility
 open Types
 
+exception ArityMismatch of (int * int)
+
+let internal_error message =
+  raise (Errors.InternalError {filename = "typeSugar.ml"; message })
+
 let show_recursion = Basicsettings.Instantiate.show_recursion
 let show_instantiation = Basicsettings.Instantiate.show_instantiation
 
@@ -18,8 +23,6 @@ type inst_env = inst_type_env * inst_row_env
 (* The type of maps given to the actual instantiation functions *)
 type instantiation_maps = (datatype IntMap.t * row IntMap.t * field_spec IntMap.t)
 
-exception ArityMismatch
-
 (* TODO: rationalise instantiation
      - do we need all of instantiate_datatype, instantiate_typ, etc?
      - what should they be named?
@@ -31,7 +34,7 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
         match datatype with
-          | `Not_typed -> failwith "Internal error: `Not_typed' passed to `instantiate'"
+          | `Not_typed -> internal_error "`Not_typed' passed to `instantiate'"
           | `Primitive _  -> datatype
           | `MetaTypeVar point ->
               let t = Unionfind.find point in
@@ -294,7 +297,6 @@ let rigid : environment -> string -> type_arg list * datatype =
         Env.String.lookup env var
       with NotFound _ ->
         raise (Errors.UndefinedVariable ("Variable '"^ var ^ "' does not refer to a declaration"))
-(*        failwith ("Variable '"^ var ^ "' does not refer to a declaration") *)
     in
       instantiate_rigid t
 
@@ -316,9 +318,10 @@ let populate_instantiation_maps dt_str qs tyargs =
          | (var, _, `Presence _), `Presence f ->
              (tenv, renv, IntMap.add var f penv)
          | _ ->
-           failwith("Kind mismatch in type application: " ^
-                    dt_str ^ " applied to type arguments: " ^
-                    mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs))
+             internal_error
+               ("Kind mismatch in type application: " ^
+                dt_str ^ " applied to type arguments: " ^
+                mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs))
     qs tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
 
 let instantiation_maps_of_type_arguments :
@@ -334,13 +337,18 @@ let instantiation_maps_of_type_arguments :
         else tyargs_length <= vars_length in
 
     if (not arities_okay) then
-        (Debug.print (Printf.sprintf "# Type variables (total %d)" (List.length vars));
-         let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.show_quantifier t) vars in
-         Debug.print tyvars;
-         Debug.print (Printf.sprintf "\n# Type arguments (total %d)" (List.length tyargs));
-         let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ Types.string_of_type_arg arg) tyargs in
-         Debug.print tyargs';
-         raise ArityMismatch);
+      (let qs_total = List.length vars in
+       let ts_total = List.length tyargs in
+       Debug.print (Printf.sprintf "# Type variables (total %d)" qs_total);
+       let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.show_quantifier t) vars in
+       Debug.print tyvars;
+       Debug.print (Printf.sprintf "\n# Type arguments (total %d)" ts_total);
+       let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ Types.string_of_type_arg arg) tyargs in
+       Debug.print tyargs';
+       (* We don't have position information at this point. Any code invoking this
+        * should either have done this check already, or does not have the position
+        * information since a type is being introduced explicitly. *)
+       raise (ArityMismatch (qs_total, ts_total)));
 
     let vars, remaining_quantifiers =
       if tyargs_length = vars_length then
@@ -416,15 +424,14 @@ let alias name tyargs env =
   *)
   match (SEnv.find env name : Types.tycon_spec option) with
     | None ->
-        failwith (Printf.sprintf "Unrecognised type constructor: %s" name)
-    | Some (`Abstract _) ->
-        failwith (Printf.sprintf "The type constructor: %s is abstract, not an alias" name)
+        internal_error (Printf.sprintf "Unrecognised type constructor: %s" name)
+    | Some (`Abstract _)
     | Some (`Mutual _) ->
-        failwith (Printf.sprintf "The type constructor: %s is a mutually-defined datatype, not an alias" name)
+        internal_error (Printf.sprintf "The type constructor: %s is not an alias" name)
     | Some (`Alias (vars, _)) when List.length vars <> List.length tyargs ->
-        failwith (Printf.sprintf
-                    "Type alias %s applied with incorrect arity (%d instead of %d)"
-                    name (List.length tyargs) (List.length vars))
+        internal_error (Printf.sprintf
+          "Type alias %s applied with incorrect arity (%d instead of %d). This should have been checked prior to instantiation."
+          name (List.length tyargs) (List.length vars))
     | Some (`Alias (vars, body)) ->
         let tenv, renv, penv = populate_instantiation_maps name vars tyargs in
         (* instantiate the type variables bound by the alias

@@ -2,7 +2,7 @@ open Utility
 
 type instantiation_maps = (Types.datatype IntMap.t * Types.row IntMap.t * Types.field_spec IntMap.t)
 
-exception ArityMismatch
+exception ArityMismatch of (int * int) (* Expected, provided *)
 
 val show_recursion : bool Settings.setting
 val quantified_instantiation : bool Settings.setting

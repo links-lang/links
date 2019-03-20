@@ -1899,7 +1899,7 @@ struct
       | `Alias (tyvars, body) ->
           let (bound_vars, vars) = split_vars tyvars in
           vars @ (free_bound_type_vars ~include_aliases bound_vars body)
-      | `Mutual (tyvars, _) -> snd @@ split_vars tyvars
+      | `Mutual (tyvars, _) -> snd (split_vars tyvars)
       | `Abstract _ -> []
 
   let init (flavour, kind, scope) name =

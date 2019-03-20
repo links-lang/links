@@ -16,6 +16,12 @@ exception Type_error of (Position.t * string)
 exception RichSyntaxError of synerrspec
 exception SugarError of (Position.t * string)
 exception UnboundTyCon of (Position.t * string)
+exception InternalError of { filename: string; message: string }
+exception TyAppArityMismatch of
+  { pos: Position.t; name: string; expected: int; provided: int}
+exception TyAppKindMismatch of
+  { pos: Position.t; name: string; tyarg_number: int;
+    expected: string; provided: string }
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string

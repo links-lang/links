@@ -739,12 +739,8 @@ struct
                 try
                   I.tappl (I.var (x, xt), tyargs)
                 with
-                    Instantiate.ArityMismatch ->
-                      prerr_endline ("Arity mismatch in instantiation (Sugartoir)");
-                      prerr_endline ("name: "^name);
-                      prerr_endline ("type: "^Types.string_of_datatype xt);
-                      prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
-                      failwith "fatal internal error" in
+                    Instantiate.ArityMismatch (expected, provided) ->
+                      raise (Errors.TyAppArityMismatch { pos; name; expected; provided }) in
 
       let rec is_pure_primitive e =
         let open Sugartypes in
@@ -830,12 +826,9 @@ struct
                   try
                     cofv (I.tappl (v, tyargs))
                   with
-                      Instantiate.ArityMismatch ->
-                        prerr_endline ("Arity mismatch in type application (Sugartoir)");
-                        prerr_endline ("expression: " ^ show_phrasenode (TAppl (e, tyargs)));
-                        prerr_endline ("type: "^Types.string_of_datatype vt);
-                        prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
-                        failwith "fatal internal error"
+                      Instantiate.ArityMismatch (expected, provided) ->
+                        raise (Errors.TyAppArityMismatch { pos;
+                          name=(Types.string_of_datatype vt); expected; provided })
                 end
           | TupleLit [e] ->
               (* It isn't entirely clear whether there should be any 1-tuples at this stage,
