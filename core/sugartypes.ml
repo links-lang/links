@@ -267,18 +267,14 @@ and phrase = phrasenode WithPos.t
 and bindingnode =
   | Val     of Pattern.with_pos * (tyvar list * phrase) * Location.t *
                  datatype' option
-  | Fun     of Binder.with_pos * DeclaredLinearity.t * (tyvar list * funlit) *
-                 Location.t * datatype' option
-  | Funs    of (Binder.with_pos * DeclaredLinearity.t *
-                  ((tyvar list *
-                   (Types.datatype * Types.quantifier option list) option)
-                   * funlit) * Location.t * datatype' option * Position.t) list
+  | Fun     of function_definition
+  | Funs    of recursive_function list
   | Handler of Binder.with_pos * handlerlit * datatype' option
   | Mutual of binding list
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
-  | Typenames of (name * (quantifier * tyvar option) list * datatype') list
+  | Typenames of typename list
   | Infix
   | Exp     of phrase
   | Module  of name * binding list
@@ -297,7 +293,17 @@ and cp_phrasenode =
   | CPLink        of Binder.with_pos * Binder.with_pos
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
-                  [@@deriving show]
+and typename = (name * (quantifier * tyvar option) list * datatype')
+(* SJF: It would be nice to make these records at some point. *)
+and function_definition =
+  Binder.with_pos * DeclaredLinearity.t * (tyvar list * funlit) *
+                   Location.t * datatype' option
+and recursive_function =
+  (Binder.with_pos * DeclaredLinearity.t *
+    ((tyvar list *
+      (Types.datatype * Types.quantifier option list) option)
+      * funlit) * Location.t * datatype' option * Position.t)
+  [@@deriving show]
 
 type directive = string * string list
                             [@@deriving show]

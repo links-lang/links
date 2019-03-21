@@ -57,7 +57,6 @@ struct
        ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
-       ->- DesugarMutual.desugar_mutual#program
        ->- DesugarMutual.lift_funs#program
        ->- DesugarDatatypes.program tyenv
        ->- uncurry TypeSugar.Check.program

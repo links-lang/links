@@ -171,6 +171,42 @@ let parseRegexFlags f =
               | 'g' -> RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
+type mutual_bindings =
+  { mut_types: typename list;
+    mut_funs: (function_definition * Position.t) list;
+    mut_pos: Position.t }
+
+let empty_mutual_bindings pos = { mut_types = []; mut_funs = []; mut_pos = pos }
+
+let add_mutual_binding ({ mut_types = ts; mut_funs = fs; _ } as block) binding =
+  match WithPos.node binding with
+  | Fun f ->
+      let pos = WithPos.pos binding in
+      { block with mut_funs = ((f, pos) :: fs) }
+  | Typenames [t] -> { block with mut_types = (t :: ts) }
+  | Typenames _ -> assert false
+  | _ ->
+      let pos = WithPos.pos binding in
+      raise (ConcreteSyntaxError
+        (pos, "Only `fun` and `typename` bindings are allowed in a `mutual` block."))
+
+let flatten_mutual_bindings { mut_types; mut_funs; mut_pos } =
+  (* We need to take care not to lift non-recursive functions to
+   * recursive functions accidentally. *)
+  let fun_binding = function
+    | [] -> []
+    | [(f, pos)] -> [WithPos.make ~pos (Fun f)]
+    | fs ->
+        let fs =
+          List.map (fun ((bnd, lin, (tvs, fl), loc, dt), pos) ->
+                    (bnd, lin, ((tvs, None), fl), loc, dt, pos)) fs
+          |> List.rev in
+        [WithPos.make ~pos:mut_pos (Funs fs)] in
+
+  let type_binding = function
+    | [] -> []
+    | ts -> [WithPos.make ~pos:mut_pos (Typenames (List.rev ts))] in
+  type_binding mut_types @ fun_binding mut_funs
 
 %}
 
@@ -298,8 +334,10 @@ var:
 | VARIABLE                                                     { with_pos $loc $1 }
 
 declarations:
+| declarations mutual                                          { $1 @ $2 }
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
+| mutual                                                       { $1 }
 
 declaration:
 | fun_declaration | nofun_declaration                          { $1 }
@@ -314,7 +352,6 @@ nofun_declaration:
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
-| MUTUAL LBRACE declaration+ RBRACE                            { with_pos $loc (Mutual $3) }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -853,10 +890,18 @@ binding:
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
 | typedecl SEMICOLON | links_module | alien_block
 | links_open SEMICOLON                                         { $1 }
-| MUTUAL LBRACE bindings RBRACE                                { with_pos $loc (Mutual $3) }
+
+mutual:
+| MUTUAL LBRACE mutual_bindings RBRACE                         { flatten_mutual_bindings $3 }
+
+mutual_bindings:
+| binding                                                      { add_mutual_binding (empty_mutual_bindings (pos $loc)) $1 }
+| mutual_bindings binding                                      { add_mutual_binding $1 $2 }
 
 bindings:
 | binding                                                      { [$1]      }
+| mutual                                                       { $1        }
+| bindings mutual                                              { $1 @ $2   }
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:
