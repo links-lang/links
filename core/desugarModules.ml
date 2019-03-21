@@ -27,7 +27,6 @@ open Utility
 open Operators
 open Sugartypes
 open Printf
-open SourceCode
 open SourceCode.WithPos
 open ModuleUtils
 

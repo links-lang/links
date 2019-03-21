@@ -365,11 +365,18 @@ arg:
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
 
+mutual_decl_block:
+| MUTUAL LBRACE mutual_decls RBRACE                            { MutualBindings.flatten $3 }
+
+mutual_decls:
+| declaration                                                  { MutualBindings.(add (empty (pos $loc)) $1) }
+| mutual_decls declaration                                     { MutualBindings.add $1 $2 }
+
 declarations:
-| declarations mutual                                          { $1 @ $2 }
+| declarations mutual_decl_block                               { $1 @ $2 }
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
-| mutual                                                       { $1 }
+| mutual_decl_block                                            { $1 }
 
 declaration:
 | fun_declaration | nofun_declaration                          { $1 }
@@ -923,7 +930,7 @@ binding:
 | typedecl SEMICOLON | links_module | alien_block
 | links_open SEMICOLON                                         { $1 }
 
-mutual:
+mutual_binding_block:
 | MUTUAL LBRACE mutual_bindings RBRACE                         { MutualBindings.flatten $3 }
 
 mutual_bindings:
@@ -932,8 +939,8 @@ mutual_bindings:
 
 bindings:
 | binding                                                      { [$1]      }
-| mutual                                                       { $1        }
-| bindings mutual                                              { $1 @ $2   }
+| mutual_binding_block                                         { $1        }
+| bindings mutual_binding_block                                { $1 @ $2   }
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:
