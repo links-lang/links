@@ -17,9 +17,9 @@ exception SugarError of (Position.t * string)
 exception Runtime_error of string
 exception UnboundTyCon of (Position.t * string)
 exception InternalError of { filename: string; message: string }
-exception TyAppArityMismatch of
+exception TypeApplicationArityMismatch of
   { pos: Position.t; name: string; expected: int; provided: int}
-exception TyAppKindMismatch of
+exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
 
@@ -84,11 +84,11 @@ let format_exception =
       Printf.sprintf
         "*** Internal Error in %s (Please report as a bug): %s\n"
         filename message
-  | TyAppArityMismatch { pos; name; expected; provided } ->
+  | TypeApplicationArityMismatch { pos; name; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
       Printf.sprintf ("%s:%d: Arity mismatch: Type %s expects %d type arguments, but %d arguments were provided. In: %s\n")
           pos.pos_fname pos.pos_lnum name expected provided expr
-  | TyAppKindMismatch { pos; name; tyarg_number; expected; provided } ->
+  | TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
       Printf.sprintf "%s:%d: Kind mismatch: Type argument %d for type constructor %s has kind %s, but an argument of kind %s was expected. \nIn:\n%s\n"
           pos.pos_fname pos.pos_lnum tyarg_number name provided expected expr
@@ -150,11 +150,11 @@ let format_exception_html = function
           "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>"
           pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
-  | TyAppArityMismatch { pos; name; expected; provided } ->
+  | TypeApplicationArityMismatch { pos; name; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
         Printf.sprintf ("<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>In expression:</p>\n<pre>%s</pre>. Type constructor %s expects %d arguments, but %d were provided.\n")
           pos.pos_fname pos.pos_lnum (xml_escape expr) name expected provided
-  | TyAppKindMismatch { pos; name; tyarg_number; expected; provided } ->
+  | TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
         Printf.sprintf "<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>In expression:</p>\n<pre>%s</pre>. Type argument %d for type constructor %s has kind %s, but an argument of kind %s was expected."
           pos.pos_fname pos.pos_lnum (xml_escape expr) tyarg_number name provided expected

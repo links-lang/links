@@ -740,7 +740,7 @@ struct
                   I.tappl (I.var (x, xt), tyargs)
                 with
                     Instantiate.ArityMismatch (expected, provided) ->
-                      raise (Errors.TyAppArityMismatch { pos; name; expected; provided }) in
+                      raise (Errors.TypeApplicationArityMismatch { pos; name; expected; provided }) in
 
       let rec is_pure_primitive e =
         let open Sugartypes in
@@ -827,7 +827,7 @@ struct
                     cofv (I.tappl (v, tyargs))
                   with
                       Instantiate.ArityMismatch (expected, provided) ->
-                        raise (Errors.TyAppArityMismatch { pos;
+                        raise (Errors.TypeApplicationArityMismatch { pos;
                           name=(Types.string_of_datatype vt); expected; provided })
                 end
           | TupleLit [e] ->

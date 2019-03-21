@@ -131,6 +131,9 @@ type lens_phrase =
 
 (* End of Lenses *)
 
+(* When unifying, we need to keep track of both mu-bound recursive variables
+ * and names of recursive type applications. The `rec_id` type allows us to
+ * abstract this and keep both in the same environment. *)
 type rec_id =
   | MuBoundId of int
   | NominalId of string [@@deriving show]

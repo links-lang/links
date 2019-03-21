@@ -196,7 +196,7 @@ struct
                 let q_kind = primary_kind_of_quantifier q in
                 let t_kind = primary_kind_of_type_arg t in
                 if q_kind <> t_kind then
-                  raise (TyAppKindMismatch {pos; name=tycon; tyarg_number=i;
+                  raise (TypeApplicationKindMismatch {pos; name=tycon; tyarg_number=i;
                     expected=PrimaryKind.to_string q_kind;
                     provided=PrimaryKind.to_string t_kind})
                 else (q, t)
@@ -216,8 +216,8 @@ struct
                       | _ -> type_arg var_env alias_env t) ts
                 with
                 | ListUtils.Lists_length_mismatch ->
-                    raise (TyAppArityMismatch {pos; name=tycon;
-                      expected=(List.length qs); provided=(List.length ts)})
+                    raise (TypeApplicationArityMismatch {pos; name=tycon;
+                      expected=List.length qs; provided=List.length ts})
               end in
 
             begin match SEnv.find alias_env tycon with

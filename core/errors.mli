@@ -17,9 +17,9 @@ exception RichSyntaxError of synerrspec
 exception SugarError of (Position.t * string)
 exception UnboundTyCon of (Position.t * string)
 exception InternalError of { filename: string; message: string }
-exception TyAppArityMismatch of
+exception TypeApplicationArityMismatch of
   { pos: Position.t; name: string; expected: int; provided: int}
-exception TyAppKindMismatch of
+exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
 
