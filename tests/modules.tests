@@ -95,6 +95,12 @@ filemode : args
 args : -m --path=tests/modules
 stdout : "Hello!" : String
 
+Mutually-recursive types
+./tests/modules/mutualtys.links
+filemode : args
+args : -m --path=tests/modules
+stdout : () : ()
+
 Type signatures in inner modules
 ./tests/modules/typesigInner.links
 filemode : args
