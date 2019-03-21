@@ -213,7 +213,7 @@ module MutualBindings = struct
   let ty_name (n, _, _, _) = n in
   let tys_with_pos =
       List.map (fun (n, qs, dt, pos) -> ((n, qs, dt, pos), pos)) tys in
-  check fun_name funs; check ty_name tys_with_pos 
+  check fun_name funs; check ty_name tys_with_pos
 
 
   let flatten { mut_types; mut_funs; mut_pos } =
