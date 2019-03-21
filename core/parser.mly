@@ -196,28 +196,24 @@ module MutualBindings = struct
   let check_dups funs tys =
     (* Check to see whether there are any duplicate names, and report
      * an error if so. *)
-    let assoc_to_list_map get_name xs =
+  let check get_name xs =
+    let dup_map =
       List.fold_left (fun acc (x, pos) ->
         let name = get_name x in
         StringMap.update name (fun x_opt ->
           OptionUtils.opt_app
             (fun positions -> Some (pos :: positions))
             (Some [pos]) x_opt) acc) StringMap.empty xs in
+    let dups =
+        StringMap.filter (fun _ poss -> List.length poss > 1) dup_map in
+    if StringMap.cardinal dups > 0 then
+      raise (Errors.MultiplyDefinedMutualNames dups) in
 
-    let funs_map =
-      assoc_to_list_map
-        (fun (bndr, _, _, _, _) -> Binder.to_name bndr) funs in
-    let tys_map =
-      List.map (fun (n, qs, dt, pos) -> ((n, qs, dt, pos), pos)) tys
-      |> assoc_to_list_map (fun (n, _, _, _) -> n) in
-
-    let check map =
-      let dups =
-        StringMap.filter (fun _ poss -> List.length poss > 1) map in
-      if StringMap.cardinal dups > 0 then
-        raise (Errors.MultiplyDefinedMutualNames dups)
-      else () in
-    check funs_map; check tys_map
+  let fun_name (bndr, _, _, _, _) = Binder.to_name bndr in
+  let ty_name (n, _, _, _) = n in
+  let tys_with_pos =
+      List.map (fun (n, qs, dt, pos) -> ((n, qs, dt, pos), pos)) tys in
+  check fun_name funs; check ty_name tys_with_pos 
 
 
   let flatten { mut_types; mut_funs; mut_pos } =
