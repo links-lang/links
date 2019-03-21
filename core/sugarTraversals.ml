@@ -2181,5 +2181,5 @@ class fold_map =
             _x_i1 in
         let (o, _x_i2) = o#datatype' _x_i2
         in (o, (_x, _x_i1, _x_i2, _x_i3))
- 
+
   end

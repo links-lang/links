@@ -314,7 +314,7 @@ and perform_renaming module_table path term_ht type_ht =
     string list -> string list stringmap -> string list stringmap ->
       (string list stringmap * string list stringmap * binding list) =
           fun binding_list mt path term_ht type_ht ->
-    
+
     let (term_ht, type_ht, bnds_rev) =
       List.fold_left (fun (term_ht, type_ht, acc) b ->
         let (o, b) =
