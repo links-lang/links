@@ -70,7 +70,7 @@ let format_exception =
           pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "*** Fatal error : " ^ msg
   | MultiplyDefinedMutualNames duplicates ->
-      "Duplicate mutually-defined bindings\n" ^
+      "*** Error: Duplicate mutually-defined bindings\n" ^
         StringMap.fold (fun name positions message ->
                           message^" "^name^":\n  "^
 			    (mapstrcat "\n  " show_pos (List.rev positions)))

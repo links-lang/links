@@ -172,27 +172,52 @@ let parseRegexFlags f =
               | _ -> assert false) (asList f 0 [])
 
 type mutual_bindings =
-  { mut_types: typename list;
+  { mut_types: (typename * Position.t) list;
     mut_funs: (function_definition * Position.t) list;
     mut_pos: Position.t }
 
 let empty_mutual_bindings pos = { mut_types = []; mut_funs = []; mut_pos = pos }
 
 let add_mutual_binding ({ mut_types = ts; mut_funs = fs; _ } as block) binding =
+  let pos = WithPos.pos binding in
   match WithPos.node binding with
   | Fun f ->
-      let pos = WithPos.pos binding in
       { block with mut_funs = ((f, pos) :: fs) }
-  | Typenames [t] -> { block with mut_types = (t :: ts) }
+  | Typenames [t] ->
+      { block with mut_types = ((t, pos) :: ts) }
   | Typenames _ -> assert false
   | _ ->
-      let pos = WithPos.pos binding in
       raise (ConcreteSyntaxError
         (pos, "Only `fun` and `typename` bindings are allowed in a `mutual` block."))
+
+let check_dups funs tys =
+  (* Check to see whether there are any duplicate names, and report
+   * an error if so. *)
+  let assoc_to_list_map get_name xs =
+    List.fold_left (fun acc (x, pos) ->
+      let name = get_name x in
+      StringMap.update name (fun x_opt ->
+        OptionUtils.opt_app
+          (fun positions -> Some (pos :: positions))
+          (Some [pos]) x_opt) acc) StringMap.empty xs in
+
+  let funs_map =
+    assoc_to_list_map
+      (fun (bndr, _, _, _, _) -> Binder.to_name bndr) funs in
+  let tys_map = assoc_to_list_map (fst3) tys in
+  let check map =
+    let dups =
+      StringMap.filter (fun _ poss -> List.length poss > 1) map in
+    if StringMap.cardinal dups > 0 then
+      raise (Errors.MultiplyDefinedMutualNames dups)
+    else () in
+  check funs_map; check tys_map
+
 
 let flatten_mutual_bindings { mut_types; mut_funs; mut_pos } =
   (* We need to take care not to lift non-recursive functions to
    * recursive functions accidentally. *)
+  check_dups mut_funs mut_types;
   let fun_binding = function
     | [] -> []
     | [(f, pos)] -> [WithPos.make ~pos (Fun f)]
@@ -205,7 +230,9 @@ let flatten_mutual_bindings { mut_types; mut_funs; mut_pos } =
 
   let type_binding = function
     | [] -> []
-    | ts -> [WithPos.make ~pos:mut_pos (Typenames (List.rev ts))] in
+    | ts ->
+        let ts = List.map (fst) ts in
+        [WithPos.make ~pos:mut_pos (Typenames (List.rev ts))] in
   type_binding mut_types @ fun_binding mut_funs
 
 %}
