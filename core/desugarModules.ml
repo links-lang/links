@@ -132,7 +132,6 @@ let rec rename_binders_get_shadow_tbl module_table
       | Typenames ts ->
           let (o, ts) = self#list (fun o (n, tvs, dt, pos) ->
             let fqn = make_path_string path n in
-            Debug.print ("Changing " ^ n ^ " to " ^ fqn);
             let o = o#bind_shadow_type n fqn in
             (o, (fqn, tvs, dt, pos))) ts in
           (o, Typenames ts)
@@ -342,5 +341,4 @@ let desugarModules prog =
   let module_map = create_module_info_map prog in
   let renamed_prog = rename module_map prog in
   let flattened_prog = flatten_prog renamed_prog in
-  Debug.print (Sugartypes.show_program flattened_prog);
   flattened_prog
