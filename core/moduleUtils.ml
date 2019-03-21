@@ -170,12 +170,13 @@ let create_module_info_map program =
     (* Getting binding names -- we're interested in function and value names *)
     let rec get_binding_names = function
       | [] -> []
-      | {node = Val (pat, _, _, _); _} :: bs ->
+      | { node = Val (pat, _, _, _); _ } :: bs ->
          (get_pattern_variables pat) @ get_binding_names bs
-      | {node = Fun (bndr, _, _, _, _); _} :: bs ->
+      | { node = Fun (bndr, _, _, _, _); _ } :: bs ->
          Binder.to_name bndr :: (get_binding_names bs)
-      | {node = Mutual ms ; _ } :: bs ->
-          get_binding_names ms @ get_binding_names bs
+      | { node = Funs fs ; _ } :: bs ->
+          (List.map (fun (bnd, _, _, _, _, _) -> Binder.to_name bnd) fs)
+          @ get_binding_names bs
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 
     (* Getting type names -- we're interested in typename decls *)
@@ -184,12 +185,8 @@ let create_module_info_map program =
       | b :: bs ->
           match node b with
             | Typenames ts ->
-                let ns =
-                  List.fold_left (fun ns_rev (n, _, _) -> n :: ns_rev) [] ts
-                  |> List.rev in
+                let ns = ListUtils.concat_map (fun (n, _, _) -> [n]) ts in
                 ns @ (get_type_names bs)
-            | Mutual ms ->
-                get_type_names ms @ get_type_names bs
             | _ -> get_type_names bs in
 
     (* Gets data constructors for variants *)

@@ -124,6 +124,11 @@ let rec rename_binders_get_shadow_tbl module_table
       | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
           let (o, bnd') = self#binder bnd in
           (o, Fun (bnd', lin, (tvs, fnlit), loc, dt_opt))
+      | Funs fs ->
+          let (o, fs) = self#list (fun o (bnd, lin, lit, loc, dt_opt, pos) ->
+            let (o, bnd') = o#binder bnd in
+            (o, (bnd', lin, lit, loc, dt_opt, pos))) fs in
+          (o, Funs fs)
       | (Typenames _) as ty -> (self, ty)
       | (Val  _) as v  -> (self, v )
       | Exp b -> (self, Exp b)
@@ -220,6 +225,13 @@ and perform_renaming module_table path term_ht type_ht =
           let (_, fnlit') = self#funlit fnlit in
           let (o, dt_opt') = self#option (fun o -> o#datatype') dt_opt in
           (o, Fun (bnd, lin, (tvs, fnlit'), loc, dt_opt'))
+      | Funs fs ->
+          let (o, fs) = self#list (fun o (bnd, lin, (tvs, fnlit), loc, dt_opt, pos) ->
+            let (_, fnlit') = o#funlit fnlit in
+            let (o, dt_opt') = o#option (fun o -> o#datatype') dt_opt in
+            (o, (bnd, lin, (tvs, fnlit'), loc, dt_opt', pos))
+          ) fs in
+          (o, Funs fs)
       | b -> super#bindingnode b
 
     method! binop = function
