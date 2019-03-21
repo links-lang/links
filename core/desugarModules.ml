@@ -27,6 +27,7 @@ open Utility
 open Operators
 open Sugartypes
 open Printf
+open SourceCode
 open SourceCode.WithPos
 open ModuleUtils
 
@@ -129,7 +130,13 @@ let rec rename_binders_get_shadow_tbl module_table
             let (o, bnd') = o#binder bnd in
             (o, (bnd', lin, lit, loc, dt_opt, pos))) fs in
           (o, Funs fs)
-      | (Typenames _) as ty -> (self, ty)
+      | Typenames ts ->
+          let (o, ts) = self#list (fun o (n, tvs, dt, pos) ->
+            let fqn = make_path_string path n in
+            Debug.print ("Changing " ^ n ^ " to " ^ fqn);
+            let o = o#bind_shadow_type n fqn in
+            (o, (fqn, tvs, dt, pos))) ts in
+          (o, Typenames ts)
       | (Val  _) as v  -> (self, v )
       | Exp b -> (self, Exp b)
       | Foreign (bnd, raw_name, lang, ext_file, dt) ->
@@ -206,14 +213,11 @@ and perform_renaming module_table path term_ht type_ht =
       | (AlienBlock _) as ab -> (self, ab)
       | (Foreign    _) as f  -> (self, f )
       | Typenames ts ->
-          (* Add all type bindings *)
-          let (o, ts_rev) =
-            List.fold_left (fun (o, ts_rev) (n, tvs, dt, pos) ->
-              let fqn = make_path_string path n in
-              let o = o#bind_shadow_type n fqn in
-              let (o, dt') = o#datatype' dt in
-              (o, (fqn, tvs, dt', pos) :: ts_rev)) (self, []) ts in
-          (o, Typenames (List.rev ts_rev))
+          let (o, ts) = self#list (fun o (n, tvs, dt, pos) ->
+            (* Type will already have been renamed. *)
+            let (o, dt) = o#datatype' dt in
+            (o, (n, tvs, dt, pos))) ts in
+          (o, Typenames ts)
       | Val (pat, (tvs, phr), loc, dt_opt) ->
           let (_, phr') = self#phrase phr in
           let (o, pat') = self#pattern pat in
@@ -311,38 +315,20 @@ and perform_renaming module_table path term_ht type_ht =
     string list -> string list stringmap -> string list stringmap ->
       (string list stringmap * string list stringmap * binding list) =
           fun binding_list mt path term_ht type_ht ->
-    (* For each binding group, get the shadowing table, and then use the shadowing
-     * table to do the renaming *)
-    let process_bindings term_ht type_ht bnds =
-      (* Rename functions and create shadow table *)
-      let (o, bnds') =
-        (rename_binders_get_shadow_tbl mt path
-            term_ht type_ht)#list (fun o -> o#binding) bnds in
-      (* Get shadow tables *)
-      let term_ht = o#get_term_shadow_table in
-      let type_ht = o#get_type_shadow_table in
-      (* Rename each of the bindings *)
-      let (o, bnds') =
-        (perform_renaming mt path
-            term_ht type_ht)#list (fun o -> o#binding) bnds' in
-      (* Get final shadow tables *)
-      let term_ht = o#get_term_shadow_table in
-      let type_ht = o#get_type_shadow_table in
-      (term_ht, type_ht, bnds') in
-
+    
     let (term_ht, type_ht, bnds_rev) =
-      List.fold_left (fun (term_ht, type_ht, acc) bnd ->
-        match bnd with
-          | { node = Mutual bs; pos } ->
-              let (term_ht, type_ht, bnds) =
-                process_bindings term_ht type_ht bs in
-              let new_mutual = SourceCode.WithPos.make ~pos (Mutual bnds) in
-              (term_ht, type_ht, new_mutual :: acc)
-          | b ->
-              let (term_ht, type_ht, bnds) =
-                process_bindings term_ht type_ht [b] in
-              (term_ht, type_ht, bnds @ acc)
-        ) (term_ht, type_ht, []) binding_list in
+      List.fold_left (fun (term_ht, type_ht, acc) b ->
+        let (o, b) =
+          (rename_binders_get_shadow_tbl mt path
+              term_ht type_ht)#binding b in
+        let term_ht = o#get_term_shadow_table in
+        let type_ht = o#get_type_shadow_table in
+        let (o, b) =
+          (perform_renaming mt path
+              term_ht type_ht)#binding b in
+        let term_ht = o#get_term_shadow_table in
+        let type_ht = o#get_type_shadow_table in
+            (term_ht, type_ht, b :: acc)) (term_ht, type_ht, []) binding_list in
     (term_ht, type_ht, List.rev bnds_rev)
 
 let rename mt (bindings, phr_opt) =
@@ -357,4 +343,5 @@ let desugarModules prog =
   let module_map = create_module_info_map prog in
   let renamed_prog = rename module_map prog in
   let flattened_prog = flatten_prog renamed_prog in
+  Debug.print (Sugartypes.show_program flattened_prog);
   flattened_prog

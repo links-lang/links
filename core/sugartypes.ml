@@ -270,7 +270,6 @@ and bindingnode =
   | Fun     of function_definition
   | Funs    of recursive_function list
   | Handler of Binder.with_pos * handlerlit * datatype' option
-  | Mutual of binding list
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
@@ -490,22 +489,6 @@ struct
     | Fun (bndr, _, (_, fn), _, _) ->
        let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
-    | Mutual bnds ->
-        (* Traverse, get names and RHSes *)
-        let names, fnlits, hlits =
-          List.fold_right
-            (fun b (names, fnlits, handlerlits) ->
-              match WithPos.node b with
-                | (Fun (bndr, _, (_, rhs), _, _)) ->
-                   (add (Binder.to_name bndr) names, rhs::fnlits, handlerlits)
-                | (Handler (bndr, hl, _)) ->
-                   (add (Binder.to_name bndr) names, fnlits, hl::handlerlits)
-                | _ -> (names, fnlits, handlerlits))
-            bnds (empty, [], []) in
-        let fnlit_fvs = union_map (fun fnlit -> funlit fnlit) fnlits in
-        let hlit_fvs = union_map (fun hlit -> handlerlit hlit) hlits in
-        let fvs = union fnlit_fvs hlit_fvs in
-        names, diff fvs names
     | Funs funs ->
         let names, rhss =
           List.fold_right

@@ -1122,7 +1122,7 @@ struct
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | Handler _ | QualifiedImport _ | Fun _ | Foreign _
-                | AlienBlock _ | Module _ | Mutual _ -> assert false
+                | AlienBlock _ | Module _  -> assert false
             end
 
   and evalv env e =

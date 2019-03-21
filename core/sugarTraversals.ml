@@ -659,20 +659,8 @@ class map =
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
           in Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))
       | Funs _x ->
-          let _x =
-            o#list
-              (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
-                 let _x = o#binder _x in
-                 let _x_i2 = o#funlit _x_i2 in
-                 let _x_i3 = o#location _x_i3 in
-                 let _x_i4 = o#option (fun o -> o#datatype') _x_i4 in
-                 let _x_i5 = o#position _x_i5
-                 in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
-              _x
+          let _x = o#list (fun o -> o#recursive_function)  _x
           in Funs _x
-      | Mutual (bs) ->
-          let bs = o#list (fun o -> o#binding) bs in
-          Mutual (bs)
       | Handler (b, hnlit, t) ->
           let b = o#binder b in
           let hnlit = o#handlerlit hnlit in
@@ -689,17 +677,7 @@ class map =
           let _xs = o#list (fun o -> o#name) _xs in
           QualifiedImport _xs
       | Typenames (ts) ->
-          let ts = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let _x = o#name _x in
-            let _x_i1 =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let _x = _x (*o#quantifier _x*) in
-                   let _x_i1 = o#unknown _x_i1
-                   in (_x, _x_i1))
-                _x_i1
-            in let _x_i2 = o#datatype' _x_i2 in (_x, _x_i1, _x_i2, _x_i3)
-          ) ts in
+          let ts = o#list (fun o -> o#typename) ts in
           Typenames ts
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
@@ -719,6 +697,28 @@ class map =
     method binding : binding -> binding =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
+
+    method recursive_function : recursive_function -> recursive_function =
+      fun (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
+        let _x = o#binder _x in
+        let _x_i2 = o#funlit _x_i2 in
+        let _x_i3 = o#location _x_i3 in
+        let _x_i4 = o#option (fun o -> o#datatype') _x_i4 in
+        let _x_i5 = o#position _x_i5
+        in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)
+
+    method typename : typename -> typename =
+      fun (_x, _x_i1, _x_i2, _x_i3) ->
+        let _x = o#name _x in
+        let _x_i1 =
+          o#list
+            (fun o (_x, _x_i1) ->
+               let _x = _x (*o#quantifier _x*) in
+               let _x_i1 = o#unknown _x_i1
+               in (_x, _x_i1))
+            _x_i1
+        in let _x_i2 = o#datatype' _x_i2 in
+        (_x, _x_i1, _x_i2, _x_i3)
 
     method program : program -> program =
       fun (bindings, phrase) ->
@@ -1322,20 +1322,8 @@ class fold =
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
       | Funs _x ->
-          let o =
-            o#list
-              (fun o (_x, _x1, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
-                 let o = o#binder _x in
-                 let o = o#list (fun o -> o#tyvar) _x_i1 in
-                 let o = o#funlit _x_i2 in
-                 let o = o#location _x_i3 in
-                 let o = o#option (fun o -> o#datatype') _x_i4 in
-                 let o = o#position _x_i5 in o)
-              _x
+          let o = o#list (fun o -> o#recursive_function) _x
           in o
-      | Mutual (bs) ->
-          let o = o#list (fun o -> o#binding) bs in
-          o
       | Handler (b, hnlit, t) ->
           let o = o#binder b in
           let o = o#handlerlit hnlit in
@@ -1350,15 +1338,7 @@ class fold =
           let o = o#list (fun o -> o#name) _xs in
           o
       | Typenames (ts) ->
-          let o = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let o = o#name _x in
-            let o =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let o = o (* #quantifier _x*) in
-                   let o = o#unknown _x_i1
-                   in o) _x_i1
-            in let o = o#datatype' _x_i2 in o) ts in
+          let o = o#list (fun o -> o#typename) ts in
           o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
@@ -1373,6 +1353,26 @@ class fold =
             let o = o#binder b in
             o#datatype' dt) dts in
           o
+
+    method recursive_function : recursive_function -> 'self_type =
+      fun (_x, _x1, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
+         let o = o#binder _x in
+         let o = o#list (fun o -> o#tyvar) _x_i1 in
+         let o = o#funlit _x_i2 in
+         let o = o#location _x_i3 in
+         let o = o#option (fun o -> o#datatype') _x_i4 in
+         let o = o#position _x_i5 in o
+
+    method typename : typename -> 'self_type =
+      fun (_x, _x_i1, _x_i2, _x_i3) ->
+          let o = o#name _x in
+          let o =
+            o#list
+              (fun o (_x, _x_i1) ->
+                 let o = o (* #quantifier _x*) in
+                 let o = o#unknown _x_i1
+                 in o) _x_i1
+          in let o = o#datatype' _x_i2 in o
 
     method binding : binding -> 'self_type =
       WithPos.traverse
@@ -2110,20 +2110,8 @@ class fold_map =
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
           in (o, (Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
       | Funs _x ->
-          let (o, _x) =
-            o#list
-              (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
-                 let (o, _x) = o#binder _x in
-                 let (o, _x_i2) = o#funlit _x_i2 in
-                 let (o, _x_i3) = o#location _x_i3 in
-                 let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4 in
-                 let (o, _x_i5) = o#position _x_i5
-                 in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
-              _x
-          in (o, (Funs _x))
-      | Mutual (bs) ->
-          let (o,bs) = o#list (fun o b -> o#binding b) bs in
-          (o, Mutual bs)
+          let (o, _x) = o#list (fun o -> o#recursive_function) _x in
+          (o, (Funs _x))
       | Handler (b, hnlit, t) ->
           let (o, b) = o#binder b in
           let (o, hnlit) = o#handlerlit hnlit in
@@ -2140,16 +2128,7 @@ class fold_map =
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, QualifiedImport _xs)
       | Typenames (ts) ->
-          let (o, ts) = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let (o, _x) = o#name _x in
-            let (o, _x_i1) =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
-                   in (o, (_x, _x_i1)))
-                _x_i1 in
-            let (o, _x_i2) = o#datatype' _x_i2
-            in (o, (_x, _x_i1, _x_i2, _x_i3))) ts
+          let (o, ts) = o#list (fun o -> o#typename) ts
           in (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
@@ -2181,4 +2160,26 @@ class fold_map =
         ~f_ty:(fun o v -> o#option (fun o -> o#unknown) v)
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
+
+    method recursive_function : recursive_function -> ('self_type * recursive_function) =
+      fun (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
+        let (o, _x) = o#binder _x in
+        let (o, _x_i2) = o#funlit _x_i2 in
+        let (o, _x_i3) = o#location _x_i3 in
+        let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4 in
+        let (o, _x_i5) = o#position _x_i5
+        in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
+
+    method typename : typename -> ('self_type * typename) =
+      fun (_x, _x_i1, _x_i2, _x_i3) ->
+        let (o, _x) = o#name _x in
+        let (o, _x_i1) =
+          o#list
+            (fun o (_x, _x_i1) ->
+               let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
+               in (o, (_x, _x_i1)))
+            _x_i1 in
+        let (o, _x_i2) = o#datatype' _x_i2
+        in (o, (_x, _x_i1, _x_i2, _x_i3))
+ 
   end
