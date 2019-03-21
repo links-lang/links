@@ -293,7 +293,7 @@ and cp_phrasenode =
   | CPLink        of Binder.with_pos * Binder.with_pos
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
-and typename = (name * (quantifier * tyvar option) list * datatype')
+and typename = (name * (quantifier * tyvar option) list * datatype' * Position.t)
 (* SJF: It would be nice to make these records at some point. *)
 and function_definition =
   Binder.with_pos * DeclaredLinearity.t * (tyvar list * funlit) *

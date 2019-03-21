@@ -475,7 +475,7 @@ object (self)
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
         let (mutual_env, venvs_map) =
-          List.fold_left (fun (alias_env, venvs_map) (t, args, _) ->
+          List.fold_left (fun (alias_env, venvs_map) (t, args, _, _) ->
             let qs = List.map (fst) args in
             let qs, var_env =  Desugar.desugar_quantifiers empty_env qs in
             let venvs_map = StringMap.add t var_env venvs_map in
@@ -484,7 +484,7 @@ object (self)
 
         (* Desugar all DTs, given the temporary new alias environment. *)
         let desugared_mutuals =
-          List.map (fun (name, args, dt) ->
+          List.map (fun (name, args, dt, pos) ->
             let sugar_qs = List.map (fst) args in
 
             (* Semantic quantifiers have already been constructed,
@@ -508,14 +508,14 @@ object (self)
               (match dt' with
                    | (t, Some dt) -> (t, dt)
                    | _ -> assert false) in
-            (name, args, (t, Some dt))
+            (name, args, (t, Some dt), pos)
           ) ts in
 
         (* Given the desugared datatypes, we now need to handle linearity. *)
         (* First, calculate linearity up to recursive application, and a
          * dependency graph. *)
         let (linearity_env, dep_graph) =
-          List.fold_left (fun (lin_map, dep_graph) (name, _, (_, dt)) ->
+          List.fold_left (fun (lin_map, dep_graph) (name, _, (_, dt), _) ->
             let dt = OptionUtils.val_of dt in
             let lin_map = StringMap.add name (not @@ is_unl_type dt) lin_map in
             let deps = recursive_applications dt in
@@ -551,7 +551,7 @@ object (self)
         (* NB: type aliases are scoped; we allow shadowing.
            We also allow type aliases to shadow abstract types. *)
         let alias_env =
-          List.fold_left (fun alias_env (t, args, (_, dt')) ->
+          List.fold_left (fun alias_env (t, args, (_, dt'), _) ->
             let dt = OptionUtils.val_of dt' in
             let semantic_qs = List.map (snd ->- val_of) args in
             let alias_env =

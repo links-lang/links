@@ -82,7 +82,6 @@ struct
       ( ExperimentalExtensions.check#sentence
        ->- DesugarHandlers.desugar_handlers_early#sentence
        ->- DesugarLAttributes.desugar_lattributes#sentence
-       ->- DesugarMutual.desugar_mutual#sentence
        ->- DesugarMutual.lift_funs#sentence
        ->- DesugarDatatypes.sentence tyenv
        ->- uncurry TypeSugar.Check.sentence

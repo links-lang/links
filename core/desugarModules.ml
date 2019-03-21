@@ -208,11 +208,11 @@ and perform_renaming module_table path term_ht type_ht =
       | Typenames ts ->
           (* Add all type bindings *)
           let (o, ts_rev) =
-            List.fold_left (fun (o, ts_rev) (n, tvs, dt) ->
+            List.fold_left (fun (o, ts_rev) (n, tvs, dt, pos) ->
               let fqn = make_path_string path n in
               let o = o#bind_shadow_type n fqn in
               let (o, dt') = o#datatype' dt in
-              (o, (fqn, tvs, dt') :: ts_rev)) (self, []) ts in
+              (o, (fqn, tvs, dt', pos) :: ts_rev)) (self, []) ts in
           (o, Typenames (List.rev ts_rev))
       | Val (pat, (tvs, phr), loc, dt_opt) ->
           let (_, phr') = self#phrase phr in

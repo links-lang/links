@@ -689,7 +689,7 @@ class map =
           let _xs = o#list (fun o -> o#name) _xs in
           QualifiedImport _xs
       | Typenames (ts) ->
-          let ts = o#list (fun o (_x, _x_i1, _x_i2) ->
+          let ts = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
             let _x = o#name _x in
             let _x_i1 =
               o#list
@@ -698,7 +698,7 @@ class map =
                    let _x_i1 = o#unknown _x_i1
                    in (_x, _x_i1))
                 _x_i1
-            in let _x_i2 = o#datatype' _x_i2 in (_x, _x_i1, _x_i2)
+            in let _x_i2 = o#datatype' _x_i2 in (_x, _x_i1, _x_i2, _x_i3)
           ) ts in
           Typenames ts
       | Infix -> Infix
@@ -1350,7 +1350,7 @@ class fold =
           let o = o#list (fun o -> o#name) _xs in
           o
       | Typenames (ts) ->
-          let o = o#list (fun o (_x, _x_i1, _x_i2) ->
+          let o = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
             let o = o#name _x in
             let o =
               o#list
@@ -2140,7 +2140,7 @@ class fold_map =
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, QualifiedImport _xs)
       | Typenames (ts) ->
-          let (o, ts) = o#list (fun o (_x, _x_i1, _x_i2) ->
+          let (o, ts) = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
             let (o, _x) = o#name _x in
             let (o, _x_i1) =
               o#list
@@ -2149,7 +2149,7 @@ class fold_map =
                    in (o, (_x, _x_i1)))
                 _x_i1 in
             let (o, _x_i2) = o#datatype' _x_i2
-            in (o, (_x, _x_i1, _x_i2))) ts
+            in (o, (_x, _x_i1, _x_i2, _x_i3))) ts
           in (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))

@@ -3857,7 +3857,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
            StringMap.empty)
       | Foreign _ -> assert false
       | Typenames ts ->
-          let env = List.fold_left (fun env (name, vars, (_, dt')) ->
+          let env = List.fold_left (fun env (name, vars, (_, dt'), _) ->
             begin
               match dt' with
                 | Some dt ->

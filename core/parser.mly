@@ -174,7 +174,7 @@ let parseRegexFlags f =
 module MutualBindings = struct
 
   type mutual_bindings =
-    { mut_types: (typename * Position.t) list;
+    { mut_types: typename list;
       mut_funs: (function_definition * Position.t) list;
       mut_pos: Position.t }
 
@@ -187,7 +187,7 @@ module MutualBindings = struct
     | Fun f ->
         { block with mut_funs = ((f, pos) :: fs) }
     | Typenames [t] ->
-        { block with mut_types = ((t, pos) :: ts) }
+        { block with mut_types = (t :: ts) }
     | Typenames _ -> assert false
     | _ ->
         raise (ConcreteSyntaxError
@@ -207,7 +207,10 @@ module MutualBindings = struct
     let funs_map =
       assoc_to_list_map
         (fun (bndr, _, _, _, _) -> Binder.to_name bndr) funs in
-    let tys_map = assoc_to_list_map (fst3) tys in
+    let tys_map =
+      List.map (fun (n, qs, dt, pos) -> ((n, qs, dt, pos), pos)) tys
+      |> assoc_to_list_map (fun (n, _, _, _) -> n) in
+
     let check map =
       let dups =
         StringMap.filter (fun _ poss -> List.length poss > 1) map in
@@ -233,9 +236,7 @@ module MutualBindings = struct
 
     let type_binding = function
       | [] -> []
-      | ts ->
-          let ts = List.map (fst) ts in
-          [WithPos.make ~pos:mut_pos (Typenames (List.rev ts))] in
+      | ts -> [WithPos.make ~pos:mut_pos (Typenames (List.rev ts))] in
     type_binding mut_types @ fun_binding mut_funs
 end
 
@@ -437,7 +438,7 @@ signature:
 | SIG op COLON datatype                                        { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5)]) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5, (pos $loc))]) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
