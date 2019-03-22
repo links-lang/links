@@ -193,6 +193,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
   let rec_types = rec_env.tenv in
   let qstack = rec_env.qstack in
 
+  let key_and_body unifier =
+      match unifier with
+        | MuBound (i, typ) -> (MuBoundId i, typ)
+        | RecAppl { r_unique_name; r_dual; r_args; r_unwind ; _ } ->
+            (NominalId r_unique_name, r_unwind r_args r_dual) in
+
   let is_unguarded_recursive t =
     let rec is_unguarded rec_types t =
       match t with
@@ -209,11 +215,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     is_unguarded IntSet.empty t in
 
   let unify_rec unifier t =
-    let (key, body) =
-      match unifier with
-        | MuBound (i, typ) -> (MuBoundId i, typ)
-        | RecAppl { r_unique_name; r_dual; r_args; r_unwind ; _ } ->
-            (NominalId r_unique_name, r_unwind r_args r_dual) in
+    let (key, body) = key_and_body unifier in
     let ts =
       if RecIdMap.mem key rec_types then
         RecIdMap.find key rec_types
@@ -226,12 +228,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     else
       unify' {rec_env with tenv=RecIdMap.add key (t::ts) rec_types} (body, t) in
 
-  (* Unification of two mu-bound recursive types.
-   * This extra machinery is not needed for the more nominal-style
-   * recursive types, since only names need to be compared. *)
-  let unify_rec2 ((lvar, lbody), (rvar, rbody)) =
-    let lkey = MuBoundId lvar in
-    let rkey = MuBoundId rvar in
+  (* Unification of two recursive types. *)
+  let unify_rec2 unifier1 unifier2 =
+    let (lkey, lbody) = key_and_body unifier1 in
+    let (rkey, rbody) = key_and_body unifier2 in
     let lts =
       if RecIdMap.mem lkey rec_types then
         RecIdMap.find lkey rec_types
@@ -479,7 +479,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                                           string_of_datatype (`MetaTypeVar rpoint) ^
                                             " with the guarded recursive type "^ string_of_datatype (`MetaTypeVar lpoint))))
                 else
-                  unify_rec2 ((lvar, t), (rvar, t'))
+                  unify_rec2 (MuBound (lvar, t)) (MuBound (rvar, t'))
               end;
               Unionfind.union lpoint rpoint
            | `Recursive (var, t'), `Body t ->
@@ -617,16 +617,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     | `RecursiveApplication a1, `RecursiveApplication a2 ->
         let (n1, args1) = (a1.r_unique_name, a1.r_args) in
         let (n2, args2) = (a2.r_unique_name, a2.r_args) in
-        if n1 <> n2 then
-          raise (Failure
-                  (`Msg ("Cannot unify recursive type '"^string_of_datatype t1^
-                           "' with recursive type '"^string_of_datatype t2^"'")))
-        else if a1.r_dual <> a2.r_dual then
-          raise (Failure
-                  (`Msg ("Cannot unify recursive session type '"^string_of_datatype t1^
-                           "' with its dual")))
+        if n1 = n2 && a1.r_dual = a2.r_dual then
+          (* Note that cannot eagerly reject incompatible duality flags
+           * due to the possibility of self-dual types such as `End`. *)
+          List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) args1 args2
         else
-           List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) args1 args2
+          unify_rec2 (RecAppl a1) (RecAppl a2)
     | `RecursiveApplication appl, t2 ->
        unify_rec (RecAppl appl) t2
     |  t1, `RecursiveApplication appl->

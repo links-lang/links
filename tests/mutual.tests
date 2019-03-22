@@ -75,3 +75,14 @@ Duplicate function bindings disallowed
 filemode : true
 stderr : @.*
 exit : 1
+
+Use structural unification if nominal unification fails
+./tests/mutual/structural.links
+filemode : true
+stdout : 123 : Int
+
+Use structural unification if nominal unification fails (type error)
+./tests/mutual/structural2.links
+filemode : true
+stderr : @.*
+exit : 1
