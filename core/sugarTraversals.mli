@@ -67,8 +67,6 @@ class map :
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
     method program         : program -> program
-    method recursive_function : recursive_function -> recursive_function
-    method typename        : typename -> typename
     method unknown         : 'a. 'a -> 'a
   end
 
@@ -140,8 +138,6 @@ class fold :
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
     method program         : program -> 'self
-    method recursive_function : recursive_function -> 'self
-    method typename        : typename -> 'self
     method unknown         : 'a. 'a -> 'self
   end
 
@@ -206,8 +202,6 @@ object ('self)
   method type_variable   : type_variable -> 'self * type_variable
   method known_type_variable : known_type_variable -> 'self * known_type_variable
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
-  method recursive_function : recursive_function -> 'self * recursive_function
-  method typename        : typename -> 'self * typename
   method tyunary_op      : tyarg list * UnaryOp.t -> 'self * (tyarg list * UnaryOp.t)
   method unary_op        : UnaryOp.t -> 'self * UnaryOp.t
   method unknown         : 'a . 'a -> 'self * 'a
