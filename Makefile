@@ -76,7 +76,8 @@ no-db:	build-dev-nodb create-startup-script
 .PHONY: create-startup-script
 create-startup-script:
 	@echo "#!/usr/bin/env sh" > links
-	@echo "LINKS_LIB=\"$(BUILD_DIR)/default/lib\" $(BUILD_DIR)/default/bin/links.exe \"\$$@\"" >> links
+	$(eval ABS_BUILD_DIR:=$(shell cd $(BUILD_DIR) ; pwd -P)) # This may depend on BASH semantics.
+	@echo "LINKS_LIB=\"$(ABS_BUILD_DIR)/default/lib\" $(ABS_BUILD_DIR)/default/bin/links.exe \"\$$@\"" >> links
 	@chmod +x links
 	ln -fs links linx
 
