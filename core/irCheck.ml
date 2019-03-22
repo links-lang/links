@@ -138,6 +138,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
             | `Recursive _ -> true
             | _ -> false
           end
+        | `RecursiveApplication _ -> true
         | _ -> false
       then
         begin
@@ -213,14 +214,8 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
              (context, Types.Abstype.equal s s' && args_ok)
          | _ -> (context, false)
          end
-      | `RecursiveApplication a1 ->
-         let open Types in
-         begin match t2 with
-         | `RecursiveApplication a2->
-             let (context, args_ok) = check_type_args context a1.r_args a2.r_args in
-             (context, a1.r_unique_name = a2.r_unique_name && args_ok)
-         | _ -> (context, false)
-         end
+      | `RecursiveApplication _ ->
+         Debug.print "IR typechecker encountered recursive type"; (context, true)
       | `ForAll (qs, t) ->
          begin match t2 with
          | `ForAll (qs', t') ->
