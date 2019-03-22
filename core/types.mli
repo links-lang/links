@@ -114,9 +114,6 @@ and rec_appl = {
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
 }
-and rec_unifier =
-  | RecAppl of rec_appl
-  | MuBound of (int * typ)
 and typ =
     [ `Not_typed
     | `Primitive of Primitive.t
@@ -161,8 +158,6 @@ and type_arg =
 type session_type = (typ, row) session_type_basis
 
 type datatype = typ
-
-val unifier_key : rec_unifier -> rec_id
 
 (* base kind stuff *)
 val is_base_type : datatype -> bool

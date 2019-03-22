@@ -164,9 +164,6 @@ and rec_appl = {
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
 }
-and rec_unifier =
-  | RecAppl of rec_appl
-  | MuBound of (int * typ)
 and typ =
     [ `Not_typed
     | `Primitive of Primitive.t
@@ -210,10 +207,6 @@ and type_arg =
 
 type session_type = (typ, row) session_type_basis
   [@@deriving show]
-
-let unifier_key = function
-  | RecAppl { r_unique_name; _ } -> NominalId r_unique_name
-  | MuBound (i, _) -> MuBoundId i
 
 let dummy_type = `Primitive Primitive.Int
 

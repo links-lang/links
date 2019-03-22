@@ -23,6 +23,12 @@ type error = [
 | `PresentAbsentClash of string * Types.row * Types.row
 ]
 
+(* We need to be able to track both mu-bound and mutually-recursive
+ * (nominal) IDs. *)
+type rec_unifier =
+  | RecAppl of rec_appl
+  | MuBound of (int * typ)
+
 exception Failure of error
 
 let occurs_check var t =
