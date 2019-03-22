@@ -87,7 +87,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       let rvar' = lookupVar lid subst_map in
       let is_equal = rid = rvar' && lsk = rsk && lfd = rfd in
       match is_equal, lfd with
-        | true, `Flexible -> ctx, true
+        | true, `Flexible -> true
         | true, `Rigid ->
            begin match Env.find kind_env rid with
              | Some (primary_kind_env, subkind_env) ->
@@ -95,10 +95,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
                   (primary_kind = primary_kind_env &&  rsk = subkind_env)
                   "Mismatch between (sub) kind information in variable vs stored in kind environment"
                   `None;
-                ctx, true
+                true
              | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurrence
            end
-        | false, _ -> (ctx, false) in
+        | false, _ -> false in
     let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
       | `ForAll (qs, t) ->
         begin match collapse_toplevel_forall t with
@@ -143,7 +143,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       then
         begin
         Debug.print "IR typechecker encountered recursive type";
-        (context, true)
+        true
         end
       else
       begin
@@ -152,70 +152,69 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       match t1 with
       | `Not_typed ->
           begin match t2 with
-              `Not_typed -> (context, true)
-            | _          -> (context, false)
+              `Not_typed -> true
+            | _          -> false
           end
       | `Primitive x ->
           begin match t2 with
-              `Primitive y -> (context, x = y)
-            | _            -> (context, false)
+              `Primitive y -> x = y
+            | _            -> false
           end
       | `MetaTypeVar lpoint ->
           begin match Unionfind.find lpoint with
-            | `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; (context, true)
+            | `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
             | lpoint_cont ->
               begin match t2 with
                 `MetaTypeVar rpoint ->
                 begin match lpoint_cont, Unionfind.find rpoint with
                 | `Var lv, `Var rv -> handle_variable pk_type lv rv context
                 | `Body _, `Body _ -> failwith "Should have removed `Body by now"
-                | _ -> (context, false)
+                | _ -> false
                 end
-                | _                   -> (context, false)
+                | _                   -> false
               end
           end
       | `Function (lfrom, lm, lto) ->
           begin match t2 with
-            `Function (rfrom, rm, rto) ->
-             let (context, r1) = eqt     (context, lfrom, rfrom) in
-             let (context, r2) = eqt     (context, lto  , rto  ) in
-             let (context, r3) = eq_rows (context, lm   , rm   ) in
-             (context, r1 && r2 && r3)
-            | _                          -> (context, false)
+            | `Function (rfrom, rm, rto) ->
+              eqt     (context, lfrom, rfrom) &&
+              eqt     (context, lto  , rto  ) &&
+              eq_rows (context, lm   , rm   )
+            | _ -> false
           end
       | `Lolli (lfrom, lm, lto) ->
           begin match t2 with
-            `Function (rfrom, rm, rto) ->
-             let (context, r1) = eqt     (context, lfrom, rfrom) in
-             let (context, r2) = eqt     (context, lto  , rto  ) in
-             let (context, r3) = eq_rows (context, lm   , rm   ) in
-             (context, r1 && r2 && r3)
-            | _                          -> (context, false)
+            | `Function (rfrom, rm, rto) ->
+              eqt     (context, lfrom, rfrom) &&
+              eqt     (context, lto  , rto  ) &&
+              eq_rows (context, lm   , rm   )
+            | _  -> false
           end
       | `Record l ->
          begin match t2 with
          | `Record r -> eq_rows (context, l, r)
-         | _         -> (context, false)
+         | _         -> false
          end
       | `Variant l ->
          begin match t2 with
            `Variant r -> eq_rows (context, l, r)
-         | _          -> (context, false)
+         | _          -> false
          end
       | `Effect l ->
          begin match t2 with
          | `Effect r -> eq_rows (context, l, r)
-         | _         -> (context, false)
+         | _         -> false
          end
       | `Application (s, ts) ->
          begin match t2 with
          | `Application (s', ts') ->
-             let (context, args_ok) = check_type_args context ts ts' in
-             (context, Types.Abstype.equal s s' && args_ok)
-         | _ -> (context, false)
+            Types.Abstype.equal s s' &&
+            List.length ts = List.length ts' &&
+            List.for_all2 (fun larg rarg -> eq_type_args (context, larg, rarg)) ts ts'
+         | _ -> false
          end
       | `RecursiveApplication _ ->
-         Debug.print "IR typechecker encountered recursive type"; (context, true)
+         Debug.print "IR typechecker encountered recursive type"; true
       | `ForAll (qs, t) ->
          begin match t2 with
          | `ForAll (qs', t') ->
@@ -231,14 +230,14 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
                   (ctx', prev_eq && l_kind = r_kind)
                 ) (context,true) (Types.unbox_quantifiers qs) (Types.unbox_quantifiers qs') in
             if quantifiers_match then
-              (context, snd (eqt (context', t, t'))) (* TODO if we are to unify flexible variables, those should survive here *)
-            else (context, false)
-         | _ -> (context, false)
+              eqt (context', t, t')
+            else false
+         | _ -> false
          end
       | #Types.session_type as l ->
          begin match t2 with
          | #Types.session_type as r -> eq_sessions (context, l, r)
-         | _          -> (context, false)
+         | _          -> false
          end
 
       | `Alias (_, t1_inner) ->
@@ -250,11 +249,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `Table (lt1, lt2, lt3) ->
          begin match t2 with
          | `Table (rt1, rt2, rt3) ->
-            let (context, r1) = eqt (context, lt1, rt1) in
-            let (context, r2) = eqt (context, lt2, rt2) in
-            let (context, r3) = eqt (context, lt3, rt3) in
-            (context, r1 && r2 && r3)
-         | _ -> (context, false)
+            eqt (context, lt1, rt1) &&
+            eqt (context, lt2, rt2) &&
+            eqt (context, lt3, rt3)
+         | _ -> false
          end
       | `Lens _ -> failwith "The IR type equality check does not support lenses (yet)"
       end
@@ -269,51 +267,47 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          eq_rows (context, l, r)
       | `Dual l, `Dual r ->
          eqt (context, l, r)
-      | `End, `End -> (context, true)
-      | _, _ -> (context, false)
+      | `End, `End -> true
+      | _, _ -> false
     and eq_rows (context, r1, r2) =
       let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
       let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
-      let (context, r1) = eq_field_envs (context, lfield_env, rfield_env) in
-      let (context, r2) = eq_row_vars (context, lrow_var, rrow_var) in
-        (context, r1 && r2 && ldual=rdual)
+      let r1 = eq_field_envs (context, lfield_env, rfield_env) in
+      let r2 = eq_row_vars (context, lrow_var, rrow_var) in
+        r1 && r2 && ldual=rdual
     and eq_presence (context, l, r) =
       match l, r with
-      | `Absent, `Absent -> (context, true)
+      | `Absent, `Absent -> true
       | `Present lt, `Present rt -> eqt (context, lt, rt)
       | `Var lpoint, `Var rpoint -> begin match Unionfind.find lpoint, Unionfind.find rpoint with
                                     | `Body _, _
                                     | _, `Body _ -> failwith "should have removed all `Body variants by now"
                                     | `Var lv, `Var rv -> handle_variable pk_presence lv rv context
                                     end
-      | _, _ -> (context, false)
+      | _, _ -> false
     and eq_field_envs (context, lfield_env, rfield_env) =
-      StringMap.fold (fun field lp (context, prev_eq) ->
-                           match StringMap.find_opt field rfield_env with
-                           | Some rp -> let (context, eq) =
-                                          eq_presence (context, lp, rp) in
-                                            (context, eq && prev_eq)
-                           | None -> (context, false)
-                          ) lfield_env (context, StringMap.cardinal lfield_env = StringMap.cardinal rfield_env)
+      let lfields_in_rfields =
+        StringMap.for_all  (fun field lp ->
+            match StringMap.find_opt field rfield_env with
+              | Some rp -> eq_presence (context, lp, rp)
+              | None -> false
+          ) lfield_env in
+      lfields_in_rfields  && StringMap.cardinal lfield_env = StringMap.cardinal rfield_env
     and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
-      | `Closed, `Closed ->  (context, true)
+      | `Closed, `Closed ->  true
       | `Var lv, `Var rv ->   handle_variable pk_row lv rv context
       | `Recursive _, _
-      | _, `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; (context, true)
-      | _ ->  (context, false)
-    and check_type_args context args1 args2 =
-      List.fold_left2 (fun (context, prev_equal) larg rarg  ->
-        let context, eq = eq_type_args (context, larg, rarg) in
-        context, prev_equal && eq) (context, true) args1 args2
+      | _, `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
+      | _ ->  false
     and eq_type_args  (context, l, r)  =
       match l,r with
       | `Type lt, `Type rt -> eqt (context, lt, rt)
       | `Row lr, `Row rr -> eq_rows (context, lr, rr)
       | `Presence lf, `Presence rf -> eq_presence (context, lf, rf)
-      | _, _ -> (context, false)
+      | _, _ -> false
     in
-      snd (eqt  (context, t1, t2))
+      eqt  (context, t1, t2)
 
 
 
