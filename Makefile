@@ -73,10 +73,15 @@ no-db:	build-dev-nodb create-startup-script
 
 # Creates a thin shell script, which executes the built Links
 # executable in a pre-configured environment.
+ABS_BUILD_DIR=$(BUILD_DIR)
 .PHONY: create-startup-script
 create-startup-script:
 	@echo "#!/usr/bin/env sh" > links
-	$(eval ABS_BUILD_DIR:=$(shell cd $(BUILD_DIR) ; pwd -P)) # This may depend on BASH semantics.
+	@# This path resolution scheme may depend on BASH semantics.
+	$(eval ABS_BUILD_DIR=$(shell cd $(BUILD_DIR) ; pwd -P))
+	@# This is an attempt to put in a safe guard
+	@# If the above resolution fails to yield an existent path then fall back to the relative path in BUILD_DIR.
+	$(eval ABS_BUILD_DIR:=$(shell test -d $(ABS_BUILD_DIR) && echo "$(ABS_BUILD_DIR)" || echo "$(BUILD_DIR)"))
 	@echo "LINKS_LIB=\"$(ABS_BUILD_DIR)/default/lib\" $(ABS_BUILD_DIR)/default/bin/links.exe \"\$$@\"" >> links
 	@chmod +x links
 	ln -fs links linx
