@@ -39,7 +39,7 @@
 
 
 # Project root and build directory
-ROOT:=$(shell dirname $(shell readlink -fn $(firstword $(MAKEFILE_LIST))))
+ROOT:=$(shell dirname $(firstword $(MAKEFILE_LIST)))
 BUILD_DIR:=$(ROOT)/_build
 
 # The build command and some standard build system flags
