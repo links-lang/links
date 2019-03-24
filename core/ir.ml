@@ -2,7 +2,6 @@
 
 open CommonTypes
 
-[@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
 
 type scope = Var.scope
   [@@deriving show]
