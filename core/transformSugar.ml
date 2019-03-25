@@ -243,7 +243,7 @@ class transform (env : Types.typing_environment) =
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
       | Var var -> (o, Var var, o#lookup_type var)
       | FunLit (Some argss, lin, lam, location) ->
-          let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
+          let inner_e = snd (last argss) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
             List.fold_right

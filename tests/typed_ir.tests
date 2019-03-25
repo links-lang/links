@@ -1,0 +1,15 @@
+Anonymous constant function
+fun (x) {1}
+stdout : fun : (_) -> Int
+
+Anonymous identity function
+fun (x) {x}
+stdout : fun : (a::Any) -> a::Any
+
+Anonymous composition function
+fun (f,g) {fun (x){f (g(x))}}
+stdout : fun : ((a::Any) -b-> c::Any, (d::Any) -b-> a::Any) -> (d::Any) -b-> c::Any
+
+XML typing
+fun (x) {<a>{x}</a>}
+stdout : fun : (Xml) -> Xml

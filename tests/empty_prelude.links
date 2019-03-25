@@ -1,0 +1,5 @@
+# This is an empty prelude file for the purpose of running IR typing tests.
+# Since standard Links prelude does not currently produce a type-correct IR we
+# to use an empty one so that we only focus on IR type errors arising from tests
+# programs and not the prelude functions.
+()
