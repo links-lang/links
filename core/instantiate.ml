@@ -5,7 +5,7 @@ open Types
 exception ArityMismatch of (int * int)
 
 let internal_error message =
-  raise (Errors.InternalError {filename = "typeSugar.ml"; message })
+  raise (Errors.internal_error ~filename:"instantiate.ml" ~message)
 
 let show_recursion = Basicsettings.Instantiate.show_recursion
 let show_instantiation = Basicsettings.Instantiate.show_instantiation
