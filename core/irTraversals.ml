@@ -1,6 +1,7 @@
 open Utility
 open CommonTypes
 open Ir
+open Var
 
 let internal_error message =
   raise (Errors.internal_error ~filename:"irTraversals.ml" ~message)
@@ -529,7 +530,7 @@ struct
             let b, o = o#binding b in
               begin
                 match b with
-                  | Let ((x, (_, _, `Local)), (tyvars, Return v)) when is_inlineable_value v ->
+                  | Let ((x, (_, _, Scope.Local)), (tyvars, Return v)) when is_inlineable_value v ->
                       let v =
                         match tyvars with
                           | [] -> v

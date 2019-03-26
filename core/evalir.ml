@@ -5,6 +5,7 @@ open Lwt
 open Utility
 open Proc
 open Pervasives
+open Var
 
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
@@ -246,11 +247,11 @@ struct
       let env =
         match z, fvs with
         | None, None            -> env
-        | Some z, Some fvs -> Value.Env.bind z (fvs, `Local) env
+        | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) env
         | _, _ -> assert false in
 
       (* extend env with arguments *)
-      let env = List.fold_right2 (fun x p -> Value.Env.bind x (p, `Local)) xs ps env in
+      let env = List.fold_right2 (fun x p -> Value.Env.bind x (p, Scope.Local)) xs ps env in
       computation_yielding env cont body
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
       let key = EventHandlers.register hs in
@@ -287,7 +288,7 @@ struct
                 apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
               | `SpawnLocation (`ServerSpawnLoc) ->
                 let var = Var.dummy_var in
-                let frame = K.Frame.make `Local var Value.Env.empty ([], Apply (Variable var, [])) in
+                let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
                 Proc.create_process false
                   (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
                 apply_cont cont env (`Pid (`ServerPid new_pid))
@@ -305,7 +306,7 @@ struct
                 apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
               | `SpawnLocation (`ServerSpawnLoc) ->
                 let var = Var.dummy_var in
-                let frame = K.Frame.make `Local var Value.Env.empty ([], Apply (Variable var, [])) in
+                let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
                 Proc.create_process true
                   (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
                 apply_cont cont env (`Pid (`ServerPid new_pid))
@@ -315,7 +316,7 @@ struct
         let our_pid = Proc.get_current_pid () in
         (* Create the new process *)
         let var = Var.dummy_var in
-        let frame = K.Frame.make `Local var Value.Env.empty ([], Apply (Variable var, [])) in
+        let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
         Proc.create_spawnwait_process our_pid
           (fun () -> apply_cont K.(frame &> empty) env func) >>= fun child_pid ->
         (* Now, we need to block this process until the spawned process has evaluated to a value.
@@ -323,7 +324,7 @@ struct
          * from proc.ml. *)
         let fresh_var = Var.fresh_raw_var () in
         let extended_env =
-          Value.Env.bind fresh_var (Value.box_pid (`ServerPid child_pid), `Local) env in
+          Value.Env.bind fresh_var (Value.box_pid (`ServerPid child_pid), Scope.Local) env in
         let grab_frame =
           K.Frame.of_expr extended_env
                           (Lib.prim_appln "spawnWait'" [Variable fresh_var]) in
@@ -445,7 +446,7 @@ struct
            * This *should* be safe, but still feels a bit unsatisfactory.
            * It would be nice to refine this further. *)
           let fresh_var = Var.fresh_raw_var () in
-          let extended_env = Value.Env.bind fresh_var (chan, `Local) env in
+          let extended_env = Value.Env.bind fresh_var (chan, Scope.Local) env in
           let grab_frame = K.Frame.of_expr extended_env (Lib.prim_appln "receive" [Variable fresh_var]) in
           let inp = (snd unboxed_chan) in
           Session.block inp (Proc.get_current_pid ());
@@ -575,7 +576,7 @@ struct
             match StringMap.lookup label cases, default, v with
             | Some ((var,_), c), _, `Variant (_, v)
             | _, Some ((var,_), c), v ->
-              computation (Value.Env.bind var (v, `Local) env) cont c
+              computation (Value.Env.bind var (v, Scope.Local) env) cont c
             | None, _, #Value.t -> eval_error "Pattern matching failed on %s" label
             | _ -> assert false (* v not a variant *)
           end
@@ -755,7 +756,7 @@ struct
              List.fold_right
                (fun (b, initial_value) (env, vars) ->
                  let var = Var.var_of_binder b in
-                 Value.Env.bind var (value env initial_value, `Local) env, var :: vars)
+                 Value.Env.bind var (value env initial_value, Scope.Local) env, var :: vars)
                params (env, [])
            in
            env, `Deep vars
@@ -812,7 +813,7 @@ struct
               begin
                 match StringMap.lookup label cases with
                 | Some ((var,_), body) ->
-                  computation (Value.Env.bind var (chan, `Local) env) cont body
+                  computation (Value.Env.bind var (chan, Scope.Local) env) cont body
                 | None -> eval_error "Choice pattern matching failed"
               end
           | ReceiveBlocked -> block ()

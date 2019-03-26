@@ -4,6 +4,7 @@ open ProcessTypes
 open Utility
 open Webserver_types
 open Pervasives
+open Var
 
 let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
 let host_name = Basicsettings.Appserver.hostname
@@ -294,10 +295,10 @@ struct
         let _, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
         let render_page = Env.String.lookup nenv "renderPage" in
         let tail = Ir.Apply (Ir.Variable render_page, [Ir.Variable x]) in
-        Hashtbl.add Tables.scopes x `Global;
+        Hashtbl.add Tables.scopes x Scope.Global;
         Hashtbl.add Tables.cont_defs x ([], tail);
         Hashtbl.add Tables.cont_vars x IntSet.empty;
-        let frame = Value.Continuation.Frame.make `Global x Value.Env.empty ([], tail) in
+        let frame = Value.Continuation.Frame.make Scope.Global x Value.Env.empty ([], tail) in
         Value.Continuation.(frame &> empty)
       in
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->

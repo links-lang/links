@@ -3,7 +3,7 @@
 open CommonTypes
 
 
-type scope = Var.scope
+type scope = Var.Scope.t
   [@@deriving show]
 (* term variables *)
 type var = Var.var

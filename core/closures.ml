@@ -1,6 +1,7 @@
 open Utility
 open CommonTypes
 open Ir
+open Var
 
 type freevars = {termvars: (Ir.binder list) ; typevars: Types.quantifier list} [@@deriving show]
 type fenv = freevars IntMap.t [@@deriving show]
@@ -160,8 +161,8 @@ struct
         let t = Var.type_of_binder b in
         let o = o#typ (`Type t) in
         match scope with
-        | `Global -> b, o#global (Var.var_of_binder b)
-        | `Local  -> b, o#bound_termvar (Var.var_of_binder b)
+        | Scope.Global -> b, o#global (Var.var_of_binder b)
+        | Scope.Local  -> b, o#bound_termvar (Var.var_of_binder b)
 
       method super_binding = super#binding
 
@@ -185,7 +186,7 @@ struct
           List.rev
             (IntSet.fold
                 (fun x zs ->
-                  (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
+                  (x, (o#lookup_type x, "fv_" ^ string_of_int x, Scope.Local))::zs)
                 (o#get_free_term_vars)
                 []) in
         (* We are only interested in free variables of the function that actually have a binder "above".
@@ -208,7 +209,8 @@ struct
           let (b, o) = o#super_binding b in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (b, o)
-        | (Fun (f, (tyvars, xs, body), None, location)) as b when Ir.binding_scope b = `Local ->
+        | (Fun (f, (tyvars, xs, body), None, location)) as b
+             when Scope.isLocal (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -247,7 +249,7 @@ struct
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
           (b, o)
 
-        | (Rec defs) as b when Ir.binding_scope b = `Local ->
+        | (Rec defs) as b when Scope.isLocal (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -371,7 +373,7 @@ end
 (* mark top-level bindings as global *)
 module Globalise =
 struct
-  let binder (x, (t, name, _)) = (x, (t, name, `Global))
+  let binder (x, (t, name, _)) = (x, (t, name, Scope.Global))
   let fun_def (f, lam, z, location) = (binder f, lam, z, location)
   let binding = function
     | Let (x, body) -> Let (binder x, body)
@@ -455,13 +457,13 @@ struct
       method! bindings =
         function
         | [] -> [], o
-        | b :: bs when Ir.binding_scope b = `Global ->
+        | b :: bs when Scope.isGlobal (Ir.binding_scope b) ->
           let b, o = o#binding b in
           let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
         | Fun ((f, _) as fb, (tyvars, xs, body), None, location) :: bs ->
-          assert (Var.scope_of_binder fb = `Local);
+          assert (Scope.isLocal (Var.scope_of_binder fb));
           let fb = Globalise.binder fb in
           let (xs, o) =
             List.fold_right
@@ -493,7 +495,7 @@ struct
                      zs)
               in
               (* fresh variable for the closure environment *)
-              let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
+              let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, Scope.Local) in
               let z = Var.var_of_binder zb in
               (* HACK: the following line leads to a compiler error in
                  OCaml 4.07.0: Fatal error: exception Ctype.Unify(_)
@@ -527,7 +529,7 @@ struct
               List.fold_left
                 (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location) ->
                    assert (none = None);
-                   assert (Var.scope_of_binder fb = `Local);
+                   assert (Scope.isLocal (Var.scope_of_binder fb));
                    let fb = Globalise.binder fb in
                    let xs, o =
                      List.fold_right
@@ -556,7 +558,7 @@ struct
                               zs)
                        in
                        (* fresh variable for the closure environment *)
-                       let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
+                       let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, Scope.Local) in
                        let _, o = o#binder zb in
                        let z = Var.var_of_binder zb in
                        Some zb, o#set_context fbs z cvars in

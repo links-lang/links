@@ -1,5 +1,6 @@
 open Utility
 open CommonTypes
+open Var
 
 module Lang =
 struct
@@ -334,7 +335,7 @@ struct
                 let env =
                   match z, fvs with
                   | None, None       -> Value.Env.empty
-                  | Some z, Some fvs -> Value.Env.bind z (fvs, `Local) Value.Env.empty
+                  | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) Value.Env.empty
                   | _, _ -> assert false in
                 Closure ((xs, body), env_of_value_env env)
             | Location.Client ->
