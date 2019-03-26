@@ -2,7 +2,8 @@ open Utility
 open CommonTypes
 open Ir
 
-let internal_error message = raise (Errors.InternalError {filename = "irTraversals.ml"; message})
+let internal_error message =
+  raise (Errors.internal_error ~filename:"irTraversals.ml" ~message)
 
 (** Traversal with type reconstruction
 

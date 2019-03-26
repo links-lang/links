@@ -8,7 +8,7 @@ open Utility
 module TyEnv = Env.String
 
 let internal_error message =
-  raise (Errors.InternalError { filename = "transformSugar.ml"; message })
+  raise (Errors.internal_error ~filename:"transformSugar.ml" ~message)
 
 let type_section env =
   let open Section in function

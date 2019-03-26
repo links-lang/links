@@ -172,3 +172,8 @@ let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
     output_string stream (format_exception exc ^ "\n");
     flush stream;
     default exc
+
+let internal_error ~filename ~message =
+  InternalError { filename; message }
+
+

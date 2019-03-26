@@ -27,3 +27,5 @@ val format_exception : exn -> string
 val format_exception_html : exn -> string
 
 val display : ?default:(exn -> 'a) -> ?stream:out_channel -> ('a lazy_t) -> 'a
+
+val internal_error : filename:string -> message:string -> exn (* filename in which internal error occurred *)

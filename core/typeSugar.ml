@@ -7,7 +7,7 @@ open SourceCode
 open SourceCode.WithPos
 
 let internal_error message =
-  raise (Errors.InternalError { filename = "typeSugar.ml"; message })
+  raise (Errors.internal_error ~filename:"typeSugar.ml" ~message)
 
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
