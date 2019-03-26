@@ -188,9 +188,9 @@ let compatible_quantifiers (lvar, rvar) (_, lenv, renv) =
     | _ -> false
 
 type unify_env =
-  {tenv: unify_type_env;
-   renv: unify_row_env;
-   qstack: quantifier_stack;
+  { tenv: unify_type_env
+  ; renv: unify_row_env
+  ; qstack: quantifier_stack
   }
 
 let rec unify' : unify_env -> (datatype * datatype) -> unit =
@@ -1305,16 +1305,18 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
 
 let unify (t1, t2) =
   unify'
-    {tenv=RecIdMap.empty;
-     renv=IntMap.empty;
-     qstack=(0, IntMap.empty, IntMap.empty) } (t1, t2)
+    { tenv=RecIdMap.empty
+    ; renv=IntMap.empty
+    ; qstack=(0, IntMap.empty, IntMap.empty)
+    } (t1, t2)
 
 (* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
 and unify_rows (row1, row2) =
   unify_rows'
-    {tenv=RecIdMap.empty;
-     renv=IntMap.empty;
-     qstack=(0, IntMap.empty, IntMap.empty)} (row1, row2)
+    { tenv=RecIdMap.empty
+    ; renv=IntMap.empty
+    ; qstack=(0, IntMap.empty, IntMap.empty)
+    } (row1, row2)
 
 (* external interface *)
 let datatypes = unify

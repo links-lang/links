@@ -18,13 +18,15 @@ let lift_funs =
 object ((self : 'self_type))
     inherit SugarTraversals.map as super
     method! binding = fun b ->
-      let position = WithPos.pos b in
+      let pos = WithPos.pos b in
       match WithPos.node b with
       |  Fun (bndr, lin, (tvs, fnlit), location, dt) ->
           let fnlit = self#funlit fnlit in
-          if is_recursive bndr fnlit then
-            WithPos.make ~pos:position (Funs [(bndr, lin, ((tvs, None), fnlit), location, dt, position)])
-          else
-            WithPos.make ~pos:position (Fun (bndr, lin, (tvs, fnlit), location, dt))
+          let node =
+            if is_recursive bndr fnlit then
+              Funs [(bndr, lin, ((tvs, None), fnlit), location, dt, pos)]
+            else
+              Fun (bndr, lin, (tvs, fnlit), location, dt) in
+          WithPos.make ~pos node
       | _ -> super#binding b
 end

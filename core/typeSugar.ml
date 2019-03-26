@@ -3857,12 +3857,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
       | Foreign _ -> assert false
       | Typenames ts ->
           let env = List.fold_left (fun env (name, vars, (_, dt'), _) ->
-            begin
               match dt' with
                 | Some dt ->
                     bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
                 | None -> internal_error "typeSugar.ml: unannotated type"
-            end
           ) empty_context ts in
           (Typenames ts, env, StringMap.empty)
       | Infix -> Infix, empty_context, StringMap.empty

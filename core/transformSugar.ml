@@ -697,7 +697,7 @@ class transform (env : Types.typing_environment) =
         (o, (pss, e), t)
 
     method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun _ _ -> internal_error "transformSugar.ml: method handlerlit not yet implemented!" (*
+      fun _ _ -> internal_error "method handlerlit not yet implemented!" (*
       let envs = o#backup_envs in
       let (o, m) =
 	match m with
@@ -816,14 +816,13 @@ class transform (env : Types.typing_environment) =
          (o, Foreign (f, raw_name, language, file, t))
       | Typenames ts ->
           let (o, _) = listu o (fun o (name, vars, (x, dt'), pos) ->
-            begin
               match dt' with
                 | Some dt ->
                    let o = o#bind_tycon name
                      (`Alias (List.map (snd ->- val_of) vars, dt)) in
                    (o, (name, vars, (x, dt'), pos))
                 | None -> internal_error "Unannotated type alias"
-            end) ts in
+            ) ts in
           (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)

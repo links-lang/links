@@ -2501,9 +2501,9 @@ let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
 
 type environment       = datatype Env.t
 and tycon_environment  = tycon_spec Env.t
-and typing_environment = { var_env   : environment ;
-                           tycon_env : tycon_environment ;
-                           effect_row : row} [@@deriving show]
+and typing_environment = { var_env    : environment
+                         ; tycon_env  : tycon_environment
+                         ; effect_row : row} [@@deriving show]
 
 let empty_typing_environment = { var_env = Env.empty; tycon_env =  Env.empty; effect_row = make_empty_closed_row ()  }
 
@@ -2517,9 +2517,9 @@ let normalise_typing_environment env =
 let extend_typing_environment
     {var_env = l ; tycon_env = al ; effect_row = _  }
     {var_env = r ; tycon_env = ar ; effect_row = er } : typing_environment =
-  { var_env = Env.extend l r;
-    tycon_env = Env.extend al ar;
-    effect_row = er }
+  { var_env    = Env.extend l r
+  ; tycon_env  = Env.extend al ar
+  ; effect_row = er }
 
 let string_of_environment = show_environment
 
