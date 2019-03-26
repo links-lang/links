@@ -2305,14 +2305,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else () in
 
             let ftype = make_ft lin pats effects (typ body) in
+            (* To correctly determine the arity of nested anonymous functions we
+               need to make sure we only inlcude arguments of the current FunLit
+               and not the nested ones. *)
+            let curried_argument_count = List.length pats in
             let argss =
-              let rec arg_types =
+              let rec arg_types : (Types.datatype * int)
+                               -> (Types.datatype * Types.row) list =
                 function
-                  | (`Function (args, effects, t)) -> (args, effects) :: arg_types t
-                  | (`Lolli (args, effects, t)) -> (args, effects) :: arg_types t
-                  | _ -> []
+                  | _, 0 -> []
+                  | `Function (args, effects, t), c
+                  | `Lolli    (args, effects, t), c ->
+                     (args, effects) :: arg_types (t, c-1)
+                  | _, _ -> failwith "Error reconstructing FunLit Type"
               in
-                arg_types ftype in
+                arg_types (ftype, curried_argument_count) in
 
             (*
               FIXME:
