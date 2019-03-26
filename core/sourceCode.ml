@@ -71,9 +71,9 @@ end
 module Lexpos = struct
   type t = Lexing.position
 
-  let pp fmt _ =
-    (** Supress lexpos output**)
-    Utility.format_omission fmt
+  let pp fmt lpos =
+    Format.fprintf fmt
+      "File %s, line %d, char %d" lpos.Lexing.pos_fname lpos.Lexing.pos_lnum lpos.Lexing.pos_cnum
 
   let show v = Format.asprintf "%a" pp v
 end
@@ -86,7 +86,35 @@ module Position = struct
     code : source_code option;
   }
 
-  let pp fmt _ = Utility.format_omission fmt
+
+  let pp : Format.formatter -> t -> unit = fun fmt pos ->
+    let pp_non_dummy () =
+      let file = pos.start.Lexing.pos_fname in
+
+      Format.fprintf fmt "File %s, "  file;
+
+      let start_line  = pos.start.Lexing.pos_lnum  in
+      let start_char  = pos.start.Lexing.pos_cnum  in
+      let finish_line = pos.finish.Lexing.pos_lnum in
+      let finish_char = pos.finish.Lexing.pos_cnum in
+
+      if start_line = finish_line then
+        if start_char = finish_char then
+          Format.fprintf fmt
+            "line %d, char %d"  start_line start_char
+        else
+          Format.fprintf fmt
+            "line %d, chars %d to %d" start_line start_char finish_char
+      else
+        Format.fprintf fmt
+          "line %d, char %d, to line %d, char %d" start_line finish_line start_char finish_char
+    in
+    if pos.start = Lexing.dummy_pos || pos.finish = Lexing.dummy_pos then
+      Format.fprintf fmt "<dummy position>"
+    else
+      pp_non_dummy ()
+
+
   let show v = Format.asprintf "%a" pp v
 
   let make ~start ~finish ~code =
@@ -159,7 +187,6 @@ module Position = struct
     let r = Resolved.resolve t in
     Resolved.start r, Resolved.source_expression r
 
-  let pp fmt _ = Utility.format_omission fmt
 end
 
 module WithPos = struct
@@ -173,6 +200,13 @@ module WithPos = struct
   let node t = t.node
 
   let pos t = t.pos
+
+  let pp polyfmt fmt t =
+    if Settings.get_value Basicsettings.show_sugar_positions then
+      pp polyfmt fmt t
+    else
+      (* Call formatter for the node only *)
+      polyfmt fmt t.node
 
   let map t ~f =
     let { node; pos } = t in
