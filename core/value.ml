@@ -2,7 +2,6 @@ open Utility
 open Notfound
 open ProcessTypes
 
-[@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
 
 let _ = ParseSettings.config_file
 
