@@ -10,11 +10,18 @@ type synerrspec = {filename : string; linespec : string;
 exception UndefinedVariable of string
 
 exception Type_error of (Position.t * string)
-exception MultiplyDefinedToplevelNames of ((Position.t list) stringmap)
+exception MultiplyDefinedMutualNames of ((Position.t list) stringmap)
+exception InvalidMutualBinding of Position.t
 exception RichSyntaxError of synerrspec
 exception SugarError of (Position.t * string)
 exception Runtime_error of string
 exception UnboundTyCon of (Position.t * string)
+exception InternalError of { filename: string; message: string }
+exception TypeApplicationArityMismatch of
+  { pos: Position.t; name: string; expected: int; provided: int}
+exception TypeApplicationKindMismatch of
+  { pos: Position.t; name: string; tyarg_number: int;
+    expected: string; provided: string }
 
 let show_pos : Position.t -> string =
   fun (pos) ->
@@ -62,12 +69,29 @@ let format_exception =
           "%s:%d: Syntax Error: Duplicate name `%s' in pattern\n  %s\nIn expression: %s"
           pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "*** Fatal error : " ^ msg
-  | MultiplyDefinedToplevelNames duplicates ->
-      "Duplicate top-level bindings\n" ^
+  | MultiplyDefinedMutualNames duplicates ->
+      "*** Error: Duplicate mutually-defined bindings\n" ^
         StringMap.fold (fun name positions message ->
                           message^" "^name^":\n  "^
 			    (mapstrcat "\n  " show_pos (List.rev positions)))
           duplicates ""
+  | InvalidMutualBinding pos ->
+      let pos, expr = Position.resolve_start_expr pos in
+      Printf.sprintf
+        "%s:%d: Mutual blocks can only contain `fun` and `typename` bindings, but the block contained: %s.\n"
+        pos.pos_fname pos.pos_lnum expr
+  | InternalError { filename; message } ->
+      Printf.sprintf
+        "*** Internal Error in %s (Please report as a bug): %s\n"
+        filename message
+  | TypeApplicationArityMismatch { pos; name; expected; provided } ->
+      let pos, expr = Position.resolve_start_expr pos in
+      Printf.sprintf ("%s:%d: Arity mismatch: Type %s expects %d type arguments, but %d arguments were provided. In: %s\n")
+          pos.pos_fname pos.pos_lnum name expected provided expr
+  | TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided } ->
+      let pos, expr = Position.resolve_start_expr pos in
+      Printf.sprintf "%s:%d: Kind mismatch: Type argument %d for type constructor %s has kind %s, but an argument of kind %s was expected. \nIn:\n%s\n"
+          pos.pos_fname pos.pos_lnum tyarg_number name provided expected expr
   | Sys.Break -> "Caught interrupt"
   | exn -> "*** Error: " ^ Printexc.to_string exn
 
@@ -93,12 +117,12 @@ let format_exception_html = function
       let pos, _ = Position.resolve_start_expr pos in
         Printf.sprintf ("<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>Unbound type constructor:</p>\n<pre>%s</pre>\n")
           pos.pos_fname pos.pos_lnum tycon
-  | MultiplyDefinedToplevelNames duplicates ->
+  | MultiplyDefinedMutualNames duplicates ->
       let show_pos : Position.t -> string = fun pos ->
         let pos, _ = Position.resolve_start_expr pos in
         Printf.sprintf "file <code>%s</code>, line %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
       in
-        "<h1>Links Syntax Error</h1><p>Duplicate top-level bindings:</p><ul>" ^
+        "<h1>Links Syntax Error</h1><p>Duplicate mutual bindings:</p><ul>" ^
           (StringMap.fold (fun name positions message -> message ^ "<li>" ^
                                      name ^ ":<ul>" ^
 			             (mapstrcat "\n"
@@ -107,6 +131,12 @@ let format_exception_html = function
                                      ^ "</ul></li>\n")
              duplicates "") ^ "</ul>"
 
+  | InvalidMutualBinding pos ->
+      let pos, expr = Position.resolve_start_expr pos in
+      ("<h1>Links mutual binding error</h1>\n<p>"
+         ^ "<code>" ^ expr ^ "</code> was contained in a mutual block, however "
+         ^ "mutual blocks may only contain function and typename bindings."
+         ^ "(at line " ^ string_of_int pos.pos_lnum ^ ")</p>\n")
   | Runtime_error s -> "<h1>Links Runtime Error</h1> " ^ s
   | Position.ASTSyntaxError (pos, s) ->
       let pos, expr = Position.resolve_start_expr pos in
@@ -120,6 +150,16 @@ let format_exception_html = function
           "<h1>Links Syntax Error</h1> <p><code>%s</code> line %d:</p><p>Duplicate name <code>%s</code> in pattern\n<code>%s</code>.</p>\n<p>In expression: <code>%s</code></p>"
           pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "<h1>Links Fatal Error</h1>\n" ^ msg
+  | TypeApplicationArityMismatch { pos; name; expected; provided } ->
+      let pos, expr = Position.resolve_start_expr pos in
+        Printf.sprintf ("<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>In expression:</p>\n<pre>%s</pre>. Type constructor %s expects %d arguments, but %d were provided.\n")
+          pos.pos_fname pos.pos_lnum (xml_escape expr) name expected provided
+  | TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided } ->
+      let pos, expr = Position.resolve_start_expr pos in
+        Printf.sprintf "<h1>Links type error</h1>\n<p>Type error at <code>%s</code>:%d:</p> <p>In expression:</p>\n<pre>%s</pre>. Type argument %d for type constructor %s has kind %s, but an argument of kind %s was expected."
+          pos.pos_fname pos.pos_lnum (xml_escape expr) tyarg_number name provided expected
+  | InternalError { filename; message } ->
+      Printf.sprintf "<h1>Links Internal Error in %s</h1>\n<p>%s</p>" filename message
   | exn -> "<h1>Links Error</h1>\n" ^ Printexc.to_string exn
       (* raise exn  (* use for backtraces *) *)
 
@@ -132,3 +172,8 @@ let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
     output_string stream (format_exception exc ^ "\n");
     flush stream;
     default exc
+
+let internal_error ~filename ~message =
+  InternalError { filename; message }
+
+

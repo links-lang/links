@@ -5,6 +5,58 @@ typename Option(a) = [|None|Some:a|];
 
 var initialState = [None, None, None, None, None, None, None, None, None] : [Option(Player)];
 
+sig playerToInt : (Player) -> Int
+fun playerToInt(player) {
+    switch(player){
+        case X -> 0
+        case O -> 1
+    }
+}
+
+sig playerToString : (Player) -> String
+fun playerToString(player) {
+    switch(player){
+        case X -> "X"
+        case O -> "O"
+    }
+}
+
+sig optionToString : ((a) -e-> String) -> (Option(a)) -e-> String
+fun optionToString(xToString)(option){
+    switch(option){
+        case None -> "_"
+        case Some(player) -> xToString(player)
+    }
+}
+
+sig stringCat : ([String]) ~> String
+fun stringCat(xs){
+    switch(xs){
+        case [] -> ""
+        case x::xs -> x ^^ stringCat(xs)
+    }
+}
+
+sig intersperse : (a, [a]) ~> [a]
+fun intersperse(y, xs){
+    switch(xs){
+        case [] -> []
+        case [x] -> [x]
+        case x::xs -> x::y::intersperse(y, xs)
+    }
+}
+
+sig listToString : ([a], ((a) ~e~> String)) ~e~>  String
+fun listToString(list, xToString){
+   "[" ^^ stringCat(intersperse(", ", map(xToString, list))) ^^ "]"
+}
+
+sig printState : ([Option(Player)]) ~> ()
+fun printState(state){
+    print(listToString(state, optionToString(playerToString)))
+}
+
+
 sig addMove : (Player, Int, [Option(Player)]) ~> [Option(Player)]
 fun addMove(player, index, state){
     print("Set Move");
@@ -15,46 +67,6 @@ fun addMove(player, index, state){
             field
         }
     }, state)
-}
-
-sig x: ([Option(Player)]) {hear:Int|_} ~> ()
-fun x(gameState){
-    var index = recv();
-    switch(gameState !! index){
-        case None -> {
-            print("Setting X.");
-            var newGameState = addMove(X, index, gameState);
-            printState(newGameState);
-            if (checkIfWon(X, newGameState))
-                print("X won")
-            else
-                o(newGameState)
-
-        }
-        case Some(player) -> {
-           print("Already full")
-        }
-    }
-}
-
-sig o: ([Option(Player)]) {hear:Int|_} ~> ()
-fun o(gameState){
-    var index = recv();
-    switch(gameState !! index){
-        case None -> {
-            print("Setting O.");
-            var newGameState = addMove(O, index, gameState);
-            printState(newGameState);
-            if (checkIfWon(O, newGameState))
-                print("O won")
-            else
-                x(newGameState)
-
-        }
-        case Some(player) -> {
-           print("Already full")
-        }
-    }
 }
 
 sig checkIfWon : (Player, [Option(Player)]) ~> Bool
@@ -81,55 +93,46 @@ fun checkIfWon(player : Player, gameState){
 
 }
 
-sig playerToInt : (Player) -> Int
-fun playerToInt(player) {
-    switch(player){
-        case X -> 0
-        case O -> 1
-    }
-}
+mutual {
+  sig x: ([Option(Player)]) {hear:Int|_} ~> ()
+  fun x(gameState){
+      var index = recv();
+      switch(gameState !! index){
+          case None -> {
+              print("Setting X.");
+              var newGameState = addMove(X, index, gameState);
+              printState(newGameState);
+              if (checkIfWon(X, newGameState))
+                  print("X won")
+              else
+                  o(newGameState)
 
-sig playerToString : (Player) -> String
-fun playerToString(player) {
-    switch(player){
-        case X -> "X"
-        case O -> "O"
-    }
-}
+          }
+          case Some(player) -> {
+             print("Already full")
+          }
+      }
+  }
 
-sig optionToString : ((a) -e-> String) -> (Option(a)) -e-> String
-fun optionToString(xToString)(option){
-    switch(option){
-        case None -> "_"
-        case Some(player) -> xToString(player)
-    }
-}
+  sig o: ([Option(Player)]) {hear:Int|_} ~> ()
+  fun o(gameState){
+      var index = recv();
+      switch(gameState !! index){
+          case None -> {
+              print("Setting O.");
+              var newGameState = addMove(O, index, gameState);
+              printState(newGameState);
+              if (checkIfWon(O, newGameState))
+                  print("O won")
+              else
+                  x(newGameState)
 
-sig listToString : ([a], ((a) ~e~> String)) ~e~>  String
-fun listToString(list, xToString){
-   "[" ^^ stringCat(intersperse(", ", map(xToString, list))) ^^ "]"
-}
-
-sig printState : ([Option(Player)]) ~> ()
-fun printState(state){
-    print(listToString(state, optionToString(playerToString)))
-}
-
-sig intersperse : (a, [a]) ~> [a]
-fun intersperse(y, xs){
-    switch(xs){
-        case [] -> []
-        case [x] -> [x]
-        case x::xs -> x::y::intersperse(y, xs)
-    }
-}
-
-sig stringCat : ([String]) ~> String
-fun stringCat(xs){
-    switch(xs){
-        case [] -> ""
-        case x::xs -> x ^^ stringCat(xs)
-    }
+          }
+          case Some(player) -> {
+             print("Already full")
+          }
+      }
+  }
 }
 
 sig playGame : ([Int]) ~> ()

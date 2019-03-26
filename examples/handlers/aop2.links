@@ -81,7 +81,7 @@ fun showExpr(e) {
 }
 
 typename SComp(e::Eff, a) =
-  Comp ({Suspend:(Expr, SComp(e, a)) {}-> a|e}, a);
+  Comp ({Suspend:(Expr, SComp({ |e}, a)) {}-> a|e}, a);
 
 sig suspend :
   forall e::Row, a.
@@ -104,39 +104,41 @@ fun showEnv(env) {
   "{" ^^ showEntries(env) ^^ "}"
 }
 
-sig bevalStep :
-  (Expr) -> SComp ({Get:Env, Put: (Env) {}-> ()|e}, Int)
-fun bevalStep(exp)() {
-  switch(exp) {
-    case Lit(x) -> x
-    case Var(x) ->
-      switch (lookup(x, get())) {
-        case Just(v) -> v
-        case Nothing -> error("variable: " ^^ x ^^ " not found!")
-      }
-    case Plus(l, r) -> beval(l) + beval(r)
-    case Assign(x, e) ->
-      var v = beval(e);
-      put ((x, v) :: get());
-      v
-    case Sequence([])    -> 0
-    case Sequence([e])   -> beval(e)
-    case Sequence(e::es) ->
-      ignore(beval(e)); beval (Sequence(es))
-    case While(c, b)     ->
-      if (beval(c) == 0) {
-        0
-      } else {
-        ignore(beval(b)); beval(exp)
-      }
+mutual {
+  sig bevalStep :
+    (Expr) -> SComp ({Get:Env, Put: (Env) {}-> ()|e}, Int)
+  fun bevalStep(exp)() {
+    switch(exp) {
+      case Lit(x) -> x
+      case Var(x) ->
+        switch (lookup(x, get())) {
+          case Just(v) -> v
+          case Nothing -> error("variable: " ^^ x ^^ " not found!")
+        }
+      case Plus(l, r) -> beval(l) + beval(r)
+      case Assign(x, e) ->
+        var v = beval(e);
+        put ((x, v) :: get());
+        v
+      case Sequence([])    -> 0
+      case Sequence([e])   -> beval(e)
+      case Sequence(e::es) ->
+        ignore(beval(e)); beval (Sequence(es))
+      case While(c, b)     ->
+        if (beval(c) == 0) {
+          0
+        } else {
+          ignore(beval(b)); beval(exp)
+        }
+    }
   }
-}
 
-sig beval : (Expr) {Get:Env,
-                    Put:(Env) {}-> (),
-                    Suspend:(Expr, SComp({Get:Env,
-                                          Put:(Env) {}-> ()|e}, Int)) {}-> Int|e}~> Int
-fun beval(e) {suspend(e)(bevalStep(e))}
+  sig beval : (Expr) {Get:Env,
+                      Put:(Env) {}-> (),
+                      Suspend:(Expr, SComp({Get:Env,
+                                            Put:(Env) {}-> ()|e}, Int)) {}-> Int|e}~> Int
+  fun beval(e) {suspend(e)(bevalStep(e))}
+}
 
 var beval = fun (e)() {beval(e)};
 

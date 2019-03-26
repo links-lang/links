@@ -1,0 +1,16 @@
+typename List(a) = [| Cons:(a, List(a)) | Nil |];
+
+sig example : () -> List(Int)
+fun example() {
+    Cons(1, Cons(2, Cons(3, Nil)))
+}
+
+sig map : (((a) ~%~> b), List(a)) ~> List(b)
+fun map(f, xs) {
+  switch (xs) {
+    case Nil -> Nil
+    case Cons(x, xs) -> Cons(f(x), map(f, xs))
+  }
+}
+
+map(fun(x) { x + 1 }, example())

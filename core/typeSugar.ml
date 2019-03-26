@@ -6,8 +6,10 @@ open SugarConstructors.SugartypesPositions
 open SourceCode
 open SourceCode.WithPos
 
-(* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
+let internal_error message =
+  raise (Errors.internal_error ~filename:"typeSugar.ml" ~message)
 
+(* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
 let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
@@ -115,7 +117,7 @@ struct
     | Fun _
     | Funs _
     | Infix
-    | Type _
+    | Typenames _
     | Handler _
     | Foreign _ -> true
     | Exp p -> is_pure p
@@ -1665,6 +1667,8 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
       | `Lens _
       (* TODO: do we need to do something special for session types? *)
       | #Types.session_type
+      (* TODO: or anything special for recursive applications? *)
+      | `RecursiveApplication _
        (* TODO: expand applications? *)
       | `Application _ -> t
   in
@@ -3851,9 +3855,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
            (bind_var empty_context (Binder.to_name bndr, datatype)),
            StringMap.empty)
       | Foreign _ -> assert false
-      | Type (name, vars, (_, Some dt)) as t ->
-          t, bind_tycon empty_context (name, `Alias (List.map (snd ->- val_of) vars, dt)), StringMap.empty
-      | Type _ -> assert false
+      | Typenames ts ->
+          let env = List.fold_left (fun env (name, vars, (_, dt'), _) ->
+              match dt' with
+                | Some dt ->
+                    bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
+                | None -> internal_error "typeSugar.ml: unannotated type"
+          ) empty_context ts in
+          (Typenames ts, env, StringMap.empty)
       | Infix -> Infix, empty_context, StringMap.empty
       | Exp e ->
           let e = tc e in

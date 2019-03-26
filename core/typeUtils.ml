@@ -20,10 +20,10 @@ let concrete_type t =
             match Unionfind.find point with
               | `Body t -> ct rec_names t
               | `Recursive (var, t) ->
-                  if IntSet.mem var rec_names then
+                  if RecIdSet.mem (MuBoundId var) rec_names then
                     `MetaTypeVar point
                   else
-                    ct (IntSet.add var rec_names) t
+                    ct (RecIdSet.add (MuBoundId var) rec_names) t
               | _ -> t
           end
       | `ForAll (qs, t) ->
@@ -39,9 +39,15 @@ let concrete_type t =
                   end
           end
       | `Dual s -> dual_type s
+      | `RecursiveApplication ({ r_unique_name; r_dual; r_args; r_unwind ; _ } as appl) ->
+          if (RecIdSet.mem (NominalId r_unique_name) rec_names) then
+            `RecursiveApplication appl
+          else
+            let body = r_unwind r_args r_dual in
+            ct (RecIdSet.add (NominalId r_unique_name) rec_names) body
       | _ -> t
   in
-    ct (IntSet.empty) t
+    ct RecIdSet.empty t
 
 let extract_row t = match concrete_type t with
   | `Effect row

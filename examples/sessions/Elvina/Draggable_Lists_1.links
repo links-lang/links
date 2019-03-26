@@ -3,34 +3,36 @@
 typename DragSelect = mu a.[+|MouseDown:!DomNode.a, MouseOut:!DomNode.a, MouseUp:a|+];
 typename DragOffer  = mu a.[&|MouseDown:?DomNode.a, MouseOut:?DomNode.a, MouseUp:a|&];
 
-sig waiting : (String, DragOffer) ~> ()
-fun waiting(id, s) client {
- offer (s) {
-  case MouseDown(s)  -> var (elem, s) = receive(s);
-   if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
-    dragging(id, elem, s)
-   else
-    waiting(id, s)
-  case MouseUp(s)          -> waiting(id, s)
-  case MouseOut(s)         -> var (toElem, s) = receive(s); waiting(id, s)
- }
-}
+mutual {
+  sig waiting : (String, DragOffer) ~> ()
+  fun waiting(id, s) client {
+   offer (s) {
+    case MouseDown(s)  -> var (elem, s) = receive(s);
+     if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+      dragging(id, elem, s)
+     else
+      waiting(id, s)
+    case MouseUp(s)          -> waiting(id, s)
+    case MouseOut(s)         -> var (toElem, s) = receive(s); waiting(id, s)
+   }
+  }
 
-sig dragging : (String, DomNode, DragOffer) ~> ()
-fun dragging(id, elem, s) {
- offer(s) {
-  case MouseUp(s)          -> waiting(id, s)
-  case MouseDown(s)        -> var (elem, s) = receive(s);
-   if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
-    dragging(id, elem, s)
-   else
-    waiting(id, s)
-  case MouseOut(s) -> var (toElem, s) = receive(s);
-   if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
-    swapNodes(elem, toElem);
-    dragging(id, elem, s)
-   } else dragging(id, elem, s)
- }
+  sig dragging : (String, DomNode, DragOffer) ~> ()
+  fun dragging(id, elem, s) {
+   offer(s) {
+    case MouseUp(s)          -> waiting(id, s)
+    case MouseDown(s)        -> var (elem, s) = receive(s);
+     if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+      dragging(id, elem, s)
+     else
+      waiting(id, s)
+    case MouseOut(s) -> var (toElem, s) = receive(s);
+     if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
+      swapNodes(elem, toElem);
+      dragging(id, elem, s)
+     } else dragging(id, elem, s)
+   }
+  }
 }
 
 

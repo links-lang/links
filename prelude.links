@@ -2,6 +2,9 @@ fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ();
 }
 
+sig ignore : (a) -> ()
+fun ignore (_) { () }
+
 fun println(msg) {
   print(msg ^^ "\n")
 }
@@ -59,10 +62,7 @@ fun all(p, l) {
 }
 
 fun and(l) {
-   switch (l) {
-     case [] -> true
-     case x::xs -> x && and(xs)
-   }
+  all(fun(x) { x }, l)
 }
 
 fun or(l) {
@@ -282,9 +282,6 @@ fun dropWhile(pred, list) {
       }
   }
 }
-
-sig ignore : (a) -> ()
-fun ignore (_) { }
 
 # until :: ((a) -> Bool) -> ((a) -> a) -> (a) -> a
 # zipWith :: ((a) -> b -> c) -> ([a]) -> [b] -> [c]
@@ -695,6 +692,9 @@ typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
 typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
 typename Handler (a) = (a) {}~> Page;
 
+sig pickleCont : (() -> Page) ~> String
+fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
+
 sig unitP : Page
 var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
 
@@ -726,19 +726,6 @@ fun plugP(context, (i, k, fs)) {
   (i, fun (xs) {context(k(xs))}, fs)
 }
 
-sig formP : (Formlet(a), Handler(a), Attributes) -> Page
-fun formP(f, h, attributes) {
-  (1,
-   fun ([x]) {x},
-   fun (gen) {
-     var ((x, c), gen) = runState(f, gen);
-     ([mkCheckedFormBuilder(x, c, h, attributes)], gen)
-   })
-}
-
-sig pickleCont : (() -> Page) ~> String
-fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
-
 sig mkForm : ((Env) ~> Page, Xml, Attributes) ~> Xml
 fun mkForm(cont, contents, attributes) {
   <form enctype="application/x-www-form-urlencoded"
@@ -749,24 +736,7 @@ fun mkForm(cont, contents, attributes) {
     {contents}
   </form>
 }
-#
-sig renderPagePure : (Page) {}~> Xml
-fun renderPagePure((n, k, fs)) {
-  var (ms, _) = fs(0);
-  var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
-  k(map (fun (z) {z(zs)}, zs))
-}
 
-sig renderPage : (Page) ~> Xml
-fun renderPage(p) {
-  # HACK: this allows us to use renderPage in effectful contexts
-  (renderPagePure : ((Page) ~%~> Xml) <- ((Page) {}~> Xml))(p)
-}
-
-sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) ~> Xml
-fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
-  mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
-}
 
 sig validate :
   (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) {}~> Page
@@ -783,6 +753,36 @@ fun validate(c, h, k, zs, i, attributes) (env) {
     }
   }
 }
+
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) ~> Xml
+fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
+  mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
+}
+
+sig formP : (Formlet(a), Handler(a), Attributes) -> Page
+fun formP(f, h, attributes) {
+  (1,
+   fun ([x]) {x},
+   fun (gen) {
+     var ((x, c), gen) = runState(f, gen);
+     ([mkCheckedFormBuilder(x, c, h, attributes)], gen)
+   })
+}
+
+#
+sig renderPagePure : (Page) {}~> Xml
+fun renderPagePure((n, k, fs)) {
+  var (ms, _) = fs(0);
+  var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
+  k(map (fun (z) {z(zs)}, zs))
+}
+
+sig renderPage : (Page) ~> Xml
+fun renderPage(p) {
+  # HACK: this allows us to use renderPage in effectful contexts
+  (renderPagePure : ((Page) ~%~> Xml) <- ((Page) {}~> Xml))(p)
+}
+
 # end of pagelet stuff
 
 # Types of input we need to handle:
@@ -1002,12 +1002,6 @@ fun preludeMultiOptionsKeyed(items) {
   }
 }
 
-sig choice : ([(a,String)]) ~> Formlet (a)
-fun choice (items) {
-  var (selected, _) = hd(items);
-  choiceDefault(items, selected)
-}
-
 sig choiceDefault : ([(a,String)], a) ~> Formlet (a)
 fun choiceDefault (items, selected) {
   # generate a fresh name for the field (menu) as a whole
@@ -1062,6 +1056,12 @@ fun choices (items) {
 sig choicesNone : ([(a, String)]) ~> Formlet ([a])
 fun choicesNone (items) {
   choices (map (fun ((v, text)) {(v, text, false)}, items))
+}
+
+sig choice : ([(a,String)]) ~> Formlet (a)
+fun choice (items) {
+  var (selected, _) = hd(items);
+  choiceDefault(items, selected)
 }
 
 typename Either (a,b) = [|Left:a | Right : b|];
@@ -1352,12 +1352,6 @@ fun assertEq (actual, expected) server {
 
 #### APP SERVER ####
 
-sig addSimpleRouteHandler : (String, (String) ~> Page) ~> ()
-fun addSimpleRouteHandler(path,f) { addRoute(path,f) }
-
-sig addRoute : (String, (String) ~> Page) ~> ()
-fun addRoute(path, f) { addLocatedRouteHandler(path, fun(p, _){f(p)}) }
-
 sig defaultErrorPage : (String, String, Location) ~> Page
 fun defaultErrorPage(_, error_string, _) {
   bodyP(<html>
@@ -1368,11 +1362,17 @@ fun defaultErrorPage(_, error_string, _) {
         </html>)
 }
 
+sig addLocatedRouteWithErrors : (String, (String, Location) ~> Page, (String, String, Location) ~> Page) ~> ()
+fun addLocatedRouteWithErrors(path, f, error_handler) { unsafeAddRoute(path, f, error_handler) }
+
 sig addLocatedRouteHandler : (String, (String, Location) ~> Page) ~> ()
 fun addLocatedRouteHandler(path,f) { addLocatedRouteWithErrors(path, fun(p, l){f(p, l)}, defaultErrorPage) }
 
-sig addLocatedRouteWithErrors : (String, (String, Location) ~> Page, (String, String, Location) ~> Page) ~> ()
-fun addLocatedRouteWithErrors(path, f, error_handler) { unsafeAddRoute(path, f, error_handler) }
+sig addRoute : (String, (String) ~> Page) ~> ()
+fun addRoute(path, f) { addLocatedRouteHandler(path, fun(p, _){f(p)}) }
+
+sig addSimpleRouteHandler : (String, (String) ~> Page) ~> ()
+fun addSimpleRouteHandler(path,f) { addRoute(path,f) }
 
 sig serveThis : (() ~> Page) ~> ()
 fun serveThis(p) {

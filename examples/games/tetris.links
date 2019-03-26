@@ -145,14 +145,6 @@ fun intMapElems(im: IntMap(a)) {
     elems
 }
 
-fun intMapAdjust(f, i, im) {
-    intMapAdjustWithKey(fun (_, x) { f(x) }, i, im)
-}
-
-fun intMapAdjustWithKey(f, i, im) {
-    intMapUpdateWithKey(fun (k, x) { Just(f(k, x)) }, i, im)
-}
-
 fun intMapUpdateWithKey(f, i, im) {
     fun h(f, i, im2, t) {
         switch (im2) {
@@ -173,10 +165,16 @@ fun intMapUpdateWithKey(f, i, im) {
     h(f, i, im, [])
 }
 
+fun intMapAdjustWithKey(f, i, im) {
+    intMapUpdateWithKey(fun (k, x) { Just(f(k, x)) }, i, im)
+}
 fun intMapUpdate(f, i, im) {
     intMapUpdateWithKey(fun(_, x) { f(x) }, i, im)
 }
 
+fun intMapAdjust(f, i, im) {
+    intMapAdjustWithKey(fun (_, x) { f(x) }, i, im)
+}
 fun intMapInsert(i, v, im) {
     fun h(i, v, im2, t) {
         switch (im2) {
@@ -369,6 +367,10 @@ fun main() {
                          rect(-.9.0, 0.9, 9.0, 6.0), rect(-.9.0, 17.0, 9.0, 3.0)]);
     var emptyBoard = tint(holeColor, holes);
 
+    fun stackFull(gameState: Game) {
+        any(isJust, intMapElems(intMapAt(gameState.stack, 0)))
+    }
+
     fun renderGame(ctx, gs: Game) {
         jsSave(ctx);
         jsScale(ctx, 19.0, 19.0);
@@ -390,11 +392,43 @@ fun main() {
             jsRestore(ctx)
         }
 
+        fun renderStack(stack: Stack) {
+            fun (ctx) {
+                ignore(map(
+                    fun (col) {
+                        ignore(map(
+                            fun (row) {
+                                switch (row.2) {
+                                    case Nothing -> mempty(ctx)
+                                    case Just(c) -> tint(darken(c), tile((row.1, col.1)))(ctx)
+                                }
+                            },
+                        col.2))
+                    },
+                stack))
+            }
+        }
+
         fun renderBoard(ctx) {
             jsSave(ctx);
             jsTranslate(ctx, 10.0, 0.0);
             mappend(renderStack(gs.stack), emptyBoard)(ctx);
             jsRestore(ctx)
+        }
+
+        fun write(str, x, y) {
+            fun (ctx) {
+                jsSave(ctx);
+                jsScale(ctx, 0.12, 0.12);
+                jsCanvasFont(ctx, gs.font);
+                jsFillText(ctx, str, x, y); # x & y should be adjusted for scale
+                jsRestore(ctx)
+            }
+        }
+
+        fun renderGameover(ctx) {
+            tint(holeColor, rect(1.0, 13.0, 9.0, 2.0))(ctx);
+            tint((0.75, 0.25, 0.25, 1.0), write("GAME OVER", 13.0, 120.0))(ctx)
         }
 
         fun renderExtra(ctx) {
@@ -415,28 +449,6 @@ fun main() {
             ]))(ctx)
         }
 
-        fun renderGameover(ctx) {
-            tint(holeColor, rect(1.0, 13.0, 9.0, 2.0))(ctx);
-            tint((0.75, 0.25, 0.25, 1.0), write("GAME OVER", 13.0, 120.0))(ctx)
-        }
-
-        fun renderStack(stack: Stack) {
-            fun (ctx) {
-                ignore(map(
-                    fun (col) {
-                        ignore(map(
-                            fun (row) {
-                                switch (row.2) {
-                                    case Nothing -> mempty(ctx)
-                                    case Just(c) -> tint(darken(c), tile((row.1, col.1)))(ctx)
-                                }
-                            },
-                        col.2))
-                    },
-                stack))
-            }
-        }
-
         fun renderBlink(ctx) {
             var y = gs.clearing;
             var x = [0..stackMaxX - 1];
@@ -448,53 +460,10 @@ fun main() {
             jsRestore(ctx)
         }
 
-        fun write(str, x, y) {
-            fun (ctx) {
-                jsSave(ctx);
-                jsScale(ctx, 0.12, 0.12);
-                jsCanvasFont(ctx, gs.font);
-                jsFillText(ctx, str, x, y); # x & y should be adjusted for scale
-                jsRestore(ctx)
-            }
-        }
-
         var img = mconcat([renderBlink, renderExtra, renderPiece, renderBoard]);
 
         img(ctx);
         jsRestore(ctx)
-    }
-
-    fun draw(gs, lastTime, now, fpsInfo) {
-        # prepare canvas
-        var (mainCanvas, dispCanvas) =
-            if (stringEq(domGetStyleAttrFromRef(getNodeById(canvasId), "display"), "none") || not(doubleBuffer))
-                (canvasId, canvas2Id)
-            else (canvas2Id, canvasId);
-        var ctx = jsGetContext2D(getNodeById(mainCanvas));
-
-        # render the game
-        clear(ctx);
-        renderGame(ctx, gs);
-
-        # calculate and draw new fpsInfo
-        var dFps = 1000.0 /. (intToFloat(now - lastTime) +. 1.0);
-        var fpsInfo = if (debug) drawFps(ctx, fpsInfo, dFps) else fpsInfo; # debug
-
-        # double buffering
-        if (doubleBuffer) swapBuffers(mainCanvas, dispCanvas) else ();
-
-        # save canvas to file
-        if (gs.state == Download) { # screenshot
-            var downloadNode = getNodeById("download");
-            var imageName = "links-tetris-" ^^ intToString(clientTime()) ^^ ".png";
-            var _ = domSetAttributeFromRef(downloadNode, "download", imageName);
-            domReplaceChildren(stringToXml("Download the snapshot as " ^^ imageName), downloadNode);
-            jsSaveCanvas(getNodeById(mainCanvas), downloadNode, "image/png")
-        }
-        else ();
-
-        # return
-        fpsInfo
     }
 
     fun drawFps(ctx, fpsInfo, dFps) {
@@ -533,6 +502,7 @@ fun main() {
         fpsInfo
     }
 
+
     fun swapBuffers(mainCanvas, dispCanvas) {
         var ctx = jsGetContext2D(getNodeById(dispCanvas));
         jsDrawImage(ctx, getNodeById(mainCanvas), 0.0, 0.0);
@@ -542,20 +512,42 @@ fun main() {
         clear(ctx)
     }
 
+    fun draw(gs, lastTime, now, fpsInfo) {
+        # prepare canvas
+        var (mainCanvas, dispCanvas) =
+            if (stringEq(domGetStyleAttrFromRef(getNodeById(canvasId), "display"), "none") || not(doubleBuffer))
+                (canvasId, canvas2Id)
+            else (canvas2Id, canvasId);
+        var ctx = jsGetContext2D(getNodeById(mainCanvas));
+
+        # render the game
+        clear(ctx);
+        renderGame(ctx, gs);
+
+        # calculate and draw new fpsInfo
+        var dFps = 1000.0 /. (intToFloat(now - lastTime) +. 1.0);
+        var fpsInfo = if (debug) drawFps(ctx, fpsInfo, dFps) else fpsInfo; # debug
+
+        # double buffering
+        if (doubleBuffer) swapBuffers(mainCanvas, dispCanvas) else ();
+
+        # save canvas to file
+        if (gs.state == Download) { # screenshot
+            var downloadNode = getNodeById("download");
+            var imageName = "links-tetris-" ^^ intToString(clientTime()) ^^ ".png";
+            var _ = domSetAttributeFromRef(downloadNode, "download", imageName);
+            domReplaceChildren(stringToXml("Download the snapshot as " ^^ imageName), downloadNode);
+            jsSaveCanvas(getNodeById(mainCanvas), downloadNode, "image/png")
+        }
+        else ();
+
+        # return
+        fpsInfo
+    }
+
     #
     # LOGIC
     #
-    fun mainGameLogic(gameState, i) {
-        fun auxUpdate(gs) {
-            clearLines(decCountdown(newPiece(dropPiece(gs))))
-        }
-
-        var newGameState = handleKeys(i, gameState);
-
-        if (stackFull(newGameState)) newGameState # handle screenshot & restart here
-        else auxUpdate(newGameState)
-    }
-
     fun clearing(gs) {
         gs.clearing
     }
@@ -573,10 +565,6 @@ fun main() {
         else gs
     }
 
-    fun clearLines(gs) {
-        updateIfReady(compose(not, compose(isNull, clearing)), removeLines, gs) # so much function composition and calling
-    }
-
     fun removeLines(gs) {
         var intact = intMapElems(fold_right(intMapDelete, gs.stack, gs.clearing));
         var newRows = replica(length(gs.clearing), emptyRow);
@@ -586,17 +574,34 @@ fun main() {
             clearing = [], countdown = calculateSpeed(gs.score))
     }
 
+    fun clearLines(gs) {
+        updateIfReady(compose(not, compose(isNull, clearing)), removeLines, gs) # so much function composition and calling
+    }
+
     fun checkLines(gs: Game) {
         var filled = intMapFilter(fun (x) { all(isJust, intMapElems(x)) }, gs.stack);
         (gs with clearing = intMapKeys(filled), countdown = 20)
     }
 
-    fun stackFull(gameState: Game) {
-        any(isJust, intMapElems(intMapAt(gameState.stack, 0)))
+    fun movePiece(xy, piece) {
+        (piece with pos = vectorAddI(xy, piece.pos))
     }
 
-    fun dropPiece(gs) {
-        updateIfReady(compose(isJust, activePiece), pieceFall, gs)
+    fun blocked(piece: Piece, stack) {
+        var ptsPrim = map(fun (x) { vectorAddI(piece.pos, x) }, piece.pts);
+        fun obs((x, y)) {
+          var t = intMapLookup(y, stack); switch (t) { case Nothing -> Nothing case Just(u) -> intMapLookup(x, u) }  }
+        any(fun (x) { maybe(true, isJust, obs(x)) }, ptsPrim)
+    }
+
+    fun settle(piece: Piece, gs: Game) {
+        var tPts = map(fun (x) { vectorAddI(piece.pos, x) }, piece.pts);
+        fun addTile(stk, (x, y)) {
+            intMapAdjust(fun (xx) { intMapInsert(x, Just(piece.color), xx) }, y, stk)
+        }
+
+        var gsPrim = (gs with activePiece = Nothing, stack = fold_left(addTile, gs.stack, tPts));
+        checkLines(gsPrim)
     }
 
     fun pieceFall(gs) {
@@ -619,14 +624,8 @@ fun main() {
         }
     }
 
-    fun settle(piece: Piece, gs: Game) {
-        var tPts = map(fun (x) { vectorAddI(piece.pos, x) }, piece.pts);
-        fun addTile(stk, (x, y)) {
-            intMapAdjust(fun (xx) { intMapInsert(x, Just(piece.color), xx) }, y, stk)
-        }
-
-        var gsPrim = (gs with activePiece = Nothing, stack = fold_left(addTile, gs.stack, tPts));
-        checkLines(gsPrim)
+    fun dropPiece(gs) {
+        updateIfReady(compose(isJust, activePiece), pieceFall, gs)
     }
 
     fun newPiece(gs) {
@@ -636,26 +635,27 @@ fun main() {
         } else gs
     }
 
-    fun blocked(piece: Piece, stack) {
-        var ptsPrim = map(fun (x) { vectorAddI(piece.pos, x) }, piece.pts);
-        fun obs((x, y)) { var t = intMapLookup(y, stack); switch (t) { case Nothing -> Nothing case Just(u) -> intMapLookup(x, u) }  }
-        any(fun (x) { maybe(true, isJust, obs(x)) }, ptsPrim)
-    }
-
-    fun movePiece(xy, piece) {
-        (piece with pos = vectorAddI(xy, piece.pos))
-    }
-
     fun rotatePiece(piece: Piece) {
         (piece with pts = map(fun ((x, y)) { (y, -x) }, piece.pts))
     }
 
+
     #
     # INPUT
     #
-    fun handleKeys(i, gs) {
-        if (length(i) > 0) fold_right(handleKey, gs, i)
+
+    fun ifInControl(f, gs) {
+        if (isJust(gs.activePiece) && not(gs.dropped)) f(gs)
         else gs
+    }
+
+    fun tryMove(f, gs) {
+        switch (gs.activePiece) {
+            case Nothing -> gs
+            case Just(piece) ->
+                if (blocked(f(piece), gs.stack)) gs
+                else (gs with activePiece = Just(f(piece)))
+        }
     }
 
     fun handleKey(k, gs) {
@@ -679,23 +679,26 @@ fun main() {
         else gs
     }
 
-    fun ifInControl(f, gs) {
-        if (isJust(gs.activePiece) && not(gs.dropped)) f(gs)
+    fun handleKeys(i, gs) {
+        if (length(i) > 0) fold_right(handleKey, gs, i)
         else gs
-    }
-
-    fun tryMove(f, gs) {
-        switch (gs.activePiece) {
-            case Nothing -> gs
-            case Just(piece) ->
-                if (blocked(f(piece), gs.stack)) gs
-                else (gs with activePiece = Just(f(piece)))
-        }
     }
 
     #
     # PROCESSES
     #
+
+    fun mainGameLogic(gameState, i) {
+        fun auxUpdate(gs) {
+            clearLines(decCountdown(newPiece(dropPiece(gs))))
+        }
+
+        var newGameState = handleKeys(i, gameState);
+
+        if (stackFull(newGameState)) newGameState # handle screenshot & restart here
+        else auxUpdate(newGameState)
+    }
+
     fun updateLogic(dt, gameState, i) {
         if (dt > step) {
             var gameState = mainGameLogic(gameState, i);

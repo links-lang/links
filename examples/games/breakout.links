@@ -107,56 +107,33 @@ fun main() {
 
     var displayDebug = false;
 
+    fun playerRect(px) {
+        (x = px, y = playerYPos, width = playerWidth, height = playerHeight)
+    }
+
+    fun ballRect((ballPos = (ballX, ballY), ballSpeed = _)) {
+        (x = (ballX -. ballRadius), y = (ballY -. ballRadius), width = (2.0 *. ballRadius), height = (2.0 *. ballRadius))
+    }
+
+    fun blockRect((blockPos = (blockX, blockY), blockLives = _): BlockState) {
+        (x = blockX, y = blockY, width = blockWidth, height = blockHeight)
+    }
+
+    fun rectOverlap(r1, r2) {
+        if (r1.x >= r2.x +. r2.width) false
+        else if (r2.x >= r1.x +. r1.width) false
+        else if (r1.y >= r2.y +. r2.height) false
+        else if (r2.y >= r1.y +. r1.height) false
+        else true
+    }
     #
     # DRAWING
     #
-    fun draw(gameState: GameState, lastTime, now, fpsInfo) {
-        var (mainCanvas, dispCanvas) =
-            if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none")
-                (canvasId, canvas2Id)
-            else (canvas2Id, canvasId);
 
-        var mainCanvasNode = getNodeById(mainCanvas);
-        var ctx = jsGetContext2D(mainCanvasNode);
-        clear(ctx);
-
-        jsCanvasFont(ctx, "28px Helvetica");
-
-        switch (gameState) {
-            case LostScreen ->
-                    jsSetFillColor(ctx, "black");
-                    jsFillText(ctx, "You lost. Press [R] to restart.", (screenWidth /. 2.0 -. 180.0), (screenHeight /. 2.0))
-
-            case WonScreen ->
-                    jsSetFillColor(ctx, "black");
-                    jsFillText(ctx, "You won! Press [R] to restart.", (screenWidth /. 2.0 -. 180.0), (screenHeight /. 2.0))
-
-            case ProperGameState(gs) ->
-                    # draw the player:
-                    jsSetFillColor(ctx, playerColor);
-                    var playerRectangle = playerRect(gs.player.xPos);
-                    var halfPlayerHeight = playerHeight /. 2.0;
-                    jsFillRect(ctx, playerRectangle.x +. halfPlayerHeight, playerRectangle.y, playerRectangle.width -. playerHeight, playerRectangle.height);
-                    jsFillCircle(ctx, playerRectangle.x +. halfPlayerHeight , playerRectangle.y +. halfPlayerHeight, halfPlayerHeight);
-                    jsFillCircle(ctx, playerRectangle.x +. playerWidth -. halfPlayerHeight, playerRectangle.y +. halfPlayerHeight, halfPlayerHeight);
-
-                    # draw the blocks:
-                    ignore(map(fun (x) { drawBlock(ctx, x) }, gs.blocks));
-
-                    # draw the ball:
-                    jsSetFillColor(ctx, ballColor);
-                    var (x, y) = (gs.ball).ballPos;
-                    jsFillCircle(ctx, x, y, ballRadius)
-
-            case _ -> ()
-        };
-
-        var fpsInfo =
-            if (displayDebug) drawFps(ctx, fpsInfo, 1000.0 /. (intToFloat(now - lastTime) +. 1.0))
-            else fpsInfo;
-
-        swapBuffers(mainCanvasNode, getNodeById(dispCanvas));
-        fpsInfo
+    fun drawBlock(ctx, bs) {
+        jsSetFillColor(ctx, if (bs.blockLives == 1) blockColor1 else blockColor2);
+        var r = blockRect(bs);
+        jsFillRect(ctx, r.x, r.y, r.width, r.height)
     }
 
     fun drawFps(ctx, fpsInfo, dFps) {
@@ -206,15 +183,177 @@ fun main() {
         clear(ctx)
     }
 
-    fun drawBlock(ctx, bs) {
-        jsSetFillColor(ctx, if (bs.blockLives == 1) blockColor1 else blockColor2);
-        var r = blockRect(bs);
-        jsFillRect(ctx, r.x, r.y, r.width, r.height)
+    fun draw(gameState: GameState, lastTime, now, fpsInfo) {
+        var (mainCanvas, dispCanvas) =
+            if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none")
+                (canvasId, canvas2Id)
+            else (canvas2Id, canvasId);
+
+        var mainCanvasNode = getNodeById(mainCanvas);
+        var ctx = jsGetContext2D(mainCanvasNode);
+        clear(ctx);
+
+        jsCanvasFont(ctx, "28px Helvetica");
+
+        switch (gameState) {
+            case LostScreen ->
+                    jsSetFillColor(ctx, "black");
+                    jsFillText(ctx, "You lost. Press [R] to restart.", (screenWidth /. 2.0 -. 180.0), (screenHeight /. 2.0))
+
+            case WonScreen ->
+                    jsSetFillColor(ctx, "black");
+                    jsFillText(ctx, "You won! Press [R] to restart.", (screenWidth /. 2.0 -. 180.0), (screenHeight /. 2.0))
+
+            case ProperGameState(gs) ->
+                    # draw the player:
+                    jsSetFillColor(ctx, playerColor);
+                    var playerRectangle = playerRect(gs.player.xPos);
+                    var halfPlayerHeight = playerHeight /. 2.0;
+                    jsFillRect(ctx, playerRectangle.x +. halfPlayerHeight, playerRectangle.y, playerRectangle.width -. playerHeight, playerRectangle.height);
+                    jsFillCircle(ctx, playerRectangle.x +. halfPlayerHeight , playerRectangle.y +. halfPlayerHeight, halfPlayerHeight);
+                    jsFillCircle(ctx, playerRectangle.x +. playerWidth -. halfPlayerHeight, playerRectangle.y +. halfPlayerHeight, halfPlayerHeight);
+
+                    # draw the blocks:
+                    ignore(map(fun (x) { drawBlock(ctx, x) }, gs.blocks));
+
+                    # draw the ball:
+                    jsSetFillColor(ctx, ballColor);
+                    var (x, y) = (gs.ball).ballPos;
+                    jsFillCircle(ctx, x, y, ballRadius)
+
+            case _ -> ()
+        };
+
+        var fpsInfo =
+            if (displayDebug) drawFps(ctx, fpsInfo, 1000.0 /. (intToFloat(now - lastTime) +. 1.0))
+            else fpsInfo;
+
+        swapBuffers(mainCanvasNode, getNodeById(dispCanvas));
+        fpsInfo
     }
+
+    #
+    # HELPERS
+    #
+    fun ballWallCollisions((ballPos = (ballX, ballY), ballSpeed = _): BallState) {
+        compose(fun (x) { map(second, x) }, fun (y) { filter(fun(z) { first(z) }, y) })
+            ([
+                (ballX < ballRadius, LeftBounce: BallCollision),
+                (ballX > screenWidth -. ballRadius, RightBounce: BallCollision),
+                (ballY < ballRadius, UpBounce: BallCollision)
+            ])
+    }
+
+    fun ballRectCollisions((ballPos = (ballX, ballY), ballSpeed = _), (x = rx, y = ry, width = rw, height = rh)) {
+        compose(fun (x) { map(second, x) }, fun (x) { filter(fun(y) { first(y) }, x) })
+            ([
+                (ballX >= rx +. rw, LeftBounce: BallCollision),
+                (ballY <= ry, DownBounce: BallCollision),
+                (ballY >= ry +. rh, UpBounce: BallCollision)
+            ])
+    }
+
+    fun ballPlayerCollisions((playerState: Float), (ballState: (ballPos: (Float, Float), ballSpeed: Vector)): BallState) {
+        if (rectOverlap(playerRect(playerState), ballRect(ballState)))
+            ballRectCollisions(ballState, playerRect(playerState))
+        else []
+    }
+
+    fun ballBlocksCollisions(ballState: BallState, blockStates: [BlockState]) {
+        var ballR = ballRect(ballState);
+        fun foldStep((ballC, blockC), blockState) {
+            if (rectOverlap(ballR, blockRect(blockState)))
+                (ballRectCollisions(ballState, blockRect(blockState)) ++ ballC, blockC ++ [[BlockCollision]])
+            else (ballC, blockC ++ [[]])
+        }
+
+        fold_left(foldStep, ([], []), blockStates)
+    }
+
 
     #
     # LOGIC
     #
+    fun keyDown(code, inEvents) {
+        fun step(old, inp) {
+            if (inp == KeyUp(code)) false
+            else if (inp == KeyDown(code)) true
+            else old
+        }
+
+        fold_left(step, false, inEvents)
+    }
+    fun gameOver(gs: GameState) {
+        switch(gs) {
+            case ProperGameState((player = _: PlayerState, ball = (ballPos = (_, ballY), ballSpeed = _): BallState, blocks = _: [BlockState])) -> ballY > screenHeight
+            case _ -> false
+        }
+    }
+
+    fun gameWon(gs: GameState) {
+        switch(gs) {
+            case ProperGameState((player = _: PlayerState, ball = _: BallState, blocks = b: [BlockState])) ->
+                switch (b) { case [] -> true case _ -> false }
+            case _ -> false
+        }
+    }
+
+    fun playerVelocity(inEvents) {
+        var leftDown = keyDown(leftKeyCode, inEvents);
+        var rightDown = keyDown(rightKeyCode, inEvents);
+
+        if (leftDown) -.playerSpeed
+        else if (rightDown) playerSpeed
+        else 0.0
+    }
+
+
+    fun playerState(ps, inEvents) {
+        var vel = playerVelocity(inEvents);
+        var xPos = boundedIntegrate((0.0, screenWidth -. playerWidth), ps, vel);
+        xPos
+    }
+
+    fun ballVelocity((vx, vy), coll: [BallCollision]) {
+        fun bounce((vx, vy), coll) {
+            switch (coll) {
+                case LeftBounce -> (fabs(vx), vy)
+                case RightBounce -> (-.fabs(vx), vy)
+                case UpBounce -> (vx, fabs(vy))
+                case DownBounce -> (vx, -.fabs(vy))
+            }
+        }
+
+        fold_left(bounce, (vx, vy), coll)
+    }
+
+
+    fun ballState(bs: BallState, collEvents: [BallCollision]) {
+        var vel = ballVelocity(bs.ballSpeed, collEvents);
+
+        var pos = vectorAdd(bs.ballPos, vel);
+
+        ((ballPos = pos, ballSpeed = vel): BallState)
+    }
+    fun blockState((initState, blockColls)) {
+        fun updatef(x, y) {
+            switch (x) {
+                case Nothing -> Nothing
+                case Just(bs) -> if (bs.blockLives == 1) Nothing else Just((bs with blockLives = 1))
+            }
+        }
+
+        fold_left(updatef, Just(initState), blockColls)
+    }
+
+    fun blockStates(obs: [BlockState], blockColls: [[BlockCollision]]) {
+        var res = map(blockState, zip(obs, blockColls));
+        var result = filter(isJust, res);
+        catMaybes(result)
+    }
+
+
+
     fun mainGameLogic(gs: GameState, inEvents: [Input]) {
         if (gameOver(gs)) { # meh
             LostScreen
@@ -242,143 +381,6 @@ fun main() {
             }
         }
     }
-
-    fun gameOver(gs: GameState) {
-        switch(gs) {
-            case ProperGameState((player = _: PlayerState, ball = (ballPos = (_, ballY), ballSpeed = _): BallState, blocks = _: [BlockState])) -> ballY > screenHeight
-            case _ -> false
-        }
-    }
-
-    fun gameWon(gs: GameState) {
-        switch(gs) {
-            case ProperGameState((player = _: PlayerState, ball = _: BallState, blocks = b: [BlockState])) ->
-                switch (b) { case [] -> true case _ -> false }
-            case _ -> false
-        }
-    }
-
-    fun playerState(ps, inEvents) {
-        var vel = playerVelocity(inEvents);
-        var xPos = boundedIntegrate((0.0, screenWidth -. playerWidth), ps, vel);
-        xPos
-    }
-
-    fun playerVelocity(inEvents) {
-        var leftDown = keyDown(leftKeyCode, inEvents);
-        var rightDown = keyDown(rightKeyCode, inEvents);
-
-        if (leftDown) -.playerSpeed
-        else if (rightDown) playerSpeed
-        else 0.0
-    }
-
-    fun ballState(bs: BallState, collEvents: [BallCollision]) {
-        var vel = ballVelocity(bs.ballSpeed, collEvents);
-
-        var pos = vectorAdd(bs.ballPos, vel);
-
-        ((ballPos = pos, ballSpeed = vel): BallState)
-    }
-
-    fun ballVelocity((vx, vy), coll: [BallCollision]) {
-        fun bounce((vx, vy), coll) {
-            switch (coll) {
-                case LeftBounce -> (fabs(vx), vy)
-                case RightBounce -> (-.fabs(vx), vy)
-                case UpBounce -> (vx, fabs(vy))
-                case DownBounce -> (vx, -.fabs(vy))
-            }
-        }
-
-        fold_left(bounce, (vx, vy), coll)
-    }
-
-    fun blockState((initState, blockColls)) {
-        fun updatef(x, y) {
-            switch (x) {
-                case Nothing -> Nothing
-                case Just(bs) -> if (bs.blockLives == 1) Nothing else Just((bs with blockLives = 1))
-            }
-        }
-
-        fold_left(updatef, Just(initState), blockColls)
-    }
-
-    fun blockStates(obs: [BlockState], blockColls: [[BlockCollision]]) {
-        var res = map(blockState, zip(obs, blockColls));
-        var result = filter(isJust, res);
-        catMaybes(result)
-    }
-
-    fun keyDown(code, inEvents) {
-        fun step(old, inp) {
-            if (inp == KeyUp(code)) false
-            else if (inp == KeyDown(code)) true
-            else old
-        }
-
-        fold_left(step, false, inEvents)
-    }
-
-    #
-    # HELPERS
-    #
-    fun ballWallCollisions((ballPos = (ballX, ballY), ballSpeed = _): BallState) {
-        compose(fun (x) { map(second, x) }, fun (y) { filter(fun(z) { first(z) }, y) })
-            ([
-                (ballX < ballRadius, LeftBounce: BallCollision),
-                (ballX > screenWidth -. ballRadius, RightBounce: BallCollision),
-                (ballY < ballRadius, UpBounce: BallCollision)
-            ])
-    }
-
-    fun ballPlayerCollisions((playerState: Float), (ballState: (ballPos: (Float, Float), ballSpeed: Vector)): BallState) {
-        if (rectOverlap(playerRect(playerState), ballRect(ballState)))
-            ballRectCollisions(ballState, playerRect(playerState))
-        else []
-    }
-
-    fun ballRectCollisions((ballPos = (ballX, ballY), ballSpeed = _), (x = rx, y = ry, width = rw, height = rh)) {
-        compose(fun (x) { map(second, x) }, fun (x) { filter(fun(y) { first(y) }, x) })
-            ([
-                (ballX >= rx +. rw, LeftBounce: BallCollision),
-                (ballY <= ry, DownBounce: BallCollision),
-                (ballY >= ry +. rh, UpBounce: BallCollision)
-            ])
-    }
-
-    fun ballBlocksCollisions(ballState: BallState, blockStates: [BlockState]) {
-        var ballR = ballRect(ballState);
-        fun foldStep((ballC, blockC), blockState) {
-            if (rectOverlap(ballR, blockRect(blockState)))
-                (ballRectCollisions(ballState, blockRect(blockState)) ++ ballC, blockC ++ [[BlockCollision]])
-            else (ballC, blockC ++ [[]])
-        }
-
-        fold_left(foldStep, ([], []), blockStates)
-    }
-
-    fun playerRect(px) {
-        (x = px, y = playerYPos, width = playerWidth, height = playerHeight)
-    }
-
-    fun ballRect((ballPos = (ballX, ballY), ballSpeed = _)) {
-        (x = (ballX -. ballRadius), y = (ballY -. ballRadius), width = (2.0 *. ballRadius), height = (2.0 *. ballRadius))
-    }
-
-    fun blockRect((blockPos = (blockX, blockY), blockLives = _): BlockState) {
-        (x = blockX, y = blockY, width = blockWidth, height = blockHeight)
-    }
-
-    fun rectOverlap(r1, r2) {
-        if (r1.x >= r2.x +. r2.width) false
-        else if (r2.x >= r1.x +. r1.width) false
-        else if (r1.y >= r2.y +. r2.height) false
-        else if (r2.y >= r1.y +. r1.height) false
-        else true
-    }
-
     #
     # PROCESSES
     #

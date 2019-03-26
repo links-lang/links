@@ -9,39 +9,6 @@ var cartItems = [(name = "Apple", quantity = 5, price = 0.5, id = 0),
             (name = "Water", quantity = 8, price = 0.2, id = 2),
             (name = "Beef Steak", quantity = 2, price = 4.5, id = 3)];
 
-sig renderItemList : ([ActionableItem({ |_})]) {hear: Cmd | %}~> ()
-fun renderItemList(items){
-    var node = getNodeById("content");
-    domReplaceChildren(itemsToXml(items), node)
-}
-
-sig cartProcess : ([ActionableItem({ |_})]) {hear:Cmd|%}~> ()
-fun cartProcess(content) client{
-    renderItemList(content);
-    var cmd = recv();
-    var items = switch(cmd){
-        case Update(id, qty)->{
-            print(intToString(qty));
-            map(fun(actItem){
-                    if (actItem.item.id == id){
-                        var newItem = (actItem.item with quantity = qty);
-                        (item = newItem, deleteAction = actItem.deleteAction, updateAction = actItem.updateAction)
-                    } else{
-                        actItem
-                    }
-                }, content)
-        }
-        case Delete(id) -> {
-            filter(fun((item = item, deleteAction = _, updateAction= _)){
-
-                item.id <> id
-            }, content)
-        }
-    };
-    cartProcess(items)
-}
-
-
 sig deleteItem : (Int, Process( {hear : Cmd, wild:() |_} ))~> ()
 fun deleteItem(id, pId) client {
     pId ! Delete(id)
@@ -56,11 +23,6 @@ fun isNegative(n) {
   n =~ /-[0-9]+$/
 }
 
-sig updateItem : (Item, Process( {hear : Cmd, wild:() | %} )) ~%~> ()
-fun updateItem(item, pId) client{
-    pId ! Update(item.id, getQuantityInput(item.id, item.quantity))
-}
-
 sig getQuantityInput : (Int, Int) ~> Int
 fun getQuantityInput(id, prevQty) {
     var newQty = getInputValue("quantity-field-" ^^ intToString(id));
@@ -73,6 +35,11 @@ fun getQuantityInput(id, prevQty) {
         print("Not Accepted");
         prevQty
     }
+}
+
+sig updateItem : (Item, Process( {hear : Cmd, wild:() | %} )) ~%~> ()
+fun updateItem(item, pId) client{
+    pId ! Update(item.id, getQuantityInput(item.id, item.quantity))
 }
 
 sig attachActionToItems: ([Item], Process( {hear : Cmd, wild:() |%} )) ~%~>  [ActionableItem({ |_})]
@@ -110,7 +77,6 @@ fun getTotalPrice(items){
     }
     loop(items, 0.0)
 }
-
 sig itemsToXml : ([ActionableItem({ |_})]) ~> Xml
 fun itemsToXml(items){
     <#>
@@ -147,6 +113,41 @@ fun itemsToXml(items){
         </div>
     </#>
 }
+
+sig renderItemList : ([ActionableItem({ |_})]) {hear: Cmd | %}~> ()
+fun renderItemList(items){
+    var node = getNodeById("content");
+    domReplaceChildren(itemsToXml(items), node)
+}
+
+sig cartProcess : ([ActionableItem({ |_})]) {hear:Cmd|%}~> ()
+fun cartProcess(content) client{
+    renderItemList(content);
+    var cmd = recv();
+    var items = switch(cmd){
+        case Update(id, qty)->{
+            print(intToString(qty));
+            map(fun(actItem){
+                    if (actItem.item.id == id){
+                        var newItem = (actItem.item with quantity = qty);
+                        (item = newItem, deleteAction = actItem.deleteAction, updateAction = actItem.updateAction)
+                    } else{
+                        actItem
+                    }
+                }, content)
+        }
+        case Delete(id) -> {
+            filter(fun((item = item, deleteAction = _, updateAction= _)){
+
+                item.id <> id
+            }, content)
+        }
+    };
+    cartProcess(items)
+}
+
+
+
 
 sig main_page : (_) ~> Page
 fun main_page(_) {

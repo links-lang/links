@@ -3,6 +3,9 @@ open CommonTypes
 open Ir
 open Var
 
+let internal_error message =
+  raise (Errors.internal_error ~filename:"irTraversals.ml" ~message)
+
 (** Traversal with type reconstruction
 
     Essentially this is a map-fold operation over the IR datatypes
@@ -208,12 +211,13 @@ struct
                 let t = Instantiate.apply_type t ts in
                   TApp (v, ts), t, o
               with
-                  Instantiate.ArityMismatch ->
-                    prerr_endline ("Arity mismatch in type application (Ir.Transform)");
-                    prerr_endline ("expression: "^show_value (TApp (v, ts)));
-                    prerr_endline ("type: "^Types.string_of_datatype t);
-                    prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts));
-                    failwith "fatal internal error"
+                  Instantiate.ArityMismatch _ ->
+                  internal_error
+                    (Printf.sprintf
+                       "Arity mismatch in type application (Ir.Transform). Expression: %s\n type: %s\n args: %s\n"
+                       (show_value (TApp (v, ts)))
+                       (Types.string_of_datatype t)
+                       (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts)))
               end
         | XmlNode (tag, attributes, children) ->
             let (attributes, _, o) = o#name_map (fun o -> o#value) attributes in

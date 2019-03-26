@@ -2,13 +2,6 @@ fun lowercase(s) {
   implode(for (c <- explode(s)) [toLower(c)])
 }
 
-fun suggest(pre) client {
- domReplaceChildren(
-  format(completions(lowercase(pre))),
-  getNodeById("suggestions")
- )
-}
-
 fun format(words) {
  for (w <- words)
   <span>
@@ -35,6 +28,13 @@ fun completions(pre) server {
      [w]
   }
  }
+}
+
+fun suggest(pre) client {
+ domReplaceChildren(
+  format(completions(lowercase(pre))),
+  getNodeById("suggestions")
+ )
 }
 
 fun main() {

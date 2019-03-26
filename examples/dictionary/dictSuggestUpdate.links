@@ -30,41 +30,39 @@ fun completions(s) server {
   }
 }
 
-fun suggest(s) client {
-  domReplaceChildren(format(completions(s)), getNodeById("suggestions"))
-}
-
-fun editDef(def) client {
-  redraw(
-    <div class="edit-def">
-    <form method="POST"
-       l:onsubmit="{
-         var def = (id=def.id, word=w, meaning=m); updateDef(def);
-         redraw(formatDef(def), def.id)}">
-     <table>
-      <tr><td class="label-col">Entry:</td><td>
-       <span class="btw">editing</span>
-       <input l:name="w" value="{def.word}"/></td></tr>
-      <tr><td class="label-col">Meaning:</td><td>
-       <textarea l:name="m" rows="5" cols="80">{
-        stringToXml(def.meaning)}</textarea></td></tr>
-     </table>
-     <button l:onclick="{deleteDef(def.id); redraw([], def.id)}"
-      style="float:right" type="button">Delete</button>
-     <button type="submit">Update</button>
-     <button l:onclick="{redraw(formatDef(def), def.id)}" type="button">
-      Cancel</button>
-    </form>
-    </div>,
-    def.id)
-}
-
 fun redraw(xml, defId) {
   domReplaceChildren(xml, getNodeById("def:" ^^ defId))
 }
 
-fun formatDef(def) {
-  <span l:onclick="{editDef(def)}">{stringToXml(def.meaning)}</span>
+mutual{
+  fun editDef(def) client {
+    redraw(
+      <div class="edit-def">
+      <form method="POST"
+         l:onsubmit="{
+           var def = (id=def.id, word=w, meaning=m); updateDef(def);
+           redraw(formatDef(def), def.id)}">
+       <table>
+        <tr><td class="label-col">Entry:</td><td>
+         <span class="btw">editing</span>
+         <input l:name="w" value="{def.word}"/></td></tr>
+        <tr><td class="label-col">Meaning:</td><td>
+         <textarea l:name="m" rows="5" cols="80">{
+          stringToXml(def.meaning)}</textarea></td></tr>
+       </table>
+       <button l:onclick="{deleteDef(def.id); redraw([], def.id)}"
+        style="float:right" type="button">Delete</button>
+       <button type="submit">Update</button>
+       <button l:onclick="{redraw(formatDef(def), def.id)}" type="button">
+        Cancel</button>
+      </form>
+      </div>,
+      def.id)
+  }
+
+  fun formatDef(def) {
+    <span l:onclick="{editDef(def)}">{stringToXml(def.meaning)}</span>
+  }
 }
 
 fun format(defs) {
@@ -82,6 +80,12 @@ fun format(defs) {
    </table>
   </div>
 }
+
+
+fun suggest(s) client {
+  domReplaceChildren(format(completions(s)), getNodeById("suggestions"))
+}
+
 
 fun addForm(manager) {
   <form l:onsubmit="{manager!NewDef((word=w, meaning=m))}">

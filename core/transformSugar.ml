@@ -7,6 +7,9 @@ open Utility
 
 module TyEnv = Env.String
 
+let internal_error message =
+  raise (Errors.internal_error ~filename:"transformSugar.ml" ~message)
+
 let type_section env =
   let open Section in function
   | Minus -> TyEnv.lookup env "-"
@@ -120,11 +123,11 @@ let check_type_application (e, t) k =
   begin
     try
       k ()
-    with Instantiate.ArityMismatch ->
+    with Instantiate.ArityMismatch (exp, prov) ->
       prerr_endline ("Arity mismatch in type application");
       prerr_endline ("Expression: " ^ show_phrasenode e);
       prerr_endline ("Type: "^Types.string_of_datatype t);
-      raise Instantiate.ArityMismatch
+      raise (Instantiate.ArityMismatch (exp, prov))
   end
 
 class transform (env : Types.typing_environment) =
@@ -148,6 +151,9 @@ class transform (env : Types.typing_environment) =
 
     method with_formlet_env formlet_env =
       {< formlet_env = formlet_env >}
+
+    method bind_tycon name tycon =
+      {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
 
     method lookup_type : name -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
@@ -621,7 +627,7 @@ class transform (env : Types.typing_environment) =
          let o = o#with_formlet_env formlet_env in
          (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
          (o, FormBinding (f, p), Types.xml_type)
-      | e -> failwith ("oops: "^show_phrasenode  e)
+      | e -> internal_error ("oops: "^show_phrasenode  e)
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun {node; pos} ->
@@ -691,7 +697,7 @@ class transform (env : Types.typing_environment) =
         (o, (pss, e), t)
 
     method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun _ _ -> failwith "transformSugar.ml: method handlerlit not yet implemented!" (*
+      fun _ _ -> internal_error "method handlerlit not yet implemented!" (*
       let envs = o#backup_envs in
       let (o, m) =
 	match m with
@@ -793,7 +799,7 @@ class transform (env : Types.typing_environment) =
          let (o, bndr) = o#binder bndr in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Fun (bndr, lin, (tyvars, lam), location, t))
-      | Fun _ -> failwith "Unannotated non-recursive function binding"
+      | Fun _ -> internal_error "Unannotated non-recursive function binding"
       | Funs defs ->
          (* put the inner bindings in the environment *)
          let o = o#rec_activate_inner_bindings defs in
@@ -808,10 +814,16 @@ class transform (env : Types.typing_environment) =
       | Foreign (f, raw_name, language, file, t) ->
          let (o, f) = o#binder f in
          (o, Foreign (f, raw_name, language, file, t))
-      | Type (name, vars, (_, Some dt)) as e ->
-         let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
-         {< tycon_env=tycon_env >}, e
-      | Type _ -> failwith "Unannotated type alias"
+      | Typenames ts ->
+          let (o, _) = listu o (fun o (name, vars, (x, dt'), pos) ->
+              match dt' with
+                | Some dt ->
+                   let o = o#bind_tycon name
+                     (`Alias (List.map (snd ->- val_of) vars, dt)) in
+                   (o, (name, vars, (x, dt'), pos))
+                | None -> internal_error "Unannotated type alias"
+            ) ts in
+          (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
       | AlienBlock _ -> assert false
@@ -866,8 +878,8 @@ class transform (env : Types.typing_environment) =
          let o, c = o#binder c in
          let o = o#restore_envs envs in
          o, CPGiveNothing c, Types.make_endbang_type
-      | CPGrab _ -> failwith "Malformed grab in TransformSugar"
-      | CPGive _ -> failwith "Malformed give in TransformSugar"
+      | CPGrab _ -> internal_error "Malformed grab in TransformSugar"
+      | CPGive _ -> internal_error "Malformed give in TransformSugar"
       | CPSelect (b, label, p) ->
          let envs = o#backup_envs in
          let o, b = o#binder b in

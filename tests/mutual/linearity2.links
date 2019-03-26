@@ -1,0 +1,10 @@
+mutual {
+  typename Unrestricted = [| LookImUnrestricted |];
+  typename Foo = [| Bobsleigh | Bobsleigh2:End |];
+  typename Bar = [| Bobsleigh3 | Bobsleigh4:Foo |];
+}
+
+sig unrestricted : Unrestricted
+var unrestricted = LookImUnrestricted;
+
+ignore(unrestricted)

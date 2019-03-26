@@ -1,0 +1,9 @@
+module T {
+  mutual {
+    typename A = B;
+    typename B = A;
+  }
+}
+
+open T;
+()

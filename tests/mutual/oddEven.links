@@ -1,0 +1,11 @@
+mutual {
+  typename Even = [| Z | SuccE:Odd |];
+  typename Odd = [| SuccO:Even |];
+
+  sig three : () -> Odd
+  fun three() {
+    SuccO(SuccE(SuccO(Z)))
+  }
+}
+
+three()

@@ -171,6 +171,70 @@ let parseRegexFlags f =
               | 'g' -> RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
+module MutualBindings = struct
+
+  type mutual_bindings =
+    { mut_types: typename list;
+      mut_funs: (function_definition * Position.t) list;
+      mut_pos: Position.t }
+
+
+  let empty pos = { mut_types = []; mut_funs = []; mut_pos = pos }
+
+  let add ({ mut_types = ts; mut_funs = fs; _ } as block) binding =
+    let pos = WithPos.pos binding in
+    match WithPos.node binding with
+    | Fun f ->
+        { block with mut_funs = ((f, pos) :: fs) }
+    | Typenames [t] ->
+        { block with mut_types = (t :: ts) }
+    | Typenames _ -> assert false
+    | _ ->
+        raise (ConcreteSyntaxError
+          (pos, "Only `fun` and `typename` bindings are allowed in a `mutual` block."))
+
+  let check_dups funs tys =
+    (* Check to see whether there are any duplicate names, and report
+     * an error if so. *)
+  let check get_name xs =
+    let dup_map =
+      List.fold_left (fun acc (x, pos) ->
+        let name = get_name x in
+        StringMap.update name (fun x_opt ->
+          OptionUtils.opt_app
+            (fun positions -> Some (pos :: positions))
+            (Some [pos]) x_opt) acc) StringMap.empty xs in
+    let dups =
+        StringMap.filter (fun _ poss -> List.length poss > 1) dup_map in
+    if StringMap.cardinal dups > 0 then
+      raise (Errors.MultiplyDefinedMutualNames dups) in
+
+  let fun_name (bndr, _, _, _, _) = Binder.to_name bndr in
+  let ty_name (n, _, _, _) = n in
+  let tys_with_pos =
+      List.map (fun (n, qs, dt, pos) -> ((n, qs, dt, pos), pos)) tys in
+  check fun_name funs; check ty_name tys_with_pos
+
+
+  let flatten { mut_types; mut_funs; mut_pos } =
+    (* We need to take care not to lift non-recursive functions to
+     * recursive functions accidentally. *)
+    check_dups mut_funs mut_types;
+    let fun_binding = function
+      | [] -> []
+      | [(f, pos)] -> [WithPos.make ~pos (Fun f)]
+      | fs ->
+          let fs =
+            List.map (fun ((bnd, lin, (tvs, fl), loc, dt), pos) ->
+                      (bnd, lin, ((tvs, None), fl), loc, dt, pos)) fs
+            |> List.rev in
+          [WithPos.make ~pos:mut_pos (Funs fs)] in
+
+    let type_binding = function
+      | [] -> []
+      | ts -> [WithPos.make ~pos:mut_pos (Typenames (List.rev ts))] in
+    type_binding mut_types @ fun_binding mut_funs
+end
 
 %}
 
@@ -212,7 +276,7 @@ let parseRegexFlags f =
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG OPEN
-%token MODULE
+%token MODULE MUTUAL
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
@@ -297,9 +361,18 @@ arg:
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
 
+mutual_decl_block:
+| MUTUAL LBRACE mutual_decls RBRACE                            { MutualBindings.flatten $3 }
+
+mutual_decls:
+| declaration                                                  { MutualBindings.(add (empty (pos $loc)) $1) }
+| mutual_decls declaration                                     { MutualBindings.add $1 $2 }
+
 declarations:
+| declarations mutual_decl_block                               { $1 @ $2 }
 | declarations declaration                                     { $1 @ [$2] }
 | declaration                                                  { [$1] }
+| mutual_decl_block                                            { $1 }
 
 declaration:
 | fun_declaration | nofun_declaration                          { $1 }
@@ -368,7 +441,7 @@ signature:
 | SIG op COLON datatype                                        { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Type ($2, $3, datatype $5)) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5, (pos $loc))]) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -850,10 +923,20 @@ binding:
 | signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
-| typedecl SEMICOLON | links_module | alien_block | links_open { $1 }
+| typedecl SEMICOLON | links_module | alien_block
+| links_open SEMICOLON                                         { $1 }
+
+mutual_binding_block:
+| MUTUAL LBRACE mutual_bindings RBRACE                         { MutualBindings.flatten $3 }
+
+mutual_bindings:
+| binding                                                      { MutualBindings.(add (empty (pos $loc)) $1) }
+| mutual_bindings binding                                      { MutualBindings.add $1 $2 }
 
 bindings:
 | binding                                                      { [$1]      }
+| mutual_binding_block                                         { $1        }
+| bindings mutual_binding_block                                { $1 @ $2   }
 | bindings binding                                             { $1 @ [$2] }
 
 moduleblock:

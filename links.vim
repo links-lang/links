@@ -21,7 +21,7 @@ syn region linksString start='"' end='"'
 
 syn keyword linksKeywords alien as case client database default delete
 syn keyword linksKeywords escape for forall from fun formlet
-syn keyword linksKeywords in yields insert linfun mu native
+syn keyword linksKeywords in yields insert linfun mu mutual native
 syn keyword linksKeywords nu offer orderby op page query readonly
 syn keyword linksKeywords receive returning select server set sig spawn
 syn keyword linksKeywords spawnAngel spawnClient spawnDemon spawnWait switch

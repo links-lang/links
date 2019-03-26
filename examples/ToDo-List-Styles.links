@@ -3,6 +3,32 @@
 
 typename Cmd = [|Add : String | Done : Int|];
 
+sig addNewItem : (String, Process( {hear : Cmd, wild:() |%} )) ~> ()
+fun addNewItem(item, pId) client {
+    pId ! Add(item)
+}
+
+sig deleteItem : (Int, Process( {hear : Cmd, wild:() |%} )) ~> ()
+fun deleteItem(id, pId) client {
+    pId ! Done(id)
+}
+sig itemsToXml : ([(Int, String)]) {hear:Cmd | %}~> Xml
+fun itemsToXml(items) client {
+    var pid = self();
+    <#>
+        {
+            for ((id, item) <- items){
+
+                <div class="list-item  rounded-corners center">
+                    <p class="text">{stringToXml(item)} </p>
+                    <button class="rounded-corners center done-button" l:onclick="{deleteItem(id, pid)}"> Done </button>
+                </div>
+            }
+
+        }
+    </#>
+}
+
 sig renderItemList : ([(Int, String)]) {hear: Cmd | %}~> ()
 fun renderItemList(items){
     var list = getNodeById("item-list");
@@ -26,33 +52,6 @@ fun todoProcess(prevList, nextId) client {
     renderItemList(items);
     todoProcess(items, nextId)
 
-}
-
-sig itemsToXml : ([(Int, String)]) {hear:Cmd | %}~> Xml
-fun itemsToXml(items) client {
-    var pid = self();
-    <#>
-        {
-            for ((id, item) <- items){
-
-                <div class="list-item  rounded-corners center">
-                    <p class="text">{stringToXml(item)} </p>
-                    <button class="rounded-corners center done-button" l:onclick="{deleteItem(id, pid)}"> Done </button>
-                </div>
-            }
-
-        }
-    </#>
-}
-
-sig addNewItem : (String, Process( {hear : Cmd, wild:() |%} )) ~> ()
-fun addNewItem(item, pId) client {
-    pId ! Add(item)
-}
-
-sig deleteItem : (Int, Process( {hear : Cmd, wild:() |%} )) ~> ()
-fun deleteItem(id, pId) client {
-    pId ! Done(id)
 }
 
 sig main_page : (_) ~> Page

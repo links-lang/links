@@ -87,7 +87,34 @@ type lens_phrase =
 
 (* End Lenses *)
 
-type typ =
+(* Type groups *)
+
+type rec_id =
+  | MuBoundId of int
+  | NominalId of string [@@deriving show]
+
+module type RECIDMAP = Utility.Map with type key = rec_id
+module RecIdMap : RECIDMAP
+module type RECIDSET = Utility.Set with type elt = rec_id
+module RecIdSet : RECIDSET
+
+
+type tygroup = {
+  id: int;
+  type_map: ((quantifier list * typ) Utility.StringMap.t);
+  linearity_map: bool Utility.StringMap.t
+}
+
+(* Types *)
+and rec_appl = {
+  r_name: string;
+  r_dual: bool;
+  r_unique_name: string;
+  r_args: type_arg list;
+  r_unwind: type_arg list -> bool -> typ;
+  r_linear: unit -> bool option
+}
+and typ =
     [ `Not_typed
     | `Primitive of Primitive.t
     | `Function of (typ * row * typ)
@@ -99,6 +126,7 @@ type typ =
     | `Lens of lens_sort
     | `Alias of ((string * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
+    | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
     | `ForAll of (quantifier list ref * typ)
     | (typ, row) session_type_basis ]
@@ -168,8 +196,13 @@ val dual_row : row -> row
 val dual_type : datatype -> datatype
 
 val type_var_number : quantifier -> int
+type alias_type = quantifier list * typ [@@deriving show]
 
-type tycon_spec = [`Alias of quantifier list * datatype | `Abstract of Abstype.t]
+type tycon_spec = [
+  | `Alias of alias_type
+  | `Abstract of Abstype.t
+  | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
+]
 
 type environment        = datatype Env.String.t
  and tycon_environment  = tycon_spec Env.String.t
@@ -383,6 +416,9 @@ val make_thunk_type : row -> datatype -> datatype
 
 val pp_datatype : Format.formatter -> datatype -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
+
+(* Recursive type applications *)
+val recursive_applications : datatype -> string list
 
 module type TYPE_VISITOR =
 sig

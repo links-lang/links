@@ -740,12 +740,8 @@ struct
                 try
                   I.tappl (I.var (x, xt), tyargs)
                 with
-                    Instantiate.ArityMismatch ->
-                      prerr_endline ("Arity mismatch in instantiation (Sugartoir)");
-                      prerr_endline ("name: "^name);
-                      prerr_endline ("type: "^Types.string_of_datatype xt);
-                      prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
-                      failwith "fatal internal error" in
+                    Instantiate.ArityMismatch (expected, provided) ->
+                      raise (Errors.TypeApplicationArityMismatch { pos; name; expected; provided }) in
 
       let rec is_pure_primitive e =
         let open Sugartypes in
@@ -831,12 +827,9 @@ struct
                   try
                     cofv (I.tappl (v, tyargs))
                   with
-                      Instantiate.ArityMismatch ->
-                        prerr_endline ("Arity mismatch in type application (Sugartoir)");
-                        prerr_endline ("expression: " ^ show_phrasenode (TAppl (e, tyargs)));
-                        prerr_endline ("type: "^Types.string_of_datatype vt);
-                        prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
-                        failwith "fatal internal error"
+                      Instantiate.ArityMismatch (expected, provided) ->
+                        raise (Errors.TypeApplicationArityMismatch { pos;
+                          name=(Types.string_of_datatype vt); expected; provided })
                 end
           | TupleLit [e] ->
               (* It isn't entirely clear whether there should be any 1-tuples at this stage,
@@ -1124,13 +1117,13 @@ struct
                     let x  = Binder.to_name bndr in
                     let xt = Binder.to_type_exn bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | Type _
+                | Typenames _
                 | Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | Handler _ | QualifiedImport _ | Fun _ | Foreign _
-                | AlienBlock _ | Module _ -> assert false
+                | AlienBlock _ | Module _  -> assert false
             end
 
   and evalv env e =

@@ -22,11 +22,6 @@ var rightKeyCode = 39;
 var upKeyCode = 38;
 var downKeyCode = 40;
 
-fun start() {
-    var gridprim = addTile(replica(4, [0, 0, 0, 0]));
-    addTile(gridprim)
-}
-
 fun merge(xs) {
     fun combine(xx) {
         switch (xx) {
@@ -81,21 +76,6 @@ fun isMoveLeft(grid) {
     sum(allChoices) > 0
 }
 
-fun printGrid(grid) client {
-    replaceNode(
-        <div id="grid">
-            { concatMap(showRow, grid) }
-        </div>,
-        getNodeById("grid")
-    )
-}
-
-fun showRow(r) client {
-    <div style="clear:both">
-        { showRowHelper(r) }
-    </div>
-}
-
 fun showRowHelper(r) client {
     for (x <- r)
         <#>
@@ -105,8 +85,29 @@ fun showRowHelper(r) client {
         </#>
 }
 
+fun showRow(r) client {
+    <div style="clear:both">
+        { showRowHelper(r) }
+    </div>
+}
+
+fun printGrid(grid) client {
+    replaceNode(
+        <div id="grid">
+            { concatMap(showRow, grid) }
+        </div>,
+        getNodeById("grid")
+    )
+}
+
+
 fun check2048(grid) {
     not([] == filter(fun (x) { x == 2048 }, concat(grid)))
+}
+
+fun choose(xs) {
+    var i = floatToInt(random() *. intToFloat(length(xs) - 1));
+    xs !! i
 }
 
 fun addTile(grid) {
@@ -115,11 +116,6 @@ fun addTile(grid) {
     var val = choose([2,2,2,2,2,2,2,2,2,4]);
     var newGridprim = setSquare(grid, pick, val);
     newGridprim
-}
-
-fun choose(xs) {
-    var i = floatToInt(random() *. intToFloat(length(xs) - 1));
-    xs !! i
 }
 
 fun newGrid(grid, msg) {
@@ -156,6 +152,11 @@ fun mesg(str) {
         </div>,
         getNodeById("msg")
     )
+}
+
+fun start() {
+    var gridprim = addTile(replica(4, [0, 0, 0, 0]));
+    addTile(gridprim)
 }
 
 fun main() {

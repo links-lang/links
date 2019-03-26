@@ -194,6 +194,7 @@ let keywords = [
  "linfun"   , LINFUN;
  "module"   , MODULE;
  "mu"       , MU;
+ "mutual"   , MUTUAL;
  "native"   , NATIVE;
  "nu"       , NU;
  "offer"    , OFFER;

@@ -1,29 +1,31 @@
-fun waiting(id) client {
- receive {
-  case MouseDown(elem)  ->
-   if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
-    dragging(id, elem)
-   else
-    waiting(id)
-  case MouseUp          -> waiting(id)
-  case MouseOut(toElem) -> waiting(id)
- }
-}
+mutual {
+  fun waiting(id) client {
+   receive {
+    case MouseDown(elem)  ->
+     if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+      dragging(id, elem)
+     else
+      waiting(id)
+    case MouseUp          -> waiting(id)
+    case MouseOut(toElem) -> waiting(id)
+   }
+  }
 
-fun dragging(id, elem) client {
- receive {
-  case MouseUp          -> waiting(id)
-  case MouseDown(elem)  ->
-   if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
-    dragging(id, elem)
-   else
-    waiting(id)
-  case MouseOut(toElem) ->
-   if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
-    swapNodes(elem, toElem);
-    dragging(id, elem)
-   } else dragging(id, elem)
- }
+  fun dragging(id, elem) client {
+   receive {
+    case MouseUp          -> waiting(id)
+    case MouseDown(elem)  ->
+     if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+      dragging(id, elem)
+     else
+      waiting(id)
+    case MouseOut(toElem) ->
+     if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
+      swapNodes(elem, toElem);
+      dragging(id, elem)
+     } else dragging(id, elem)
+   }
+  }
 }
 
 fun format(text) {
