@@ -243,6 +243,8 @@ module Ir = struct
   (* Print the lib.ml functions and their types. In particular, map their integer identifiers to their original names *)
   let show_lib_function_env = Settings.add_bool("show_lib_function_env", false, `User)
   let typecheck_ir = Settings.add_bool("typecheck_ir", false, `User)
+  (* Abort compilation on IR typing error *)
+  let fail_on_ir_type_error = Settings.add_bool("fail_on_ir_type_error", false, `User)
 end
 
 (* Generalise stuff *)
