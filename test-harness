@@ -57,15 +57,24 @@ def check_expected(name, item, got, expected, errors):
     else:
         return True
 
-def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None, filemode='', args='', ignore = None):
+def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = None, filemode='', args='', ignore = None):
+    arg_array = str.split(args)
+    if config_file != None:
+        for arg in arg_array:
+            if arg.startswith("--config"):
+                print(
+                    "Test \"%s\" comes with an args entry to specify the config file," % name +
+                    " but a config file was also passed as a command-line argument to the test harness" )
+                exit(1)
+
+        arg_array += ["--config=" + config_file]
+
+
     if filemode.startswith('true') :
-        proc = Popen([links, code], stdout=PIPE, stderr=PIPE, env=env)
-    elif filemode.startswith('args'):
-        arg_array = str.split(args, ' ')
-        popen_list = [links] + arg_array + [code]
-        proc = Popen(popen_list, stdout=PIPE, stderr=PIPE, env=env)
+        proc = Popen([links] + arg_array + [code], stdout=PIPE, stderr=PIPE, env=env)
     else:
-        proc = Popen([links] +  flags.split(" ") + [code], stdout=PIPE, stderr=PIPE, env=env)
+        proc = Popen([links] + arg_array + ["-e", code], stdout=PIPE, stderr=PIPE, env=env)
+
     passed = True
     errors = []
     for i in range(0, TIMEOUT*100):
@@ -95,12 +104,18 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
     print('!FAILURE: %s [TIMED OUT]' % name)
 
 def main():
-    try:
+    config_file = None
+
+    if len(sys.argv) == 3:
         filename = sys.argv[1]
-    except IndexError:
-        raise SystemExit('Usage: run <filename>')
+        config_file =  sys.argv[2]
+    elif len(sys.argv) == 2:
+        filename =  sys.argv[1]
+    else:
+        raise SystemExit('Usage: run <test file> [<links config file>]')
+
     for name, code, opts in parse(open(filename, 'r')):
-        evaluate(name, code, **opts)
+        evaluate(name, code, config_file, **opts)
     print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
     if failures > 0:
         sys.exit(1)
