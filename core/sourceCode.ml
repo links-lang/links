@@ -101,13 +101,13 @@ module Position = struct
       if start_line = finish_line then
         if start_char = finish_char then
           Format.fprintf fmt
-            "line %d, char %d"  start_line start_char
+            "line %d, column %d"  start_line start_char
         else
           Format.fprintf fmt
-            "line %d, chars %d to %d" start_line start_char finish_char
+            "line %d, columns %d to %d" start_line start_char finish_char
       else
         Format.fprintf fmt
-          "line %d, char %d, to line %d, char %d" start_line finish_line start_char finish_char
+          "line %d, column %d, to line %d, column %d" start_line finish_line start_char finish_char
     in
     if pos.start = Lexing.dummy_pos || pos.finish = Lexing.dummy_pos then
       Format.fprintf fmt "<dummy position>"
