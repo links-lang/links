@@ -274,7 +274,7 @@ module SugarConstructors (Position : Pos)
        let () =
          if name = "#" && (List.length attr_list != 0 || blk_opt <> None) then
            xml_sugar_error pos
-            (Printf.sprintf "XML tag '%s' has duplicate attributes" name) in
+            "XML forest literals cannot have attributes" in
        ()
     | _ -> assert false
 
