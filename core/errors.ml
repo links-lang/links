@@ -7,14 +7,30 @@ type synerrspec = {filename : string; linespec : string;
                    message : string; linetext : string;
                    marker : string}
 
-exception UndefinedVariable of string
+type sugar_error_stage =
+  | DesugarFormlets
+  | DesugarRegexes
+  | CheckQuasiquotes
+  | DesugarLAttributes
+  | DesugarPages
+  | CheckXML
 
+let string_of_stage = function
+  | DesugarFormlets -> "compiling formlets"
+  | DesugarRegexes -> "compiling regular expressions"
+  | CheckQuasiquotes -> "checking quasiquotes"
+  | DesugarLAttributes -> "compiling attributes"
+  | DesugarPages -> "compiling page expressions"
+  | CheckXML -> "checking XML"
+
+exception Runtime_error of string
+exception UndefinedVariable of string
+exception InvalidMutualBinding of Position.t
 exception Type_error of (Position.t * string)
 exception MultiplyDefinedMutualNames of ((Position.t list) stringmap)
-exception InvalidMutualBinding of Position.t
 exception RichSyntaxError of synerrspec
-exception SugarError of (Position.t * string)
-exception Runtime_error of string
+exception DesugaringError of
+  { pos: Position.t; stage: sugar_error_stage; message: string }
 exception UnboundTyCon of (Position.t * string)
 exception InternalError of { filename: string; message: string }
 exception TypeApplicationArityMismatch of
@@ -38,11 +54,10 @@ let format_exception =
        ^ s.linespec ^ "\n"
        ^ s.message ^ "\n" ^ prefix_lines "  " s.linetext ^ "\n"
        ^ "   " ^ s.marker)
-  | SugarError (pos, s) ->
+  | DesugaringError { pos; stage; message } ->
       let pos, expr = Position.resolve_start_expr pos in
-        ("*** Syntactic sugar error: " ^ pos.pos_fname ^ ":"
-         ^ string_of_int pos.pos_lnum ^ "\n"
-         ^ prefix_lines "   " (s ^ "\nIn expression: " ^ expr ^ "\n"))
+      Printf.sprintf "%s:%d: Error %s: %s\nIn expression: %s.\n"
+        pos.pos_fname pos.pos_lnum (string_of_stage stage) message expr
   | Getopt.Error s -> s
   | Type_error (pos, s) ->
       let pos, expr = Position.resolve_start_expr pos in
@@ -111,4 +126,5 @@ let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
 let internal_error ~filename ~message =
   InternalError { filename; message }
 
-
+let desugaring_error ~pos ~stage ~message =
+  DesugaringError { pos; stage; message }

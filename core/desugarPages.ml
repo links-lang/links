@@ -3,6 +3,11 @@ open Sugartypes
 open SugarConstructors.DummyPositions
 open SourceCode.WithPos
 
+let raise_invalid_element pos =
+  let open Errors in
+  raise (desugaring_error ~pos ~stage:DesugarPages
+    ~message:"Invalid element in page literal")
+
 let rec is_raw phrase =
   match phrase.node with
   | TextNode _ -> true
@@ -11,8 +16,7 @@ let rec is_raw phrase =
   | PagePlacement _ -> false
   | Xml (_, _, _, children) ->
      List.for_all is_raw children
-  | _e ->
-     raise (Errors.SugarError (phrase.pos, "Invalid element in page literal"))
+  | _e -> raise_invalid_element phrase.pos
 
 (* DODGEYNESS:
 
@@ -53,8 +57,7 @@ let rec desugar_page (o, page_type) =
                         dl_unl [[variable_pat ~ty:Types.xml_type x]]
                         (xml name attrs dynattrs [block ([], var x)]);
                 desugar_nodes children]
-        | _ ->
-          raise (Errors.SugarError (pos, "Invalid element in page literal"))
+        | _ -> raise_invalid_element pos
 
 and desugar_pages env =
 object

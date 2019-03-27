@@ -13,6 +13,10 @@ open SourceCode.WithPos
    to the server.
 *)
 
+let desugaring_error pos message =
+  let open Errors in
+  raise (desugaring_error ~pos ~stage:DesugarLAttributes ~message)
+
 let has_lattrs : phrasenode -> bool = function
   | Xml (_, attrs, _, _) -> exists (fst ->- start_of ~is:"l:") attrs
   | _ -> false
@@ -134,7 +138,9 @@ let desugar_form : phrasenode -> phrasenode = function
       let lnames =
         try List.fold_left StringMap.union_disjoint StringMap.empty lnames
         with StringMap.Not_disjoint (item, _) ->
-          raise (Errors.SugarError (Position.dummy, "Duplicate l:name binding: " ^ item)) in
+          (* SJF TODO: We should generalise these passes to `phrase`s instead of
+           * `phrasenode`s to get proper position information. *)
+          desugaring_error Position.dummy ("Duplicate l:name binding: " ^ item) in
       let attrs = List.map (bind_lname_vars lnames) attrs in
         Xml (form, attrs, attrexp, Utility.zip_with with_pos poss children)
   | e -> e
@@ -145,7 +151,7 @@ let replace_lattrs : phrasenode -> phrasenode =
      if (has_lattrs xml) then
        match xml with
          | Xml (_tag, _attributes, _, _) ->
-             raise (Errors.SugarError (Position.dummy, "Illegal l: attribute in XML node"))
+            desugaring_error Position.dummy "Illegal l: attribute in XML node"
          | _ -> assert false
      else
        xml)
