@@ -177,10 +177,10 @@ let print_types_pretty = Settings.add_bool ("print_types_pretty", true, `User)
 let print_colors = Settings.add_bool ("print_colors", false, `User)
 
 (* Print Sugar AST before frontend processing? *)
-let show_pre_frontend_sugar_ast = Settings.add_bool("show_pre_frontend_sugar_ast", false, `User)
+let show_pre_frontend_ast = Settings.add_bool("show_pre_frontend_ast", false, `User)
 
 (* Print Sugar AST after frontend processing? *)
-let show_post_frontend_sugar_ast = Settings.add_bool("show_post_frontend_sugar_ast", false, `User)
+let show_post_frontend_ast = Settings.add_bool("show_post_frontend_ast", false, `User)
 
 (* When dumping sugar constructs, shall we print the embedded position information *)
 let show_sugar_positions =  Settings.add_bool("show_sugar_positions", false, `User)
