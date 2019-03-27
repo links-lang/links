@@ -87,7 +87,7 @@ let program tyenv pos_context program =
   result
 
 
-  let interactive =
+  let interactive_pipeline =
     fun tyenv pos_context sentence ->
     let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
     let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
@@ -107,4 +107,18 @@ let program tyenv pos_context program =
        ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#sentence ->- snd)
        ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)
        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#sentence ->- snd)) sentence
+
+
+let interactive tyenv pos_context sentence =
+  if Settings.get_value Basicsettings.show_pre_frontend_sugar_ast then
+    Debug.print ("Pre-Frontend AST:\n" ^ Sugartypes.show_sentence sentence);
+
+  let (post_sentence, _, _) as result = interactive_pipeline tyenv pos_context sentence in
+
+  if Settings.get_value Basicsettings.show_post_frontend_sugar_ast then
+    Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_sentence post_sentence);
+
+  result
+
+
 end
