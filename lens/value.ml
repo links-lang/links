@@ -170,12 +170,17 @@ let get_query lens =
 let lens_get lens =
   if is_memory_lens lens then get_memory lens else get_query lens
 
-let lens_select lens ~predicate =
+(* HACK: This constructs a select lens bypassing sort checks. This is fine for the
+   forward direction, but would produce an invalid lens for the put direction. *)
+let lens_select_internal lens ~predicate =
   let sort = sort lens in
-  let sort = Sort.select_lens_sort sort ~predicate in
+  let sort =
+    let query = Some predicate |> Phrase.Option.combine_and @@ Sort.query sort in
+    let predicate = Some predicate |> Phrase.Option.combine_and @@ Sort.predicate sort in
+    Sort.update_predicate ~query ~predicate sort in
   LensSelect { lens; predicate; sort }
 
-let lens_get_select lens ~predicate = lens_get (lens_select lens ~predicate)
+let lens_get_select lens ~predicate = lens_get (lens_select_internal lens ~predicate)
 
 let lens_get_select_opt lens ~predicate =
   match predicate with
@@ -184,7 +189,7 @@ let lens_get_select_opt lens ~predicate =
 
 let query_exists lens predicate =
   let sort = sort lens in
-  let sort = Sort.select_lens_sort sort ~predicate in
+  let sort = Sort.select_lens_sort sort ~predicate |> Result.ok_exn in
   if is_memory_lens lens then
     let res = lens_get (LensSelect { lens; predicate; sort}) in
     res <> []

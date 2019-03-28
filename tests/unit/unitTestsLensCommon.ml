@@ -105,14 +105,13 @@ module LensTestHelpers = struct
 
   let select_lens lens predicate =
     let sort = Lens.Value.sort lens in
-    let sort = Lens.Sort.select_lens_sort sort ~predicate in
+    let sort = Lens.Sort.select_lens_sort sort ~predicate |> Result.ok_exn in
     Lens.Value.LensSelect {lens; predicate; sort}
 
   let drop_lens lens drop key default =
-    let drop' = Alias.Set.singleton drop in
     let key' = Alias.Set.singleton key in
     let sort = Value.sort lens in
-    let sort = Sort.drop_lens_sort sort ~drop:drop' ~key:key' in
+    let sort = Sort.drop_lens_sort sort ~drop:[drop] ~default:[default] ~key:key' |> Result.ok_exn in
     Value.LensDrop {lens; drop; key; default; sort}
 
   let select_query l predicate =

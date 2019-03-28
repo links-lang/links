@@ -51,15 +51,15 @@ let rec traverse expr ~f =
         let a1 = fn a1 in
         let a2 = fn a2 in
         InfixAppl (a, a1, a2)
-    | TupleLit [x] ->
-        let x = fn x in
-        TupleLit [x]
+    | TupleLit l ->
+        let l = List.map ~f l in
+        TupleLit l
     | Case (phr, cases, otherwise) ->
         let phr = Option.map ~f:fn phr in
         let cases = List.map ~f:(fun (inp, lst) -> (fn inp, fn lst)) cases in
         let otherwise = fn otherwise in
         Case (phr, cases, otherwise)
-    | _ -> failwith "Unknown operation"
+    | In _ -> expr
   in
   f expr
 
@@ -198,6 +198,14 @@ module Option = struct
     if names = [] then None
     else if vals = [] then Some (Constant.bool false)
     else Some (In (names, vals))
+
+  let eval phrase f =
+    match phrase with
+    | Some phrase -> eval phrase f
+    | None -> Phrase_value.box_bool true
+
+  let get_vars phrase =
+    Option.map ~f:(get_vars) phrase |> Option.value ~default:Alias.Set.empty
 end
 
 module Record = struct

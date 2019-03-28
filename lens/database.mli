@@ -43,6 +43,9 @@ module Select : sig
     db : db;
   }
 
+  (** Add a further selection criterion to an existing predicate. *)
+  val select : t -> predicate:Phrase.Option.t -> t
+
   (** Construct a select query from a lens sort. *)
   val of_sort : db -> sort:Sort.t -> t
 

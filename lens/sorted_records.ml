@@ -334,7 +334,7 @@ let calculate_fd_changelist data ~fun_deps =
     if Fun_dep.Set.is_empty fds then
       []
     else
-      let fun_dep = Fun_dep.Set.root_fd fds |> (fun v -> Option.value_exn v) in
+      let fun_dep = Fun_dep.Set.root_fds fds |> (fun v -> List.hd v) in
       let cols, changeset_pos, _ = project_fun_dep data ~fun_dep in
       let changeset = Array.to_list changeset_pos in
       (* remove duplicates and sort *)

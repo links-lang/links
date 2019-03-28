@@ -621,9 +621,12 @@ struct
         let sort =
           Lens.Sort.drop_lens_sort
             (Lens.Value.sort lens)
-            ~drop:(Alias.Set.singleton drop)
+            ~drop:[drop]
+            ~default:[default]
             ~key:(Alias.Set.singleton key)
+          |> Lens_errors.unpack_type_drop_lens_result ~die:(eval_error "%s")
         in
+
         apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
     | LensSelect (lens, predicate, _sort) ->
         let open Lens in
@@ -632,6 +635,7 @@ struct
           Lens.Sort.select_lens_sort
             (Lens.Value.sort lens)
             ~predicate
+          |> Lens_errors.unpack_sort_select_result ~die:(eval_error "%s")
         in
         apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
     | LensJoin (lens1, lens2, on, del_left, del_right, _sort) ->
@@ -661,12 +665,14 @@ struct
         let lens = value env lens |> get_lens in
         let data = value env data |> Value.unbox_list in
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
-        let classic = Settings.get_value Basicsettings.RelationalLenses.classic_lenses in
-        if classic then
-            Lens.Helpers.Classic.lens_put lens data
-        else
-            Lens.Helpers.Incremental.lens_put lens data;
-        apply_cont cont env (Value.box_unit ())
+        let behaviour =
+          match Settings.get_value Basicsettings.RelationalLenses.classic_lenses with
+          | true -> Lens.Eval.Classic
+          | false -> Lens.Eval.Incremental in
+        (match Lens.Eval.put ~behaviour lens data with
+        | Result.Ok () -> apply_cont cont env (Value.box_unit ())
+        | Result.Error Lens.Eval.Error.InvalidData -> eval_error "Not all records in data satisfy the condition in the lens sort."
+        | Result.Error Lens.Eval.Error.InvalidDataType -> eval_error "Data is not a set of records.")
     | Table (db, name, keys, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have

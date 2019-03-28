@@ -13,6 +13,10 @@ end
 module Set = struct
   include String.Set
 
+  module Set = struct
+    include Set.Make (String.Set)
+  end
+
   let pp_pretty fmt cs =
     List.iter (fun c -> Format.fprintf fmt "%s " c) (elements cs)
 end

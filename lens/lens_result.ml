@@ -12,6 +12,11 @@ let bind v ~f =
 let map v ~f =
   bind v ~f:(fun v -> f v |> return)
 
+let ok_exn v =
+  match v with
+  | Result.Ok v -> v
+  | _ -> failwith "Unexpected error unpacking result."
+
 let of_option v ~error =
   match v with
   | Some v -> return v
@@ -25,6 +30,14 @@ let map_error ~f r =
   match r with
   | Error e -> f e |> error
   | Ok r -> Ok r
+
+let of_bool cond ~error =
+  if cond then return () else Result.Error error
+
+let unpack_error_exn t =
+  match t with
+  | Error e -> e
+  | _ -> failwith "Unexpected error unpacking result to error."
 
 module O = struct
   let (>>|) v f = map v ~f

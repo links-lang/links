@@ -60,6 +60,9 @@ module List : sig
   (** Get the aliases of all present columns. *)
   val present_aliases : t -> string list
 
+  (** Return the set of all present aliases. *)
+  val present_aliases_set : t -> Alias.Set.t
+
   (** determine if the calumn [alias] is present. *)
   val mem_alias : t -> alias:string -> bool
 

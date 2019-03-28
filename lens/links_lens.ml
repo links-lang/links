@@ -23,10 +23,12 @@ module Database = Database
 module Statistics = Statistics
 module Sorted_records = Sorted_records
 
+module Eval = struct
+  include Eval
 
-module Helpers = struct
-  module Classic = LensHelpersClassic
-  module Incremental = LensHelpersIncremental
+  module Incremental = Eval_incremental
+
+  module Classic = Eval_classic
 end
 
 module Utility = Lens_utility

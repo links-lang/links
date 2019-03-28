@@ -68,6 +68,8 @@ module List = struct
 
   let present_aliases t = present t |> aliases
 
+  let present_aliases_set t = present t |> aliases |> Alias.Set.of_list
+
   let find_alias t ~alias = List.find_opt (fun c -> c.alias = alias) t
 
   let mem_alias t ~alias = find_alias t ~alias |> Option.is_some

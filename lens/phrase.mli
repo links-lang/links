@@ -90,6 +90,12 @@ module Option : sig
 
   (** Construct an in expression phrase option  *)
   val in_expr : string list -> Value.t list list -> t
+
+(** Calculate the vale of an expression given a lookup function for variables. Defaults to true if the phrase is [None]. *)
+  val eval : t -> (string -> Value.t) -> Value.t
+
+  (** Get a list of variables in the expression. *)
+  val get_vars : t -> Alias.Set.t
 end
 
 module List : sig
