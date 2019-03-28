@@ -90,7 +90,9 @@ object(self)
           self#phrase (fn_appl libfn tyargs
                             [e1; desugar_regex self#phrase regex_type r])
     | InfixAppl ((_tyargs, BinaryOp.RegexMatch _), _, _) ->
-        raise (Errors.SugarError (pos, "Internal error: unexpected rhs of regex operator"))
+        let (_, expr) = SourceCode.Position.resolve_start_expr pos in
+        let message = "Unexpected RHS of regex operator: " ^ expr in
+        raise (Errors.internal_error ~filename:"desugarRegexes.ml" ~message)
     | _ -> super#phrase ph
 end
 

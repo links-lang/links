@@ -13,7 +13,11 @@ let rec is_raw phrase =
   | Xml (_, _, _, children) ->
       List.for_all is_raw children
   | _ ->
-      raise (Errors.SugarError (phrase.pos, "Invalid element in formlet literal"))
+      let open Errors in
+      raise (desugaring_error
+        ~pos:phrase.pos
+        ~stage:DesugarFormlets
+        ~message:"Invalid element in formlet literal")
 
 let tt =
   function

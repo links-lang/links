@@ -261,17 +261,20 @@ module SugarConstructors (Position : Pos)
                   closing opening))
          | _ -> () in
        (* Check uniqueness of attributes *)
+       let xml_sugar_error pos message =
+         let open Errors in
+         raise (desugaring_error ~pos ~stage:CheckXML ~message) in
+
        let () =
          let attr_names = fst (List.split attr_list) in
          if ListUtils.has_duplicates attr_names then
-           raise (Errors.SugarError (pos,
-                  Printf.sprintf "XML tag '%s' has duplicate attributes"
-                    name)); in
+           xml_sugar_error pos
+            (Printf.sprintf "XML tag '%s' has duplicate attributes" name) in
        (* Check that XML forests don't have attributes *)
        let () =
          if name = "#" && (List.length attr_list != 0 || blk_opt <> None) then
-           raise (Errors.SugarError (pos,
-                    "XML forest literals cannot have attributes")); in
+           xml_sugar_error pos
+            "XML forest literals cannot have attributes" in
        ()
     | _ -> assert false
 
