@@ -27,6 +27,7 @@ exception Runtime_error of string
 exception UndefinedVariable of string
 exception InvalidMutualBinding of Position.t
 exception Type_error of (Position.t * string)
+exception IRTypeError of string
 exception MultiplyDefinedMutualNames of ((Position.t list) stringmap)
 exception RichSyntaxError of synerrspec
 exception DesugaringError of
@@ -59,6 +60,7 @@ let format_exception =
       let pos, expr = Position.resolve_start_expr pos in
         Printf.sprintf "%s:%d: Type error: %s\nIn expression: %s.\n"
           pos.pos_fname pos.pos_lnum s expr
+  | IRTypeError msg -> Printf.sprintf "IR Type Error: %s" msg
   | UnboundTyCon (pos, tycon) ->
       let pos, _ = Position.resolve_start_expr pos in
       Printf.sprintf "%s:%d: Unbound type constructor %s\n"
