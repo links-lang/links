@@ -330,25 +330,23 @@ let instantiation_maps_of_type_arguments :
     (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
     let vars, t = TypeUtils.split_quantified_type pt in
     let tyargs_length = List.length tyargs in
-    let vars_length = List.length vars in
+    let vars_length   = List.length vars   in
     let arities_okay =
       if must_instantiate_all_quantifiers
         then tyargs_length = vars_length
         else tyargs_length <= vars_length in
 
     if (not arities_okay) then
-      (let qs_total = List.length vars in
-       let ts_total = List.length tyargs in
-       Debug.print (Printf.sprintf "# Type variables (total %d)" qs_total);
+      (Debug.print (Printf.sprintf "# Type variables (total %d)" vars_length);
        let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.show_quantifier t) vars in
        Debug.print tyvars;
-       Debug.print (Printf.sprintf "\n# Type arguments (total %d)" ts_total);
+       Debug.print (Printf.sprintf "\n# Type arguments (total %d)" tyargs_length);
        let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ Types.string_of_type_arg arg) tyargs in
        Debug.print tyargs';
        (* We don't have position information at this point. Any code invoking this
         * should either have done this check already, or does not have the position
         * information since a type is being introduced explicitly. *)
-       raise (ArityMismatch (qs_total, ts_total)));
+       raise (ArityMismatch (vars_length, tyargs_length)));
 
     let vars, remaining_quantifiers =
       if tyargs_length = vars_length then
