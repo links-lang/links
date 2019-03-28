@@ -16,12 +16,12 @@ type sugar_error_stage =
   | CheckXML
 
 let string_of_stage = function
-  | DesugarFormlets -> "compiling formlets"
-  | DesugarRegexes -> "compiling regular expressions"
-  | CheckQuasiquotes -> "checking quasiquotes"
+  | DesugarFormlets    -> "compiling formlets"
+  | DesugarRegexes     -> "compiling regular expressions"
+  | CheckQuasiquotes   -> "checking quasiquotes"
   | DesugarLAttributes -> "compiling attributes"
-  | DesugarPages -> "compiling page expressions"
-  | CheckXML -> "checking XML"
+  | DesugarPages       -> "compiling page expressions"
+  | CheckXML           -> "checking XML"
 
 exception Runtime_error of string
 exception UndefinedVariable of string

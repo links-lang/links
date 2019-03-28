@@ -52,10 +52,10 @@ let check mode pos e =
         Printf.sprintf "%s %s in %s quasiquote" node_type expr kind in
       raise (desugaring_error ~pos ~stage:CheckQuasiquotes ~message) in
     match o#get_error with
-    | None -> ()
-    | Some (`FormletBinding, pos') -> raise_error "Formlet binding" pos'
+    | None                           -> ()
+    | Some (`FormletBinding, pos')   -> raise_error "Formlet binding" pos'
     | Some (`FormletPlacement, pos') -> raise_error "Formlet placement" pos'
-    | Some (`PagePlacement, pos') -> raise_error "Page placement" pos'
+    | Some (`PagePlacement, pos')    -> raise_error "Page placement" pos'
 
 (* traverse a whole tree searching for and then checking quasiquotes *)
 let checker =

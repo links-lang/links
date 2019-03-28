@@ -48,7 +48,7 @@ let desugar_lhref : phrase -> phrase = function
               :: rest
           | _ ->
               desugaring_error pos
-                ("Invalid l:href: check that there are not " ^
+                ("Invalid l:href: check that there are no " ^
                  "multiple l:href attributes")
       in WithPos.make ~pos (Xml (a, attrs, attrexp, children))
   | e -> e
@@ -71,7 +71,7 @@ let desugar_laction : phrase -> phrase = function
               (Xml (form, action::rest, attrexp, hidden::children))
         | _ ->
             desugaring_error pos
-              ("Invalid l:action: check that there are not " ^
+              ("Invalid l:action: check that there are no " ^
                "multiple l:action attributes")
       end
   | e -> e
@@ -108,13 +108,13 @@ let desugar_lnames (p : phrase) : phrase * (string * string) StringMap.t =
             [("name", [constant_str name]);
              ("id"  , [constant_str id  ])]
       | "l:name", _ ->
-          desugaring_error pos "The value l:name binding must be a string constant"
+          desugaring_error pos "The value of an l:name attribute must be a string constant"
       | a -> [a] in
   let rec aux : phrase -> phrase  = function
     | { node=Xml (tag, attrs, attrexp, children); pos } ->
         let attrs = concat_map (attr pos) attrs in
         let children =
-          List.map (fun child -> aux child) children in
+          List.map aux children in
           WithPos.make ~pos (Xml (tag, attrs, attrexp, children))
     | p -> p
   in
