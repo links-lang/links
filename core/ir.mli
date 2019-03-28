@@ -72,10 +72,10 @@ and binding =
 and special =
   | Wrong      of Types.datatype
   | Database   of value
-  | Lens       of value * Types.lens_sort
-  | LensDrop   of value * string * string * value * Types.lens_sort
-  | LensSelect of value * Types.lens_phrase * Types.lens_sort
-  | LensJoin   of value * value * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort
+  | Lens of value * Lens.Sort.t
+  | LensDrop of value * string * string * value* Lens.Sort.t
+  | LensSelect of value * Lens.Phrase.t * Lens.Sort.t
+  | LensJoin of value * value * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Sort.t
   | LensGet    of value * Types.datatype
   | LensPut    of value * value * Types.datatype
   | Table      of value * value * value * (Types.datatype * Types.datatype * Types.datatype)

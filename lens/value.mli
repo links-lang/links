@@ -1,0 +1,50 @@
+type t =
+  | Lens of {table: Database.Table.t; database: Database.t; sort: Sort.t}
+  | LensMem of {records: Phrase_value.t list; sort: Sort.t}
+  | LensSelect of {lens: t; predicate: Phrase.t; sort: Sort.t}
+  | LensJoin of
+      { left: t
+      ; right: t
+      ; on: (string * string * string) list
+      ; del_left: Phrase.t
+      ; del_right: Phrase.t
+      ; sort: Sort.t }
+  | LensDrop of
+      { lens: t
+      ; drop: string
+      ; key: string
+      ; default: Phrase_value.t
+      ; sort: Sort.t }
+      [@@deriving show]
+
+val string_of_value : t -> string
+
+val sort : t -> Sort.t
+
+val is_memory_lens : t -> bool
+
+val columns : t -> Column.List.t
+
+(** returns the aliases of all present columns. *)
+val cols_present_aliases : t -> string list
+
+val colset : t -> Column.Set.t
+
+val fundeps : t -> Fun_dep.Set.t
+
+val predicate : t -> Phrase.t option
+
+val get_primary_key : t -> Alias.Set.t
+
+val generate_query : t -> Database.Select.t
+
+(** Fetch the records of a lens from the database. *)
+val lens_get : t -> Phrase_value.t list
+
+(** Construct a select lens using the specified underlying lens and select predicate. *)
+val lens_select : t -> predicate:Phrase.t -> t
+
+(** Generate a select lens from the specified lens and query its results. *)
+val lens_get_select_opt : t -> predicate:Phrase.t option -> Phrase_value.t list
+
+val query_exists : t -> Phrase.t -> bool

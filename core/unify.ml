@@ -129,7 +129,10 @@ let rec eq_types : (datatype * datatype) -> bool =
 
       | `Alias  _ -> assert false
       | `Table _  -> assert false
-      | `Lens _ as t1 -> Lens.Type.equal t1 t2
+      | `Lens l ->
+        (match unalias t2 with
+         | `Lens l2 -> Lens.Type.equal l l2
+         | _ -> false)
 and eq_sessions : (datatype * datatype) -> bool =
   function
   | `Input (lt, _), `Input (rt, _)

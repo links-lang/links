@@ -1,33 +1,37 @@
 open OUnitTest
 
-open Links_core
-open Value
-
 open UnitTestsLensCommon
+open Links_core
+
 
 module Sorted = Lens.Sorted_records
 module Phrase = Lens.Phrase
 
+open Lens.Utility
+open Lens.Utility.O
+open Lens.Phrase.Value
+
 (* define composition operator *)
-let (<<) f g x = f (g x)
 let (<|) f x = f x
 
 module Query = struct
+  module Value = Lens.Phrase.Value
+
   let lookup (col : string) (r : Value.t) =
-    let rec fndi l =
+    let rec find l =
       let c,_ = List.hd l in
-      if c = col then 0 else 1 + fndi (List.tl l) in
-    fndi (unbox_record r)
+      if c = col then 0 else 1 + find (List.tl l) in
+    find (unbox_record r)
 
   let skip f a _b = f a
 
   let set (col : string) (fn : Value.t -> Value.t -> Value.t) (r : Value.t) =
     let r' = unbox_record r in
-    let r' = List.map (fun (c,a) -> if col = c then (c,fn r a) else (c,a)) r' in
+    let r' = List.map ~f:(fun (c,a) -> if col = c then (c,fn r a) else (c,a)) r' in
     box_record r'
 
   let ifcol (col : string) (bcond : Value.t -> bool) (i : Value.t) (r : Value.t) (oth : Value.t) =
-    let (_,v) = List.find (fun (c,_) -> c = col) (unbox_record r) in
+    let (_,v) = List.find_exn ~f:(fun (c,_) -> c = col) (unbox_record r) in
     if bcond v then i else oth
 
   let ifelse (bcond : Value.t -> bool) i el (v : Value.t) =
@@ -54,7 +58,7 @@ module Query = struct
   let id (v : Value.t) = v
 
   let col (col : string) (v : Value.t) =
-    let (_,v) = List.find (fun (c,_) -> c = col) (unbox_record v) in
+    let (_,v) = List.find_exn ~f:(fun (c,_) -> c = col) (unbox_record v) in
     v
 
   let cst i (_v : Value.t) = i
@@ -64,27 +68,22 @@ module Query = struct
 
   let setcol (col : string) v (r : Value.t) =
     let r' = unbox_record r in
-    let r' = List.map (fun (c,a) -> if col = c then (c,v r) else (c,a)) r' in
+    let r' = List.map ~f:(fun (c,a) -> if col = c then (c,v r) else (c,a)) r' in
     box_record r'
 
   let setcolcst (col : string) (i : int) (r : Value.t) =
     setcol col (cst (box_int i)) r
 
-  let map_records fn recs =
-    let recs = unbox_list recs in
-    let recs = List.map fn recs in
-    box_list recs
+  let map_records f recs =
+    List.map ~f recs
 
   let map = map_records
 
   let append rs1 rs2 =
-    let rs = List.append (unbox_list rs1) (unbox_list rs2) in
-    box_list rs
+    List.append rs1 rs2
 
   let filter fn recs =
-    let recs = unbox_list recs in
-    let recs = List.filter fn recs in
-    box_list recs
+    List.filter fn recs
 
 end
 
@@ -102,11 +101,11 @@ let test_put test_ctx lens res =
   let benchmark_opt = UnitTestsLensCommon.benchmark_opt test_ctx in
 
   let step = if classic_opt then
-      LensHelpersClassic.lens_put_step lens res
+      Lens.Helpers.Classic.lens_put_step lens res
     else
-      let data = LensHelpersIncremental.lens_get_delta lens res in
+      let data = Lens.Helpers.Incremental.lens_get_delta lens res in
       LensTestHelpers.print_verbose test_ctx ("Delta Size: " ^ string_of_int (Lens.Sorted_records.total_size data));
-      LensHelpersIncremental.lens_put_set_step lens data in
+      Lens.Helpers.Incremental.lens_put_set_step lens data in
 
   let run () = step (fun _ res ->
       LensTestHelpers.print_verbose test_ctx ("Delta Size (output): " ^ string_of_int (Sorted.total_size res));
@@ -117,7 +116,7 @@ let test_put test_ctx lens res =
     let (qts, tts) = List.split runs in
     LensTestHelpers.print_query_time ();
     print_endline "query times";
-    let prlist = print_endline << string_of_value << box_list << List.map box_int in
+    let prlist = List.map ~f:Phrase.Value.box_int >> Phrase.Value.show_values >> print_endline in
     prlist qts; prlist tts
   else
     (* calculate what the first step does *)
@@ -125,15 +124,15 @@ let test_put test_ctx lens res =
 
     (* perform full update *)
     let put = if classic_opt then
-        LensHelpersClassic.lens_put
+        Lens.Helpers.Classic.lens_put
       else
-        LensHelpersIncremental.lens_put in
+        Lens.Helpers.Incremental.lens_put in
     put lens res;
 
     (* double check results *)
     let upd = Lens.Value.lens_get lens in
-    LensTestHelpers.print_verbose test_ctx (string_of_value upd);
-    LensTestHelpers.print_verbose test_ctx (string_of_value res);
+    LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values upd);
+    LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);
     LensTestHelpers.assert_rec_list_eq upd res;
     ()
 
@@ -191,7 +190,7 @@ let test_select_lens_3 n test_ctx =
   let res = ref (Lens.Value.lens_get l4) in
   let n = ref 0 in
   let changed () =
-    let del = LensHelpersIncremental.lens_get_delta l4 !res in
+    let del = Lens.Helpers.Incremental.lens_get_delta l4 !res in
     Sorted.total_size del in
   while changed () < UnitTestsLensCommon.set_upto_opt test_ctx && !n < upto do
     n := !n + 100;
@@ -212,14 +211,16 @@ let test_get_delta test_ctx =
   let l3 = LensTestHelpers.join_lens_dl l1 l2 ["b"] in
   let res = Query.map_records (Query.set "d" (Query.ifcol "b" (Query.band (Query.gt 0) (Query.lt 10)) (box_int 5))) (Lens.Value.lens_get l3) in
   let run () =
-    let _data = LensHelpersIncremental.lens_get_delta l3 res in
+    let _data = Lens.Helpers.Incremental.lens_get_delta l3 res in
     () in
   let runs = initlist 20 (fun _i -> LensTestHelpers.time_op run) in
   let (qts, tts) = List.split runs in
   print_endline "query times";
-  let prlist = print_endline << string_of_value << box_list << List.map box_int in
+  let prlist = print_endline << Phrase.Value.show_values << List.map ~f:box_int in
   prlist qts; prlist tts;
   ()
+
+let () = Lens.Debug.set_debug true
 
 let test_put_delta test_ctx =
   let n = override_n 10000 test_ctx in
@@ -247,21 +248,23 @@ let test_put_delta test_ctx =
           ) res
         )
     ) in
-  let table = match l1 with `Lens (t,_) -> t | _ -> assert false in
-  let run = if classic_opt then
+  let table = match l1 with Lens.Value.Lens {table; _} -> table | _ -> assert false in
+  let run, revert = if classic_opt then
       let cols = Lens.Value.cols_present_aliases l1 in
       let data = Sorted.construct_cols ~columns:cols ~records:res in
-      let run () = LensHelpersClassic.apply_table_data table data in
-      run
+      let run () = Lens.Helpers.Classic.apply_table_data ~table ~database:db data in
+      run, fun () -> ()
     else
-      let delta = LensHelpersIncremental.lens_get_delta l1 res in
+      let delta = Lens.Helpers.Incremental.lens_get_delta l1 res in
+      let neg = Lens.Sorted_records.negate delta in
       LensTestHelpers.print_verbose test_ctx ("Delta Size: " ^ string_of_int (Sorted.total_size delta));
-      let run () = LensHelpersIncremental.apply_delta table delta in
-      run in
-  let runs = initlist 20 (fun _i -> LensTestHelpers.time_op run) in
+      let run () = Lens.Helpers.Incremental.apply_delta ~table ~database:db delta in
+      let revert () = Lens.Helpers.Incremental.apply_delta ~table ~database:db neg in
+      run, revert in
+  let runs = initlist 20 (fun _i -> let r = LensTestHelpers.time_op run in revert (); r) in
   let (qts, tts) = List.split runs in
   print_endline "query times";
-  let prlist = print_endline << string_of_value << box_list << List.map box_int in
+  let prlist = print_endline << Phrase.Value.show_values << List.map ~f:box_int in
   prlist qts; prlist tts;
   ()
 
@@ -293,15 +296,15 @@ let test_join_lens_2 n test_ctx =
   let l2 = LensTestHelpers.drop_create_populate_table test_ctx db "t2" "b -> d" "b d" [`Seq; `RandTo (40)] upto in
   let l3 = LensTestHelpers.join_lens_dl l1 l2 ["b"] in
   let res = Query.filter (Query.lt 40 << Query.col "b") (Lens.Value.lens_get l3) in
-  LensTestHelpers.print_verbose test_ctx (string_of_value (Lens.Value.lens_get l3));
-  LensTestHelpers.print_verbose test_ctx (string_of_value res);
-  LensHelpersIncremental.lens_put_step l3 res (fun _ res ->
+  LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3));
+  LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);
+  Lens.Helpers.Incremental.lens_put_step l3 res (fun _ res ->
       LensTestHelpers.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)
     );
-  LensHelpersIncremental.lens_put l3 res;
+  Lens.Helpers.Incremental.lens_put l3 res;
   let upd = Lens.Value.lens_get l3 in
-  LensTestHelpers.print_verbose test_ctx (string_of_value upd);
-  LensTestHelpers.print_verbose test_ctx (string_of_value res);
+  LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values upd);
+  LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);
   LensTestHelpers.assert_rec_list_eq upd res;
   LensTestHelpers.drop_if_cleanup test_ctx db "t1";
   LensTestHelpers.drop_if_cleanup test_ctx db "t2";
@@ -313,15 +316,15 @@ let test_join_lens_dr_2 n test_ctx =
   let l2 = LensTestHelpers.drop_create_populate_table test_ctx db "t2" "b -> d" "b d" [`Seq; `RandTo (40)] 50 in
   let l3 = LensTestHelpers.join_lens_dr l1 l2 ["b"] in
   let res = Query.filter (Query.lt 20 << Query.col "c") (Lens.Value.lens_get l3) in
-  LensTestHelpers.print_verbose test_ctx (string_of_value (Lens.Value.lens_get l3));
-  LensTestHelpers.print_verbose test_ctx (string_of_value res);
-  LensHelpersIncremental.lens_put_step l3 res (fun _ res ->
+  LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3));
+  LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);
+  Lens.Helpers.Incremental.lens_put_step l3 res (fun _ res ->
       LensTestHelpers.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)
     );
-  LensHelpersIncremental.lens_put l3 res;
+  Lens.Helpers.Incremental.lens_put l3 res;
   let upd = Lens.Value.lens_get l3 in
-  LensTestHelpers.print_verbose test_ctx (string_of_value upd);
-  LensTestHelpers.print_verbose test_ctx (string_of_value res);
+  LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values upd);
+  LensTestHelpers.print_verbose test_ctx (Phrase.Value.show_values res);
   LensTestHelpers.assert_rec_list_eq upd res;
   LensTestHelpers.drop_if_cleanup test_ctx db "t1";
   LensTestHelpers.drop_if_cleanup test_ctx db "t2";

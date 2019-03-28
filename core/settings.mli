@@ -10,9 +10,9 @@ type 'a setting
 type mode = [`User | `System]
 
 (* add a new setting *)
-val add_bool : (string * bool * mode) -> bool setting
-val add_int : (string * int * mode) -> int setting
-val add_string : (string * string * mode) -> string setting
+val add_bool : ?hook:(bool -> unit) -> (string * bool * mode) -> bool setting
+val add_int : ?hook:(int -> unit) -> (string * int * mode) -> int setting
+val add_string : ?hook:(string -> unit) -> (string * string * mode) -> string setting
 
 (*
   parse_and_set(name, value)
