@@ -141,7 +141,8 @@ and rec_appl = {
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
 }
-and typ =    [ `Not_typed
+and typ =
+    [ `Not_typed
     | `Primitive of Primitive.t
     | `Function of (typ * row * typ)
     | `Lolli of (typ * row * typ)
