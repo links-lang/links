@@ -39,10 +39,6 @@ exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
 
-let show_pos : Position.t -> string =
-  fun (pos) ->
-    let pos = Position.start pos in
-    Printf.sprintf "%s:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
 
 let prefix_lines prefix s =
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
@@ -88,7 +84,7 @@ let format_exception =
       "*** Error: Duplicate mutually-defined bindings\n" ^
         StringMap.fold (fun name positions message ->
                           message^" "^name^":\n  "^
-			    (mapstrcat "\n  " show_pos (List.rev positions)))
+			    (mapstrcat "\n  " Position.show (List.rev positions)))
           duplicates ""
   | InvalidMutualBinding pos ->
       let pos, expr = Position.resolve_start_expr pos in
