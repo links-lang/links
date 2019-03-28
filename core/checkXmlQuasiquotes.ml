@@ -45,17 +45,17 @@ let check mode pos e =
     | `Formlet -> "formlet"
     | `Page -> "page"
   in
+    let raise_error node_type pos =
+      let open Errors in
+      let expr = Position.resolve_expression pos in
+      let message =
+        Printf.sprintf "%s %s in %s quasiquote" node_type expr kind in
+      raise (desugaring_error ~pos ~stage:CheckQuasiquotes ~message) in
     match o#get_error with
-    | None -> ()
-    | Some (`FormletBinding, pos') ->
-      let expr = Position.resolve_expression pos' in
-        raise (Errors.SugarError (pos, "Formlet binding " ^ expr ^ " in " ^ kind ^ " quasiquote"))
-    | Some (`FormletPlacement, pos') ->
-      let expr = Position.resolve_expression pos' in
-        raise (Errors.SugarError (pos, "Formlet placement " ^ expr ^ " in " ^ kind ^ " quasiquote"))
-    | Some (`PagePlacement, pos') ->
-      let expr = Position.resolve_expression pos' in
-        raise (Errors.SugarError (pos, "Page placement " ^ expr ^ " in " ^ kind ^ " quasiquote"))
+    | None                           -> ()
+    | Some (`FormletBinding, pos')   -> raise_error "Formlet binding" pos'
+    | Some (`FormletPlacement, pos') -> raise_error "Formlet placement" pos'
+    | Some (`PagePlacement, pos')    -> raise_error "Page placement" pos'
 
 (* traverse a whole tree searching for and then checking quasiquotes *)
 let checker =
@@ -87,7 +87,9 @@ object (o)
       o#phrase_with `Quasi body
     | (Formlet _ | Page _) when mode = `Quasi ->
       (* The parser should prevent this from ever happening *)
-      raise (Errors.SugarError (pos, "Malformed quasiquote (internal error)"))
+      let message =
+        Printf.sprintf "Malformed quasiquote (%s)" (Position.show pos) in
+      raise (Errors.internal_error ~filename:"checkXmlQuasiquotes.ml" ~message)
     | _ when mode = `Quasi ->
       o#phrase_with `Exp phrase
     | _ when mode = `Exp ->
