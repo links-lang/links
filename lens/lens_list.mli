@@ -12,7 +12,11 @@ val for_all2_exn : 'a list -> 'b list -> f:('a -> 'b -> bool) -> bool
 
 val for_all : 'a list -> f:('a -> bool) -> bool
 
+val for_all_or_error : 'a list -> f:('a -> bool) -> error:('a -> 'b) -> (unit, 'b) result
+
 val map : 'a list -> f:('a -> 'b) -> 'b list
+
+val map_if : 'a list -> b:('a -> bool) -> f:('a -> 'a) -> 'a list
 
 val filter_opt : 'a option list -> 'a list
 
