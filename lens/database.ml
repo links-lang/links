@@ -117,8 +117,12 @@ module Select = struct
     ; predicate: Phrase.t option
     ; db: db }
 
+  let select t ~predicate =
+    let predicate = Phrase.Option.combine_and t.predicate predicate in
+    { t with predicate }
+
   let of_sort t ~sort =
-    let predicate = Sort.predicate sort in
+    let predicate = Sort.query sort in
     let cols = Sort.cols sort in
     let tables =
       List.map ~f:Column.table cols

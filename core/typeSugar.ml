@@ -2396,43 +2396,42 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | LensKeysLit (table, keys, _) ->
            let open Lens in
            let table = tc table in
-           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
+           let columns = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
            let keys = Lens_sugar_conv.cols_of_phrase keys in
-           let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases cols) in
-           let lens_sort = Sort.make ~fds cols in
+           let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases columns) in
+           let lens_sort = Sort.make ~fds columns in
            let typ = Lens.Type.Lens lens_sort in
            LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensFunDepsLit (table, fds, _) ->
            let open Lens in
            let table = tc table in
-           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
-           let fds = Helpers.Incremental.get_fds fds cols in
-           let lens_sort = Sort.make ~fds cols in
-           let typ = Lens.Type.Lens lens_sort in
-           LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
+           let columns = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
+           let typ =
+             Lens.Type.type_lens_fun_dep ~fds ~columns
+             |> Lens_errors.unpack_type_lens_result ~die:(Gripers.die pos) in
+           LensLit (erase table, Some (Type.sort typ)), `Lens typ, merge_usages [usages table]
         | LensDropLit (lens, drop, key, default, _) ->
            let open Lens in
-           let lens = tc lens
-           and default = tc default in
-           let sort =
-             Lens.Sort.drop_lens_sort
-               (Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type))
-               ~drop:(Alias.Set.singleton drop)
-               ~key:(Alias.Set.singleton key)
-           in
-           let typ = Lens.Type.Lens sort in
+           let lens = tc lens in
+           let default = tc default in
+           let typ =
+             let lens = typ lens |> Lens_type_conv.lens_type_of_type in
+             let default = typ default |> Lens_type_conv.lens_phrase_type_of_type |> fun a -> [a] in
+             let drop = [drop] in
+             let key = Alias.Set.singleton key in
+             Type.type_drop_lens lens ~default ~drop ~key
+             |> Lens_errors.unpack_type_drop_lens_result ~die:(Gripers.die pos) in
+           let sort = Type.sort typ in
            LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens typ, merge_usages [usages lens; usages default]
         | LensSelectLit (lens, predicate, _) ->
            let lens = tc lens in
-           let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
-           let lpredicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
-           (match Lens.Phrase.Typesugar.tc_sort ~sort lpredicate with
-           | Result.Ok Lens.Phrase.Type.Bool -> ()
-           | Result.Ok _ ->
-             Gripers.die pos "Lens select predicate does not evaluate to a boolean value."
-           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
-           let typ = Lens.Type.Lens sort in
-               LensSelectLit(erase lens, predicate, Some (sort)), `Lens typ, merge_usages [usages lens]
+           let typ =
+             let lens = typ lens |> Lens_type_conv.lens_type_of_type in
+             let predicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
+             Lens.Type.type_select_lens lens ~predicate
+             |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
+           let sort = Lens.Type.sort typ in
+           LensSelectLit(erase lens, predicate, Some (sort)), `Lens typ, merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
            let lens1 = tc lens1
            and lens2 = tc lens2 in

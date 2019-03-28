@@ -8,5 +8,7 @@ end
 module Set : sig
   include Lens_set.S with type elt = t
 
+  module Set : Lens_set.S with type elt = t
+
   val pp_pretty : Format.formatter -> t -> unit
 end
