@@ -69,11 +69,10 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
 
         arg_array += ["--config=" + config_file]
 
+    if not filemode.startswith('true'):
+        arg_array += ["-e"]
 
-    if filemode.startswith('true') :
-        proc = Popen([links] + arg_array + [code], stdout=PIPE, stderr=PIPE, env=env)
-    else:
-        proc = Popen([links] + arg_array + ["-e", code], stdout=PIPE, stderr=PIPE, env=env)
+    proc = Popen([links] + arg_array + [code], stdout=PIPE, stderr=PIPE, env=env)
 
     passed = True
     errors = []
