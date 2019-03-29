@@ -44,6 +44,8 @@ let process_program
 let process_program  interacting envs program external_files =
   lazy (process_program  interacting envs program external_files) |>measure_as<| "process_program"
 
+let die_on_exception f x =
+  Errors.display ~default:(fun _ -> exit 1) (lazy (f x))
 
 let die_on_exception_unless_interacting is_interacting f x =
   let handle exc =
@@ -125,28 +127,31 @@ struct
       Env.String.iter (fun name var -> Debug.print (string_of_int var ^ " -> " ^ name ^ " :: " ^
         Types.string_of_datatype (Env.String.lookup Lib.typing_env.Types.var_env name ) )) Lib.nenv));
 
-    let open Loader in
-    let source =
-      (die_on_exception_unless_interacting false
-        (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
-    in
-    let (nenv, tyenv) = source.envs in
-    let (globals, _, _) = source.program in
+    let load_prelude_inner () =
+      let open Loader in
+      let source =
+        (die_on_exception_unless_interacting false
+          (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
+      in
+      let (nenv, tyenv) = source.envs in
+      let (globals, _, _) = source.program in
 
-    let tyenv = Lib.patch_prelude_funs tyenv in
+      let tyenv = Lib.patch_prelude_funs tyenv in
 
-    Lib.prelude_tyenv := Some tyenv;
-    Lib.prelude_nenv := Some nenv;
+      Lib.prelude_tyenv := Some tyenv;
+      Lib.prelude_nenv := Some nenv;
 
-    let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
+      let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
 
-    let globals = Backend.transform_prelude tenv globals in
+      let globals = Backend.transform_prelude tenv globals in
 
-    let valenv = Eval.run_defs Value.Env.empty globals in
-    let envs =
-      (valenv,
-      Env.String.extend Lib.nenv nenv,
-      Types.extend_typing_environment Lib.typing_env tyenv)
-    in
-      globals, envs
+      let valenv = Eval.run_defs Value.Env.empty globals in
+      let envs =
+        (valenv,
+        Env.String.extend Lib.nenv nenv,
+        Types.extend_typing_environment Lib.typing_env tyenv)
+      in
+        globals, envs
+   in
+   die_on_exception load_prelude_inner ()
 end

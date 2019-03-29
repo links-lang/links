@@ -175,7 +175,7 @@ class transform (env : Types.typing_environment) =
         let (o, t) = optionu o (fun o -> o#datatype) t in
           (o, (s, t))
 
-    method lens_sort : Types.lens_sort -> ('self_type * Types.lens_sort) =
+    method lens_sort : Lens.Sort.t -> ('self_type * Lens.Sort.t) =
       fun sort ->
             (o, sort)
 
@@ -527,22 +527,22 @@ class transform (env : Types.typing_environment) =
       | LensLit (table, Some t) ->
          let (o, table, _) = o#phrase table in
          let (o, t) = o#lens_sort t in
-            (o, LensLit (table, Some t), `Lens (t))
+            (o, LensLit (table, Some t), `Lens (Lens.Type.Lens t))
       | LensDropLit (lens, drop, key, default, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#lens_sort t in
           let (o, default, _) = o#phrase default in
-            (o, LensDropLit (lens, drop, key, default, Some t), `Lens (t))
+            (o, LensDropLit (lens, drop, key, default, Some t), `Lens (Lens.Type.Lens t))
       | LensSelectLit (lens, predicate, Some t) ->
           let (o, lens, _) = o#phrase lens in
           (* let (o, predicate, _) = o#phrase predicate in *)
           let (o, t) = o#lens_sort t in
-            (o, LensSelectLit (lens, predicate, Some t), `Lens t)
+            (o, LensSelectLit (lens, predicate, Some t), `Lens (Lens.Type.Lens t))
       | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
           let (o, lens1, _) = o#phrase lens1 in
           let (o, lens2, _) = o#phrase lens2 in
           let (o, t) = o#lens_sort t in
-            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), `Lens t)
+            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), `Lens (Lens.Type.Lens t))
       | LensGetLit (lens, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#datatype t in
