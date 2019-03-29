@@ -67,9 +67,6 @@ let handle_ir_type_error lazy_val alternative occurrence =
         Debug.print (msg ^ occurrence_string);
         alternative
 
-
-
-
 (* Some of the helper functions we use raise their own exceptions.
    We translate them to IR type exceptions here *)
 let translate_helper_exns (f : 'a -> 'b) (x : 'a) occurrence : 'b =
@@ -83,9 +80,6 @@ let translate_helper_exns (f : 'a -> 'b) (x : 'a) occurrence : 'b =
         Printf.sprintf "Arity mismatch during type application/instantiation. \
                         Providing %d type arguments to function that takes %d." given takes in
       raise_ir_type_error msg occurrence
-
-
-
 
 let ensure condition msg occurrence =
   if condition then () else raise_ir_type_error msg occurrence
@@ -366,9 +360,6 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       eqt  (context, t1, t2)
 
 
-
-
-
 let check_eq_types (ctx : type_eq_context) et at occurrence =
   if not (eq_types occurrence ctx (et, at)) then
     raise_ir_type_error
@@ -382,8 +373,6 @@ let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
       List.iter2 (fun  et at ->
           check_eq_types ctx et at occurrence
        )  exptl actl
-
-
 
 
 let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurrence =
@@ -598,10 +587,8 @@ struct
                                          (string_of_datatype vt) (string_of_datatype t)) (SVal orig);
               Coerce (v, t), t, o
               end
-
       in
       fun value -> translate_helper_exns value_inner value (SVal value)
-
 
 
     method! tail_computation :
@@ -938,10 +925,8 @@ struct
         | LensGet _
         | LensJoin _
         | LensPut _ -> (* just do type reconstruction *) super#special special
-
       in
       fun special -> translate_helper_exns special_inner special (SSpec special)
-
 
 
    method! bindings : binding list -> (binding list * 'self_type) =
@@ -1119,9 +1104,6 @@ struct
               Module (name, defs), o
       in
       fun b -> translate_helper_exns binding_inner b (SBind b)
-
-
-
 
 
     method! binder : binder -> (binder * 'self_type) =
