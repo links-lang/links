@@ -91,13 +91,13 @@ let type_join_lens s t ~on ~del_left ~del_right =
   >>= (function
         | Phrase_type.Bool -> Phrase.of_sugar del_left |> Result.return
         | _ as t -> PredicateNotBoolean (Left, t) |> Result.error)
-  >>= fun del_left ->
+  >>= fun _del_left ->
   Phrase_typesugar.tc_sort ~sort:sort2 del_right
   |> Result.map_error ~f:(fun v -> PredicateTypeError (Right, v))
   >>= (function
         | Phrase_type.Bool -> Phrase.of_sugar del_right |> Result.return
         | _ as t -> PredicateNotBoolean (Right, t) |> Result.error)
-  >>= fun del_right ->
+  >>= fun _del_right ->
   Sort.join_lens_sort sort1 sort2 ~on
   |> Result.map_error ~f:(fun e -> SortError e)
   >>| fun (sort, _) -> Lens sort
