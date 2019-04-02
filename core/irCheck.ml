@@ -4,7 +4,8 @@ open Ir
 
 (* ERROR HANDLING*)
 
-let fail_on_ir_type_error = false
+let fail_on_ir_type_error =
+  Settings.get_value Basicsettings.Ir.fail_on_ir_type_error
 exception IRTypeError of string
 
 let raise_ir_type_error msg occurrence =
