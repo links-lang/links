@@ -12,6 +12,12 @@ ret=0                              # Return code. If <> 0 then some tests failed
 STARTCOLOR="\e[31m"                # Control sequence to enable red text
 ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
 
+# If the user presses CTRL+C then kill the script as well
+control_c() {
+	exit
+}
+trap control_c SIGINT
+
 prepare_database_config () {
     # Check if database configuration exists. If not the creating from
     # a default config.sample file
