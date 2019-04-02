@@ -670,10 +670,8 @@ struct
           match Settings.get_value Basicsettings.RelationalLenses.classic_lenses with
           | true -> Lens.Eval.Classic
           | false -> Lens.Eval.Incremental in
-        (match Lens.Eval.put ~behaviour lens data with
-        | Result.Ok () -> apply_cont cont env (Value.box_unit ())
-        | Result.Error Lens.Eval.Error.InvalidData -> eval_error "Not all records in data satisfy the condition in the lens sort."
-        | Result.Error Lens.Eval.Error.InvalidDataType -> eval_error "Data is not a set of records.")
+        Lens.Eval.put ~behaviour lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
+        Value.box_unit () |> apply_cont cont env
     | Table (db, name, keys, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have

@@ -4,6 +4,15 @@ open Lens_utility
 
 type t [@@deriving show]
 
+(** Print functional dependencies in a human readable form, e.g. 'Col1 Col2 -> Col 3' *)
+val pp_pretty : t Format.fmt_fn
+
+(** Construct a new functional dependency. Example:
+
+    {[
+      let fd = Fun_dep.make left right in
+      ...
+    ]} *)
 val make : Alias.Set.t -> Alias.Set.t -> t
 
 (** Get the left side of a functional dependency (i.e. left of X -> Y returns X)*)

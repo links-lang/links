@@ -35,10 +35,6 @@ module Check_error = struct
     | ProbablyCycle of Alias.Set.t
     | FunDepNotTreeForm of Alias.Set.t
   [@@deriving show]
-
-  exception E of t
-
-  let raise e = E e |> raise
 end
 
 module Remove_defines_error = struct

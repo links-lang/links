@@ -125,3 +125,13 @@ let format_type_join_error e =
 
 let unpack_type_join_lens_result ~die res =
   unpack ~die ~fmt:format_type_join_error res
+
+let format_eval_error e =
+  let open Eval.Error in
+  match e with
+  | InvalidData -> "Not all records in data satisfy the condition in the lens sort."
+  | InvalidDataType -> "Data is not a set of records."
+  | ViolatesFunDepConstraint fd -> Format.asprintf "Data violates the functional dependency %a." Fun_dep.pp_pretty fd
+
+let unpack_eval_error ~die res =
+  unpack ~die ~fmt:format_eval_error res
