@@ -18,21 +18,39 @@ type ir_snippet =
   | SProg  of program
   | SNone
 
-let string_of_occurrence : ir_snippet -> string = function
-  | STC tc -> "\noccurring in IR tail computation:\n" ^ Ir.string_of_tail_computation tc
-  | SVal v -> "\noccurring in IR value:\n" ^ Ir.string_of_value v
-  | SSpec s -> "\noccurring in IR special tail computation:\n" ^ Ir.string_of_special s
-  | SBind b -> "\noccurring in IR binding:\n" ^ Ir.string_of_binding b
+let string_of_occurrence : ir_snippet -> string =
+  let nl = "\n" in function
+  | STC tc ->
+    "occurring in IR tail computation:" ^
+    nl ^
+    Ir.string_of_tail_computation tc
+  | SVal v ->
+    "occurring in IR value:" ^
+    nl ^
+    Ir.string_of_value v
+  | SSpec s ->
+    "noccurring in IR special tail computation:" ^
+    nl ^
+    Ir.string_of_special s
+  | SBind b ->
+    "occurring in IR binding:" ^
+    nl ^
+    Ir.string_of_binding b
   | SBinds bs ->
-    "\noccurring in IR binding list:\n" ^
-    String.concat "\n" (List.map Ir.string_of_binding bs)
-  | SProg p ->  "\noccurring in IR program:\n" ^ Ir.string_of_program p
+    "occurring in IR binding list:" ^
+    nl ^
+    String.concat nl (List.map Ir.string_of_binding bs)
+  | SProg p ->
+    "occurring in IR program:" ^
+    nl ^
+    Ir.string_of_program p
   | SNone -> ""
 
 
 let raise_ir_type_error msg occurrence =
+  let nl = "\n" in
   let occurrence_string = string_of_occurrence occurrence in
-  raise (Errors.IRTypeError (msg ^ occurrence_string))
+  raise (Errors.IRTypeError (msg ^ nl ^ occurrence_string))
 
 
 (* Evalutes a lazy value and handles exceptions raised while doing so.
