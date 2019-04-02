@@ -6,31 +6,98 @@ open Ir
 
 let fail_on_ir_type_error =
   Settings.get_value Basicsettings.Ir.fail_on_ir_type_error
-exception IRTypeError of string
+
+(* Artificial "supertype" of all IR types,
+   so we can provide arbitrary IR fragments to the error handling functions *)
+type ir_snippet =
+  | STC    of tail_computation
+  | SVal   of value
+  | SSpec  of special
+  | SBind  of binding
+  | SBinds of binding list
+  | SProg  of program
+  | SNone
+
+let string_of_occurrence : ir_snippet -> string =
+  let nl = "\n" in function
+  | STC tc ->
+    "occurring in IR tail computation:" ^
+    nl ^
+    Ir.string_of_tail_computation tc
+  | SVal v ->
+    "occurring in IR value:" ^
+    nl ^
+    Ir.string_of_value v
+  | SSpec s ->
+    "noccurring in IR special tail computation:" ^
+    nl ^
+    Ir.string_of_special s
+  | SBind b ->
+    "occurring in IR binding:" ^
+    nl ^
+    Ir.string_of_binding b
+  | SBinds bs ->
+    "occurring in IR binding list:" ^
+    nl ^
+    String.concat nl (List.map Ir.string_of_binding bs)
+  | SProg p ->
+    "occurring in IR program:" ^
+    nl ^
+    Ir.string_of_program p
+  | SNone -> ""
+
 
 let raise_ir_type_error msg occurrence =
-  let occurrence_string = match occurrence with
-    | `TC tc -> "\noccuring in tail computation: " ^ Ir.string_of_tail_computation tc
-    | `Value v -> "\noccuring in value: " ^ Ir.string_of_value v
-    | `Special s -> "\noccuring in special tail computation: " ^ Ir.string_of_special s
-    | `Binding b -> "\noccuring in binding: " ^ Ir.string_of_binding b
-    | `None -> "" in
-  raise (IRTypeError (msg ^ occurrence_string))
+  let nl = "\n" in
+  let occurrence_string = string_of_occurrence occurrence in
+  raise (Errors.IRTypeError (msg ^ nl ^ occurrence_string))
 
-let handle_ir_type_error error alternative =
-  match error with
-    | IRTypeError msg
-    | TypeUtils.TypeDestructionError msg ->
-      if fail_on_ir_type_error then
-        failwith ("IR Type Error: " ^ msg)
-      else
+
+(* Evalutes a lazy value and handles exceptions raised while doing so.
+   If we are supposed to fail on IR exceptions, we don't catch any of them.
+   If we are supposed to continue after IR type errors, we print a debug
+   message and return the alternative value in case of an exception. *)
+let handle_ir_type_error lazy_val alternative occurrence =
+  if fail_on_ir_type_error then
+    (* All exceptions are left unhandled, leaving them for the error handling
+       facilities outside of the IR type checker *)
+    Lazy.force lazy_val
+  else
+    (* Catch all errors, print them to debug output, but continue by
+       returning the alternative value *)
+    try
+      Lazy.force lazy_val
+    with
+      | Errors.IRTypeError msg  ->
+        (* We saw an IR error, but we are not supposed to abort.
+           Print the error and return the alternative value *)
         Debug.print
           ("\n--------------------------------------------------------------------\n" ^
-            "Continuing after IR Type Error: " ^
-            msg ^
-            "\n-------------------------------------------------------------------\n" ); alternative
-    |  e-> failwith ("Unknown exception during IR type-checking: " ^ Printexc.to_string e)
+           "Continuing after IR Type Error:\n" ^
+           msg ^
+           "\n-------------------------------------------------------------------\n" );
+        alternative
+      | exn ->
+        let msg =
+          "Encountered exception during IR type-checking, saying:\n" ^
+          Printexc.to_string exn in
+        let occurrence_string = string_of_occurrence occurrence in
+        Debug.print (msg ^ occurrence_string);
+        alternative
 
+(* Some of the helper functions we use raise their own exceptions.
+   We translate them to IR type exceptions here *)
+let translate_helper_exns (f : 'a -> 'b) (x : 'a) occurrence : 'b =
+  try
+    f x
+  with
+    | TypeUtils.TypeDestructionError msg ->
+      raise_ir_type_error msg occurrence
+    | Instantiate.ArityMismatch (takes, given) ->
+      let msg =
+        Printf.sprintf "Arity mismatch during type application/instantiation. \
+                        Providing %d type arguments to function that takes %d." given takes in
+      raise_ir_type_error msg occurrence
 
 let ensure condition msg occurrence =
   if condition then () else raise_ir_type_error msg occurrence
@@ -95,7 +162,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
                 ensure
                   (primary_kind = primary_kind_env &&  rsk = subkind_env)
                   "Mismatch between (sub) kind information in variable vs stored in kind environment"
-                  `None;
+                  SNone;
                 true
              | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurrence
            end
@@ -311,9 +378,6 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       eqt  (context, t1, t2)
 
 
-
-
-
 let check_eq_types (ctx : type_eq_context) et at occurrence =
   if not (eq_types occurrence ctx (et, at)) then
     raise_ir_type_error
@@ -322,13 +386,11 @@ let check_eq_types (ctx : type_eq_context) et at occurrence =
 
 let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
     if List.length exptl <> List.length actl then
-      raise_ir_type_error "Arity mismatch" `None
+      raise_ir_type_error "Arity mismatch" occurrence
     else
       List.iter2 (fun  et at ->
           check_eq_types ctx et at occurrence
        )  exptl actl
-
-
 
 
 let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurrence =
@@ -397,8 +459,8 @@ struct
 
 
 
-    method! value : value -> (value * datatype * 'self_type) = fun orig ->
-      match orig with
+    method! value : value -> (value * datatype * 'self_type) =
+      let value_inner orig = match orig with
         | Ir.Constant c -> let (c, t, o) = o#constant c in Ir.Constant c, t, o
         | Variable x -> let (x, t, o) = o#var x in Variable x, t, o
         | Extend (fields, base) as orig ->
@@ -407,7 +469,7 @@ struct
 
             let handle_extended_record = function
               | Some t -> `Record t
-              | None -> raise_ir_type_error "Record already contains one of the extension fields" (`Value orig) in
+              | None -> raise_ir_type_error "Record already contains one of the extension fields" (SVal orig) in
 
             let t =
               match base_type with
@@ -417,7 +479,7 @@ struct
                       match t with
                         | `Record row ->
                             handle_extended_record (extend_row_safe field_types row)
-                        | _ -> raise_ir_type_error "Trying to extend non-record type" (`Value orig)
+                        | _ -> raise_ir_type_error "Trying to extend non-record type" (SVal orig)
                     end
             in
               Extend (fields, base), t, o
@@ -434,8 +496,8 @@ struct
             let v, vt, o = o#value v in
             let _ = match t with
               | `Variant _ ->
-                 o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (`Value orig)
-              | _ -> raise_ir_type_error "trying to inject into non-variant type" (`Value orig) in
+                 o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (SVal orig)
+              | _ -> raise_ir_type_error "trying to inject into non-variant type" (SVal orig) in
             Inject (name, v, t), t, o
 
         | TAbs (tyvars, v) ->
@@ -454,23 +516,14 @@ struct
 
         | TApp (v, ts)  ->
             let v, t, o = o#value v in
-              begin try
-                let t = Instantiate.apply_type t ts in
-                  TApp (v, ts), t, o
-              with
-                  Instantiate.ArityMismatch _ ->
-                    let msg = ("Arity mismatch in type application (Ir.Transform)")
-                    ^ ("expression: "^string_of_value (TApp (v, ts)))
-                    ^ ("type: "^Types.string_of_datatype t)
-                    ^ ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts)) in
-                    raise_ir_type_error msg (`Value orig)
-              end
+            let t = Instantiate.apply_type t ts in
+            TApp (v, ts), t, o
         | XmlNode (tag, attributes, children) ->
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
 
-            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive Primitive.String) t (`Value orig)) attribute_types in
-            let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t (`Value orig)) children_types in
+            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive Primitive.String) t (SVal orig)) attribute_types in
+            let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t (SVal orig)) children_types in
               XmlNode (tag, attributes, children), Types.xml_type, o
 
         | ApplyPure (f, args) ->
@@ -484,8 +537,8 @@ struct
             let (args, argument_types, o) = o#list (fun o -> o#value) args in
 
             let parameter_types = arg_types ~overstep_quantifiers:false ft in
-            check_eq_type_lists (o#extract_type_equality_context ()) parameter_types argument_types (`Value orig);
-            ensure (is_pure_function f) "ApplyPure used for non-pure function" (`Value orig);
+            check_eq_type_lists (o#extract_type_equality_context ()) parameter_types argument_types (SVal orig);
+            ensure (is_pure_function f) "ApplyPure used for non-pure function" (SVal orig);
             ApplyPure (f, args),  return_type ~overstep_quantifiers:false ft, o
 
 
@@ -501,7 +554,7 @@ struct
               let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false ft tyargs in
               Instantiate.datatype instantiation_maps remaining_type, instantiation_maps  in
 
-          ensure (is_function_type (snd (TypeUtils.split_quantified_type ft_instantiated))) "Passing closure to non-funcion" (`Value orig);
+          ensure (is_function_type (snd (TypeUtils.split_quantified_type ft_instantiated))) "Passing closure to non-funcion" (SVal orig);
           begin match o#lookup_closure_def_for_fun f with
           | Some optbinder ->
             begin match optbinder with
@@ -531,10 +584,10 @@ struct
                 let uninstantiated_type_of_environment = (Var.type_of_binder binder) in
                 Debug.print (IntMap.show Types.pp_datatype (fst3 inner_instantiation_maps));
                 let type_of_environment = Instantiate.datatype inner_instantiation_maps uninstantiated_type_of_environment in
-                o#check_eq_types type_of_environment zt (`Value orig)
-              | _, None -> raise_ir_type_error "Providing closure to a function that does not need one" (`Value orig)
+                o#check_eq_types type_of_environment zt (SVal orig)
+              | _, None -> raise_ir_type_error "Providing closure to a function that does not need one" (SVal orig)
             end
-          | None -> raise_ir_type_error "Providing closure to untracked function" (`Value orig)
+          | None -> raise_ir_type_error "Providing closure to untracked function" (SVal orig)
           end;
           Closure (f, tyargs, z), ft_instantiated, o
 
@@ -548,14 +601,17 @@ struct
               end
             else
               begin
-              ensure (eq_types (`Value orig) (o#extract_type_equality_context ()) (vt, t) || is_sub_type (vt, t)) (Printf.sprintf "coercion error: %s is not a subtype of %s"
-                                         (string_of_datatype vt) (string_of_datatype t)) (`Value orig);
+              ensure (eq_types (SVal orig) (o#extract_type_equality_context ()) (vt, t) || is_sub_type (vt, t)) (Printf.sprintf "coercion error: %s is not a subtype of %s"
+                                         (string_of_datatype vt) (string_of_datatype t)) (SVal orig);
               Coerce (v, t), t, o
               end
+      in
+      fun value -> translate_helper_exns value_inner value (SVal value)
+
 
     method! tail_computation :
-      tail_computation -> (tail_computation * datatype * 'self_type) = fun orig ->
-      match orig with
+      tail_computation -> (tail_computation * datatype * 'self_type) =
+      let tail_computation_inner orig = match orig with
         | Return v ->
             let v, t, o = o#value v in
               Return v, t, o
@@ -565,8 +621,8 @@ struct
             let args, argtypes, o = o#list (fun o -> o#value) args in
             let exp_argstype = arg_types ~overstep_quantifiers:false ft in
             let effects = effect_row ~overstep_quantifiers:false ft in
-            ensure_effect_rows_compatible (o#extract_type_equality_context ()) allowed_effects effects (`TC orig);
-            check_eq_type_lists (o#extract_type_equality_context ()) exp_argstype argtypes (`TC orig);
+            ensure_effect_rows_compatible (o#extract_type_equality_context ()) allowed_effects effects (STC orig);
+            check_eq_type_lists (o#extract_type_equality_context ()) exp_argstype argtypes (STC orig);
             Apply (f, args), return_type ~overstep_quantifiers:false ft, o
 
         | Special special ->
@@ -589,15 +645,15 @@ struct
                let case_fields = StringMap.fold (fun field _ fields -> StringSet.add field fields) cases StringSet.empty in
 
                if has_default then
-                 ensure (StringSet.subset case_fields present_fields) "superfluous case" (`TC orig)
+                 ensure (StringSet.subset case_fields present_fields) "superfluous case" (STC orig)
                else
                  begin
-                   ensure (not (StringSet.is_empty present_fields)) "Case with neither cases nor default" (`TC orig);
-                   ensure (is_closed) "case without default over open row"  (`TC orig);
+                   ensure (not (StringSet.is_empty present_fields)) "Case with neither cases nor default" (STC orig);
+                   ensure (is_closed) "case without default over open row"  (STC orig);
                    ensure (not has_presence_polymorphism)
-                     "case without default over variant with presence polymorphism in some field"  (`TC orig);
+                     "case without default over variant with presence polymorphism in some field"  (STC orig);
                    ensure (StringSet.equal case_fields present_fields)
-                     "cases not identical to present fields in closed row, no default case" (`TC orig)
+                     "cases not identical to present fields in closed row, no default case" (STC orig)
                  end;
 
                let cases, types, o =
@@ -605,7 +661,7 @@ struct
                    (fun name  (binder, comp) (cases, types, o) ->
                      let type_binder = Var.type_of_binder binder in
                      let type_variant = variant_at ~overstep_quantifiers:false name variant in
-                     o#check_eq_types type_binder type_variant (`TC orig);
+                     o#check_eq_types type_binder type_variant (STC orig);
                      let b, o = o#binder binder in
                      let c, t, o = o#computation comp in
                      let o = o#remove_binder binder in
@@ -619,36 +675,42 @@ struct
                      (b, c), t, o) default in
                let types = OptionUtils.opt_app (fun dt -> dt :: types) types default_type in
                let t = List.hd types in
-               List.iter (fun ty -> o#check_eq_types t ty (`TC orig)) (List.tl types);
+               List.iter (fun ty -> o#check_eq_types t ty (STC orig)) (List.tl types);
                Ir.Case (v, cases, default), t, o
-            | _ ->  raise_ir_type_error "Case over non-variant value" (`TC orig)
+            | _ ->  raise_ir_type_error "Case over non-variant value" (STC orig)
             end
         | If (v, left, right) ->
             let v, vt, o = o#value v in
             let left, lt, o = o#computation left in
             let right, rt, o = o#computation right in
-            o#check_eq_types vt (`Primitive Primitive.Bool) (`TC orig);
-            o#check_eq_types lt rt (`TC orig);
+            o#check_eq_types vt (`Primitive Primitive.Bool) (STC orig);
+            o#check_eq_types lt rt (STC orig);
             If (v, left, right), lt, o
 
+      in
+      fun tc -> translate_helper_exns tail_computation_inner tc (STC tc)
+
+
+
+
     method! special : special -> (special * datatype * 'self_type) =
-      fun special -> match special with
+      let special_inner special = match special with
         | Wrong t -> Wrong t, t, o
         | Database v ->
             let v, vt, o = o#value v in
             (* v must be a record containing string fields  name, args, and driver*)
             List.iter (fun field ->
-                o#check_eq_types (project_type field vt) Types.string_type (`Special special)
+                o#check_eq_types (project_type field vt) Types.string_type (SSpec special)
               ) ["name"; "args"; "driver"];
             Database v, `Primitive Primitive.DB, o
 
         | Table (db, table_name, keys, tt) ->
             let db, db_type, o = o#value db in
-            o#check_eq_types db_type Types.database_type (`Special special);
+            o#check_eq_types db_type Types.database_type (SSpec special);
             let table_name, table_name_type, o = o#value table_name in
-            o#check_eq_types table_name_type Types.string_type (`Special special);
+            o#check_eq_types table_name_type Types.string_type (SSpec special);
             let keys, keys_type, o = o#value keys in
-            o#check_eq_types keys_type Types.keys_type (`Special special);
+            o#check_eq_types keys_type Types.keys_type (SSpec special);
             (* TODO: tt is a tuple of three records. Discussion pending about what kind of checks we should do here
                From an implementation perspective, we should check the consistency of the read, write, needed info here *)
               Table (db, table_name, keys, tt), `Table tt, o
@@ -658,12 +720,12 @@ struct
               o#optionu
                 (fun o (limit, offset) ->
                    (* Query blocks themselves only have the wild effect when they have a range *)
-                   o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
+                   o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
 
                    let limit, ltype, o = o#value limit in
                    let offset, otype, o = o#value offset in
-                      o#check_eq_types ltype Types.int_type (`Special special);
-                      o#check_eq_types otype Types.int_type (`Special special);
+                      o#check_eq_types ltype Types.int_type (SSpec special);
+                      o#check_eq_types otype Types.int_type (SSpec special);
                      (limit, offset), o)
                 range in
             (* query body must not have effects *)
@@ -672,62 +734,62 @@ struct
             let o, _ = o#set_allowed_effects outer_effects in
 
             (* The type of the body must match the type the query is annotated with *)
-            o#check_eq_types original_t t (`Special special);
+            o#check_eq_types original_t t (SSpec special);
 
             (if Settings.get_value Basicsettings.Shredding.relax_query_type_constraint then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in
               let row = TypeUtils.extract_row list_content_type in
-              ensure (Types.is_base_row row) "Only base types allowed in query result record" (`Special special));
+              ensure (Types.is_base_row row) "Only base types allowed in query result record" (SSpec special));
 
               Query (range, e, t), t, o
 
         | Update ((x, source), where, body) ->
-            o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
+            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
             let source, source_t, o = o#value source in
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
             let table_write = TypeUtils.table_write_type source_t in
             let x, o = o#binder x in
-            o#check_eq_types (Var.type_of_binder x) table_read (`Special special);
+            o#check_eq_types (Var.type_of_binder x) table_read (SSpec special);
             (* where part must not have effects *)
             let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
             let where, o = o#optionu (fun o where ->
                   let where, t, o = o#computation where in
-                  o#check_eq_types t Types.bool_type (`Special special);
+                  o#check_eq_types t Types.bool_type (SSpec special);
                   where, o
                 )
                where in
             let body, body_t, o = o#computation body in
             let body_element_type = TypeUtils.element_type ~overstep_quantifiers:false body_t in
             let body_record_row = (TypeUtils.extract_row body_element_type) in
-            ensure (Types.is_closed_row body_record_row) "Open row as result of update" (`Special special);
+            ensure (Types.is_closed_row body_record_row) "Open row as result of update" (SSpec special);
             TypeUtils.iter_row (fun field presence_spec ->
                 match presence_spec with
                   | `Present actual_type_field ->
                     (* Ensure that the field we update is in the write row and the types match *)
                     let expected_type_field = TypeUtils.project_type field table_write in
-                    o#check_eq_types expected_type_field actual_type_field (`Special special)
+                    o#check_eq_types expected_type_field actual_type_field (SSpec special)
                   | `Absent -> () (* This is a closed row, ignore Absent *)
-                  | `Var _  -> raise_ir_type_error "Found presence polymorphism in the result of an update" (`Special special)
+                  | `Var _  -> raise_ir_type_error "Found presence polymorphism in the result of an update" (SSpec special)
               ) body_record_row;
             let o = o#remove_binder x in
             let o, _ = o#set_allowed_effects outer_effects in
               Update ((x, source), where, body), Types.unit_type, o
 
         | Delete ((x, source), where) ->
-            o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
+            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
             let source, source_t, o = o#value source in
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
             let x, o = o#binder x in
-            o#check_eq_types (Var.type_of_binder x) table_read (`Special special);
+            o#check_eq_types (Var.type_of_binder x) table_read (SSpec special);
             (* where part must not have effects *)
             let o, outer_effects = o#set_allowed_effects (Types.make_empty_closed_row ()) in
             let where, o = o#optionu (fun o where ->
                   let where, t, o = o#computation where in
-                  o#check_eq_types t Types.bool_type (`Special special);
+                  o#check_eq_types t Types.bool_type (SSpec special);
                   where, o
                 )
                where in
@@ -740,11 +802,11 @@ struct
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               CallCC v, return_type ~overstep_quantifiers:false t, o
         | Select (l, v) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
+           o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
            let v, t, o = o#value v in
            Select (l, v), t, o
         | Choice (v, bs) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect "wild" Types.unit_type (`Special special);
+           o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
            let v, _, o = o#value v in
            let bs, branch_types, o =
              o#name_map (fun o (b, c) ->
@@ -783,7 +845,7 @@ struct
                   let resume_type = Var.type_of_binder resume in
                   let (cur_resume_args, cur_resume_effects, cur_resume_ret) = match TypeUtils.concrete_type resume_type with
                     | `Function (a, b, c) -> a, b, c
-                    | _ -> raise_ir_type_error "Resumptions has non-function type" (`Special special) in
+                    | _ -> raise_ir_type_error "Resumptions has non-function type" (SSpec special) in
 
                   let presence_spec_funtype = `Function (x_type, Types.make_empty_closed_row (), cur_resume_args) in
 
@@ -792,14 +854,14 @@ struct
                       resumption_effects := Some cur_resume_effects;
                       resumption_return_type := Some  cur_resume_ret
                     | (Some existing_resumption_effects, Some existing_resumption_rettype) ->
-                      o#check_eq_types (`Effect existing_resumption_effects) (`Effect cur_resume_effects) (`Special special);
-                      o#check_eq_types existing_resumption_rettype cur_resume_ret (`Special special)
+                      o#check_eq_types (`Effect existing_resumption_effects) (`Effect cur_resume_effects) (SSpec special);
+                      o#check_eq_types existing_resumption_rettype cur_resume_ret (SSpec special)
                     | _ -> assert false);
 
 
                   (* ct is A_d in the IR formalization *)
                   let (c, ct, o) = o#computation c in
-                  o#check_eq_types return_t ct (`Special special);
+                  o#check_eq_types return_t ct (SSpec special);
                   let o = o#remove_binder x in
                   let o = o#remove_binder resume in
                   (x, resume, c), presence_spec_funtype, o)
@@ -821,7 +883,7 @@ struct
 
         (if not (Types.is_closed_row outer_effects) then
           let outer_effects_contain e = StringMap.mem e outer_effects_map in
-          ensure (StringMap.for_all (fun e _ -> outer_effects_contain e) cases) "Outer effects are open but do not mention an effect handled by handler" (`Special special));
+          ensure (StringMap.for_all (fun e _ -> outer_effects_contain e) cases) "Outer effects are open but do not mention an effect handled by handler" (SSpec special));
 
           (* comp_t  is A_c in the IR formalization *)
           let o, _ = o#set_allowed_effects inner_effects in
@@ -843,15 +905,15 @@ struct
             | Shallow -> Shallow, o in
           let o, _ = o#set_allowed_effects outer_effects in
 
-          o#check_eq_types return_binder_type comp_t (`Special special);
+          o#check_eq_types return_binder_type comp_t (SSpec special);
 
         (match !resumption_effects, !resumption_return_type, depth with
           | Some re, Some rrt, (Deep _) ->
-            o#check_eq_types (`Effect re) (`Effect outer_effects) (`Special special);
-            o#check_eq_types return_t rrt (`Special special)
+            o#check_eq_types (`Effect re) (`Effect outer_effects) (SSpec special);
+            o#check_eq_types return_t rrt (SSpec special)
           | Some re, Some rrt, Shallow ->
-            o#check_eq_types (`Effect re) (`Effect inner_effects) (`Special special);
-            o#check_eq_types comp_t rrt (`Special special)
+            o#check_eq_types (`Effect re) (`Effect inner_effects) (SSpec special);
+            o#check_eq_types comp_t rrt (SSpec special)
           | _ -> ());
 
 
@@ -867,11 +929,11 @@ struct
               Therefore, can't use return_type and arg_types from TypeUtils here, because these have those assumptions hard-coded *)
           let (arg_type_expected, effects, ret_type_expected) = match TypeUtils.concrete_type effect_type with
             | `Function (at, et, rt) -> (at, et, rt)
-            | _ -> raise_ir_type_error "Non-function type associated with effect" (`Special special) in
+            | _ -> raise_ir_type_error "Non-function type associated with effect" (SSpec special) in
 
-          ensure (Types.is_empty_row effects) "Effect case's function type has non-empty effect row" (`Special special);
-          o#check_eq_types arg_type_expected arg_type_actual (`Special special);
-          o#check_eq_types ret_type_expected t (`Special special);
+          ensure (Types.is_empty_row effects) "Effect case's function type has non-empty effect row" (SSpec special);
+          o#check_eq_types arg_type_expected arg_type_actual (SSpec special);
+          o#check_eq_types ret_type_expected t (SSpec special);
 
           (DoOperation (name, vs, t), t, o)
 
@@ -881,6 +943,9 @@ struct
         | LensGet _
         | LensJoin _
         | LensPut _ -> (* just do type reconstruction *) super#special special
+      in
+      fun special -> translate_helper_exns special_inner special (SSpec special)
+
 
    method! bindings : binding list -> (binding list * 'self_type) =
       fun bs ->
@@ -906,9 +971,9 @@ struct
         let is_recursive = match fundef with
           | Rec _ -> true
           | _ -> false in
-        let mismatch () = raise_ir_type_error "Quantifier mismatch in function def" (`Binding fundef) in
+        let mismatch () = raise_ir_type_error "Quantifier mismatch in function def" (SBind fundef) in
         let check_types subst type_var_env expected_returntype body_actual_type  =
-          check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type (`Binding fundef) in
+          check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type (SBind fundef) in
         let rec handle_foralls subst type_var_env funtype tyvars body_actual_type = match funtype with
           | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst type_var_env (unbox_quantifiers qs_boxed) t tyvars body_actual_type
           | `Function (_, _, rt)
@@ -931,7 +996,7 @@ struct
         let fully_applied_function_expected = Instantiate.apply_type expected_overall_funtype quantifiers_as_type_args in
         let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
         let o, previously_allowed_effects = o#set_allowed_effects expected_function_effects in
-        (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type (`Binding fundef));
+        (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type (SBind fundef));
         let o = List.fold_left
               (fun o quant ->
                 let var = var_of_quantifier quant in
@@ -948,10 +1013,10 @@ struct
         body, o
 
     method! binding : binding -> (binding * 'self_type) =
-      function
+      let binding_inner = function
         | (Let (x, (tyvars, tc))) as orig ->
-            let tc, o =
-            try
+            let lazy_check =
+            lazy (
               let o = List.fold_left
                 (fun o quant ->
                   let var = var_of_quantifier quant in
@@ -964,16 +1029,17 @@ struct
                   o#remove_typevar_to_context var) o tyvars in
               let exp = Var.type_of_binder x in
               let act_foralled = `ForAll (ref tyvars, act) in
-              o#check_eq_types exp act_foralled (`Binding orig);
+              o#check_eq_types exp act_foralled (SBind orig);
               tc, o
-            with e -> handle_ir_type_error e (tc, o) in
+            ) in
+            let (tc, o) = handle_ir_type_error lazy_check (tc, o) (SBind orig) in
             let x, o = o#binder x in
             Let (x, (tyvars, tc)), o
 
         | Fun (f, (tyvars, xs, body), z, location) as binding ->
               (* It is important that the type annotations of the parameters are expressed in terms of the type variables from tyvars (also for rec functions) *)
-              let f, tyvars, xs, body, z, location, o =
-              try
+              let lazy_check =
+              lazy(
                 let (z, o) = o#optionu (fun o -> o#binder) z in
                 let (xs, o) =
                   List.fold_right
@@ -991,7 +1057,9 @@ struct
                 let o = OptionUtils.opt_app o#remove_binder o z in
                 let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
                 f, tyvars, xs, body, z, location, o
-              with e -> handle_ir_type_error e (f, tyvars, xs, body, z, location, o) in
+              ) in
+              let f, tyvars, xs, body, z, location, o =
+               handle_ir_type_error lazy_check (f, tyvars, xs, body, z, location, o) (SBind binding) in
               let f, o = o#binder f in
               Fun (f, (tyvars, xs, body), z, location), o
 
@@ -1007,8 +1075,8 @@ struct
                 defs
                 ([], o) in
 
-            let defs, o =
-            try
+            let lazy_check =
+            lazy (
               let defs, o =
               List.fold_left
                 (fun (defs, (o : 'self_type)) ((f, (tyvars, xs, body), z, location)) ->
@@ -1033,8 +1101,9 @@ struct
                 defs in
               let defs = List.rev defs in
               defs, o
-            with e -> handle_ir_type_error e (defs, o) in
-              Rec defs, o
+            ) in
+            let defs, o = handle_ir_type_error lazy_check (defs, o) (SBind binding) in
+            Rec defs, o
 
 
         | Alien (x, name, language) ->
@@ -1051,6 +1120,9 @@ struct
                       Some defs, o
             in
               Module (name, defs), o
+      in
+      fun b -> translate_helper_exns binding_inner b (SBind b)
+
 
     method! binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
@@ -1090,10 +1162,12 @@ struct
   end
 
   let program tyenv p =
-    let p, _, _ = (checker tyenv)#computation p in
-      p
+    let lazy_check =
+      lazy (let p, _, _ = (checker tyenv)#computation p in p) in
+   handle_ir_type_error lazy_check p (SProg p)
 
   let bindings tyenv b =
-    let b, _ = (checker tyenv)#bindings b in
-      b
+    let lazy_check =
+      lazy (let b, _ = (checker tyenv)#bindings b in b) in
+    handle_ir_type_error lazy_check b (SBinds b)
 end
