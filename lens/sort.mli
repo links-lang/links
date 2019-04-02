@@ -85,6 +85,12 @@ module Drop_sort_error : sig
   val equal : t -> t -> bool
 end
 
+module Join_sort_error : sig
+  type t = UnboundColumn of Alias.Set.t | AlreadyBound of Alias.Set.t
+
+  val equal : t -> t -> bool
+end
+
 (** Create a drop lens sort. *)
 val drop_lens_sort :
      t
@@ -95,7 +101,10 @@ val drop_lens_sort :
 
 (** Create a sort as the join of two other sorts on the columns specified by [on] *)
 val join_lens_sort :
-  t -> t -> on:string list -> t * (string * string * string) list
+     t
+  -> t
+  -> on:(string * string * string) list
+  -> (t * (string * string * string) list, Join_sort_error.t) result
 
 (** Convert the sort into a phrase type. *)
 val record_type : t -> Phrase_type.t

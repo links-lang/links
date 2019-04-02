@@ -2435,27 +2435,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
            let lens1 = tc lens1
            and lens2 = tc lens2 in
-           let sort1 = Lens.Type.sort (typ lens1 |> Lens_type_conv.lens_type_of_type) in
-           let sort2 = Lens.Type.sort (typ lens2 |> Lens_type_conv.lens_type_of_type) in
-           let lleft = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
-           let lright = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
-           (match Lens.Phrase.Typesugar.tc_sort ~sort:sort1 lleft with
-           | Result.Ok Lens.Phrase.Type.Bool -> ()
-           | Result.Ok _ ->
-             Gripers.die pos "Lens join left predicate does not evaluate to a boolean value."
-           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
-           (match Lens.Phrase.Typesugar.tc_sort ~sort:sort2 lright with
-           | Result.Ok Lens.Phrase.Type.Bool -> ()
-           | Result.Ok _ ->
-             Gripers.die pos "Lens join right predicate does not evaluate to a boolean value."
-           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
-           let sort, _ =
-             Lens.Sort.join_lens_sort
-               sort1
-               sort2
-               ~on:(Lens_sugar_conv.cols_of_phrase on)
-           in
-           let typ = Lens.Type.Lens sort in
+           let typ =
+             let lens1 = typ lens1 |> Lens_type_conv.lens_type_of_type in
+             let lens2 = typ lens2 |> Lens_type_conv.lens_type_of_type in
+             let on = Lens_sugar_conv.cols_of_phrase on |> List.map (fun a -> a, a, a) in
+             let del_left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
+             let del_right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
+             Lens.Type.type_join_lens lens1 lens2 ~on ~del_left ~del_right
+           |> Lens_errors.unpack_type_join_lens_result ~die:(Gripers.die pos) in
+           let sort = Lens.Type.sort typ in
            LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens typ, merge_usages [usages lens1; usages lens2]
         | LensGetLit (lens, _) ->
            let lens = tc lens in

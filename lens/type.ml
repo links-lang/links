@@ -71,3 +71,33 @@ let type_drop_lens t ~drop ~default ~key =
   let sort = sort t in
   let default = List.map ~f:Phrase_value.default_value default in
   Sort.drop_lens_sort sort ~drop ~default ~key >>| fun sort -> Lens sort
+
+module Join_lens_error = struct
+  type lens = Left | Right
+
+  type 'a t =
+    | PredicateTypeError of lens * 'a Phrase_typesugar.error
+    | PredicateNotBoolean of lens * Phrase_type.t
+    | SortError of Sort.Join_sort_error.t
+end
+
+let type_join_lens s t ~on ~del_left ~del_right =
+  let open Result.O in
+  let open Join_lens_error in
+  let sort1 = sort s in
+  let sort2 = sort t in
+  Phrase_typesugar.tc_sort ~sort:sort1 del_left
+  |> Result.map_error ~f:(fun v -> PredicateTypeError (Left, v))
+  >>= (function
+        | Phrase_type.Bool -> Phrase.of_sugar del_left |> Result.return
+        | _ as t -> PredicateNotBoolean (Left, t) |> Result.error)
+  >>= fun del_left ->
+  Phrase_typesugar.tc_sort ~sort:sort2 del_right
+  |> Result.map_error ~f:(fun v -> PredicateTypeError (Right, v))
+  >>= (function
+        | Phrase_type.Bool -> Phrase.of_sugar del_right |> Result.return
+        | _ as t -> PredicateNotBoolean (Right, t) |> Result.error)
+  >>= fun del_right ->
+  Sort.join_lens_sort sort1 sort2 ~on
+  |> Result.map_error ~f:(fun e -> SortError e)
+  >>| fun (sort, _) -> Lens sort

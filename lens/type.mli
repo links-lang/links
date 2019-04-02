@@ -39,3 +39,20 @@ val type_drop_lens :
   -> default:Phrase_type.t list
   -> key:Alias.Set.t
   -> (t, Drop_lens_error.t) result
+
+module Join_lens_error : sig
+  type lens = Left | Right
+
+  type 'a t =
+    | PredicateTypeError of lens * 'a Phrase_typesugar.error
+    | PredicateNotBoolean of lens * Phrase_type.t
+    | SortError of Sort.Join_sort_error.t
+end
+
+val type_join_lens :
+     t
+  -> t
+  -> on:(string * string * string) list
+  -> del_left:'a Phrase_sugar.phrase
+  -> del_right:'a Phrase_sugar.phrase
+  -> (t, 'a Join_lens_error.t) result

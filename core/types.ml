@@ -2150,14 +2150,21 @@ struct
                datatype bound_vars p w ^ "," ^
                datatype bound_vars p n ^ ")"
           | `Lens typ ->
-            let sort = Lens.Type.sort typ in
-            let cols = Lens.Sort.cols sort in
+            let open Lens in
+            let sort = Type.sort typ in
+            let cols = Sort.present_colset sort |> Column.Set.elements in
+            let fds = Sort.fds sort in
+            let predicate =
+              Sort.predicate sort
+              |> OptionUtils.from_option (Phrase.Constant.bool true) in
             let pp_col f col =
               Format.fprintf f "%s : %a"
                 (Lens.Column.alias col)
-                Lens.Phrase.Type.pp (Lens.Column.typ col) in
-            Format.asprintf "Lens(%a)"
+                Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
+            Format.asprintf "Lens((%a), %a, { %a })"
               (Lens.Utility.Format.pp_comma_list pp_col) cols
+              Lens.Database.fmt_phrase_dummy predicate
+              Lens.Fun_dep.Set.pp_pretty fds
           | `Alias ((s,[]), _) ->  s
           | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg bound_vars p) elems ^"]"

@@ -649,11 +649,12 @@ struct
           then lens2, lens1
           else lens1, lens2
         in
+        let on = List.map (fun a -> a, a, a) on in
         let sort, on =
           Lens.Sort.join_lens_sort
             (Lens.Value.sort lens1)
             (Lens.Value.sort lens2) ~on
-        in
+          |> Lens_errors.unpack_sort_join_result ~die:(eval_error "%s") in
         apply_cont cont env (`Lens (Value.LensJoin {left; right; on; del_left; del_right; sort}))
     | LensGet (lens, _rtype) ->
         let lens = value env lens |> get_lens in
