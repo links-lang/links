@@ -10,7 +10,8 @@ module Lens_error : sig
         (** Error thrown when there are references to columns
             in functional dependencies which don't exist. *)
     | ProbablyCycle of Alias.Set.t
-        (** Error thrown when the algorithm assumes that some columns have not been included because there is some cycle with them. *)
+        (** Error thrown when the algorithm assumes that some columns have not
+            been included because there is some cycle with them. *)
     | FunDepNotTreeForm of Alias.Set.t  (** Error thrown when *)
 end
 
