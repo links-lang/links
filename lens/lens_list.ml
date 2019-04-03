@@ -1,5 +1,4 @@
 include List
-
 module Seq = Lens_seq
 
 let rec mem t v ~equal =
@@ -14,7 +13,9 @@ let map_if t ~b ~f =
   map ~f t
 
 let rec find t ~f =
-  match t with [] -> None | x :: xs -> if f x then Some x else find xs ~f
+  match t with
+  | [] -> None
+  | x :: xs -> if f x then Some x else find xs ~f
 
 let find_exn t ~f = find t ~f |> fun v -> Lens_option.value_exn v
 
@@ -36,7 +37,9 @@ let rec filter_map t ~f =
   match t with
   | [] -> []
   | x :: xs -> (
-    match f x with None -> filter_map xs ~f | Some y -> y :: filter_map xs ~f )
+    match f x with
+    | None -> filter_map xs ~f
+    | Some y -> y :: filter_map xs ~f )
 
 let rec unzip3 l =
   match l with
@@ -46,7 +49,9 @@ let rec unzip3 l =
   | [] -> ([], [], [])
 
 let rec take l ~n =
-  match (l, n) with [], _ | _, 0 -> [] | x :: xs, n -> x :: take xs ~n:(n - 1)
+  match (l, n) with
+  | [], _ | _, 0 -> []
+  | x :: xs, n -> x :: take xs ~n:(n - 1)
 
 let rec drop l ~n =
   match (l, n) with
@@ -62,6 +67,8 @@ let rec zip_nofail l1 l2 =
   | _, _ -> []
 
 let rec to_seq l () =
-  match l with [] -> Seq.Nil | x :: xs -> Seq.Cons (x, to_seq xs)
+  match l with
+  | [] -> Seq.Nil
+  | x :: xs -> Seq.Cons (x, to_seq xs)
 
 let for_all2_exn s t ~f = for_all2 f s t
