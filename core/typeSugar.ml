@@ -4085,6 +4085,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
   WithPos.make ~pos p, t, u
 
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
+let show_post_sugar_typing = Basicsettings.TypeSugar.show_post_sugar_typing
 
 let binding_purity_check bindings =
   List.iter (fun ({pos;_} as b) ->
@@ -4101,14 +4102,19 @@ struct
            "before type checking: \n"^ show_program (bindings, body));
       let tyenv', bindings, _ = type_bindings tyenv bindings in
       let tyenv' = Types.normalise_typing_environment tyenv' in
-        if Settings.get_value check_top_level_purity then
-          binding_purity_check bindings; (* TBD: do this only in web mode? *)
+      if Settings.get_value check_top_level_purity then
+        binding_purity_check bindings; (* TBD: do this only in web mode? *)
+      let program, typ, tyenv' =
         match body with
-          | None -> (bindings, None), Types.unit_type, tyenv'
-          | Some body ->
-              let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
-              let typ = Types.normalise_datatype typ in
-                (bindings, Some body), typ, tyenv'
+        | None -> (bindings, None), Types.unit_type, tyenv'
+        | Some body ->
+          let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
+          let typ = Types.normalise_datatype typ in
+          (bindings, Some body), typ, tyenv' in
+      Debug.if_set show_post_sugar_typing
+        (fun () ->
+           ("after type checking: \n"^ show_program program));
+      program, typ, tyenv'
     with
         Unify.Failure (`Msg msg) -> failwith msg
 
@@ -4116,14 +4122,19 @@ struct
     Debug.if_set show_pre_sugar_typing
       (fun () ->
          "before type checking: \n"^ show_sentence sentence);
-    match sentence with
+    let sentence, t, tyenv =
+      match sentence with
       | Definitions bindings ->
-          let tyenv', bindings, _ = type_bindings tyenv bindings in
-          let tyenv' = Types.normalise_typing_environment tyenv' in
-            Definitions bindings, Types.unit_type, tyenv'
+        let tyenv', bindings, _ = type_bindings tyenv bindings in
+        let tyenv' = Types.normalise_typing_environment tyenv' in
+        Definitions bindings, Types.unit_type, tyenv'
       | Expression body ->
-          let body, t, _ = (type_check tyenv body) in
-          let t = Types.normalise_datatype t in
-            Expression body, t, tyenv
-      | Directive d -> Directive d, Types.unit_type, tyenv
+        let body, t, _ = (type_check tyenv body) in
+        let t = Types.normalise_datatype t in
+        Expression body, t, tyenv
+      | Directive d -> Directive d, Types.unit_type, tyenv in
+    Debug.if_set show_post_sugar_typing
+      (fun () ->
+         "after type checking: \n" ^ show_sentence sentence);
+    sentence, t, tyenv
 end
