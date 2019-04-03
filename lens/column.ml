@@ -1,16 +1,11 @@
 open Lens_utility
-
 module Type = Phrase_type
 
 type t =
-  { table: string
-  ; name: string
-  ; alias: string
-  ; typ: Type.t
-  ; present: bool }
-  [@@deriving show]
+  {table: string; name: string; alias: string; typ: Type.t; present: bool}
+[@@deriving show]
 
-let make ~table ~name ~alias ~typ ~present = { table; name; alias; typ; present }
+let make ~table ~name ~alias ~typ ~present = {table; name; alias; typ; present}
 
 let name t = t.name
 
@@ -34,6 +29,7 @@ let set_table t ~table = {t with table}
 
 module Compare = struct
   type elt = t [@@deriving show]
+
   type t = elt [@@deriving show]
 
   let _ = show_elt
@@ -76,8 +72,7 @@ module List = struct
 
   let colset t = Set.of_list t
 
-  let colmap t =
-    List.map ~f:(fun t -> (alias t, t)) t |> Alias.Map.from_alist
+  let colmap t = List.map ~f:(fun t -> (alias t, t)) t |> Alias.Map.from_alist
 
   let record_type t =
     let map =

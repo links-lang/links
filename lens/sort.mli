@@ -1,5 +1,3 @@
-[@@@ocamlformat "doc-comments=before"]
-
 type t [@@deriving show]
 
 (** Get the functional dependencies *)

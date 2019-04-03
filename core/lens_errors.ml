@@ -1,7 +1,9 @@
 open Lens
 
 let unpack r ~die ~fmt =
-  match r with Result.Ok t -> t | Result.Error e -> fmt e |> die
+  match r with
+  | Result.Ok t -> t
+  | Result.Error e -> fmt e |> die
 
 (** Unpack the result or format and throw the error using the [die] function. *)
 let unpack_type_lens_result ~die res =
@@ -129,9 +131,11 @@ let unpack_type_join_lens_result ~die res =
 let format_eval_error e =
   let open Eval.Error in
   match e with
-  | InvalidData -> "Not all records in data satisfy the condition in the lens sort."
+  | InvalidData ->
+      "Not all records in data satisfy the condition in the lens sort."
   | InvalidDataType -> "Data is not a set of records."
-  | ViolatesFunDepConstraint fd -> Format.asprintf "Data violates the functional dependency %a." Fun_dep.pp_pretty fd
+  | ViolatesFunDepConstraint fd ->
+      Format.asprintf "Data violates the functional dependency %a."
+        Fun_dep.pp_pretty fd
 
-let unpack_eval_error ~die res =
-  unpack ~die ~fmt:format_eval_error res
+let unpack_eval_error ~die res = unpack ~die ~fmt:format_eval_error res
