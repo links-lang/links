@@ -49,7 +49,7 @@ val traverse : t -> f:(t -> t) -> t
 (** Get a list of variables in the expression. *)
 val get_vars : t -> Alias.Set.t
 
-(** Calculate the vale of an expression given a lookup function for
+(** Calculate the value of an expression given a lookup function for
     variables. *)
 val eval : t -> (string -> Value.t) -> Value.t
 
