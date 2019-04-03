@@ -12,7 +12,8 @@ val for_all2_exn : 'a list -> 'b list -> f:('a -> 'b -> bool) -> bool
 
 val for_all : 'a list -> f:('a -> bool) -> bool
 
-val for_all_or_error : 'a list -> f:('a -> bool) -> error:('a -> 'b) -> (unit, 'b) result
+val for_all_or_error :
+  'a list -> f:('a -> bool) -> error:('a -> 'b) -> (unit, 'b) result
 
 val map : 'a list -> f:('a -> 'b) -> 'b list
 
@@ -34,8 +35,10 @@ val drop : 'a list -> n:int -> 'a list
     elements as possible and then ends. *)
 val zip_nofail : 'a list -> 'b list -> ('a * 'b) list
 
-(** Turn a list into a lazily evaluated sequence. This is for ocaml 4.06 compatibility. *)
+(** Turn a list into a lazily evaluated sequence. This is for ocaml 4.06
+    compatibility. *)
 val to_seq : 'a list -> 'a Seq.t
 
-(** Create a tuple using the elements of two lists. Requires lists to be of equal length or fail. *)
+(** Create a tuple using the elements of two lists. Requires lists to be of
+    equal length or fail. *)
 val zip_exn : 'a list -> 'b list -> ('a * 'b) list
