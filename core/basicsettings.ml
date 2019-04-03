@@ -214,6 +214,7 @@ module TypeSugar = struct
 (*  let constrain_absence_types = Settings.add_bool ("constrain_absence_types", false, `User)*)
   let check_top_level_purity = Settings.add_bool ("check_top_level_purity", false, `User)
   let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
+  let show_post_sugar_typing = Settings.add_bool("show_post_sugar_typing", false, `User)
   let dodgey_type_isomorphism = Settings.add_bool("dodgey_type_isomorphism", false, `User)
 end
 
