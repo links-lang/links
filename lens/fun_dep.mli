@@ -1,5 +1,3 @@
-[@@@ocamlformat "doc-comments=before"]
-
 open Lens_utility
 
 type t [@@deriving show]
@@ -36,15 +34,12 @@ module Check_error : sig
         (** Error thrown when the algorithm assumes that some
             columns have not been included because there is
             some cycle with them. *)
-    | FunDepNotTreeForm of Alias.Set.t
-        (** Error thrown when *)
+    | FunDepNotTreeForm of Alias.Set.t  (** Error thrown when *)
   [@@deriving show]
 end
 
 module Remove_defines_error : sig
-  type t =
-    | DefiningFDNotFound of Alias.Set.t
-  [@@deriving show]
+  type t = DefiningFDNotFound of Alias.Set.t [@@deriving show]
 end
 
 module Compare : sig
@@ -66,7 +61,8 @@ module Set : sig
   val of_lists : (Alias.t list * Alias.t list) list -> t
 
   (** Remove all functional dependencies where the left side is contained by [cols] *)
-  val remove_defines : t -> cols:Alias.Set.t -> (t, Remove_defines_error.t) result
+  val remove_defines :
+    t -> cols:Alias.Set.t -> (t, Remove_defines_error.t) result
 
   (** Generate a single functional dependency as a set from the given keys and columns *)
   val key_fds : keys:Alias.t list -> cols:Alias.t list -> t
@@ -93,7 +89,7 @@ module Tree : sig
   type elt = Alias.Set.t [@@deriving show]
 
   type node = FDNode of elt * t
-  and t = node list [@@deriving show]
+ and t = node list [@@deriving show]
 
   val pp_pretty : Format.formatter -> t -> unit
 

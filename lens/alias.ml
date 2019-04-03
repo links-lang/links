@@ -1,13 +1,11 @@
 open Lens_utility
 
-type t = string
-  [@@deriving show]
+type t = string [@@deriving show]
 
 module Map = struct
   include String.Map
 
-  let find t ~key =
-    find_opt key t
+  let find t ~key = find_opt key t
 end
 
 module Set = struct

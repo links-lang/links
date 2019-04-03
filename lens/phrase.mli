@@ -1,4 +1,3 @@
-[@@@ocamlformat "doc-comments=before"]
 (** This module manages expressions for relational lenses. Expressions
     are considered to be executed within the environment of a row, meaning
     we may have the row (A = 3; B = 10) and then we could evaluate the expression

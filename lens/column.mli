@@ -1,8 +1,12 @@
-[@@@ocamlformat "doc-comments=before"]
-
 type t [@@deriving show]
 
-val make : table:string -> name:string -> alias:string -> typ:Phrase_type.t -> present:bool -> t
+val make :
+     table:string
+  -> name:string
+  -> alias:string
+  -> typ:Phrase_type.t
+  -> present:bool
+  -> t
 
 (** Return the name of the column as the column would be bound in the user program. *)
 val alias : t -> string
