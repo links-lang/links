@@ -9,8 +9,14 @@ let left (l, _) = l
 let right (_, r) = r
 
 let pp_pretty f fd =
-  let pp_cols = Format.pp_print_list ~pp_sep:(Format.pp_constant " ") Format.pp_print_string in
-  Format.fprintf f "%a -> %a" pp_cols (left fd |> Alias.Set.elements) pp_cols (right fd |> Alias.Set.elements)
+  let pp_cols =
+    Format.pp_print_list ~pp_sep:(Format.pp_constant " ")
+      Format.pp_print_string
+  in
+  Format.fprintf f "%a -> %a" pp_cols
+    (left fd |> Alias.Set.elements)
+    pp_cols
+    (right fd |> Alias.Set.elements)
 
 let compare (l1, r1) (l2, r2) =
   let res = Alias.Set.compare l1 l2 in
@@ -38,8 +44,7 @@ module Check_error = struct
 end
 
 module Remove_defines_error = struct
-  type t = DefiningFDNotFound of Alias.Set.t
-  [@@deriving show]
+  type t = DefiningFDNotFound of Alias.Set.t [@@deriving show]
 end
 
 module Compare = struct
@@ -156,9 +161,13 @@ module Tree = struct
 
   and t = node list [@@deriving show]
 
-  let cols n = match n with FDNode (cols, _) -> cols
+  let cols n =
+    match n with
+    | FDNode (cols, _) -> cols
 
-  let subnodes n = match n with FDNode (_, subnodes) -> subnodes
+  let subnodes n =
+    match n with
+    | FDNode (_, subnodes) -> subnodes
 
   let rec pp_pretty fmt v =
     let pp_node node =
@@ -177,7 +186,8 @@ module Tree = struct
   let rec fd_subnodes fds key =
     let subfds = Set.filter (fun fd -> Alias.Set.subset (left fd) key) fds in
     let subkeys =
-      Set.elements subfds |> List.map ~f:left
+      Set.elements subfds
+      |> List.map ~f:left
       |> List.sort_uniq Alias.Set.compare
     in
     let remain =

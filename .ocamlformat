@@ -1,2 +1,3 @@
 break-cases=toplevel
 doc-comments=before
+break-infix=fit-or-vertical
