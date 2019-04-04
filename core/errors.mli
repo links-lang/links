@@ -18,6 +18,7 @@ exception Runtime_error of string
 exception UndefinedVariable of string
 exception InvalidMutualBinding of Position.t
 exception Type_error of (Position.t * string)
+exception IRTypeError of string
 exception MultiplyDefinedMutualNames of
   ((Position.t list) Utility.stringmap)
 exception RichSyntaxError of synerrspec

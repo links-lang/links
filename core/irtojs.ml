@@ -56,8 +56,6 @@ module VariableInspection = struct
 
     let get_vars () =
       let res = StringSet.diff (!vars) (!binders) |> StringSet.elements in
-      Debug.print "affected client vars: \n";
-      List.iter (Debug.print) res;
       res in
 
     let rec go cmd =

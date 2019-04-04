@@ -54,7 +54,7 @@ let extract_row t = match concrete_type t with
   | `Record row -> row
   | `Variant row -> row
   | t ->
-      failwith
+      error
         ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
          ^ string_of_datatype t)
 
