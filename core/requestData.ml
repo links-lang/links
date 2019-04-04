@@ -56,8 +56,8 @@ let raw_decode : string -> string = fun s ->
   let rec need_decode i =
     if i < String.length s then
       match s.[i] with
-	| '%' | '+' -> true
-	| _ -> need_decode (succ i)
+    | '%' | '+' -> true
+    | _ -> need_decode (succ i)
     else false
   in
   let rec compute_len i i1 =
@@ -67,7 +67,7 @@ let raw_decode : string -> string = fun s ->
           | '%' when i + 2 < String.length s -> i + 3
           | _ -> succ i
       in
-	compute_len i (succ i1)
+    compute_len i (succ i1)
     else i1
   in
   let rec copy_decode_in : bytes -> int -> int -> bytes = fun s1 i i1 ->
@@ -76,11 +76,11 @@ let raw_decode : string -> string = fun s ->
         match s.[i] with
           | '%' when i + 2 < String.length s ->
               let v = hexa_val s.[i + 1] * 16 + hexa_val s.[i + 2] in
-		Bytes.set s1 i1 (Char.chr v); i + 3
+        Bytes.set s1 i1 (Char.chr v); i + 3
           | '+' -> Bytes.set s1 i1  ' '; succ i
           | x -> Bytes.set s1 i1  x; succ i
       in
-	copy_decode_in s1 i (succ i1)
+    copy_decode_in s1 i (succ i1)
     else s1
   in
   if need_decode 0 then
@@ -101,7 +101,7 @@ let decode : string -> string = fun s ->
         strip_heading_and_trailing_spaces
           (String.sub s 0 (String.length s - 1))
       else
-	s
+    s
     else
       s
   in

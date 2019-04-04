@@ -2,10 +2,10 @@
 # In this code, it does not make difference, since they all are Strings, but suppose
 # at some later point it will be possible to distinguish them and assign different features.
 
-typename Book 		= String;
-typename Audio_Visual 	= String;
-typename Gadget 	= String;
-typename Product 	= [| Book:Book | Audio_Visual:Audio_Visual | Gadget:Gadget|];
+typename Book         = String;
+typename Audio_Visual     = String;
+typename Gadget     = String;
+typename Product     = [| Book:Book | Audio_Visual:Audio_Visual | Gadget:Gadget|];
 
 
 # Again, it is possible to directly put Int in the session type. This bit only reflects the paper better.
@@ -32,10 +32,10 @@ typename SonOffer  = [+|Choice:?Product.End|+];
 sig removeProduct : (Product, [Product]) ~> ([Product])
 fun removeProduct(item, products) client
 {
-	switch (products) {
-     		case []    -> []
-     		case x::xs -> if (item == x) xs
-                   	      else x::removeProduct(item, xs)
+    switch (products) {
+             case []    -> []
+             case x::xs -> if (item == x) xs
+                             else x::removeProduct(item, xs)
   }
 }
 
@@ -43,28 +43,28 @@ fun removeProduct(item, products) client
 # Convinces Links that any Product is also a String.
 fun turnProductToString(product) client
 {
-	switch(product) {
-		case Book(s) -> s
-		case Audio_Visual(s) -> s
-		case Gadget(s) -> s
-	}
+    switch(product) {
+        case Book(s) -> s
+        case Audio_Visual(s) -> s
+        case Gadget(s) -> s
+    }
 }
 
 # Turns a list of products into a single string.
 sig concatenateProducts : ([Product], String) ~> (String)
 fun concatenateProducts(products, fullList) client
 {
-	switch(products) {
-		case [] -> fullList
-		case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
-	}
+    switch(products) {
+        case [] -> fullList
+        case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
+    }
 }
 
 # Turns order summary into a single readable string.
 sig summariseOrder : (Int, String, [Product], String) ~> ([String])
 fun summariseOrder(card, address, products, removed) client
 {
-	[concatenateProducts(products, ""), removed, intToString(card), address]
+    [concatenateProducts(products, ""), removed, intToString(card), address]
 }
 
 #sig shipper : (?(?String.c).!String.!c.End) ~> ()
@@ -82,21 +82,21 @@ fun waitForClient(s, orderedProducts, removedProducts) client
 {
 
  <| offer s {
-	case Add -> s(item).{waitForClient(s, item::orderedProducts, removedProducts)}
+    case Add -> s(item).{waitForClient(s, item::orderedProducts, removedProducts)}
 
-	case Remove -> s(item).{var updatedList = removeProduct(item, orderedProducts);
-		# See if the list is smaller (= an item to be removed was actually in a list).
-		if (length(updatedList) < length(orderedProducts))
-	   		waitForClient(s, updatedList, removedProducts ^^ turnProductToString(item) ^^ ". ")
-		else
-	   		waitForClient(s, orderedProducts, removedProducts)}
+    case Remove -> s(item).{var updatedList = removeProduct(item, orderedProducts);
+        # See if the list is smaller (= an item to be removed was actually in a list).
+        if (length(updatedList) < length(orderedProducts))
+               waitForClient(s, updatedList, removedProducts ^^ turnProductToString(item) ^^ ". ")
+        else
+               waitForClient(s, orderedProducts, removedProducts)}
 
-	case Checkout -> s(card).
-	  nu c.({shipper(c)} |
-	        c[s].c(addressFull).c(s).
-	        s[summariseOrder(card, addressFull, orderedProducts, removedProducts)].
-	        c().s[])
-	 } |>
+    case Checkout -> s(card).
+      nu c.({shipper(c)} |
+            c[s].c(addressFull).c(s).
+            s[summariseOrder(card, addressFull, orderedProducts, removedProducts)].
+            c().s[])
+     } |>
 }
 
 
@@ -104,16 +104,16 @@ fun waitForClient(s, orderedProducts, removedProducts) client
 #sig waitForSon : (SonSelect) ~> ()
 fun waitForSon(c) client
 {
-	<| offer c {
-		case Choice -> c[Gadget("LED Water Speakers")].c[]
-	} |>
+    <| offer c {
+        case Choice -> c[Gadget("LED Water Speakers")].c[]
+    } |>
 }
 
 # Sends a signal that it is time to choose a product.
 #sig getSonBook : (SonOffer) ~> (Product)
 fun getSonBook(s) client
 {
-	<| Choice s.s(choice).s().{choice} |>
+    <| Choice s.s(choice).s().{choice} |>
 }
 
 
@@ -121,9 +121,9 @@ fun getSonBook(s) client
 sig orderBooks : (ShopSelect) ~> ([String])
 fun orderBooks(c) client
 {
-	var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
+    var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
 
-	<| Add c.c[Book("Alice in Wonderland")].
+    <| Add c.c[Book("Alice in Wonderland")].
            Add c.c[Audio_Visual("Hitchhiker's Guide to the Galaxy")].{
        var choice = <| nu s.({waitForSon(s)}|{getSonBook(s)}) |>;
 
@@ -138,29 +138,29 @@ fun orderBooks(c) client
 sig main : () ~> ()
 fun main() client
 {
-	var order = <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
+    var order = <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
 
-	appendChildren(stringToXml(order!!0), getNodeById("items"));
-	appendChildren(stringToXml(order!!1), getNodeById("removed"));
-	appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
-	appendChildren(stringToXml(order!!3), getNodeById("address"));
+    appendChildren(stringToXml(order!!0), getNodeById("items"));
+    appendChildren(stringToXml(order!!1), getNodeById("removed"));
+    appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
+    appendChildren(stringToXml(order!!3), getNodeById("address"));
 
 }
 
 page
-	<html>
-	<head><title>From Academic Papers</title></head>
-	<body bgcolor="#E6E6FA">
-	<form l:onsubmit="{main()}">
-	<h3>Finished example from "Linear type theory for asynchronous session types":</h3>
-	<button type="submit">Start communication</button>
-	</form>
-	<p><b>Products ordered:</b></p>
-	<p id="items"></p>
-	<p><b>Products removed:</b></p>
-	<p id="removed"></p>
-	<p><b>Payment details:</b></p>
-	<p id="cardNo">Card number: </p>
-	<p id="address">Address: </p>
-	</body>
-	</html>
+    <html>
+    <head><title>From Academic Papers</title></head>
+    <body bgcolor="#E6E6FA">
+    <form l:onsubmit="{main()}">
+    <h3>Finished example from "Linear type theory for asynchronous session types":</h3>
+    <button type="submit">Start communication</button>
+    </form>
+    <p><b>Products ordered:</b></p>
+    <p id="items"></p>
+    <p><b>Products removed:</b></p>
+    <p id="removed"></p>
+    <p><b>Payment details:</b></p>
+    <p id="cardNo">Card number: </p>
+    <p id="address">Address: </p>
+    </body>
+    </html>

@@ -84,7 +84,7 @@ let format_exception =
       "*** Error: Duplicate mutually-defined bindings\n" ^
         StringMap.fold (fun name positions message ->
                           message^" "^name^":\n  "^
-			    (mapstrcat "\n  " Position.show (List.rev positions)))
+                (mapstrcat "\n  " Position.show (List.rev positions)))
           duplicates ""
   | InvalidMutualBinding pos ->
       let pos, expr = Position.resolve_start_expr pos in

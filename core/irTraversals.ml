@@ -366,8 +366,8 @@ struct
                          (b, c), t, o) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            Choice (v, bs), t, o
-	| Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
-	   let (comp, _, o) = o#computation ih_comp in
+    | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
+       let (comp, _, o) = o#computation ih_comp in
            (* TODO FIXME traverse parameters *)
            let (depth, o) =
              match ih_depth with
@@ -383,24 +383,24 @@ struct
                 Deep (List.rev bindings), o
              | Shallow -> Shallow, o
            in
-	   let (cases, _branch_types, o) =
-	     o#name_map
+       let (cases, _branch_types, o) =
+         o#name_map
                (fun o (x, resume, c) ->
                  let (x, o) = o#binder x in
-		 let (resume, o) = o#binder resume in
-		 let (c, t, o) = o#computation c in
-		 (x, resume, c), t, o)
-	       ih_cases
-	   in
+         let (resume, o) = o#binder resume in
+         let (c, t, o) = o#computation c in
+         (x, resume, c), t, o)
+           ih_cases
+       in
            let (return, t, o) =
              let (b, o) = o#binder (fst ih_return) in
              let (comp, t, o) = o#computation (snd ih_return) in
              (b, comp), t, o
            in
-	   Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t, o
-	| DoOperation (name, vs, t) ->
-	   let (vs, _, o) = o#list (fun o -> o#value) vs in
-	   (DoOperation (name, vs, t), t, o)
+       Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t, o
+    | DoOperation (name, vs, t) ->
+       let (vs, _, o) = o#list (fun o -> o#value) vs in
+       (DoOperation (name, vs, t), t, o)
 
    method bindings : binding list -> (binding list * 'self_type) =
       fun bs ->

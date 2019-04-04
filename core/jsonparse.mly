@@ -162,7 +162,7 @@ object_:
                                               | `Database db -> db
                                               | _ -> failwith ("jsonparse: first argument to a table must be a database")
                                           end
-					and name = Value.unbox_string (List.assoc "name" bs)
+                    and name = Value.unbox_string (List.assoc "name" bs)
                                         and row =
                                           begin
                                             match DesugarDatatypes.read ~aliases:Env.String.empty (Value.unbox_string (List.assoc "row" bs)) with
@@ -170,17 +170,17 @@ object_:
                                                 | _ -> failwith ("jsonparse: tables must have record type")
                                           end
                                         and keys =
-					  begin
-					    match List.assoc "keys" bs with
-					      | `List keys ->
-						  List.map
-						    (function
-						       | `List part_keys ->
-							   List.map Value.unbox_string part_keys
-						       | _ -> failwith "jsonparse: keys must be lists of strings")
-						    keys
-					      | _ -> failwith ("jsonparse: table keys must have list type")
-					  end
+                      begin
+                        match List.assoc "keys" bs with
+                          | `List keys ->
+                          List.map
+                            (function
+                               | `List part_keys ->
+                               List.map Value.unbox_string part_keys
+                               | _ -> failwith "jsonparse: keys must be lists of strings")
+                            keys
+                          | _ -> failwith ("jsonparse: table keys must have list type")
+                      end
                                         in
                                           `Table (db, name, keys, row)
                                     | _ -> failwith ("jsonparse: table value must be a record")

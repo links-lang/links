@@ -199,9 +199,9 @@ sig bobStrat : (Comp({Move:(Player, Int) {}-> Int|e}, Player  )) ->
 open handler bobStrat(m) {
      case Return(x)          -> Winner(x)
      case Move(Bob, n, k)    -> {
-     	  var take = move(Bob,n); # Explicit forwarding of move
-     	  var tree = k(take);
-	  Take(Bob, [(take, tree)])
+           var take = move(Bob,n); # Explicit forwarding of move
+           var tree = k(take);
+      Take(Bob, [(take, tree)])
      }
      case Move(player, n, k) -> reifyMove(player, n, k)
 }
@@ -243,7 +243,7 @@ fun cheater2(n,k) {
 # checkMove checks whether a given player p has cheated
 sig checkMove : (Player,Int,
                 (Int) {Move:(Player,Int) {}-> Int,Cheat:(Player,Int) {}-> Zero|e}~> a) # k signature
-		      {Move:(Player,Int) {}-> Int,Cheat:(Player,Int) {}-> Zero|e}~> a  # Effects + return type
+              {Move:(Player,Int) {}-> Int,Cheat:(Player,Int) {}-> Zero|e}~> a  # Effects + return type
 fun checkMove(p,n,k) {
   var take = move(p,n);
   #if (take < 1 || 3 < take) { # Cheater detected!
@@ -266,7 +266,7 @@ open handler check(m) {
 # Convenient function to launch a checked game
 sig checkedGame : (Int) ->
                   Comp ({Move :(Player, Int) {}-> Int,
-		         Cheat:(Player, Int) {}-> Zero|e}, Player)
+                 Cheat:(Player, Int) {}-> Zero|e}, Player)
 fun checkedGame(n) { check(game(n)) }
 
 # aliceCheats assigns Alice the cheater's strategy
@@ -371,12 +371,12 @@ open handler notReallyRandom(m) {
 # Strategy handler factory
 sig strategy : (Strategy, Strategy) ->
                (Comp({Move:(Player,Int) {}-> Int |e}, a)) ->
-	        Comp({Move{_}                    |e}, a)
+            Comp({Move{_}                    |e}, a)
 fun strategy(s1, s2) {
     open handler(m) {
-    	 case Move(Alice,n,k) -> s1(n,k)
-	 case Move(Bob,n,k)   -> s2(n,k)
-	 case Return(x)       -> x
+         case Move(Alice,n,k) -> s1(n,k)
+     case Move(Bob,n,k)   -> s2(n,k)
+     case Return(x)       -> x
     }
 }
 
@@ -407,8 +407,8 @@ fun put(s) {do Put(s)}
 # The state handler is parameterised by a state s
 # which is threaded through the handler during evaluation
 sig state : (Comp({Get:s,Put:(s) {}-> ()|e}, a)) ->
-    	    (s) ->                                  # Initial state
-	    Comp({Get{_},Put{_}|e}, a)
+            (s) ->                                  # Initial state
+        Comp({Get{_},Put{_}|e}, a)
 open handler state(m)(s) {
      case Get(k)    -> k(s)(s)
      case Put(p,k)  -> k(())(p)
@@ -440,7 +440,7 @@ sig repeatGame : (Int, Comp({Move:(Player,Int) {}-> Int|e},  a)) ->
                        Comp({Move:(Player,Int) {}-> Int|e}, [a])
 fun repeatGame(r, m)() {
     for (_ <- [1..r]) {
-    	[m()]
+        [m()]
     }
 }
 
@@ -483,11 +483,11 @@ fun updateScore(p,s) {
 sig printBoard : (GameState) ~> ()
 fun printBoard(s) {
     var xs = map(fun(p) {
-    	var player = showPlayer(first(p));
-	var wins   = intToString(second(p));
-	var ws_c1 = 12 - strlen(player);
-	var ws_c2 = 10 - strlen(wins);
-	"| " ^^ player ^^ makeWhitespace(11 - strlen(player)) ^^ "|" ^^ makeWhitespace(8 - strlen(wins)) ^^ wins ^^ " |"
+        var player = showPlayer(first(p));
+    var wins   = intToString(second(p));
+    var ws_c1 = 12 - strlen(player);
+    var ws_c2 = 10 - strlen(wins);
+    "| " ^^ player ^^ makeWhitespace(11 - strlen(player)) ^^ "|" ^^ makeWhitespace(8 - strlen(wins)) ^^ wins ^^ " |"
     }, sort(s));
 
     println("/======================\\");

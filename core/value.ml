@@ -27,30 +27,30 @@ class virtual dbvalue = object (self)
   method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
       let max = self#ntuples in
       let rec do_map n acc =
-	if n < max
-	then (
-	  do_map (n+1) (f (self#getvalue n)::acc)
-	 )
-	else acc
+    if n < max
+    then (
+      do_map (n+1) (f (self#getvalue n)::acc)
+     )
+    else acc
       in do_map 0 []
   method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
       let max = self#ntuples in
       let rec do_map n acc =
-	if n < max
-	then (
-	  do_map (n+1) (f (self#gettuple n)::acc)
-	 )
-	else acc
+    if n < max
+    then (
+      do_map (n+1) (f (self#gettuple n)::acc)
+     )
+    else acc
       in do_map 0 []
   method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
       let max = self#ntuples in
       let rec do_fold n acc =
-	if n < max
-	then (
-	  do_fold (n+1) (f (self#gettuple n) acc)
-	 )
-	else acc
-      in do_fold 0 x	    method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
+    if n < max
+    then (
+      do_fold (n+1) (f (self#gettuple n) acc)
+     )
+    else acc
+      in do_fold 0 x        method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
   method virtual getvalue : int -> int -> string
   method virtual gettuple : int -> string array
   method virtual error : string
@@ -1126,11 +1126,11 @@ and unbox_unit : t -> unit = function
 
 let box_op : t list -> t -> t =
   fun ps k -> let box = List.fold_left
-			  (fun (i, box) p -> let i = i + 1 in (i, ((string_of_int i, p) :: box)))
-			  (0, []) ps
-	      in
-	      let box = (string_of_int ((fst box) + 1), k) :: (snd box) in
-	      `Record (List.rev box)
+              (fun (i, box) p -> let i = i + 1 in (i, ((string_of_int i, p) :: box)))
+              (0, []) ps
+          in
+          let box = (string_of_int ((fst box) + 1), k) :: (snd box) in
+          `Record (List.rev box)
 
 let box : t list -> t = fun ps -> `Record (List.mapi (fun i p -> (string_of_int (i+1), p)) ps)
 

@@ -393,9 +393,9 @@ and regex' ctxt nl = parse
   | eof                                 { END }
   | '/'                                 { ctxt#push_lexer (regex ctxt nl); SLASH }
   | "s/"                                { ctxt#push_lexer (regexrepl ctxt nl); (* push twice is intentional *)
-					  ctxt#push_lexer (regexrepl ctxt nl);
-					  ctxt#push_lexer (regex ctxt nl);
-					  SSLASH }
+                      ctxt#push_lexer (regexrepl ctxt nl);
+                      ctxt#push_lexer (regex ctxt nl);
+                      SSLASH }
   | '#' ([^ '\n'] *)                    { regex' ctxt nl lexbuf }
   | '\n'                                { nl (); bump_lines lexbuf 1; regex' ctxt nl lexbuf }
   | def_blank                           { regex' ctxt nl lexbuf }
