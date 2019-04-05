@@ -709,7 +709,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
 
                  if we unify
 
-                   forall %a.(a) -> a
+                   forall %a.(%a) -> %a
 
                  with
 

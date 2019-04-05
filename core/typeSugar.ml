@@ -2305,14 +2305,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else () in
 
             let ftype = make_ft lin pats effects (typ body) in
+            (* To correctly determine the arity of nested anonymous functions we
+               need to make sure we only inlcude arguments of the current FunLit
+               and not the nested ones. *)
+            let curried_argument_count = List.length pats in
             let argss =
-              let rec arg_types =
+              let rec arg_types : (Types.datatype * int)
+                               -> (Types.datatype * Types.row) list =
                 function
-                  | (`Function (args, effects, t)) -> (args, effects) :: arg_types t
-                  | (`Lolli (args, effects, t)) -> (args, effects) :: arg_types t
-                  | _ -> []
+                  | _, 0 -> []
+                  | `Function (args, effects, t), c
+                  | `Lolli    (args, effects, t), c ->
+                     (args, effects) :: arg_types (t, c-1)
+                  | _, _ -> failwith "Error reconstructing FunLit Type"
               in
-                arg_types ftype in
+                arg_types (ftype, curried_argument_count) in
 
             (*
               FIXME:
@@ -2333,8 +2340,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let e = FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body), location) in
               if Settings.get_value Instantiate.quantified_instantiation then
                 let (qs, _tyargs), ftype = Utils.generalise context.var_env ftype in
-                let _, ftype = Instantiate.typ ftype in
-                  tabstr (qs, e), ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
+                let tyargs, ftype = Instantiate.typ ftype in
+                let ebody = tappl (tabstr (qs, e), tyargs) in
+                (* this code takes care to ensure that the quantifier
+                   reference in the type matches that of the outer
+                   type abstraction - unfortunately this connection
+                   may be broken by later invocation of concrete_type
+                   *)
+                let e' =
+                  match ftype with
+                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (qs',  WithPos.make ebody)
+                  | _ -> ebody in
+                e', ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
               else
                 e, ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
 
