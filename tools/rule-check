@@ -8,7 +8,7 @@ RULEDIR="tools/rules"
 
 ERRORS=0
 
-for script in $(find $RULEDIR -maxdepth 1 -perm -111 -type f -not -name "*~"); do
+for script in $(find $RULEDIR -maxdepth 1 -perm -111 -type f -not -name "*~" -not -name "*.skip"); do
     # Only run the script if it is under revision control.
     git ls-files --error-unmatch "$script" > /dev/null 2>&1 # Returns 1 when the file is untracked.
     if [[ $? -eq 0 ]]; then
