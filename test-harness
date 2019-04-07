@@ -108,7 +108,6 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
         else:
             time.sleep(0.01)
 
-
     with the_lock:
         failures += 1
         print('!FAILURE: %s [TIMED OUT]' % name)
