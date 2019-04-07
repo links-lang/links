@@ -42,7 +42,7 @@ def parse(stream):
             opts = dict([str.split(str.rstrip(line), ' : ', 1) for line in test])
             yield name, code, opts
 
-# Must only be called while having the lock
+# Lock not required for calling
 def check_expected(name, item, got, expected, errors):
     """Check some data against an expected value or predicate.  If it
     matches, return True.  Otherwise, display an error and return
