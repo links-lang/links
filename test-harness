@@ -3,14 +3,18 @@
 links = './links'
 
 import sys, re, time
+import concurrent.futures, threading, multiprocessing
 from subprocess import Popen, PIPE
 
 successes = failures = ignored = 0
 TIMEOUT = 15 # seconds before a test is timed out.
 
+the_lock = threading.Lock()
+
 def FAIL(name, msg):
     return ('  error: %s' % name,'      (%s)' % msg)
 
+# must only be called while having the lock
 def OK(name):
     global successes
     successes+=1
@@ -38,6 +42,7 @@ def parse(stream):
             opts = dict([str.split(str.rstrip(line), ' : ', 1) for line in test])
             yield name, code, opts
 
+# Must only be called while having the lock
 def check_expected(name, item, got, expected, errors):
     """Check some data against an expected value or predicate.  If it
     matches, return True.  Otherwise, display an error and return
@@ -83,24 +88,30 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
             passed &= check_expected(name, 'stdout', proc.stdout.read().decode('ascii'), stdout, errors)
             passed &= check_expected(name, 'stderr', str(proc.stderr.read().decode('ascii')), stderr, errors)
             if passed:
-                OK(name)
+                with the_lock:
+                    OK(name)
             else:
                 if ignore != None:
                     global ignored
-                    ignored += 1
-                    print('?IGNORED: %s (%s)' % (name, ignore))
+                    with the_lock:
+                        ignored += 1
+                        print('?IGNORED: %s (%s)' % (name, ignore))
                 else:
                     global failures
-                    failures += 1
-                    print('!FAILURE: %s' % name)
-                    for i, j in errors:
-                        print(i)
-                        print(j)
+                    with the_lock:
+                        failures += 1
+                        print('!FAILURE: %s' % name)
+                        for i, j in errors:
+                            print(i)
+                            print(j)
             return
         else:
             time.sleep(0.01)
-    failures += 1
-    print('!FAILURE: %s [TIMED OUT]' % name)
+
+
+    with the_lock:
+        failures += 1
+        print('!FAILURE: %s [TIMED OUT]' % name)
 
 def main():
     config_file = None
@@ -113,8 +124,17 @@ def main():
     else:
         raise SystemExit('Usage: run <test file> [<links config file>]')
 
+    cpus=multiprocessing.cpu_count()
+    tp = concurrent.futures.ThreadPoolExecutor(max_workers=cpus)
     for name, code, opts in parse(open(filename, 'r')):
-        evaluate(name, code, config_file, **opts)
+        # enqueues execution of
+        # evaluate(name, code, config_file, **opts)
+        # in the thread pool
+        tp.submit(evaluate, name, code, config_file, **opts)
+
+    # Wait for all jobs to finish
+    tp.shutdown(wait=True)
+
     print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
     if failures > 0:
         sys.exit(1)
