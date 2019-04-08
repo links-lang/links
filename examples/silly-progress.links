@@ -21,9 +21,9 @@ fun compute(count, total) client {
 
 fun showAnswer(answer) client {
  replaceNode(
-	<div id="bar">{stringToXml(answer)}</div>,
+    <div id="bar">{stringToXml(answer)}</div>,
         getNodeById("bar")
-	)
+    )
 }
 
 page

@@ -165,7 +165,7 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | `Output (t, s) -> isn t && isn s
         | `Select row -> isnr row
         | `Choice row -> isnr row
-	| `End -> false
+    | `End -> false
         | `Dual s -> isn s
 and is_negative_row : TypeVarSet.t -> StringSet.t -> int -> row -> bool =
   fun bound_vars expanded_apps var (field_env, row_var, _dual) ->

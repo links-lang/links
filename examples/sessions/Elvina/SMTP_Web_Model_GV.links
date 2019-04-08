@@ -17,27 +17,27 @@ sig mailServer : (SMTPServer) ~> EndBang
 fun mailServer(s) client {
 
 offer (s) {
-	case EHLO(s) ->
+    case EHLO(s) ->
 
-				var (domain, s) = receive(s);
-				var s = select ACCEPT s;
-				offer(s) {
-					case MAIL(s) ->
-								var (address, s) = receive(s);
-								var s = select ACCEPT s;
-								offer(s) {
-									case RCPT(s) ->
-												var (rcpt, s) = receive(s);
-												var s = select ACCEPT s;
-												offer(s) {
-													case DATA(s) ->
-															var (message, s) = receive(s);
-															var s = select ACCEPT s;
-															var s = send("Success! Mail sent.", s);
-															s
-												}
-								}
-				}
+                var (domain, s) = receive(s);
+                var s = select ACCEPT s;
+                offer(s) {
+                    case MAIL(s) ->
+                                var (address, s) = receive(s);
+                                var s = select ACCEPT s;
+                                offer(s) {
+                                    case RCPT(s) ->
+                                                var (rcpt, s) = receive(s);
+                                                var s = select ACCEPT s;
+                                                offer(s) {
+                                                    case DATA(s) ->
+                                                            var (message, s) = receive(s);
+                                                            var s = select ACCEPT s;
+                                                            var s = send("Success! Mail sent.", s);
+                                                            s
+                                                }
+                                }
+                }
 
  }
 
@@ -48,63 +48,63 @@ fun mailClient(c, mail_form) client {
 
 var c = send("inf.ed.ac.uk", select EHLO c);
 offer (c) {
-	case REJECT(c) ->
-	 				var (error, c) = receive(c);
-	 				wait(c);
-	 				error
-	case ACCEPT(c) ->
-	 				var c = send(mail_form.1, select MAIL c);
-	 				offer(c) {
-	 					case REJECT(c) ->
-	 					  				var (error, c) = receive(c);
-	 					  				wait(c);
-	 					  				error
-	 					case ACCEPT(c) ->
-	 					  				var c = send(mail_form.2, select RCPT c);
-	 					  				offer(c) {
-	 					  					case REJECT(c) ->
-	 					  					 				var (error, c) = receive(c);
-	 					  					  				wait(c);
-	 					  					  				error
-	 					  					case ACCEPT(c) ->
-	 					  					  				var c = send(mail_form.3, select DATA c);
-	 					  					  				offer(c) {
-	 					  					  					case REJECT(c) ->
-	 					  					  					  				var (error, c) = receive(c);
-	 					  					  					  				wait(c);
-	 					  					  					  				error
-	 					  					  					case ACCEPT(c) ->
-	 					  					  					  				var (success, c) = receive(c);
-	 					  					  					  				wait(c);
-	 					  					  					  				success
-	 					  					  					  }
-	 					  					 }
-	 					  }
-	 }
+    case REJECT(c) ->
+                     var (error, c) = receive(c);
+                     wait(c);
+                     error
+    case ACCEPT(c) ->
+                     var c = send(mail_form.1, select MAIL c);
+                     offer(c) {
+                         case REJECT(c) ->
+                                           var (error, c) = receive(c);
+                                           wait(c);
+                                           error
+                         case ACCEPT(c) ->
+                                           var c = send(mail_form.2, select RCPT c);
+                                           offer(c) {
+                                               case REJECT(c) ->
+                                                                var (error, c) = receive(c);
+                                                                 wait(c);
+                                                                 error
+                                               case ACCEPT(c) ->
+                                                                 var c = send(mail_form.3, select DATA c);
+                                                                 offer(c) {
+                                                                     case REJECT(c) ->
+                                                                                       var (error, c) = receive(c);
+                                                                                       wait(c);
+                                                                                       error
+                                                                     case ACCEPT(c) ->
+                                                                                       var (success, c) = receive(c);
+                                                                                       wait(c);
+                                                                                       success
+                                                                       }
+                                                }
+                           }
+     }
 }
 
 sig startCommunication : (String, String, String) ~> String
 fun startCommunication(sender, recipient, message) client {
-	var mail_form = (sender, recipient, message);
-	mailClient(forkSync(mailServer), mail_form)
+    var mail_form = (sender, recipient, message);
+    mailClient(forkSync(mailServer), mail_form)
 }
 
 page
-	<html>
-	<head><title>SMTP Client</title></head>
-	<body bgcolor="#e3e2dd">
+    <html>
+    <head><title>SMTP Client</title></head>
+    <body bgcolor="#e3e2dd">
 
-	<form l:onsubmit="{domReplaceChildren(stringToXml(startCommunication(sender, recipient, message)), getNodeById("result"))}">
-	From:<br />
-	<input type="text" size="30" value="someone@staffmail.inf.ed.ac.uk" l:name="sender" /><br />
-	To:<br />
-	<input type="text" size="30" value="starlight@dust" l:name="recipient" /><br />
-	Message:<br />
-	<textarea l:name="message" rows="6" cols="34">Hi! How are you?</textarea><br />
-	<button type="submit">Send</button>
+    <form l:onsubmit="{domReplaceChildren(stringToXml(startCommunication(sender, recipient, message)), getNodeById("result"))}">
+    From:<br />
+    <input type="text" size="30" value="someone@staffmail.inf.ed.ac.uk" l:name="sender" /><br />
+    To:<br />
+    <input type="text" size="30" value="starlight@dust" l:name="recipient" /><br />
+    Message:<br />
+    <textarea l:name="message" rows="6" cols="34">Hi! How are you?</textarea><br />
+    <button type="submit">Send</button>
     </form>
 
     <p id="result"></p>
 
-	</body>
-	</html>
+    </body>
+    </html>

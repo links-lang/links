@@ -471,8 +471,8 @@ struct
       (fun database ->
          bind table
            (fun table ->
-	     bind keys
-		(fun keys ->  lift (Special (Table (database, table, keys, (r, w, n))),
+         bind keys
+        (fun keys ->  lift (Special (Table (database, table, keys, (r, w, n))),
                                `Table (r, w, n)))))
 
   let lens_handle (table, sort) =

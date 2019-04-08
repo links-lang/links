@@ -58,7 +58,7 @@ function _fullyNativeMandelbrot() {
   var div = document.createElement("div");
   div.innerHTML =
    "<canvas id=\""+id+
-	    "\" width=\""+(2*width)+
+        "\" width=\""+(2*width)+
             "\" height=\""+(2*height)+"\"></canvas>";
 
   var canvas = div.firstChild;
@@ -72,7 +72,7 @@ function _fullyNativeMandelbrot() {
   for (y = -39; y <= 39; y++) {
     for (x = -39; x <= 39; x++) {
       if (_mandelbrot(x/40.0, y/40.0) == 0)
-	_plot(context, x+39,y+39);
+    _plot(context, x+39,y+39);
     }
   }
 

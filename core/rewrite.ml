@@ -80,18 +80,18 @@ struct
     fun e ->
      let rec aux e =
        match rewrite e with
-	 | None   -> e
-	 | Some e -> aux e in
+     | None   -> e
+     | Some e -> aux e in
        match rewrite e with
-	 | None   -> None
-	 | Some e -> Some (aux e)
+     | None   -> None
+     | Some e -> Some (aux e)
 end
 
 module SimpleRewrite
   (T : (sig type t
-	    type rewriter = t -> t option
-	    val process_children : rewriter -> rewriter
-	end)) : RewritePrimitives
+        type rewriter = t -> t option
+        val process_children : rewriter -> rewriter
+    end)) : RewritePrimitives
   with type t = T.t
   and type rewriter = T.t -> T.t option =
 struct

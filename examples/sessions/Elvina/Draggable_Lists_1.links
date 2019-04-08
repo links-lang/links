@@ -44,11 +44,11 @@ fun format(text) {
 
 sig manage : (DragSelect) {:[|MouseUp|MouseDown:DomNode|MouseOut:DomNode|]|_}~> ()
 fun manage(c) {
-	receive {
-	    case MouseUp         -> manage(select MouseUp c)
-	    case MouseDown(elem) -> manage(send(elem, select MouseDown c))
+    receive {
+        case MouseUp         -> manage(select MouseUp c)
+        case MouseDown(elem) -> manage(send(elem, select MouseDown c))
             case MouseOut(elem)  -> manage(send(elem, select MouseOut c))
-	}
+    }
     }
 
 

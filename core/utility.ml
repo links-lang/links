@@ -99,7 +99,7 @@ end
 
 module IntPair = struct
   type t = int * int
-	[@@deriving show]
+    [@@deriving show]
   (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
   let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1

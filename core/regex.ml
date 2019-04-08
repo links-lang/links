@@ -12,9 +12,9 @@ and  regex = | Range of (char * char)
              | EndAnchor
              | Seq of regex list
              | Alternate of (regex * regex)
-	     | Group of regex
+         | Group of regex
              | Repeat of (repeat * regex)
-	     | Replace of (regex * string)
+         | Replace of (regex * string)
                [@@deriving show]
 
 let string_of_regex : regex -> string = fun s ->

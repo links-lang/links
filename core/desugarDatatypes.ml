@@ -448,7 +448,7 @@ object (self)
     | TableLit (t, (dt, _), cs, keys, p) ->
         let read, write, needed = Desugar.tableLit alias_env cs dt in
         let o, t = self#phrase t in
-	let o, keys = o#phrase keys in
+    let o, keys = o#phrase keys in
         let o, p = o#phrase p in
           o, TableLit (t, (dt, Some (read, write, needed)), cs, keys, p)
     (* Switch and receive type annotations are never filled in by

@@ -700,16 +700,16 @@ class transform (env : Types.typing_environment) =
       fun _ _ -> internal_error "method handlerlit not yet implemented!" (*
       let envs = o#backup_envs in
       let (o, m) =
-	match m with
-	  `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
-	| `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
+    match m with
+      `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
+    | `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
       in
       let (o, cases) =
         listu o
-	      (fun o (p, e) ->
+          (fun o (p, e) ->
                let (o, p) = o#pattern p in
                let (o, e, _) = o#phrase e in (o, (p, e)))
-	      cases
+          cases
       in
       let o = o#restore_envs envs in
       (o, (m, cases, params), t)*)
