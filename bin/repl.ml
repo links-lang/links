@@ -18,7 +18,7 @@ let print_value rtype value =
   then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get_value(BS.printing_types) then
-		       " : "^ Types.string_of_datatype rtype
+               " : "^ Types.string_of_datatype rtype
                      else "")
     end
   else
@@ -41,7 +41,7 @@ let print_value rtype value =
     fprintf std_formatter "@[%a@;<1 4>: %s@]"
             Value.p_value value
             (if Settings.get_value(BS.printing_types) then
-	       Types.string_of_datatype rtype
+           Types.string_of_datatype rtype
              else "");
     pp_print_newline std_formatter ()
 

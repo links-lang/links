@@ -81,8 +81,8 @@ let result_signature field_types result =
             rs (i+1)
           else if List.mem_assoc name field_types then
             let fields,null_query = rs (i+1) in
-	    (name, (List.assoc name field_types, i)) :: fields,
-	    null_query && is_null(name)
+        (name, (List.assoc name field_types, i)) :: fields,
+        null_query && is_null(name)
           else
             failwith("Column " ^ name ^
                         " had no type info in query's type spec: " ^
@@ -99,7 +99,7 @@ let result_signature field_types result =
       match rs with
       | [] -> l
       | (name,(t,i))::rs' ->
-	  build rs' ((name,value_of_db_string (row i) t)::l)
+      build rs' ((name,value_of_db_string (row i) t)::l)
     in build rs []
 
 
@@ -111,14 +111,14 @@ let execute_select_result
     (match result#status with
        | `QueryOk ->
            result,
-	   result_signature field_types result
+       result_signature field_types result
        | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
 
 
 let build_result ((result:Value.dbvalue),rs) =
   `List (result#map (fun row ->
                      `Record (build_record rs row))
-	   )
+       )
 
 let execute_select
     (field_types:(string * Types.datatype) list) (query:string) (db : database)

@@ -21,7 +21,7 @@ fun await() { do Await }
 # Handles yield
 sig up : (Comp( {Yield:(s) {}-> () |e}, ()))
                 {Yield{yp}         |e}~>
-	  Comp( {Yield{yp}         |e}, (Consumer({Yield{yp} |e}, s)) {Yield{yp} |e}~> ())
+      Comp( {Yield{yp}         |e}, (Consumer({Yield{yp} |e}, s)) {Yield{yp} |e}~> ())
 fun up(m)() {
   handle(m()) {
     case Return(x)   -> fun(_) { x }
@@ -58,7 +58,7 @@ var down = fun(prod)(m) { down(m)()(prod) };
 # Some combinators
 # sig <+< : ( Comp({Await:s  , Yield{yp}          |e}, ())      # in: down
 #           , Comp({Await{ap}, Yield:(s) {}-> ()  |e}, ()) ) -> # in: up
-# 	      Comp({Await{ap}, Yield{yp}          |e}, ())      # out: pipe
+#           Comp({Await{ap}, Yield{yp}          |e}, ())      # out: pipe
 sig <+< : (Sink({ Yield{yp} |e}, s), Pump({ Await{ap} |e}, s)) -> Pipe({ Await{ap}, Yield{yp} |e}, s, s)
 op d <+< u {
   fun() { down(fun(())(cons) { up(cons)(u) })(d) }
@@ -66,7 +66,7 @@ op d <+< u {
 
 # sig >+> : ( Comp({Await{ap}, Yield:(s) {}-> ()  |e}, ())      # in: up
 #           , Comp({Await:s  , Yield{yp}          |e}, ()) ) -> # in: down
-# 	      Comp({Await{ap}, Yield{yp}          |e}, ())      # out: pipe
+#           Comp({Await{ap}, Yield{yp}          |e}, ())      # out: pipe
 sig >+> : ( Pump({ Await{ap} |e}, s), Sink({ Yield{yp} |e}, s)) -> Pipe({ Await{ap}, Yield{yp} |e}, s, s)
 op u >+> d {
   d <+< u

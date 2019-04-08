@@ -285,7 +285,7 @@ let rec field_types_of_list =
     | Table table -> table_field_types table
     | _ -> assert false
 
-	  (* takes a normal form expression and returns true iff it has list type *)
+      (* takes a normal form expression and returns true iff it has list type *)
 let is_list =
   let open Q in
   function
@@ -297,7 +297,7 @@ let is_list =
     | _ -> false
 
 
-	  (* TODO: Clean up and unify with Queryshredding.Eval *)
+      (* TODO: Clean up and unify with Queryshredding.Eval *)
 
 module Eval =
 struct
@@ -663,12 +663,12 @@ struct
        begin
          match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
          | Q.Database (db, params), name, keys, `Record row ->
-	    let unboxed_keys =
-	      List.map
-		(fun key ->
-		 List.map unbox_string (unbox_list key))
-		(unbox_list keys)
-	    in
+        let unboxed_keys =
+          List.map
+        (fun key ->
+         List.map unbox_string (unbox_list key))
+        (unbox_list keys)
+        in
             Q.Table ((db, params), unbox_string name, unboxed_keys, row)
          | _ -> eval_error "Error evaluating table handle"
        end
@@ -890,7 +890,7 @@ let gens_index (gs : (Var.var * Q.t) list)   =
   let key_fields t =
     match t with
       (_, _, (ks::_), _) -> StringSet.from_list ks
-    |	_ -> all_fields t
+    |    _ -> all_fields t
   in
   let table_index get_fields (x, source) =
     let t = match source with Q.Table t -> t | _ -> assert false in

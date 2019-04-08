@@ -491,11 +491,11 @@ end
       let ppr_lt = show_type lt in
       let ppr_rt = show_type rt in
       die pos ("\
-		All the value cases of a handle should have compatible patterns, " ^
+        All the value cases of a handle should have compatible patterns, " ^
                   "but the pattern" ^ nli () ^
                   code lexpr ^ nl () ^
                   "has type" ^ nli () ^
-		  code ppr_lt ^ nl () ^
+          code ppr_lt ^ nl () ^
                   "while the subsequent patterns have type" ^ nli () ^
                   code ppr_rt)
 
@@ -504,24 +504,24 @@ end
       let ppr_lt = show_type lt in
       let ppr_rt = show_type rt in
       die pos ("\
-		All the effect cases of a handle should have compatible patterns, " ^
+        All the effect cases of a handle should have compatible patterns, " ^
                   "but the pattern" ^ nli () ^
                   code lexpr ^ nl () ^
                   "has type" ^ nli () ^
-		  code ppr_lt ^ nl () ^
+          code ppr_lt ^ nl () ^
                   "while the subsequent patterns have type" ^ nli () ^
                   code ppr_rt)
 
     let handle_branches ~pos ~t1:(lexpr, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
       die pos ("\
-		All handler clauses must have the same type, but
-		the clause expression" ^ nl() ^
-		  tab() ^ code lexpr ^ nl() ^
-		  "has type" ^ nl() ^
-		  tab() ^ code (show_type lt) ^ nl() ^
-		  "while the subsequent clauses have type" ^ nl() ^
-		  tab() ^ code (show_type rt))
+        All handler clauses must have the same type, but
+        the clause expression" ^ nl() ^
+          tab() ^ code lexpr ^ nl() ^
+          "has type" ^ nl() ^
+          tab() ^ code (show_type lt) ^ nl() ^
+          "while the subsequent clauses have type" ^ nl() ^
+          tab() ^ code (show_type rt))
 
     let handle_return ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -548,7 +548,7 @@ end
       build_tyvar_names[lt;rt];
       die pos ("The handle has effect type " ^ nl() ^
                   tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
-		  "but, the currently allowed effects are" ^ nl() ^
+          "but, the currently allowed effects are" ^ nl() ^
                   tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
 
@@ -609,10 +609,10 @@ end
       let dropDoPrefix = Str.substitute_first (Str.regexp "do ") (fun _ -> "") in
       let operation = dropDoPrefix (code rexpr) in
       die pos ("Invocation of the operation " ^ nl() ^
-		  tab() ^ operation ^ nl() ^
-		  "requires an effect context " ^ nl() ^
-		  tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
-		  "but, the currently allowed effects are" ^ nl()
+          tab() ^ operation ^ nl() ^
+          "requires an effect context " ^ nl() ^
+          tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
+          "but, the currently allowed effects are" ^ nl()
                ^ tab() ^ code ( show_effectrow (TypeUtils.extract_row lt)))
 
     (* BUG: This griper is a bit rubbish because it doesn't distinguish
@@ -3207,9 +3207,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            (** allow_wild adds wild : () to the given effect row *)
            let allow_wild : Types.row -> Types.row
-	     = fun row ->
-	       let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
-	       Types.extend_row fields row
+         = fun row ->
+           let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
+           Types.extend_row fields row
            in
            (** returns a pair of lists whose first component is the
                value clauses, while the second component is the
@@ -3395,7 +3395,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                  (fun (pat, body) cases ->
                    let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
-	                      (pos_and_typ body, no_pos bt) in
+                          (pos_and_typ body, no_pos bt) in
                    let vs = Env.domain (pattern_env pat) in
                    let vs' = Env.domain henv.var_env in
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
@@ -3437,9 +3437,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
-	     = fun row ->
+         = fun row ->
              let (operations, rho, dual) = row in
-	     let operations' =
+         let operations' =
                StringMap.mapi
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
@@ -3448,7 +3448,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                                        make absent operations polymorphic in their presence. *)
                  operations
              in
-	     (operations', rho, dual)
+         (operations', rho, dual)
            in
            let m_context = { context with effect_row = Types.make_empty_open_row (lin_unl, res_any) } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
@@ -3499,20 +3499,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               4. Unify with current effect context
            *)
            if String.compare opname "Return" = 0 then
-	     Gripers.die pos "The implicit effect Return is not invocable"
+         Gripers.die pos "The implicit effect Return is not invocable"
            else
-	     let (row, return_type, args) =
-	       let ps     = List.map tc args in
-	       let inp_t  = List.map typ ps in
-	       let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
-	       let optype = Types.make_pure_function_type inp_t out_t in
+         let (row, return_type, args) =
+           let ps     = List.map tc args in
+           let inp_t  = List.map typ ps in
+           let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
+           let optype = Types.make_pure_function_type inp_t out_t in
                let effrow = Types.make_singleton_open_row (opname, `Present optype) (lin_unl, res_effect) in
-	       (effrow, out_t, ps)
-	     in
-	     let p = Position.resolve_expression pos in
-	     let () = unify ~handle:Gripers.do_operation
-	       (no_pos (`Effect context.effect_row), (p, `Effect row))
-	     in
+           (effrow, out_t, ps)
+         in
+         let p = Position.resolve_expression pos in
+         let () = unify ~handle:Gripers.do_operation
+           (no_pos (`Effect context.effect_row), (p, `Effect row))
+         in
              (DoOperation (opname, List.map erase args, Some return_type), return_type, StringMap.empty)
         | Switch (e, binders, _) ->
             let e = tc e in

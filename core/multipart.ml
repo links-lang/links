@@ -10,12 +10,12 @@ let split separator text =
   let rec loop pos =
     if pos < len then
       try
-       	let last = String.index_from text pos separator in
- 	let str = String.sub text pos (last-pos) in
-	  str::(loop (succ last))
+           let last = String.index_from text pos separator in
+     let str = String.sub text pos (last-pos) in
+      str::(loop (succ last))
       with Not_found ->
- 	if pos < len then [String.sub text pos (len-pos)]
- 	else []
+     if pos < len then [String.sub text pos (len-pos)]
+     else []
     else []
   in
   loop 0
@@ -91,8 +91,8 @@ let rec extract_fields accu = function
       accu
   | chunk :: rem ->
       extract_fields
-	(try extract_field chunk :: accu with Not_found -> accu)
-	rem
+    (try extract_field chunk :: accu with Not_found -> accu)
+    rem
 
 let parse_multipart_args mime_type content : (string * field_data) list =
   if not (string_starts_with mime_type "multipart/form-data")

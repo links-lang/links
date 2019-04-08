@@ -65,8 +65,8 @@ let fresh desc = {
 let rec repr point =
   match point.link with
     | Link point' ->
-	let point'' = repr point' in
-	  if point'' != point' then
+    let point'' = repr point' in
+      if point'' != point' then
 
             (* [point''] is [point']'s representative element. Because we
                just invoked [repr point'], [point'.link] must be [Link
@@ -75,9 +75,9 @@ let rec repr point =
                performs memory allocation. *)
 
             point.link <- point'.link;
-	  point''
+      point''
     | Info _ ->
-	point
+    point
 
 (** find point returns the descriptor associated with point's equivalence
    class. *)
@@ -90,22 +90,22 @@ let rec find point =
   match point.link with
     | Info info
     | Link { link = Info info } ->
-	info.descriptor
+    info.descriptor
     | Link { link = Link _ } ->
-	find (repr point)
+    find (repr point)
 
 let rec change point v =
   match point.link with
     | Info info
     | Link { link = Info info } ->
-	info.descriptor <- v
+    info.descriptor <- v
 (* [SL]
   changed the return type to unit to negate the need for
   lots of 'ignores'
 *)
 (*; info.descriptor*)
     | Link { link = Link _ } ->
-	change (repr point) v
+    change (repr point) v
 
 (** equivalent point1 point2 tells whether point1 and point2 belong to the same
    equivalence class. *)
@@ -133,20 +133,20 @@ let union point1 point2 =
     and point2 = repr point2 in
       assert (point1 != point2);
       match point1.link, point2.link with
-	| Info info1, Info info2 ->
-	    let weight1 = info1.weight
-	    and weight2 = info2.weight in
-	      if weight1 >= weight2 then begin
-		point2.link <- Link point1;
-		info1.weight <- weight1 + weight2;
-		info1.descriptor <- info2.descriptor
-	      end
-	      else begin
-		point1.link <- Link point2;
-		info2.weight <- weight1 + weight2
-	      end
-	| _, _ ->
-	    assert false (* [repr] guarantees that [link] matches [Info _]. *)
+    | Info info1, Info info2 ->
+        let weight1 = info1.weight
+        and weight2 = info2.weight in
+          if weight1 >= weight2 then begin
+        point2.link <- Link point1;
+        info1.weight <- weight1 + weight2;
+        info1.descriptor <- info2.descriptor
+          end
+          else begin
+        point1.link <- Link point2;
+        info2.weight <- weight1 + weight2
+          end
+    | _, _ ->
+        assert false (* [repr] guarantees that [link] matches [Info _]. *)
 
 (* Prints the address of the representative point in order to debug sharing
    effects *)

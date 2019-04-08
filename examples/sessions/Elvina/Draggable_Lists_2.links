@@ -19,7 +19,7 @@ mutual {
   fun dragging(id, elem, s) {
    offer(s) {
     case MouseUp(s)          -> waiting(id, s)
-    case MouseOut(s) 	   -> var (toElem, s) = receive(s);
+    case MouseOut(s)        -> var (toElem, s) = receive(s);
 
      if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
       swapNodes(elem, toElem);
