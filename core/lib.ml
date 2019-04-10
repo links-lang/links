@@ -1048,6 +1048,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() ~> Int",
    IMPURE);
 
+  "clientTimeMilliseconds",
+  (`Client,
+   datatype "() ~> Int",
+   IMPURE);
+
   "serverTime",
   (`Server
      (`PFun (fun _ _ ->

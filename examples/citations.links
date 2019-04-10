@@ -266,7 +266,7 @@ fun main () {
               # because JavaScript is so slow that sending the
               # message back and forth has the desired effect
               # but this is what the code should look like
-              var u = clientTime();
+              var u = clientTimeMilliseconds();
               if(u-t < w) { sleep(w-(u-t)) } else {()};
 
               manager!GetCurrentState;
@@ -285,7 +285,7 @@ fun main () {
               error("Didn't ask for a suggestion!");
           }
         }
-        var t = clientTime();
+        var t = clientTimeMilliseconds();
         suggester("", "", t)
       }
     }

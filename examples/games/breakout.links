@@ -413,7 +413,7 @@ fun main() {
 
     fun updateState() {
         fun mainLoop(st, dt, lastTime, fpsInfo) {
-            var now = clientTime();
+            var now = clientTimeMilliseconds();
             var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
 
             var i = if (haveMail())
@@ -435,7 +435,7 @@ fun main() {
         }
 
         ignore(recv());
-        mainLoop(initialState, 0.0, clientTime(),
+        mainLoop(initialState, 0.0, clientTimeMilliseconds(),
             (frameCount = 0, avgFps = 0.0, fpsAcc = 0.0,
              loFps = 1000000.0, hiFps = 0.0, loFpsFrame = 0,
              upFrames = 0, downFrames = 0));
