@@ -340,6 +340,10 @@ struct
                 range in
             let e, t, o = o#computation e in
               Query (range, e, t), t, o
+        | InsertRows (source, rows) ->
+            let source, _, o = o#value source in
+	    let rows, _, o = o#value rows in
+              InsertRows(source, rows), Types.unit_type, o
         | Update ((x, source), where, body) ->
             let source, _, o = o#value source in
             let x, o = o#binder x in

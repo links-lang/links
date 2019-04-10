@@ -129,6 +129,7 @@ sig
 
   val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
 
+  val db_insert : env -> (value sem * value sem) -> tail_computation sem
   val db_update : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
   val db_delete : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option) -> tail_computation sem
 
@@ -534,6 +535,13 @@ struct
                 let tenv = TEnv.bind tenv (var, sem_type v) in
                 let (bs, tc) = CompilePatterns.compile_choices (nenv, tenv, eff) (t, var, cases) in
                   reflect (bs, (tc, t))))
+
+  let db_insert _env (source, rows) =
+    bind source
+      (fun source ->
+	bind rows
+	  (fun rows -> 
+            lift (Special (InsertRows (source, rows)), Types.unit_type)))
 
   let db_update env (p, source, where, body) =
     let source_type = sem_type source in
@@ -968,7 +976,10 @@ struct
           | Block (bs, e) -> eval_bindings Scope.Local env bs e
           | Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
-
+	  | DBInsert (source, _fields, rows, None) ->
+	      let source = ev source in
+	      let rows = ev rows in
+	      I.db_insert env (source, rows)
           | DBUpdate (p, source, where, fields) ->
               let p, penv = CompilePatterns.desugar_pattern p in
               let env' = env ++ penv in
@@ -1009,7 +1020,6 @@ struct
           | FunLit _
           | Iteration _
           | InfixAppl ((_, BinaryOp.RegexMatch _), _, _)
-          | DBInsert _
           | Regex _
           | Formlet _
           | Page _

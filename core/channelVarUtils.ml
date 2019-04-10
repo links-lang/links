@@ -73,6 +73,9 @@ let variables_in_computation comp =
         OptionUtils.opt_iter
           (fun (v1, v2) -> List.iter (traverse_value) [v1; v2]) vs_opt;
         traverse_computation comp
+    | InsertRows (v, r) -> 
+        traverse_value v;
+        traverse_value r
     | Update ((_, v), c_opt, c) ->
         traverse_value v;
         OptionUtils.opt_iter (traverse_computation) c_opt;

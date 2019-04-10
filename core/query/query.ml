@@ -1120,7 +1120,8 @@ let update : Value.database -> ((Ir.var * string) * Q.t option * Q.t) -> string 
     in
       "update "^table^" set "^fields^where
 
-let delete db ((_, table), where) =
+let delete : Value.database -> ((Ir.var * string) * Q.t option) -> string =
+  fun db ((_, table), where) ->
   Sql.reset_dummy_counter ();
   let base = base db [] ->- (Sql.string_of_base db true) in
   let where =

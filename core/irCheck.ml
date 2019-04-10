@@ -745,6 +745,10 @@ struct
 
               Query (range, e, t), t, o
 
+        | InsertRows (_source, _rows) ->
+	    (* TODO: check that the type of rows being inserted matches the table type *)
+	       assert false
+
         | Update ((x, source), where, body) ->
             o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
             let source, source_t, o = o#value source in
