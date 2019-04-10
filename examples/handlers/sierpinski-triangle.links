@@ -182,7 +182,7 @@ fun getDotXml(x, y, scale, id, text){
 
 sig calculateScale: (Int) ~> (Float, Float,Float)
 fun calculateScale(startTime){
-    var elapsed = clientTimeMlilliseconds() - startTime;
+    var elapsed = clientTimeMilliseconds() - startTime;
     var n = 70;
     var t = (elapsed/100) `mod` (2*n);
     var w = {
@@ -196,7 +196,7 @@ fun calculateScale(startTime){
 
 sig drawDot: (Int, Int, String) ~> ()
 fun drawDot(x, y, nodeId){
-    var xml = getDotXml(x, y, calculateScale(clientTimeMlilliseconds()), nodeId, "1");
+    var xml = getDotXml(x, y, calculateScale(clientTimeMilliseconds()), nodeId, "1");
     appendChildren(xml, getNodeById("container"))
 }
 
@@ -244,7 +244,7 @@ fun schedule(main){
 
     fun runFiber(fiber, runQ){
         #dump(self());
-        handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTimeMlilliseconds()) -> state){
+        handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) -> state){
             case Return(x) ->
                 runNext(poll(state.runQ))
             case Fork(f, resume) ->
@@ -261,7 +261,7 @@ fun schedule(main){
                         runFiber(f, qq)
                 }
             case Yield(resume) ->
-                var currentTime = clientTimeMlilliseconds();
+                var currentTime = clientTimeMilliseconds();
                 var buffer = switch(state.prio){
                     case High -> 120
                     case Low -> 30
@@ -276,7 +276,7 @@ fun schedule(main){
 
     #sig makeSchedulerState: (Priority, PrioQueue(a)) ~> SchedulerState(a)
     fun makeSchedulerState(prio, q){
-        (runQ = q, prio = prio, startTime = clientTimeMlilliseconds())
+        (runQ = q, prio = prio, startTime = clientTimeMilliseconds())
     }
 
     #sig fiber0ToFiber: (Fiber0({ |%e})) ~%~> Fiber({ |%e})
@@ -345,7 +345,7 @@ fun setUpTriangle(s, text){
 
 fun start(){
     var tri = setUpTriangle(400, "1");
-    var startTime = clientTimeMlilliseconds();
+    var startTime = clientTimeMilliseconds();
     switch(tri){
         case None -> ()
         case Some(triangle) ->
