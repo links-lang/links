@@ -1037,7 +1037,9 @@ struct
             Let (x, (tyvars, tc)), o
 
         | Fun (f, (tyvars, xs, body), z, location) as binding ->
-              (* It is important that the type annotations of the parameters are expressed in terms of the type variables from tyvars (also for rec functions) *)
+           (* It is important that the type annotations of the parameters are
+              expressed in terms of the type variables from tyvars (also for rec
+              functions) *)
               let lazy_check =
               lazy(
                 let (z, o) = o#optionu (fun o -> o#binder) z in
