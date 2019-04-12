@@ -743,6 +743,16 @@ struct
 	      apply_cont cont env (`Record [])
           | _ -> internal_error "insert row into non-database"
 	end
+  (* FIXME:
+
+     Choose a semantics for InsertReturning.
+
+     Currently it is well-defined if exactly one row is inserted, but
+     is not necessarily well-defined otherwise.
+
+     Perhaps the easiest course of action is to restrict it to the
+     case of inserting a single row.
+  *)
     | InsertReturning (source, rows, returning) ->
 	begin
           match value env source, value env rows, value env returning with
