@@ -744,7 +744,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          in
          filter ls, filter rs in
 
-       (* throw away any unpartnered flexible quantifiers raise an error for
+       (* throw away any unpartnered flexible quantifiers.  Raise an error for
           unpartnered rigid quantifiers *)
        let ls, rs =
          let cull vars qs =
