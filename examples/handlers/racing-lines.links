@@ -139,7 +139,7 @@ fun schedule(main){
 
     #sig makeSchedulerState: (Priority, PrioQueue(a)) ~> SchedulerState(a)
     fun makeSchedulerState(prio, q){
-        (runQ = q, prio = prio, startTime = clientTime())
+        (runQ = q, prio = prio, startTime = clientTimeMilliseconds())
     }
 
     fun runNext(q){
@@ -168,7 +168,7 @@ fun schedule(main){
       fun runFiber(fiber, runQ){
           #println("runQ: " ^^ intToString(fiberQueueLength(runQ)));
           #dump(self());
-          handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTime()) -> state){
+          handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) -> state){
               case Return(x) ->
                   runNext(poll(state.runQ))
               case Fork(f, resume) ->
@@ -185,7 +185,7 @@ fun schedule(main){
                           runFiber(f, qq)
                   }
               case Yield(resume) ->
-                  var currentTime = clientTime();
+                  var currentTime = clientTimeMilliseconds();
                   var buffer = switch(state.prio){
                       case High -> 400
                       case Low -> 200

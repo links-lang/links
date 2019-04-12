@@ -383,12 +383,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 if var_is_free_in_type var t2 then
                   begin
                     (* Don't infer recursion through a polymorphic type.
-                             This catches the case of unifying
+                       This catches the case of unifying
 
-                                forall %a.%b  with  %b
+                          forall %a.%b  with  %b
 
-                             where we probably want to throw away the quantifier.
-                             It isn't clear that this is always the best choice though...
+                       where we probably want to throw away the quantifier.
+                       It isn't clear that this is always the best choice though...
                      *)
                     match mono_of_type (Types.concrete_type t2) with
                     | Some t2 -> unify' rec_env (t1, t2); false
@@ -501,10 +501,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 else
                   unify_rec (MuBound (var, t')) t
               end;
-              (*
-                          it is critical that the arguments to Unionfind.union are in this order
-                          to ensure that we keep the recursive type rather than its unwinding
-               *)
+              (* it is critical that the arguments to Unionfind.union are in
+                 this order to ensure that we keep the recursive type rather
+                 than its unwinding *)
               (* union keeps the data associated with its second argument *)
               Unionfind.union rpoint lpoint
            | `Body t, `Recursive (var, t') ->
@@ -520,10 +519,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               Unionfind.union lpoint rpoint
            | `Body t, `Body t' ->
               ut (t, t')
-         (*
-                          Apparently this isn't sound as it can lead to unguarded recursion:
+         (* Apparently this isn't sound as it can lead to unguarded recursion:
 
-                            Unionfind.union lpoint rpoint
+            Unionfind.union lpoint rpoint
           *)
          end
     | `MetaTypeVar point, t | t, `MetaTypeVar point ->
@@ -533,7 +531,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          | `Var (l, _, `Rigid) ->
             begin
               (* if t is polymorphic then we might make
-                      progress by stripping the flexible quantifiers *)
+                 progress by stripping the flexible quantifiers *)
               match mono_of_type t with
               | Some t -> unify' rec_env (t, `MetaTypeVar point)
               | None ->
@@ -588,11 +586,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               else
                 unify_rec (MuBound (var, t')) t
             end
-         (* It's tempting to try to do this, but it isn't sound
-                          as point may appear inside t
+         (* It's tempting to try to do this, but it isn't sound as point may
+            appear inside t
 
-                          Unionfind.change point t;
-          *)
+            Unionfind.change point t; *)
          | `Body t' -> ut (t, t')
        end
     | `Alias (_, t1), t2
@@ -637,8 +634,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     |  t1, `RecursiveApplication appl->
        unify_rec (RecAppl appl) t1
     | `ForAll (lsref, lbody), `ForAll (rsref, rbody) ->
-       (* Check that all quantifiers that were originally rigid
-                 are still distinct *)
+       (* Check that all quantifiers that were originally rigid are still
+          distinct *)
        let distinct_rigid_check =
          let rec drc rigids (qs, ss) =
            match qs, ss with
@@ -676,24 +673,22 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          if Types.is_rigid_quantifier q then `Rigid
          else `Flexible in
 
-       (* We're assuming that all of the quantifiers start off atomic
-                 (either rigid or flexible type variables, rather than instantiated
-                 as some other type). Does this assumption always hold?
+       (* We're assuming that all of the quantifiers start off atomic (either
+          rigid or flexible type variables, rather than instantiated as some
+          other type). Does this assumption always hold?
 
-                 Perhaps we should extract the quantifiers initially just in case.
-                 This might allow us to think about other simplifications as well,
-                 such as getting rid of the annoying reference type constructor.
+          Perhaps we should extract the quantifiers initially just in case.
+          This might allow us to think about other simplifications as well, such
+          as getting rid of the annoying reference type constructor.
 
-                 We could add quantifier extraction to the FixTypeAbstractions
-                 sugar transformer pass.
+          We could add quantifier extraction to the FixTypeAbstractions sugar
+          transformer pass.
 
-                 Doing this kind of thing may be too difficult,
-                 because we might not have enough information
-                 available (e.g. how do we know which quantifiers need
-                 to be thrown away). Storing the information might
-                 take more effort than the current implementation
-                 which just requires the quantifier list to be
-                 mutable. *)
+          Doing this kind of thing may be too difficult, because we might not
+          have enough information available (e.g. how do we know which
+          quantifiers need to be thrown away). Storing the information might
+          take more effort than the current implementation which just requires
+          the quantifier list to be mutable. *)
        let lstatus = List.map status ls in
        let rstatus = List.map status rs in
 
@@ -704,33 +699,31 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
 
        let () = unify' {rec_env with qstack=(depth, lenv, renv)} (lbody, rbody) in
 
-       (* Here we need to extract instantiated quantifiers
-                 e.g.:
+       (* Here we need to extract instantiated quantifiers e.g.:
 
-                 if we unify
+          if we unify
 
-                   forall %a.(%a) -> %a
+            forall %a.(%a) -> %a
 
-                 with
+          with
 
-                   forall a,b.((a) -> b) -> (a) -> b
+            forall a,b.((a) -> b) -> (a) -> b
 
-                 Then we get:
+          Then we get:
 
-                   forall ((a) -> b).((a) -> b) -> ((a) -> b)
+            forall ((a) -> b).((a) -> b) -> ((a) -> b)
 
-                 which we can then convert to:
+          which we can then convert to:
 
-                   forall a,b.((a) -> b) -> ((a) -> b)
+            forall a,b.((a) -> b) -> ((a) -> b)
 
-                 by pulling out a and b from the %a quantifier (which
-                 was instantiated to (a) -> b).
+          by pulling out a and b from the %a quantifier (which was instantiated
+          to (a) -> b).
 
-                 Generalise.extract_quantifiers does this.
+          Generalise.extract_quantifiers does this.
 
-                 We then propagate any changes due to unification of
-                 the bodies back into the quantifiers.
-        *)
+          We then propagate any changes due to unification of the bodies back
+          into the quantifiers.  *)
 
        distinct_rigid_check (ls, lstatus);
        distinct_rigid_check (rs, rstatus);
@@ -741,9 +734,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        let lvars = collect ls IntSet.empty in
        let rvars = collect rs IntSet.empty in
 
-       (* throw away any rigid quantifiers that weren't in the
-                 original set of quantifiers, as they must be unbound
-                 or bound at an outer scope *)
+       (* throw away any rigid quantifiers that weren't in the original set of
+          quantifiers, as they must be unbound or bound at an outer scope *)
        let ls, rs =
          let filter =
            List.filter
@@ -752,8 +744,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          in
          filter ls, filter rs in
 
-       (* throw away any unpartnered flexible quantifiers
-                 raise an error for unpartnered rigid quantifiers *)
+       (* throw away any unpartnered flexible quantifiers raise an error for
+          unpartnered rigid quantifiers *)
        let ls, rs =
          let cull vars qs =
            List.fold_right
@@ -771,13 +763,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
 
        (* Now we know that ls and rs contain the same quantifiers *)
 
-       (* unify_quantifiers just checks that the kinds of the
-                 quantifiers match up
+       (* unify_quantifiers just checks that the kinds of the quantifiers match
+          up
 
-                 This seems unnecessary as we already know that the
-                 names of the quantifiers match up and it should not
-                 be possible to have distinct type variables with the
-                 same name.
+          This seems unnecessary as we already know that the names of the
+          quantifiers match up and it should not be possible to have distinct
+          type variables with the same name.
 
         *)
        (* let rec unify_quantifiers (ls, rs) = *)
@@ -817,9 +808,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
       | `Choice row, `Choice row' ->
        unify_rows' rec_env (row, row')
     | `Dual s, `Dual s' -> ut (s, s')
-    (* DODGEYNESS: dual_type doesn't doesn't necessarily make
-           the type smaller - the following could potentially lead to
-           non-termination *)
+    (* DODGEYNESS: dual_type doesn't doesn't necessarily make the type smaller -
+       the following could potentially lead to non-termination *)
     | `Dual s, s' ->
        begin
          (* if dual_type yields `Dual s then s must be a type variable *)

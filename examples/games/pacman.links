@@ -866,7 +866,7 @@ fun main() {
             # save canvas to file
             var gameState = if (gameState.metaState == Download) { # screenshot
                 var downloadNode = getNodeById("download");
-                var imageName = gameName ^^ "-" ^^ intToString(clientTime()) ^^ ".png";
+                var imageName = gameName ^^ "-" ^^ intToString(clientTimeMilliseconds()) ^^ ".png";
                 var _ = domSetAttributeFromRef(downloadNode, "download", imageName);
                 domReplaceChildren(
                     <#>
@@ -1381,7 +1381,7 @@ fun main() {
 
         fun updateState() {
             fun mainLoop(gameState: Game, dt, lastTime, fpsInfo, ii) {
-                var now = clientTime();
+                var now = clientTimeMilliseconds();
                 var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
 
                 fun aux(auxi: [Input]) {
@@ -1407,7 +1407,7 @@ fun main() {
             }
 
             var _ = recv(); # wait for initialize()
-            mainLoop(getInitialGameState(), 0.0, clientTime(), initialFpsInfo, []);
+            mainLoop(getInitialGameState(), 0.0, clientTimeMilliseconds(), initialFpsInfo, []);
 
             if (not(haveMail())) self() ! CarryOn else (); # restart
             updateState()
