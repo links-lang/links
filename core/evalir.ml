@@ -7,6 +7,9 @@ open Proc
 open Pervasives
 open Var
 
+let internal_error message =
+  raise (Errors.internal_error ~filename:"evalir.ml" ~message)
+
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
@@ -119,9 +122,9 @@ struct
 
        fun req_data name cont args ->
          if not(Settings.get_value Basicsettings.web_mode) then
-           failwith "Can't make client call outside web mode.";
+           internal_error "Can't make client call outside web mode.";
          (*if not(Proc.singlethreaded()) then
-           failwith "Remaining procs on server at client call!"; *)
+           internal_error "Remaining procs on server at client call!"; *)
          Debug.print("Making client call to " ^ name);
   (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
          let call_package =
@@ -274,7 +277,7 @@ struct
            with
                  UnknownProcessID _ ->
                    (* FIXME: printing out the message might be more useful. *)
-                   failwith("Couldn't deliver message because destination process has no mailbox.")) >>= fun _ ->
+                   internal_error("Couldn't deliver message because destination process has no mailbox.")) >>= fun _ ->
             apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawnAt",_), [func; loc] ->
         let req_data = Value.Env.request_data env in
@@ -384,7 +387,7 @@ struct
         match ap with
           | `ClientAccessPoint _ ->
               (* TODO: Work out the semantics of this *)
-              failwith "Cannot *yet* accept on a client AP on the server"
+              internal_error "Cannot *yet* accept on a client AP on the server"
           | `ServerAccessPoint apid ->
               Session.accept apid >>= fun ((_, c) as ch, blocked) ->
               let boxed_channel = Value.box_channel ch in
@@ -403,7 +406,7 @@ struct
         match ap with
           | `ClientAccessPoint _ ->
               (* TODO: Work out the semantics of this *)
-              failwith "Cannot *yet* request from a client-spawned AP on the server"
+              internal_error "Cannot *yet* request from a client-spawned AP on the server"
           | `ServerAccessPoint apid ->
               Session.request apid >>= fun ((_, c) as ch, blocked) ->
               let boxed_channel = Value.box_channel ch in
@@ -564,7 +567,7 @@ struct
             computation env cont (bs, tailcomp)
           | Alien _ ->
             computation env cont (bs, tailcomp)
-          | Module _ -> failwith "Not implemented interpretation of modules yet"
+          | Module _ -> internal_error "Not implemented interpretation of modules yet"
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     | Ir.Return v   -> apply_cont cont env (value env v)
     | Apply (f, ps) -> apply cont env (value env f, List.map (value env) ps)
@@ -589,7 +592,7 @@ struct
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
   and special env (cont : continuation) : Ir.special -> result =
-    let get_lens l = match l with | `Lens l -> l | _ -> failwith "Expected a lens." in
+    let get_lens l = match l with | `Lens l -> l | _ -> internal_error "Expected a lens." in
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
         [], `Not_typed)) in
@@ -609,7 +612,7 @@ struct
             | `List records, `Record _row ->
               let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
               apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
-            | _ -> failwith ("Unsupported underlying lens value.")
+            | _ -> internal_error ("Unsupported underlying lens value.")
       end
     | LensDrop (lens, drop, key, def, _sort) ->
         let open Lens in
@@ -738,13 +741,13 @@ struct
               Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
               let () = ignore (Database.execute_insert (table_name, field_names, vss) db) in
 	      apply_cont cont env (`Record [])
-          | _ -> failwith "Internal error: insert row into non-database"
+          | _ -> internal_error "insert row into non-database"
 	end
     | InsertReturning (source, rows, returning) ->
 	begin
           match value env source, value env rows, value env returning with
           | `Table _, `List [], _ ->
-              failwith "InsertReturning: undefined for empty list of rows"
+              internal_error "InsertReturning: undefined for empty list of rows"
           | `Table ((db, _params), table_name, _, _), rows, returning ->
               let (field_names,vss) = Value.row_columns_values db rows in
               let returning = Value.unbox_string returning in
@@ -752,7 +755,7 @@ struct
                            String.concat "\n"
                              (db#make_insert_returning_query(table_name, field_names, vss, returning)));
               apply_cont cont env (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
-          | _ -> failwith "Internal error: insert row into non-database"
+          | _ -> internal_error "insert row into non-database"
 	end
     | Update ((xb, source), where, body) ->
       let db, table, field_types =
@@ -875,17 +878,17 @@ struct
       try (
         Proc.run (fun () -> computation env cont program)
       ) with
-        | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                     " while interpreting.")
+        | NotFound s -> internal_error ("NotFound " ^ s ^
+					" while interpreting.")
 
   let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     fun env program ->
       try (
         Proc.run (fun () -> eval env program)
       ) with
-        | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                     " while interpreting.")
-        | Not_found  -> failwith ("Internal error: Not_found while interpreting.")
+        | NotFound s -> internal_error ("NotFound " ^ s ^
+					" while interpreting.")
+        | Not_found  -> internal_error ("Not_found while interpreting.")
 
   let run_defs : Value.env -> Ir.binding list -> Value.env =
     fun env bs ->
@@ -897,21 +900,21 @@ struct
 
   let apply_cont_toplevel (cont : continuation) env v =
     try snd (Proc.run (fun () -> apply_cont cont env v)) with
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                " while interpreting.")
+    | NotFound s -> internal_error ("NotFound " ^ s ^
+                                    " while interpreting.")
 
   let apply_with_cont (cont : continuation) env (f, vs) =
     try snd (Proc.run (fun () -> apply cont env (f, vs))) with
-    |  NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                 " while interpreting.")
+    |  NotFound s -> internal_error ("NotFound " ^ s ^
+                                     " while interpreting.")
 
 
   let apply_toplevel env (f, vs) = apply_with_cont K.empty env (f, vs)
 
   let eval_toplevel env program =
     try snd (Proc.run (fun () -> eval env program)) with
-    | NotFound s -> failwith ("Internal error: NotFound " ^ s ^
-                                " while interpreting.")
+    | NotFound s -> internal_error ("NotFound " ^ s ^
+                                    " while interpreting.")
 end
 
 module type EVAL = functor (Webs : WEBSERVER) -> sig
