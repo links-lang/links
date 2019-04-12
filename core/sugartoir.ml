@@ -542,7 +542,7 @@ struct
     bind source
       (fun source ->
 	bind rows
-	  (fun rows -> 
+	  (fun rows ->
             lift (Special (InsertRows (source, rows)), Types.unit_type)))
 
   let db_insert_returning _env (source, rows, returning) =
