@@ -991,6 +991,11 @@ struct
 	      let source = ev source in
 	      let rows = ev rows in
 	      I.db_insert env (source, rows)
+	  | DBInsert (source, _fields, rows, Some returning) ->
+	      let source = ev source in
+	      let rows = ev rows in
+	      let returning = ev returning in
+	      I.db_insert_returning env (source, rows, returning)
           | DBUpdate (p, source, where, fields) ->
               let p, penv = CompilePatterns.desugar_pattern p in
               let env' = env ++ penv in
