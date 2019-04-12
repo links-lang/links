@@ -760,7 +760,8 @@ struct
             let table_needed_r = TypeUtils.extract_row table_needed in
 
 
-            let rows, rows_t, o = o#value rows in
+            let rows, rows_list_t, o = o#value rows in
+            let rows_t = TypeUtils.element_type ~overstep_quantifiers:false rows_list_t in
             let rows_r = TypeUtils.extract_row rows_t in
 
             ensure (Types.is_closed_row rows_r) "Inserted record must have closed row" (SSpec special);
