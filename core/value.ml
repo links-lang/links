@@ -7,7 +7,7 @@ open Var
 let _ = ParseSettings.config_file
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"instantiate.ml" ~message)
+  raise (Errors.internal_error ~filename:"value.ml" ~message)
 
 let serialiser = Basicsettings.Serialisation.serialiser
 let session_exception_operation = "_SessionFail"
