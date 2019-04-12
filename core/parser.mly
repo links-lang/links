@@ -4,15 +4,15 @@ Note [Debugging grammar conflicts]
 ==================================
 
 It might happen that after modifying the grammar Menhir reports new conflicts.
-To debug these go to `dune` file and add flags --dump and --explain:
+To debug these go to core/dune file and add flags --dump and --explain:
 
   (menhir
     (modules parser jsonparse xmlParser)
     (flags "--table" "--dump" "--explain")
   )
 
---dump flag generates *.automaton files in _build directory.  These files
-contains human-readable description of the parser automaton, including
+--dump flag generates *.automaton files in _build/default/core directory.  These
+files contains human-readable description of the parser automaton, including
 explanation of the conflicts, located at the end of file.  --explain flag
 generates *.conflicts files that contain explanation of conflicts for each
 parser.  Note that this does not include end-of-stream conflicts, which are
