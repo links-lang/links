@@ -70,6 +70,7 @@ class virtual database = object(self)
     fun _ ->
     failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
   method virtual supports_shredding : unit -> bool
+
 end
 
 let equal_database db1 db2 = db1 == db2
@@ -1315,3 +1316,24 @@ and xmlitem_of_variant =
         then failwith "Illegal character in tagname"
         else NsNode(ns, name, xml_of_variants variant_children)
     | _ -> failwith "Cannot construct xml from variant"
+
+(* Some utility functions for databases used by insertion *)
+
+let row_columns_values db v =
+  let escaped_string_of_value db =
+    function
+      | `String s -> "\'" ^ db # escape_string s ^ "\'"
+      | v -> string_of_value v
+  in
+  let row_columns : t -> string list = function
+    | `List ((`Record fields)::_) -> List.map fst fields
+    | r -> failwith ("Internal error: forming query from non-row (row_columns): "^ string_of_value r)
+  in
+  let row_values db = function
+    | `List records ->
+	(List.map (function
+          | `Record fields -> List.map (escaped_string_of_value db -<- snd) fields
+          | _ -> failwith "Internal error: forming query from non-row") records)
+    | r -> failwith ("Internal error: forming query from non-row (row_values): "^ string_of_value r)
+  in
+  (row_columns v, row_values db v)

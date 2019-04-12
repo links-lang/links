@@ -10,24 +10,6 @@ open Var
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
-    (* is this the best place for these? *)
-let value_as_string db =
-  function
-    | `String s -> "\'" ^ db # escape_string s ^ "\'"
-    | v -> Value.string_of_value v
-
-let row_columns : Value.t -> string list = function
-  | `List ((`Record fields)::_) -> List.map fst fields
-  | r -> failwith ("Internal error: forming query from non-row (row_columns): "^ Value.string_of_value r)
-
-let row_values db = function
-  | `List records ->
-      (List.map (function
-        | `Record fields -> List.map (value_as_string db -<- snd) fields
-        | _ -> failwith "Internal error: forming query from non-row") records)
-  | r -> failwith ("Internal error: forming query from non-row (row_values): "^ Value.string_of_value r)
-
-
 let dynamic_static_routes = Basicsettings.Evalir.dynamic_static_routes
 let allow_static_routes = ref true
 
@@ -752,8 +734,7 @@ struct
           match value env source, value env rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
           | `Table ((db, _params), table_name, _, _), rows ->
-              let field_names = row_columns rows in
-              let vss = row_values db rows in
+              let (field_names,vss) = Value.row_columns_values db rows in
               Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
               let () = ignore (Database.execute_insert (table_name, field_names, vss) db) in
 	      apply_cont cont env (`Record [])
@@ -765,8 +746,7 @@ struct
           | `Table _, `List [], _ ->
               failwith "InsertReturning: undefined for empty list of rows"
           | `Table ((db, _params), table_name, _, _), rows, returning ->
-              let field_names = row_columns rows in
-              let vss = row_values db rows in
+              let (field_names,vss) = Value.row_columns_values db rows in
               let returning = Value.unbox_string returning in
               Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
                            String.concat "\n"
