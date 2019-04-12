@@ -13,8 +13,7 @@ fun insertNone() {
 
 fun insertOne() {
   insert factorials
-  values (f, i)
-    [(f=1, i=1)];
+  values [(f=1, i=1)];
 }
 
 fun insertTwoThree() {
@@ -22,6 +21,22 @@ fun insertTwoThree() {
   values (f, i)
     [(f=2, i=2),
      (f=6, i=3)];
+}
+
+fun insertReturningOne() {
+  insert factorials
+  values [(f=1, i=1)] returning i
+}
+
+fun insertReturningTwo() {
+  insert factorials
+  values (f,i) [(f=2, i=2)] returning i
+}
+
+fun updateTwoThree() {
+  update (x <-- factorials)
+  where (x.i == 2)
+  set (f=3);
 }
 
 fun lookupFactorials(n) server {
@@ -38,11 +53,20 @@ fun test() {
   deleteAll();
   assertEq(lookupFactorials(10), []);
   insertNone();
+  assertEq(lookupFactorials(10), []);
   insertOne();
   assertEq(lookupFactorials(1), [(f=1,i=1)]);
   insertTwoThree();
   ## The order is wrong.
   assertEq(lookupFactorials(3), [(i=3, f=6), (i=2, f=2), (f=1,i=1)]);
+  deleteAll();
+  assertEq(lookupFactorials(10), []);
+  assertEq(insertReturningOne(), 1);
+  assertEq(lookupFactorials(10), [(f=1,i=1)]);
+  assertEq(insertReturningTwo(), 2);
+  assertEq(lookupFactorials(10), [(f=2,i=2),(f=1,i=1)]);
+  updateTwoThree();
+  assertEq(lookupFactorials(10), [(f=3,i=2),(f=1,i=1)]);
 }
 
 test()
