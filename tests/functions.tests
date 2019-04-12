@@ -72,7 +72,7 @@ Quantification of alien functions (#280)
 ./tests/functions/alien-quantification.links
 filemode : true
 exit : 1
-stderr : @\*\*\* Fatal error.*
+stderr : @\*\*\* Internal Error.*
 
 Type annotation on inner function (correct, basic)
 ./tests/functions/innerfun1.links
