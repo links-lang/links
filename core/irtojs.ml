@@ -906,6 +906,7 @@ end = functor (K : CONTINUATION) -> struct
       | LensGet _ | LensPut _ -> Die "Attempt to run a relational lens operation on client"
       | Query _ -> Die "Attempt to run a query on the client"
       | InsertRows _ -> Die "Attempt to run a database insert on the client"
+      | InsertReturning _ -> Die "Attempt to run a database insert on the client"
       | Update _ -> Die "Attempt to run a database update on the client"
       | Delete _ -> Die "Attempt to run a database delete on the client"
       | CallCC v ->

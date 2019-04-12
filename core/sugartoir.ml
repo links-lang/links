@@ -130,6 +130,8 @@ sig
   val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
 
   val db_insert : env -> (value sem * value sem) -> tail_computation sem
+  val db_insert_returning : env -> (value sem * value sem * value sem) -> tail_computation sem
+
   val db_update : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
   val db_delete : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option) -> tail_computation sem
 
@@ -542,6 +544,15 @@ struct
 	bind rows
 	  (fun rows -> 
             lift (Special (InsertRows (source, rows)), Types.unit_type)))
+
+  let db_insert_returning _env (source, rows, returning) =
+    bind source
+      (fun source ->
+	bind rows
+	  (fun rows ->
+	    bind returning
+	      (fun returning ->
+		lift (Special (InsertReturning (source, rows, returning)), Types.int_type))))
 
   let db_update env (p, source, where, body) =
     let source_type = sem_type source in

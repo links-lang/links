@@ -759,6 +759,21 @@ struct
 	      apply_cont cont env (`Record [])
           | _ -> failwith "Internal error: insert row into non-database"
 	end
+    | InsertReturning (source, rows, returning) ->
+	begin
+          match value env source, value env rows, value env returning with
+          | `Table _, `List [], _ ->
+              failwith "InsertReturning: undefined for empty list of rows"
+          | `Table ((db, _params), table_name, _, _), rows, returning ->
+              let field_names = row_columns rows in
+              let vss = row_values db rows in
+              let returning = Value.unbox_string returning in
+              Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
+                           String.concat "\n"
+                             (db#make_insert_returning_query(table_name, field_names, vss, returning)));
+              apply_cont cont env (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
+          | _ -> failwith "Internal error: insert row into non-database"
+	end
     | Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with

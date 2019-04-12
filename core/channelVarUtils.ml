@@ -76,6 +76,10 @@ let variables_in_computation comp =
     | InsertRows (v, r) -> 
         traverse_value v;
         traverse_value r
+    | InsertReturning (v, r, s) -> 
+        traverse_value v;
+        traverse_value r;
+	traverse_value s
     | Update ((_, v), c_opt, c) ->
         traverse_value v;
         OptionUtils.opt_iter (traverse_computation) c_opt;

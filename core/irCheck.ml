@@ -747,6 +747,10 @@ struct
 
         | InsertRows (_source, _rows) ->
 	    (* TODO: check that the type of rows being inserted matches the table type *)
+	    assert false
+
+	| InsertReturning (_source, _rows, _returning) ->
+	    (* TODO: check that the type of rows being inserted matches the table type *)
 	       assert false
 
         | Update ((x, source), where, body) ->

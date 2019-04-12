@@ -81,6 +81,7 @@ and special =
   | Table      of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
   | Query      of (value * value) option * computation * Types.datatype
   | InsertRows of value * value
+  | InsertReturning of value * value * value
   | Update     of (binder * value) * computation option * computation
   | Delete     of (binder * value) * computation option
   | CallCC     of value
