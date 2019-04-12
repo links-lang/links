@@ -745,13 +745,62 @@ struct
 
               Query (range, e, t), t, o
 
-        | InsertRows (_source, _rows) ->
-	    (* TODO: check that the type of rows being inserted matches the table type *)
-	    assert false
+        | InsertRows (source, rows)
+	| InsertReturning (source, rows, _) ->
+            (* Most logic is shared between InsertRow and InsetReturning.
+               We disambiguate between the two later on. *)
 
-	| InsertReturning (_source, _rows, _returning) ->
-	    (* TODO: check that the type of rows being inserted matches the table type *)
-	       assert false
+            (* The insert itself is wild *)
+            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+            let source, source_t, o = o#value source in
+            (* this implicitly checks that source is a table *)
+            let table_read = TypeUtils.table_read_type source_t in
+            let table_write = TypeUtils.table_write_type source_t in
+            let table_needed = TypeUtils.table_needed_type source_t in
+            let table_needed_r = TypeUtils.extract_row table_needed in
+
+
+            let rows, rows_t, o = o#value rows in
+            let rows_r = TypeUtils.extract_row rows_t in
+
+            ensure (Types.is_closed_row rows_r) "Inserted record must have closed row" (SSpec special);
+            TypeUtils.iter_row (fun field presence_spec ->
+                 match presence_spec with
+                  | `Present actual_type_field ->
+                    (* Ensure that the field we update is in the write row and the types match
+                       As an invariant of Table types, it should then also be in the read row *)
+                    let write_type = TypeUtils.project_type field table_write in
+                    o#check_eq_types actual_type_field write_type (SSpec special);
+                  | `Absent -> () (* This is a closed row, ignore Absent *)
+                  | `Var _  -> raise_ir_type_error "Found presence polymorphism in inserted row" (SSpec special)
+              ) rows_r;
+
+
+            (* The following should be an invariant of Table types? *)
+            ensure (Types.is_closed_row table_needed_r) "Needed row of table type must be closed" (SSpec special);
+            TypeUtils.iter_row (fun field presence_spec ->
+                 match presence_spec with
+                  | `Present needed_type ->
+                    (* Ensure that all fields `Present in the needed row are being inserted *)
+                    let inserted_type = TypeUtils.project_type field rows_t in
+                    o#check_eq_types inserted_type needed_type (SSpec special)
+                  | `Absent
+                  | `Var _  -> ()
+              ) table_needed_r;
+
+            begin match special with
+                | InsertRows (_, _) ->
+                   InsertRows(source, rows), Types.unit_type, o
+                | InsertReturning (_, _, (Constant (Constant.String id) as ret)) ->
+                   (* The return value must be encoded as a string literal,
+                      denoting a column *)
+                   let ret_type = TypeUtils.project_type id table_read in
+                   o#check_eq_types Types.int_type ret_type (SSpec special);
+                   InsertReturning (source, rows, ret), Types.int_type, o
+                | InsertReturning (_, _, _) ->
+                   raise_ir_type_error "Return value in InsertReturning was not a string literal" (SSpec special)
+                | _ -> assert false (* impossible at this point *)
+            end
 
         | Update ((x, source), where, body) ->
             o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
