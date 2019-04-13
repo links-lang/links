@@ -2743,9 +2743,12 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
 
-let make_function_type : datatype list -> row -> datatype -> datatype
-  = fun args effs range ->
-  `Function (make_tuple_type args, effs, range)
+let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> datatype
+  = fun ?(linear=false) args effs range ->
+  if linear then
+    `Lolli (make_tuple_type args, effs, range)
+  else
+    `Function (make_tuple_type args, effs, range)
 
 let make_pure_function_type : datatype list -> datatype -> datatype
   = fun domain range -> make_function_type domain (make_empty_closed_row ()) range
