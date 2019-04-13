@@ -29,7 +29,7 @@ let string_of_occurrence : ir_snippet -> string =
     nl ^
     Ir.string_of_value v
   | SSpec s ->
-    "noccurring in IR special tail computation:" ^
+    "occurring in IR special tail computation:" ^
     nl ^
     Ir.string_of_special s
   | SBind b ->
@@ -554,7 +554,7 @@ struct
               let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false ft tyargs in
               Instantiate.datatype instantiation_maps remaining_type, instantiation_maps  in
 
-          ensure (is_function_type (snd (TypeUtils.split_quantified_type ft_instantiated))) "Passing closure to non-funcion" (SVal orig);
+          ensure (is_function_type (snd (TypeUtils.split_quantified_type ft_instantiated))) "Passing closure to non-function" (SVal orig);
           begin match o#lookup_closure_def_for_fun f with
           | Some optbinder ->
             begin match optbinder with
@@ -820,8 +820,7 @@ struct
                 )
                where in
             let body, body_t, o = o#computation body in
-            let body_element_type = TypeUtils.element_type ~overstep_quantifiers:false body_t in
-            let body_record_row = (TypeUtils.extract_row body_element_type) in
+            let body_record_row = (TypeUtils.extract_row body_t) in
             ensure (Types.is_closed_row body_record_row) "Open row as result of update" (SSpec special);
             TypeUtils.iter_row (fun field presence_spec ->
                 match presence_spec with
