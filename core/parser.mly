@@ -880,8 +880,7 @@ exp:
 | typed_expression                                             { $1 }
 
 database_expression:
-| INSERT exp VALUES LPAREN record_labels RPAREN exp
-                                 { db_insert ~ppos:$loc $2 $5 $7 None }
+| INSERT exp VALUES LPAREN record_labels RPAREN exp            { db_insert ~ppos:$loc $2 $5 $7 None }
 | INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
   RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
 | INSERT exp VALUES LPAREN record_labels RPAREN typed_expression
