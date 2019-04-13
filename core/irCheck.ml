@@ -69,13 +69,23 @@ let handle_ir_type_error lazy_val alternative occurrence =
       Lazy.force lazy_val
     with
       | Errors.IRTypeError msg  ->
+         let nl = "\n" in
         (* We saw an IR error, but we are not supposed to abort.
            Print the error and return the alternative value *)
         Debug.print
-          ("\n--------------------------------------------------------------------\n" ^
-           "Continuing after IR Type Error:\n" ^
-           msg ^
-           "\n-------------------------------------------------------------------\n" );
+          (nl ^
+          "--------------------------------------------------------------------" ^
+          nl ^
+          "Continuing after IR Type Error:" ^
+          nl ^
+          msg ^
+          nl ^
+          "backtrace:" ^
+          nl ^
+          Printexc.get_backtrace () ^
+          nl ^
+          "-------------------------------------------------------------------" ^
+          nl);
         alternative
       | exn ->
         let msg =
@@ -381,7 +391,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
 let check_eq_types (ctx : type_eq_context) et at occurrence =
   if not (eq_types occurrence ctx (et, at)) then
     raise_ir_type_error
-      ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
+      ("Type mismatch:\n Expected:\n  " ^ Types.string_of_datatype et ^ "\n Actual:\n  " ^ Types.string_of_datatype at)
       occurrence
 
 let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
