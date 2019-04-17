@@ -172,6 +172,7 @@ let rec type_of_expression : Q.t -> Types.datatype = fun v ->
   in
     let open Q in
     match v with
+      | Concat [] -> Types.make_list_type(Types.unit_type)
       | Concat (v::_) -> te v
       | For (_, _, _os, body) -> te body
       | Singleton t -> Types.make_list_type (te t)

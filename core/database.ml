@@ -79,10 +79,14 @@ let result_signature field_types result =
           if start_of ~is:"order_" name then
             (* ignore ordering fields *)
             rs (i+1)
+	  else if start_of ~is:"@unit@" name then
+            let fields,null_query = rs (i+1) in
+            (name, (Types.unit_type,i)) :: fields,
+            null_query
           else if List.mem_assoc name field_types then
             let fields,null_query = rs (i+1) in
-        (name, (List.assoc name field_types, i)) :: fields,
-        null_query && is_null(name)
+            (name, (List.assoc name field_types, i)) :: fields,
+            null_query && is_null(name)
           else
             failwith("Column " ^ name ^
                         " had no type info in query's type spec: " ^
