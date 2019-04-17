@@ -1110,7 +1110,6 @@ struct
 
                 let whole_function_expected = Var.type_of_binder f in
                 let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
-                let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                 (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                 let o = OptionUtils.opt_app o#remove_binder o z in
@@ -1120,6 +1119,7 @@ struct
               let f, tyvars, xs, body, z, location, o =
                handle_ir_type_error lazy_check (f, tyvars, xs, body, z, location, o) (SBind binding) in
               let f, o = o#binder f in
+              let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
               Fun (f, (tyvars, xs, body), z, location), o
 
         | Rec defs  as binding ->
@@ -1129,6 +1129,7 @@ struct
             let defs, o =
               List.fold_right
                 (fun (f, (tyvars, xs, body), z, location) (fs, o) ->
+                   let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                    let f, o = o#binder f in
                      ((f, (tyvars, xs, body), z, location)::fs, o))
                 defs
@@ -1150,7 +1151,6 @@ struct
 
                   let whole_function_expected = Var.type_of_binder f in
                   let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
-                  let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                   (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                   let o = OptionUtils.opt_app o#remove_binder o z in
