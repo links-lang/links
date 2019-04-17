@@ -114,10 +114,10 @@ let rec string_of_query db ignore_fields q =
   let sb = string_of_base db false in
   let string_of_fields fields =
     if ignore_fields then
-      "0 as dummy" (* SQL doesn't support empty records! *)
+      "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
     else
       match fields with
-        | [] -> "0 as dummy" (* SQL doesn't support empty records! *)
+        | [] -> "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
         | fields ->
           mapstrcat ","
             (fun (b, l) ->
