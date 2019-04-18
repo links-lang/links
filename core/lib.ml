@@ -20,26 +20,6 @@ let alias_env : Types.tycon_environment =
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
-(*
-  assumption:
-    the only kind of lists that are allowed to be inserted into databases
-    are strings
-*)
-let value_as_string db =
-  function
-    | `String s -> "\'" ^ db # escape_string s ^ "\'"
-    | v -> Value.string_of_value v
-
-let row_columns = function
-  | `List ((`Record fields)::_) -> map fst fields
-  | r -> failwith ("Internal error: forming query from non-row (row_columns): "^ Value.string_of_value r)
-and row_values db = function
-  | `List records ->
-        (List.map (function
-                     | `Record fields -> map (value_as_string db -<- snd) fields
-                     | _ -> failwith "Internal error: forming query from non-row") records)
-  | r -> failwith ("Internal error: forming query from non-row (row_values): "^ Value.string_of_value r)
-
 type primitive =
 [ Value.t
 | `PFun of RequestData.request_data -> Value.t list -> Value.t ]
@@ -1048,6 +1028,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() ~> Int",
    IMPURE);
 
+  "clientTimeMilliseconds",
+  (`Client,
+   datatype "() ~> Int",
+   IMPURE);
+
   "serverTime",
   (`Server
      (`PFun (fun _ _ ->
@@ -1103,49 +1088,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "AsList",
   (p1 (fun _ -> failwith "Unoptimized table access!!!"),
    datatype "(TableHandle(r, w, n)) -> [r]",
-  IMPURE);
-
-  "InsertRows",
-  (`Server
-     (p2 (fun table rows ->
-            match table, rows with
-              | `Table _, `List [] -> `Record []
-              | `Table ((db, _params), table_name, _, _), _ ->
-                  let field_names = row_columns rows in
-                  let vss = row_values db rows in
-                    Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-                    (Database.execute_insert (table_name, field_names, vss) db)
-              | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w, n), [s]) ~> ()",
-  IMPURE);
-
-  (* FIXME:
-
-     Choose a semantics for InsertReturning.
-
-     Currently it is well-defined if exactly one row is inserted, but
-     is not necessarily well-defined otherwise.
-
-     Perhaps the easiest course of action is to restrict it to the
-     case of inserting a single row.
-  *)
-  "InsertReturning",
-  (`Server
-     (p3 (fun table rows returning ->
-            match table, rows, returning with
-              | `Table _, `List [], _ ->
-                  failwith "InsertReturning: undefined for empty list of rows"
-              | `Table ((db, _params), table_name, _, _), _, _ ->
-                  let field_names = row_columns rows in
-                  let vss = row_values db rows in
-
-                  let returning = Value.unbox_string returning in
-                    Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
-                                    String.concat "\n"
-                                    (db#make_insert_returning_query(table_name, field_names, vss, returning)));
-                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
-              | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w, n), [s], String) ~> Int",
   IMPURE);
 
   "getDatabaseConfig",

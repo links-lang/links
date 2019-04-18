@@ -4,15 +4,15 @@ Note [Debugging grammar conflicts]
 ==================================
 
 It might happen that after modifying the grammar Menhir reports new conflicts.
-To debug these go to `dune` file and add flags --dump and --explain:
+To debug these go to core/dune file and add flags --dump and --explain:
 
   (menhir
     (modules parser jsonparse xmlParser)
     (flags "--table" "--dump" "--explain")
   )
 
---dump flag generates *.automaton files in _build directory.  These files
-contains human-readable description of the parser automaton, including
+--dump flag generates *.automaton files in _build/default/core directory.  These
+files contains human-readable description of the parser automaton, including
 explanation of the conflicts, located at the end of file.  --explain flag
 generates *.conflicts files that contain explanation of conflicts for each
 parser.  Note that this does not include end-of-stream conflicts, which are
@@ -883,7 +883,7 @@ database_expression:
 | INSERT exp VALUES LPAREN record_labels RPAREN exp            { db_insert ~ppos:$loc $2 $5 $7 None }
 | INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
   RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
-| INSERT exp VALUES LPAREN record_labels RPAREN db_expression
+| INSERT exp VALUES LPAREN record_labels RPAREN typed_expression
   RETURNING VARIABLE                                           { db_insert ~ppos:$loc $2 $5 $7 (Some $9) }
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (DatabaseLit ($2, $3))           }
 

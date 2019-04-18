@@ -283,3 +283,5 @@ val split_html : xml -> xml * xml
 val is_channel : t -> bool
 
 val session_exception_operation : string
+
+val row_columns_values : database -> t -> string list * string list list
