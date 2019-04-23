@@ -640,11 +640,11 @@ let toplevel_bindings alias_env bs =
   in (alias_env, List.rev bnds)
 
 let program typing_env (bindings, p : Sugartypes.program) :
-    (Types.typing_environment * Sugartypes.program) =
-  let alias_env = typing_env.tycon_env in
+    (FrontendTypeEnv.t * Sugartypes.program) =
+  let alias_env = typing_env.FrontendTypeEnv.tycon_env in
   let alias_env, bindings =
     toplevel_bindings alias_env bindings in
-  let typing_env = { typing_env with tycon_env = alias_env } in
+  let typing_env = { typing_env with FrontendTypeEnv.tycon_env = alias_env } in
   (typing_env, (bindings, opt_map ((phrase alias_env) ->- snd) p))
 
 let sentence typing_env = function

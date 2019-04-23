@@ -4234,14 +4234,14 @@ struct
         (fun () ->
            "before type checking: \n"^ show_program (bindings, body));
       let tyenv', bindings, _ = type_bindings tyenv bindings in
-      let tyenv' = FronendTypeEnv.normalise_typing_environment tyenv' in
+      let tyenv' = FrontendTypeEnv.normalise_typing_environment tyenv' in
       if Settings.get_value check_top_level_purity then
         binding_purity_check bindings; (* TBD: do this only in web mode? *)
       let program, typ, tyenv' =
         match body with
         | None -> (bindings, None), Types.unit_type, tyenv'
         | Some body ->
-          let body, typ, _ = type_check (Types.FrontendTypeEnv.extend_typing_environment tyenv tyenv') body in
+          let body, typ, _ = type_check (FrontendTypeEnv.extend_typing_environment tyenv tyenv') body in
           let typ = Types.normalise_datatype typ in
           (bindings, Some body), typ, tyenv' in
       Debug.if_set show_post_sugar_typing

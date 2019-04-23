@@ -123,8 +123,6 @@ let sugar_program_to_ir
         sugar_program
         source.Loader.pos_context in
 
-let die_on_exception f x =
-  Errors.display ~default:(fun _ -> exit 1) (lazy (f x))
 
 
     updated_evaluation_env, post_backend_ir_program, typ

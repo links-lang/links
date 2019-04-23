@@ -26,26 +26,6 @@ struct
 end
 
 
-(*
-  assumption:
-    the only kind of lists that are allowed to be inserted into databases
-    are strings
-*)
-let value_as_string db =
-  function
-    | `String s -> "\'" ^ db # escape_string s ^ "\'"
-    | v -> Value.string_of_value v
-
-let row_columns = function
-  | `List ((`Record fields)::_) -> map fst fields
-  | r -> failwith ("Internal error: forming query from non-row (row_columns): "^ Value.string_of_value r)
-and row_values db = function
-  | `List records ->
-        (List.map (function
-                     | `Record fields -> map (value_as_string db -<- snd) fields
-                     | _ -> failwith "Internal error: forming query from non-row") records)
-  | r -> failwith ("Internal error: forming query from non-row (row_values): "^ Value.string_of_value r)
-
 type primitive =
 [ Value.t
 | `PFun of RequestData.request_data -> Value.t list -> Value.t ]

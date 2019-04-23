@@ -67,7 +67,7 @@ let program tyenv pos_context program =
   if Settings.get_value Basicsettings.show_pre_frontend_ast then
     Debug.print ("Pre-Frontend AST:\n" ^ Sugartypes.show_program program);
 
-  let ((post_program, _, _), _) as result = program_pipeline tyenv pos_context program in
+  let (post_program, _, _) as result = program_pipeline tyenv pos_context program in
 
   if Settings.get_value Basicsettings.show_post_frontend_ast then
     Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_program post_program);
