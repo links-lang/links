@@ -177,18 +177,18 @@ let run_files_and_dependencies
     Loader.load_source_files_and_dependencies paths in
 
   (* First, we perform the processing from source to ir on each file *)
-  let updated_envs, (ir_progs_rev : (Ir.program * Loader.source * Types.datatype) list) =
-    List.fold_left
-      (fun (cur_env, bss) source ->
-        let (new_env, ir_program, typ) =
-          file_ast_to_ir
-            interacting
-            cur_env
-            source in
-        new_env, ((ir_program, source, typ) :: bss))
-      (envs, [])
-      sources_and_dependencies in
-  let ir_progs = List.rev ir_progs_rev in
+  let process_file source (cur_env, bss) =
+    let (new_env, ir_program, typ) =
+      file_ast_to_ir
+        interacting
+        cur_env
+        source
+    in
+    new_env, ((ir_program, source, typ) :: bss)
+  in
+  let updated_envs, (ir_progs : (Ir.program * Loader.source * Types.datatype) list) =
+    List.fold_right process_file sources_and_dependencies (envs, [])
+  in
 
   (* Then we evaluate everything in the necessary order *)
   let (after_eval_envs, results_rev) =
