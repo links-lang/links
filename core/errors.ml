@@ -14,6 +14,7 @@ type sugar_error_stage =
   | DesugarLAttributes
   | DesugarPages
   | CheckXML
+  | DesugarInners
 
 let string_of_stage = function
   | DesugarFormlets    -> "compiling formlets"
@@ -22,6 +23,7 @@ let string_of_stage = function
   | DesugarLAttributes -> "compiling attributes"
   | DesugarPages       -> "compiling page expressions"
   | CheckXML           -> "checking XML"
+  | DesugarInners      -> "desugaring inner types"
 
 exception Runtime_error of string
 exception UndefinedVariable of string
@@ -39,6 +41,7 @@ exception TypeApplicationArityMismatch of
 exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
+exception SettingsError of string
 
 
 let prefix_lines prefix s =
@@ -70,17 +73,6 @@ let format_exception =
       let pos, expr = Position.resolve_start_expr pos in
         Printf.sprintf "%s:%d: Syntax error: %s\nIn expression: %s\n"
           pos.pos_fname pos.pos_lnum s expr
-  | Sugartypes.RedundantPatternMatch pos ->
-      let pos, expr = Position.resolve_start_expr pos in
-        Printf.sprintf "%s:%d: Redundant pattern match:\nIn expression: %s\n"
-          pos.pos_fname pos.pos_lnum expr
-  | Sugartypes.PatternDuplicateNameError(pos, name) ->
-      (* BUG: this can't be right (the pattern and the expression are the same!) *)
-      let pos, expr = Position.resolve_start_expr pos in
-      let pattern = expr in
-        Printf.sprintf
-          "%s:%d: Syntax Error: Duplicate name `%s' in pattern\n  %s\nIn expression: %s"
-          pos.pos_fname pos.pos_lnum name (xml_escape pattern) (xml_escape expr)
   | Failure msg -> "*** Fatal error : " ^ msg
   | MultiplyDefinedMutualNames duplicates ->
       "*** Error: Duplicate mutually-defined bindings\n" ^
@@ -105,6 +97,8 @@ let format_exception =
       let pos, expr = Position.resolve_start_expr pos in
       Printf.sprintf "%s:%d: Kind mismatch: Type argument %d for type constructor %s has kind %s, but an argument of kind %s was expected. \nIn:\n%s\n"
           pos.pos_fname pos.pos_lnum tyarg_number name provided expected expr
+  | SettingsError message ->
+      Printf.sprintf "*** Settings Error: %s" message
   | Sys.Break -> "Caught interrupt"
   | exn -> "*** Error: " ^ Printexc.to_string exn
 
@@ -126,3 +120,6 @@ let internal_error ~filename ~message =
 
 let desugaring_error ~pos ~stage ~message =
   DesugaringError { pos; stage; message }
+
+let settings_error message = (SettingsError message)
+let runtime_error message = (Runtime_error message)

@@ -318,8 +318,6 @@ type program = binding list * phrase option
   [@@deriving show]
 
 exception ConcreteSyntaxError       of (Position.t * string)
-exception PatternDuplicateNameError of (Position.t * string)
-exception RedundantPatternMatch     of  Position.t
 
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with

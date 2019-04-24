@@ -12,6 +12,7 @@ type sugar_error_stage =
   | DesugarLAttributes
   | DesugarPages
   | CheckXML
+  | DesugarInners
 
 
 exception Runtime_error of string
@@ -31,6 +32,7 @@ exception TypeApplicationArityMismatch of
 exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
+exception SettingsError of string
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string
@@ -39,3 +41,5 @@ val display : ?default:(exn -> 'a) -> ?stream:out_channel -> ('a lazy_t) -> 'a
 
 val internal_error : filename:string -> message:string -> exn (* filename in which internal error occurred *)
 val desugaring_error: pos:Position.t -> stage:sugar_error_stage -> message:string -> exn
+val settings_error: string -> exn
+val runtime_error: string -> exn
