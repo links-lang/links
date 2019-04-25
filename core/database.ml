@@ -28,8 +28,9 @@ let value_of_db_string (value:string) t =
     | `Primitive Primitive.Float ->
        if value = "" then Value.box_float 0.00      (* HACK HACK *)
        else Value.box_float (float_of_string value)
-    | t -> failwith ("value_of_db_string: unsupported datatype: '" ^
-                        Types.string_of_datatype t ^"'")
+    | t -> runtime_error
+      ("value_of_db_string: unsupported datatype: '" ^
+        Types.string_of_datatype t ^"'")
 
 let execute_command  (query:string) (db: database) : Value.t =
   let result = (db#exec query) in
@@ -84,11 +85,12 @@ let result_signature field_types result =
         (name, (List.assoc name field_types, i)) :: fields,
         null_query && is_null(name)
           else
-            failwith("Column " ^ name ^
-                        " had no type info in query's type spec: " ^
-                        mapstrcat ", " (fun (name, t) -> name ^ ":" ^
-                          Types.string_of_datatype t)
-                        field_types)
+            runtime_error
+              ("Column " ^ name ^
+               " had no type info in query's type spec: " ^
+               mapstrcat ", " (fun (name, t) -> name ^ ":" ^
+                 Types.string_of_datatype t)
+               field_types)
     in let rs, null_query = rs 0
     in if null_query then [] else rs
 

@@ -10,6 +10,8 @@ open Parse
 
 module SEnv = Env.String
 
+let internal_error message =
+  raise (Errors.internal_error ~filename:"desugarDatatypes.ml" ~message)
 
 let tygroup_counter = ref 0
 let fresh_tygroup_id = function () ->
@@ -73,9 +75,10 @@ object (self)
       let tv' = (name, (pk', sk'), freedom') in
       (* check that duplicate type variables have the same kind *)
       if tv <> tv' then
-        failwith ("kind mismatch in type variable: " ^
-                  Sugartypes.show_type_variable tv ^ " vs: " ^
-                  Sugartypes.show_type_variable tv');
+        internal_error
+          ("kind mismatch in type variable: " ^
+           Sugartypes.show_type_variable tv ^ " vs: " ^
+           Sugartypes.show_type_variable tv');
       self#register tv
     else
       (self#register tv)#add_name name
@@ -114,7 +117,7 @@ type var_env = { tenv : Types.meta_type_var StringMap.t;
 let empty_env = {tenv = StringMap.empty; renv = StringMap.empty; penv = StringMap.empty}
 
 exception UnexpectedFreeVar of string
-exception UnexpectedOperationEffects of string
+exception UnexpectedOperationEffects of (string * Position.t)
 
 module Desugar =
 struct
@@ -312,13 +315,18 @@ struct
                | Open _, []
                | Recursive _, [] -> (* might need an extra check on recursive rows *)
                   (name, Present (WithPos.make ~pos (Function (domain, ([], Closed), codomain))))
-               | _,_ -> raise (UnexpectedOperationEffects name)
+               | _,_ -> raise (UnexpectedOperationEffects (name, pos))
                end
             | x -> x)
             fields
       with
-        UnexpectedOperationEffects op_name ->
-          failwith (Printf.sprintf "The abstract operation %s has unexpected effects in its signature. The effect signature on an abstract operation arrow is always supposed to be empty, since any effects it might have are ultimately conferred by its handler." op_name)
+        UnexpectedOperationEffects (op_name, pos) ->
+          raise (Errors.Type_error
+            (pos,
+             "The abstract operation " ^ op_name ^ " has unexpected " ^
+             "effects in its signature. The effect signature on an " ^
+             "abstract operation arrow is always supposed to be empty, " ^
+             "since any effects it might have are ultimately conferred by its handler."))
     in
     let (fields, rho, dual) = row var_env alias_env (fields, rv) in
     let fields =
@@ -403,7 +411,7 @@ struct
                  (add write, add needed))
              fields
              (Types.make_empty_closed_row (), Types.make_empty_closed_row ())
-        | _ -> failwith "Table types must be record types"
+        | _ -> internal_error "Table types must be record types"
       in
       (* We deliberately don't concretise the returned read_type in
           the hope of improving error messages during type

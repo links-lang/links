@@ -380,7 +380,9 @@ struct
     | Fun def -> Fun (fun_def def)
     | Rec defs -> Rec (List.map fun_def defs)
     | Alien (x, n, language) -> Alien (binder x, n, language)
-    | Module _ -> failwith "unimplemented"
+    | Module _ ->
+        raise (Errors.internal_error ~filename:"closures.ml"
+          ~message:"Globalisation of modules unimplemented")
   let bindings = List.map binding
   let computation (bs, tc) = (bindings bs, tc)
   let program : Ir.program -> Ir.program = computation
