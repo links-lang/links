@@ -153,7 +153,7 @@ object_:
                                             (Value.unbox_string (List.assoc "name" bs),
                                              Value.unbox_string (List.assoc "args" bs)) in
                                           `Database (Value.db_connect driver params)
-                                    | _ -> internal_error ("jsonparse: database value must be a record")
+                                    | _ -> internal_error ("database value must be a record")
                                 end
                             | ["_table", t] ->
                                 begin
@@ -163,14 +163,14 @@ object_:
                                           begin
                                             match List.assoc "db" bs with
                                               | `Database db -> db
-                                              | _ -> internal_error ("jsonparse: first argument to a table must be a database")
+                                              | _ -> internal_error ("first argument to a table must be a database")
                                           end
                     and name = Value.unbox_string (List.assoc "name" bs)
                                         and row =
                                           begin
                                             match DesugarDatatypes.read ~aliases:Env.String.empty (Value.unbox_string (List.assoc "row" bs)) with
                                                 | `Record row -> row
-                                                | _ -> internal_error ("jsonparse: tables must have record type")
+                                                | _ -> internal_error ("tables must have record type")
                                           end
                                         and keys =
                       begin
@@ -180,13 +180,13 @@ object_:
                             (function
                                | `List part_keys ->
                                List.map Value.unbox_string part_keys
-                               | _ -> internal_error "jsonparse: keys must be lists of strings")
+                               | _ -> internal_error "keys must be lists of strings")
                             keys
-                          | _ -> internal_error ("jsonparse: table keys must have list type")
+                          | _ -> internal_error ("table keys must have list type")
                       end
                                         in
                                           `Table (db, name, keys, row)
-                                    | _ -> internal_error ("jsonparse: table value must be a record")
+                                    | _ -> internal_error ("table value must be a record")
                                 end
                             | ["_xml", t] ->
                               begin
@@ -206,7 +206,7 @@ object_:
                                           let attrs = get_assoc "attributes" in
                                           let attrs = match attrs with
                                             | `Record attrs -> attrs
-                                            | _ -> internal_error ("jsonparse: xml attributes should be an attribute record") in
+                                            | _ -> internal_error ("xml attributes should be an attribute record") in
                                           let attrs = List.fold_left (fun attrs (label, value) ->
                                             Value.Attr (label, Value.unbox_string value) :: attrs
                                           ) [] attrs in
@@ -214,14 +214,14 @@ object_:
                                           let body = match body with
                                             | `List body -> List.map (function
                                                 | `XML body -> body
-                                                | _ -> internal_error ("jsonparse: xml body should be a list of xmlitems")
+                                                | _ -> internal_error ("xml body should be a list of xmlitems")
                                               ) body
-                                            | _ -> internal_error ("jsonparse: xml body should be a list of xmlitems")
+                                            | _ -> internal_error ("xml body should be a list of xmlitems")
                                           in `XML (Value.Node (tag, attrs @ body))
-                                        | _ -> internal_error ("Jsonparse: xml of unknown type in jsonparse. Got type: " ^ elemType)
+                                        | _ -> internal_error ("xml of unknown type in jsonparse. Got type: " ^ elemType)
                                       )
                                   | _ ->  internal_error (
-                                      "jsonparse: xml should be either a text node or an element node. Got: " ^
+                                      "xml should be either a text node or an element node. Got: " ^
                                       Value.string_of_value t
                                     )
                                 end

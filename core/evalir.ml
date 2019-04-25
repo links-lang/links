@@ -712,7 +712,7 @@ struct
                   "The database driver '%s' does not support shredding."
                   (db#driver_name ())
               in
-              raise (Errors.Runtime_error error_msg)
+              raise (Errors.runtime_error error_msg)
        else (* shredding disabled *)
          begin
            match EvalQuery.compile env (range, e) with

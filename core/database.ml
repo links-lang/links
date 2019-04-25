@@ -3,7 +3,7 @@ open CommonTypes
 open Utility
 
 type database = Value.database
-exception Runtime_error = Errors.Runtime_error
+let runtime_error str = raise (Errors.runtime_error str)
 
 class virtual db_args from_str = object
   val strval : string = from_str
@@ -36,7 +36,7 @@ let execute_command  (query:string) (db: database) : Value.t =
     begin
       match result#status with
         | `QueryOk -> `Record []
-        | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg))
+        | `QueryError msg -> runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)
     end
 
 let execute_insert (table_name, field_names, vss) db =
@@ -56,9 +56,9 @@ let execute_insert_returning (table_name, field_names, vss, returning) db =
                      begin
                        match rows with
                          | [[id]] -> Value.box_int (int_of_string id)
-                         | _ -> raise (Runtime_error ("Returned the wrong number of results executing " ^ q))
+                         | _ -> runtime_error ("Returned the wrong number of results executing " ^ q)
                      end
-               | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg))
+               | `QueryError msg -> runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg)
             end
       | q :: qs ->
         let _unit = execute_command q db in
@@ -112,7 +112,7 @@ let execute_select_result
        | `QueryOk ->
            result,
        result_signature field_types result
-       | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+       | `QueryError msg -> runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg))
 
 
 let build_result ((result:Value.dbvalue),rs) =
@@ -132,4 +132,4 @@ let execute_untyped_select (query:string) (db: database) : Value.t =
     (match result#status with
        | `QueryOk ->
            `List (map (fun row -> `List (map Value.box_string row)) result#get_all_lst)
-       | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+       | `QueryError msg -> runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg))
