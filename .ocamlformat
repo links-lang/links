@@ -1,3 +1,3 @@
-break-cases=toplevel
+break-cases=all
 doc-comments=before
-
+module-item-spacing=preserve
