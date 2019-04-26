@@ -48,8 +48,9 @@ let js_dq_escape_string str =
   (* escape for placement in double-quoted string *)
   Str.global_replace (Str.regexp_string "\"") "\\\""
     (Str.global_replace (Str.regexp_string "\n") "\\n"
+      (Str.global_replace (Str.regexp_string "\r") "\\r"
        (Str.global_replace (Str.regexp_string "\\") "\\\\"
-          str))
+          str)))
 
 (** Escape the argument for inclusion in a double-quoted string. *)
 let js_dq_escape_char =
