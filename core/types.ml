@@ -1135,8 +1135,8 @@ let rec concrete_field_spec f =
             | `Var _ -> f
             | `Body f -> concrete_field_spec f
         end
-   (* The following may be tempting, but can lead to an infinite loop
-    | `Present t -> `Present (concrete_type IntSet.empty t) *)
+    (* The following may be tempting, but can lead to an infinite loop *)
+    (* | `Present t -> `Present (concrete_type IntSet.empty t) *)
     | _ -> f
 
 let concrete_fields =
@@ -1557,10 +1557,16 @@ and normalise_row rec_names row =
      non-termination.
   *)
   let fields, row_var, dual = flatten_row row in
+  let closed = is_closed_row (fields, row_var, dual) in
   let fields =
-    FieldEnv.map
-      (fun f -> normalise_field_spec rec_names f)
+    FieldEnv.fold
+      (fun l f fields ->
+        match f with
+        (* strip absent fields from closed rows *)
+        | `Absent when closed -> fields
+        | _ -> FieldEnv.add l (normalise_field_spec rec_names f) fields)
       fields
+      FieldEnv.empty
   in
     (fields, row_var, dual)
 and normalise_type_arg rec_names type_arg =
@@ -1578,7 +1584,7 @@ and normalise_field_spec rec_names f =
         begin
           match Unionfind.find point with
             | `Var _ -> f
-            | `Body f -> concrete_field_spec f
+            | `Body f -> normalise_field_spec rec_names f
         end
     | `Present t -> `Present (normalise_datatype rec_names t)
     | _ -> f
