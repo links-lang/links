@@ -206,8 +206,12 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
     let rec eqt ((context, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
 
-      let t1 = collapse_toplevel_forall t1 in
-      let t2 = collapse_toplevel_forall t2 in
+      let rec unalias = function
+        | `Alias (_, x) -> unalias x
+        | x             -> x in
+
+      let t1 = unalias (collapse_toplevel_forall t1) in
+      let t2 = unalias (collapse_toplevel_forall t2) in
 
       (* If t2 is recursive at the top, we give up. t1 is checked for recursion later on *)
       if match t2 with
@@ -225,8 +229,6 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
         end
       else
       begin
-
-
       match t1 with
       | `Not_typed ->
           begin match t2 with
