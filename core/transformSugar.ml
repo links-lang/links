@@ -729,10 +729,10 @@ class transform (env : Types.typing_environment) =
 
     method rec_bodies :
     (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     ((tyvar list * (Types.datatype * int option list) option) * funlit) *
      Location.t * datatype' option * Position.t) list ->
     ('self * (Binder.with_pos * DeclaredLinearity.t *
-              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              ((tyvar list * (Types.datatype * int option list) option) * funlit) *
               Location.t * datatype' option * Position.t) list) =
       let outer_tyvars = o#backup_quantifiers in
       let rec list o =
@@ -751,10 +751,10 @@ class transform (env : Types.typing_environment) =
         list o
 
     method rec_activate_outer_bindings : (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     ((tyvar list * (Types.datatype * int option list) option) * funlit) *
      Location.t * datatype' option * Position.t) list ->
      ('self * (Binder.with_pos * DeclaredLinearity.t *
-              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              ((tyvar list * (Types.datatype * int option list) option) * funlit) *
               Location.t * datatype' option * Position.t) list) =
       let rec list o =
         function
@@ -768,7 +768,7 @@ class transform (env : Types.typing_environment) =
         list o
 
     method rec_activate_inner_bindings : (Binder.with_pos * DeclaredLinearity.t *
-        ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+        ((tyvar list * (Types.datatype * int option list) option) * funlit) *
         Location.t * datatype' option * Position.t) list -> 'self_type =
       let rec list o =
         function

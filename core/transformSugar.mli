@@ -66,23 +66,23 @@ object ('self)
 
   method rec_bodies :
     (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     ((tyvar list * (Types.datatype * int option list) option) * funlit) *
      Location.t * datatype' option * Position.t) list ->
     ('self * (Binder.with_pos * DeclaredLinearity.t *
-              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              ((tyvar list * (Types.datatype * int option list) option) * funlit) *
               Location.t * datatype' option * Position.t) list)
 
   method rec_activate_outer_bindings :
     (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     ((tyvar list * (Types.datatype * int option list) option) * funlit) *
      Location.t * datatype' option * Position.t) list ->
     ('self * (Binder.with_pos * DeclaredLinearity.t *
-              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              ((tyvar list * (Types.datatype * int option list) option) * funlit) *
               Location.t * datatype' option * Position.t) list)
 
   method rec_activate_inner_bindings :
     (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     ((tyvar list * (Types.datatype * int option list) option) * funlit) *
      Location.t * datatype' option * Position.t) list -> 'self
 
   method sugar_datatype   : Datatype.with_pos -> 'self * Datatype.with_pos

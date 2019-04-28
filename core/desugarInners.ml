@@ -11,14 +11,21 @@ open Sugartypes
    stores a single type for each recursive function.
 *)
 
-let rec add_extras =
-  function
-    | [], [] -> []
-    | None::extras, tyarg::tyargs -> tyarg :: add_extras (extras, tyargs)
-    | Some q::extras, tyargs ->
-      (Types.type_arg_of_quantifier q) :: add_extras (extras, tyargs)
-    | _, _ ->
-      failwith "Mismatch in number of quantifiers and type arguments"
+let rec add_extras qs (extras, tyargs) =
+  match qs, extras with
+  | [], [] -> []
+  | q::qs, None::extras -> Types.type_arg_of_quantifier q :: add_extras qs (extras, tyargs)
+  | _::qs, Some i::extras -> List.nth tyargs i :: add_extras qs (extras, tyargs)
+  | _, _ -> failwith "Mismatch in number of quantifiers and type arguments"
+
+(* let rec add_extras =
+ *   function
+ *     | [], [] -> []
+ *     | None::extras, tyarg::tyargs -> tyarg :: add_extras (extras, tyargs)
+ *     | Some q::extras, tyargs ->
+ *       (Types.type_arg_of_quantifier q) :: add_extras (extras, tyargs)
+ *     | _, _ ->
+ *       failwith "Mismatch in number of quantifiers and type arguments" *)
 
 class desugar_inners env =
 object (o : 'self_type)
@@ -29,26 +36,36 @@ object (o : 'self_type)
   method with_extra_env env =
     {< extra_env = env >}
 
-  method bind f extras =
-    {< extra_env = StringMap.add f extras extra_env >}
+  method bind f tyvars extras =
+    {< extra_env = StringMap.add f (tyvars, extras) extra_env >}
 
   method unbind f =
     {< extra_env = StringMap.remove f extra_env >}
 
   method! phrasenode = function
-    | TAppl ({node=Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
-        let extras = StringMap.find name extra_env in
-        let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (TAppl (phn, tyargs))
+    | (Var name as e)
+    | (Section (Section.Name name) as e) when StringMap.mem name extra_env ->
+       let tyvars, extras = StringMap.find name extra_env in
+       let tyargs = add_extras tyvars (extras, []) in
+       let o = o#unbind name in
+       let (o, e, t) = o#phrasenode (TAppl (SourceCode.WithPos.make e, tyargs)) in
+       (o#with_extra_env extra_env, e, t)
+    | TAppl ({node=Var name;_} as p, tyargs)
+    | TAppl ({node=Section (Section.Name name);_} as p, tyargs) when StringMap.mem name extra_env ->
+        let tyvars, extras = StringMap.find name extra_env in
+        let tyargs = add_extras tyvars (extras, tyargs) in
+        let o = o#unbind name in
+        let (o, e, t) = o#phrasenode (TAppl (p, tyargs)) in
+        (o#with_extra_env extra_env, e, t)
     | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
-        let extras = StringMap.find name extra_env in
-        let tyargs = add_extras (extras, tyargs) in
+        let tyvars, extras = StringMap.find name extra_env in
+        let tyargs = add_extras tyvars (extras, tyargs) in
           super#phrasenode (InfixAppl ((tyargs, BinaryOp.Name name), e1, e2))
     | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
-        let extras = StringMap.find name extra_env in
-        let tyargs = add_extras (extras, tyargs) in
+        let tyvars, extras = StringMap.find name extra_env in
+        let tyargs = add_extras tyvars (extras, tyargs) in
           super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
-            (* HACK: manage the lexical scope of extras *)
+    (* HACK: manage the lexical scope of extras *)
     | Spawn _ as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
@@ -74,9 +91,9 @@ object (o : 'self_type)
         (* put the extras in the environment *)
         let o =
           List.fold_left
-            (fun o (bndr, _, ((_tyvars, dt_opt), _), _, _, _) ->
+            (fun o (bndr, _, ((tyvars, dt_opt), _), _, _, _) ->
                match dt_opt with
-                 | Some (_, extras) -> o#bind (Binder.to_name bndr) extras
+                 | Some (_, extras) -> o#bind (Binder.to_name bndr) tyvars extras
                  | None -> assert false
             )
             o defs in
@@ -114,11 +131,18 @@ object (o : 'self_type)
           (o, (Funs defs))
     | b -> super#bindingnode b
 
-  method! binder : Binder.with_pos -> ('self_type * Binder.with_pos) = function
-      | {node=_, None; _} -> assert false
-      | bndr ->
-         let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in
-         ({< var_env=var_env; extra_env=extra_env >}, bndr)
+  method! binder =
+    fun bndr ->
+    let (o, bndr) = super#binder bndr in
+    (* avoid accidentally capturing type applications through shadowing *)
+    let o = o#unbind (Binder.to_name bndr) in
+    (o, bndr)
+
+  (* method! binder : Binder.with_pos -> ('self_type * Binder.with_pos) = function
+   *     | {node=_, None; _} -> assert false
+   *     | bndr ->
+   *        let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in
+   *        ({< var_env=var_env; extra_env=extra_env >}, bndr) *)
 end
 
 let desugar_inners env = ((new desugar_inners env) : desugar_inners :> TransformSugar.transform)

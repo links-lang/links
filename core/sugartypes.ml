@@ -300,7 +300,7 @@ and function_definition =
 and recursive_function =
   (Binder.with_pos * DeclaredLinearity.t *
     ((tyvar list *
-      (Types.datatype * Types.quantifier option list) option)
+      (Types.datatype * int option list) option)
       * funlit) * Location.t * datatype' option * Position.t)
   [@@deriving show]
 
