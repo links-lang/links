@@ -99,12 +99,12 @@ stdout : 3 : Int
 args : --config=tests/enable_quantified_instantiation.config
 
 Bad polymorphism behaviour (1)
-sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> ([a]) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
+sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : (a) -> ([a]) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
 stdout : [fun] : [forall a,b::Row.(a) -b-> a]
 args : --config=tests/enable_quantified_instantiation.config
 
 Bad polymorphism behaviour (2)
-sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> (b) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
+sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : (a) -> (b) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
 stdout : [fun] : [(a::Any) -> a::Any]
 args : --config=tests/enable_quantified_instantiation.config
 
