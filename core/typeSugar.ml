@@ -3658,8 +3658,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
               var_env = penv},
             usage
       | Fun (bndr, lin, (_, (pats, body)), location, t) ->
-         (* FIXME: make sure the type variables in the inferred type
-            match those of any annotation *)
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let pats = List.map (List.map tpc) pats in
@@ -3668,23 +3666,20 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let return_type = Types.fresh_type_variable (lin_any, res_any) in
 
           (* Check that any annotation matches the shape of the function *)
-          let context', ft =
+          let context_body, ft =
             match t with
               | None ->
                   context, make_ft lin pats effects return_type
               | Some (_, Some t) ->
-                  (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
+                  (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
-                  let _, fti = Instantiate.typ_rigid t in
 
-                  (* let (_, ft) = Generalise.generalise_rigid context.var_env t in
-                   *
-                   * let _, fti = Instantiate.typ_rigid ft in
-                   * let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos fti) in *)
+                  let (_, ft) = Generalise.generalise_rigid context.var_env t in
+                  let _, ft_mono = TypeUtils.split_quantified_type ft in
 
-                  (* Debug.print ("fti: " ^ Types.string_of_datatype fti); *)
-                  let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos fti) in
+                  (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
+                  let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos ft_mono) in
                     (* Debug.print ("return type: " ^Types.string_of_datatype (TypeUtils.concrete_type return_type)); *)
                   (* HACK: Place a dummy name in the environment in
                      order to ensure that the generalisation check
@@ -3692,14 +3687,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
                      the original name as the function is not
                      recursive) *)
                   let v = Utils.dummy_source_name () in
-                  bind_var context (v, fti), fti
+                  bind_var context (v, ft_mono), ft
               | Some _ -> assert false in
 
           (* type check the body *)
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
-          let context' = List.fold_left fold_in_envs context' pats in
+          let context_body = List.fold_left fold_in_envs context_body pats in
 
-          let body = type_check (bind_effects context' effects) body in
+          let body = type_check (bind_effects context_body effects) body in
 
           (* check that the body type matches the return type of any annotation *)
           let () = unify pos ~handle:Gripers.bind_fun_return (no_pos (typ body), no_pos return_type) in
@@ -3722,7 +3717,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             if DeclaredLinearity.is_nonlinear lin then
               StringMap.iter (fun v _ ->
                               if not (List.mem v vs) then
-                                let t = Env.lookup context'.var_env v in
+                                let t = Env.lookup context_body.var_env v in
                                 if Types.type_can_be_unl t then
                                   Types.make_type_unl t
                                 else
@@ -3731,11 +3726,42 @@ and type_binding : context -> binding -> binding * context * usagemap =
                              (usages body)
             else () in
 
-          (* generalise *)
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
 
-          (* TODO: check that tyvars matches up with the quantifiers
-             from any type annotation! *)
+          (* FIXME: We should do the following check, but currently it
+             breaks some of our examples.  *)
+
+          (* It could be handy to support a (different) syntax for
+             specifying quantifiers sloppily without fixing an order
+             or promising that they're complete - in order to denote
+             their kinds if nothing else *)
+
+          (* let tyvars, ft =
+           *   (\* generalise *\)
+           *   let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
+           *   (\* check that tyvars matches up those from any type
+           *      annotation *\)
+           *   match t with
+           *   | None -> tyvars, ft
+           *   | Some (_, Some t) ->
+           *      begin
+           *        match TypeUtils.quantifiers t with
+           *        | [] -> tyvars, ft
+           *        | t_tyvars ->
+           *           if not
+           *                (List.for_all
+           *                   (fun q ->
+           *                     let n = Types.type_var_number q in
+           *                     List.exists (fun q -> Types.type_var_number q = n) t_tyvars) tyvars)
+           *           then
+           *             begin
+           *               Debug.print ("t: "^Types.string_of_datatype t);
+           *               Debug.print ("ft: "^Types.string_of_datatype ft);
+           *               failwith "inconsistent quantifiers (fun)"
+           *             end;
+           *           t_tyvars, t
+           *      end
+           *   | Some (_, None) -> assert false in *)
 
           (* let ft = Instantiate.freshen_quantifiers ft in *)
             (Fun (Binder.set_type bndr ft,
@@ -3789,8 +3815,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
                          (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                          (* make sure the annotation has the right shape *)
-                         let _, fti = Instantiate.typ ft in
-                         let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos fti) in
+                         let _, ft_mono = TypeUtils.split_quantified_type ft in
+                         let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft_mono) in
                            ft
                      | Some _ -> assert false
                  in
@@ -3836,31 +3862,17 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                             if Types.type_can_be_unl t then
                                               Types.make_type_unl t
                                             else
-                                              Gripers.die pos ("Use of variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " in unlimited function binding.")
+                                              Gripers.die pos ("Use of variable " ^ v ^ " of linear type " ^
+                                                                 Types.string_of_datatype t ^ " in unlimited function binding.")
                                           else ())
                                          (usages body);
                         StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
 
                       (* check that the inferred type doesn't contradict any type annotation *)
                       let shape = make_ft lin pats effects (typ body) in
-                        (* it is important to instantiate with rigid
-                           type variables in order to ensure that the
-                           inferred type is consistent with any
-                           annotation *)
                       let ft = Env.lookup body_context.var_env name in
-                      let ft =
-                        match Types.concrete_type ft with
-                        | `ForAll (_, ft) -> ft
-                        | _ -> ft in
-                      (* let ft =
-                       *   let _, ft = Instantiate.rigid body_context.var_env name in
-                       *     if Settings.get_value Instantiate.quantified_instantiation then
-                       *       match ft with
-                       *         | `ForAll (_, ft) -> ft
-                       *         | ft -> ft
-                       *     else
-                       *       ft in *)
-                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
+                      let _, ft_mono = TypeUtils.split_quantified_type ft in
+                      let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft_mono) in
 
                       ((Binder.erase_type bndr, lin, (([], None), (pats, body)), location, t, pos), used) :: defs_and_uses) [] defs patss)) in
 
@@ -3895,7 +3907,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                    (fun q ->
                                      let n = Types.type_var_number q in
                                      List.exists (fun q -> Types.type_var_number q = n) outer_tyvars) inner_tyvars) then
-                            failwith "inconsistent quantifiers";
+                            failwith "inconsistent quantifiers (funs)";
 
                            (* compute mapping from outer_tyvars to inner_tyvars
 
@@ -3910,16 +3922,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                | _ :: qs -> find n (i+1) qs in
                              let find q = find (Types.type_var_number q) 0 inner_tyvars in
                              List.map find outer_tyvars in
-
-                           (* update type applications in body to respect outer_tyvars *)
-                           (* let extras =
-                            *   let has q =
-                            *     let n = Types.type_var_number q in
-                            *       List.exists (fun q -> Types.type_var_number q = n) inner_tyvars
-                            *   in
-                            *     List.map (fun q ->
-                            *                 if has q then None
-                            *                 else Some q) outer_tyvars in *)
 
                            (* let outer = Instantiate.freshen_quantifiers outer in
                             * let inner = Instantiate.freshen_quantifiers inner in *)
