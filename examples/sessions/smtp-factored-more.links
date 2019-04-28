@@ -202,7 +202,7 @@ mutual {
     }
   }
 
-  sig checker : forall a::Session, r::Session.
+  sig checker : forall a::Session, r::Session, e::Row.
                   (Socket, ~Checker(~a, ~r), (a, Socket) ~e~> (), (r, Socket) ~e~> ()) ~e~> ()
   fun checker(socket, s, accept, reject) {
     var status = parseServerAnswer(read(socket));
