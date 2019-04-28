@@ -1181,7 +1181,7 @@ fun reproduce(ap, f) {
 # spawnAngel which allows us to spawn a process that will continue to
 # run even if the main process terminates.)
 
-sig connect : forall s::Session,e::Row.((s) ~e~> (), (~s) ~e~> a) ~e~> a
+sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
   var ap = new();
   var done = new();
@@ -1243,7 +1243,7 @@ fun linForkSync(f) {
   request(ap)
 }
 
-sig linkSync : forall s::Session.(s, ~s) ~> EndBang
+sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
 fun linkSync(s, c) {
   link(s, c);
   makeEndBang()
