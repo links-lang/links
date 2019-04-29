@@ -11,12 +11,6 @@ struct
 end
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"jsonparse.mly" ~message)
-
-(* let unparse_label = function *)
-(*   | `Char c -> String.make 1 c *)
-(*   | `List (`Char _::_) as s -> Value.unbox_string s *)
-(*   | r -> (internal_error "(json) error decoding label " ^ Show.show Value.show_t r) *)
 
 (* BUG: need to unescape strings
    (where they are escaped in json.ml)
