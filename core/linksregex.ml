@@ -2,7 +2,7 @@ open Regex
 open Utility
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"linksregex.ml" ~message)
+  Errors.internal_error ~filename:"linksregex.ml" ~message
 
 let unit = `Record []
 
@@ -32,7 +32,7 @@ struct
     | `Variant ("Plus", _)     -> Plus
     | `Variant ("Question", _) -> Question
     | v                        ->
-        internal_error ("Attempt to treat " ^ Value.show v ^ " as a repeat value")
+        raise (internal_error ("Attempt to treat " ^ Value.show v ^ " as a repeat value"))
   and ofLinksNGroups r = ofLinks r, 0
 end
 
@@ -104,8 +104,8 @@ struct
       let (re, count) = ofLinksCount count re in
       Replace(re, Value.unbox_string tmpl), count
       | v  ->
-          internal_error ("Attempt to treat " ^
-            Value.show v ^ " as a regex value") in
+          raise (internal_error ("Attempt to treat " ^
+            Value.show v ^ " as a regex value")) in
     ofLinksCount 0 res
 
 

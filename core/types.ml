@@ -4,7 +4,7 @@ open CommonTypes
 [@@@ocaml.warning "-32"] (** disable warnings about unused functions in this module**)
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"types.ml" ~message)
+  Errors.internal_error ~filename:"types.ml" ~message
 
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap [@@deriving show]
@@ -2601,7 +2601,7 @@ let is_sub_type, is_sub_row =
           let lrow, _ = unwrap_row row
           and rrow, _ = unwrap_row row' in
             is_sub_row rec_vars (lrow, rrow)
-      | `Table _, `Table _ -> internal_error "not implemented subtyping on tables yet"
+      | `Table _, `Table _ -> raise (internal_error "not implemented subtyping on tables yet")
       | `Application (labs, _), `Application (rabs, _) ->
           (* WARNING:
 
@@ -2618,7 +2618,7 @@ let is_sub_type, is_sub_row =
               | `Body t, _ -> is_sub_type rec_vars (t, t')
               | _, `Body t -> is_sub_type rec_vars (t, t')
               | `Recursive _, `Recursive _ ->
-                  internal_error "not implemented subtyping on recursive types yet"
+                  raise (internal_error "not implemented subtyping on recursive types yet")
               | _, _ -> false
           end
       | `MetaTypeVar point, _ ->
@@ -2639,7 +2639,7 @@ let is_sub_type, is_sub_row =
       | (`Alias (_, t)), t'
       | t, (`Alias (_, t')) -> is_sub_type rec_vars (t, t')
       | `ForAll _, `ForAll _ ->
-          internal_error "not implemented subtyping on forall types yet"
+          raise (internal_error "not implemented subtyping on forall types yet")
       | _, _ -> false
   (* This is like standard row sub-typing, but the field types must be invariant.
      Ultimately we might want more flexibility. For instance, we might expect
@@ -2701,7 +2701,7 @@ let is_sub_type, is_sub_row =
           | `Body lrow, _ -> is_sub_row rec_vars (dual_if ldual lrow, rrow)
           | _, `Body rrow -> is_sub_row rec_vars (lrow, dual_if rdual rrow)
           | `Recursive _, `Recursive _ ->
-              internal_error "not implemented subtyping on recursive rows yet"
+              raise (internal_error "not implemented subtyping on recursive rows yet")
           | _, _ -> false
       in
         sub_fields && sub_row_vars

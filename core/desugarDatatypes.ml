@@ -11,7 +11,7 @@ open Parse
 module SEnv = Env.String
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"desugarDatatypes.ml" ~message)
+  Errors.internal_error ~filename:"desugarDatatypes.ml" ~message
 
 let tygroup_counter = ref 0
 let fresh_tygroup_id = function () ->
@@ -75,10 +75,10 @@ object (self)
       let tv' = (name, (pk', sk'), freedom') in
       (* check that duplicate type variables have the same kind *)
       if tv <> tv' then
-        internal_error
+        raise (internal_error
           ("kind mismatch in type variable: " ^
            Sugartypes.show_type_variable tv ^ " vs: " ^
-           Sugartypes.show_type_variable tv');
+           Sugartypes.show_type_variable tv'));
       self#register tv
     else
       (self#register tv)#add_name name
@@ -411,7 +411,7 @@ struct
                  (add write, add needed))
              fields
              (Types.make_empty_closed_row (), Types.make_empty_closed_row ())
-        | _ -> internal_error "Table types must be record types"
+        | _ -> raise (internal_error "Table types must be record types")
       in
       (* We deliberately don't concretise the returned read_type in
           the hope of improving error messages during type
