@@ -43,6 +43,7 @@ exception TypeApplicationKindMismatch of
     expected: string; provided: string }
 exception SettingsError of string
 exception DynlinkError of string
+exception ModuleError of string
 
 
 let prefix_lines prefix s =
@@ -112,6 +113,8 @@ let format_exception =
              tyarg_number name provided expected expr)
   | SettingsError message ->
       pos_prefix (Printf.sprintf "Settings Error: %s" message)
+  | ModuleError message ->
+      pos_prefix (Printf.sprintf "Module Error: %s" message)
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
 
@@ -137,3 +140,4 @@ let desugaring_error ~pos ~stage ~message =
 let settings_error message = (SettingsError message)
 let runtime_error message = (RuntimeError message)
 let dynlink_error message = (DynlinkError message)
+let module_error message = (ModuleError message)

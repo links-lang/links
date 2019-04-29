@@ -7,6 +7,9 @@ open Ir
 let fail_on_ir_type_error =
   Settings.get_value Basicsettings.Ir.fail_on_ir_type_error
 
+let internal_error message =
+  raise (Errors.internal_error ~filename:"irCheck.ml" ~message)
+
 (* Artificial "supertype" of all IR types,
    so we can provide arbitrary IR fragments to the error handling functions *)
 type ir_snippet =
@@ -236,7 +239,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
                 `MetaTypeVar rpoint ->
                 begin match lpoint_cont, Unionfind.find rpoint with
                 | `Var lv, `Var rv -> handle_variable pk_type lv rv context
-                | `Body _, `Body _ -> failwith "Should have removed `Body by now"
+                | `Body _, `Body _ -> raise (internal_error "Should have removed `Body by now")
                 | _ -> false
                 end
                 | _                   -> false
@@ -322,7 +325,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
             eqt (context, lt3, rt3)
          | _ -> false
          end
-      | `Lens _ -> failwith "The IR type equality check does not support lenses (yet)"
+      | `Lens _ -> raise (internal_error "The IR type equality check does not support lenses (yet)")
       end
 
     and eq_sessions (context, l, r) =
@@ -347,11 +350,14 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       match l, r with
       | `Absent, `Absent -> true
       | `Present lt, `Present rt -> eqt (context, lt, rt)
-      | `Var lpoint, `Var rpoint -> begin match Unionfind.find lpoint, Unionfind.find rpoint with
-                                    | `Body _, _
-                                    | _, `Body _ -> failwith "should have removed all `Body variants by now"
-                                    | `Var lv, `Var rv -> handle_variable pk_presence lv rv context
-                                    end
+      | `Var lpoint, `Var rpoint ->
+          begin
+            match Unionfind.find lpoint, Unionfind.find rpoint with
+              | `Body _, _
+              | _, `Body _ ->
+                  raise (internal_error "should have removed all `Body variants by now")
+              | `Var lv, `Var rv -> handle_variable pk_presence lv rv context
+              end
       | _, _ -> false
     and eq_field_envs (context, lfield_env, rfield_env) =
       let lfields_in_rfields =

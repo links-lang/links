@@ -36,14 +36,14 @@ let occurs_check var t =
     | "all" -> true
     | "guarded" -> is_guarded var t
     | "positive" -> not (is_negative var t)
-    | s -> failwith ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'")
+    | s -> raise (Errors.settings_error ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'"))
 
 let occurs_check_row var row =
   match Settings.get_value infer_recursive_types with
     | "all" -> true
     | "guarded" -> is_guarded_row var row
     | "positive" -> not (is_negative_row var row)
-    | s -> failwith ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'")
+    | s -> raise (Errors.settings_error ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'"))
 
 let var_is_free_in_type var datatype = TypeVarSet.mem var (free_type_vars datatype)
 
@@ -321,7 +321,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
   Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2 ^ counter');
   begin
     match (t1, t2) with
-    | `Not_typed, _ | _, `Not_typed -> failwith "Internal error: `Not_typed' passed to `unify'"
+    | `Not_typed, _ | _, `Not_typed ->
+        raise (Errors.internal_error ~filename:"unify.ml" ~message:"`Not_typed' passed to `unify'")
     | `Primitive x, `Primitive y when x = y -> ()
     | `MetaTypeVar lpoint, `MetaTypeVar rpoint ->
        if Unionfind.equivalent lpoint rpoint then

@@ -862,7 +862,10 @@ module CheckForCycles =
            (* Debug.print ("Method typ, mu_vars is " ^ Utility.IntSet.show mu_vars); *)
            match List.assoc_opt t seen_types with
            | Some _ ->
-                failwith "descending into type cycle"
+               raise (
+                Errors.internal_error
+                  ~filename:"irTraversals.ml"
+                  ~message:"descending into type cycle")
            | None ->
               let o' = {<seen_types =  (t,()) :: seen_types>} in
               let (t, _) = o'#typ_super t in
@@ -870,7 +873,10 @@ module CheckForCycles =
 
          method! row r =
            match List.assoc_opt r seen_rows with
-           | Some _ ->  failwith "descending into row cycle"
+           | Some _ ->
+               raise (Errors.internal_error
+                 ~filename:"irTraversals.ml"
+                 ~message:"descending into row cycle")
            | None ->
               let o' = {<seen_rows =  (r,()) :: seen_rows>} in
               let (r,_) = o'#row_super r in

@@ -506,7 +506,11 @@ struct
             (StringSet.empty) decls in
         bound_foreigns, empty
         (* TODO: this needs to be implemented *)
-    | Module _ -> failwith "Freevars for modules not implemented yet"
+    | Module _ ->
+        raise (
+          Errors.internal_error
+            ~filename:"sugartypes.ml"
+            ~message:"Freevars for modules not implemented yet")
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and handlerlit (_, m, cases, params : handlerlit) : StringSet.t =
