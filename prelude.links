@@ -625,7 +625,7 @@ fun applyE (f, x) {
 }
 
 infixr 1 @@@;
-sig @@@ : (Formlet (a), Formlet ((a) -%-> b)) -%-> Formlet (b)
+sig @@@ : (Formlet (a), Formlet ((a) {}~> b)) -> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){

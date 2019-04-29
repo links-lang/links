@@ -30,6 +30,8 @@ let pure_str          = "pure"
 let plug_str          = "plug"
 let atatat_str        = "@@@"
 
+let closed_wild = Types.row_with ("wild", `Present Types.unit_type) (Types.make_empty_closed_row ())
+
 class desugar_formlets env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
@@ -106,13 +108,12 @@ object (o : 'self_type)
                     ([], [], []) contents
                 in
                   List.rev pss, List.rev vs, List.rev ts in
-              let empty_eff = Types.make_empty_closed_row () in
               let ft =
                 List.fold_right
                   (fun t ft ->
-                     `Function (Types.make_tuple_type [t], empty_eff, ft))
+                     `Function (Types.make_tuple_type [t], closed_wild, ft))
                   ts (tt ts) in
-              let args = List.map (fun t -> (Types.make_tuple_type [t], empty_eff)) ts in
+              let args = List.map (fun t -> (Types.make_tuple_type [t], closed_wild)) ts in
                 begin
                   match args with
                     | [] ->
@@ -145,10 +146,9 @@ object (o : 'self_type)
               (* plug (fun x -> (<tag attrs>{x}</tag>)) (<#>contents</#>)^o*)
               let (o, attrexp, _) = TransformSugar.option o (fun o -> o#phrase) attrexp in
               let eff = o#lookup_effects in
-              let plug_eff = Types.row_with ("wild", `Present Types.unit_type) (Types.make_empty_closed_row ()) in
               let context : phrase =
                 let name = Utility.gensym ~prefix:"_formlet_" () in
-                fun_lit ~args:[Types.make_tuple_type [Types.xml_type], plug_eff]
+                fun_lit ~args:[Types.make_tuple_type [Types.xml_type], closed_wild]
                         dl_unl
                         [[variable_pat ~ty:(Types.xml_type) name]]
                         (xml tag attrs attrexp [block ([], var name)]) in
@@ -165,7 +165,6 @@ object (o : 'self_type)
     | Formlet (body, yields) ->
         (* pure (fun q^ -> [[e]]* ) <*> q^o *)
         (* let e_in = `Formlet (body, yields) in *)
-        let empty_eff = Types.make_empty_closed_row () in
         let (ps, _, ts) = o#formlet_patterns body in
         let (o, body, _body_type) = o#formlet_body body in
         let (o, ps) = TransformSugar.listu o (fun o -> o#pattern) ps in
@@ -183,8 +182,8 @@ object (o : 'self_type)
           fn_appl_node atatat_str
              [`Type arg_type; `Type yields_type; mb]
              [body; fn_appl pure_str
-                    [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]
-                    [fun_lit ~args:[Types.make_tuple_type [arg_type], empty_eff] dl_unl pss yields]]
+                    [`Type (`Function (Types.make_tuple_type [arg_type], closed_wild, yields_type)); mb]
+                    [fun_lit ~args:[Types.make_tuple_type [arg_type], closed_wild] dl_unl pss yields]]
         in
           (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)
     | e -> super#phrasenode e
