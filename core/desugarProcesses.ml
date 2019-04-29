@@ -48,8 +48,8 @@ object (o : 'self_type)
         let spawn_loc_phr =
           match spawn_loc with
             | ExplicitSpawnLocation phr -> phr
-            | SpawnClient -> fn_appl "there" [] [tuple []]
-            | NoSpawnLocation -> fn_appl "here" [] [tuple []] in
+            | SpawnClient -> fn_appl "there" [] []
+            | NoSpawnLocation -> fn_appl "here" [] [] in
 
         let spawn_fun =
           match k with
@@ -63,8 +63,8 @@ object (o : 'self_type)
 
         let e : phrasenode =
           fn_appl_node spawn_fun [`Row inner_eff; `Type body_type; `Row outer_eff]
-             [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_unl [[]] body;
-              spawn_loc_phr]
+             [spawn_loc_phr;
+              fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_lin [[]] body]
         in
           (o, e, process_type)
     | Receive (cases, Some t) ->
