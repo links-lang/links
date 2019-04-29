@@ -11,6 +11,7 @@ struct
 end
 
 let internal_error message =
+  raise (Errors.internal_error ~filename:"jsonparse.mly" ~message)
 
 (* BUG: need to unescape strings
    (where they are escaped in json.ml)
