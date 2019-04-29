@@ -64,7 +64,7 @@ module type SugarConstructorsSig = sig
   val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
   val cp_unit     : t -> cp_phrase
   val record      : ?ppos:t -> ?exp:phrase -> (name * phrase) list -> phrase
-  val tuple       : ?ppos:t -> phrase list -> phrase
+  val tuple       : ?one_tuple_hack:bool -> ?ppos:t -> phrase list -> phrase
   val list        :
     ?ppos:t -> ?ty:Types.datatype -> phrase list -> phrase
   val constructor :

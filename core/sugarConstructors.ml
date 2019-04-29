@@ -92,8 +92,8 @@ module SugarConstructors (Position : Pos)
   let record ?(ppos=dp) ?exp lbls = with_pos ppos (RecordLit (lbls, exp))
 
   (* Create a tuple.  Preserves 1-tuples. *)
-  let tuple ?(ppos=dp) = function
-    | [e] -> record ~ppos [("1", e)]
+  let tuple ?(one_tuple_hack=true) ?(ppos=dp) = function
+    | [e] when one_tuple_hack -> record ~ppos [("1", e)]
     | es  -> with_pos ppos (TupleLit es)
 
   let cp_unit ppos = with_pos ppos (CPUnquote ([], tuple ~ppos []))
