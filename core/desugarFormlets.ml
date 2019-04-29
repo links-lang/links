@@ -120,7 +120,7 @@ object (o : 'self_type)
                           super#phrasenode (Xml ("#", [], None, contents))
                         in (o, fn_appl_node xml_str [`Row (o#lookup_effects)]
                                             [with_dummy_pos e],
-                            Types.xml_type)
+                            Types.unit_type)
                     | _ ->
                         let (o, es, _) = TransformSugar.list o (fun o -> o#formlet_body) contents in
                         let mb = `Row (o#lookup_effects) in
@@ -145,9 +145,10 @@ object (o : 'self_type)
               (* plug (fun x -> (<tag attrs>{x}</tag>)) (<#>contents</#>)^o*)
               let (o, attrexp, _) = TransformSugar.option o (fun o -> o#phrase) attrexp in
               let eff = o#lookup_effects in
+              let plug_eff = Types.row_with ("wild", `Present Types.unit_type) (Types.make_empty_closed_row ()) in
               let context : phrase =
                 let name = Utility.gensym ~prefix:"_formlet_" () in
-                fun_lit ~args:[Types.make_tuple_type [Types.xml_type], eff]
+                fun_lit ~args:[Types.make_tuple_type [Types.xml_type], plug_eff]
                         dl_unl
                         [[variable_pat ~ty:(Types.xml_type) name]]
                         (xml tag attrs attrexp [block ([], var name)]) in
