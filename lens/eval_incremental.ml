@@ -141,8 +141,8 @@ let apply_delta ~table ~database:db data =
       exec cmds
 
 let get_fds (fds : (string list * string list) list) (cols : Column.t list) : Fun_dep.Set.t =
-  let check_col xs = List.iter (fun alias -> if not (Column.List.mem_alias cols ~alias) then failwith ("The column " ^ alias ^ " does not exist.")) xs in
-  List.iter (fun (left, right) -> check_col left; check_col right) fds;
+  let check_col xs = List.iter ~f:(fun alias -> if not (Column.List.mem_alias cols ~alias) then failwith ("The column " ^ alias ^ " does not exist.")) xs in
+  List.iter ~f:(fun (left, right) -> check_col left; check_col right) fds;
   let fd_of (left, right) =
     Fun_dep.make (Alias.Set.of_list left) (Alias.Set.of_list right) in
   Fun_dep.Set.of_list (List.map ~f:fd_of fds)

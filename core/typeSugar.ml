@@ -420,6 +420,13 @@ end
        code rexpr           ^ nl  () ^
       "has type"            ^ nli () ^
        code ppr_rt
+         
+    let but2things (lthing, (lexpr, lt)) (rthing, (rexpr, rt)) =
+      build_tyvar_names [lt;rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      Format.sprintf ", but the %s\n  %s\nhas type\n  %s\nwhile the %s\n  %s\nhas type\n  %s" lthing (code lexpr) (code ppr_lt) rthing (code rexpr) (code ppr_rt)
+
 
     let but2 l r = but2things ("expression", l) ("expression", r)
 
@@ -1451,7 +1458,7 @@ let type_binary_op ctxt =
   | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
   | Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (StringMap.singleton n 1)
 
-(** close a pattern type relative to a list of patterns
+(* close a pattern type relative to a list of patterns
 
    If there are no _ or variable patterns at a variant type, then that
    variant will be closed.
@@ -1710,7 +1717,7 @@ let unify_or ~(handle:Gripers.griper) ~pos ((_, ltype1), (_, rtype1))
   end
 
 
-(** check for duplicate names in a list of pattern *)
+(* check for duplicate names in a list of pattern *)
 let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string list = fun pos ps ->
   let add name binder binderss =
     if StringMap.mem name binderss then
@@ -3192,13 +3199,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 let (x, xs') = pop_last xs in
                 x, x' :: xs'
            in
-           (** allow_wild adds wild : () to the given effect row *)
+           (* allow_wild adds wild : () to the given effect row *)
            let allow_wild : Types.row -> Types.row
          = fun row ->
            let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
            Types.extend_row fields row
            in
-           (** returns a pair of lists whose first component is the
+           (* returns a pair of lists whose first component is the
                value clauses, while the second component is the
                operation clauses *)
            let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
@@ -3422,7 +3429,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
              (val_cases, rt), eff_cases, bt, inner_eff, outer_eff
            in
-           (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
+           (* make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
          = fun row ->
              let (operations, rho, dual) = row in
@@ -3440,9 +3447,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let m_context = { context with effect_row = Types.make_empty_open_row (lin_unl, res_any) } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = `Effect m_context.effect_row in
-           (** Most of the work is done by `type_cases'. *)
+           (* Most of the work is done by `type_cases'. *)
            let (val_cases, eff_cases) =
-             (** The following is a slight hack until I get rid of the
+             (* The following is a slight hack until I get rid of the
                  `handler' sugar. It is necessary because of "old
                  fashioned" parameterised handlers. *)
              match val_cases with
@@ -3451,11 +3458,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases val_cases eff_cases in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
-           (** Patch the result type of `m' *)
+           (* Patch the result type of `m' *)
            let () =
               unify ~handle:Gripers.handle_return (pos_and_typ m, no_pos rt)
            in
-           (** Finalise construction of the effect row of the input computation *)
+           (* Finalise construction of the effect row of the input computation *)
            let inner_eff, outer_eff =
              let m_pos = exp_pos m in
              let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
@@ -3469,7 +3476,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              List.map (fun (p, _, body) -> (p, body)) eff_cases
            in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
-           (***)
+           
            let descr = { descr with
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
@@ -3579,7 +3586,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | Raise -> (Raise, Types.fresh_type_variable (lin_any, res_any), StringMap.empty)
     in with_pos pos e, t, usages
 
-(** [type_binding] takes XXX YYY (FIXME)
+(* [type_binding] takes XXX YYY (FIXME)
     The input context is the environment in which to type the bindings.
 
     The output context is the environment resulting from typing the
@@ -3653,7 +3660,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let effects = Types.make_empty_open_row (lin_any, res_any) in
           let return_type = Types.fresh_type_variable (lin_any, res_any) in
 
-          (** Check that any annotation matches the shape of the function *)
+          (* Check that any annotation matches the shape of the function *)
           let context', ft =
             match t with
               | None ->

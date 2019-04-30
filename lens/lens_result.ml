@@ -39,6 +39,14 @@ let unpack_error_exn t =
   | Error e -> e
   | _ -> failwith "Unexpected error unpacking result to error."
 
+let is_ok t =
+  match t with
+  | Ok _ -> true
+  | _ -> false
+
+let is_error t =
+  is_ok t |> not
+
 module O = struct
   let (>>|) v f = map v ~f
 

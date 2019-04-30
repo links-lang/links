@@ -15,6 +15,8 @@ val for_all : 'a list -> f:('a -> bool) -> bool
 val for_all_or_error :
   'a list -> f:('a -> bool) -> error:('a -> 'b) -> (unit, 'b) result
 
+val iter : 'a list -> f:('a -> unit) -> unit
+
 val map : 'a list -> f:('a -> 'b) -> 'b list
 
 val map_if : 'a list -> b:('a -> bool) -> f:('a -> 'a) -> 'a list
