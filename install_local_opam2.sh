@@ -6,7 +6,7 @@ OPAM_URL="https://github.com/ocaml/opam/releases/download/${OPAM_VERSION}/opam-$
 # Designated home of opam.
 OPAM_HOME_DIR="$HOME/.opam"
 # Name of the local OPAM executable.
-OPAM_EXEC="opam${OPAM_VERSION}_local"
+OPAM_EXEC="opam2_local"
 
 # Abort if the OPAM home directory already exists -- which could
 # indicate that the current installation image isn't clean.
