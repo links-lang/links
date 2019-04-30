@@ -6,6 +6,8 @@ let rec mem t v ~equal =
   | [] -> false
   | x :: xs -> if equal x v then true else mem xs v ~equal
 
+let iter t ~f = iter f t
+
 let map t ~f = map f t
 
 let map_if t ~b ~f =

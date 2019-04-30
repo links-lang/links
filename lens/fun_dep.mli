@@ -91,9 +91,16 @@ module Tree : sig
   type node = FDNode of elt * t
  and t = node list [@@deriving show]
 
+  module Tree_form_error : sig
+    type t = ContainsCycle of Alias.Set.t list | NotDisjoint of Alias.Set.t
+    [@@deriving eq, show]
+  end
+
   val pp_pretty : Format.formatter -> t -> unit
 
   val show_pretty : t -> string
 
   val of_fds : Set.t -> columns:Alias.Set.t -> (t, Check_error.t) result
+
+  val in_tree_form : Set.t -> (Set.t, Tree_form_error.t) result
 end

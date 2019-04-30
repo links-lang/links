@@ -179,7 +179,7 @@ module Tree = struct
       pp_pretty fmt (subnodes node) ;
       Format.pp_close_box fmt ()
     in
-    List.iter pp_node v
+    List.iter ~f:pp_node v
 
   let show_pretty v = Format.asprintf "%a" pp_pretty v
 
@@ -239,4 +239,69 @@ module Tree = struct
     Alias.Set.is_empty not_included
     |> Result.of_bool ~error:(Check_error.ProbablyCycle not_included)
     >>= fun () -> is_disjoint tree ~columns >>| fun () -> tree
+
+  let split_fds fds colsets =
+    let split_fd fd =
+      let rights =
+        Alias.Set.Set.filter (fun v -> Alias.Set.subset v (right fd)) colsets
+      in
+      let l = left fd in
+      let unmapped =
+        Alias.Set.Set.elements rights
+        |> Alias.Set.union_all
+        |> Alias.Set.diff (right fd)
+      in
+      let splitto = Alias.Set.Set.elements rights |> List.map ~f:(make l) in
+      if Alias.Set.is_empty unmapped then splitto
+      else make l unmapped :: splitto
+    in
+    Set.elements fds |> List.map ~f:split_fd |> List.flatten |> Set.of_list
+
+  module Tree_form_error = struct
+    type t = ContainsCycle of Alias.Set.t list | NotDisjoint of Alias.Set.t
+    [@@deriving eq, show]
+
+    exception E of t
+  end
+
+  let is_acyclic fds =
+    let nextfds node =
+      Set.filter (fun fd -> Alias.Set.equal (left fd) node) fds
+    in
+    let rec find_cycle node bt =
+      match bt with
+      | x :: xs ->
+          if Alias.Set.equal x node then List.append bt [node]
+          else find_cycle node xs
+      | [] -> [Alias.Set.singleton "ERROR RECONSTRUCTING CYCLE"]
+    in
+    let rec f bt acc fd =
+      let acc = Alias.Set.union acc (left fd) in
+      let bt = left fd :: bt in
+      let fds = nextfds (right fd) |> Set.elements in
+      if Alias.Set.subset (right fd) acc then
+        let cycle = find_cycle (right fd) (List.rev bt) in
+        Tree_form_error.E (Tree_form_error.ContainsCycle cycle) |> raise
+      else List.iter ~f:(f bt acc) fds
+    in
+    try Set.iter (f [] Alias.Set.empty) fds |> Result.return
+    with Tree_form_error.E e -> Result.error e
+
+  let in_tree_form fds =
+    let open Result.O in
+    let lefts =
+      Set.elements fds |> List.map ~f:left |> Alias.Set.Set.of_list
+    in
+    let rights = Set.elements fds |> List.map ~f:right in
+    (* the left column sets are all either identical and are mapped to a
+       single set element or should be disjoint *)
+    Alias.Set.Set.is_disjoint lefts
+    |> Result.map_error ~f:(fun v -> Tree_form_error.NotDisjoint v)
+    >>= fun () ->
+    (* all rights should only have a single incoming edge, and be disjoint *)
+    Alias.Set.List.is_disjoint rights
+    |> Result.map_error ~f:(fun v -> Tree_form_error.NotDisjoint v)
+    >>= fun () ->
+    let fds = split_fds fds lefts in
+    is_acyclic fds >>| fun () -> fds
 end
