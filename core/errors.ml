@@ -52,9 +52,9 @@ let prefix_lines prefix s =
 let pos_prefix ?pos:(pos=None) line =
   let prefix =
     match pos with
-      | Some pos -> Printf.sprintf "%s:%d:" pos.pos_fname pos.pos_lnum
+      | Some pos -> Printf.sprintf "%s:%d" pos.pos_fname pos.pos_lnum
       | None -> "***" in
-  Printf.sprintf "%s:%s " prefix line
+  Printf.sprintf "%s: %s " prefix line
 
 let format_exception =
   function
