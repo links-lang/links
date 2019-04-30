@@ -1551,7 +1551,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),
-     datatype "(String, (String, Location) ~> a, (String, String, Location) ~> a) ~> ()",
+     (* The `hear' effects on the second argument (request handler)
+        and third argument (error handler) should have different
+        presence variables as they are executed in different
+        contexts. *)
+     datatype "(String, (String, Location) {hear{_}}~> a, (String, String, Location) {hear{_}}~> a) ~> ()",
      IMPURE);
     "servePages",
     (`PFun (fun _ -> assert false),
