@@ -3,7 +3,7 @@ maintainer: "Jan Stolarek <jan.stolarek@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
 synopsis: "SQLite database driver for the Links Programming Language"
 homepage: "https://github.com/links-lang/links"
-dev-repo: "https://github.com/links-lang/links.git"
+dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-2"
 
