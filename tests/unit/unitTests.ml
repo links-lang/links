@@ -12,6 +12,7 @@ let suites =
             UnitTestsLensPrimitives.suite;
             UnitTestsLensLang.suite;
             UnitTestsLensSort.suite;
+            UnitTestsLensAlias.suite;
         ];
    ];;
 
