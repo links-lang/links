@@ -58,6 +58,7 @@ let construct_join_lens fd_set name data =
 let construct_join_lens_2 l1 l2 on =
   let sort, on =
     Lens.Sort.join_lens_sort (Lens.Value.sort l1) (Lens.Value.sort l2) ~on
+    |> Result.ok_exn
   in
   `LensJoin (l1, l2, on, `Constant (`Bool true), `Constant (`Bool false), sort)
 
@@ -139,6 +140,10 @@ let assert_equal_tree_error ~ctxt v1 v2 =
 let assert_equal_fun_dep_tree ~ctxt v1 v2 =
   assert_equal ~ctxt ~cmp:( = ) ~printer:Fun_dep.Tree.show_pretty v1 v2
 
+let assert_equal_tree_form_error ~ctxt v1 v2 =
+  assert_equal ~ctxt ~cmp:Fun_dep.Tree.Tree_form_error.equal
+    ~printer:Fun_dep.Tree.Tree_form_error.show v1 v2
+
 let node c subnodes =
   let open Fun_dep.Tree in
   FDNode (cols c, subnodes)
@@ -147,6 +152,8 @@ module Tree_form = struct
   let simple ctxt =
     let open Fun_dep.Tree in
     let fds = fds "A -> B C; A -> D; B C -> E F; D -> G" in
+    let in_tree_form = Fun_dep.Tree.in_tree_form fds |> H.assert_ok in
+    assert_equal_fds ~ctxt fds in_tree_form ;
     let tree = of_fds fds ~columns:(cols "A B C D E F G") |> Result.ok_exn in
     let cmp_bc = node "B C" [node "E F" []] in
     let cmp_d = node "D" [node "G" []] in
@@ -155,6 +162,8 @@ module Tree_form = struct
   let key_extra ctxt =
     let open Fun_dep.Tree in
     let fds = fds "A -> B C" in
+    let in_tree_form = Fun_dep.Tree.in_tree_form fds |> H.assert_ok in
+    assert_equal_fds ~ctxt fds in_tree_form ;
     let tree = of_fds fds ~columns:(cols "A B C D") |> Result.ok_exn in
     let cmp_tree = [node "D" []; node "A" [node "B C" []]] in
     assert_equal_fun_dep_tree ~ctxt cmp_tree tree
@@ -162,28 +171,44 @@ module Tree_form = struct
   let key_overlap ctxt =
     let open Fun_dep.Tree in
     let fds = fds "A B -> D E; B C -> F G" in
-    let tree =
-      of_fds fds ~columns:(cols "A B C D E F G") |> Result.unpack_error_exn
-    in
+    let err = Fun_dep.Tree.in_tree_form fds |> H.assert_error in
+    assert_equal_tree_form_error ~ctxt err
+      (Fun_dep.Tree.Tree_form_error.NotDisjoint (cols "B")) ;
+    let tree = of_fds fds ~columns:(cols "A B C D E F G") |> H.assert_error in
     assert_equal_tree_error ~ctxt
       (Fun_dep.Check_error.FunDepNotTreeForm (cols ""))
       tree
 
   let key_split ctxt =
     let open Fun_dep.Tree in
-    let fds = fds "A -> B C D E; B C -> F; D E -> G" in
+    let fds' = fds "A -> B C D E; B C -> F; D E -> G" in
+    let in_tree_form = Fun_dep.Tree.in_tree_form fds' |> H.assert_ok in
+    assert_equal_fds ~ctxt
+      (fds "A -> B C; A -> D E; B C -> F; D E -> G")
+      in_tree_form ;
     let columns = cols "A B C D E F G" in
-    let tree = of_fds fds ~columns |> Result.ok_exn in
+    let tree = of_fds fds' ~columns |> Result.ok_exn in
     let cmp_tree =
       [node "A" [node "B C" [node "F" []]; node "D E" [node "G" []]]]
     in
     assert_equal_fun_dep_tree ~ctxt cmp_tree tree
 
+  let key_split_2 ctxt =
+    let open Fun_dep.Tree in
+    let fds' = fds "A -> B C D E; B C -> F" in
+    let in_tree_form = Fun_dep.Tree.in_tree_form fds' |> H.assert_ok in
+    assert_equal_fds ~ctxt
+      (fds "A -> B C; A -> D E; B C -> F")
+      in_tree_form
+
   let recursive ctxt =
     let open Fun_dep.Tree in
-    let fds = fds "A -> B; B -> A" in
+    let fds' = fds "A -> B; B -> A" in
+    let err = Fun_dep.Tree.in_tree_form fds' |> H.assert_error in
+    assert_equal_tree_form_error ~ctxt err
+      (Fun_dep.Tree.Tree_form_error.ContainsCycle [cols "A"; cols "B"; cols "A"]) ;
     let columns = cols "A B C" in
-    let error = of_fds fds ~columns |> Result.unpack_error_exn in
+    let error = of_fds fds' ~columns |> Result.unpack_error_exn in
     assert_equal_tree_error ~ctxt
       (Fun_dep.Check_error.ProbablyCycle (cols "A B"))
       error
@@ -193,6 +218,7 @@ module Tree_form = struct
     ; "key_extra" >:: key_extra
     ; "key_overlap" >:: key_overlap
     ; "key_split" >:: key_split
+    ; "key_split_2" >:: key_split_2
     ; "recursive" >:: recursive ]
 end
 
