@@ -127,7 +127,7 @@ object (o : 'self_type)
                         let base : phrase =
                           fn_appl pure_str [`Type ft; mb]
                             [fun_lit ~args:(List.rev args) dl_unl (List.rev pss)
-                                     (tuple vs)] in
+                                     (tuple ~one_tuple_hack:false vs)] in
                         let p, et =
                           List.fold_right
                             (fun arg (base, ft) ->
