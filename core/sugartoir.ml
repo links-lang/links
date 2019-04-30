@@ -885,10 +885,12 @@ struct
              let vs = evs ps in
              I.do_operation (name, vs, t)
           | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
-             (* FIXME: get the right effects in here! *)
+             (* it happens that the ambient effects are the right ones
+                for all of the patterns here (they match those of the
+                initial computations for parameterised handlers and
+                the bodies of the cases) *)
              let eff = lookup_effects env in
              let henv, params =
-               (* let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in *)
                let empty_env = (NEnv.empty, TEnv.empty, eff) in
                 match (sh_descr.shd_params) with
                 | None -> empty_env, []
