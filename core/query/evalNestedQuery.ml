@@ -743,7 +743,7 @@ Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usua
       | _ when x = "1@1" || x = "1@2" -> (`Primitive Primitive.Int, -1)
       | _ -> assert false
     in
-    let idx_and_val = function 
+    let idx_and_val = function
       | `Record fl ->
            let w_tmpl = try List.assoc "2" fl with NotFound _ -> `Record [] in
            (match List.assoc "1" fl with
