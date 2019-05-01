@@ -42,13 +42,24 @@ val update_predicate :
 (** Update all columns with a table name *)
 val update_table_name : t -> table:string -> t
 
-(** Determines if the lenses should be swapped, because the right lens defines the left lens. *)
+(** Determines if the lenses should be swapped, because the right lens defines
+    the left lens. *)
 val join_lens_should_swap : t -> t -> on:string list -> bool
+
+module Lens_sort_error : sig
+  type t = UnboundColumns of Alias.Set.t [@@deriving eq]
+end
+
+val lens_sort :
+  fds:Fun_dep.Set.t -> columns:Column.List.t -> (t, Lens_sort_error.t) result
 
 module Select_sort_error : sig
   type t =
     | PredicateDoesntIgnoreOutputs of {fds: Fun_dep.Set.t; columns: Alias.Set.t}
-        (** The underlying lens predicate doesn't ignore the outputs of the functional dependencies. *)
+        (** The underlying lens predicate doesn't ignore the outputs of the
+            functional dependencies. *)
+    | TreeFormError of {error: Fun_dep.Tree.Tree_form_error.t}
+        (** The functional dependencies are not in tree form. *)
     | UnboundColumns of Alias.Set.t
         (** The specified columns are not bound by the lens. *)
   [@@deriving show]
@@ -72,21 +83,27 @@ module Drop_sort_error : sig
     | DefaultDropMismatch
         (** The number of columns to drop does not match the number
           of default values specified. *)
+    | DefaultDoesntMatchPredicate
+        (** The default value a for A does not satisfy P[A]. *)
     | DropTypeError of
         { column: Alias.t
         ; default_type: Phrase_type.t
         ; column_type: Phrase_type.t }
         (** The type of [column] is [column_type] does not match the
           type [default_type] of the default value. *)
+    | NotIndependent of Alias.Set.t
+        (** It is not possible to tell that P = P[A] join P[U-A]. *)
   [@@deriving show]
 
   val equal : t -> t -> bool
 end
 
 module Join_sort_error : sig
-  type t = UnboundColumn of Alias.Set.t | AlreadyBound of Alias.Set.t
-
-  val equal : t -> t -> bool
+  type t =
+    | UnboundColumn of Alias.Set.t
+    | AlreadyBound of Alias.Set.t
+    | TreeFormError of {error: Fun_dep.Tree.Tree_form_error.t}
+  [@@deriving eq]
 end
 
 (** Create a drop lens sort. *)

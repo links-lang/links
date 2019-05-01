@@ -1,6 +1,6 @@
 open Lens_utility
 
-type t = string [@@deriving show]
+type t = string [@@deriving show, eq]
 
 module Map = struct
   include String.Map
@@ -12,7 +12,11 @@ module Set = struct
   module Base = String.Set
   include Base
 
-  let pp_pretty fmt cs = List.iter ~f:(Format.fprintf fmt "%s ") (elements cs)
+  let pp_pretty fmt cs =
+    Format.fprintf fmt "%a"
+      (Format.pp_print_list ~pp_sep:(Format.pp_constant " ")
+         Format.pp_print_string)
+      (elements cs)
 
   module List = struct
     type elt = Base.t

@@ -36,6 +36,8 @@ let update_table_name t ~table =
 
 let update_predicate t ~query ~predicate = {t with predicate; query}
 
+let update_fds t ~fds = {t with fds}
+
 let equal sort1 sort2 =
   let fd_equal = Fun_dep.Set.equal (fds sort1) (fds sort2) in
   let pred_equal = predicate sort1 = predicate sort2 in
@@ -43,6 +45,21 @@ let equal sort1 sort2 =
   fd_equal && pred_equal && cols_equal
 
 let record_type t = cols t |> Column.List.record_type
+
+module Lens_sort_error = struct
+  type t = UnboundColumns of Alias.Set.t [@@deriving eq]
+end
+
+let lens_sort ~fds ~columns =
+  let open Result.O in
+  let unbound =
+    Alias.Set.diff
+      (Fun_dep.Set.all_columns fds)
+      (Column.List.present_aliases_set columns)
+  in
+  Alias.Set.is_empty unbound
+  |> Result.of_bool ~error:(Lens_sort_error.UnboundColumns unbound)
+  >>| fun () -> make ~fds columns
 
 let join_lens_should_swap sort1 sort2 ~on:on_columns =
   let fds1 = fds sort1 in
@@ -60,6 +77,7 @@ let join_lens_should_swap sort1 sort2 ~on:on_columns =
 module Select_sort_error = struct
   type t =
     | PredicateDoesntIgnoreOutputs of {fds: Fun_dep.Set.t; columns: Alias.Set.t}
+    | TreeFormError of {error: Fun_dep.Tree.Tree_form_error.t}
     | UnboundColumns of Alias.Set.t
   [@@deriving show]
 
@@ -87,15 +105,19 @@ let select_lens_sort sort ~predicate:pred =
   let violating_outputs =
     Alias.Set.inter outputs (Phrase.Option.get_vars oldPred)
   in
-  violating_outputs |> Alias.Set.is_empty
+  violating_outputs
+  |> Alias.Set.is_empty
   |> Result.of_bool
        ~error:
          (Select_sort_error.PredicateDoesntIgnoreOutputs
             {fds; columns= violating_outputs})
-  >>| fun () ->
+  >>= fun () ->
+  Fun_dep.Tree.in_tree_form fds
+  |> Result.map_error ~f:(fun error -> Select_sort_error.TreeFormError {error})
+  >>| fun fds ->
   let predicate = Phrase.Option.combine_and oldPred (Some pred) in
   let query = Phrase.Option.combine_and (query sort) (Some pred) in
-  update_predicate sort ~query ~predicate
+  update_predicate sort ~query ~predicate |> update_fds ~fds
 
 module Drop_sort_error = struct
   type t =
@@ -103,24 +125,13 @@ module Drop_sort_error = struct
     | DefiningFDNotFound of Alias.Set.t
     | DropNotDefinedByKey
     | DefaultDropMismatch
+    | DefaultDoesntMatchPredicate
     | DropTypeError of
         { column: Alias.t
         ; default_type: Phrase_type.t
         ; column_type: Phrase_type.t }
-  [@@deriving show]
-
-  let equal v1 v2 =
-    match (v1, v2) with
-    | UnboundColumns c, UnboundColumns c' -> Alias.Set.equal c c'
-    | DefiningFDNotFound c, DefiningFDNotFound c' -> Alias.Set.equal c c'
-    | DropNotDefinedByKey, DropNotDefinedByKey -> true
-    | DefaultDropMismatch, DefaultDropMismatch -> true
-    | ( DropTypeError {column; default_type; column_type}
-      , DropTypeError {column= c; default_type= dt; column_type= ct} ) ->
-        column = c
-        && Phrase_type.equal default_type dt
-        && Phrase_type.equal column_type ct
-    | _ -> false
+    | NotIndependent of Alias.Set.t
+  [@@deriving show, eq]
 end
 
 let drop_lens_sort sort ~drop ~default ~key =
@@ -140,7 +151,8 @@ let drop_lens_sort sort ~drop ~default ~key =
   |> Result.of_bool ~error:Drop_sort_error.DropNotDefinedByKey
   >>= fun () ->
   (* ensure that number of items specified for drop is identical to number of columns to drop *)
-  List.length drop = List.length default
+  List.length drop
+  = List.length default
   |> Result.of_bool ~error:Drop_sort_error.DefaultDropMismatch
   >>= fun () ->
   (* type check columns *)
@@ -165,7 +177,7 @@ let drop_lens_sort sort ~drop ~default ~key =
   |> Result.map_error ~f:(function
          | Fun_dep.Remove_defines_error.DefiningFDNotFound c ->
          Drop_sort_error.DefiningFDNotFound c )
-  >>| fun fds ->
+  >>= fun fds ->
   (* hide all columns that are dropped. *)
   let cols =
     List.map_if
@@ -175,9 +187,33 @@ let drop_lens_sort sort ~drop ~default ~key =
   (* remove references to the dropped column by performing partial evaluation with
      the default value. *)
   let replace = List.zip_exn drop default |> Alias.Map.from_alist in
+  (* first simplify the predicate *)
   let predicate =
-    predicate sort |> Option.map ~f:(Phrase.replace_var ~replace)
+    predicate sort |> Phrase.Option.partial_eval ~lookup:(fun _ -> None)
   in
+  (* ensure that predicate can be rewritten into P = P[A] join P[U-A] *)
+  let gtv =
+    Option.map ~f:Phrase.Grouped_variables.gtv predicate
+    |> Option.value ~default:Alias.Set.Set.empty
+  in
+  Phrase.Grouped_variables.no_partial_overlaps gtv ~cols:drop_set
+  |> Result.map_error ~f:(fun (Phrase.Grouped_variables.Error.Overlaps cols) ->
+         Drop_sort_error.NotIndependent cols )
+  >>= fun () ->
+  (* calculate P[U-A]*)
+  let predicate' = predicate in
+  let predicate =
+    predicate
+    |> Phrase.Option.partial_eval ~lookup:(fun key ->
+           Alias.Map.find replace ~key )
+  in
+  (* Ensure that (A=a) satisfies P[A]. *)
+  ( match (predicate', predicate) with
+  | Some (Phrase.Constant (Phrase.Value.Bool false)), _ -> Result.return ()
+  | _, Some (Phrase.Constant (Phrase.Value.Bool false)) ->
+      Result.error Drop_sort_error.DefaultDoesntMatchPredicate
+  | _ -> Result.return () )
+  >>| fun () ->
   (* query is unchanged *)
   let query = query sort in
   make ~fds ~predicate ~query cols
@@ -201,13 +237,11 @@ let get_new_alias alias columns =
   try_next num
 
 module Join_sort_error = struct
-  type t = UnboundColumn of Alias.Set.t | AlreadyBound of Alias.Set.t
-
-  let equal v1 v2 =
-    match (v1, v2) with
-    | UnboundColumn c1, UnboundColumn c2 -> Alias.Set.equal c1 c2
-    | AlreadyBound c1, AlreadyBound c2 -> Alias.Set.equal c1 c2
-    | _ -> false
+  type t =
+    | UnboundColumn of Alias.Set.t
+    | AlreadyBound of Alias.Set.t
+    | TreeFormError of {error: Fun_dep.Tree.Tree_form_error.t}
+  [@@deriving eq]
 end
 
 let rename_columns ~rename columns =
@@ -232,6 +266,12 @@ let join_lens_sort sort1 sort2 ~on =
   Alias.Set.is_empty unbound
   |> Result.of_bool ~error:(Join_sort_error.UnboundColumn unbound)
   >>= fun () ->
+  Fun_dep.Tree.in_tree_form (fds sort1)
+  |> Result.map_error ~f:(fun error -> Join_sort_error.TreeFormError {error})
+  >>= fun fds_left ->
+  Fun_dep.Tree.in_tree_form (fds sort2)
+  |> Result.map_error ~f:(fun error -> Join_sort_error.TreeFormError {error})
+  >>= fun fds_right ->
   (* Find all 'on' target name columns that are already bound in one of the lenses. *)
   let on_bind_to = List.map ~f:(fun (_, _, t) -> t) on |> Alias.Set.of_list in
   let already_bound_left =
@@ -293,7 +333,7 @@ let join_lens_sort sort1 sort2 ~on =
         Phrase.Option.combine_and (Some jn) pred )
       pred join_renames
   in
-  let fds = Fun_dep.Set.union (fds sort1) (fds sort2) in
+  let fds = Fun_dep.Set.union fds_left fds_right in
   (* determine the on column renames as a tuple (join, left, right) *)
   let jrs =
     Alias.Set.elements on_bind_to
