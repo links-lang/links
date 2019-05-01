@@ -50,7 +50,7 @@ object (o : 'self_type)
             let t = Types.fresh_type_variable (lin_any, res_any) in
             let () =
               Unify.datatypes
-                (ft, Instantiate.alias "Formlet" [`Type t] tycon_env) in
+                (ft, Instantiate.alias (QualifiedName.of_name "Formlet") [`Type t] (o#get_env ()) ) in
             let name = Utility.gensym ~prefix:"_formlet_" () in
             let (xb, x) = (binder name ~ty:t, var (QualifiedName.of_name name)) in
               [with_dummy_pos (Pattern.As (xb, p))], [x], [t]
@@ -196,7 +196,10 @@ object (o : 'self_type)
                     [`Type (`Function (Types.make_tuple_type [arg_type], empty_eff, yields_type)); mb]
                     [fun_lit ~args:[Types.make_tuple_type [arg_type], empty_eff] dl_unl pss yields]]
         in
-          (o, e, Instantiate.alias "Formlet" [`Type yields_type] tycon_env)
+          (o, e, Instantiate.alias
+                   (QualifiedName.of_name "Formlet")
+                   [`Type yields_type]
+                   (o#get_env ()))
     | e -> super#phrasenode e
 end
 

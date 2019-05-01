@@ -2974,7 +2974,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 (fun e ->
                    unify ~handle:Gripers.xml_attributes
                      (pos_and_typ e, no_pos (
-                        (Instantiate.alias "Attributes" [] context.tycon_env)))) attrexp
+                        (Instantiate.alias (QualifiedName.of_name "Attributes") [] context)))) attrexp
             and () =
               List.iter (fun child ->
                            unify ~handle:Gripers.xml_child (pos_and_typ child, no_pos Types.xml_type)) children in
@@ -2995,12 +2995,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let yields = type_check context' yields in
               unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
               (Formlet (erase body, erase yields),
-               Instantiate.alias "Formlet" [`Type (typ yields)] context.tycon_env,
+               Instantiate.alias (QualifiedName.of_name "Formlet") [`Type (typ yields)] context,
                merge_usages [usages body; StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages yields)])
         | Page e ->
             let e = tc e in
               unify ~handle:Gripers.page_body (pos_and_typ e, no_pos Types.xml_type);
-              Page (erase e), Instantiate.alias "Page" [] context.tycon_env, usages e
+              Page (erase e), Instantiate.alias (QualifiedName.of_name "Page") [] context, usages e
         | FormletPlacement (f, h, attributes) ->
             let t = Types.fresh_type_variable (lin_any, res_any) in
 
@@ -3008,24 +3008,24 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and h = tc h
             and attributes = tc attributes in
             let () = unify ~handle:Gripers.render_formlet
-              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [`Type t] context.tycon_env)) in
+              (pos_and_typ f, no_pos (Instantiate.alias (QualifiedName.of_name "Formlet") [`Type t] context)) in
             let () = unify ~handle:Gripers.render_handler
               (pos_and_typ h, (exp_pos f,
-                               Instantiate.alias "Handler" [`Type t] context.tycon_env)) in
+                               Instantiate.alias (QualifiedName.of_name "Handler") [`Type t] context)) in
             let () = unify ~handle:Gripers.render_attributes
-              (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.tycon_env))
+              (pos_and_typ attributes, no_pos (Instantiate.alias (QualifiedName.of_name "Attributes") [] context))
             in
               FormletPlacement (erase f, erase h, erase attributes), Types.xml_type, merge_usages [usages f; usages h; usages attributes]
         | PagePlacement e ->
             let e = tc e in
-            let pt = Instantiate.alias "Page" [] context.tycon_env in
+            let pt = Instantiate.alias (QualifiedName.of_name "Page") [] context in
               unify ~handle:Gripers.page_placement (pos_and_typ e, no_pos pt);
               PagePlacement (erase e), Types.xml_type, usages e
         | FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable (lin_any, res_any) in
-            let ft = Instantiate.alias "Formlet" [`Type a] context.tycon_env in
+            let ft = Instantiate.alias (QualifiedName.of_name "Formlet") [`Type a] context in
               unify ~handle:Gripers.form_binding_body (pos_and_typ e, no_pos ft);
               unify ~handle:Gripers.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
               FormBinding (erase e, erase_pat pattern), Types.xml_type, usages e
@@ -3155,7 +3155,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             Block (bindings, erase e), typ e, usage_builder (usages e)
         | Regex r ->
             Regex (type_regex context r),
-            Instantiate.alias "Regex" [] context.tycon_env,
+            Instantiate.alias (QualifiedName.of_name "Regex") [] context,
             StringMap.empty
         | Projection (r,l) ->
             (*
@@ -3343,7 +3343,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              | None -> (henv, [], descr)
            in
            let type_cases val_cases eff_cases =
-             let bind = FrontendTypeEnv.bind_var_venv in
+             let bind = FrontendTypeEnv.var_env_bind_var in
              let wild_row () =
                let fresh_row = Types.make_empty_open_row (lin_unl, res_any) in
                allow_wild fresh_row
@@ -3816,8 +3816,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                    lin,
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
                    location, t),
-             {empty_context with
-                var_env = FrontendTypeEnv.bind_var_venv Env.empty (name, ft)},
+             FrontendTypeEnv.bind_var empty_context (name, ft),
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
       | Funs defs ->
           (*
@@ -3998,13 +3997,18 @@ and type_binding : context -> binding -> binding * context * usagemap =
       | Module (name, _, bindings) ->
          let module_ctx, bindings, usage_builder = type_bindings context bindings in
          (* FIXME: This is unnecessary work, since Env is using a StringMap internally. Should we give Env the ability to expose the StringMap? *)
-         let env_to_stringmap env =
+         let env_to_stringmap1 env =
            Env.fold (fun name (_, v) map ->
                StringMap.add name v map
              ) env StringMap.empty in
+         let env_to_stringmap2 env =
+           Env.fold (fun name v map ->
+               StringMap.add name v map
+             ) env StringMap.empty in
          let module_type : Types.module_t = {
-             Types.fields  = env_to_stringmap module_ctx.var_env ;
-             Types.modules = env_to_stringmap module_ctx.module_env ;
+             Types.tycons  = env_to_stringmap2 module_ctx.tycon_env ;
+             Types.fields  = env_to_stringmap1 module_ctx.var_env ;
+             Types.modules = env_to_stringmap1 module_ctx.module_env ;
          } in
          let context' = {empty_context with module_env = Env.bind Env.empty (name, (None, module_type)) } in
          let module_usages = usage_builder StringMap.empty in

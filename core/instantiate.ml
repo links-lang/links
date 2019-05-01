@@ -415,12 +415,13 @@ let recursive_application name qs tyargs body =
   let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
   body
 
-let alias name tyargs env =
+let alias qname tyargs env =
   (* This is just type application.
 
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
-  match (SEnv.find env name : Types.tycon_spec option) with
+  let name = QualifiedName.canonical_name qname in
+  match (FrontendTypeEnv.find_type env qname : Types.tycon_spec option) with
     | None ->
         internal_error (Printf.sprintf "Unrecognised type constructor: %s" name)
     | Some (`Abstract _)

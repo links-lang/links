@@ -135,52 +135,49 @@ let check_type_application (e, t) k =
       raise (Instantiate.ArityMismatch (exp, prov))
   end
 
-class transform (env : FrontendTypeEnv.t) =
+class transform (initial_env : FrontendTypeEnv.t) =
   object (o : 'self_type)
-    val var_env = env.FrontendTypeEnv.var_env
-    val module_env = env.FrontendTypeEnv.module_env
-    val tycon_env = env.FrontendTypeEnv.tycon_env
-    val formlet_env = TyEnv.empty
-    val effect_row = fst (Types.unwrap_row env.FrontendTypeEnv.effect_row)
 
+    (* TODO: re-creating the environment's parts here is very ugly *)
+    val var_env = initial_env.FrontendTypeEnv.var_env
+    val module_env = initial_env.FrontendTypeEnv.module_env
+    val tycon_env = initial_env.FrontendTypeEnv.tycon_env
+    val formlet_env = TyEnv.empty
+    val effect_row = fst (Types.unwrap_row initial_env.FrontendTypeEnv.effect_row)
+
+    method get_env : unit -> FrontendTypeEnv.t = fun () ->
+      { FrontendTypeEnv.var_env;
+        FrontendTypeEnv.module_env;
+        FrontendTypeEnv.tycon_env;
+        FrontendTypeEnv.effect_row }
     method get_var_env : unit -> FrontendTypeEnv.qual_var_environment = fun () -> var_env
     method get_module_env :  unit -> FrontendTypeEnv.qual_module_environment = fun () -> module_env
     method get_tycon_env : unit -> FrontendTypeEnv.tycon_environment = fun () -> tycon_env
     method get_formlet_env : unit -> FrontendTypeEnv.qual_var_environment = fun () -> formlet_env
 
+
     method backup_envs = var_env, module_env, tycon_env, formlet_env, effect_row
     method restore_envs (var_env, module_env, tycon_env, formlet_env, effect_row) =
-      {< var_env = var_env; module_env = module_env; tycon_env = tycon_env; formlet_env = formlet_env;
-         effect_row = effect_row >}
+      {< var_env;
+         tycon_env;
+         formlet_env;
+         effect_row;
+         module_env>}
 
     method with_var_env var_env =
       {< var_env = var_env >}
 
-    method with_module_env module_env =
-      {< module_env = module_env >}
-
     method with_formlet_env formlet_env =
       {< formlet_env = formlet_env >}
+
+    method with_module_env module_env =
+      {< module_env >}
 
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
 
     method lookup_type : QualifiedName.t -> Types.datatype = fun var ->
-      let rec lookup cur_module_env cur_var_env = function
-        | `Ident x ->  StringMap.find x cur_var_env
-        | `Dot (moodule, remainder) ->
-          let module_t = StringMap.find moodule cur_module_env in
-          lookup module_t.Types.modules module_t.Types.fields remainder in
-      match var with
-        | `Ident x ->  lookup_var var_env x
-        | `Dot (moodule, remainder) when moodule = Lib.BuiltinModules.lib ->
-          begin match QualifiedName.split remainder with
-            | [x] -> FrontendTypeEnv.lookup_var_venv Lib.type_env x
-            | _ -> failwith "illegal lib function"
-          end
-        | `Dot (moodule, remainder) ->
-          let module_t = snd (TyEnv.lookup module_env moodule) in
-          lookup module_t.Types.modules module_t.Types.fields remainder
+      FrontendTypeEnv.lookup_variable (o#get_env ()) var
 
     method lookup_effects : Types.row = effect_row
 
@@ -265,7 +262,7 @@ class transform (env : FrontendTypeEnv.t) =
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
       function
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
-      | Var qvar -> (o, Var qvar, o#lookup_type qvar)
+      | Var qvar as v -> o, v, o#lookup_type qvar
       | FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
           let (o, lam, rt) = o#funlit inner_e lam in
@@ -371,7 +368,7 @@ class transform (env : FrontendTypeEnv.t) =
                    (o, InfixAppl ((tyargs, op), e1, e2), t))
       | Regex r ->
           let (o, r) = o#regex r in
-            (o, Regex r, Instantiate.alias "Regex" [] tycon_env)
+            (o, Regex r, Instantiate.alias (QualifiedName.of_name "Regex") [] (o#get_env ()))
       | UnaryAppl ((tyargs, op), e) ->
           let (o, op, t) = o#unary_op op in
             check_type_application
@@ -631,8 +628,8 @@ class transform (env : FrontendTypeEnv.t) =
          let o = o#with_var_env (TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ())) in
          let (o, yields, t) = o#phrase yields in
          let o = o#restore_envs envs in
-         (o, Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
-      | Page e -> let (o, e, _) = o#phrase e in (o, Page e, Instantiate.alias "Page" [] tycon_env)
+         (o, Formlet (body, yields), Instantiate.alias (QualifiedName.of_name "Formlet") [`Type t] (o#get_env ()))
+      | Page e -> let (o, e, _) = o#phrase e in (o, Page e, Instantiate.alias (QualifiedName.of_name "Page") [] (o#get_env ()))
       | FormletPlacement (f, h, attributes) ->
           let (o, f, _) = o#phrase f in
           let (o, h, _) = o#phrase h in
@@ -860,7 +857,7 @@ class transform (env : FrontendTypeEnv.t) =
         let rec visit_module_t o mt =
           let (o, fields) = update_map o mt.Types.fields (fun o t -> o#datatype t) in
           let (o, modules) = update_map o mt.Types.modules visit_module_t in
-          (o, {Types.fields = fields ; Types.modules = modules}) in
+          (o, {Types.fields = fields ; Types.modules = modules ; Types.tycons = mt.Types.tycons}) in
 
         let envs = o#backup_envs in
         let (o, bs) = listu o (fun o b -> o#binding b) bs in

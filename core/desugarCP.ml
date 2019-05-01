@@ -4,7 +4,10 @@ open SugarConstructors.DummyPositions
 open SourceCode.WithPos
 
 
-let bind_var = FrontendTypeEnv.bind_var_venv
+let bind_var var_env d =
+  let open FrontendTypeEnv in
+  let env = {empty_typing_environment with var_env} in
+  (FrontendTypeEnv.bind_var env d).var_env
 
 let accept_str    = "accept"
 let close_str     = "closeBang"

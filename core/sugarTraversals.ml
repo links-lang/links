@@ -591,7 +591,7 @@ class map =
          let _x_i2 = o#datatype _x_i2 in Table (_x, _x_i1, _x_i2)
       | List _x -> let _x = o#datatype _x in List _x
       | TypeApplication (_x, _x_i1) ->
-          let _x = o#name _x in
+          let _x = o#qualified_name _x in
           let _x_i1 = o#list (fun o -> o#type_arg) _x_i1
           in TypeApplication (_x, _x_i1)
       | Primitive _x -> let _x = o#unknown _x in Primitive _x
@@ -1251,7 +1251,7 @@ class fold =
           let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
       | List _x -> let o = o#datatype _x in o
       | TypeApplication (_x, _x_i1) ->
-          let o = o#name _x in
+          let o = o#qualified_name _x in
           let o = o#list (fun o -> o#type_arg) _x_i1 in o
       | Primitive _x -> let o = o#unknown _x in o
       | DB -> o
@@ -2027,7 +2027,7 @@ class fold_map =
           let (o, _x_i2) = o#datatype _x_i2 in (o, (Table (_x, _x_i1, _x_i2)))
       | List _x -> let (o, _x) = o#datatype _x in (o, (List _x))
       | TypeApplication (_x, _x_i1) ->
-          let (o, _x) = o#string _x in
+          let (o, _x) = o#qualified_name _x in
           let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
           in (o, TypeApplication (_x, _x_i1))
       | Primitive _x ->

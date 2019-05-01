@@ -198,7 +198,6 @@ object(o : 'self_type)
   method! binding _ = disabled_method ()
   method! bindingnode _ = disabled_method ()
   method! sentence _ = disabled_method ()
-  method! qualified_name _ = disabled_method ()
 
 
 
@@ -476,8 +475,3 @@ let read_file_source (nenv, tyenv) (filename:string) =
 let print file_path =
   let (plain_ast, _) = Parse.parse_file Parse.program file_path in
   print_string (Sugartypes.show_program plain_ast)
-
-
-
-
-

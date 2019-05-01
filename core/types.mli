@@ -126,9 +126,19 @@ and type_arg =
   [ `Type of typ | `Row of row | `Presence of field_spec ]
   [@@deriving show]
 
+
+
+type alias_type = quantifier list * typ
+and tycon_spec = [
+  | `Alias of alias_type
+  | `Abstract of Abstype.t
+  | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
+]
+
 type module_t = {
-    fields: typ stringmap;
-    modules: module_t stringmap;
+    fields: typ Utility.StringMap.t;
+    modules: module_t Utility.StringMap.t;
+    tycons : tycon_spec Utility.StringMap.t;
 }
 
 type session_type = (typ, row) session_type_basis
@@ -172,14 +182,6 @@ val dual_row : row -> row
 val dual_type : datatype -> datatype
 
 val type_var_number : quantifier -> int
-type alias_type = quantifier list * typ [@@deriving show]
-
-type tycon_spec = [
-  | `Alias of alias_type
-  | `Abstract of Abstype.t
-  | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
-]
-
 
 val concrete_type : datatype -> datatype
 val concrete_field_spec : field_spec -> field_spec
@@ -197,6 +199,8 @@ val unbox_quantifiers : quantifier list ref -> quantifier list
 (* val flexible_of_type : datatype -> datatype option *)
 
 val normalise_quantifier : quantifier -> quantifier
+val normalise_tycon_spec : tycon_spec -> tycon_spec
+
 val for_all : quantifier list * datatype -> datatype
 
 (** useful types *)

@@ -32,7 +32,7 @@ exception MultiplyDefinedMutualNames of ((Position.t list) stringmap)
 exception RichSyntaxError of synerrspec
 exception DesugaringError of
   { pos: Position.t; stage: sugar_error_stage; message: string }
-exception UnboundTyCon of (Position.t * string)
+exception UnboundTyCon of (Position.t * QualifiedName.t)
 exception InternalError of { filename: string; message: string }
 exception TypeApplicationArityMismatch of
   { pos: Position.t; name: string; expected: int; provided: int}
@@ -64,7 +64,7 @@ let format_exception =
   | UnboundTyCon (pos, tycon) ->
       let pos, _ = Position.resolve_start_expr pos in
       Printf.sprintf "%s:%d: Unbound type constructor %s\n"
-                    pos.pos_fname pos.pos_lnum tycon
+                    pos.pos_fname pos.pos_lnum (QualifiedName.canonical_name tycon)
   | Runtime_error s -> "*** Runtime error: " ^ s
   | Position.ASTSyntaxError (pos, s) ->
       let pos, expr = Position.resolve_start_expr pos in

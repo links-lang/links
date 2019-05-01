@@ -35,6 +35,7 @@ object ('self)
   val tycon_env : FrontendTypeEnv.tycon_environment
   val effect_row : Types.row
 
+  method get_env         : unit -> FrontendTypeEnv.t
   method get_var_env     : unit -> FrontendTypeEnv.qual_var_environment
   method get_module_env  : unit -> FrontendTypeEnv.qual_module_environment
   method get_tycon_env   : unit -> FrontendTypeEnv.tycon_environment

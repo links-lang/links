@@ -69,7 +69,7 @@ let desugar_regexes env =
 object(self)
   inherit (TransformSugar.transform env) as super
 
-  val regex_type = Instantiate.alias "Regex" [] env.FrontendTypeEnv.tycon_env
+  val regex_type = Instantiate.alias (QualifiedName.of_name "Regex") [] env
 
   method! phrase ({node=p; pos} as ph) = match p with
     | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex((Replace(_,_) as r)); _}) ->
@@ -108,4 +108,3 @@ object
   method satisfied = no_regexes
   method! regex _ = {< no_regexes = false >}
 end
-

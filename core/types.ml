@@ -167,11 +167,25 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
-      [@@deriving show]
-and module_t = {
-        fields : typ stringmap ;
-        modules : module_t stringmap;
-      }
+  [@@deriving show]
+
+
+
+
+and alias_type = quantifier list * typ
+and tycon_spec = [
+  | `Alias of alias_type
+  | `Abstract of Abstype.t
+  | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
+] [@@deriving show]
+
+type module_t = {
+  fields : typ Utility.StringMap.t ;
+  modules : module_t Utility.StringMap.t;
+  tycons : tycon_spec Utility.StringMap.t;
+} [@@deriving show]
+
+
 
 type session_type = (typ, row) session_type_basis
   [@@deriving show]
@@ -183,13 +197,9 @@ let is_present =
   | `Present _           -> true
   | (`Absent | `Var _) -> false
 
-type alias_type = quantifier list * typ [@@deriving show]
 
-type tycon_spec = [
-  | `Alias of alias_type
-  | `Abstract of Abstype.t
-  | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
-] [@@deriving show]
+
+
 
 let unbox_quantifiers = (!)
 let box_quantifiers = ref
@@ -487,6 +497,10 @@ struct
   let type_arg ta = fst (elim_recursive_type_cycles_visitor#type_arg ta)
   let row_var rv = fst (elim_recursive_type_cycles_visitor#row_var rv)
   let quantifier q = fst (elim_recursive_type_cycles_visitor#quantifier q)
+
+  let tycon_spec = function
+    | `Alias (qs, t) -> `Alias (List.map quantifier qs, datatype t)
+    | x -> x
 
 end
 
@@ -1640,6 +1654,11 @@ let normalise_quantifier = fun q ->
             | _ -> (* TODO: shouldn't this be an error? *) q
         end
 
+let normalise_tycon_spec = function
+  | `Alias (qs, t) -> `Alias (List.map normalise_quantifier qs, normalise_datatype t)
+  | x -> x
+
+
 (* let rec flexible_of_type t = *)
 (*   match concrete_type t with *)
 (*     | `MetaTypeVar point as t -> *)
@@ -2779,5 +2798,6 @@ let pp_module_t : Format.formatter -> module_t -> unit = fun fmt mt ->
   let rec decycle_module mt  = {
       fields = StringMap.map DecycleTypes.datatype mt.fields;
       modules = StringMap.map decycle_module mt.modules;
+      tycons = StringMap.map DecycleTypes.tycon_spec mt.tycons
     } in
   pp_module_t fmt (decycle_module mt)

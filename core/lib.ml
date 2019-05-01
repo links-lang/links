@@ -1614,6 +1614,7 @@ let module_env : FrontendTypeEnv.qual_module_environment =
     List.fold_right (fun (n, (_,t,_)) fs -> StringMap.add n t fs) env StringMap.empty in
   let lib_module =
     { Types.modules = StringMap.empty;
+      Types.tycons = StringMap.empty;
       Types.fields = lib_module_fields} in
   Env.String.bind Env.String.empty (BuiltinModules.lib, (None, lib_module))
 

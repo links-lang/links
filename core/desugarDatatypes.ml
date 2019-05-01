@@ -85,6 +85,9 @@ object (self)
     (* type declarations bind variables; exclude those from the
        analysis. *)
     | Typenames _  -> self
+    (* Don't traverse into modules, we call typevars on them separately
+       once we desugar them *)
+    | Module _     -> self
     | b            -> super#bindingnode b
 
   method! datatypenode = let open Datatype in
@@ -142,8 +145,8 @@ struct
                     ((var, subkind, `Presence point))::args,
                      {tenv; renv; penv=StringMap.add name point penv})
 
-  let rec datatype var_env (alias_env : FrontendTypeEnv.tycon_environment) t' =
-    let datatype var_env t' = datatype var_env alias_env t' in
+  let rec datatype var_env (type_env : FrontendTypeEnv.t) t' =
+    let datatype var_env t' = datatype var_env type_env t' in
     match t' with
     | {node = t; pos} ->
       let lookup_type t = StringMap.find t var_env.tenv in
@@ -153,11 +156,11 @@ struct
                                 with NotFound _ -> raise (UnexpectedFreeVar s))
         | Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
-                      effect_row var_env alias_env e,
+                      effect_row var_env type_env e,
                       datatype var_env t)
         | Lolli (f, e, t) ->
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
-                       effect_row var_env alias_env e,
+                       effect_row var_env type_env e,
                        datatype var_env t)
         | Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
@@ -177,12 +180,12 @@ struct
             let present (s, x) = (s, `Present x)
             in
               `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map (datatype var_env) ks) unit)
-        | Record r -> `Record (row var_env alias_env r)
-        | Variant r -> `Variant (row var_env alias_env r)
-        | Effect r -> `Effect (row var_env alias_env r)
+        | Record r -> `Record (row var_env type_env r)
+        | Variant r -> `Variant (row var_env type_env r)
+        | Effect r -> `Effect (row var_env type_env r)
         | Table (r, w, n) -> `Table (datatype var_env r, datatype var_env w, datatype var_env n)
         | List k -> `Application (Types.list, [`Type (datatype var_env k)])
-        | TypeApplication (tycon, ts) ->
+        | TypeApplication (qtycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
             let match_quantifiers qs =
@@ -195,14 +198,16 @@ struct
                 let q_kind = primary_kind_of_quantifier q in
                 let t_kind = primary_kind_of_type_arg t in
                 if q_kind <> t_kind then
-                  raise (TypeApplicationKindMismatch {pos; name=tycon; tyarg_number=i;
+                  raise (TypeApplicationKindMismatch {pos;
+                    name=QualifiedName.canonical_name qtycon;
+                    tyarg_number=i;
                     expected=PrimaryKind.to_string q_kind;
                     provided=PrimaryKind.to_string t_kind})
                 else (q, t)
               in
-              let type_arg' var_env alias_env = function
-                | Row r -> `Row (effect_row var_env alias_env r)
-                | t -> type_arg var_env alias_env t
+              let type_arg' var_env type_env = function
+                | Row r -> `Row (effect_row var_env type_env r)
+                | t -> type_arg var_env type_env t
               in
               begin
                 try
@@ -211,27 +216,28 @@ struct
                     (fun i (q,t) ->
                       let (q, t) = match_kinds i (q, t) in
                       match subkind_of_quantifier q with
-                      | (_, Restriction.Effect) -> type_arg' var_env alias_env t
-                      | _ -> type_arg var_env alias_env t) ts
+                      | (_, Restriction.Effect) -> type_arg' var_env type_env t
+                      | _ -> type_arg var_env type_env t) ts
                 with
                 | ListUtils.Lists_length_mismatch ->
-                    raise (TypeApplicationArityMismatch {pos; name=tycon;
+                    raise (TypeApplicationArityMismatch {pos;
+                      name=QualifiedName.canonical_name qtycon;
                       expected=List.length qs; provided=List.length ts})
               end in
 
-            begin match SEnv.find alias_env tycon with
-              | None -> raise (UnboundTyCon (pos,tycon))
+            begin match FrontendTypeEnv.find_type type_env qtycon with
+              | None -> raise (UnboundTyCon (pos, qtycon))
               | Some (`Alias (qs, _dt)) ->
                   let ts = match_quantifiers qs in
-                  Instantiate.alias tycon ts alias_env
+                  Instantiate.alias qtycon ts type_env
               | Some (`Abstract abstype) ->
                   (* TODO: check that the kinds match up *)
-                  `Application (abstype, List.map (type_arg var_env alias_env) ts)
+                  `Application (abstype, List.map (type_arg var_env type_env) ts)
               | Some (`Mutual (qs, tygroup_ref)) ->
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers qs in
-
+                  let tycon = QualifiedName.unqualify qtycon in
                   let r_unwind args dual =
                     let (_, body) = StringMap.find tycon !tygroup_ref.type_map in
                     let body = Instantiate.recursive_application tycon qs args body in
@@ -249,30 +255,30 @@ struct
             end
         | Primitive k -> `Primitive k
         | DB -> `Primitive Primitive.DB
-        | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s -> session_type var_env alias_env s
-  and session_type var_env alias_env =
+        | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s -> session_type var_env type_env s
+  and session_type var_env type_env =
     (* let lookup_type t = StringMap.find t var_env.tenv in  -- used only in commented code *)
     (* HACKY *)
     let open Datatype in
     function
-    | Input (t, s)  -> `Input (datatype var_env alias_env t, datatype var_env alias_env s)
-    | Output (t, s) -> `Output (datatype var_env alias_env t, datatype var_env alias_env s)
-    | Select r      -> `Select (row var_env alias_env r)
-    | Choice r      -> `Choice (row var_env alias_env r)
-    | Dual s        -> `Dual (datatype var_env alias_env s)
+    | Input (t, s)  -> `Input (datatype var_env type_env t, datatype var_env type_env s)
+    | Output (t, s) -> `Output (datatype var_env type_env t, datatype var_env type_env s)
+    | Select r      -> `Select (row var_env type_env r)
+    | Choice r      -> `Choice (row var_env type_env r)
+    | Dual s        -> `Dual (datatype var_env type_env s)
     | End           -> `End
     | _ -> assert false
-  and fieldspec var_env alias_env =
+  and fieldspec var_env type_env =
     let lookup_flag = flip StringMap.find var_env.penv in
       let open Datatype in function
         | Absent -> `Absent
-        | Present t -> `Present (datatype var_env alias_env t)
+        | Present t -> `Present (datatype var_env type_env t)
         | Var (name, _, _) ->
             begin
               try `Var (lookup_flag name)
               with NotFound _ -> raise (UnexpectedFreeVar name)
             end
-  and row var_env alias_env (fields, rv) =
+  and row var_env type_env (fields, rv) =
     let lookup_row = flip StringMap.find var_env.renv in
     let seed =
       let open Datatype in
@@ -287,16 +293,16 @@ struct
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let renv = StringMap.add name point var_env.renv in
-            let _ = Unionfind.change point (`Recursive (var, row {var_env with renv=renv} alias_env r)) in
+            let _ = Unionfind.change point (`Recursive (var, row {var_env with renv=renv} type_env r)) in
               (StringMap.empty, point, false) in
     let fields =
         List.map
           (fun (k, p) ->
-            (k, fieldspec var_env alias_env p))
+            (k, fieldspec var_env type_env p))
           fields
     in
     fold_right Types.row_with fields seed
-  and effect_row var_env alias_env (fields, rv) =
+  and effect_row var_env type_env (fields, rv) =
     let fields =
       (* Closes any empty, open arrow rows on user-defined
          operations. Note any row which can be closed will have an
@@ -319,7 +325,7 @@ struct
         UnexpectedOperationEffects op_name ->
           failwith (Printf.sprintf "The abstract operation %s has unexpected effects in its signature. The effect signature on an abstract operation arrow is always supposed to be empty, since any effects it might have are ultimately conferred by its handler." op_name)
     in
-    let (fields, rho, dual) = row var_env alias_env (fields, rv) in
+    let (fields, rho, dual) = row var_env type_env (fields, rv) in
     let fields =
       StringMap.mapi
         (fun name ->
@@ -333,11 +339,11 @@ struct
         fields
     in
     (fields, rho, dual)
-  and type_arg var_env alias_env =
+  and type_arg var_env type_env =
     let open Datatype in function
-    | Type t -> `Type (datatype var_env alias_env t)
-    | Row r -> `Row (row var_env alias_env r)
-    | Presence f -> `Presence (fieldspec var_env alias_env f)
+    | Type t -> `Type (datatype var_env type_env t)
+    | Row r -> `Row (row var_env type_env r)
+    | Presence f -> `Presence (fieldspec var_env type_env f)
 
   (* pre condition: all subkinds have been filled in *)
   let generate_var_mapping (vars : type_variable list) : (Types.quantifier list * var_env) =
@@ -368,22 +374,22 @@ struct
     in
       List.rev vars, var_env
 
-  let datatype' map alias_env (dt, _ : datatype') =
-    (dt, Some (datatype map alias_env dt))
+  let datatype' map type_env (dt, _ : datatype') =
+    (dt, Some (datatype map type_env dt))
 
   (* Desugar a foreign function declaration.  Foreign declarations
      cannot use type variables from the context.  Any type variables
      found are implicitly universally quantified at this point. *)
-  let foreign alias_env dt =
+  let foreign type_env dt =
     let tvars = (typevars#datatype' dt)#tyvar_list in
-      datatype' (snd (generate_var_mapping tvars)) alias_env dt
+      datatype' (snd (generate_var_mapping tvars)) type_env dt
 
 
  (* Desugar a table literal.  No free variables are allowed here.
     We generate both read and write types by looking for readonly constraints *)
-  let tableLit alias_env constraints dt =
+  let tableLit type_env constraints dt =
     try
-      let read_type = match datatype' empty_env alias_env (dt, None) with
+      let read_type = match datatype' empty_env type_env (dt, None) with
         | (_, Some read_type) -> read_type
         | _ -> assert false in
       let write_row, needed_row =
@@ -414,16 +420,28 @@ end
 
 
 (* convert a syntactic type into a semantic type, using `map' to resolve free type variables *)
-let desugar initial_alias_env map =
-object (self)
+let desugar (initial_type_env : FrontendTypeEnv.t) (initial_map : var_env) =
+object (self : 'self_type)
   inherit SugarTraversals.fold_map as super
 
-  val alias_env = initial_alias_env
+  val tyvar_map = initial_map
+
+  val type_env = initial_type_env
+
+  (* Typing environment collecting additions to the typing environment in the
+     current module *)
+  val cur_module_additions = FrontendTypeEnv.empty_typing_environment
+
+  method get_additions () = cur_module_additions
+
+  method reset_additions () =
+    ({< cur_module_additions = FrontendTypeEnv.empty_typing_environment >},
+     cur_module_additions)
 
   method! patternnode = function
     | Pattern.HasType (pat, dt) ->
         let o, pat = self#pattern pat in
-          o, Pattern.HasType (pat, Desugar.datatype' map alias_env dt)
+          o, Pattern.HasType (pat, Desugar.datatype' tyvar_map type_env dt)
     | p -> super#patternnode p
 
 
@@ -440,12 +458,12 @@ object (self)
           self, Block (bs, p)
     | TypeAnnotation (p, dt) ->
         let o, p = self#phrase p in
-          o, TypeAnnotation (p, Desugar.datatype' map self#aliases dt)
+          o, TypeAnnotation (p, Desugar.datatype' tyvar_map self#get_type_env dt)
     | Upcast (p, dt1, dt2) ->
         let o, p = self#phrase p in
-          o, Upcast (p, Desugar.datatype' map alias_env dt1, Desugar.datatype' map alias_env dt2)
+          o, Upcast (p, Desugar.datatype' tyvar_map type_env dt1, Desugar.datatype' tyvar_map type_env dt2)
     | TableLit (t, (dt, _), cs, keys, p) ->
-        let read, write, needed = Desugar.tableLit alias_env cs dt in
+        let read, write, needed = Desugar.tableLit type_env cs dt in
         let o, t = self#phrase t in
     let o, keys = o#phrase keys in
         let o, p = o#phrase p in
@@ -471,18 +489,25 @@ object (self)
          * later passes.*)
         let venvs_map = StringMap.empty in
 
-        (* Add all type declarations in the group to the alias
-         * environment, as mutuals. Quantifiers need to be desugared. *)
-        let (mutual_env, venvs_map) =
+        (* Collect all type declarations in the group as mutuals.
+           Quantifiers need to be desugared. *)
+        let (new_mutual_env, venvs_map) =
           List.fold_left (fun (alias_env, venvs_map) (t, args, _, _) ->
             let qs = List.map (fst) args in
             let qs, var_env =  Desugar.desugar_quantifiers empty_env qs in
             let venvs_map = StringMap.add t var_env venvs_map in
             (SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)), venvs_map) )
-            (alias_env, venvs_map) ts in
+            (SEnv.empty, venvs_map) ts in
+
+        let mutual_type_env =
+          SEnv.fold
+            (fun name d env -> FrontendTypeEnv.bind_tycons env (name, d))
+            new_mutual_env
+            type_env in
+
 
         (* Desugar all DTs, given the temporary new alias environment. *)
-        let desugared_mutuals =
+        let desugared_mutuals : Sugartypes.typename list =
           List.map (fun (name, args, dt, pos) ->
             let sugar_qs = List.map (fst) args in
 
@@ -490,7 +515,7 @@ object (self)
              * so retrieve them *)
             let sem_qs =
                 begin
-                  match SEnv.find mutual_env name with
+                  match SEnv.find new_mutual_env name with
                     | Some (`Mutual (qs, _)) -> qs
                     | _ -> assert false
                 end in
@@ -501,7 +526,7 @@ object (self)
 
             (* Desugar the datatype *)
             let var_env = StringMap.find name venvs_map in
-            let dt' = Desugar.datatype' var_env mutual_env dt in
+            let dt' = Desugar.datatype' var_env mutual_type_env dt in
             (* Check if the datatype has actually been desugared *)
             let (t, dt) =
               (match dt' with
@@ -544,12 +569,12 @@ object (self)
               List.fold_left (fun acc x -> StringMap.add x scc_linear acc) acc scc in
             (acc, scc_linear)) sorted_graph (StringMap.empty, false) in
 
-        (* Finally, construct a new alias environment, and populate the map from
+        (* Finally, construct environment of new aliases, and populate the map from
          * strings to the desugared datatypes which in turn allows recursive type
          * unwinding in unification. *)
         (* NB: type aliases are scoped; we allow shadowing.
            We also allow type aliases to shadow abstract types. *)
-        let alias_env =
+        let new_aliases_env =
           List.fold_left (fun alias_env (t, args, (_, dt'), _) ->
             let dt = OptionUtils.val_of dt' in
             let semantic_qs = List.map (snd ->- val_of) args in
@@ -560,19 +585,38 @@ object (self)
                   type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map);
                   linearity_map };
             alias_env
-        ) alias_env desugared_mutuals in
+        ) SEnv.empty desugared_mutuals in
 
-        ({< alias_env = alias_env >}, Typenames desugared_mutuals)
+        let additions_only_tenv =
+          {FrontendTypeEnv.empty_typing_environment with
+            FrontendTypeEnv.tycon_env = new_aliases_env} in
+
+
+        (* Updated both typing environments carried in the object *)
+        let updated_type_env =
+           FrontendTypeEnv.extend_typing_environment
+             ~effects:type_env.FrontendTypeEnv.effect_row
+             type_env
+             additions_only_tenv in
+        let updated_additions_env =
+          FrontendTypeEnv.extend_typing_environment
+            ~effects:cur_module_additions.FrontendTypeEnv.effect_row
+            cur_module_additions
+            additions_only_tenv in
+
+        ({< type_env = updated_type_env;
+            cur_module_additions = updated_additions_env >},
+         Typenames desugared_mutuals)
     | Val (pat, (tyvars, p), loc, dt) ->
         let o, pat = self#pattern pat in
         let o, p   = o#phrase p in
         let o, loc = o#location loc in
-          o, Val (pat, (tyvars, p), loc, opt_map (Desugar.datatype' map alias_env) dt)
+          o, Val (pat, (tyvars, p), loc, opt_map (Desugar.datatype' tyvar_map type_env) dt)
     | Fun (bind, lin, (tyvars, fl), loc, dt) ->
         let o, bind = self#binder bind in
         let o, fl   = o#funlit fl in
         let o, loc  = o#location loc in
-          o, Fun (bind, lin, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
+          o, Fun (bind, lin, (tyvars, fl), loc, opt_map (Desugar.datatype' tyvar_map type_env) dt)
     | Funs binds ->
         let o, binds =
           super#list
@@ -580,15 +624,76 @@ object (self)
                let o, bind = o#binder bind in
                let o, fl   = o#funlit fl in
                let o, loc  = o#location loc in
-               let    dt   = opt_map (Desugar.datatype' map alias_env) dt in
+               let    dt   = opt_map (Desugar.datatype' tyvar_map type_env) dt in
                let o, pos  = o#position pos
                in (o, (bind, lin, (tyvars, fl), loc, dt, pos)))
             binds
         in o, Funs binds
     | Foreign (bind, raw_name, lang, file, dt) ->
         let _, bind = self#binder bind in
-        let dt' = Desugar.foreign alias_env dt in
+        let dt' = Desugar.foreign type_env dt in
         self, Foreign (bind, raw_name, lang, file, dt')
+    | Module (name, module_t, bs) ->
+       assert (module_t = None);
+       let pre_module_type_env = type_env in
+       let (o, pre_module_additions) = self#reset_additions () in
+
+       let desugar_module_binding
+           : ('self_type * binding list) -> binding -> ('self_type * binding list) =
+         fun (o, bs) b ->
+         (* Approximates the existing (broken) scoping of type variables
+            used in DesugarDatatypes:
+            The scope of each type variable is the "toplevel" binding
+            it appears in, where toplevel either means the toplevel of
+            a file (as usual), but it also includes any binding
+            that appears as an immediate child of a module.
+            To achieve this, we re-create the map from
+            syntactic to semantic type variables for all
+            bindings of the module *)
+         let tyvars = (typevars#binding b)#tyvar_list in
+         let new_tyvar_map = snd (Desugar.generate_var_mapping tyvars) in
+         let o = o#update_ty_var_map new_tyvar_map in
+         let o, b = o#binding b in
+         o, (b :: bs)
+       in
+
+       let o, name = o#name name in
+       let o, bs_rev =
+         List.fold_left
+           desugar_module_binding
+           (o, [])
+           bs in
+       let bs = List.rev bs_rev in
+
+       let additions = o#get_additions () in
+       let alias_additions =
+         Env.String.fold
+           (fun tycon tspec map -> StringMap.add tycon tspec map)
+           additions.FrontendTypeEnv.tycon_env
+           StringMap.empty in
+       let module_additions =
+         Env.String.fold
+           (fun module_name (_, module_t) map -> StringMap.add module_name module_t  map)
+           additions.FrontendTypeEnv.module_env
+           StringMap.empty in
+       let new_module : Types.module_t =
+         {fields  = StringMap.empty;
+          tycons  = alias_additions;
+          modules = module_additions} in
+
+       (* prerr_endline ("Aliases in module " ^ name);
+       StringMap.iter (fun n _ -> print_endline n) new_module.tycons; *)
+
+       let updated_type_env =
+         FrontendTypeEnv.bind_module pre_module_type_env (name, new_module) in
+       let updated_additions_env =
+         FrontendTypeEnv.bind_module pre_module_additions (name, new_module) in
+
+       ({< type_env = updated_type_env;
+           cur_module_additions = updated_additions_env>},
+        Module (name, module_t, bs))
+    | Import _ -> assert false (* TODO *)
+
     | b -> super#bindingnode b
 
   method! sentence =
@@ -604,60 +709,51 @@ object (self)
     let _o, e       = o#option (fun o -> o#phrase) e in
       self, (bindings, e)
 
-  method aliases = alias_env
+  method update_ty_var_map new_tyvar_map =
+    {< tyvar_map = new_tyvar_map >}
+
+  method get_type_env = type_env
 end
 
-let phrase alias_env p =
+let phrase type_env p =
   let tvars = (typevars#phrase p)#tyvar_list in
-    (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#phrase p
+  let tyvar_mapping = (snd (Desugar.generate_var_mapping tvars)) in
+    (desugar type_env tyvar_mapping )#phrase p
 
-let rec binding  alias_env b =
-  match node b with
-    | Module (name, typ, (mb :: mbs)) ->
-      let o, mb = binding alias_env mb in
+let binding type_env b =
+  let tvars = (typevars#binding b)#tyvar_list in
+  let tyvar_mapping = snd (Desugar.generate_var_mapping tvars) in
+  (desugar type_env tyvar_mapping)#binding b
 
-      let (o, _alias_env, mbs) =
-      List.fold_left
-        (fun (_o, alias_env, bnds) bnd ->
-          let o, bnd = binding alias_env bnd in
-            (o, o#aliases, bnd::bnds))
-        (o, alias_env, [])
-        mbs in
-      let mbs = List.rev mbs in
-      o, make ~pos:(pos b) (Module (name, typ, mb :: mbs))
-    | _ ->
-      let tvars = (typevars#binding b)#tyvar_list in
-      (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#binding b
-
-let toplevel_bindings alias_env bs =
-  let alias_env, bnds =
+let toplevel_bindings type_env bs =
+  let type_env, bnds =
     List.fold_left
-      (fun (alias_env, bnds) bnd ->
-         let o, bnd = binding alias_env bnd in
-           (o#aliases, bnd::bnds))
-    (alias_env, [])
+      (fun (type_env, bnds) bnd ->
+         let o, bnd = binding type_env bnd in
+           (o#get_type_env, bnd::bnds))
+    (type_env, [])
       bs
-  in (alias_env, List.rev bnds)
+  in (type_env, List.rev bnds)
 
 let program typing_env (bindings, p : Sugartypes.program) :
     (FrontendTypeEnv.t * Sugartypes.program) =
-  let alias_env = typing_env.FrontendTypeEnv.tycon_env in
-  let alias_env, bindings =
-    toplevel_bindings alias_env bindings in
-  let typing_env = { typing_env with FrontendTypeEnv.tycon_env = alias_env } in
-  (typing_env, (bindings, opt_map ((phrase alias_env) ->- snd) p))
+  let res_ty_env, bindings =
+    toplevel_bindings typing_env bindings in
+  (res_ty_env, (bindings, opt_map ((phrase typing_env) ->- snd) p))
 
 let sentence typing_env = function
   | Definitions bs ->
-      let alias_env, bs' = toplevel_bindings typing_env.FrontendTypeEnv.tycon_env bs in
-        {typing_env with FrontendTypeEnv.tycon_env = alias_env}, Definitions bs'
-  | Expression  p  -> let o, p = phrase typing_env.FrontendTypeEnv.tycon_env p in
-      {typing_env with FrontendTypeEnv.tycon_env = o#aliases}, Expression p
+      let typing_env', bs' = toplevel_bindings typing_env bs in
+        typing_env', Definitions bs'
+  | Expression  p  -> let o, p = phrase typing_env p in
+      o#get_type_env, Expression p
   | Directive   d  -> typing_env, Directive d
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
+  let type_env =
+    {FrontendTypeEnv.empty_typing_environment with
+      FrontendTypeEnv.tycon_env = aliases } in
   let () = List.iter Generalise.rigidify_quantifier vars in
-    (Types.for_all (vars, Desugar.datatype var_env aliases dt))
-
+    (Types.for_all (vars, Desugar.datatype var_env type_env dt))

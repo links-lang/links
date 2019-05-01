@@ -283,8 +283,8 @@ struct
 
       let render_cont () =
         let nenv = !env.Evaluation_env.nenv in
-        let {FrontendTypeEnv.tycon_env = tycon_env; _ } = !env.Evaluation_env.tyenv in
-        let _, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
+        let tyenv = !env.Evaluation_env.tyenv in
+        let _, x = Var.fresh_global_var_of_type (Instantiate.alias (QualifiedName.of_name "Page") [] tyenv) in
         let render_page = Env.String.lookup nenv "renderPage" in
         let tail = Ir.Apply (Ir.Variable render_page, [Ir.Variable x]) in
         Hashtbl.add Tables.scopes x Scope.Global;
