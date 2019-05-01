@@ -83,6 +83,12 @@ module Set : sig
 
   (** Get all columns which are defined by other columns. *)
   val outputs : t -> Alias.Set.t
+
+  (** Get the set of all columns. *)
+  val all_columns : t -> Alias.Set.t
+
+  (** Get the set of all nodes. *)
+  val all_nodes : t -> Alias.Set.Set.t
 end
 
 module Tree : sig

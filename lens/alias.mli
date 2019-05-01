@@ -1,7 +1,6 @@
 open Lens_utility
 
-type t = string
-  [@@deriving show]
+type t = string [@@deriving show, eq]
 
 module Map : sig
   include Lens_map.S with type key = t
@@ -18,6 +17,7 @@ module Set : sig
 
   module List : sig
     type elt = t
+
     type t = elt list
 
     val is_disjoint : t -> (unit, elt) result

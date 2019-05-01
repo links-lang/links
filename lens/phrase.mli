@@ -53,6 +53,10 @@ val get_vars : t -> Alias.Set.t
     variables. *)
 val eval : t -> (string -> Value.t) -> Value.t
 
+(** Tries to execute and simplify as much of the equation as possible using the
+    given variables. *)
+val partial_eval : t -> lookup:(string -> Value.t option) -> t
+
 (** Rename all variables with an entry in the given map. *)
 val rename_var : t -> replace:string Alias.Map.t -> t
 
@@ -98,6 +102,11 @@ module Option : sig
 
   (** Get a list of variables in the expression. *)
   val get_vars : t -> Alias.Set.t
+
+  (** Tries to execute and simplify as much of the equation as possible using the
+      given variables. *)
+  val partial_eval : t -> lookup:(string -> Value.t option) -> t
+
 end
 
 module List : sig
@@ -172,7 +181,8 @@ end
 module Grouped_variables : sig
   type phrase = t
 
-  include Lens_set.S with type elt = Alias.Set.t
+  type elt = Alias.Set.t
+  type t = Alias.Set.Set.t
 
   (** Generate a grouped type variable value from a list of lists of column
       names. This is mainly useful for debugging. *)
@@ -191,4 +201,10 @@ module Grouped_variables : sig
       variables. If it is called with cols `C`, then it returns true, because
       the group `C D` contains the column `D` in addition to the column `C`. *)
   val has_partial_overlaps : t -> cols:elt -> bool
+
+  module Error : sig
+    type t = Overlaps of Alias.Set.t [@@deriving eq]
+  end
+
+  val no_partial_overlaps : t -> cols:Alias.Set.t -> (unit, Error.t) result
 end

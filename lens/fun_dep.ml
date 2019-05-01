@@ -146,9 +146,13 @@ module Set = struct
     let fd_of (left, right) = make left right in
     List.map ~f:fd_of fds |> of_list
 
-  let all_cols fds =
+  let all_columns fds =
     let cols fd = Alias.Set.union (left fd) (right fd) in
     elements fds |> List.map ~f:cols |> Alias.Set.union_all
+
+  let all_nodes fds =
+    let nodes fd = Alias.Set.Set.of_list [left fd; right fd] in
+    elements fds |> List.map ~f:nodes |> Alias.Set.Set.union_all
 
   let outputs fds =
     fold (fun elt v -> right elt |> Alias.Set.union v) fds Alias.Set.empty
@@ -235,7 +239,7 @@ module Tree = struct
   let of_fds fds ~columns =
     let roots = Set.simple_key fds ~columns in
     let tree = fd_subnodes fds roots in
-    let not_included = Alias.Set.diff (Set.all_cols fds) (all_cols tree) in
+    let not_included = Alias.Set.diff (Set.all_columns fds) (all_cols tree) in
     Alias.Set.is_empty not_included
     |> Result.of_bool ~error:(Check_error.ProbablyCycle not_included)
     >>= fun () -> is_disjoint tree ~columns >>| fun () -> tree
@@ -303,5 +307,9 @@ module Tree = struct
     |> Result.map_error ~f:(fun v -> Tree_form_error.NotDisjoint v)
     >>= fun () ->
     let fds = split_fds fds lefts in
-    is_acyclic fds >>| fun () -> fds
+    is_acyclic fds
+    >>= fun () ->
+    Alias.Set.Set.is_disjoint (Set.all_nodes fds)
+    |> Result.map_error ~f:(fun v -> Tree_form_error.NotDisjoint v)
+    >>| fun () -> fds
 end

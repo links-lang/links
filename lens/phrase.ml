@@ -80,7 +80,8 @@ let rename_var expr ~replace =
       match expr with
       | Var key ->
           Alias.Map.find ~key replace
-          |> Option.map ~f:var |> Option.value ~default:expr
+          |> Option.map ~f:var
+          |> Option.value ~default:expr
       | _ -> expr )
 
 module Constant = struct
@@ -122,48 +123,51 @@ let[@inline always] val_numeric op_i op_f v1 v2 =
   | Value.Float v, Value.Float v' -> op_f v v' |> Value.box_float
   | _ -> failwith "Type comparison mismatch."
 
+let eval_infix op a1 a2 =
+  let open Value in
+  match op with
+  | Binary.GreaterEqual -> val_typ_cmp ( >= ) ( >= ) ( >= ) ( >= ) ( >= ) a1 a2
+  | Binary.Greater -> val_typ_cmp ( > ) ( > ) ( > ) ( > ) ( > ) a1 a2
+  | Binary.LessEqual -> val_typ_cmp ( <= ) ( <= ) ( <= ) ( <= ) ( <= ) a1 a2
+  | Binary.Less -> val_typ_cmp ( < ) ( < ) ( < ) ( < ) ( < ) a1 a2
+  | Binary.Equal -> val_typ_cmp ( = ) ( = ) ( = ) ( = ) ( = ) a1 a2
+  | Binary.LogicalAnd -> box_bool (unbox_bool a1 && unbox_bool a2)
+  | Binary.LogicalOr -> box_bool (unbox_bool a1 || unbox_bool a2)
+  | Binary.Plus -> val_numeric ( + ) ( +. ) a1 a2
+  | Binary.Multiply ->
+      val_numeric (fun v v' -> v * v') (fun v v' -> v *. v') a1 a2
+  | Binary.Minus -> val_numeric ( - ) ( -. ) a1 a2
+  | Binary.Divide -> val_numeric ( / ) ( /. ) a1 a2
+
+let eval_unary op arg =
+  let open Value in
+  match op with
+  | Unary.Not -> unbox_bool arg |> not |> box_bool
+  | Unary.Minus -> (
+    match arg with
+    | Value.Float v -> -.v |> box_float
+    | Value.Int v -> -v |> box_int
+    | _ ->
+        failwith
+          (Format.asprintf
+             "Value '%a' does not support the unary minus operator." Value.pp
+             arg) )
+
 let rec eval expr get_val =
   let open Value in
   match expr with
   | Constant c -> c
   | Var v -> (
-    try get_val v with Not_found ->
-      failwith ("Could not find column " ^ v ^ ".") )
-  | InfixAppl (op, a1, a2) -> (
+    try get_val v
+    with Not_found -> failwith ("Could not find column " ^ v ^ ".") )
+  | InfixAppl (op, a1, a2) ->
       let a1 = eval a1 get_val in
       let a2 = eval a2 get_val in
-      match op with
-      | Binary.GreaterEqual ->
-          val_typ_cmp ( >= ) ( >= ) ( >= ) ( >= ) ( >= ) a1 a2
-      | Binary.Greater -> val_typ_cmp ( > ) ( > ) ( > ) ( > ) ( > ) a1 a2
-      | Binary.LessEqual ->
-          val_typ_cmp ( <= ) ( <= ) ( <= ) ( <= ) ( <= ) a1 a2
-      | Binary.Less -> val_typ_cmp ( < ) ( < ) ( < ) ( < ) ( < ) a1 a2
-      | Binary.Equal -> val_typ_cmp ( = ) ( = ) ( = ) ( = ) ( = ) a1 a2
-      | Binary.LogicalAnd -> box_bool (unbox_bool a1 && unbox_bool a2)
-      | Binary.LogicalOr -> box_bool (unbox_bool a1 || unbox_bool a2)
-      | Binary.Plus -> val_numeric ( + ) ( +. ) a1 a2
-      | Binary.Multiply ->
-          val_numeric (fun v v' -> v * v') (fun v v' -> v *. v') a1 a2
-      | Binary.Minus -> val_numeric ( - ) ( -. ) a1 a2
-      | Binary.Divide -> val_numeric ( / ) ( /. ) a1 a2 )
+      eval_infix op a1 a2
   | TupleLit l -> eval (List.hd l) get_val
-  | UnaryAppl (op, arg) -> (
-    match op with
-    | Unary.Not ->
-        let res = eval arg get_val in
-        let res = not (unbox_bool res) in
-        box_bool res
-    | Unary.Minus -> (
-        let res = eval arg get_val in
-        match res with
-        | Value.Float v -> -.v |> box_float
-        | Value.Int v -> -v |> box_int
-        | _ ->
-            failwith
-              (Format.asprintf
-                 "Value '%a' does not support the unary minus operator."
-                 Value.pp res) ) )
+  | UnaryAppl (op, arg) ->
+      let res = eval arg get_val in
+      eval_unary op res
   | In (names, vals) ->
       let find = List.map ~f:get_val names in
       let equal s t = List.for_all2_exn ~f:Value.equal s t in
@@ -171,11 +175,43 @@ let rec eval expr get_val =
       box_bool res
   | Case (inp, cases, otherwise) -> (
       let inp =
-        match inp with None -> Value.Bool true | Some inp -> eval inp get_val
+        match inp with
+        | None -> Value.Bool true
+        | Some inp -> eval inp get_val
       in
       match List.find ~f:(fun (k, _v) -> eval k get_val = inp) cases with
       | Some (_, v) -> eval v get_val
       | None -> eval otherwise get_val )
+
+let rec partial_eval expr ~lookup =
+  match expr with
+  | Constant c -> Constant c
+  | Var v ->
+      lookup v
+      |> Option.map ~f:(fun v -> Constant v)
+      |> Option.value ~default:(Var v)
+  | InfixAppl (op, a1, a2) -> (
+      let a1 = partial_eval a1 ~lookup in
+      let a2 = partial_eval a2 ~lookup in
+      match (op, a1, a2) with
+      | Binary.LogicalOr, Constant (Value.Bool true), _
+       |Binary.LogicalOr, _, Constant (Value.Bool true) ->
+          Constant (Value.Bool true)
+      | Binary.LogicalAnd, Constant (Value.Bool false), _
+       |Binary.LogicalAnd, _, Constant (Value.Bool false) ->
+          Constant (Value.Bool false)
+      | _, Constant v1, Constant v2 -> eval_infix op v1 v2 |> Constant.of_value
+      | _ -> InfixAppl (op, a1, a2) )
+  | TupleLit l -> partial_eval (List.hd l) ~lookup
+  | UnaryAppl (op, arg) -> (
+      let arg = partial_eval arg ~lookup in
+      match arg with
+      | Constant c1 -> Constant (eval_unary op c1)
+      | _ -> UnaryAppl (op, arg) )
+  | In _ -> expr (* do not support in *)
+  | Case _ -> expr
+
+(* do not support case *)
 
 module Option = struct
   type elt = t
@@ -205,7 +241,9 @@ module Option = struct
     | None -> Phrase_value.box_bool true
 
   let get_vars phrase =
-    Option.map ~f:(get_vars) phrase |> Option.value ~default:Alias.Set.empty
+    Option.map ~f:get_vars phrase |> Option.value ~default:Alias.Set.empty
+
+  let partial_eval expr ~lookup = Option.map ~f:(partial_eval ~lookup) expr
 end
 
 module Record = struct
@@ -259,7 +297,9 @@ module List = struct
         (fun phrase term -> Option.combine_or phrase (Some term))
         None phrases
     in
-    match ored with None -> Some (Constant.bool false) | _ -> ored
+    match ored with
+    | None -> Some (Constant.bool false)
+    | _ -> ored
 
   let fold_or_opt l = List.filter_opt l |> fold_or
 end
@@ -271,11 +311,9 @@ module O = struct
 
   let ( = ) a b = infix (Operators.Binary.of_string "=") a b
 
-  let ( && ) a b =
-    infix Binary.LogicalAnd a b
+  let ( && ) a b = infix Binary.LogicalAnd a b
 
-  let ( || ) a b =
-    infix Binary.LogicalOr a b
+  let ( || ) a b = infix Binary.LogicalOr a b
 
   let v a = var a
 
@@ -287,21 +325,28 @@ end
 module Grouped_variables = struct
   type phrase = t
 
-  module Inner = Alias.Set
-  include Set.Make (Inner)
+  type elt = Alias.Set.t
 
-  let times s1 s2 = fold (fun e acc -> map (Inner.union e) acc) s1 s2
+  type t = Alias.Set.Set.t
 
-  let of_lists l = Lens_list.map ~f:Inner.of_list l |> of_list
+  module OptionU = Lens_utility.Option
+
+  let times s1 s2 =
+    Alias.Set.Set.fold
+      (fun e acc -> Alias.Set.Set.map (Alias.Set.union e) acc)
+      s1 s2
+
+  let of_lists l =
+    Lens_list.map ~f:Alias.Set.of_list l |> Alias.Set.Set.of_list
 
   let rec gtv p =
     match p with
-    | Var v -> Inner.singleton v |> singleton
-    | Constant _ -> singleton Inner.empty
+    | Var v -> Alias.Set.singleton v |> Alias.Set.Set.singleton
+    | Constant _ -> Alias.Set.Set.singleton Alias.Set.empty
     | InfixAppl (Binary.LogicalAnd, p1, p2) ->
         let s1 = gtv p1 in
         let s2 = gtv p2 in
-        union s1 s2
+        Alias.Set.Set.union s1 s2
     | InfixAppl (_, p1, p2) ->
         let s1 = gtv p1 in
         let s2 = gtv p2 in
@@ -309,10 +354,32 @@ module Grouped_variables = struct
     | _ -> failwith "Grouped type variables does not support this operator."
 
   let has_partial_overlaps t ~cols =
-    exists
+    Alias.Set.Set.exists
       (fun gr ->
-        let int_not_empty = Inner.inter gr cols |> Inner.is_empty |> not in
-        let diff_not_empty = Inner.diff gr cols |> Inner.is_empty |> not in
+        let int_not_empty =
+          Alias.Set.inter gr cols |> Alias.Set.is_empty |> not
+        in
+        let diff_not_empty =
+          Alias.Set.diff gr cols |> Alias.Set.is_empty |> not
+        in
         int_not_empty && diff_not_empty )
       t
+
+  module Error = struct
+    type t = Overlaps of Alias.Set.t [@@deriving eq]
+  end
+
+  let no_partial_overlaps t ~cols =
+    Alias.Set.Set.find_first_opt
+      (fun gr ->
+        let int_not_empty =
+          Alias.Set.inter gr cols |> Alias.Set.is_empty |> not
+        in
+        let diff_not_empty =
+          Alias.Set.diff gr cols |> Alias.Set.is_empty |> not
+        in
+        int_not_empty && diff_not_empty )
+      t
+    |> OptionU.map ~f:(fun v -> Error.Overlaps v |> Result.error)
+    |> OptionU.value ~default:(Result.return ())
 end

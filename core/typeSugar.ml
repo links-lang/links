@@ -420,13 +420,6 @@ end
        code rexpr           ^ nl  () ^
       "has type"            ^ nli () ^
        code ppr_rt
-         
-    let but2things (lthing, (lexpr, lt)) (rthing, (rexpr, rt)) =
-      build_tyvar_names [lt;rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      Format.sprintf ", but the %s\n  %s\nhas type\n  %s\nwhile the %s\n  %s\nhas type\n  %s" lthing (code lexpr) (code ppr_lt) rthing (code rexpr) (code ppr_rt)
-
 
     let but2 l r = but2things ("expression", l) ("expression", r)
 
