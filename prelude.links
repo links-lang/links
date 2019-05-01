@@ -593,11 +593,11 @@ sig $ : ((a) -b-> c, a) -b-> c
 op f $ x { f(x) }
 
 # state monad
-sig runState : (State (d,a), d) -%-> (a,d)
+sig runState : (State (d,a), d) {}~> (a,d)
 fun runState(s, i) { s(i) }
 
 infixl 1 >>=;
-sig >>= : (State (d,a), (a) -%-> State(d,b)) -%-> State (d,b)
+sig >>= : (State (d,a), (a) {}~> State(d,b)) -> State (d,b)
 op x >>= f {
    (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
@@ -605,7 +605,7 @@ op x >>= f {
 sig return : (a) -> State (b,a)
 fun return(a) { fun (s) { (a,s) } }
 
-sig fmap : ((a) -%-> b, State (c,a)) -%-> State (c,b)
+sig fmap : ((a) {}~> b, State (c,a)) -> State (c,b)
 fun fmap(f, x) { x >>= return `compose` f }
 
 sig pure : (a) -> Formlet(a)
@@ -616,7 +616,7 @@ fun pure(v) {
 sig pureE : (a) -> Maybe (a)
 fun pureE (x) { Just (x) }
 
-sig applyE : (Maybe ((a) -%-> b), Maybe (a)) -%-> Maybe (b)
+sig applyE : (Maybe ((a) -e-> b), Maybe (a)) -e-> Maybe (b)
 fun applyE (f, x) {
   switch ((f, x)) {
     case (Just (f), Just (x)) -> Just (f(x))
@@ -641,7 +641,7 @@ op m @@@ k {
 #   Returns a formlet that post-processes the formlet x by running its
 #   output through f.   (This is fmap for the Formlet functor.)
 #   (This could be written more efficiently.)
-sig @@=> : (Formlet(a), (a) -%-> b) -%-> Formlet(b)
+sig @@=> : (Formlet(a), (a) {}~> b) -> Formlet(b)
 op m @@=> f {
   m @@@ pure(f)
 }
@@ -652,7 +652,7 @@ fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
 sig text : (String) ~> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
-sig plug : (XmlContext, Formlet (a)) -%-> Formlet (a)
+sig plug : (XmlContext, Formlet (a)) -> Formlet (a)
 op f `plug` m {
   m >>= fun((x,collector)){ return((f(x),
     fun (env) { var (xml,c) = collector (env);
@@ -938,7 +938,7 @@ var checkbox = fun(gen) {checkboxDefault(false)(gen)};
 # and passes this list of pairs to the 'layout' function, which should
 # return XML. The result is a formlet that will return the value from
 # 'items' that is associated with the radio button selected by the user.
-sig inputRadiogroup : ([a], a, ([(Xml, a)]) -%-> Xml) -%->
+sig inputRadiogroup : ([a], a, ([(Xml, a)]) {}~> Xml) ->
                      Formlet (a)
 fun inputRadiogroup(items, selected, layout) {
   nextName >>= fun (name) {
@@ -1068,7 +1068,7 @@ typename Either (a,b) = [|Left:a | Right : b|];
 
 # given a formlet and a "predicate", return a new formlet that uses
 # the predicate for validation.
-sig satisfies : (Formlet (a), (a,Xml) -%-> Either(Xml,Xml)) ~> Formlet(a)
+sig satisfies : (Formlet (a), (a,Xml) {}~> Either(Xml,Xml)) -> Formlet(a)
 fun satisfies(f, validate) {
    f >>= fun((xml,collector)) {
    return((xml, fun (env) {
@@ -1091,7 +1091,7 @@ fun errorMsg (f, msg) (x,xml) {
 
 infixr 5 `errorMsg`;
 
-sig transform : (Formlet(a), (a) -%-> Bool, (a) -%-> String, (a) ~b~> c) ~b~> Formlet(c)
+sig transform : (Formlet(a), (a) {}~> Bool, (a) {}~> String, (a) {}~> b) -> Formlet(b)
 fun transform(f, predicate, error, g) {
   formlet
     <#>{f `satisfies` (predicate `errorMsg` error) -> v}</#>

@@ -2901,15 +2901,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                           List.map usages children ])
         | TextNode _ as t -> t, Types.xml_type, StringMap.empty
         | Formlet (body, yields) ->
-            let body = tc body in
-            let env = extract_formlet_bindings (erase body) in
-            let vs = Env.domain env in
-            let context' = context ++ env in
-            let yields = type_check context' yields in
-              unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
-              (Formlet (erase body, erase yields),
-               Instantiate.alias "Formlet" [`Type (typ yields)] context.tycon_env,
-               merge_usages [usages body; StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages yields)])
+           let closed_wild = Types.row_with ("wild", `Present Types.unit_type) (Types.make_empty_closed_row ()) in
+           let context = {context with effect_row = closed_wild} in
+           let body = type_check context body in
+           let env = extract_formlet_bindings (erase body) in
+           let vs = Env.domain env in
+           let context' = context ++ env in
+           let yields = type_check context' yields in
+           unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
+           (Formlet (erase body, erase yields),
+            Instantiate.alias "Formlet" [`Type (typ yields)] context.tycon_env,
+            merge_usages [usages body; StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages yields)])
         | Page e ->
             let e = tc e in
               unify ~handle:Gripers.page_body (pos_and_typ e, no_pos Types.xml_type);
