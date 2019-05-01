@@ -829,7 +829,7 @@ perhaps_where:
 
 perhaps_orderby:
 | /* empty */                                                  { None }
-| ORDERBY LPAREN exps RPAREN                                   { Some (tuple ~ppos:$loc($3) $3) }
+| ORDERBY LPAREN exps RPAREN                                   { Some (orderby_tuple ~ppos:$loc($3) $3) }
 
 escape_expression:
 | ESCAPE VARIABLE IN postfix_expression                        { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }

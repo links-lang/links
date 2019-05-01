@@ -65,6 +65,7 @@ module type SugarConstructorsSig = sig
   val cp_unit     : t -> cp_phrase
   val record      : ?ppos:t -> ?exp:phrase -> (name * phrase) list -> phrase
   val tuple       : ?ppos:t -> phrase list -> phrase
+  val orderby_tuple : ?ppos:t -> phrase list -> phrase
   val list        :
     ?ppos:t -> ?ty:Types.datatype -> phrase list -> phrase
   val constructor :
