@@ -737,9 +737,8 @@ fun mkForm(cont, contents, attributes) {
   </form>
 }
 
-
 sig validate :
-  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) {}~> Page
+  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) ~> (Env) {}~> Page
 fun validate(c, h, k, zs, i, attributes) (env) {
   var (xml, v) = c(env);
   switch (v) {
