@@ -387,19 +387,15 @@ nofun_declaration:
                                                                  set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
-| typedecl SEMICOLON                                           { $1 }
-| module_binding                                               { $1 }
-| module_import                                                { $1 }
+| typedecl SEMICOLON | module_binding | module_import          { $1 }
 
 module_binding:
 | MODULE CONSTRUCTOR LBRACE declarations? RBRACE               { let decls = match $4 with
                                                                     | None -> []
                                                                     | Some xs -> xs
                                                                  in with_pos $loc (Module ($2, None, decls)) }
-
 module_import:
-| OPEN qualified_type_name SEMICOLON                           { with_pos $loc (Import (QualifiedName.of_path $2)) }
-| OPEN CONSTRUCTOR SEMICOLON                                   { with_pos $loc (Import (QualifiedName.of_name $2)) }
+| OPEN separated_nonempty_list(DOT, CONSTRUCTOR) SEMICOLON     { with_pos $loc (Import (QualifiedName.of_path $2)) }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -928,7 +924,7 @@ binding:
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
 | typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
 | typedecl SEMICOLON | alien_block
-| module_binding | module_import SEMICOLON { $1 }
+| module_binding | module_import                               { $1 }
 
 mutual_binding_block:
 | MUTUAL LBRACE mutual_bindings RBRACE                         { MutualBindings.flatten $3 }
@@ -1033,7 +1029,8 @@ session_datatype:
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
 | END                                                          { Datatype.End             }
 | primary_datatype                                             { $1                       }
-| qualified_type_name                                          { Datatype.TypeApplication (QualifiedName.(unqualify (of_path $1)) (* TODO FIXME. *), []) }
+| qualified_type_name                                          { Datatype.TypeApplication (QualifiedName.of_path $1, []) }
+| qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.TypeApplication (QualifiedName.of_path $1, $3) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
@@ -1064,9 +1061,9 @@ primary_datatype:
                                                                    | "XmlItem" -> Primitive Primitive.XmlItem
                                                                    | "String"  -> Primitive Primitive.String
                                                                    | "Database"-> DB
-                                                                   | t         -> TypeApplication (t, [])
+                                                                   | t         -> TypeApplication (QualifiedName.of_name t, [])
                                                                }
-| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
+| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication (QualifiedName.of_name $1, $3) }
 
 type_var:
 | VARIABLE                                                     { Datatype.TypeVar ($1, None, `Rigid)    }
