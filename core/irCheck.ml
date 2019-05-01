@@ -72,13 +72,23 @@ let handle_ir_type_error lazy_val alternative occurrence =
       Lazy.force lazy_val
     with
       | Errors.IRTypeError msg  ->
+         let nl = "\n" in
         (* We saw an IR error, but we are not supposed to abort.
            Print the error and return the alternative value *)
         Debug.print
-          ("\n--------------------------------------------------------------------\n" ^
-           "Continuing after IR Type Error:\n" ^
-           msg ^
-           "\n-------------------------------------------------------------------\n" );
+          (nl ^
+          "--------------------------------------------------------------------" ^
+          nl ^
+          "Continuing after IR Type Error:" ^
+          nl ^
+          msg ^
+          nl ^
+          "backtrace:" ^
+          nl ^
+          Printexc.get_backtrace () ^
+          nl ^
+          "-------------------------------------------------------------------" ^
+          nl);
         alternative
       | exn ->
         let msg =
@@ -199,8 +209,12 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
     let rec eqt ((context, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
 
-      let t1 = collapse_toplevel_forall t1 in
-      let t2 = collapse_toplevel_forall t2 in
+      let rec unalias = function
+        | `Alias (_, x) -> unalias x
+        | x             -> x in
+
+      let t1 = unalias (collapse_toplevel_forall t1) in
+      let t2 = unalias (collapse_toplevel_forall t2) in
 
       (* If t2 is recursive at the top, we give up. t1 is checked for recursion later on *)
       if match t2 with
@@ -218,8 +232,6 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
         end
       else
       begin
-
-
       match t1 with
       | `Not_typed ->
           begin match t2 with
@@ -387,7 +399,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
 let check_eq_types (ctx : type_eq_context) et at occurrence =
   if not (eq_types occurrence ctx (et, at)) then
     raise_ir_type_error
-      ("Type mismatch:\n Expected:\n" ^ Types.string_of_datatype et ^ "\n Actual:\n " ^ Types.string_of_datatype at)
+      ("Type mismatch:\n Expected:\n  " ^ Types.string_of_datatype et ^ "\n Actual:\n  " ^ Types.string_of_datatype at)
       occurrence
 
 let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
@@ -1029,50 +1041,67 @@ struct
         let o = o#remove_bindings bs in
           (bs, tc), t, o
 
-    method handle_funbinding : tyvar list -> datatype -> computation  -> binding -> (computation * 'self_type) =
-      fun tyvars expected_overall_funtype body fundef ->
-        let is_recursive = match fundef with
-          | Rec _ -> true
-          | _ -> false in
-        let mismatch () = raise_ir_type_error "Quantifier mismatch in function def" (SBind fundef) in
-        let check_types subst type_var_env expected_returntype body_actual_type  =
-          check_eq_types { typevar_subst = subst; tyenv = type_var_env } expected_returntype body_actual_type (SBind fundef) in
-        let rec handle_foralls subst type_var_env funtype tyvars body_actual_type = match funtype with
-          | `ForAll (qs_boxed, t)  -> handle_unboxed_foralls subst type_var_env (unbox_quantifiers qs_boxed) t tyvars body_actual_type
-          | `Function (_, _, rt)
-          | `Lolli (_, _, rt) ->
-            if tyvars = [] then
-              check_types subst type_var_env rt body_actual_type
-            else
-              mismatch ()
-          | _ -> mismatch ()
-        and handle_unboxed_foralls subst type_var_env quantifier_list rest_expected_type tyvars body_actual_type = match quantifier_list, tyvars with
-          | [], _ -> handle_foralls subst type_var_env rest_expected_type tyvars body_actual_type
-          | lq :: lqs, rq :: rqs ->
-              if Types.kind_of_quantifier lq = Types.kind_of_quantifier rq then
-                let subst' = IntMap.add (Types.var_of_quantifier lq) (Types.var_of_quantifier rq) subst in
-                handle_unboxed_foralls subst' type_var_env lqs rest_expected_type rqs body_actual_type
-              else
-                mismatch ()
-          | _ -> mismatch () in
+
+   (* The function parameters (and potentially other recursive functions), as well as the closure binder
+      (if it exists), must be added to the environment before calling *)
+    method handle_funbinding
+             (expected_overall_funtype : datatype)
+             (tyvars : Types.quantifier list)
+             (parameter_types : datatype list)
+             (body : computation)
+             (is_recursive : bool)
+             (occurrence : ir_snippet)
+           : (computation * 'self_type) =
+
+        (* Get all toplevel quantifiers, even if nested as in
+           forall a. forall b. t1 -> t2. Additionally, get type with quantifiers stripped away *)
+        let _, exp_unquant_t =
+          TypeUtils.split_quantified_type expected_overall_funtype in
+
+        ensure
+          (TypeUtils.is_function_type exp_unquant_t)
+          "Function annotated with non-function type"
+          occurrence;
+
+        (* In order to obtain the effects to type-check the body with,
+           we take the expected effects and substitute the quantifiers from the type
+           annotation with those in the tyvar list *)
         let quantifiers_as_type_args = List.map Types.type_arg_of_quantifier tyvars in
-        let fully_applied_function_expected = Instantiate.apply_type expected_overall_funtype quantifiers_as_type_args in
-        let expected_function_effects = TypeUtils.effect_row fully_applied_function_expected in
-        let o, previously_allowed_effects = o#set_allowed_effects expected_function_effects in
-        (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type (SBind fundef));
+        let exp_t_substed = Instantiate.apply_type expected_overall_funtype quantifiers_as_type_args in
+        let exp_effects_substed = TypeUtils.effect_row exp_t_substed in
+
+        (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type occurrence);
         let o = List.fold_left
               (fun o quant ->
                 let var = var_of_quantifier quant in
                 let kind = kind_of_quantifier quant in
                 o#add_typevar_to_context var kind) o tyvars in
-        let body, body_actual_type, o = o#computation body in
-        let type_var_env = o#get_type_var_env in
-        handle_foralls IntMap.empty type_var_env expected_overall_funtype tyvars body_actual_type;
+
+        (* determine body type, using translated version of expected effects in context *)
+        let o, previously_allowed_effects = o#set_allowed_effects exp_effects_substed in
+        let body, body_type, o = o#computation body in
+
         let o = List.fold_left
               (fun o quant ->
                 let var = var_of_quantifier quant in
                 o#remove_typevar_to_context var) o tyvars in
         let o, _ = o#set_allowed_effects previously_allowed_effects in
+
+
+        let is_linear = not (Types.is_unl_type exp_unquant_t) in
+        let actual_ft_unquant =
+          Types.make_function_type
+            ~linear:is_linear
+            parameter_types
+            exp_effects_substed
+            body_type in
+        let actual_overall_funtype = Types.for_all (tyvars, actual_ft_unquant) in
+
+        (* Compare the overall types. Note that the effects are actually unncessary here:
+           We already checked them when checking the body. However, removing them
+           from the overall types would be confusing *)
+        o#check_eq_types expected_overall_funtype actual_overall_funtype occurrence;
+
         body, o
 
     method! binding : binding -> (binding * 'self_type) =
@@ -1091,7 +1120,7 @@ struct
                   let var = var_of_quantifier quant in
                   o#remove_typevar_to_context var) o tyvars in
               let exp = Var.type_of_binder x in
-              let act_foralled = `ForAll (ref tyvars, act) in
+              let act_foralled = Types.for_all (tyvars, act) in
               o#check_eq_types exp act_foralled (SBind orig);
               tc, o
             ) in
@@ -1115,7 +1144,15 @@ struct
                     ([], o) in
 
                 let whole_function_expected = Var.type_of_binder f in
-                let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
+                let actual_parameter_types = (List.map Var.type_of_binder xs) in
+                let body, o = o#handle_funbinding
+                                whole_function_expected
+                                tyvars
+                                actual_parameter_types
+                                body
+                                false
+                                (SBind binding) in
+                let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                 (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                 let o = OptionUtils.opt_app o#remove_binder o z in
@@ -1156,7 +1193,15 @@ struct
                        ([], o) in
 
                   let whole_function_expected = Var.type_of_binder f in
-                  let body, o = o#handle_funbinding tyvars whole_function_expected body binding in
+                  let actual_parameter_types = (List.map Var.type_of_binder xs) in
+                  let body, o = o#handle_funbinding
+                                whole_function_expected
+                                tyvars
+                                actual_parameter_types
+                                body
+                                true
+                                (SBind binding) in
+                  let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                   (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                   let o = OptionUtils.opt_app o#remove_binder o z in
