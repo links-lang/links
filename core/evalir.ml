@@ -279,10 +279,10 @@ struct
                    (* FIXME: printing out the message might be more useful. *)
                    internal_error("Couldn't deliver message because destination process has no mailbox.")) >>= fun _ ->
             apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("spawnAt",_), [func; loc] ->
+    | `PrimitiveFunction ("spawnAt",_), [loc; func] ->
         let req_data = Value.Env.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-            client_call req_data "_spawnWrapper" cont [func; loc]
+            client_call req_data "_spawnWrapper" cont [loc; func]
         else
           begin
             match loc with
@@ -297,10 +297,10 @@ struct
                 apply_cont cont env (`Pid (`ServerPid new_pid))
               | _ -> assert false
           end
-    | `PrimitiveFunction ("spawnAngelAt",_), [func; loc] ->
+    | `PrimitiveFunction ("spawnAngelAt",_), [loc; func] ->
         let req_data = Value.Env.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-            client_call req_data "_spawnWrapper" cont [func; loc]
+            client_call req_data "_spawnWrapper" cont [loc; func]
         else
           begin
             match loc with
