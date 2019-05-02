@@ -246,13 +246,13 @@ object(o : 'self_type)
 
   method resolve_qualified_module_name qn  =
     let rec rslv mod_type qn = match mod_type, qn with
-      | ModT map, `Ident m_name -> StringMap.find m_name map
-      | ModT map, `Dot (m_name, remainder) ->
+      | ModT map,  QualifiedName.Ident m_name -> StringMap.find m_name map
+      | ModT map,  QualifiedName.Dot (m_name, remainder) ->
         let sub_mod_type = StringMap.find m_name map in
         rslv sub_mod_type remainder in
     let first_path_element = QualifiedName.head qn in
     match StringMap.find_opt first_path_element module_env, qn with
-      | Some s_mod_type, `Dot _->
+      | Some s_mod_type,  QualifiedName.Dot _->
         begin
           try
             o, rslv s_mod_type (QualifiedName.tail qn)

@@ -2135,12 +2135,12 @@ let resolve_qualified_name pos context qname
     | Some prefix -> QualifiedName.append prefix original in
   let rec traverse_module_path count current_qname (current_module_type : Types.module_t) : 'b =
     match current_qname with
-      | `Ident name ->
+      | QualifiedName.Ident name ->
         begin match StringMap.find_opt name (ident_env_extractor current_module_type) with
           | None -> griper pos qname
           | Some t -> t
         end
-      | `Dot (m_name, remainder) ->
+      | QualifiedName.Dot (m_name, remainder) ->
         begin match StringMap.find_opt m_name current_module_type.Types.modules with
           | None ->
             let module_path_until_failure = QualifiedName.prefix (count+1) qname in
@@ -2149,12 +2149,12 @@ let resolve_qualified_name pos context qname
               traverse_module_path (count+1) remainder next_module_type
         end in
   match qname with
-    | `Ident name ->
+    | QualifiedName.Ident name ->
       begin match Env.find toplevel_env name with
         | None -> qname, griper pos qname
         | Some (imported_path_opt, t) -> append_opt imported_path_opt qname, t
       end
-    | `Dot (first_module, remainder) ->
+    |  QualifiedName.Dot (first_module, remainder) ->
       begin match Env.find context.module_env first_module with
         | None ->
           let module_path_until_failure = QualifiedName.prefix 1 qname in

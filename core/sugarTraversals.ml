@@ -497,8 +497,9 @@ class map =
     method name : name -> name = o#string
 
     method qualified_name : QualifiedName.t -> QualifiedName.t = function
-    | `Ident name -> `Ident (o#string name)
-    | `Dot (name, path) -> `Dot (o#string name, o#qualified_name path)
+    |  QualifiedName.Ident name ->  QualifiedName.Ident (o#string name)
+    |  QualifiedName.Dot (name, path) ->
+        QualifiedName.Dot (o#string name, o#qualified_name path)
 
     method location : Location.t -> Location.t = o#unknown
 
@@ -1165,8 +1166,8 @@ class fold =
     method name : name -> 'self_type = o#string
 
     method qualified_name : QualifiedName.t -> 'self_type = function
-    | `Ident name -> o#string name
-    | `Dot (name, path) ->
+    | QualifiedName.Ident name -> o#string name
+    | QualifiedName.Dot (name, path) ->
        let o = o#qualified_name path in
        o#string name
 
@@ -1917,13 +1918,13 @@ class fold_map =
     method name : name -> ('self_type * name) = o#string
 
     method qualified_name : QualifiedName.t -> ('self_type * QualifiedName.t) = function
-    | `Ident name ->
+    | QualifiedName.Ident name ->
        let (o, name) = o#string name in
-       o, `Ident name
-    | `Dot (component, path) ->
+       o, QualifiedName.Ident name
+    | QualifiedName.Dot (component, path) ->
        let (o, path) = o#qualified_name path in
        let (o, component) = o#string component in
-       o, `Dot (component, path)
+       o, QualifiedName.Dot (component, path)
 
 
     method location : Location.t -> ('self_type * Location.t) = o#unknown

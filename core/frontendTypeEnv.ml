@@ -98,12 +98,12 @@ let resolve_qualified_name
             cur_qname
             (cur_module_t : Types.module_t) =
     match cur_qname with
-      | `Ident name ->
+      | QualifiedName.Ident name ->
          begin match module_extractor name cur_module_t with
            | None -> RNotFound
            | Some res -> RInModule res
          end
-      | `Dot (mod_name, remainder) ->
+      |  QualifiedName.Dot (mod_name, remainder) ->
          let next_module =
            StringMap.find_opt
              mod_name
@@ -120,12 +120,12 @@ let resolve_qualified_name
                  module_t
   in
   match qname with
-    | `Ident name ->
+    |  QualifiedName.Ident name ->
        begin match  env_extractor name env with
          | None -> RNotFound
          | Some res -> RInEnv res
        end
-    | `Dot (first_module, remainder) ->
+    |  QualifiedName.Dot (first_module, remainder) ->
       begin match Env.String.find env.module_env first_module with
         | None ->
            raise (ModuleNotFound (QualifiedName.of_name first_module))
