@@ -276,7 +276,6 @@ struct
                   Mailbox.send_client_message msg client_id process_id
            with
                  UnknownProcessID id ->
-                   (* FIXME: printing out the message might be more useful. *)
                    Debug.print (
                      "Couldn't deliver message because destination process " ^
                      (ProcessTypes.ProcessID.to_string id) ^ " has no mailbox.");

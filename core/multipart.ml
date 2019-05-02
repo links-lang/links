@@ -1,7 +1,5 @@
 (* Parse multipart formdata... ripped out of ocamlcgi *)
 
-let runtime_error msg = raise (Errors.runtime_error msg)
-
 (* Using the following function, we avoid the use of the Str library
  * which is not compatible with the threads of ocaml.
  * Thanks to Olivier Montanuy. *)
@@ -97,11 +95,11 @@ let rec extract_fields accu = function
 let parse_multipart_args mime_type content : (string * field_data) list =
   if not (string_starts_with mime_type "multipart/form-data")
   then
-    runtime_error ("Cannot handle multipart form data of type " ^ mime_type);
+    raise (Errors.runtime_error ("Cannot handle multipart form data of type " ^ mime_type));
   (* Determine boundary delimiter *)
   let boundary =
     try
       match_string boundary_re1 boundary_re2 mime_type
     with Not_found ->
-      runtime_error ("No boundary provided in " ^ mime_type) in
+      raise (Errors.runtime_error ("No boundary provided in " ^ mime_type)) in
   extract_fields [] (Str.split (Str.regexp_string ("--" ^ boundary)) content)
