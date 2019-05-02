@@ -421,7 +421,7 @@ let alias qname tyargs env =
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
   let name = QualifiedName.canonical_name qname in
-  match (FrontendTypeEnv.find_type env qname : Types.tycon_spec option) with
+  match (FrontendTypeEnv.find_tycons env qname : Types.tycon_spec option) with
     | None ->
         internal_error (Printf.sprintf "Unrecognised type constructor: %s" name)
     | Some (`Abstract _)

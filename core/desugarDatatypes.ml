@@ -225,7 +225,7 @@ struct
                       expected=List.length qs; provided=List.length ts})
               end in
 
-            begin match FrontendTypeEnv.find_type type_env qtycon with
+            begin match FrontendTypeEnv.find_tycons type_env qtycon with
               | None -> raise (UnboundTyCon (pos, qtycon))
               | Some (`Alias (qs, _dt)) ->
                   let ts = match_quantifiers qs in

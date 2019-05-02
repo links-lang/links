@@ -62,49 +62,93 @@
 
 
 
-exception TypeNotFound of QualifiedName.t
+exception TyConsNotFound of QualifiedName.t
 exception VariableNotFound of QualifiedName.t
 exception ModuleNotFound of QualifiedName.t
 
 
 
+type ('a, 'b) resolve_result =
+  | RInEnv of 'a
+  | RInModule of 'b
+  | RNotFound
 
-let lookup_variable (type_env : t) qname : Types.datatype =
- let rec lookup prev_path_rev cur_module_env cur_var_env = function
-    | `Ident x ->
-       begin match StringMap.find_opt x cur_var_env with
-         | Some t -> t
-         | None -> raise (VariableNotFound qname)
-       end
-    | `Dot (moodule, remainder) ->
-       begin match StringMap.find_opt moodule cur_module_env with
-         | Some module_t ->
-            lookup
-              (moodule :: prev_path_rev)
-              module_t.Types.modules
-              module_t.Types.fields
-              remainder
-         | None ->
-            let path = List.rev (moodule :: prev_path_rev) in
-            raise (ModuleNotFound (QualifiedName.of_path path))
-       end
+(**
+  This is the generic resolver logic for qualified names.
+  It should not be exported from this module.
+  Used by the variable/type/module lookup functions
+
+  env_extractor:
+  How to handle a qname that is just an Ident?
+  module_extractor:
+  How to handle an Ident once we are in a module?
+
+  raises ModuleNotFound if it can't traverse module
+  path furter
+  returns RNotFound if we get to the right module,
+  but the Ident is unknown **)
+let resolve_qualified_name
+    (env : t)
+    (qname : QualifiedName.t)
+    (env_extractor : string -> t -> 'a option)
+    (module_extractor : string -> Types.module_t -> 'b option)
+      : ('a, 'b) resolve_result =
+  let rec traverse_submodules
+            count
+            cur_qname
+            (cur_module_t : Types.module_t) =
+    match cur_qname with
+      | `Ident name ->
+         begin match module_extractor name cur_module_t with
+           | None -> RNotFound
+           | Some res -> RInModule res
+         end
+      | `Dot (mod_name, remainder) ->
+         let next_module =
+           StringMap.find_opt
+             mod_name
+             cur_module_t.Types.modules in
+          match next_module with
+            | None ->
+               let module_path_until_failure =
+                 QualifiedName.prefix (count+1) qname in
+               raise (ModuleNotFound module_path_until_failure)
+            | Some module_t ->
+               traverse_submodules
+                 (count+1)
+                 remainder
+                 module_t
   in
   match qname with
-  | `Ident x ->
-     begin match Env.String.find type_env.var_env x with
-       | Some (_, t) -> t
-       | None -> raise (TypeNotFound qname)
-     end
-  | `Dot (moodule, remainder) ->
-     begin match Env.String.find type_env.module_env moodule with
-       | Some ( _, module_t) ->
-          lookup
-            [moodule]
-            module_t.Types.modules
-            module_t.Types.fields
-            remainder
-       | None -> raise (ModuleNotFound (QualifiedName.of_name moodule))
-     end
+    | `Ident name ->
+       begin match  env_extractor name env with
+         | None -> RNotFound
+         | Some res -> RInEnv res
+       end
+    | `Dot (first_module, remainder) ->
+      begin match Env.String.find env.module_env first_module with
+        | None ->
+           raise (ModuleNotFound (QualifiedName.of_name first_module))
+        | Some (_, module_t) ->
+           traverse_submodules 0 remainder module_t
+      end
+
+
+let lookup_variable (type_env : t) qname : Types.datatype =
+  let var_from_env var (env : t) =
+    Env.String.find env.var_env var in
+  let var_from_module var (module_t : Types.module_t) =
+    StringMap.lookup var module_t.Types.fields in
+  let resolve_res =
+    resolve_qualified_name
+      type_env
+      qname
+      var_from_env
+      var_from_module in
+  match resolve_res with
+    | RInEnv (_, typ) -> typ
+    | RInModule typ -> typ
+    | RNotFound -> raise (VariableNotFound qname)
 
 let find_variable (env : t) qname : Types.datatype option =
   try Some (lookup_variable env qname)
@@ -112,47 +156,50 @@ let find_variable (env : t) qname : Types.datatype option =
        | ModuleNotFound _ -> None
 
 
-let lookup_type (type_env : t) qname : Types.tycon_spec =
- let rec lookup prev_path_rev cur_module_env cur_tycon_env = function
-    | `Ident x ->
-       begin match StringMap.find_opt x cur_tycon_env with
-         | Some tspec -> tspec
-         | None -> raise (TypeNotFound qname)
-       end
-    | `Dot (moodule, remainder) ->
-       begin match StringMap.find_opt moodule cur_module_env with
-         | Some module_t ->
-            lookup
-              (moodule :: prev_path_rev)
-              module_t.Types.modules
-              module_t.Types.tycons remainder
-         | None ->
-            let path = List.rev (moodule :: prev_path_rev) in
-            raise (ModuleNotFound (QualifiedName.of_path path))
-       end
-  in
-  match qname with
-  | `Ident x ->
-     begin match Env.String.find type_env.tycon_env x with
-       | Some tspec -> tspec
-       | None -> raise (TypeNotFound qname)
-     end
-  | `Dot (moodule, remainder) ->
-     begin match Env.String.find type_env.module_env moodule with
-       | Some (_, module_t) ->
-          lookup
-            [moodule]
-            module_t.Types.modules
-            module_t.Types.tycons
-            remainder
-       | None -> raise (ModuleNotFound (QualifiedName.of_name moodule))
-     end
 
+let lookup_tycons (type_env : t) qname : Types.tycon_spec =
+  let type_from_env tycon (env : t) =
+    Env.String.find env.tycon_env tycon in
+  let type_from_module tycon (module_t : Types.module_t) =
+    StringMap.lookup tycon module_t.Types.tycons in
+  let resolve_res =
+    resolve_qualified_name
+      type_env
+      qname
+      type_from_env
+      type_from_module in
+  match resolve_res with
+    | RInEnv tyspec -> tyspec
+    | RInModule tyspec -> tyspec
+    | RNotFound -> raise (TyConsNotFound qname)
 
-let find_type (env : t) qname : Types.tycon_spec option =
-  try Some (lookup_type env qname)
-  with | TypeNotFound _ -> None
+let find_tycons (env : t) qname : Types.tycon_spec option =
+  try Some (lookup_tycons env qname)
+  with | TyConsNotFound  _ -> None
        | ModuleNotFound _ -> None
+
+
+let lookup_module (type_env : t) qname : Types.module_t =
+  let module_from_env var (env : t) =
+    Env.String.find env.module_env var in
+  let module_from_module var (module_t : Types.module_t) =
+    StringMap.lookup var module_t.Types.modules in
+  let resolve_res =
+    resolve_qualified_name
+      type_env
+      qname
+      module_from_env
+      module_from_module in
+  match resolve_res with
+    | RInEnv (_, module_t) -> module_t
+    | RInModule module_t -> module_t
+    | RNotFound -> raise (ModuleNotFound qname)
+
+let find_module (env : t) qname : Types.module_t option =
+  try Some (lookup_module env qname)
+  with | ModuleNotFound _ -> None
+
+
 
 
   (* Must not be used for binding vars that come from opening/importing a module *)

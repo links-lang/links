@@ -2121,6 +2121,9 @@ let usages_cases bs =
 
 
 (* Looks up a qualified name in the context.
+   This is similar to the resolving logic in FrontendTypeEnv, but also
+   returns the fully expaneded name (i.e., without needing open).
+
    If the qualified name refers to something in an opened/imported module, re-write it
    to explicitly state the full path *)
 let resolve_qualified_name pos context qname
@@ -2161,10 +2164,6 @@ let resolve_qualified_name pos context qname
       end
 
 
-(* Fixme: Using "extractor functions" here allows us to re-use the same implementation for both
-   qualified variable and module names, but we pay with up to two additional function calls per variable lookup:
-   1. The call of resolve_qualified_name (always)
-   2. The call of the extractor function once the `Ident is reached (only if the whole name is not just immediately an `Ident) *)
 let resolve_qualified_variable_name pos context qname : (QualifiedName.t * Types.datatype) =
   resolve_qualified_name pos context qname context.FrontendTypeEnv.var_env (fun moodule -> moodule.Types.fields) Gripers.unknown_variable
 
