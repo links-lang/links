@@ -17,7 +17,7 @@ type t =
 
 val empty_typing_environment : t
 
-val import_module : Env.String.name -> t -> t
+val open_module : QualifiedName.t -> t -> t
 
 val normalise_typing_environment : t -> t
 

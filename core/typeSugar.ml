@@ -2124,6 +2124,9 @@ let usages_cases bs =
    This is similar to the resolving logic in FrontendTypeEnv, but also
    returns the fully expaneded name (i.e., without needing open).
 
+   This code will go away once we do the expansion of names w.r.t. openend
+   modules in a separate pass rather than in typeSugar.
+
    If the qualified name refers to something in an opened/imported module, re-write it
    to explicitly state the full path *)
 let resolve_qualified_name pos context qname
@@ -4013,13 +4016,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
          let module_usages = usage_builder StringMap.empty in
           Module (name, Some module_type, bindings), context', module_usages
       | Import module_path ->
-         let full_path, module_type = resolve_qualified_module_name pos context module_path in
-         let augment_with_path new_map = StringMap.fold
-            (fun key value env ->
-              Env.bind env (key, (Some full_path, value))) new_map Env.empty in
-         let context' = { empty_context with
-            var_env = augment_with_path module_type.Types.fields ;
-            module_env = augment_with_path module_type.Types.modules ; } in
+         let full_path, _ = resolve_qualified_module_name pos context module_path in
+         let context' = FrontendTypeEnv.open_module module_path context in
          Import full_path, context', StringMap.empty
     in
       WithPos.make ~pos typed, ctxt, usage

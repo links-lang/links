@@ -19,16 +19,6 @@
     effect_row = Types.make_empty_closed_row () }
 
 
-  let import_module module_name env =
-    let _, imported_module = Env.String.lookup env.module_env module_name in
-    let orig_path = Some (QualifiedName.of_name module_name) in
-    let extend1 sm env = StringMap.fold (fun k v env -> Env.String.bind env (k,(orig_path,v))) sm env in
-    let extend2 sm env = StringMap.fold (fun k v env -> Env.String.bind env (k, v)) sm env in
-    { env with
-        var_env = extend1 imported_module.Types.fields env.var_env;
-        module_env = extend1 imported_module.Types.modules env.module_env;
-        tycon_env = extend2 imported_module.Types.tycons env.tycon_env}
-
   let normalise_typing_environment env =
     let rec normalise_module_t mt =
     {
@@ -62,15 +52,15 @@
 
 
 
-exception TyConsNotFound of QualifiedName.t
+exception TyConsNotFound   of QualifiedName.t
 exception VariableNotFound of QualifiedName.t
-exception ModuleNotFound of QualifiedName.t
+exception ModuleNotFound   of QualifiedName.t
 
 
 
 type ('a, 'b) resolve_result =
   | RInEnv of 'a
-  | RInModule of 'b
+  | RInModule of QualifiedName.t option * 'b
   | RNotFound
 
 (**
@@ -94,6 +84,7 @@ let resolve_qualified_name
     (module_extractor : string -> Types.module_t -> 'b option)
       : ('a, 'b) resolve_result =
   let rec traverse_submodules
+            orig_module
             count
             cur_qname
             (cur_module_t : Types.module_t) =
@@ -101,7 +92,7 @@ let resolve_qualified_name
       | QualifiedName.Ident name ->
          begin match module_extractor name cur_module_t with
            | None -> RNotFound
-           | Some res -> RInModule res
+           | Some res -> RInModule (orig_module, res)
          end
       |  QualifiedName.Dot (mod_name, remainder) ->
          let next_module =
@@ -115,13 +106,14 @@ let resolve_qualified_name
                raise (ModuleNotFound module_path_until_failure)
             | Some module_t ->
                traverse_submodules
+                 orig_module
                  (count+1)
                  remainder
                  module_t
   in
   match qname with
     |  QualifiedName.Ident name ->
-       begin match  env_extractor name env with
+       begin match env_extractor name env with
          | None -> RNotFound
          | Some res -> RInEnv res
        end
@@ -129,8 +121,8 @@ let resolve_qualified_name
       begin match Env.String.find env.module_env first_module with
         | None ->
            raise (ModuleNotFound (QualifiedName.of_name first_module))
-        | Some (_, module_t) ->
-           traverse_submodules 0 remainder module_t
+        | Some (orig_module, module_t) ->
+           traverse_submodules orig_module 0 remainder module_t
       end
 
 
@@ -147,7 +139,7 @@ let lookup_variable (type_env : t) qname : Types.datatype =
       var_from_module in
   match resolve_res with
     | RInEnv (_, typ) -> typ
-    | RInModule typ -> typ
+    | RInModule (_, typ) -> typ
     | RNotFound -> raise (VariableNotFound qname)
 
 let find_variable (env : t) qname : Types.datatype option =
@@ -170,7 +162,7 @@ let lookup_tycons (type_env : t) qname : Types.tycon_spec =
       type_from_module in
   match resolve_res with
     | RInEnv tyspec -> tyspec
-    | RInModule tyspec -> tyspec
+    | RInModule (_, tyspec) -> tyspec
     | RNotFound -> raise (TyConsNotFound qname)
 
 let find_tycons (env : t) qname : Types.tycon_spec option =
@@ -179,7 +171,9 @@ let find_tycons (env : t) qname : Types.tycon_spec option =
        | ModuleNotFound _ -> None
 
 
-let lookup_module (type_env : t) qname : Types.module_t =
+let lookup_module_with_orig_path
+      (type_env : t) qname
+    : (QualifiedName.t option*Types.module_t) =
   let module_from_env var (env : t) =
     Env.String.find env.module_env var in
   let module_from_module var (module_t : Types.module_t) =
@@ -191,13 +185,29 @@ let lookup_module (type_env : t) qname : Types.module_t =
       module_from_env
       module_from_module in
   match resolve_res with
-    | RInEnv (_, module_t) -> module_t
-    | RInModule module_t -> module_t
+    | RInEnv (orig_path, module_t) -> (orig_path, module_t)
+    | RInModule (orig_path, module_t) -> (orig_path, module_t)
     | RNotFound -> raise (ModuleNotFound qname)
 
+let lookup_module
+   (type_env : t) qname : Types.module_t =
+  snd (lookup_module_with_orig_path type_env qname)
+
 let find_module (env : t) qname : Types.module_t option =
-  try Some (lookup_module env qname)
+  try Some (snd (lookup_module_with_orig_path env qname))
   with | ModuleNotFound _ -> None
+
+
+
+let open_module module_qname env =
+  let _, module_t = lookup_module_with_orig_path env module_qname in
+  let orig_path = Some module_qname in
+  let extend1 sm env = StringMap.fold (fun k v env -> Env.String.bind env (k,(orig_path,v))) sm env in
+  let extend2 sm env = StringMap.fold (fun k v env -> Env.String.bind env (k, v)) sm env in
+  { env with
+    var_env = extend1 module_t.Types.fields env.var_env;
+    module_env = extend1 module_t.Types.modules env.module_env;
+    tycon_env = extend2 module_t.Types.tycons env.tycon_env}
 
 
 
