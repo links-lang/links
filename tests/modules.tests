@@ -128,3 +128,39 @@ Qualified names allowed without parentheses
 filemode : true
 args : --path=tests/modules
 stdout : () : ()
+
+Scoping/Shadowing of type names (1)
+./tests/modules/type-scoping1.links
+filemode : true
+stdout : () : ()
+
+Scoping/Shadowing of type names (2)
+./tests/modules/type-scoping2.links
+filemode : true
+stdout : () : ()
+
+Scoping/Shadowing of type names (3)
+./tests/modules/type-scoping3.links
+filemode : true
+stdout : () : ()
+
+Scoping/Shadowing of type names (4)
+./tests/modules/type-scoping4.links
+filemode : true
+stdout : () : ()
+
+Scoping/Shadowing of type names (5)
+./tests/modules/type-scoping5.links
+filemode : true
+stdout : () : ()
+
+Scoping/Shadowing of type names (6)
+./tests/modules/type-scoping6.links
+filemode : true
+stdout : () : ()
+
+Broken scoping of type names (1)
+./tests/modules/type-scoping-bad1.links
+filemode : true
+stderr : @.*
+exit : 1

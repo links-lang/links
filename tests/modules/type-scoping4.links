@@ -1,0 +1,10 @@
+typename Foo = String;
+
+module A {
+  typename Foo = Int;
+}
+
+open A;
+
+sig x : Foo
+var x = 3;
