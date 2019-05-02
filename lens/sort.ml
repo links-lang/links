@@ -283,7 +283,7 @@ let join_lens_sort sort1 sort2 ~on =
   let already_bound = Alias.Set.union already_bound_left already_bound_right in
   Alias.Set.is_empty already_bound
   |> Result.of_bool ~error:(Join_sort_error.AlreadyBound already_bound)
-  >>| fun () ->
+  >>= fun () ->
   (* join the two column lists while renaming columns and keeping track of renames *)
   let cols_l =
     cols sort1
@@ -334,6 +334,9 @@ let join_lens_sort sort1 sort2 ~on =
       pred join_renames
   in
   let fds = Fun_dep.Set.union fds_left fds_right in
+  Fun_dep.Tree.in_tree_form fds
+  |> Result.map_error ~f:(fun error -> Join_sort_error.TreeFormError {error})
+  >>| fun fds ->
   (* determine the on column renames as a tuple (join, left, right) *)
   let jrs =
     Alias.Set.elements on_bind_to
