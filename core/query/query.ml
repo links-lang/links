@@ -384,14 +384,12 @@ struct
                fields)
       | `Variant (name, v) -> Variant (name, expression_of_value v)
       | `XML xmlitem -> XML xmlitem
-      | `FunctionPtr (f, fvs) ->
-        (* Debug.print ("Converting function pointer: " ^ string_of_int f ^ " to query closure"); *)
-        find_fun (f, fvs)
+      | `FunctionPtr (f, fvs) -> find_fun (f, fvs)
       | `PrimitiveFunction (f,_) -> Primitive f
-          (*     | `ClientFunction f ->  *)
-          (*     | `Continuation cont ->  *)
-      | _ ->
-          raise (internal_error "Cannot convert value to expression")
+      | v ->
+          raise (internal_error (Printf.sprintf
+              "Cannot convert value %s to expression" (Value.string_of_value v)))
+
 
   let bind (val_env, exp_env) (x, v) =
     (val_env, Env.Int.bind exp_env (x, v))

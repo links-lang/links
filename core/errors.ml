@@ -49,7 +49,7 @@ exception ModuleError of string
 let prefix_lines prefix s =
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
 
-let pos_prefix ?pos:(pos=None) line =
+let pos_prefix ?pos line =
   let prefix =
     match pos with
       | Some pos -> Printf.sprintf "%s:%d" pos.pos_fname pos.pos_lnum
@@ -65,23 +65,23 @@ let format_exception =
        ^ "   " ^ s.marker)
   | DesugaringError { pos; stage; message } ->
       let pos, expr = Position.resolve_start_expr pos in
-      pos_prefix ~pos:(Some pos)
+      pos_prefix ~pos
         (Printf.sprintf "Error %s: %s\nIn expression: %s.\n"
            (string_of_stage stage) message expr)
   | Getopt.Error s -> s
   | Type_error (pos, s) ->
       let pos, expr = Position.resolve_start_expr pos in
-      pos_prefix ~pos:(Some pos)
+      pos_prefix ~pos
         (Printf.sprintf "Type error: %s\nIn expression: %s.\n" s expr)
   | IRTypeError msg -> pos_prefix (Printf.sprintf "IR Type Error: %s" msg)
   | UnboundTyCon (pos, tycon) ->
       let pos, _ = Position.resolve_start_expr pos in
-      pos_prefix ~pos:(Some pos)
+      pos_prefix ~pos
         (Printf.sprintf "Unbound type constructor %s\n" tycon)
   | RuntimeError s -> pos_prefix ("Runtime error: " ^ s)
   | Position.ASTSyntaxError (pos, s) ->
       let pos, expr = Position.resolve_start_expr pos in
-      pos_prefix ~pos:(Some pos)
+      pos_prefix ~pos
         (Printf.sprintf "Syntax error: %s\nIn expression: %s\n" s expr)
   | Failure msg -> pos_prefix ("Fatal error : " ^ msg)
   | MultiplyDefinedMutualNames duplicates ->
@@ -93,7 +93,7 @@ let format_exception =
           duplicates "")
   | InvalidMutualBinding pos ->
       let pos, expr = Position.resolve_start_expr pos in
-      pos_prefix ~pos:(Some pos)
+      pos_prefix ~pos
         (Printf.sprintf
            "Mutual blocks can only contain `fun` and `typename` bindings, but the block contained: %s.\n" expr)
   | InternalError { filename; message } ->
@@ -103,12 +103,12 @@ let format_exception =
          filename message)
   | TypeApplicationArityMismatch { pos; name; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
-      pos_prefix ~pos:(Some pos)
+      pos_prefix ~pos
         (Printf.sprintf ("Arity mismatch: Type %s expects %d type arguments, but %d arguments were provided. In: %s\n")
              name expected provided expr)
   | TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
-      pos_prefix ~pos:(Some pos)
+      pos_prefix ~pos
         (Printf.sprintf "Kind mismatch: Type argument %d for type constructor %s has kind %s, but an argument of kind %s was expected. \nIn:\n%s\n"
              tyarg_number name provided expected expr)
   | SettingsError message ->

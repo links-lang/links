@@ -275,9 +275,12 @@ struct
               | `ClientPid (client_id, process_id) ->
                   Mailbox.send_client_message msg client_id process_id
            with
-                 UnknownProcessID _ ->
+                 UnknownProcessID id ->
                    (* FIXME: printing out the message might be more useful. *)
-                   raise (internal_error("Couldn't deliver message because destination process has no mailbox."))) >>= fun _ ->
+                   Debug.print (
+                     "Couldn't deliver message because destination process " ^
+                     (ProcessTypes.ProcessID.to_string id) ^ " has no mailbox.");
+                   Lwt.return ()) >>= fun _ ->
             apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawnAt",_), [func; loc] ->
         let req_data = Value.Env.request_data env in
