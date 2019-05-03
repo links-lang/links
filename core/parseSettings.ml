@@ -28,7 +28,6 @@ let options : opt list =
     (noshort, "measure-performance", set BS.Performance.measuring true,               None);
     ('n',     "no-types",            set BS.printing_types false,      None);
     ('e',     "evaluate",            None,                             Some (fun str -> push_back str to_evaluate));
-    (* ('m',     "modules",             set BS.modules true,              None); *)
     (noshort, "print-keywords",      Some (fun () -> print_keywords := true), None);
     (noshort, "pp",                  None,                             Some (Settings.set_value BS.pp));
     (noshort, "path",                None,                             Some (fun str -> Settings.set_value BS.links_file_paths str));
@@ -56,4 +55,3 @@ let validate_settings () =
   OptionUtils.opt_iter (fun err_msg ->
     Printf.fprintf stderr "error: %s\n" err_msg; flush stderr; exit 1
   ) settings_result
-
