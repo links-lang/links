@@ -331,6 +331,9 @@ let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
     | [] -> e
     | _  -> TAppl (WithPos.make e, tys)
 
+(** This module only returns those free variables that are not qualified.
+    This is fine, because it is currently only used by the recursion check,
+    which only cares about unqualified names **)
 module Freevars =
 struct
   open Utility
@@ -367,7 +370,12 @@ struct
   let rec phrase (p : phrase) : StringSet.t =
     let p = WithPos.node p in
     match p with
-    | Var q -> singleton (QualifiedName.unqualify q)
+    | Var q ->
+       (* This module explicitly disregards qualified vars *)
+       if QualifiedName.is_qualified q then
+         empty
+       else
+         singleton (QualifiedName.unqualify q)
     | Section (Section.Name n) -> singleton n
 
     | Constant _
@@ -516,7 +524,7 @@ struct
              (bvs'', fvs''))
            bs (empty, empty)
        in
-       singleton name, fvs
+       empty, fvs
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and handlerlit (_, m, cases, params : handlerlit) : StringSet.t =
