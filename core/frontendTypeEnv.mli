@@ -6,18 +6,18 @@ type qual_module_environment =
   (QualifiedName.t option * Types.module_t) Env.String.t
 [@@deriving show]
 
-type tycon_environment = Types.tycon_spec Env.String.t [@@deriving show]
+type qual_tycon_environment = (QualifiedName.t option * Types.tycon_spec) Env.String.t [@@deriving show]
 
 type t =
   { var_env: qual_var_environment
   ; module_env: qual_module_environment
-  ; tycon_env: tycon_environment
+  ; tycon_env: qual_tycon_environment
   ; effect_row: Types.row }
 [@@deriving show]
 
 val empty_typing_environment : t
 
-val open_module : QualifiedName.t -> t -> t
+val open_module : QualifiedName.t -> t -> t -> t
 
 val normalise_typing_environment : t -> t
 
@@ -37,6 +37,7 @@ val lookup_variable : t -> QualifiedName.t -> Types.datatype
 
 val find_variable : t -> QualifiedName.t -> Types.datatype option
 
+val lookup_tycons_with_orig_path : t -> QualifiedName.t -> (QualifiedName.t option * Types.tycon_spec)
 val lookup_tycons : t -> QualifiedName.t -> Types.tycon_spec
 
 val find_tycons : t -> QualifiedName.t -> Types.tycon_spec option

@@ -3,9 +3,9 @@ open CommonTypes
 (* Alias environment *)
 module AliasEnv = Env.String
 
-let alias_env : FrontendTypeEnv.tycon_environment =
+let alias_env : FrontendTypeEnv.qual_tycon_environment =
   List.fold_left
-    AliasEnv.bind
+    (fun tycon_env (name, spec) -> AliasEnv.bind tycon_env (name, (None, spec)))
     AliasEnv.empty
     [
       (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.Char)])); *)

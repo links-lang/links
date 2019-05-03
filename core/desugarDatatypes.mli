@@ -1,4 +1,4 @@
-val read : aliases:FrontendTypeEnv.tycon_environment -> string -> Types.datatype
+val read : aliases:FrontendTypeEnv.qual_tycon_environment -> string -> Types.datatype
 
 val sentence :
   FrontendTypeEnv.t ->

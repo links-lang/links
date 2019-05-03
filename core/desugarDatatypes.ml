@@ -237,6 +237,8 @@ struct
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers qs in
+                  (* In a group of recursive type defs, references of other
+                     types must be unqualified *)
                   let tycon = QualifiedName.unqualify qtycon in
                   let r_unwind args dual =
                     let (_, body) = StringMap.find tycon !tygroup_ref.type_map in
@@ -579,7 +581,7 @@ object (self : 'self_type)
             let dt = OptionUtils.val_of dt' in
             let semantic_qs = List.map (snd ->- val_of) args in
             let alias_env =
-              SEnv.bind alias_env (t, `Alias (List.map (snd ->- val_of) args, dt)) in
+              SEnv.bind alias_env (t, (None, `Alias (List.map (snd ->- val_of) args, dt))) in
             tygroup_ref :=
               { !tygroup_ref with
                   type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map);
@@ -668,7 +670,7 @@ object (self : 'self_type)
        let additions = o#get_additions () in
        let alias_additions =
          Env.String.fold
-           (fun tycon tspec map -> StringMap.add tycon tspec map)
+           (fun tycon (_, tspec) map -> StringMap.add tycon tspec map)
            additions.FrontendTypeEnv.tycon_env
            StringMap.empty in
        let module_additions =
@@ -692,7 +694,8 @@ object (self : 'self_type)
        ({< type_env = updated_type_env;
            cur_module_additions = updated_additions_env>},
         Module (name, module_t, bs))
-    | Import _ -> assert false (* TODO *)
+    | Import qname ->
+       ({< type_env = FrontendTypeEnv.open_module qname type_env type_env >}, Import qname)
 
     | b -> super#bindingnode b
 

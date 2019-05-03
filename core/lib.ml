@@ -11,11 +11,11 @@ module AliasEnv = Env.String
 
 (* This is done in two stages because the datatype for regexes refers
    to the String alias *)
-let alias_env : FrontendTypeEnv.tycon_environment = DefaultAliases.alias_env
+let alias_env : FrontendTypeEnv.qual_tycon_environment = DefaultAliases.alias_env
 
-let alias_env : FrontendTypeEnv.tycon_environment =
+let alias_env : FrontendTypeEnv.qual_tycon_environment =
   AliasEnv.bind alias_env
-    ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
+    ("Regex", (None, `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype))))
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 

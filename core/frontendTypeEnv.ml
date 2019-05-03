@@ -6,10 +6,10 @@
 
   (* Maps module names to their type and optionally to their original module, if the module is a sub-module of an opened module*)
   type qual_module_environment = (QualifiedName.t option * Types.module_t) Env.String.t [@@deriving show]
-  type tycon_environment  =  Types.tycon_spec Env.String.t [@@deriving show]
+  type qual_tycon_environment  = (QualifiedName.t option * Types.tycon_spec) Env.String.t [@@deriving show]
   type t = {  var_env   : qual_var_environment
            ; module_env : qual_module_environment
-           ; tycon_env  : tycon_environment
+           ; tycon_env  : qual_tycon_environment
            ; effect_row : Types.row } [@@deriving show]
 
   let empty_typing_environment = {
@@ -148,9 +148,9 @@ let find_variable (env : t) qname : Types.datatype option =
        | ModuleNotFound _ -> None
 
 
-
-let lookup_tycons (type_env : t) qname : Types.tycon_spec =
-  let type_from_env tycon (env : t) =
+let lookup_tycons_with_orig_path (type_env : t) qname
+    : (QualifiedName.t option * Types.tycon_spec) =
+ let type_from_env tycon (env : t) =
     Env.String.find env.tycon_env tycon in
   let type_from_module tycon (module_t : Types.module_t) =
     StringMap.lookup tycon module_t.Types.tycons in
@@ -161,12 +161,15 @@ let lookup_tycons (type_env : t) qname : Types.tycon_spec =
       type_from_env
       type_from_module in
   match resolve_res with
-    | RInEnv tyspec -> tyspec
-    | RInModule (_, tyspec) -> tyspec
+    | RInEnv (orig_path, tyspec) -> (orig_path, tyspec)
+    | RInModule (orig_path, tyspec) -> (orig_path, tyspec)
     | RNotFound -> raise (TyConsNotFound qname)
 
+let lookup_tycons (type_env : t) qname : Types.tycon_spec =
+  snd (lookup_tycons_with_orig_path  type_env qname)
+
 let find_tycons (env : t) qname : Types.tycon_spec option =
-  try Some (lookup_tycons env qname)
+  try Some (snd (lookup_tycons_with_orig_path  env qname))
   with | TyConsNotFound  _ -> None
        | ModuleNotFound _ -> None
 
@@ -199,15 +202,18 @@ let find_module (env : t) qname : Types.module_t option =
 
 
 
-let open_module module_qname env =
-  let _, module_t = lookup_module_with_orig_path env module_qname in
-  let orig_path = Some module_qname in
-  let extend1 sm env = StringMap.fold (fun k v env -> Env.String.bind env (k,(orig_path,v))) sm env in
-  let extend2 sm env = StringMap.fold (fun k v env -> Env.String.bind env (k, v)) sm env in
-  { env with
-    var_env = extend1 module_t.Types.fields env.var_env;
-    module_env = extend1 module_t.Types.modules env.module_env;
-    tycon_env = extend2 module_t.Types.tycons env.tycon_env}
+let open_module module_qname env_lookup_from env_add_to =
+  let orig_path_opt, module_t = lookup_module_with_orig_path env_lookup_from module_qname in
+  let orig_path = match orig_path_opt with
+      | None -> Some module_qname
+      | Some prefix_path ->
+         Some (QualifiedName.append prefix_path module_qname) in
+  let extend sm env = StringMap.fold
+    (fun k v env -> Env.String.bind env (k,(orig_path,v))) sm env in
+  { effect_row = env_add_to.effect_row;
+    var_env = extend module_t.Types.fields env_add_to.var_env;
+    module_env = extend module_t.Types.modules env_add_to.module_env;
+    tycon_env = extend module_t.Types.tycons env_add_to.tycon_env}
 
 
 
@@ -216,7 +222,7 @@ let open_module module_qname env =
   let bind_var (env : t) (name, t) =
     {env with var_env = Env.String.bind env.var_env (name, (None, t))}
   let bind_tycons (env : t) (name, tspec) =
-    {env with tycon_env = Env.String.bind env.tycon_env (name,  tspec)}
+    {env with tycon_env = Env.String.bind env.tycon_env (name, (None, tspec))}
   let bind_module (env : t) (name, module_t) =
     {env with module_env = Env.String.bind env.module_env (name, (None, module_t))}
 

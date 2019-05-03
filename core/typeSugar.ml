@@ -1385,7 +1385,7 @@ type context = FrontendTypeEnv.t = {
      type inference.  Instead, we use it to resolve references
      introduced here to aliases defined in the prelude such as "Page"
      and "Formlet". *)
-  tycon_env : FrontendTypeEnv.tycon_environment ;
+  tycon_env : FrontendTypeEnv.qual_tycon_environment ;
 
   (* the current effects *)
   effect_row : Types.row
@@ -1403,7 +1403,7 @@ let bind_var context (v, t) = {context with var_env = Env.bind context.var_env (
 let unbind_var context v = {context with var_env = Env.unbind context.var_env v}
 
 
-let bind_tycon context (v, t) = {context with tycon_env = Env.bind context.tycon_env (v,t)}
+let bind_tycon = FrontendTypeEnv.bind_tycons
 let bind_effects context r = {context with effect_row = r}
 
 let type_section context = function
@@ -3996,28 +3996,34 @@ and type_binding : context -> binding -> binding * context * usagemap =
           Exp (erase e), empty_context, usages e
       | Handler _
       | AlienBlock _ -> assert false
-      | Module (name, _, bindings) ->
+      | Module (module_name, _, bindings) ->
+         Debug.print ("TypeSugar: before traversing module " ^ module_name );
          let module_ctx, bindings, usage_builder = type_bindings context bindings in
          (* FIXME: This is unnecessary work, since Env is using a StringMap internally. Should we give Env the ability to expose the StringMap? *)
-         let env_to_stringmap1 env =
-           Env.fold (fun name (_, v) map ->
-               StringMap.add name v map
-             ) env StringMap.empty in
-         let env_to_stringmap2 env =
-           Env.fold (fun name v map ->
-               StringMap.add name v map
+         Debug.print ("TypeSugar: finished traversing module " ^ module_name ^ ". Its fields are:");
+         Env.iter (fun n _ -> Debug.print n) module_ctx.var_env;
+         let env_to_module_component env =
+           Env.fold (fun name (orig, v) map ->
+               match orig with
+                 | None -> StringMap.add name v map
+                 | Some _ ->
+                    (* If a binding comes from an open,
+                       it should not become part of the module signature *)
+                    (*prerr_endline ("ignoring the folling in module " ^ module_name ^ ":" ^ name);*)
+                    map
              ) env StringMap.empty in
          let module_type : Types.module_t = {
-             Types.tycons  = env_to_stringmap2 module_ctx.tycon_env ;
-             Types.fields  = env_to_stringmap1 module_ctx.var_env ;
-             Types.modules = env_to_stringmap1 module_ctx.module_env ;
+             Types.tycons  = env_to_module_component module_ctx.tycon_env ;
+             Types.fields  = env_to_module_component module_ctx.var_env ;
+             Types.modules = env_to_module_component module_ctx.module_env ;
          } in
-         let context' = {empty_context with module_env = Env.bind Env.empty (name, (None, module_type)) } in
+         let context' =
+           FrontendTypeEnv.bind_module empty_context (module_name, module_type) in
          let module_usages = usage_builder StringMap.empty in
-          Module (name, Some module_type, bindings), context', module_usages
+          Module (module_name, Some module_type, bindings), context', module_usages
       | Import module_path ->
          let full_path, _ = resolve_qualified_module_name pos context module_path in
-         let context' = FrontendTypeEnv.open_module module_path context in
+         let context' = FrontendTypeEnv.open_module module_path context empty_context in
          Import full_path, context', StringMap.empty
     in
       WithPos.make ~pos typed, ctxt, usage

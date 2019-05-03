@@ -32,23 +32,23 @@ val listu :
 class transform : FrontendTypeEnv.t ->
 object ('self)
   val var_env : FrontendTypeEnv.qual_var_environment
-  val tycon_env : FrontendTypeEnv.tycon_environment
+  val tycon_env : FrontendTypeEnv.qual_tycon_environment
   val effect_row : Types.row
 
   method get_env         : unit -> FrontendTypeEnv.t
   method get_var_env     : unit -> FrontendTypeEnv.qual_var_environment
   method get_module_env  : unit -> FrontendTypeEnv.qual_module_environment
-  method get_tycon_env   : unit -> FrontendTypeEnv.tycon_environment
+  method get_tycon_env   : unit -> FrontendTypeEnv.qual_tycon_environment
   method get_formlet_env : unit -> FrontendTypeEnv.qual_var_environment
 
   method backup_envs     :   FrontendTypeEnv.qual_var_environment
                            * FrontendTypeEnv.qual_module_environment
-                           * FrontendTypeEnv.tycon_environment
+                           * FrontendTypeEnv.qual_tycon_environment
                            * FrontendTypeEnv.qual_var_environment
                            * Types.row
   method restore_envs    :  (   FrontendTypeEnv.qual_var_environment
                               * FrontendTypeEnv.qual_module_environment
-                              * FrontendTypeEnv.tycon_environment
+                              * FrontendTypeEnv.qual_tycon_environment
                               * FrontendTypeEnv.qual_var_environment
                               * Types.row)
                             -> 'self

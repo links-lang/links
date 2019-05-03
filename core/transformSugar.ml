@@ -152,7 +152,7 @@ class transform (initial_env : FrontendTypeEnv.t) =
         FrontendTypeEnv.effect_row }
     method get_var_env : unit -> FrontendTypeEnv.qual_var_environment = fun () -> var_env
     method get_module_env :  unit -> FrontendTypeEnv.qual_module_environment = fun () -> module_env
-    method get_tycon_env : unit -> FrontendTypeEnv.tycon_environment = fun () -> tycon_env
+    method get_tycon_env : unit -> FrontendTypeEnv.qual_tycon_environment = fun () -> tycon_env
     method get_formlet_env : unit -> FrontendTypeEnv.qual_var_environment = fun () -> formlet_env
 
 
@@ -174,7 +174,7 @@ class transform (initial_env : FrontendTypeEnv.t) =
       {< module_env >}
 
     method bind_tycon name tycon =
-      {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
+      {< tycon_env = TyEnv.bind tycon_env (name, (None, tycon)) >}
 
     method lookup_type : QualifiedName.t -> Types.datatype = fun var ->
       FrontendTypeEnv.lookup_variable (o#get_env ()) var

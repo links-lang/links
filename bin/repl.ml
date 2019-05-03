@@ -76,7 +76,7 @@ let rec directives
     (ignore_envs
        (fun _ ->
           Env.String.fold
-            (fun k s () ->
+            (fun k (_, s) () ->
                Printf.fprintf stderr "typename %s = %s\n" k
                  (Types.string_of_tycon_spec s))
             (Lib.typing_env.FrontendTypeEnv.tycon_env) ();
@@ -107,7 +107,7 @@ let rec directives
     ((fun envs _ ->
         let tycon_env = envs.Evaluation_env.tyenv.FrontendTypeEnv.tycon_env in
         StringSet.iter (fun k ->
-                          let s = Env.String.lookup tycon_env k in
+                          let (_, s) = Env.String.lookup tycon_env k in
                             Printf.fprintf stderr " %s = %s\n" k
                               (Types.string_of_tycon_spec s))
           (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.FrontendTypeEnv.tycon_env));
@@ -209,7 +209,7 @@ let evaluate_parse_result envs parse_result =
         let valenv = result_env.Evaluation_env.venv in
 
           Env.String.fold (* TBD: Make Env.String.foreach. *)
-            (fun name spec () ->
+            (fun name (_, spec) () ->
                   print_endline (name ^" = "^
                                 Types.string_of_tycon_spec spec); ())
             (tyenv'.FrontendTypeEnv.tycon_env)

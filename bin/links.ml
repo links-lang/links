@@ -29,6 +29,7 @@ let prelude_evaluation_environment () =
       Evaluation_env.tyenv =
         FrontendTypeEnv.open_module
           (QualifiedName.of_name Lib.BuiltinModules.lib)
+          Lib.typing_env
           Lib.typing_env;
       Evaluation_env.nenv = Lib.nenv} in
 
@@ -40,6 +41,7 @@ let prelude_evaluation_environment () =
   let prelude_opened_tyenv =
     FrontendTypeEnv.open_module
       (QualifiedName.of_name Lib.BuiltinModules.prelude)
+      patched_tyenv
       patched_tyenv in
 
   {prelude_eval_env with Evaluation_env.tyenv = prelude_opened_tyenv}
