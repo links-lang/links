@@ -281,7 +281,7 @@ struct
     fun pick_orders ->
       function
         | (_, _, os) :: _ -> List.length (pick_orders os)
-        | [] -> assert false
+        | [] -> 0
 
   let ordered_query v =
     let ss = query v in
