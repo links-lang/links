@@ -488,4 +488,4 @@ Examples
 ./examples/handlers/tests.links
 filemode : true
 stdout : () : ()
-ignore : Depends on modules (flags : --enable-handlers -m --path=examples/handlers)
+args : --enable-handlers --path=examples/handlers)
