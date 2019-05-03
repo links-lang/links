@@ -1138,7 +1138,12 @@ let rec concrete_field_spec f =
             | `Var _ -> f
             | `Body f -> concrete_field_spec f
         end
+    (* The following may be tempting, but can lead to an infinite loop *)
+    (* | `Present t -> `Present (concrete_type IntSet.empty t) *)
     | _ -> f
+
+let concrete_fields =
+  FieldEnv.map concrete_field_spec
 
 let free_type_vars, free_row_type_vars, free_tyarg_vars =
   let module S = TypeVarSet in
@@ -1298,13 +1303,7 @@ let is_empty_row : row -> bool =
   in
     is_empty TypeVarSet.empty
 
-(*
-  get rid of any `Body constructors inside a presence flag
-*)
-let normalise_field_spec = concrete_field_spec
 
-let normalise_fields =
-  FieldEnv.map normalise_field_spec
 
 type var_map = (bool * meta_type_var) TypeVarMap.t
 
@@ -1458,7 +1457,7 @@ and flatten_row : row -> row = fun (field_env, row_var, dual) ->
         assert (is_flattened_row row');
         row' in
   let field_env, row_var, dual = flatten_row' IntMap.empty (field_env, row_var, dual) in
-  let field_env = normalise_fields field_env in
+  let field_env = concrete_fields field_env in
     field_env, row_var, dual
 
 (*
@@ -1496,24 +1495,22 @@ and unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) 
         assert (is_flattened_row (fst row'));
         row' in
   let (field_env, row_var, dual), rec_row = unwrap_row' IntMap.empty (field_env, row_var, dual) in
-  let field_env = normalise_fields field_env in
+  let field_env = concrete_fields field_env in
     (field_env, row_var, dual), rec_row
 
 
-let dual_type = dual_type TypeVarMap.empty
-let dual_row = dual_row TypeVarMap.empty
 
 
 (* TODO: tidy up all this normalisation / concretisation code *)
-let rec normalise_datatype rec_names t =
+and normalise_datatype rec_names t =
   let nt = normalise_datatype rec_names in
-  let nr = normalise_row in
+  let nr = normalise_row rec_names in
     hoist_quantifiers t;
     match t with
       | `Not_typed
       | `Primitive _             -> t
       | `Function (f, m, t)      ->
-          `Function (nt f, nr m, nt t)
+         `Function (nt f, nr m, nt t)
       | `Lolli (f, m, t)         ->
            `Lolli (nt f, nr m, nt t)
       | `Record row              -> `Record (nr row)
@@ -1553,31 +1550,60 @@ let rec normalise_datatype rec_names t =
       | `Output (t, s)        -> `Output (nt t, nt s)
       | `Select r             -> `Select (nr r)
       | `Choice r             -> `Choice (nr r)
-      | `Dual s               -> dual_type (nt s)
+      | `Dual s               -> dual_type TypeVarMap.empty (nt s)
       | `End                  -> `End
 
-and normalise_row row =
+and normalise_row rec_names row =
   (* WARNING:
 
      We cannot use unwrap_row here, as that would lead to
      non-termination.
   *)
   let fields, row_var, dual = flatten_row row in
+  let closed = is_closed_row (fields, row_var, dual) in
   let fields =
-    FieldEnv.map
-      (fun f -> normalise_field_spec f)
+    FieldEnv.fold
+      (fun l f fields ->
+        match f with
+        (* strip absent fields from closed rows *)
+        | `Absent when closed -> fields
+        | _ -> FieldEnv.add l (normalise_field_spec rec_names f) fields)
       fields
+      FieldEnv.empty
   in
     (fields, row_var, dual)
 and normalise_type_arg rec_names type_arg =
   match type_arg with
     | `Type t -> `Type (normalise_datatype rec_names t)
-    | `Row row -> `Row (normalise_row row)
-    | `Presence f -> `Presence (normalise_field_spec f)
+    | `Row row -> `Row (normalise_row rec_names row)
+    | `Presence f -> `Presence (normalise_field_spec rec_names f)
+
+(*
+  get rid of any `Body constructors inside a presence flag
+*)
+and normalise_field_spec rec_names f =
+  match f with
+    | `Var point ->
+        begin
+          match Unionfind.find point with
+            | `Var _ -> f
+            | `Body f -> normalise_field_spec rec_names f
+        end
+    | `Present t -> `Present (normalise_datatype rec_names t)
+    | _ -> f
+
+and normalise_fields rec_names =
+  FieldEnv.map (normalise_field_spec rec_names)
+
+
+let dual_type = dual_type TypeVarMap.empty
+let dual_row = dual_row TypeVarMap.empty
+
 
 let concrete_type = concrete_type IntSet.empty
 
 let normalise_datatype = normalise_datatype IntSet.empty
+let normalise_row = normalise_row IntSet.empty
 
 (** building quantified types *)
 
