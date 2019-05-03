@@ -756,12 +756,22 @@ struct
                     Instantiate.ArityMismatch (expected, provided) ->
                       raise (Errors.TypeApplicationArityMismatch { pos; name; expected; provided }) in
 
+      let is_pure_primitive_var qname =
+        (* Note that at this point every variable x that refers to
+           something in Lib will have been expanded to Lib.x.
+           This is independen from the fact that in this module,
+           we *translate* all variables of the form Lib.x to
+           just x, rather than projection x from the Lib module
+           record (as for all other modules) *)
+        (QualifiedName.head qname = Lib.BuiltinModules.lib &&
+           Lib.is_pure_primitive (QualifiedName.unqualify qname)) in
+
       let rec is_pure_primitive e =
         let open Sugartypes in
         match WithPos.node e with
           | TAbstr (_, e)
           | TAppl (e, _) -> is_pure_primitive e
-          | Var f when Lib.is_pure_primitive (QualifiedName.unqualify f) -> true (* TODO FIXME *)
+          | Var f -> is_pure_primitive_var f
           | _ -> false in
 
       let eff = lookup_effects env in
@@ -821,10 +831,10 @@ struct
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
-          | FnAppl ({node=Var f; _}, es) when Lib.is_pure_primitive (QualifiedName.unqualify f) ->
+          | FnAppl ({node=Var f; _}, es) when is_pure_primitive_var f ->
               cofv (I.apply_pure (I.var (lookup_variable_name_and_type (QualifiedName.unqualify f) env), evs es))
           | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
-               when Lib.is_pure_primitive (QualifiedName.unqualify f) ->
+               when is_pure_primitive_var f ->
               cofv (I.apply_pure (instantiate (QualifiedName.unqualify f) tyargs, evs es))
           | FnAppl (e, es) when is_pure_primitive e ->
               cofv (I.apply_pure (ev e, evs es))
