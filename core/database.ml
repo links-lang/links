@@ -3,7 +3,7 @@ open CommonTypes
 open Utility
 
 type database = Value.database
-exception Runtime_error = Errors.Runtime_error
+let runtime_error str = (Errors.runtime_error str)
 
 class virtual db_args from_str = object
   val strval : string = from_str
@@ -28,15 +28,18 @@ let value_of_db_string (value:string) t =
     | `Primitive Primitive.Float ->
        if value = "" then Value.box_float 0.00      (* HACK HACK *)
        else Value.box_float (float_of_string value)
-    | t -> failwith ("value_of_db_string: unsupported datatype: '" ^
-                        Types.string_of_datatype t ^"'")
+    | t -> raise (runtime_error
+      ("value_of_db_string: unsupported datatype: '" ^
+        Types.string_of_datatype t ^"'"))
 
 let execute_command  (query:string) (db: database) : Value.t =
   let result = (db#exec query) in
     begin
       match result#status with
         | `QueryOk -> `Record []
-        | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg))
+        | `QueryError msg ->
+            raise (runtime_error
+              ("An error occurred executing the query " ^ query ^ ": " ^ msg))
     end
 
 let execute_insert (table_name, field_names, vss) db =
@@ -56,9 +59,11 @@ let execute_insert_returning (table_name, field_names, vss, returning) db =
                      begin
                        match rows with
                          | [[id]] -> Value.box_int (int_of_string id)
-                         | _ -> raise (Runtime_error ("Returned the wrong number of results executing " ^ q))
+                         | _ ->
+                             raise (runtime_error ("Returned the wrong number of results executing " ^ q))
                      end
-               | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg))
+               | `QueryError msg ->
+                   raise (runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg))
             end
       | q :: qs ->
         let _unit = execute_command q db in
@@ -88,11 +93,12 @@ let result_signature field_types result =
             (name, (List.assoc name field_types, i)) :: fields,
             null_query && is_null(name)
           else
-            failwith("Column " ^ name ^
-                        " had no type info in query's type spec: " ^
-                        mapstrcat ", " (fun (name, t) -> name ^ ":" ^
-                          Types.string_of_datatype t)
-                        field_types)
+            raise (runtime_error
+              ("Column " ^ name ^
+               " had no type info in query's type spec: " ^
+               mapstrcat ", " (fun (name, t) -> name ^ ":" ^
+                 Types.string_of_datatype t)
+               field_types))
     in let rs, null_query = rs 0
     in if null_query then [] else rs
 
@@ -116,7 +122,9 @@ let execute_select_result
        | `QueryOk ->
            result,
        result_signature field_types result
-       | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+       | `QueryError msg ->
+           raise (runtime_error
+             ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
 
 
 let build_result ((result:Value.dbvalue),rs) =
@@ -136,4 +144,5 @@ let execute_untyped_select (query:string) (db: database) : Value.t =
     (match result#status with
        | `QueryOk ->
            `List (map (fun row -> `List (map Value.box_string row)) result#get_all_lst)
-       | `QueryError msg -> raise (Runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+       | `QueryError msg ->
+           raise (runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))

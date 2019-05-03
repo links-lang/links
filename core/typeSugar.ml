@@ -7,7 +7,7 @@ open SourceCode
 open SourceCode.WithPos
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"typeSugar.ml" ~message)
+  Errors.internal_error ~filename:"typeSugar.ml" ~message
 
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
@@ -3899,7 +3899,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               match dt' with
                 | Some dt ->
                     bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
-                | None -> internal_error "typeSugar.ml: unannotated type"
+                | None -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
           (Typenames ts, env, StringMap.empty)
       | Infix -> Infix, empty_context, StringMap.empty
@@ -4000,7 +4000,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
            Types.make_type_unl a
          else
            Gripers.non_linearity pos uses x a;
-       let (_, grab_ty, _) = type_check context (var "receive") in
+       let grab_ty = (Env.lookup context.var_env "receive") in
        let tyargs =
          match Types.concrete_type grab_ty with
          | `ForAll (qs, _t) ->
@@ -4030,7 +4030,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
              (t, ctype);
        let (p, t, u') = with_channel c s (type_cp (bind_var context (c, s)) p) in
 
-       let (_, give_ty, _) = type_check context (var "send") in
+       let give_ty = (Env.lookup context.var_env "send") in
        let tyargs =
          match Types.concrete_type give_ty with
          | `ForAll (qs, _t) ->

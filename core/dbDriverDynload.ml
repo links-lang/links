@@ -1,5 +1,7 @@
 let () = Findlib.init ()
 
+let error msg = raise (Errors.dynlink_error msg)
+
 (** Convention: For a driver named mydriver, we expect the corresponding
      library file to be named links_mydriver.cma or links_myriver.cmxs **)
 let driver_file_name driver_name =
@@ -55,19 +57,19 @@ let search_path_generators = [
 let get_dependencies driver_name =
   let unyojson_string = function
     | `String s -> s
-    | _ -> failwith "ill-formed dependency JSON" in
+    | _ -> error "ill-formed dependency JSON" in
   let unyojson_list_of_strings = function
     | `List json -> List.map unyojson_string json
-    | _ -> failwith "ill-formed dependency JSON" in
+    | _ -> error "ill-formed dependency JSON" in
   let unyojson_deps   = function
     | `List json -> List.map (function
                         | `Assoc map -> {
                             opam_package = unyojson_string (List.assoc "opam_package" map);
                             files = unyojson_list_of_strings (List.assoc "files" map);
                           }
-                        | _ -> failwith "ill-formed dependency JSON"
+                        | _ -> error "ill-formed dependency JSON"
                       ) json
-    | _ -> failwith "ill-formed dependency JSON" in
+    | _ -> error "ill-formed dependency JSON" in
 
   let rec getdeps = function
     | [] -> raise No_such_file
@@ -86,7 +88,7 @@ let get_dependencies driver_name =
   with No_such_file ->
     Debug.print ("Potential paths for json dependency file we've  tried:");
     List.iter (Debug.print) dep_files;
-    failwith "Could not find dependency json file"
+    error "Could not find dependency json file"
 
 
 
@@ -115,14 +117,14 @@ let dynload_first_existing_file files =
 let load_dependency driver_name dep =
     let folder = match opam_lib_folder_for_package dep.opam_package with
       | Some f -> f
-      | None -> failwith (Printf.sprintf "Driver %s depends on package %s, but it is not intalled" driver_name dep.opam_package) in
+      | None -> error (Printf.sprintf "Driver %s depends on package %s, but it is not intalled" driver_name dep.opam_package) in
     List.iter (fun depfile ->
         let file = Dynlink.adapt_filename (depfile ^ ".cma") in
         let path = Filename.concat folder file in
         try
           dynload_first_existing_file [path]
-        with | No_such_file -> failwith (Printf.sprintf "Could not find file %s, which is a dependency of driver %s"  path  driver_name)
-             | Dynlink_Error (f, e) -> failwith (Printf.sprintf "Error while loading dependency file %s:\n%s" f (Dynlink.error_message e))
+        with | No_such_file -> error (Printf.sprintf "Could not find file %s, which is a dependency of driver %s"  path  driver_name)
+             | Dynlink_Error (f, e) -> error (Printf.sprintf "Error while loading dependency file %s:\n%s" f (Dynlink.error_message e))
       ) dep.files
 
 let load_driver driver_name =
@@ -133,8 +135,8 @@ let load_driver driver_name =
   with | No_such_file ->
           Debug.print ("Potential paths for driver file we've tried:");
           List.iter (Debug.print) driver_files;
-          failwith (Printf.sprintf "Could not find file for driver %s" driver_name)
-       | Dynlink_Error (f, e) -> failwith (Printf.sprintf "Error while loading driver file %s:\n%s" f (Dynlink.error_message e))
+          error (Printf.sprintf "Could not find file for driver %s" driver_name)
+       | Dynlink_Error (f, e) -> error (Printf.sprintf "Error while loading driver file %s:\n%s" f (Dynlink.error_message e))
 
 let load driver_name =
   let dependencies = get_dependencies driver_name in

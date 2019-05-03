@@ -38,7 +38,7 @@ let try_parse_file filename =
 
   (* Loop through, trying to open the module with each path *)
   let rec loop = (function
-    | [] -> failwith ("Could not find file " ^ filename)
+    | [] -> raise (Errors.module_error ("Could not find file " ^ filename))
     | x :: xs ->
         let candidate_filename =
           if x = "" then filename else (x ^ Filename.dir_sep ^ filename) in
@@ -288,7 +288,8 @@ let shadow_open module_plain module_fqn module_table term_ht type_ht =
     let shadowed_type_ht =
         shadow_binding module_plain module_fqn shadowed_type_ht in
     (shadowed_term_ht, shadowed_type_ht)
-  with Notfound.NotFound _ -> failwith ("Error: Trying to import nonexistent module " ^ module_plain)
+  with Notfound.NotFound _ ->
+    raise (Errors.module_error ("Error: Trying to import nonexistent module " ^ module_plain))
 
 let lst_to_path = String.concat module_sep
 

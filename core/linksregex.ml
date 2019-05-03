@@ -1,6 +1,9 @@
 open Regex
 open Utility
 
+let internal_error message =
+  Errors.internal_error ~filename:"linksregex.ml" ~message
+
 let unit = `Record []
 
 module type Links_type =
@@ -28,8 +31,8 @@ struct
     | `Variant ("Star", _)     -> Star
     | `Variant ("Plus", _)     -> Plus
     | `Variant ("Question", _) -> Question
-    | v                        -> failwith ("Internal error: attempt to treat "
-                                           ^ Value.show v ^ " as a repeat value")
+    | v                        ->
+        raise (internal_error ("Attempt to treat " ^ Value.show v ^ " as a repeat value"))
   and ofLinksNGroups r = ofLinks r, 0
 end
 
@@ -100,8 +103,9 @@ struct
     ->
       let (re, count) = ofLinksCount count re in
       Replace(re, Value.unbox_string tmpl), count
-      | v  -> failwith ("Internal error: attempt to treat "
-            ^ Value.show v ^ " as a regex value") in
+      | v  ->
+          raise (internal_error ("Attempt to treat " ^
+            Value.show v ^ " as a regex value")) in
     ofLinksCount 0 res
 
 

@@ -51,7 +51,8 @@ struct
             else if CharMap.mem ch words then
               CharMap.find ch words
             else
-              failwith("Internal error: unknown symbol character: "^String.make 1 ch))
+              raise (Errors.internal_error ~filename:"js.ml"
+                ~message:("Unknown symbol character: "^String.make 1 ch)))
          (Utility.explode name))
         (* TBD: it would be better if this split to chunks maximally matching
            (\w+)|(\W)
