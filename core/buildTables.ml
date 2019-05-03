@@ -19,7 +19,10 @@ struct
     | Fun def -> add fs def
     | Rec defs -> List.iter (add fs) defs
     | Alien _ -> ()
-    | Module _ -> failwith "Not implemented"
+    | Module _ ->
+        raise (Errors.internal_error
+          ~filename:"buildTables.ml"
+          ~message:"Module tables not implemented")
 
   let bindings fs = List.iter (binding fs)
 
