@@ -35,8 +35,15 @@ object (o : 'self_type)
   method unbind f =
     {< extra_env = StringMap.remove f extra_env >}
 
-  method! phrasenode = function
-    | TAppl ({node=Var name;_} as phn, tyargs) when StringMap.mem (QualifiedName.unqualify name) extra_env ->
+  method! phrasenode =
+    let qual_fun_has_extras qname =
+      (* If we see a qualified name, it cannot possibly refer to a function
+           from the same block of mutually recursive function, if we are in one *)
+      not (QualifiedName.is_qualified qname) &&
+        StringMap.mem (QualifiedName.unqualify qname) extra_env
+    in
+    function
+    | TAppl ({node=Var name;_} as phn, tyargs) when qual_fun_has_extras name ->
         let extras = StringMap.find (QualifiedName.unqualify name) extra_env in
         let tyargs = add_extras (extras, tyargs) in
           super#phrasenode (TAppl (phn, tyargs))
