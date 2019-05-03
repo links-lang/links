@@ -33,12 +33,16 @@ let cols_of_phrase key : string list =
   let open Sugartypes in
   let var_name (var : phrase) =
     match WithPos.node var with
-    | Var name -> QualifiedName.unqualify name
+    | Var name ->
+       if QualifiedName.is_qualified name then
+         failwith "Must not use qualified names in lens expression"
+       else
+         QualifiedName.unqualify name
     | _ -> failwith "Expected a `Var type"
   in
   match WithPos.node key with
   | TupleLit keys -> List.map ~f:var_name keys
-  | Var name -> [QualifiedName.unqualify name]
+  | Var _ -> [var_name key]
   | _ -> failwith "Expected a tuple or a variable."
 
 let rec lens_sugar_phrase_of_sugar p =
@@ -56,6 +60,10 @@ let rec lens_sugar_phrase_of_sugar p =
       LPS.UnaryAppl (op, p)
   | S.Constant c ->
       LPS.Constant (Lens_value_conv.lens_phrase_value_of_constant c)
-  | S.Var v -> LPS.Var (QualifiedName.unqualify v)
+  | S.Var v ->
+     if QualifiedName.is_qualified v then
+       failwith "Must not use qualified names in lens expression"
+     else
+       LPS.Var (QualifiedName.unqualify v)
   | _ -> failwith "Unsupported sugar phrase." )
   |> fun v -> (pos, v)
