@@ -5,6 +5,7 @@ open Sugartypes
 open SugarConstructors.SugartypesPositions
 open SourceCode
 open SourceCode.WithPos
+open FrontendTypeEnv
 
 let internal_error message =
   raise (Errors.internal_error ~filename:"typeSugar.ml" ~message)
@@ -24,12 +25,10 @@ module Utils : sig
 
   val instantiate_typ : Types.datatype -> (Types.type_arg list * Types.datatype)
 
-  (* FIXME: Check if we need to pass the whole environment here, too, so that we can respect variables bound in module env *)
-  val instantiate : FrontendTypeEnv.qual_var_environment -> string ->
+  val instantiate : qual_var_environment -> string ->
                     (Types.type_arg list * Types.datatype)
 
-  (* FIXME: Check if we need to pass the whole environment here, too, so that we can respect variables bound in module env *)
-  val generalise : FrontendTypeEnv.qual_var_environment -> Types.datatype ->
+  val generalise : qual_var_environment -> Types.datatype ->
                    ((Types.quantifier list*Types.type_arg list) * Types.datatype)
 
   (* val is_pure : phrase -> bool *)
@@ -1374,22 +1373,7 @@ end
       die pos ("Unknown module " ^ QualifiedName.canonical_name moodule)
 end
 
-type context = FrontendTypeEnv.t = {
-  (* mapping from variables to type schemes *)
-  var_env   : FrontendTypeEnv.qual_var_environment ;
-
-  module_env : FrontendTypeEnv.qual_module_environment;
-
-  (* mapping from type alias names to the types they name.  We don't
-     use this to resolve aliases in the code, which is done before
-     type inference.  Instead, we use it to resolve references
-     introduced here to aliases defined in the prelude such as "Page"
-     and "Formlet". *)
-  tycon_env : FrontendTypeEnv.qual_tycon_environment ;
-
-  (* the current effects *)
-  effect_row : Types.row
-}
+type context = FrontendTypeEnv.t
 
 let empty_context eff =
   { var_env   = Env.empty;
@@ -1397,11 +1381,10 @@ let empty_context eff =
     module_env = Env.empty;
     effect_row = eff }
 
-
-(* The binding functions must not be used for variable get in scope because they are inside of a module that's opened/imported *)
-let bind_var context (v, t) = {context with var_env = Env.bind context.var_env (v, (None, t))}
+(* The binding functions must not be used for variable get in scope because they
+   are inside of a module that's opened/imported *)
+let bind_var = bind_var
 let unbind_var context v = {context with var_env = Env.unbind context.var_env v}
-
 
 let bind_tycon = FrontendTypeEnv.bind_tycons
 let bind_effects context r = {context with effect_row = r}
@@ -1779,7 +1762,7 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
     else
       List.map fst (StringMap.bindings binderss)
 
-let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv.qual_var_environment * Types.datatype =
+let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * qual_var_environment * Types.datatype =
   let make_singleton_row =
     match closed with
       | `Closed -> Types.make_singleton_closed_row
@@ -1795,7 +1778,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
      using types from the inner type.
 
   *)
-  let rec type_pattern {node = pattern; pos = pos'} : Pattern.with_pos * FrontendTypeEnv.qual_var_environment * (Types.datatype * Types.datatype) =
+  let rec type_pattern {node = pattern; pos = pos'} : Pattern.with_pos * qual_var_environment * (Types.datatype * Types.datatype) =
     let _UNKNOWN_POS_ = "<unknown>" in
     let tp = type_pattern in
     let bind env (n, t) = Env.bind env (n, (None, t)) in
@@ -1807,7 +1790,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
     and pos ({pos = p;_},_,_) = Position.Resolved.resolve p |> Position.Resolved.source_expression
     and (++) = Env.extend in
     let (p, env, (outer_type, inner_type)) :
-      Pattern.t * FrontendTypeEnv.qual_var_environment * (Types.datatype * Types.datatype) =
+      Pattern.t * qual_var_environment * (Types.datatype * Types.datatype) =
       let open Pattern in
       match pattern with
       | Nil ->
@@ -1855,7 +1838,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
         Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
       | Effect (name, ps, k) ->
          (* Auxiliary machinery for typing effect patterns *)
-         let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * FrontendTypeEnv.qual_var_environment * (Types.datatype * Types.datatype) =
+         let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * qual_var_environment * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
              let domain   = Types.fresh_type_variable (lin_unl, res_any) in
              let codomain = Types.fresh_type_variable (lin_unl, res_any) in
@@ -1977,7 +1960,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
     let pos, env, (outer_type, _) = type_pattern pattern in
     pos, env, outer_type
 
-let rec pattern_env : Pattern.with_pos -> FrontendTypeEnv.qual_var_environment =
+let rec pattern_env : Pattern.with_pos -> qual_var_environment =
   let bind env (v, t) = Env.bind env (v, (None, t)) in
   fun { node = p; _} -> let open Pattern in
   match p with
@@ -2021,7 +2004,7 @@ let update_pattern_vars env =
          | _ -> super#patternnode n
  end)#pattern
 
-let rec extract_formlet_bindings : phrase -> FrontendTypeEnv.qual_var_environment = fun p ->
+let rec extract_formlet_bindings : phrase -> qual_var_environment = fun p ->
   match p.node with
   | FormBinding (_, pattern) -> pattern_env pattern
   | Xml (_, _, _, children) ->
@@ -2168,10 +2151,10 @@ let resolve_qualified_name pos context qname
 
 
 let resolve_qualified_variable_name pos context qname : (QualifiedName.t * Types.datatype) =
-  resolve_qualified_name pos context qname context.FrontendTypeEnv.var_env (fun moodule -> moodule.Types.fields) Gripers.unknown_variable
+  resolve_qualified_name pos context qname context.var_env (fun moodule -> moodule.Types.fields) Gripers.unknown_variable
 
 let resolve_qualified_module_name pos context qname : (QualifiedName.t * Types.module_t) =
-  resolve_qualified_name pos context qname context.FrontendTypeEnv.module_env (fun moodule -> moodule.Types.modules) Gripers.unknown_module
+  resolve_qualified_name pos context qname context.module_env (fun moodule -> moodule.Types.modules) Gripers.unknown_module
 
 
 
@@ -3153,7 +3136,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               Conditional (erase i, erase t, erase e), (typ t), merge_usages [usages i; usage_compat [usages t; usages e]]
         | Block (bindings, e) ->
             let context', bindings, usage_builder = type_bindings context bindings in
-            let e = type_check (FrontendTypeEnv.extend_typing_environment context context') e in
+            let e = type_check (extend_typing_environment context context') e in
             Block (bindings, erase e), typ e, usage_builder (usages e)
         | Regex r ->
             Regex (type_regex context r),
@@ -3345,7 +3328,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              | None -> (henv, [], descr)
            in
            let type_cases val_cases eff_cases =
-             let bind = FrontendTypeEnv.var_env_bind_var in
+             let bind = var_env_bind_var in
              let wild_row () =
                let fresh_row = Types.make_empty_open_row (lin_unl, res_any) in
                allow_wild fresh_row
@@ -3493,7 +3476,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (* Type operation clause bodies and resumptions *)
              let eff_cases =
                List.fold_right
-                 (fun (pat, (kpat : Pattern.with_pos * FrontendTypeEnv.qual_var_environment * Types.datatype), body) cases ->
+                 (fun (pat, (kpat : Pattern.with_pos * qual_var_environment * Types.datatype), body) cases ->
                    let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
@@ -3709,7 +3692,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
     let exp_pos (p,_,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
 
-    let empty_context = empty_context (context.FrontendTypeEnv.effect_row) in
+    let empty_context = empty_context (context.effect_row) in
 
     let typed, ctxt, usage = match def with
       | Val (pat, (_, body), location, datatype) ->
@@ -3818,7 +3801,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                    lin,
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
                    location, t),
-             FrontendTypeEnv.bind_var empty_context (name, ft),
+             bind_var empty_context (name, ft),
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
       | Funs defs ->
           (*
@@ -3997,11 +3980,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
       | Handler _
       | AlienBlock _ -> assert false
       | Module (module_name, _, bindings) ->
-         Debug.print ("TypeSugar: before traversing module " ^ module_name );
          let module_ctx, bindings, usage_builder = type_bindings context bindings in
-         (* FIXME: This is unnecessary work, since Env is using a StringMap internally. Should we give Env the ability to expose the StringMap? *)
-         Debug.print ("TypeSugar: finished traversing module " ^ module_name ^ ". Its fields are:");
-         Env.iter (fun n _ -> Debug.print n) module_ctx.var_env;
          let env_to_module_component env =
            Env.fold (fun name (orig, v) map ->
                match orig with
@@ -4018,12 +3997,12 @@ and type_binding : context -> binding -> binding * context * usagemap =
              Types.modules = env_to_module_component module_ctx.module_env ;
          } in
          let context' =
-           FrontendTypeEnv.bind_module empty_context (module_name, module_type) in
+           bind_module empty_context (module_name, module_type) in
          let module_usages = usage_builder StringMap.empty in
           Module (module_name, Some module_type, bindings), context', module_usages
       | Import module_path ->
          let full_path, _ = resolve_qualified_module_name pos context module_path in
-         let context' = FrontendTypeEnv.open_module module_path context empty_context in
+         let context' = open_module module_path context empty_context in
          Import full_path, context', StringMap.empty
     in
       WithPos.make ~pos typed, ctxt, usage
@@ -4052,8 +4031,8 @@ and type_bindings (globals : context)  bindings =
   let tyenv, (bindings, uinf) =
     List.fold_left
       (fun (ctxt, (bindings, uinf)) (binding : binding) ->
-         let binding, ctxt', usage = type_binding (FrontendTypeEnv.extend_typing_environment globals ctxt) binding in
-         let result_ctxt = FrontendTypeEnv.extend_typing_environment ctxt ctxt' in
+         let binding, ctxt', usage = type_binding (extend_typing_environment globals ctxt) binding in
+         let result_ctxt = extend_typing_environment ctxt ctxt' in
          result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
       (empty_context globals.effect_row, ([], [])) bindings in
   let usage_builder body_usage =
@@ -4088,7 +4067,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
   let (p, t, u) = match p with
     | CPUnquote (bindings, e) ->
        let context', bindings, usage_builder = type_bindings context bindings in
-       let (e, t, u) = type_check (FrontendTypeEnv.extend_typing_environment context context') e in
+       let (e, t, u) = type_check (extend_typing_environment context context') e in
          if Settings.get_value endbang_antiquotes then
            unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
          CPUnquote (bindings, e), t, usage_builder u
@@ -4241,14 +4220,14 @@ struct
         (fun () ->
            "before type checking: \n"^ show_program (bindings, body));
       let tyenv', bindings, _ = type_bindings tyenv bindings in
-      let tyenv' = FrontendTypeEnv.normalise_typing_environment tyenv' in
+      let tyenv' = normalise_typing_environment tyenv' in
       if Settings.get_value check_top_level_purity then
         binding_purity_check bindings; (* TBD: do this only in web mode? *)
       let program, typ, tyenv' =
         match body with
         | None -> (bindings, None), Types.unit_type, tyenv'
         | Some body ->
-          let body, typ, _ = type_check (FrontendTypeEnv.extend_typing_environment tyenv tyenv') body in
+          let body, typ, _ = type_check (extend_typing_environment tyenv tyenv') body in
           let typ = Types.normalise_datatype typ in
           (bindings, Some body), typ, tyenv' in
       Debug.if_set show_post_sugar_typing
@@ -4266,7 +4245,7 @@ struct
       match sentence with
       | Definitions bindings ->
          let tyenv', bindings, _ = type_bindings tyenv bindings in
-         let tyenv' = FrontendTypeEnv.normalise_typing_environment tyenv' in
+         let tyenv' = normalise_typing_environment tyenv' in
          Definitions bindings, Types.unit_type, tyenv'
       | Expression body ->
         let body, t, _ = (type_check tyenv body) in

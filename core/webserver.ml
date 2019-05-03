@@ -10,7 +10,6 @@ let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
 let host_name = Basicsettings.Appserver.hostname
 let port = Basicsettings.Appserver.port
 
-
 module Trie =
 struct
   type ('a, 'b) t =

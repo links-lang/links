@@ -167,13 +167,10 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * subkind * meta_var
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
-  [@@deriving show]
+      [@@deriving show]
 
-
-
-
-and alias_type = quantifier list * typ
-and tycon_spec = [
+type alias_type = quantifier list * typ [@@deriving show]
+type tycon_spec = [
   | `Alias of alias_type
   | `Abstract of Abstype.t
   | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
@@ -196,9 +193,6 @@ let is_present =
   function
   | `Present _           -> true
   | (`Absent | `Var _) -> false
-
-
-
 
 
 let unbox_quantifiers = (!)

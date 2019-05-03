@@ -123,8 +123,8 @@ and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
 and quantifier = int * subkind * meta_var
 and type_arg =
-  [ `Type of typ | `Row of row | `Presence of field_spec ]
-  [@@deriving show]
+    [ `Type of typ | `Row of row | `Presence of field_spec ]
+    [@@deriving show]
 
 
 
