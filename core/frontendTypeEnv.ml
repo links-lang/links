@@ -122,7 +122,7 @@ let resolve_qualified_name
         | None ->
            raise (ModuleNotFound (QualifiedName.of_name first_module))
         | Some (orig_module, module_t) ->
-           traverse_submodules orig_module 0 remainder module_t
+           traverse_submodules orig_module 1 remainder module_t
       end
 
 
