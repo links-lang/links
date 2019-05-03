@@ -7,6 +7,18 @@ open Types
 open Utility
 open Proc
 
+(* Error functions *)
+let runtime_error msg = raise (Errors.runtime_error msg)
+
+let internal_error message =
+  Errors.internal_error ~filename:"lib.ml" ~message
+
+let runtime_type_error error =
+  internal_error
+    ("Runtime type error: " ^ error ^ ".\n" ^
+     "This should not happen if the type system / checker is correct. " ^
+     "Please file a bug report.")
+
 (* Alias environment *)
 module AliasEnv = Env.String
 
@@ -30,7 +42,7 @@ type located_primitive = [ `Client | `Server of primitive | primitive ]
 
 let mk_binop_fn impl unbox_fn constr = function
     | [x; y] -> constr (impl (unbox_fn x) (unbox_fn y))
-    | _ -> failwith "arity error in integer operation"
+    | _ -> raise (internal_error "arity error in integer operation")
 
 let int_op impl pure : located_primitive * Types.datatype * pure =
   (`PFun (fun _ -> mk_binop_fn impl Value.unbox_int (fun x -> `Int x))),
@@ -59,7 +71,7 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_pr
 
 let string_to_xml : Value.t -> Value.t = function
   | `String s -> `List [`XML (Value.Text s)]
-  | _ -> failwith "internal error: non-string value passed to xml conversion routine"
+  | _ -> raise (runtime_type_error "non-string value passed to xml conversion routine")
 
 (* The following functions expect 1 argument. Assert false otherwise. *)
 let char_test_op fn pure =
@@ -126,7 +138,10 @@ let rec equal l r =
           List.for_all (one_equal_all rfields) lfields && List.for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> equal_lists l r
-    | l, r ->  failwith ("Comparing "^ Value.string_of_value l ^" with "^ Value.string_of_value r ^" either doesn't make sense or isn't implemented")
+    | l, r ->
+        runtime_error
+          (Printf.sprintf "Comparing %s with %s which either does not make sense or isn't implemented."
+            (Value.string_of_value l) (Value.string_of_value r))
 and equal_lists l r =
   match l,r with
     | [], [] -> true
@@ -152,7 +167,7 @@ let rec less l r =
           | _::rest                -> compare_list rest in
           compare_list (combine lv rv)
     | `List (l), `List (r) -> less_lists (l,r)
-    | l, r ->  failwith ("Cannot yet compare "^ Value.string_of_value l ^" with "^ Value.string_of_value r)
+    | l, r ->  runtime_error ("Cannot yet compare "^ Value.string_of_value l ^" with "^ Value.string_of_value r)
 and less_lists = function
   | _, [] -> false
   | [], (_::_) -> true
@@ -175,11 +190,11 @@ let add_attribute : Value.t * Value.t -> Value.t -> Value.t =
     in let new_attr = match String.split_on_char ':' name with
           | [ n ] -> Value.Attr(n, value)
           | [ ns; n ] -> Value.NsAttr(ns, n, value)
-          | _ -> failwith ("Attribute-name con only contain one colon for namespacing. Multiple found: " ^ name)
+          | _ -> runtime_error ("Attribute-name con only contain one colon for namespacing. Multiple found: " ^ name)
     in function
     | `XML (Value.Node (tag, children))       -> `XML (Value.Node (tag, new_attr :: filter name children))
     | `XML (Value.NsNode (ns, tag, children)) -> `XML (Value.NsNode (ns, tag, new_attr :: filter name children))
-    | r -> failwith ("cannot add attribute to " ^ Value.string_of_value r)
+    | r -> raise (runtime_type_error ("cannot add attribute to " ^ Value.string_of_value r))
 
 let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
   List.fold_right add_attribute
@@ -313,7 +328,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          | `List xmlitems, `List attrs ->
              let attrs = List.map (fun p -> Value.unbox_pair p) attrs in
                `List (List.map (add_attributes attrs) xmlitems)
-         | _ -> failwith "Internal error: addAttributes takes an XML forest and a list of attributes"),
+         | _ -> raise (runtime_type_error "addAttributes takes an XML forest and a list of attributes")),
    datatype "(Xml, [(String, String)]) -> Xml",
    PURE);
 
@@ -344,7 +359,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "haveMail",
   (`PFun(fun _ ->
-           failwith "The haveMail function is not implemented on the server yet"),
+           runtime_error "The haveMail function is not implemented on the server yet"),
    datatype "() {:_|_}~> Bool",
    IMPURE);
 
@@ -487,7 +502,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "hd",
   (p1 (fun lst ->
         match (Value.unbox_list lst) with
-          | [] -> failwith "hd() of empty list"
+          | [] -> runtime_error "hd() of empty list"
           | x :: _ -> x
       ),
    datatype "([a]) ~> a",
@@ -496,7 +511,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "tl",
   (p1 (fun lst ->
          match (Value.unbox_list lst) with
-            | [] -> failwith "tl() of empty list"
+            | [] -> runtime_error "tl() of empty list"
             | _x :: xs -> Value.box_list xs
       ),
    datatype "([a]) ~> [a]",
@@ -524,7 +539,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          function
            | `List [] -> `Variant ("None", `Record [])
            | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
-           | _ -> failwith "Internal error: non-list passed to max"),
+           | _ -> raise (runtime_type_error "Internal error: non-list passed to max")),
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
@@ -533,7 +548,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          function
            | `List [] -> `Variant ("None", `Record [])
            | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
-           | _ -> failwith "Internal error: non-list passed to min"),
+           | _ -> raise (runtime_type_error "Internal error: non-list passed to min")),
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
@@ -552,7 +567,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              | (Value.NsNode _) -> true
              | _ -> false) children in
            `List (map (fun x -> `XML x) children)
-         | _ -> failwith "non-XML given to childNodes"),
+         | _ -> raise (runtime_type_error "non-XML given to childNodes")),
    datatype "(Xml) -> Xml",
   IMPURE);
 
@@ -570,12 +585,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     ) cs with
       | Value.Attr (_, v) -> `Variant ("Just", Value.box_string v)
       | Value.NsAttr (_, _, v) -> `Variant ("Just", Value.box_string v)
-      | _ -> failwith "Internal error in `attribute'"
+      | _ -> raise (runtime_type_error "Incorrect arguments to `attribute' function")
     with NotFound _ -> `Variant ("Nothing", `Record []))
     in match elem with
       | `List [ `XML (Value.Node (_, children)) ] -> find_attr children
       | `List [ `XML (Value.NsNode (_, _, children)) ] -> find_attr children
-      | _ -> failwith "Non-element node given to attribute"),
+      | _ -> raise (runtime_type_error  "Non-element node given to attribute function")),
   datatype "(Xml, String) -> [| Just: String | Nothing |]",
   PURE);
 
@@ -620,7 +635,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "error",
-  (p1 (Value.unbox_string ->- failwith), datatype "(String) ~> a",
+  (p1 (Value.unbox_string ->- runtime_error), datatype "(String) ~> a",
   IMPURE);
 
   (* HACK *)
@@ -702,13 +717,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p3 (fun name attrList children -> match (attrList, children) with
     | (`List attrs, `List cs) -> `XML (Value.Node (Value.unbox_string(name), List.map (function
         | (`XML x) -> x
-        | _ -> failwith "non-XML in makeXml"
+        | _ -> raise (runtime_type_error "non-XML in makeXml")
       ) cs @ (List.map (function
           | `Record [ ("1", key); ("2", value) ] -> Value.Attr (Value.unbox_string(key), Value.unbox_string(value))
-        | _ -> failwith "non-attr in makeXml"
+        | _ -> raise (runtime_type_error "non-attr in makeXml")
       ) attrs))
     )
-    | _ -> failwith "non-XML in makeXml"),
+    | _ -> raise (runtime_type_error "non-XML in makeXml")),
   datatype "(String, [(String, String)], Xml) -> XmlItem",
   IMPURE);
 
@@ -716,12 +731,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "xmlToVariant",
   (p1 (fun v ->
-                  match v with
-                    | `List xs ->
-                        `List (List.map (function
-                                           | (`XML x) -> Value.value_of_xmlitem x
-                                           | _ -> failwith "non-XML passed to xmlToVariant") xs)
-                    | _ -> failwith "non-XML passed to xmlToVariant"),
+        match v with
+          | `List xs ->
+              `List (List.map
+                (function
+                   | (`XML x) -> Value.value_of_xmlitem x
+                   | _ -> raise (runtime_type_error "non-XML passed to xmlToVariant")) xs)
+          | _ -> raise (runtime_type_error "non-XML passed to xmlToVariant")),
   datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |] ]",
   IMPURE);
 
@@ -729,7 +745,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun v ->
       match v with
         | (`XML x) -> Value.value_of_xmlitem x
-        | _ -> failwith "non-XML passed to xmlItemToVariant"),
+        | _ -> raise (runtime_type_error "non-XML passed to xmlItemToVariant")),
     datatype "(XmlItem) ~> mu n. [|Text:String | Attr:(String, String) | Node:(String, [ n ]) | NsAttr: (String, String, String) | NsNode: (String, String, [ n ]) |]",
     IMPURE);
 
@@ -750,7 +766,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          match v with
            | `List [ `XML (Value.Node (name, _)) ]      -> Value.box_string name
            | `List [ `XML (Value.NsNode (_, name, _)) ] -> Value.box_string name
-           | _ -> failwith "non-element passed to getTagName"),
+           | _ -> raise (runtime_type_error "non-element passed to getTagName")),
   datatype "(Xml) ~> String",
   IMPURE);
 
@@ -758,7 +774,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun v -> match v with
     | `List [ `XML (Value.NsNode (ns, _, _)) ] -> Value.box_string ns
     | `List [ `XML (Value.Node (_, _)) ]       -> Value.box_string ""
-    | _ -> failwith "non-element passed to getNamespace"),
+    | _ -> raise (runtime_type_error "non-element passed to getNamespace")),
   datatype "(Xml) ~> String",
   IMPURE);
 
@@ -780,7 +796,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     in match v with
       | `List [ `XML (Value.Node (_, children)) ]      -> `List (map attr_to_record (filter is_attr children))
       | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (map attr_to_record (filter is_attr children))
-      | _ -> failwith "non-element given to getAttributes"),
+      | _ -> raise (runtime_type_error "non-element given to getAttributes")),
   datatype "(Xml) ~> [(String,String)]",
   IMPURE);
 
@@ -800,7 +816,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                `List (map (fun x -> `XML(x)) (filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
            | `List [`XML(Value.NsNode(_, _, children))] ->
                `List (map (fun x -> `XML(x)) (filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
-           | _ -> failwith "non-element given to getChildNodes"),
+           | _ -> raise (runtime_type_error "non-element given to getChildNodes")),
    datatype "(Xml) ~> Xml",
   IMPURE);
 
@@ -1018,7 +1034,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          (* FIXME: This isn't right : it freezes all threads *)
          (*Unix.sleep (int_of_num (Value.unbox_int duration));
          `Record []*)
-      failwith "The sleep function is not implemented on the server yet"
+      runtime_error "The sleep function is not implemented on the server yet"
       ),
    datatype "(Int) ~> ()",
   IMPURE);
@@ -1086,7 +1102,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* Database functions *)
   "AsList",
-  (p1 (fun _ -> failwith "Unoptimized table access!!!"),
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
    datatype "(TableHandle(r, w, n)) -> [r]",
   IMPURE);
 
@@ -1096,7 +1112,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     let driver = Settings.get_value Basicsettings.database_driver
     and args = Settings.get_value Basicsettings.database_args in
       if driver = "" then
-        failwith "Internal error: default database driver not defined"
+        raise (Errors.settings_error
+          "Default database driver not defined. Set `database_driver`.")
       else
         `Record(["driver", Value.box_string driver;
              "args", Value.box_string args])),
@@ -1196,7 +1213,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
         try
               Value.box_char ((Value.unbox_string s).[int i])
         with
-        Invalid_argument _ -> failwith "charAt: invalid index"),
+        Invalid_argument _ -> runtime_error "charAt: invalid index"),
     datatype ("(String, Int) ~> Char"),
     IMPURE));
 
@@ -1206,24 +1223,28 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
         try
           Value.box_string (String.sub (Value.unbox_string s) (int start) (int len))
         with
-        Invalid_argument _ -> failwith "strsub: invalid arguments"),
+        Invalid_argument _ -> runtime_error "strsub: invalid arguments"),
     datatype "(String, Int, Int) ~> String",
     IMPURE));
 
   ("strlen",
    (p1 (fun s -> match s with
           | `String s -> `Int (String.length s)
-      |  _ -> failwith "Internal error: strlen got wrong arguments"),
+          |  _ -> raise (runtime_type_error "strlen got wrong arguments")),
     datatype ("(String) ~> Int "),
     PURE));
 
   ("strescape",
-   (p1 (function | `String s -> `String (String.escaped s) | _ -> failwith "Internal error: strescape got wrong arguments"),
+   (p1 (function
+          | `String s -> `String (String.escaped s)
+          | _ -> raise (runtime_type_error "strescape got wrong arguments")),
    datatype ("(String) ~> String "),
    IMPURE));
 
   ("strunescape",
-   (p1 (function | `String s -> `String (Scanf.unescaped s) | _ -> failwith "Internal error: strunescape got wrong arguments"),
+   (p1 (function
+          | `String s -> `String (Scanf.unescaped s)
+          | _ -> raise (runtime_type_error "Internal error: strunescape got wrong arguments")),
    datatype ("(String) ~> String "),
    IMPURE));
 
@@ -1259,7 +1280,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                in
                let chars = aux ((String.length s) - 1) [] in
              Value.box_list (List.map Value.box_char chars)
-               | _  -> failwith "Internal error: non-String in implode"),
+               | _  -> raise (runtime_type_error "Internal error: non-String in implode")),
     datatype ("(String) ~> [Char]"),
     PURE));
 
@@ -1682,8 +1703,8 @@ let primitive_stub_by_code (var : Var.var) : Value.t =
 let apply_pfun_by_code var args req_data =
   match primitive_by_code var with
   | Some #Value.t ->
-      failwith("Attempt to apply primitive non-function "
-           ^ "(#" ^string_of_int var^ ").")
+      raise (runtime_type_error ("Attempt to apply primitive non-function "
+           ^ "(#" ^string_of_int var^ ")."))
   | Some (`PFun p) -> p req_data args
   | None -> assert false
 

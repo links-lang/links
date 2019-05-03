@@ -653,7 +653,6 @@ struct
         xsb
     in
       M.bind (fun_binding (f_info, (tyvars, xsb, body), location)) rest
-(*        fun_binding (f_info, (tyvars, (xs_info, ps, body)), location) rest *)
 
   let letrec env defs rest =
     let defs =
