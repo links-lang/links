@@ -161,7 +161,7 @@ class map =
       | Constant _x -> let _x = o#constant _x in Constant _x
       | Var _x -> let _x = o#qualified_name _x in Var _x
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
-                                          let _x_i2 = o#location _x_i2 in FunLit (_x, _x1, _x_i1, _x_i2)
+                                           let _x_i2 = o#location _x_i2 in FunLit (_x, _x1, _x_i1, _x_i2)
       | HandlerLit hnlit ->
      let hnlit = o#handlerlit hnlit in
      HandlerLit hnlit
@@ -430,6 +430,7 @@ class map =
           let _p3 = o#phrase _p3 in
           TryInOtherwise (_p1, _pat, _p2, _p3, _ty)
       | Raise -> Raise
+
 
     method phrase : phrase -> phrase =
       fun p ->
