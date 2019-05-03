@@ -21,7 +21,7 @@
     | Dot (x, q) -> x :: split q
 
   let canonical_name q =
-    String.concat "\\" (split q)
+    String.concat "." (split q)
 
   let is_qualified = function
     | Ident _ -> false
