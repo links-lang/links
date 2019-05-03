@@ -61,6 +61,7 @@ Basic types in modules
 filemode : true
 args : --path=tests/modules
 stdout : 5 : A.AInt
+ignore : Pending discussion of module name expansion in Alias strings
 
 Basic type in session type
 ./tests/modules/session-type.links
@@ -97,6 +98,7 @@ Type signatures in inner modules
 filemode : true
 args : --path=tests/modules
 stdout : 11 : A.B.Foo
+ignore : Pending discussion of module name expansion in Alias strings
 
 Infix operators
 ./tests/modules/infix.links

@@ -188,6 +188,31 @@ struct
         | TypeApplication (qtycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
+
+            (* We expand the qualified name to account for module opening.
+               This is only used for printing the types, the environments
+               keep track of the expansion
+               However, this is slightly dodgy from a usability experience:
+               Subsequent opens may invalidate the string name we fix here,
+               meaning that they are only valid at the point of their creation.
+
+               FIXME: Discuss what to do with this.
+               One test assumes expaning the string names in the aliases,
+               but doing it consistently would break many tests
+               Maybe would become Prelude.Maybe
+               *)
+            let _qtycon_expanded_name =
+              try
+                begin match FrontendTypeEnv.lookup_tycons_with_orig_path type_env qtycon with
+                  | None, _ -> QualifiedName.canonical_name qtycon
+                  | Some prefix, _ ->
+                     QualifiedName.canonical_name (QualifiedName.append prefix qtycon)
+                end
+              with | FrontendTypeEnv.ModuleNotFound _
+                   | FrontendTypeEnv.TyConsNotFound _ ->
+                      (* We ignore these errors for now, they will be handled further down *)
+                      QualifiedName.canonical_name qtycon
+            in
             let match_quantifiers qs =
               let match_kinds i (q, t) =
                 let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
