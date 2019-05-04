@@ -1375,19 +1375,8 @@ end
 
 type context = FrontendTypeEnv.t
 
-let empty_context eff =
-  { var_env   = Env.empty;
-    tycon_env = Env.empty;
-    module_env = Env.empty;
-    effect_row = eff }
+let empty_context = bind_effects empty_typing_environment
 
-(* The binding functions must not be used for variable get in scope because they
-   are inside of a module that's opened/imported *)
-let bind_var = bind_var
-let unbind_var context v = {context with var_env = Env.unbind context.var_env v}
-
-let bind_tycon = FrontendTypeEnv.bind_tycons
-let bind_effects context r = {context with effect_row = r}
 
 let type_section context = function
   | Section s as s' ->

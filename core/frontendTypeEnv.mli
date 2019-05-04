@@ -48,9 +48,14 @@ val find_module : t -> QualifiedName.t -> Types.module_t option
 
 val bind_var : t -> Env.String.name * Types.datatype -> t
 
-val bind_tycons : t -> Env.String.name * Types.tycon_spec -> t
+val bind_tycon : t -> Env.String.name * Types.tycon_spec -> t
 
 val bind_module : t -> Env.String.name * Types.module_t -> t
+
+val bind_effects : t -> Types.row -> t
+
+val unbind_var : t -> Env.String.name -> t
+
 
 val var_env_bind_var :
      qual_var_environment

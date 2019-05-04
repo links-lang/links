@@ -528,7 +528,7 @@ object (self : 'self_type)
 
         let mutual_type_env =
           SEnv.fold
-            (fun name d env -> FrontendTypeEnv.bind_tycons env (name, d))
+            (fun name d env -> FrontendTypeEnv.bind_tycon env (name, d))
             new_mutual_env
             type_env in
 

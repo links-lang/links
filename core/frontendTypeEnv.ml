@@ -221,10 +221,18 @@ let open_module module_qname env_lookup_from env_add_to =
   (* Must not be used for binding vars that come from opening/importing a module *)
   let bind_var (env : t) (name, t) =
     {env with var_env = Env.String.bind env.var_env (name, (None, t))}
-  let bind_tycons (env : t) (name, tspec) =
+  let bind_tycon (env : t) (name, tspec) =
     {env with tycon_env = Env.String.bind env.tycon_env (name, (None, tspec))}
   let bind_module (env : t) (name, module_t) =
     {env with module_env = Env.String.bind env.module_env (name, (None, module_t))}
+
+  let bind_effects (env : t) eff =
+    {env with effect_row = eff }
+
+
+  let unbind_var (env : t) name =
+    {env with var_env = Env.String.unbind env.var_env name}
+
 
 
 (* Legacy, remove later *)
