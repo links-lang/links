@@ -35,8 +35,6 @@ module Binder = struct
       )
 end
 
-
-
 (* type variables *)
 type tyvar = Types.quantifier
   [@@deriving show]
