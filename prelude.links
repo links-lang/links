@@ -1351,7 +1351,7 @@ fun assertEq (actual, expected) server {
 
 #### APP SERVER ####
 
-sig defaultErrorPage : (String, String, Location) ~> Page
+sig defaultErrorPage : (String, String, Location) {}~> Page
 fun defaultErrorPage(_, error_string, _) {
   bodyP(<html>
         <body>
@@ -1361,25 +1361,25 @@ fun defaultErrorPage(_, error_string, _) {
         </html>)
 }
 
-sig addLocatedRouteWithErrors : (String, (String, Location) ~> Page, (String, String, Location) ~> Page) ~> ()
+sig addLocatedRouteWithErrors : (String, (String, Location) {hear{_}}~> Page, (String, String, Location) {hear{_}}~> Page) ~> ()
 fun addLocatedRouteWithErrors(path, f, error_handler) { unsafeAddRoute(path, f, error_handler) }
 
-sig addLocatedRouteHandler : (String, (String, Location) ~> Page) ~> ()
+sig addLocatedRouteHandler : (String, (String, Location) {hear{_}}~> Page) ~> ()
 fun addLocatedRouteHandler(path,f) { addLocatedRouteWithErrors(path, fun(p, l){f(p, l)}, defaultErrorPage) }
 
-sig addRoute : (String, (String) ~> Page) ~> ()
+sig addRoute : (String, (String) {hear{_}}~> Page) ~> ()
 fun addRoute(path, f) { addLocatedRouteHandler(path, fun(p, _){f(p)}) }
 
-sig addSimpleRouteHandler : (String, (String) ~> Page) ~> ()
+sig addSimpleRouteHandler : (String, (String) {hear{_}}~> Page) ~> ()
 fun addSimpleRouteHandler(path,f) { addRoute(path,f) }
 
-sig serveThis : (() ~> Page) ~> ()
+sig serveThis : (() {hear{_}}~> Page) ~> ()
 fun serveThis(p) {
   addRoute("/",fun (_) {p()});
   servePages()
 }
 
-sig serveThese : ([(String,() ~> Page)]) ~> ()
+sig serveThese : ([(String,() {hear{_}}~> Page)]) ~> ()
 fun serveThese(routes) {
   var _ = map(fun ((s,p)) {addRoute(s,fun (_) {p()})}, routes);
   servePages()

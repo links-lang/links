@@ -9,6 +9,8 @@ let _ = ParseSettings.config_file
 let js_hide_database_info = Basicsettings.Js.hide_database_info
 let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exceptions_enabled)
 
+let internal_error message = Errors.internal_error ~filename:"irtojs.ml" ~message
+
 (* strip any top level polymorphism from an expression *)
 let rec strip_poly =
   function
@@ -451,7 +453,7 @@ module Default_Continuation : CONTINUATION = struct
   let contify_with_env fn =
     match fn Identity with
     | env, (Fn _ as k) -> env, reflect k
-    | _ -> failwith "error: contify: non-function argument."
+    | _ -> raise (internal_error "error: contify: non-function argument.")
 
   (* Pop returns the code in "the singleton list" as the second
      component, and returns a fresh singleton list containing the
@@ -550,7 +552,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
     let name = __kappa in
     match fn (reflect (Var name)) with
     | env, Fn (args, body) -> env, reflect (Fn (args @ [name], body))
-    | _ -> failwith "error: contify: none function argument."
+    | _ -> raise (internal_error "contify: non-function argument.")
 
   let rec pop = function
     | Cons (kappa, kappas) ->
@@ -1000,7 +1002,7 @@ end = functor (K : CONTINUATION) -> struct
            snd (generate_computation env' body kappas)
          in
          begin match depth with
-         | Shallow -> failwith "CPS compilation of shallow handlers is currently not supported"
+         | Shallow -> raise (Errors.runtime_error "CPS compilation of shallow handlers is currently not supported")
          | Deep params ->
             let translate_parameters params =
               let is_parameterised = List.length params > 0 in
@@ -1163,7 +1165,8 @@ end = functor (K : CONTINUATION) -> struct
         | Location.Client | Location.Unknown ->
            snd (generate_computation body_env body (K.reflect (Var __kappa)))
         | Location.Server -> generate_remote_call f xs_names (Dict [])
-        | Location.Native -> failwith ("Not implemented native calls yet")
+        | Location.Native ->
+            raise (Errors.runtime_error ("Not implemented native calls yet"))
       in
       (f_name,
        xs_names @ [__kappa],
@@ -1262,6 +1265,6 @@ module Continuation =
       | "cps" ->
          (module Default_Continuation : CONTINUATION)
       (** TODO: better error handling *)
-      | _ -> failwith "Unrecognised JS backend.") : CONTINUATION)
+      | _ -> raise (Errors.runtime_error "Unrecognised JS backend.")) : CONTINUATION)
 
 module Compiler = CPS_Compiler(Continuation)

@@ -22,6 +22,9 @@ open SugarConstructors.DummyPositions
 
 *)
 
+let internal_error message =
+  Errors.internal_error ~filename:"desugarHandlers.ml" ~message
+
 
 (* Computes the set of names in a given pattern *)
 let rec names : Pattern.with_pos -> string list
@@ -61,7 +64,8 @@ let resolve_name_conflicts : Pattern.with_pos -> stringset -> Pattern.with_pos
           | Cons (pat, pat')            -> Cons (hide_names pat, hide_names pat')
           | Tuple pats                  -> Tuple (List.map hide_names pats)
           | List pats                   -> List (List.map hide_names pats)
-          | Negative _                  -> failwith "desugarHandlers.ml: hide_names `Negative not yet implemented"
+          | Negative _                  ->
+              raise (internal_error "hide_names `Negative not yet implemented")
           | As (bndr,pat)               -> let {node;_} as pat = hide_names pat in
                                             if StringSet.mem (Binder.to_name bndr) conflicts
                                             then node
@@ -138,7 +142,8 @@ let rec phrase_of_pattern : Pattern.with_pos -> phrase
       | List ps                     -> list (List.map phrase_of_pattern ps)
       | Effect _                    -> assert false
       | Variant (name, pat_opt)     -> constructor name ?body:(opt_map phrase_of_pattern pat_opt)
-      | Negative _                  -> failwith "desugarHandlers.ml: phrase_of_pattern case for `Negative not yet implemented!"
+      | Negative _                  ->
+          raise (internal_error "phrase_of_pattern case for `Negative not yet implemented!")
       | Record (name_pats, pat_opt) -> record (List.map (fun (n,p) -> (n, phrase_of_pattern p)) name_pats)
                                                ?exp:(opt_map phrase_of_pattern pat_opt)
       | Tuple ps                    -> tuple (List.map phrase_of_pattern ps)
@@ -160,7 +165,7 @@ let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos 
         (fun (val_cases, eff_cases) (pat, body) ->
           match pat.node with
           | Pattern.Variant ("Return", None) ->
-             failwith "Improper pattern-matching on return value"
+             raise (internal_error "Improper pattern-matching on return value")
           | Pattern.Variant ("Return", Some pat) ->
              (pat, body) :: val_cases, eff_cases
           | _ ->

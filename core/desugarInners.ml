@@ -11,6 +11,8 @@ open Sugartypes
    stores a single type for each recursive function.
 *)
 
+(* FIXME: replace failwith *)
+
 let rec add_extras qs (extras, tyargs) =
   match qs, extras with
   | [], [] -> []
@@ -18,14 +20,18 @@ let rec add_extras qs (extras, tyargs) =
   | _::qs, Some i::extras -> List.nth tyargs i :: add_extras qs (extras, tyargs)
   | _, _ -> failwith "Mismatch in number of quantifiers and type arguments"
 
-(* let rec add_extras =
- *   function
+(* let add_extras pos extras =
+ *   let rec go = function
  *     | [], [] -> []
- *     | None::extras, tyarg::tyargs -> tyarg :: add_extras (extras, tyargs)
+ *     | None::extras, tyarg::tyargs -> tyarg :: go (extras, tyargs)
  *     | Some q::extras, tyargs ->
- *       (Types.type_arg_of_quantifier q) :: add_extras (extras, tyargs)
+ *       (Types.type_arg_of_quantifier q) :: go (extras, tyargs)
  *     | _, _ ->
- *       failwith "Mismatch in number of quantifiers and type arguments" *)
+ *       raise (Errors.desugaring_error
+ *         ~pos
+ *         ~stage:Errors.DesugarInners
+ *         ~message:"Mismatch in number of quantifiers and type arguments") in
+ *   go extras *)
 
 class desugar_inners env =
 object (o : 'self_type)
@@ -77,11 +83,42 @@ object (o : 'self_type)
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e
 
+(* FIXME: consider refactoring the above code along the lines of the (out-dated) below *)
+
+  (* method! phrase { node; pos } =
+   *   let add_extras = add_extras pos in
+   *   let (o, e, t) =
+   *     match node with
+   *       | TAppl ({node=Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
+   *           let extras = StringMap.find name extra_env in
+   *           let tyargs = add_extras (extras, tyargs) in
+   *             super#phrasenode (TAppl (phn, tyargs))
+   *       | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
+   *           let extras = StringMap.find name extra_env in
+   *           let tyargs = add_extras (extras, tyargs) in
+   *             super#phrasenode (InfixAppl ((tyargs, BinaryOp.Name name), e1, e2))
+   *       | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
+   *           let extras = StringMap.find name extra_env in
+   *           let tyargs = add_extras (extras, tyargs) in
+   *             super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
+   *               (\* HACK: manage the lexical scope of extras *\)
+   *       | Spawn _ as e ->
+   *           let (o, e, t) = super#phrasenode e in
+   *             (o#with_extra_env extra_env, e, t)
+   *       | Escape _ as e ->
+   *           let (o, e, t) = super#phrasenode e in
+   *             (o#with_extra_env extra_env, e, t)
+   *       | Block _ as e ->
+   *           let (o, e, t) = super#phrasenode e in
+   *             (o#with_extra_env extra_env, e, t)
+   *       | e -> super#phrasenode e in
+   *   (o, SourceCode.WithPos.make ~pos e, t) *)
+
   method! funlit =
     (* HACK: manage the lexical scope of extras *)
     fun inner_mb lam ->
-      let (o, lam, t) = super#funlit inner_mb lam in
-        (o#with_extra_env extra_env, lam, t)
+    let (o, lam, t) = super#funlit inner_mb lam in
+    (o#with_extra_env extra_env, lam, t)
 
   method! bindingnode = function
     | Funs defs ->

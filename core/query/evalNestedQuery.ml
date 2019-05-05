@@ -732,17 +732,29 @@ Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usua
 
     in build template
 
-
   let build_stitch_map (((vs:Value.dbvalue),rs),t) =
     let st = FlattenRecords.unflatten_type t in
     let tmpl = FlattenRecords.make_template st in
-    let tmpl' = FlattenRecords.template_map (fun x -> List.assoc x rs) tmpl in
-    let (a_idx,d_idx,w_tmpl) =
-       match tmpl' with
-      | `Record [("1", (`Record [ ("1", `Primitive(_,a_idx));
-                  ("2", `Primitive(_,d_idx))]));
-          ("2", w_tmpl)] -> (a_idx,d_idx,w_tmpl)
-      |     _ -> assert false in
+    let sql_map x = match List.assoc_opt x rs with
+      | Some y -> y
+      (* HACK HACK
+         dummy empty queries don't have indices, so we can't find "1@1" or "1@2"
+         in rs: we output a dummy column position (-1) instead *)
+      | _ when x = "1@1" || x = "1@2" -> (`Primitive Primitive.Int, -1)
+      | _ -> assert false
+    in
+    let idx_and_val = function
+      | `Record fl ->
+           let w_tmpl = try List.assoc "2" fl with NotFound _ -> `Record [] in
+           (match List.assoc "1" fl with
+            | `Record fl' -> (match List.assoc "1" fl', List.assoc "2" fl' with
+              | `Primitive (_,a_idx), `Primitive (_,d_idx) -> (a_idx,d_idx,w_tmpl)
+              | _ -> assert false)
+            | _ -> assert false)
+      | _ -> assert false
+    in
+    let tmpl' = FlattenRecords.template_map sql_map tmpl in
+    let (a_idx,d_idx,w_tmpl) = idx_and_val tmpl' in
     let add_row_to_map row m =
       let w = build_unflattened_record_from_array w_tmpl row in
       let a = int_of_string(Array.get row a_idx) in

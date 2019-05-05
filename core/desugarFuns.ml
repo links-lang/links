@@ -5,7 +5,12 @@ open SourceCode.WithPos
 open Sugartypes
 open SugarConstructors.DummyPositions
 
-(*
+(* This module desugars multi-argument functions, anonymous functions, and
+   operator sections.
+
+  1. Multi-argument functions are turned into a series of nested one-argument
+     functions:
+
     fun f[qs](xs1)...(xsk) {e}
   -->
     fun f[qs](xs1) {
@@ -20,16 +25,29 @@ open SugarConstructors.DummyPositions
       f2
     }
 
+  2. Anonymous functions are named and then turned into a series of nested
+     one-argument functions:
+
 
     fun [qs](xs1)...(xsk) {e}
   -->
-    {fun f[qs](xs1)...(xsk) {e};
-     f}
+    {fun f[qs](xs1) {
+       fun f1[](xs2) {
+       ...
+         fun fk[](xsk) {
+           e
+         }; fk
+       ...
+       }; f1
+    }; f}
 
+
+  3. Operator sections are turned into named functions:
 
     (.l)
   -->
-    fun (r) {r.l}
+    { fun f(x:r) {x.l}; f }
+
 *)
 
 
@@ -67,19 +85,38 @@ class desugar_funs env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
+  method private desugarFunLit argss lin lam location tvs =
+    let inner_mb     = snd (last argss) in
+    let (o, lam, rt) = o#funlit inner_mb lam in
+    let ft = List.fold_right (fun (args, mb) rt -> `Function (args, mb, rt))
+                             argss rt in
+    let f = gensym ~prefix:"_fun_" () in
+    let body, tvs, ft = match tvs with
+      | [] -> Var f, [], ft
+      | _  ->
+         (* If a FunLit is surrounded by a type abstraction we need to generate
+            a corresponding type application.  Type abstractions are inserted
+            during type checking.  This really shouldn't happen since it couples
+            typechecking with this desugaring stage.  If we didn't insert type
+            application here the resulting AST would be ill-typed. *)
+         let (tvs, tyargs), ft = Generalise.generalise env.Types.var_env ft in
+         let ft = Instantiate.freshen_quantifiers ft in
+         tappl (Var f, tyargs), tvs, ft in
+    let (bndr, lin, tvs, loc, ty) =
+      unwrap_def (binder ~ty:ft f, lin, (tvs, lam), location, None) in
+    let e = block_node ([with_dummy_pos (Fun (bndr, lin, tvs, loc, ty))],
+                         with_dummy_pos body)
+    in (o, e, ft)
+
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
+    | TAbstr (tvs', {node = TAppl ({node = TAbstr (tvs, {node =
+         FunLit (Some argss, lin, lam, location); _ } ); _}, tyargs); _})
+      when Settings.get_value Instantiate.quantified_instantiation ->
+       let (o, e, ft) = o#desugarFunLit argss lin lam location !tvs in
+       (o, TAbstr (tvs', with_dummy_pos (TAppl (with_dummy_pos (
+            TAbstr (tvs, with_dummy_pos e)), tyargs))), ft)
     | FunLit (Some argss, lin, lam, location) ->
-        let inner_mb = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("!"^s))) in
-        let (o, lam, rt) = o#funlit inner_mb lam in
-        let ft =
-          List.fold_right (fun (args, mb) rt -> `Function (args, mb, rt))
-                          argss rt in
-        let f = gensym ~prefix:"_fun_" () in
-        let (bndr, lin, tvs, loc, ty) =
-          unwrap_def (binder ~ty:ft f, lin, ([], lam), location, None) in
-        let e = block_node ([with_dummy_pos (Fun (bndr, lin, tvs, loc, ty))],
-                            var f)
-        in (o, e, ft)
+       o#desugarFunLit argss lin lam location []
     | Section (Section.Project name) ->
         let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
         let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in

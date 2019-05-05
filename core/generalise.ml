@@ -19,7 +19,10 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
   fun kind bound_vars t ->
     let gt = get_type_args kind bound_vars in
       match t with
-        | `Not_typed -> failwith "Internal error: Not_typed encountered in get_type_args"
+        | `Not_typed ->
+            raise (Errors.internal_error
+              ~filename:"generalise.ml"
+              ~message:"Internal error: Not_typed encountered in get_type_args")
         | `Primitive _ -> []
         | `MetaTypeVar point ->
             begin

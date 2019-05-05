@@ -7,7 +7,7 @@ open SourceCode
 open SourceCode.WithPos
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"typeSugar.ml" ~message)
+  Errors.internal_error ~filename:"typeSugar.ml" ~message
 
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
@@ -3978,7 +3978,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               match dt' with
                 | Some dt ->
                     bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
-                | None -> internal_error "typeSugar.ml: unannotated type"
+                | None -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
           (Typenames ts, env, StringMap.empty)
       | Infix -> Infix, empty_context, StringMap.empty

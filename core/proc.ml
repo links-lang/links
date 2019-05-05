@@ -1432,7 +1432,7 @@ and Session : SESSION = struct
         | Remote _ ->
             (* If this happens, something has gone *seriously* wrong
              * internally. *)
-            failwith "Cannot receive on remote port!"
+            raise (Errors.internal_error ~filename:"proc.ml" ~message:"Cannot receive on remote port!")
 
   (* Currently: all four of these should be server endpoints.
    * Eventually we'll have to do something a bit cleverer... *)
