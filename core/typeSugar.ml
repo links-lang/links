@@ -3301,8 +3301,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         end
                      | { node = Variant (opname, None); pos } ->
                         with_pos pos (Effect (opname, [], with_dummy_pos Pattern.Any))
-                     | {pos;_} -> Gripers.die pos "Improper pattern matching"
-                   in
+                     (* already compiled to an effect *)
+                     | { node = Effect _; pos = _ } ->
+                        pat
+                     | { pos; _ } -> Gripers.die pos "Improper pattern matching" in
                    let pat = tpo pat in
                    unify ~handle:Gripers.handle_effect_patterns
                          (ppos_and_typ pat, no_pos (`Effect inner_eff));
