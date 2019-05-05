@@ -176,9 +176,10 @@ type tycon_spec = [
 ]
 
 type environment        = datatype Env.String.t
- and tycon_environment  = tycon_spec Env.String.t
- and typing_environment = { var_env   : environment ;
-                            tycon_env : tycon_environment ;
+type tycon_environment  = tycon_spec Env.String.t
+type typing_environment = { var_env    : environment ;
+                            rec_vars   : Utility.StringSet.t ;
+                            tycon_env  : tycon_environment ;
                             effect_row : row }
 
 val empty_typing_environment : typing_environment

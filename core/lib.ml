@@ -1622,6 +1622,7 @@ let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
 
 let typing_env = {Types.var_env = type_env;
+                  Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
                   Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}
 

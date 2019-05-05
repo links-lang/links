@@ -1361,22 +1361,26 @@ end
 
 type context = Types.typing_environment = {
   (* mapping from variables to type schemes *)
-  var_env   : Types.environment ;
+  var_env   : Types.environment;
+
+  (* variables which are recursive in the current scope *)
+  rec_vars : StringSet.t;
 
   (* mapping from type alias names to the types they name.  We don't
      use this to resolve aliases in the code, which is done before
      type inference.  Instead, we use it to resolve references
      introduced here to aliases defined in the prelude such as "Page"
      and "Formlet". *)
-  tycon_env : Types.tycon_environment ;
+  tycon_env : Types.tycon_environment;
 
   (* the current effects *)
   effect_row : Types.row
 }
 
 let empty_context eff =
-  { var_env   = Env.empty;
-    tycon_env = Env.empty;
+  { var_env    = Env.empty;
+    rec_vars   = StringSet.empty;
+    tycon_env  = Env.empty;
     effect_row = eff }
 
 let bind_var context (v, t) = {context with var_env = Env.bind context.var_env (v,t)}
@@ -2007,14 +2011,6 @@ let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = fun p ->
         children Env.empty
   | _ -> Env.empty
 
-(* let show_context : context -> context = *)
-(*   fun context -> *)
-(*     Printf.fprintf stderr "Types  : %s\n" (Env.Dom.show_t (Env.domain context.tycon_env)); *)
-(*     Printf.fprintf stderr "Values : %s\n" (Env.Dom.show_t (Env.domain context.var_env)); *)
-(*     flush stderr; *)
-(*     context *)
-
-
 (* given a list of argument patterns and a return type
    return the corresponding function type *)
 let make_ft declared_linearity ps effects return_type =
@@ -2166,18 +2162,25 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     let e, t, usages =
       match (expr : phrasenode) with
         | Var v            ->
-            (
-              try
-                let (tyargs, t) = Utils.instantiate context.var_env v in
-                  if Settings.get_value Instantiate.quantified_instantiation then
-                    let tyvars = Types.quantifiers_of_type_args tyargs in
-                      tabstr(tyvars, tappl (Var v, tyargs)), t, StringMap.singleton v 1
-                  else
-                    tappl (Var v, tyargs), t, StringMap.singleton v 1
-              with
-                  Errors.UndefinedVariable _msg ->
-                    Gripers.die pos ("Unknown variable " ^ v ^ ".")
-            )
+           begin
+           try
+             (* register wildness if this is a recursive variable instance *)
+             if StringSet.mem v context.rec_vars then
+               begin
+                 let wild_open = Types.make_singleton_open_row ("wild", `Present Types.unit_type) (lin_any, res_any) in
+                 (* FIXME: griper *)
+                 Unify.rows (wild_open, context.effect_row)
+               end;
+             let (tyargs, t) = Utils.instantiate context.var_env v in
+             if Settings.get_value Instantiate.quantified_instantiation then
+               let tyvars = Types.quantifiers_of_type_args tyargs in
+               tabstr(tyvars, tappl (Var v, tyargs)), t, StringMap.singleton v 1
+             else
+               tappl (Var v, tyargs), t, StringMap.singleton v 1
+           with
+             Errors.UndefinedVariable _msg ->
+             Gripers.die pos ("Unknown variable " ^ v ^ ".")
+           end
         | Section _ as s   -> type_section context s
         (* literals *)
         | Constant c as c' ->
@@ -3787,11 +3790,16 @@ and type_binding : context -> binding -> binding * context * usagemap =
             As well as the function types, the typed patterns are also
             returned here as a simple optimisation.  *)
 
-          let fresh_wild () = Types.make_singleton_open_row ("wild", (`Present Types.unit_type)) (lin_any, res_any) in
+         (* we've changed the semantics such that wildness only
+            manifests on encountering a recursive reference to a
+            recursive function (which we track using the rec_vars
+            component of context) *)
+          let fresh_tame () = Types.make_empty_open_row (lin_any, res_any) in
+          (* let fresh_wild () = Types.make_singleton_open_row ("wild", (`Present Types.unit_type)) (lin_any, res_any) in *)
 
-          let inner_env, patss =
+          let inner_rec_vars, inner_env, patss =
             List.fold_left
-              (fun (inner_env, patss) (bndr, lin, (_, (pats, _body)), _, t, pos) ->
+              (fun (inner_rec_vars, inner_env, patss) (bndr, lin, (_, (pats, _body)), _, t, pos) ->
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
@@ -3810,20 +3818,19 @@ and type_binding : context -> binding -> binding * context * usagemap =
                             f(x1)...(xk)
                             }
                          *)
-                         make_ft_poly_curry lin pats (fresh_wild ()) (Types.fresh_type_variable (lin_any, res_any))
+                         make_ft_poly_curry lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any))
                      | Some (_, Some t) ->
                          (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
-                         let shape = make_ft lin pats (fresh_wild ()) (Types.fresh_type_variable (lin_any, res_any)) in
+                         let shape = make_ft lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any)) in
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
                          (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                          (* make sure the annotation has the right shape *)
                          let _, ft_mono = TypeUtils.split_quantified_type ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft_mono) in
                            ft
-                     | Some _ -> assert false
-                 in
-                   Env.bind inner_env (name, inner), pats::patss)
-              (Env.empty, []) defs in
+                     | Some _ -> assert false in
+                 StringSet.add name inner_rec_vars, Env.bind inner_env (name, inner), pats::patss)
+              (StringSet.empty, Env.empty, []) defs in
           let patss = List.rev patss in
 
           (*
@@ -3833,6 +3840,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
           *)
           let (defs, used) =
             let body_env = Env.extend context.var_env inner_env in
+            let context = {context with rec_vars = StringSet.union context.rec_vars inner_rec_vars} in
             (* let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in *)
             List.split
               (List.rev
@@ -3841,7 +3849,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let body_context = {context with var_env = Env.extend body_env pat_env} in
-                      let effects = fresh_wild () in
+                      let effects = fresh_tame () in
                       let body = type_check (bind_effects body_context effects) body in
                       let () =
                         Env.iter
