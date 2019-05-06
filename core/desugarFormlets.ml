@@ -13,7 +13,11 @@ let rec is_raw phrase =
   | Xml (_, _, _, children) ->
       List.for_all is_raw children
   | _ ->
-      raise (Errors.SugarError (phrase.pos, "Invalid element in formlet literal"))
+      let open Errors in
+      raise (desugaring_error
+        ~pos:phrase.pos
+        ~stage:DesugarFormlets
+        ~message:"Invalid element in formlet literal")
 
 let tt =
   function
@@ -123,7 +127,7 @@ object (o : 'self_type)
                         let base : phrase =
                           fn_appl pure_str [`Type ft; mb]
                             [fun_lit ~args:(List.rev args) dl_unl (List.rev pss)
-                                     (tuple vs)] in
+                                     (tuple ~one_tuple_hack:false vs)] in
                         let p, et =
                           List.fold_right
                             (fun arg (base, ft) ->

@@ -4,6 +4,7 @@ open ProcessTypes
 open Utility
 open Webserver_types
 open Pervasives
+open Var
 
 let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
 let host_name = Basicsettings.Appserver.hostname
@@ -122,7 +123,7 @@ struct
           let decoded_client_id = Utility.base64decode client_id in
           Debug.print ("Decoded client ID: " ^ decoded_client_id);
           ClientID.of_string decoded_client_id
-      | None -> failwith "Client ID expected but not found."
+      | None -> raise (Errors.runtime_error "Client ID expected but not found.")
 
 
   let get_or_make_client_id cgi_args =
@@ -293,11 +294,11 @@ struct
         let (_, nenv, {Types.tycon_env = tycon_env; _ }) = !env in
         let _, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
         let render_page = Env.String.lookup nenv "renderPage" in
-        let tail = `Apply (`Variable render_page, [`Variable x]) in
-        Hashtbl.add Tables.scopes x `Global;
+        let tail = Ir.Apply (Ir.Variable render_page, [Ir.Variable x]) in
+        Hashtbl.add Tables.scopes x Scope.Global;
         Hashtbl.add Tables.cont_defs x ([], tail);
         Hashtbl.add Tables.cont_vars x IntSet.empty;
-        let frame = Value.Continuation.Frame.make `Global x Value.Env.empty ([], tail) in
+        let frame = Value.Continuation.Frame.make Scope.Global x Value.Env.empty ([], tail) in
         Value.Continuation.(frame &> empty)
       in
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->

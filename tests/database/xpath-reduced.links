@@ -30,7 +30,7 @@ fun xpath2() {
         empty(for (t <-- xml)
                   where (s.id == t.parent)
                    [()])
-		   };
+           };
   query {
     for (x <-- xml)
     where ( p(x))

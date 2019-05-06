@@ -19,7 +19,10 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
   fun kind bound_vars t ->
     let gt = get_type_args kind bound_vars in
       match t with
-        | `Not_typed -> failwith "Internal error: Not_typed encountered in get_type_args"
+        | `Not_typed ->
+            raise (Errors.internal_error
+              ~filename:"generalise.ml"
+              ~message:"Internal error: Not_typed encountered in get_type_args")
         | `Primitive _ -> []
         | `MetaTypeVar point ->
             begin
@@ -84,6 +87,8 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
               get_type_args kind (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t
         | `Application (_, args) ->
             Utility.concat_map (get_type_arg_type_args kind bound_vars) args
+        | `RecursiveApplication appl ->
+            Utility.concat_map (get_type_arg_type_args kind bound_vars) appl.r_args
         | `Input (t, s)
         | `Output (t, s) -> gt t @ gt s
         | `Select fields -> get_row_type_args kind bound_vars fields

@@ -7,6 +7,9 @@ open Utility
 
 module TyEnv = Env.String
 
+let internal_error message =
+  Errors.internal_error ~filename:"transformSugar.ml" ~message
+
 let type_section env =
   let open Section in function
   | Minus -> TyEnv.lookup env "-"
@@ -120,11 +123,11 @@ let check_type_application (e, t) k =
   begin
     try
       k ()
-    with Instantiate.ArityMismatch ->
+    with Instantiate.ArityMismatch (exp, prov) ->
       prerr_endline ("Arity mismatch in type application");
       prerr_endline ("Expression: " ^ show_phrasenode e);
       prerr_endline ("Type: "^Types.string_of_datatype t);
-      raise Instantiate.ArityMismatch
+      raise (Instantiate.ArityMismatch (exp, prov))
   end
 
 class transform (env : Types.typing_environment) =
@@ -149,6 +152,9 @@ class transform (env : Types.typing_environment) =
     method with_formlet_env formlet_env =
       {< formlet_env = formlet_env >}
 
+    method bind_tycon name tycon =
+      {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
+
     method lookup_type : name -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
 
@@ -169,7 +175,7 @@ class transform (env : Types.typing_environment) =
         let (o, t) = optionu o (fun o -> o#datatype) t in
           (o, (s, t))
 
-    method lens_sort : Types.lens_sort -> ('self_type * Types.lens_sort) =
+    method lens_sort : Lens.Sort.t -> ('self_type * Lens.Sort.t) =
       fun sort ->
             (o, sort)
 
@@ -237,7 +243,7 @@ class transform (env : Types.typing_environment) =
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
       | Var var -> (o, Var var, o#lookup_type var)
       | FunLit (Some argss, lin, lam, location) ->
-          let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
+          let inner_e = snd (last argss) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
             List.fold_right
@@ -521,22 +527,22 @@ class transform (env : Types.typing_environment) =
       | LensLit (table, Some t) ->
          let (o, table, _) = o#phrase table in
          let (o, t) = o#lens_sort t in
-            (o, LensLit (table, Some t), `Lens (t))
+            (o, LensLit (table, Some t), `Lens (Lens.Type.Lens t))
       | LensDropLit (lens, drop, key, default, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#lens_sort t in
           let (o, default, _) = o#phrase default in
-            (o, LensDropLit (lens, drop, key, default, Some t), `Lens (t))
+            (o, LensDropLit (lens, drop, key, default, Some t), `Lens (Lens.Type.Lens t))
       | LensSelectLit (lens, predicate, Some t) ->
           let (o, lens, _) = o#phrase lens in
           (* let (o, predicate, _) = o#phrase predicate in *)
           let (o, t) = o#lens_sort t in
-            (o, LensSelectLit (lens, predicate, Some t), `Lens t)
+            (o, LensSelectLit (lens, predicate, Some t), `Lens (Lens.Type.Lens t))
       | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
           let (o, lens1, _) = o#phrase lens1 in
           let (o, lens2, _) = o#phrase lens2 in
           let (o, t) = o#lens_sort t in
-            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), `Lens t)
+            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), `Lens (Lens.Type.Lens t))
       | LensGetLit (lens, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#datatype t in
@@ -621,7 +627,7 @@ class transform (env : Types.typing_environment) =
          let o = o#with_formlet_env formlet_env in
          (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
          (o, FormBinding (f, p), Types.xml_type)
-      | e -> failwith ("oops: "^show_phrasenode  e)
+      | e -> raise (internal_error ("oops: "^show_phrasenode  e))
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun {node; pos} ->
@@ -691,19 +697,19 @@ class transform (env : Types.typing_environment) =
         (o, (pss, e), t)
 
     method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun _ _ -> failwith "transformSugar.ml: method handlerlit not yet implemented!" (*
+      fun _ _ -> raise (internal_error "method handlerlit not yet implemented!") (*
       let envs = o#backup_envs in
       let (o, m) =
-	match m with
-	  `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
-	| `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
+    match m with
+      `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
+    | `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
       in
       let (o, cases) =
         listu o
-	      (fun o (p, e) ->
+          (fun o (p, e) ->
                let (o, p) = o#pattern p in
                let (o, e, _) = o#phrase e in (o, (p, e)))
-	      cases
+          cases
       in
       let o = o#restore_envs envs in
       (o, (m, cases, params), t)*)
@@ -722,10 +728,12 @@ class transform (env : Types.typing_environment) =
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
 
     method rec_bodies :
-
-      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-      ('self_type *
-         (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list) =
+    (Binder.with_pos * DeclaredLinearity.t *
+     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     Location.t * datatype' option * Position.t) list ->
+    ('self * (Binder.with_pos * DeclaredLinearity.t *
+              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              Location.t * datatype' option * Position.t) list) =
       let outer_tyvars = o#backup_quantifiers in
       let rec list o =
         function
@@ -742,10 +750,12 @@ class transform (env : Types.typing_environment) =
       in
         list o
 
-    method rec_activate_outer_bindings :
-      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-      ('self_type *
-         (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list) =
+    method rec_activate_outer_bindings : (Binder.with_pos * DeclaredLinearity.t *
+     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+     Location.t * datatype' option * Position.t) list ->
+     ('self * (Binder.with_pos * DeclaredLinearity.t *
+              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+              Location.t * datatype' option * Position.t) list) =
       let rec list o =
         function
           | [] -> o, []
@@ -757,9 +767,9 @@ class transform (env : Types.typing_environment) =
       in
         list o
 
-    method rec_activate_inner_bindings :
-      (Binder.t * DeclaredLinearity.t * ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) * Location.t * datatype' option * Position.t) list ->
-      'self_type =
+    method rec_activate_inner_bindings : (Binder.with_pos * DeclaredLinearity.t *
+        ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
+        Location.t * datatype' option * Position.t) list -> 'self_type =
       let rec list o =
         function
           | [] -> o
@@ -789,7 +799,7 @@ class transform (env : Types.typing_environment) =
          let (o, bndr) = o#binder bndr in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Fun (bndr, lin, (tyvars, lam), location, t))
-      | Fun _ -> failwith "Unannotated non-recursive function binding"
+      | Fun _ -> raise (internal_error "Unannotated non-recursive function binding")
       | Funs defs ->
          (* put the inner bindings in the environment *)
          let o = o#rec_activate_inner_bindings defs in
@@ -804,10 +814,16 @@ class transform (env : Types.typing_environment) =
       | Foreign (f, raw_name, language, file, t) ->
          let (o, f) = o#binder f in
          (o, Foreign (f, raw_name, language, file, t))
-      | Type (name, vars, (_, Some dt)) as e ->
-         let tycon_env = TyEnv.bind tycon_env (name, `Alias (List.map (snd ->- val_of) vars, dt)) in
-         {< tycon_env=tycon_env >}, e
-      | Type _ -> failwith "Unannotated type alias"
+      | Typenames ts ->
+          let (o, _) = listu o (fun o (name, vars, (x, dt'), pos) ->
+              match dt' with
+                | Some dt ->
+                   let o = o#bind_tycon name
+                     (`Alias (List.map (snd ->- val_of) vars, dt)) in
+                   (o, (name, vars, (x, dt'), pos))
+                | None -> raise (internal_error "Unannotated type alias")
+            ) ts in
+          (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
       | AlienBlock _ -> assert false
@@ -820,7 +836,7 @@ class transform (env : Types.typing_environment) =
         ~f_pos:(fun o v -> o, v)
         ~f_node:(fun _ v -> o#bindingnode v)
 
-    method binder : Binder.t -> ('self_type * Binder.t) =
+    method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       fun bndr ->
       assert (Binder.has_type bndr);
       let var_env = TyEnv.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in
@@ -862,8 +878,8 @@ class transform (env : Types.typing_environment) =
          let o, c = o#binder c in
          let o = o#restore_envs envs in
          o, CPGiveNothing c, Types.make_endbang_type
-      | CPGrab _ -> failwith "Malformed grab in TransformSugar"
-      | CPGive _ -> failwith "Malformed give in TransformSugar"
+      | CPGrab _ -> raise (internal_error "Malformed grab in TransformSugar")
+      | CPGive _ -> raise (internal_error "Malformed give in TransformSugar")
       | CPSelect (b, label, p) ->
          let envs = o#backup_envs in
          let o, b = o#binder b in

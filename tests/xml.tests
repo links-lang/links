@@ -283,3 +283,8 @@ Newlines in comment
 ./tests/xml_comment_newlines.links
 stdout : <b/> : Xml
 filemode : true
+
+Mismatched tags
+<a></b>
+stderr : @.*Closing.*tag.*does.*not.*match.*
+exit : 1

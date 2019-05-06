@@ -1,29 +1,29 @@
 Tree construction and postorder traversal
 ./tests/stdlibtests/binaryTree/postorder.links
-filemode : args
+filemode : true
 args : -m
 stdout : "[1,4,3,2]" : String
 
 Tree construction and inorder traversal
 ./tests/stdlibtests/binaryTree/inorder.links
-filemode : args
+filemode : true
 args : -m
 stdout : "[1,2,3,4]" : String
 
 Tree construction and preorder traversal
 ./tests/stdlibtests/binaryTree/preorder.links
-filemode : args
+filemode : true
 args : -m
 stdout : "[2,1,3,4]" : String
 
 Deletion (1 node)
 ./tests/stdlibtests/binaryTree/remove1.links
-filemode : args
+filemode : true
 args : -m
 stdout : BinaryTree.Node(BinaryTree.Node(BinaryTree.Leaf, 1, BinaryTree.Leaf), 3, BinaryTree.Node(BinaryTree.Leaf, 4, BinaryTree.Leaf)) : BinaryTree.BinaryTree (Int)
 
 Deletion (2 nodes)
 ./tests/stdlibtests/binaryTree/remove2.links
-filemode : args
+filemode : true
 args : -m
 stdout : BinaryTree.Node(BinaryTree.Node(BinaryTree.Node(BinaryTree.Leaf, 1, BinaryTree.Leaf), 2, BinaryTree.Leaf), 4, BinaryTree.Node(BinaryTree.Node(BinaryTree.Leaf, 1, BinaryTree.Leaf), 2, BinaryTree.Leaf)) : BinaryTree.BinaryTree (Int)

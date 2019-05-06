@@ -4,6 +4,7 @@ open Utility
 open SourceCode
 open SourceCode.WithPos
 open Ir
+open Var
 
 (* {0 Sugar To IR}
 
@@ -115,7 +116,7 @@ sig
   val apply_pure : (value sem * (value sem) list) -> value sem
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 
-  val comp : env -> (CompilePatterns.pattern * value sem * tail_computation sem) -> tail_computation sem
+  val comp : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem) -> tail_computation sem
   val letvar : (var_info * tail_computation sem * (var -> tail_computation sem)) -> tail_computation sem
 
   val xml : value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
@@ -128,19 +129,22 @@ sig
 
   val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
 
-  val db_update : env -> (CompilePatterns.pattern * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
-  val db_delete : env -> (CompilePatterns.pattern * value sem * tail_computation sem option) -> tail_computation sem
+  val db_insert : env -> (value sem * value sem) -> tail_computation sem
+  val db_insert_returning : env -> (value sem * value sem * value sem) -> tail_computation sem
+
+  val db_update : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
+  val db_delete : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option) -> tail_computation sem
 
   val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 
   val handle : env -> (tail_computation sem *
-                         (CompilePatterns.pattern * (env -> tail_computation sem)) list *
-                         (CompilePatterns.pattern * (env -> tail_computation sem)) list *
-                         ((env -> tail_computation sem) * CompilePatterns.pattern * Types.datatype) list *
+                         (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
+                         (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
+                         ((env -> tail_computation sem) * CompilePatterns.Pattern.t * Types.datatype) list *
                           Sugartypes.handler_descriptor)
                -> tail_computation sem
 
-  val switch : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
+  val switch : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
   val inject : name * value sem * datatype -> value sem
   (* val case : *)
@@ -155,13 +159,13 @@ sig
 
   val table_handle : value sem * value sem * value sem * (datatype * datatype * datatype) -> tail_computation sem
 
-  val lens_handle : value sem * Types.lens_sort -> tail_computation sem
+  val lens_handle : value sem * Lens.Sort.t -> tail_computation sem
 
-  val lens_drop_handle : value sem * string * string * value sem * Types.lens_sort -> tail_computation sem
+  val lens_drop_handle : value sem * string * string * value sem * Lens.Sort.t -> tail_computation sem
 
-  val lens_select_handle : value sem * Types.lens_phrase * Types.lens_sort -> tail_computation sem
+  val lens_select_handle : value sem * Lens.Phrase.t * Lens.Sort.t -> tail_computation sem
 
-  val lens_join_handle : value sem * value sem * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort -> tail_computation sem
+  val lens_join_handle : value sem * value sem * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Sort.t -> tail_computation sem
 
   val lens_get : value sem * datatype -> tail_computation sem
 
@@ -171,13 +175,13 @@ sig
 
   val letfun :
     env ->
-    (var_info * (Types.quantifier list * (CompilePatterns.pattern list * tail_computation sem)) * location) ->
+    (var_info * (Types.quantifier list * (CompilePatterns.Pattern.t list * tail_computation sem)) * location) ->
     (var -> tail_computation sem) ->
     tail_computation sem
 
   val letrec :
     env ->
-    (var_info * (Types.quantifier list * (CompilePatterns.pattern list * (var list -> tail_computation sem))) * location) list ->
+    (var_info * (Types.quantifier list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location) list ->
     (var list -> tail_computation sem) ->
     tail_computation sem
 
@@ -185,7 +189,7 @@ sig
 
   val select : name * value sem -> tail_computation sem
 
-  val offer : env -> (value sem * (CompilePatterns.pattern * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
+  val offer : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -234,7 +238,7 @@ struct
     in
       e
 
-  let dummy_computation = `Special (`Wrong `Not_typed)
+  let dummy_computation = Special (Wrong `Not_typed)
   let sem_type s =
     let (_, t) =
       s (fun (_, t) -> ([], dummy_computation), t)
@@ -300,7 +304,7 @@ struct
 
     let fun_binding (f_info, (tyvars, xsb, body), location) =
       let fb, f = Var.fresh_var f_info in
-        lift_binding (`Fun (fb, (tyvars, xsb, body), None, location)) f
+        lift_binding (Fun (fb, (tyvars, xsb, body), None, location)) f
 
     let rec_binding defs =
       let defs, fs =
@@ -311,7 +315,7 @@ struct
           defs ([], [])
       in
         lift_binding
-          (`Rec
+          (Rec
              (List.map
                 (fun (fb, (tyvars, xsb, body), none, location) ->
                   assert (none = None);
@@ -321,27 +325,27 @@ struct
 
     let alien_binding (x_info, raw_name, language) =
       let xb, x = Var.fresh_var x_info in
-        lift_binding (`Alien (xb, raw_name, language)) x
+        lift_binding (Alien (xb, raw_name, language)) x
 
     let value_of_untyped_var (s, t) =
-      M.bind s (fun x -> lift (`Variable x, t))
+      M.bind s (fun x -> lift (Variable x, t))
   end
   open S
 
   let value_of_comp s =
     bind s
       (function
-         | `Return v -> lift (v, sem_type s)
+         | Return v -> lift (v, sem_type s)
          | e ->
              let t = sem_type s in
                value_of_untyped_var (comp_binding (Var.info_of_type t, e), t))
 
   let comp_of_value s =
-    bind s (fun v -> lift (`Return v, sem_type s))
+    bind s (fun v -> lift (Return v, sem_type s))
 
   (* eval parameters *)
-  let constant c = lift (`Constant c, `Primitive (Constant.type_of c))
-  let var (x, t) = lift (`Variable x, t)
+  let constant c = lift (Constant c, `Primitive (Constant.type_of c))
+  let var (x, t) = lift (Variable x, t)
 
   let apply (s, ss) =
     let ss = lift_list ss in
@@ -349,7 +353,7 @@ struct
       bind s
         (fun v ->
            M.bind ss
-             (fun vs -> lift (`Apply (v, vs), t)))
+             (fun vs -> lift (Apply (v, vs), t)))
 
   let apply_pure (s, ss) =
     let ss = lift_list ss in
@@ -357,10 +361,10 @@ struct
       bind s
         (fun v ->
            M.bind ss
-             (fun vs -> lift (`ApplyPure (v, vs), t)))
+             (fun vs -> lift (ApplyPure (v, vs), t)))
 
   let condition (s, s1, s2) =
-    bind s (fun v -> lift (`If (v, reify s1, reify s2), sem_type s1))
+    bind s (fun v -> lift (If (v, reify s1, reify s2), sem_type s1))
 
   let concat (nil, append, ss) =
     match ss with
@@ -371,7 +375,7 @@ struct
 
   let string_concat (string_append, ss) =
     match ss with
-      | [] -> lift (`Constant (Constant.String ""), Types.string_type)
+      | [] -> lift (Constant (Constant.String ""), Types.string_type)
       | [s] -> s
       | s::ss ->
           List.fold_left (fun s s' -> apply_pure (string_append, [s; s'])) s ss
@@ -392,7 +396,7 @@ struct
            M.bind children
              (fun children ->
                 let attrs = StringMap.from_alist attrs in
-                  lift (`XmlNode (name, attrs, children), Types.xml_type)))
+                  lift (XmlNode (name, attrs, children), Types.xml_type)))
 
   let record (fields, r) =
     let field_types =
@@ -406,24 +410,24 @@ struct
             let t = Types.make_record_type field_types in
               M.bind s'
                 (fun fields ->
-                   lift (`Extend (StringMap.from_alist fields, None), t))
+                   lift (Extend (StringMap.from_alist fields, None), t))
         | Some s ->
             let t = `Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
               bind s
                 (fun r ->
                    M.bind s'
-                     (fun fields -> lift (`Extend (StringMap.from_alist fields, Some r), t)))
+                     (fun fields -> lift (Extend (StringMap.from_alist fields, Some r), t)))
 
   let project (s, name) =
     let t = TypeUtils.project_type name (sem_type s) in
-      bind s (fun v -> lift (`Project (name, v), t))
+      bind s (fun v -> lift (Project (name, v), t))
 
   let erase (s, names) =
     let t = TypeUtils.erase_type names (sem_type s) in
-      bind s (fun v -> lift (`Erase (names, v), t))
+      bind s (fun v -> lift (Erase (names, v), t))
 
   let coerce (s, t) =
-    bind s (fun v -> lift (`Coerce (v, t), sem_type s))
+    bind s (fun v -> lift (Coerce (v, t), sem_type s))
 
   (*
       (r : (l1:A1, ... li:Ai | R) with (l1=v1, ..., li=vi))
@@ -440,7 +444,7 @@ struct
     record (fields, Some (erase (s, names)))
 
   let inject (name, s, t) =
-      bind s (fun v -> lift (`Inject (name, v, t), t))
+      bind s (fun v -> lift (Inject (name, v, t), t))
 
   (* this isn't used... *)
   (* let case (s, name, (cinfo, cbody), default) = *)
@@ -460,64 +464,64 @@ struct
 
   let case_zero (s, t) =
     bind s (fun v ->
-              lift (`Case (v, StringMap.empty, None), t))
+              lift (Case (v, StringMap.empty, None), t))
 
   let database s =
-    bind s (fun v -> lift (`Special (`Database v), `Primitive Primitive.DB))
+    bind s (fun v -> lift (Special (Database v), `Primitive Primitive.DB))
 
   let table_handle (database, table, keys, (r, w, n)) =
     bind database
       (fun database ->
          bind table
            (fun table ->
-	     bind keys
-		(fun keys ->  lift (`Special (`Table (database, table, keys, (r, w, n))),
+         bind keys
+        (fun keys ->  lift (Special (Table (database, table, keys, (r, w, n))),
                                `Table (r, w, n)))))
 
   let lens_handle (table, sort) =
       bind table
         (fun table ->
-            lift (`Special (`Lens (table, sort)), `Lens (sort)))
+            lift (Special (Lens (table, sort)), `Lens (Lens.Type.Lens sort)))
 
   let lens_drop_handle (lens, drop, key, default, sort) =
       bind lens
         (fun lens ->
             bind default
             (fun default ->
-               lift (`Special (`LensDrop (lens, drop, key, default, sort)), `Lens (sort))))
+               lift (Special (LensDrop (lens, drop, key, default, sort)), `Lens (Lens.Type.Lens sort))))
 
   let lens_select_handle (lens, pred, sort) =
       bind lens
         (fun lens ->
-           lift (`Special (`LensSelect (lens, pred, sort)), `Lens (sort)))
+           lift (Special (LensSelect (lens, pred, sort)), `Lens (Lens.Type.Lens sort)))
 
   let lens_join_handle (lens1, lens2, on, left, right, sort) =
       bind lens1
         (fun lens1 ->
           bind lens2
           (fun lens2 ->
-            lift (`Special (`LensJoin (lens1, lens2, on, left, right, sort)), `Lens (sort))))
+            lift (Special (LensJoin (lens1, lens2, on, left, right, sort)), `Lens (Lens.Type.Lens sort))))
 
   let lens_get (lens, rtype) =
       bind lens
         (fun lens ->
-            lift (`Special (`LensGet (lens, rtype)), Types.make_list_type rtype))
+            lift (Special (LensGet (lens, rtype)), Types.make_list_type rtype))
 
   let lens_put (lens, data, rtype) =
       bind lens
         (fun lens ->
             bind data
                 (fun data ->
-                        lift (`Special (`LensPut (lens, data, rtype)), Types.make_list_type rtype)))
+                        lift (Special (LensPut (lens, data, rtype)), Types.make_list_type rtype)))
 
-  let wrong t = lift (`Special (`Wrong t), t)
+  let wrong t = lift (Special (Wrong t), t)
 
   let alien (x_info, raw_name, language, rest) =
     M.bind (alien_binding (x_info, raw_name, language)) rest
 
   let select (l, e) =
     let t = TypeUtils.select_type l (sem_type e) in
-      bind e (fun v -> lift (`Special (`Select (l, v)), t))
+      bind e (fun v -> lift (Special (Select (l, v)), t))
 
   let offer env (v, cases, t) =
     let cases =
@@ -527,12 +531,28 @@ struct
       bind v
         (fun e ->
            M.bind
-             (comp_binding (Var.info_of_type (sem_type v), `Return e))
+             (comp_binding (Var.info_of_type (sem_type v), Return e))
              (fun var ->
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
                 let (bs, tc) = CompilePatterns.compile_choices (nenv, tenv, eff) (t, var, cases) in
                   reflect (bs, (tc, t))))
+
+  let db_insert _env (source, rows) =
+    bind source
+      (fun source ->
+	bind rows
+	  (fun rows ->
+            lift (Special (InsertRows (source, rows)), Types.unit_type)))
+
+  let db_insert_returning _env (source, rows, returning) =
+    bind source
+      (fun source ->
+	bind rows
+	  (fun rows ->
+	    bind returning
+	      (fun returning ->
+		lift (Special (InsertReturning (source, rows, returning)), Types.int_type))))
 
   let db_update env (p, source, where, body) =
     let source_type = sem_type source in
@@ -543,14 +563,14 @@ struct
            match where with
              | None ->
                  let body_type = sem_type body in
-                 let body = CompilePatterns.let_pattern env p (`Variable x, xt) (reify body, body_type) in
-                   lift (`Special (`Update ((xb, source), None, body)), Types.unit_type)
+                 let body = CompilePatterns.let_pattern env p (Variable x, xt) (reify body, body_type) in
+                   lift (Special (Update ((xb, source), None, body)), Types.unit_type)
              | Some where ->
                  let body_type = sem_type body in
-                 let wrap = CompilePatterns.let_pattern env p (`Variable x, xt) in
+                 let wrap = CompilePatterns.let_pattern env p (Variable x, xt) in
                  let where = wrap (reify where, Types.bool_type) in
                  let body = wrap (reify body, body_type) in
-                   lift (`Special (`Update ((xb, source), Some where, body)), Types.unit_type))
+                   lift (Special (Update ((xb, source), Some where, body)), Types.unit_type))
 
   let db_delete env (p, source, where) =
     let source_type = sem_type source in
@@ -560,22 +580,22 @@ struct
         (fun source ->
            match where with
              | None ->
-                 lift (`Special (`Delete ((xb, source), None)), Types.unit_type)
+                 lift (Special (Delete ((xb, source), None)), Types.unit_type)
              | Some where ->
-                 let where = CompilePatterns.let_pattern env p (`Variable x, xt) (reify where, Types.bool_type) in
-                   lift (`Special (`Delete ((xb, source), Some where)), Types.unit_type))
+                 let where = CompilePatterns.let_pattern env p (Variable x, xt) (reify where, Types.bool_type) in
+                   lift (Special (Delete ((xb, source), Some where)), Types.unit_type))
 
   let query (range, s) =
     let bs, e = reify s in
       match range with
         | None ->
-            lift (`Special (`Query (None, (bs, e), sem_type s)), sem_type s)
+            lift (Special (Query (None, (bs, e), sem_type s)), sem_type s)
         | Some (limit, offset) ->
             bind limit
               (fun limit ->
                  bind offset
                    (fun offset ->
-                      lift (`Special (`Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
+                      lift (Special (Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
 
   let letvar (x_info, s, body) =
     bind s
@@ -597,8 +617,8 @@ struct
     let body_type = sem_type body in
     let body = reify body in
     let ft = `Function (Types.make_tuple_type [kt], eff, body_type) in
-    let f_info = (ft, "", `Local) in
-    let rest f : tail_computation sem = lift (`Special (`CallCC (`Variable f)),
+    let f_info = (ft, "", Scope.Local) in
+    let rest f : tail_computation sem = lift (Special (CallCC (Variable f)),
                                               body_type) in
       M.bind (fun_binding (f_info, ([], [kb], body), loc_unknown)) rest
 
@@ -627,13 +647,12 @@ struct
         (fun body p (xb : binder) ->
            let x  = Var.var_of_binder  xb in
            let xt = Var.type_of_binder xb in
-             CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
+             CompilePatterns.let_pattern env p (Variable x, xt) (body, body_type))
         (reify body)
         ps
         xsb
     in
       M.bind (fun_binding (f_info, (tyvars, xsb, body), location)) rest
-(*        fun_binding (f_info, (tyvars, (xs_info, ps, body)), location) rest *)
 
   let letrec env defs rest =
     let defs =
@@ -658,7 +677,7 @@ struct
                  (fun body p xb ->
                     let x  = Var.var_of_binder  xb in
                     let xt = Var.type_of_binder xb in
-                      CompilePatterns.let_pattern env p (`Variable x, xt) (body, body_type))
+                      CompilePatterns.let_pattern env p (Variable x, xt) (body, body_type))
                  (reify body)
                  ps
                  xsb
@@ -670,7 +689,7 @@ struct
 
   let do_operation (name, vs, t) =
     let vs = lift_list vs in
-    M.bind vs (fun vs -> lift (`Special (`DoOperation (name, vs, t)), t))
+    M.bind vs (fun vs -> lift (Special (DoOperation (name, vs, t)), t))
 
   let handle env (m, val_cases, eff_cases, params, desc) =
     let params =
@@ -697,7 +716,7 @@ struct
       bind v
         (fun e ->
            M.bind
-             (comp_binding (Var.info_of_type (sem_type v), `Return e))
+             (comp_binding (Var.info_of_type (sem_type v), Return e))
              (fun var ->
                 let nenv, tenv, eff = env in
                 let tenv = TEnv.bind tenv (var, sem_type v) in
@@ -706,11 +725,11 @@ struct
 
   let tabstr (tyvars, s) =
     let t = Types.for_all (tyvars, sem_type s) in
-      bind s (fun v -> lift (`TAbs (tyvars, v), t))
+      bind s (fun v -> lift (TAbs (tyvars, v), t))
 
   let tappl (s, tyargs) =
     let t = Instantiate.apply_type (sem_type s) tyargs in
-      bind s (fun v -> lift (`TApp (v, tyargs), t))
+      bind s (fun v -> lift (TApp (v, tyargs), t))
 end
 
 
@@ -739,12 +758,8 @@ struct
                 try
                   I.tappl (I.var (x, xt), tyargs)
                 with
-                    Instantiate.ArityMismatch ->
-                      prerr_endline ("Arity mismatch in instantiation (Sugartoir)");
-                      prerr_endline ("name: "^name);
-                      prerr_endline ("type: "^Types.string_of_datatype xt);
-                      prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
-                      failwith "fatal internal error" in
+                    Instantiate.ArityMismatch (expected, provided) ->
+                      raise (Errors.TypeApplicationArityMismatch { pos; name; expected; provided }) in
 
       let rec is_pure_primitive e =
         let open Sugartypes in
@@ -774,7 +789,7 @@ struct
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
              let kt = Binder.to_type_exn bndr in
-             I.escape ((kt, k, `Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
+             I.escape ((kt, k, Scope.Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | Section (Section.Minus) -> cofv (lookup_var "-")
           | Section (Section.FloatMinus) -> cofv (lookup_var "-.")
           | Section (Section.Name name) -> cofv (lookup_var name)
@@ -830,12 +845,9 @@ struct
                   try
                     cofv (I.tappl (v, tyargs))
                   with
-                      Instantiate.ArityMismatch ->
-                        prerr_endline ("Arity mismatch in type application (Sugartoir)");
-                        prerr_endline ("expression: " ^ show_phrasenode (TAppl (e, tyargs)));
-                        prerr_endline ("type: "^Types.string_of_datatype vt);
-                        prerr_endline ("tyargs: "^String.concat "," (List.map (fun t -> Types.string_of_type_arg t) tyargs));
-                        failwith "fatal internal error"
+                      Instantiate.ArityMismatch (expected, provided) ->
+                        raise (Errors.TypeApplicationArityMismatch { pos;
+                          name=(Types.string_of_datatype vt); expected; provided })
                 end
           | TupleLit [e] ->
               (* It isn't entirely clear whether there should be any 1-tuples at this stage,
@@ -879,7 +891,7 @@ struct
                    let env, bindings =
                      List.fold_left2
                        (fun (env, bindings) (body, p) t ->
-                         let p, penv = CompilePatterns.desugar_pattern `Local p in
+                         let p, penv = CompilePatterns.desugar_pattern p in
                          let bindings = ((fun env -> eval env body), p, t) :: bindings in
                          ((env ++ penv), bindings))
                        (empty_env, []) bindings types
@@ -889,14 +901,14 @@ struct
              let eff_cases =
                List.map
                  (fun (p, body) ->
-                   let p, penv = CompilePatterns.desugar_pattern `Local p in
+                   let p, penv = CompilePatterns.desugar_pattern p in
                    (p, fun env -> eval ((env ++ henv) ++ penv) body))
                  sh_effect_cases
              in
              let val_cases =
                 List.map
                   (fun (p, body) ->
-                    let p, penv = CompilePatterns.desugar_pattern `Local p in
+                    let p, penv = CompilePatterns.desugar_pattern p in
                     (p, fun env -> eval ((env ++ henv) ++ penv) body))
                   sh_value_cases
              in
@@ -905,7 +917,7 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern `Local p in
+                     let p, penv = CompilePatterns.desugar_pattern p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -916,7 +928,7 @@ struct
           | DatabaseLit (name, (Some driver, args)) ->
               let args =
                 match args with
-                  | None -> WithPos.make ~pos (Constant (Constant.String ""))
+                  | None -> WithPos.make ~pos (Sugartypes.Constant (Constant.String ""))
                   | Some args -> args
               in
                 I.database
@@ -930,14 +942,14 @@ struct
                 I.lens_drop_handle (lens, drop, key, default, t)
           | LensSelectLit (lens, pred, Some t) ->
               let lens = ev lens in
-              let pred = Lens.Phrase.of_phrase pred in
+              let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
                 I.lens_select_handle (lens, pred, t)
           | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
-              let on = Lens.Types.cols_of_phrase on in
-              let left = Lens.Phrase.of_phrase left in
-              let right = Lens.Phrase.of_phrase right in
+              let on = Lens_sugar_conv.cols_of_phrase on in
+              let left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left |> Lens.Phrase.of_sugar in
+              let right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right |> Lens.Phrase.of_sugar in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
           | LensGetLit (lens, Some t) ->
               let lens = ev lens in
@@ -949,52 +961,42 @@ struct
           | TableLit (name, (_, Some (readtype, writetype, neededtype)), _constraints, keys, db) ->
               I.table_handle (ev db, ev name, ev keys, (readtype, writetype, neededtype))
           | Xml (tag, attrs, attrexp, children) ->
-              (* check for duplicates *)
-              let () =
-                let rec dup_check names =
-                  function
-                    | [] -> ()
-                    | (name, _) :: attrs ->
-                        if StringSet.mem name names then
-                          raise (Errors.SugarError (pos,
-                                                 "XML attribute '"^name^"' is defined more than once"))
-                        else
-                          dup_check (StringSet.add name names) attrs
-                in
-                  dup_check StringSet.empty attrs
-              in
-                if tag = "#" then
-                  if List.length attrs != 0 || attrexp <> None then
-                    raise (Errors.SugarError (pos,
-                                           "XML forest literals cannot have attributes"))
-                  else
-                    cofv
-                      (I.concat (instantiate "Nil" [`Type (`Primitive Primitive.XmlItem)],
-                                 instantiate "Concat" [`Type (`Primitive Primitive.XmlItem); `Row eff],
+               if tag = "#" then
+                 cofv (I.concat (instantiate "Nil"
+                                   [`Type (`Primitive Primitive.XmlItem)],
+                                 instantiate "Concat"
+                                   [ `Type (`Primitive Primitive.XmlItem)
+                                   ; `Row eff],
                                  List.map ev children))
                 else
-                  let attrs = alistmap (List.map ev) attrs in
+                  let attrs    = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
-                  let body =
-                         I.xml (instantiate "^^" [`Row eff],
-                                tag, attrs, children)
-                  in
-                    begin match attrexp with
-                      | None -> cofv body
-                      | Some e ->
-                          cofv (I.apply_pure (instantiate_mb "addAttributes", [body; ev e]))
-                    end
+                  let body     = I.xml (instantiate "^^" [`Row eff], tag, attrs,
+                                        children) in
+                  begin match attrexp with
+                  | None   -> cofv body
+                  | Some e -> cofv (I.apply_pure (instantiate_mb "addAttributes",
+                                                 [body; ev e]))
+                  end
           | TextNode name ->
               cofv
                 (I.apply_pure
                    (instantiate_mb "stringToXml",
-                    [ev (WithPos.make ~pos (Constant (Constant.String name)))]))
-          | Block (bs, e) -> eval_bindings `Local env bs e
+                    [ev (WithPos.make ~pos (Sugartypes.Constant (Constant.String name)))]))
+          | Block (bs, e) -> eval_bindings Scope.Local env bs e
           | Query (range, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
-
+	  | DBInsert (source, _fields, rows, None) ->
+	      let source = ev source in
+	      let rows = ev rows in
+	      I.db_insert env (source, rows)
+	  | DBInsert (source, _fields, rows, Some returning) ->
+	      let source = ev source in
+	      let rows = ev rows in
+	      let returning = ev returning in
+	      I.db_insert_returning env (source, rows, returning)
           | DBUpdate (p, source, where, fields) ->
-              let p, penv = CompilePatterns.desugar_pattern `Local p in
+              let p, penv = CompilePatterns.desugar_pattern p in
               let env' = env ++ penv in
               let source = ev source in
               let where =
@@ -1004,7 +1006,7 @@ struct
               let body = eval env' (WithPos.make ~pos (RecordLit (fields, None))) in
                 I.db_update env (p, source, where, body)
           | DBDelete (p, source, where) ->
-              let p, penv = CompilePatterns.desugar_pattern `Local p in
+              let p, penv = CompilePatterns.desugar_pattern p in
               let env' = env ++ penv in
               let source = ev source in
               let where =
@@ -1020,7 +1022,7 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern `Local p in
+                     let p, penv = CompilePatterns.desugar_pattern p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -1033,7 +1035,6 @@ struct
           | FunLit _
           | Iteration _
           | InfixAppl ((_, BinaryOp.RegexMatch _), _, _)
-          | DBInsert _
           | Regex _
           | Formlet _
           | Page _
@@ -1084,7 +1085,7 @@ struct
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Val (p, (_, body), _, _) ->
-                    let p, penv = CompilePatterns.desugar_pattern scope p in
+                    let p, penv = CompilePatterns.desugar_pattern p in
                     let env' = env ++ penv in
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
@@ -1096,7 +1097,7 @@ struct
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
-                           let p, penv = CompilePatterns.desugar_pattern `Local p in
+                           let p, penv = CompilePatterns.desugar_pattern p in
                              p::ps, body_env ++ penv)
                         ps
                         ([], env) in
@@ -1106,7 +1107,7 @@ struct
                         ((ft, f, scope), (tyvars, (ps, body)), location)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | Exp e' ->
-                    I.comp env (`Any, ev e', eval_bindings scope env bs e)
+                    I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
                 | Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
@@ -1127,7 +1128,7 @@ struct
                            let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
-                                  let p, penv = CompilePatterns.desugar_pattern `Local p in
+                                  let p, penv = CompilePatterns.desugar_pattern p in
                                     p::ps, body_env ++ penv)
                                ps
                                ([], env) in
@@ -1141,13 +1142,13 @@ struct
                     let x  = Binder.to_name bndr in
                     let xt = Binder.to_type_exn bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | Type _
+                | Typenames _
                 | Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | Handler _ | QualifiedImport _ | Fun _ | Foreign _
-                | AlienBlock _ | Module _ -> assert false
+                | AlienBlock _ | Module _  -> assert false
             end
 
   and evalv env e =
@@ -1174,29 +1175,29 @@ struct
         | b::bs ->
             begin
               match b with
-                | `Let ((x, (_xt, x_name, `Global)), _) ->
+                | Let ((x, (_xt, x_name, Scope.Global)), _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (x_name, x)) bs
-                | `Fun ((f, (_ft, f_name, `Global)), _, _, _) ->
+                | Fun ((f, (_ft, f_name, Scope.Global)), _, _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
-                | `Rec defs ->
+                | Rec defs ->
                   (* we depend on the invariant that mutually
                      recursive definitions all have the same scope *)
                     let scope, nenv =
                       List.fold_left
                         (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _, _) ->
                            match f_scope with
-                             | `Global -> `Global, Env.String.bind nenv (f_name, f)
-                             | `Local -> scope, nenv)
-                        (`Local, nenv) defs
+                             | Scope.Global -> Scope.Global, Env.String.bind nenv (f_name, f)
+                             | Scope.Local -> scope, nenv)
+                        (Scope.Local, nenv) defs
                     in
                       begin
                         match scope with
-                          | `Global ->
+                          | Scope.Global ->
                               partition (b::locals @ globals, [], nenv) bs
-                          | `Local ->
+                          | Scope.Local ->
                               partition (globals, b::locals, nenv) bs
                       end
-                | `Alien ((f, (_ft, f_name, `Global)), _, _) ->
+                | Alien ((f, (_ft, f_name, Scope.Global)), _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
                 | _ -> partition (globals, b::locals, nenv) bs
             end in
@@ -1211,7 +1212,7 @@ struct
       match body with
         | None -> WithPos.dummy (Sugartypes.RecordLit ([], None))
         | Some body -> body in
-      let s = eval_bindings `Global env bindings body in
+      let s = eval_bindings Scope.Global env bindings body in
         let r = (I.reify s) in
           Debug.print ("compiled IR");
           Debug.if_set show_compiled_ir (fun () -> Ir.string_of_program r);

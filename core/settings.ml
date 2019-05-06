@@ -6,7 +6,7 @@ open Utility
 module SettingsMap = Utility.StringMap
 
 type mode = [`User | `System]
-type 'a setting = {mutable value: 'a; name: string; mode: mode}
+type 'a setting = {mutable value: 'a; name: string; mode: mode; hook: 'a -> unit }
 (*
 [SUGGESTION]
   add an optional function to each setting
@@ -17,7 +17,7 @@ type 'a setting = {mutable value: 'a; name: string; mode: mode}
 let get_value setting = setting.value
 let get_name setting = setting.name
 
-let set_value setting v = setting.value <- v
+let set_value setting v = setting.value <- v; setting.hook v
 
 type universal = [
 | `Bool of bool setting
@@ -69,31 +69,31 @@ let parse_and_set' : [`Any | `OnlyUser] -> (string * string) -> bool -> unit = f
         | `Any, _
         | `OnlyUser, true ->
             begin
-	      match universal_setting with
-	        | `Bool setting ->
-	            begin
-		      try
-		        set_value setting (parse_bool value)
-		      with (Invalid_argument _) ->
-		        output_string ("Setting '" ^ name ^ "' expects a boolean\n")
-	            end
-	        | `Int setting ->
-	            begin
-		      try
-		        set_value setting (int_of_string value)
-		      with Invalid_argument _ ->
-		        output_string ("Setting '" ^ name ^ "' expects a boolean\n")
-	            end
-	        | `String setting ->
+          match universal_setting with
+            | `Bool setting ->
+                begin
+              try
+                set_value setting (parse_bool value)
+              with (Invalid_argument _) ->
+                output_string ("Setting '" ^ name ^ "' expects a boolean\n")
+                end
+            | `Int setting ->
+                begin
+              try
+                set_value setting (int_of_string value)
+              with Invalid_argument _ ->
+                output_string ("Setting '" ^ name ^ "' expects a boolean\n")
+                end
+            | `String setting ->
                    let expanded_value =
                      try Utility.Sys.expand value
                      with Utility.Sys.Unknown_environment_variable v ->
                        failwith (Printf.sprintf "failed to expand environment variable '%s' in value '%s' while setting '%s'.\n" v value setting.name)
                    in
-	           set_value setting expanded_value
+               set_value setting expanded_value
             end
         | _ ->
-	    output_string ("Cannot change system setting '" ^ name ^ "'\n")
+        output_string ("Cannot change system setting '" ^ name ^ "'\n")
   else
     output_string ("Unknown setting: " ^ name ^ "\n")
 
@@ -106,16 +106,16 @@ let add : string -> universal -> unit = fun name universal_setting ->
   else
     (settings := SettingsMap.add name universal_setting (!settings))
 
-let add_bool (name, value, mode) =
-  let setting = {value=value; name=name; mode=mode} in
+let add_bool ?(hook=ignore) (name, value, mode) =
+  let setting = {value; name; mode; hook} in
     add name (`Bool setting);
     setting
-let add_int (name, value, mode) =
-  let setting : int setting = {value=value; name=name; mode=mode} in
+let add_int ?(hook=ignore) (name, value, mode) =
+  let setting : int setting = {value; name; mode; hook} in
     add name (`Int setting);
     setting
-let add_string (name, value, mode) =
-  let setting = {value=value; name=name; mode=mode} in
+let add_string ?(hook=ignore) (name, value, mode) =
+  let setting = {value; name; mode; hook} in
     add name (`String setting);
     setting
 
@@ -140,11 +140,11 @@ let lookup_string name =
 let format_universal formatter : universal -> string = fun universal_setting ->
   match universal_setting with
     | `Bool setting ->
-	formatter setting.name (string_of_bool setting.value)
+    formatter setting.name (string_of_bool setting.value)
     | `Int setting ->
-	formatter setting.name (string_of_int setting.value)
+    formatter setting.name (string_of_int setting.value)
     | `String setting ->
-	formatter setting.name setting.value
+    formatter setting.name setting.value
 
 let print_settings () =
   let get_settings mode =
@@ -153,8 +153,8 @@ let print_settings () =
                            match mode, is_user setting with
                              | `User, true
                              | `System, false ->
-		                 (format_universal
-		                    (Printf.sprintf " %-25s %-7s") setting)::p
+                         (format_universal
+                            (Printf.sprintf " %-25s %-7s") setting)::p
                              | _ -> p) !settings []) in
   let user_settings =
     ("User settings" :: get_settings `User) in
@@ -190,7 +190,7 @@ let load_file quiet filename =
   let strip_comment s =
     if String.contains s '#' then
       let i = String.index s '#' in
-	String.sub s 0 i
+    String.sub s 0 i
     else
       s in
 
@@ -199,26 +199,26 @@ let load_file quiet filename =
   let parse_line n s =
     let s = strip_comment s in
       if not (is_empty s) then
-	(* ignore 'empty' lines *)
-	begin
-	  if String.contains s '=' then
-	    begin
-	      let i = String.index s '=' in
-	      let name = String.sub s 0 i in
-	      let value = String.sub s (i+1) ((String.length s) - (i+1))
-	      in
-		parse_and_set (name, value) quiet
-	    end
-	  else
-	    failwith ("Error in configuration file (line "^string_of_int n^"): '"^s^"'\n"^
-			"Configuration options must be of the form <name>=<value>")
-	end in
+    (* ignore 'empty' lines *)
+    begin
+      if String.contains s '=' then
+        begin
+          let i = String.index s '=' in
+          let name = String.sub s 0 i in
+          let value = String.sub s (i+1) ((String.length s) - (i+1))
+          in
+        parse_and_set (name, value) quiet
+        end
+      else
+        failwith ("Error in configuration file (line "^string_of_int n^"): '"^s^"'\n"^
+            "Configuration options must be of the form <name>=<value>")
+    end in
 
   let rec parse_lines n =
     try
       parse_line n (input_line file);
       parse_lines (n+1)
     with
-	End_of_file -> close_in file
+    End_of_file -> close_in file
   in
     parse_lines 1

@@ -125,12 +125,12 @@ end
 
 module RelationalLenses =
 struct
-    let relational_lenses = Settings.add_bool("relational_lenses", false, `User)
+    let relational_lenses = Settings.add_bool ("relational_lenses", false, `User)
 
     (* Use naive/non-incremental relational lenses instead of incremental ones *)
     let classic_lenses = Settings.add_bool("relational_lenses_classic", false, `User)
 
-    let debug = Settings.add_bool("relational_lenses_debug", false, `User)
+    let debug = Settings.add_bool ~hook:Lens.Debug.set_debug ("relational_lenses_debug", false, `User)
 end
 
 
@@ -176,6 +176,15 @@ let print_types_pretty = Settings.add_bool ("print_types_pretty", true, `User)
 
 let print_colors = Settings.add_bool ("print_colors", false, `User)
 
+(* Print Sugar AST before frontend processing? *)
+let show_pre_frontend_ast = Settings.add_bool("show_pre_frontend_ast", false, `User)
+
+(* Print Sugar AST after frontend processing? *)
+let show_post_frontend_ast = Settings.add_bool("show_post_frontend_ast", false, `User)
+
+(* When dumping sugar constructs, shall we print the embedded position information *)
+let show_sugar_positions =  Settings.add_bool("show_sugar_positions", false, `User)
+
 (* Base URL for websocket connections *)
 let websocket_url = Settings.add_string("websocket_url", "/ws/", `User)
 
@@ -205,6 +214,7 @@ module TypeSugar = struct
 (*  let constrain_absence_types = Settings.add_bool ("constrain_absence_types", false, `User)*)
   let check_top_level_purity = Settings.add_bool ("check_top_level_purity", false, `User)
   let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
+  let show_post_sugar_typing = Settings.add_bool("show_post_sugar_typing", false, `User)
   let dodgey_type_isomorphism = Settings.add_bool("dodgey_type_isomorphism", false, `User)
 end
 
@@ -234,6 +244,8 @@ module Ir = struct
   (* Print the lib.ml functions and their types. In particular, map their integer identifiers to their original names *)
   let show_lib_function_env = Settings.add_bool("show_lib_function_env", false, `User)
   let typecheck_ir = Settings.add_bool("typecheck_ir", false, `User)
+  (* Abort compilation on IR typing error *)
+  let fail_on_ir_type_error = Settings.add_bool("fail_on_ir_type_error", false, `User)
 end
 
 (* Generalise stuff *)
@@ -260,7 +272,7 @@ end
 module Instantiate = struct
   let show_recursion = Settings.add_bool("show_recursion", false, `User)
   let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
-  let quantified_instantiation = Settings.add_bool("quantified_instantiation", true, `User)
+  let quantified_instantiation = Settings.add_bool("quantified_instantiation", false, `User)
 end
 
 (* Evaluation stuff *)

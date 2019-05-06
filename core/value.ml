@@ -1,10 +1,13 @@
 open Utility
 open Notfound
 open ProcessTypes
+open Var
 
-[@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
 
 let _ = ParseSettings.config_file
+
+let internal_error message =
+  Errors.internal_error ~filename:"value.ml" ~message
 
 let serialiser = Basicsettings.Serialisation.serialiser
 let session_exception_operation = "_SessionFail"
@@ -27,30 +30,30 @@ class virtual dbvalue = object (self)
   method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
       let max = self#ntuples in
       let rec do_map n acc =
-	if n < max
-	then (
-	  do_map (n+1) (f (self#getvalue n)::acc)
-	 )
-	else acc
+    if n < max
+    then (
+      do_map (n+1) (f (self#getvalue n)::acc)
+     )
+    else acc
       in do_map 0 []
   method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
       let max = self#ntuples in
       let rec do_map n acc =
-	if n < max
-	then (
-	  do_map (n+1) (f (self#gettuple n)::acc)
-	 )
-	else acc
+    if n < max
+    then (
+      do_map (n+1) (f (self#gettuple n)::acc)
+     )
+    else acc
       in do_map 0 []
   method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
       let max = self#ntuples in
       let rec do_fold n acc =
-	if n < max
-	then (
-	  do_fold (n+1) (f (self#gettuple n) acc)
-	 )
-	else acc
-      in do_fold 0 x	    method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
+    if n < max
+    then (
+      do_fold (n+1) (f (self#gettuple n) acc)
+     )
+    else acc
+      in do_fold 0 x        method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
   method virtual getvalue : int -> int -> string
   method virtual gettuple : int -> string array
   method virtual error : string
@@ -68,8 +71,9 @@ class virtual database = object(self)
         String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
   method make_insert_returning_query : (string * string list * string list list * string) -> string list =
     fun _ ->
-    failwith ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())
+    raise (raise (internal_error ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())))
   method virtual supports_shredding : unit -> bool
+
 end
 
 let equal_database db1 db2 = db1 == db2
@@ -116,7 +120,7 @@ let parse_db_string : string -> (string * string) =
   fun params ->
     match Str.bounded_split (Str.regexp ":") params 2 with
       | [hd; tail] -> (hd, tail)
-      | _ -> failwith ("Could not parse db connection string : " ^ params)
+      | _ -> raise (raise (internal_error ("Could not parse db connection string : " ^ params)))
 and reconstruct_db_string : (string * string) -> string =
   fun (x,y) -> x ^ ":" ^ y
 
@@ -266,9 +270,9 @@ module Env = struct
   let bind name (v,scope) env =
     (* Maintains globals as submap of global bindings. *)
     match scope with
-      `Local ->
+      Scope.Local ->
       { env with all = IntMap.add name (v,scope) env.all }
-    | `Global ->
+    | Scope.Global ->
        { env with
          all = IntMap.add name (v,scope) env.all;
          globals = IntMap.add name (v,scope) env.globals;
@@ -297,9 +301,9 @@ module Env = struct
       (fun name locals ->
         match lookupS name env with
         | None
-          | Some (_, `Global) -> locals
-        | Some (v, `Local) ->
-           bind name (v, `Local) locals)
+          | Some (_, Scope.Global) -> locals
+        | Some (v, Scope.Local) ->
+           bind name (v, Scope.Local) locals)
       (Tables.find Tables.cont_vars var)
       empty
 
@@ -310,7 +314,7 @@ module Env = struct
     List.rev
     (fold
        (fun name (v, scope) compressed ->
-          if scope = `Global then
+          if Scope.isGlobal scope then
             compressed
           else
             (name, compress_val v)::compressed)
@@ -324,7 +328,7 @@ module Env = struct
           bind name (uncompress_val globals v, Tables.find Tables.scopes name) env)
         empty
         env
-    with NotFound str -> failwith("In uncompress_env: " ^ str)
+    with NotFound str -> raise (internal_error("In uncompress_env: " ^ str))
 end
 
 module Trap = struct
@@ -353,7 +357,7 @@ module Frame = struct
 
   let make scope var env comp = (scope, var, env, comp)
   let of_expr env tc =
-    make (`Local : Ir.scope) (Var.dummy_var : Ir.var) env (([], tc) : Ir.computation)
+    make (Scope.Local : Ir.scope) (Var.dummy_var : Ir.var) env (([], tc) : Ir.computation)
 
   (** Compression **)
   type 'cv compressed_t = Ir.var * 'cv Env.compressed_t
@@ -623,7 +627,7 @@ module Eff_Handler_Continuation = struct
         { env = Env.uncompress uncompress_val globals (fst h);
         cases = StringMap.empty;
         return =
-          (xb, ([], `Return (`Variable x)));
+          (xb, ([], Ir.Return (Ir.Variable x)));
         depth = snd h; }
   end
 
@@ -638,7 +642,7 @@ module Eff_Handler_Continuation = struct
 
       let return k h v =
         let ((var,_), comp) = h.return in
-        E.computation (Env.bind var (v, `Local) h.env) k comp
+        E.computation (Env.bind var (v, Scope.Local) h.env) k comp
 
       let rec apply ~env k v =
         match k with
@@ -663,7 +667,7 @@ module Eff_Handler_Continuation = struct
                       let params =
                         List.fold_left2
                           (fun acc x v ->
-                            Env.bind x (v, `Local) acc)
+                            Env.bind x (v, Scope.Local) acc)
                           Env.empty xs vs
                       in
                       let env = Env.shadow h.env ~by:params in
@@ -695,7 +699,7 @@ module Eff_Handler_Continuation = struct
              | Some ((var, _), _, comp)
                   when session_exn_enabled && opname = session_exception_operation ->
                 let continuation_thunk =
-                  fun () -> E.computation (Env.bind var (arg, `Local) h.env) k comp
+                  fun () -> E.computation (Env.bind var (arg, Scope.Local) h.env) k comp
                 in
                 let comps = List.map (fun (_, _, _, c) -> c) pk in
                 SessionTrap ({
@@ -710,8 +714,8 @@ module Eff_Handler_Continuation = struct
                     | `Shallow -> Shallow (pk, List.rev k')
                     | `Deep _ -> Deep ((User_defined h,pk) :: k')
                   in
-                  let env = Env.bind var (arg, `Local) h.env in
-                  Env.bind (Var.var_of_binder resumeb) (E.reify resume, `Local) env
+                  let env = Env.bind var (arg, Scope.Local) h.env in
+                  Env.bind (Var.var_of_binder resumeb) (E.reify resume, Scope.Local) env
                 in
                 Trap (fun () -> E.computation env k comp)
              | None -> handle ((User_defined h, pk) :: k') k
@@ -777,14 +781,7 @@ module Continuation
 
 type t = [
 | primitive_value
-| `Lens of table * Types.lens_sort
-| `LensMem of t * Types.lens_sort
-(* lens select: lens, predicate, sort *)
-| `LensSelect of t * Types.lens_phrase * Types.lens_sort
-(* lens join: left lens, right lens, column maps (left, right to out?), delete left phrase, delete right phrase, sort *)
-| `LensJoin of t * t * (string * string * string) list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort
-(* lens drop: lens, drop, key (defined by), default, sort *)
-| `LensDrop of t * string * string * t * Types.lens_sort
+| `Lens of Lens.Value.t
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
@@ -847,11 +844,7 @@ and compress_val (v : t) : compressed_t =
   let cv = compress_val in
     match v with
       | #primitive_value as v -> compress_primitive_value v
-      | `Lens _
-      | `LensJoin _
-      | `LensSelect _
-      | `LensDrop _
-      | `LensMem _ -> failwith "Lens compression for serialization not supported."
+      | `Lens _ -> raise (raise (internal_error "Lens compression for serialization not supported."))
       | `List vs -> `List (List.map cv vs)
       | `Record fields -> `Record(List.map(fun(name, v) -> (name, cv v)) fields)
       | `Variant (name, v) -> `Variant (name, cv v)
@@ -943,11 +936,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
                              else
                                fprintf ppf "fun"
   | `Socket _ -> fprintf ppf "<socket>"
-  | `Lens (_, _) -> fprintf ppf "(lens)"
-  | `LensMem (_, _) -> fprintf ppf "(lens)"
-  | `LensDrop (_lens, dr, key, def, _typ) -> fprintf ppf ("(lensdrop %s determined by %s default %a)") dr key p_value def
-  | `LensSelect (_lens, _pred, _sort) -> fprintf ppf ("(lensselect)")
-  | `LensJoin (_lens1, _lens2, _on, _left, _right, _sort) -> fprintf ppf "(lensjoin)"
+  | `Lens l -> fprintf ppf "(%a)" Lens.Value.pp l
   | `Table (_, name, _, _) -> fprintf ppf "(table %s)" name
   | `Database (_, params) -> fprintf ppf "(database %s" params
   | `SessionChannel (ep1, ep2) ->
@@ -1084,7 +1073,7 @@ let string_of_xml ?(close_tags = false): xml -> string =
     from the Links value [value], provided [value] is a record. *)
 let project name = function
   | (`Record fields) -> List.assoc name fields
-  | _ -> failwith ("Match failure in record projection")
+  | _ -> raise (raise (internal_error ("Match failure in record projection")))
 
 (** Given a Links tuple, returns an Ocaml list of the Links values in that
     tuple. *)
@@ -1102,11 +1091,11 @@ let untuple : t -> t list =
 (** {1 Boxing and unboxing of primitive types} *)
 let box_bool b = `Bool b
 and unbox_bool : t -> bool   = function
-  | `Bool b  -> b | _ -> failwith "Type error unboxing bool"
+  | `Bool b  -> b | _ -> raise (raise (internal_error "Type error unboxing bool"))
 and box_int i = `Int i
 and unbox_int  : t -> int    = function
   | `Int i   -> i
-  | _other -> failwith("Type error unboxing int")
+  | _other -> raise (internal_error("Type error unboxing int"))
 and box_float f = `Float f
 and unbox_float : t -> float = function
   | `Float f -> f
@@ -1116,67 +1105,67 @@ and unbox_float : t -> float = function
    * on the client, but this is easier and more performant (if a little hacky)
    *)
   | `Int i -> float_of_int i
-  | _ -> failwith "Type error unboxing float"
+  | _ -> raise (internal_error "Type error unboxing float")
 and box_char c = `Char c
 and unbox_char :  t -> char = function
-  | `Char f -> f | _ -> failwith "Type error unboxing char"
+  | `Char f -> f | _ -> raise (internal_error "Type error unboxing char")
 and box_xml x = `XML x
 and unbox_xml  :  t -> xmlitem = function
-  | `XML x -> x | _ -> failwith "Type error unboxing xml"
+  | `XML x -> x | _ -> raise (internal_error "Type error unboxing xml")
 and box_string s = `String s
 and unbox_string : t -> string = function
   | `String s -> s
   | v ->
-     failwith ("Type error unboxing string: " ^ string_of_value v)
+     raise (internal_error ("Type error unboxing string: " ^ string_of_value v))
 and box_list l = `List l
 and unbox_list : t -> t list = function
-  | `List l -> l | v -> failwith ("Type error unboxing list: " ^ string_of_value v)
+  | `List l -> l | v -> raise (internal_error ("Type error unboxing list: " ^ string_of_value v))
 and box_record fields = `Record fields
 and unbox_record : t -> (string * t) list = function
-  | `Record fields -> fields | _ -> failwith "Type error unboxing record"
+  | `Record fields -> fields | _ -> raise (internal_error "Type error unboxing record")
 and box_unit : unit -> t
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
-  | `Record [] -> () | _ -> failwith "Type error unboxing unit"
+  | `Record [] -> () | _ -> raise (internal_error "Type error unboxing unit")
 
 let box_op : t list -> t -> t =
   fun ps k -> let box = List.fold_left
-			  (fun (i, box) p -> let i = i + 1 in (i, ((string_of_int i, p) :: box)))
-			  (0, []) ps
-	      in
-	      let box = (string_of_int ((fst box) + 1), k) :: (snd box) in
-	      `Record (List.rev box)
+              (fun (i, box) p -> let i = i + 1 in (i, ((string_of_int i, p) :: box)))
+              (0, []) ps
+          in
+          let box = (string_of_int ((fst box) + 1), k) :: (snd box) in
+          `Record (List.rev box)
 
 let box : t list -> t = fun ps -> `Record (List.mapi (fun i p -> (string_of_int (i+1), p)) ps)
 
 let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
-  | _ -> failwith ("Match failure in pair conversion")
+  | _ -> raise (internal_error ("Match failure in pair conversion"))
 let box_variant : string -> t -> t = fun l v -> `Variant (l, v)
 let unbox_variant : t -> (string * t) = function
   | `Variant x -> x
-  | _ -> failwith ("Type error unboxing variant")
+  | _ -> raise (internal_error ("Type error unboxing variant"))
 let box_pid dist_pid = `Pid dist_pid
 let unbox_pid = function
   | `Pid dist_pid -> dist_pid
-  | _ -> failwith "Type error unboxing pid"
+  | _ -> raise (internal_error "Type error unboxing pid")
 let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p
-  | _ -> failwith "Type error unboxing socket"
+  | _ -> raise (internal_error "Type error unboxing socket")
 let box_spawn_loc sl = `SpawnLocation sl
 let unbox_spawn_loc = function
   | `SpawnLocation sl -> sl
-  | _ -> failwith "Type error unboxing spawn location"
+  | _ -> raise (internal_error "Type error unboxing spawn location")
 let box_channel ch = `SessionChannel ch
 let unbox_channel = function
   | `SessionChannel x -> x
-  | _ -> failwith "Type error unboxing session channel"
+  | _ -> raise (internal_error "Type error unboxing session channel")
 let box_access_point ap = `AccessPointID ap
 let unbox_access_point = function
   | `AccessPointID x -> x
-  | _ -> failwith "Type error unboxing access point"
+  | _ -> raise (internal_error "Type error unboxing access point")
 let intmap_of_record = function
   | `Record members ->
       Some(IntMap.from_alist(
@@ -1205,7 +1194,7 @@ let continuation_serialisers : (string * compressed_continuation serialiser) lis
   { save = (fun ccont -> (Yojson.Safe.to_string (compressed_continuation_to_yojson ccont )));
     load = fun  str -> match compressed_continuation_of_yojson (Yojson.Safe.from_string str) with
       | Ok ccont -> ccont
-      | Error msg -> failwith ("unmarshalling error: " ^ msg)};
+      | Error msg -> raise (internal_error ("unmarshalling error: " ^ msg))};
 ]
 
 (*let continuation_serialisers : (string * compressed_continuation serialiser) list = [
@@ -1229,14 +1218,14 @@ let value_serialisers : (string * compressed_t serialiser) list = [
   { save = (fun ccont -> (Yojson.Safe.to_string (compressed_t_to_yojson ccont )));
     load = fun  str -> match compressed_t_of_yojson (Yojson.Safe.from_string str) with
       | Ok ccont -> ccont
-      | Error msg -> failwith ("unmarshalling error: " ^ msg)};
+      | Error msg -> raise (internal_error ("unmarshalling error: " ^ msg))};
 ]
 
 let retrieve_serialiser : (string * 'a serialiser) list -> 'a serialiser =
   fun serialisers ->
     let name = Settings.get_value serialiser in
     try List.assoc name serialisers
-    with NotFound _ -> failwith ("Unknown serialisation method : " ^ name)
+    with NotFound _ -> raise (internal_error ("Unknown serialisation method : " ^ name))
 
 let continuation_serialiser : unit -> compressed_continuation serialiser =
   fun () -> retrieve_serialiser continuation_serialisers
@@ -1301,7 +1290,7 @@ and value_of_xmlitem =
 
 let rec xml_of_variants vs = match vs with
   | (`List variant_items) -> List.map xmlitem_of_variant variant_items
-  | _ -> failwith "Cannot construct xml from variants"
+  | _ -> raise (internal_error "Cannot construct xml from variants")
 and xmlitem_of_variant =
   function
     | `Variant ("Text", boxed_string) ->
@@ -1311,22 +1300,43 @@ and xmlitem_of_variant =
     | `Variant ("Node", `Record([ ("1", boxed_name); ("2", variant_children) ])) ->
         let name = unbox_string(boxed_name) in
         if (String.contains name ':')
-        then failwith "Illegal character in tagname"
+        then raise (internal_error "Illegal character in tagname")
         else Node(unbox_string(boxed_name), xml_of_variants variant_children)
     | `Variant ("NsAttr", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", boxed_value) ])) ->
         let ns = unbox_string(boxed_ns) in
         let name = unbox_string(boxed_name) in
         if (String.contains ns ':')
-        then failwith "Illegal character in namespace"
+        then raise (internal_error "Illegal character in namespace")
         else if (String.contains name ':')
-        then failwith "Illegal character in attrname"
+        then raise (internal_error "Illegal character in attrname")
         else NsAttr(ns, name, unbox_string(boxed_value))
     | `Variant ("NsNode", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", variant_children) ])) ->
         let ns = unbox_string(boxed_ns) in
         let name = unbox_string(boxed_name) in
         if (String.contains ns ':')
-        then failwith "Illegal character in namespace"
+        then raise (internal_error "Illegal character in namespace")
         else if (String.contains name ':')
-        then failwith "Illegal character in tagname"
+        then raise (internal_error "Illegal character in tagname")
         else NsNode(ns, name, xml_of_variants variant_children)
-    | _ -> failwith "Cannot construct xml from variant"
+    | _ -> raise (internal_error "Cannot construct xml from variant")
+
+(* Some utility functions for databases used by insertion *)
+
+let row_columns_values db v =
+  let escaped_string_of_value db =
+    function
+      | `String s -> "\'" ^ db # escape_string s ^ "\'"
+      | v -> string_of_value v
+  in
+  let row_columns : t -> string list = function
+    | `List ((`Record fields)::_) -> List.map fst fields
+    | r -> raise (internal_error ("forming query from non-row (row_columns): "^ string_of_value r))
+  in
+  let row_values db = function
+    | `List records ->
+	(List.map (function
+          | `Record fields -> List.map (escaped_string_of_value db -<- snd) fields
+          | _ -> raise (internal_error "forming query from non-row")) records)
+    | r -> raise (internal_error ("forming query from non-row (row_values): "^ string_of_value r))
+  in
+  (row_columns v, row_values db v)

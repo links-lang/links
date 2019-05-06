@@ -18,17 +18,17 @@ stderr : @..*
 exit : 1
 
 Mutually recursive top-level functions
-fun evn(n) { n == 0 || od(n - 1) } fun od(n) { evn(n) == false } evn(20)
+mutual { fun evn(n) { n == 0 || od(n - 1) } fun od(n) { evn(n) == false } } evn(20)
 stdout : true : Bool
 exit : 0
 
 Mutually recursive nested functions
-{ fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even(20) }
+{ mutual{ fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } } even(20) }
 stdout : true : Bool
 exit : 0
 
 Mutually recursive nested functions returned outside their scope
-{fun f() { fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } even } f()(7) }
+{fun f() { mutual { fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } } even } f()(7) }
 stdout : false : Bool
 exit : 0
 

@@ -1515,7 +1515,7 @@ page (I<right> and I<down> are the positive directions).
 
 =head2 Modifying the Web Page
 
-L<XML Quasiquote|XML Quasiquotes> expressions construct XML values, but these 
+L<XML Quasiquote|"XML Quasiquotes"> expressions construct XML values, but these 
 values are not rendered by a browser immediately. XML values can be used to 
 create DOM nodes, which in turn can be installed in the I<active document>.
 
@@ -1832,6 +1832,13 @@ Wait for the specified number of seconds.
 Exits the program, using the argument to exit as the program's return value.
 
 (FIXME: this can be ill-typed.)
+
+ serverTime             : () ~> Int
+ serverTimeMilliseconds : () ~> Int
+ clientTime             : () ~> Int
+ clientTimeMilliseconds : () ~> Int
+
+Get the time on the server (resp. client) in seconds or milliseconds since January 1, 1970.
 
 =head1 Standard library (prelude)
 

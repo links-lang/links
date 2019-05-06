@@ -1,21 +1,19 @@
 (* Parse multipart formdata... ripped out of ocamlcgi *)
 
-
 (* Using the following function, we avoid the use of the Str library
  * which is not compatible with the threads of ocaml.
  * Thanks to Olivier Montanuy. *)
-
 let split separator text =
   let len = String.length text in
   let rec loop pos =
     if pos < len then
       try
-       	let last = String.index_from text pos separator in
- 	let str = String.sub text pos (last-pos) in
-	  str::(loop (succ last))
+           let last = String.index_from text pos separator in
+     let str = String.sub text pos (last-pos) in
+      str::(loop (succ last))
       with Not_found ->
- 	if pos < len then [String.sub text pos (len-pos)]
- 	else []
+     if pos < len then [String.sub text pos (len-pos)]
+     else []
     else []
   in
   loop 0
@@ -91,17 +89,17 @@ let rec extract_fields accu = function
       accu
   | chunk :: rem ->
       extract_fields
-	(try extract_field chunk :: accu with Not_found -> accu)
-	rem
+    (try extract_field chunk :: accu with Not_found -> accu)
+    rem
 
 let parse_multipart_args mime_type content : (string * field_data) list =
   if not (string_starts_with mime_type "multipart/form-data")
   then
-    failwith ("Cannot handle multipart form data of type " ^ mime_type);
+    raise (Errors.runtime_error ("Cannot handle multipart form data of type " ^ mime_type));
   (* Determine boundary delimiter *)
   let boundary =
     try
       match_string boundary_re1 boundary_re2 mime_type
     with Not_found ->
-      failwith ("No boundary provided in " ^ mime_type) in
+      raise (Errors.runtime_error ("No boundary provided in " ^ mime_type)) in
   extract_fields [] (Str.split (Str.regexp_string ("--" ^ boundary)) content)

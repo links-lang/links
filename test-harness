@@ -3,14 +3,18 @@
 links = './links'
 
 import sys, re, time
+import concurrent.futures, threading, multiprocessing
 from subprocess import Popen, PIPE
 
 successes = failures = ignored = 0
 TIMEOUT = 15 # seconds before a test is timed out.
 
+the_lock = threading.Lock()
+
 def FAIL(name, msg):
     return ('  error: %s' % name,'      (%s)' % msg)
 
+# must only be called while having the lock
 def OK(name):
     global successes
     successes+=1
@@ -38,6 +42,7 @@ def parse(stream):
             opts = dict([str.split(str.rstrip(line), ' : ', 1) for line in test])
             yield name, code, opts
 
+# Lock not required for calling
 def check_expected(name, item, got, expected, errors):
     """Check some data against an expected value or predicate.  If it
     matches, return True.  Otherwise, display an error and return
@@ -57,15 +62,23 @@ def check_expected(name, item, got, expected, errors):
     else:
         return True
 
-def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = None, filemode='', args='', ignore = None):
-    if filemode.startswith('true') :
-        proc = Popen([links, code], stdout=PIPE, stderr=PIPE, env=env)
-    elif filemode.startswith('args'):
-        arg_array = str.split(args, ' ')
-        popen_list = [links] + arg_array + [code]
-        proc = Popen(popen_list, stdout=PIPE, stderr=PIPE, env=env)
-    else:
-        proc = Popen([links] +  flags.split(" ") + [code], stdout=PIPE, stderr=PIPE, env=env)
+def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = None, filemode='', args='', ignore = None):
+    arg_array = str.split(args)
+    if config_file != None:
+        for arg in arg_array:
+            if arg.startswith("--config"):
+                print(
+                    "Test \"%s\" comes with an args entry to specify the config file," % name +
+                    " but a config file was also passed as a command-line argument to the test harness" )
+                exit(1)
+
+        arg_array += ["--config=" + config_file]
+
+    if not filemode.startswith('true'):
+        arg_array += ["-e"]
+
+    proc = Popen([links] + arg_array + [code], stdout=PIPE, stderr=PIPE, env=env)
+
     passed = True
     errors = []
     for i in range(0, TIMEOUT*100):
@@ -75,32 +88,52 @@ def evaluate(name, code, stdout='', stderr='', exit = '0', flags='-e', env = Non
             passed &= check_expected(name, 'stdout', proc.stdout.read().decode('ascii'), stdout, errors)
             passed &= check_expected(name, 'stderr', str(proc.stderr.read().decode('ascii')), stderr, errors)
             if passed:
-                OK(name)
+                with the_lock:
+                    OK(name)
             else:
                 if ignore != None:
                     global ignored
-                    ignored += 1
-                    print('?IGNORED: %s (%s)' % (name, ignore))
+                    with the_lock:
+                        ignored += 1
+                        print('?IGNORED: %s (%s)' % (name, ignore))
                 else:
                     global failures
-                    failures += 1
-                    print('!FAILURE: %s' % name)
-                    for i, j in errors:
-                        print(i)
-                        print(j)
+                    with the_lock:
+                        failures += 1
+                        print('!FAILURE: %s' % name)
+                        for i, j in errors:
+                            print(i)
+                            print(j)
             return
         else:
             time.sleep(0.01)
-    failures += 1
-    print('!FAILURE: %s [TIMED OUT]' % name)
+
+    with the_lock:
+        failures += 1
+        print('!FAILURE: %s [TIMED OUT]' % name)
 
 def main():
-    try:
+    config_file = None
+
+    if len(sys.argv) == 3:
         filename = sys.argv[1]
-    except IndexError:
-        raise SystemExit('Usage: run <filename>')
+        config_file =  sys.argv[2]
+    elif len(sys.argv) == 2:
+        filename =  sys.argv[1]
+    else:
+        raise SystemExit('Usage: run <test file> [<links config file>]')
+
+    cpus=multiprocessing.cpu_count()
+    tp = concurrent.futures.ThreadPoolExecutor(max_workers=cpus)
     for name, code, opts in parse(open(filename, 'r')):
-        evaluate(name, code, **opts)
+        # enqueues execution of
+        # evaluate(name, code, config_file, **opts)
+        # in the thread pool
+        tp.submit(evaluate, name, code, config_file, **opts)
+
+    # Wait for all jobs to finish
+    tp.shutdown(wait=True)
+
     print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
     if failures > 0:
         sys.exit(1)

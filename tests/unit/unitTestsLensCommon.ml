@@ -2,14 +2,19 @@ open OUnit2
 
 open Links_postgresql.Pg_database
 
-open Links_core
-open Types
-open Value
-open Utility
-open CommonTypes
+module Debug = Links_core.Debug
+module Settings = Links_core.Settings
+module Basicsettings = Links_core.Basicsettings
+module Links_value = Links_core.Value
+
+
+open Lens
+open Lens.Utility
+open Lens.Utility.O
+open Links_core.CommonTypes
 
 (* ensure links configuration is loaded *)
-let _ = OptionUtils.opt_iter (Links_core.Settings.load_file false) Links_core.Basicsettings.config_file_path
+let _ = Option.iter ~f:(Links_core.Settings.load_file false) Links_core.Basicsettings.config_file_path
 
 let display_table_query_opt = Conf.make_bool "display_table_query" false "Show queries to take and manipulate tables."
 let leave_tables_opt = Conf.make_bool "leave_tables" false "Do not delete tables after run."
@@ -24,7 +29,7 @@ module LensTestHelpers = struct
   let get_db test_ctx =
     (* host port dbname user pw *)
     let (conn,_) = get_pg_database_by_string (database_args_opt test_ctx) in
-    conn
+    Links_core.Lens_database_conv.lens_db_of_db conn
 
   (** Only print when **)
   let fmt_std_v test_ctx (fn : Format.formatter -> unit) =
@@ -41,9 +46,12 @@ module LensTestHelpers = struct
 
   let print_verbose test_ctx message =
     if verbose_opt test_ctx then
-      print_endline message
+      Printf.printf "%s\n%!" message
     else
       ()
+
+  let print_table_query test_ctx message =
+    if display_table_query_opt test_ctx then Printf.printf "%s\n%!" message
 
   let colslist_of_string str =
     let cols = String.split_on_char ' ' str in
@@ -52,7 +60,7 @@ module LensTestHelpers = struct
 
   let rec_constr_int (cols : string) (vals : int list) =
     let cols = colslist_of_string cols in
-    Value.box_record (List.map2 (fun c v -> (c, box_int v)) cols vals)
+    Links_value.box_record (List.map2 (fun c v -> (c, Links_value.box_int v)) cols vals)
 
   let delt_constr_int (cols : string) (vals, m : int list * int) =
     rec_constr_int cols vals, m
@@ -64,60 +72,65 @@ module LensTestHelpers = struct
   let fundep_of_string str =
     let split = Str.split (Str.regexp "->") str in
     let _ = assert_equal (List.length split) 2 in
-    let colsets = List.map colset_of_string split in
+    let colsets = List.map ~f:colset_of_string split in
     Lens.Fun_dep.make (List.nth colsets 0) (List.nth colsets 1)
 
   let fundepset_of_string str =
     let split = Str.split (Str.regexp ";") str in
-    let fds = List.map fundep_of_string split in
+    let fds = List.map ~f:fundep_of_string split in
     Lens.Fun_dep.Set.of_list fds
 
-  let mem_lens fd_set name data =
-    let cols = Lens.Fun_dep.Set.fold (fun fd fld -> Lens.Alias.Set.union_all [Lens.Fun_dep.left fd; Lens.Fun_dep.right fd; fld]) fd_set Lens.Alias.Set.empty in
+  let mem_lens fds name records =
+    let cols = Lens.Fun_dep.Set.fold (fun fd fld -> Lens.Alias.Set.union_all [Lens.Fun_dep.left fd; Lens.Fun_dep.right fd; fld]) fds Lens.Alias.Set.empty in
     let cols = Lens.Alias.Set.elements cols in
-    let colFn tbl name = {
-      alias = name; name = name; table = tbl; typ = `Primitive Primitive.Int; present = true
-    } in
-    let l1 = `LensMem ((`List data), (fd_set, None, List.map (colFn name) cols)) in
-    l1
+    let colFn table name =
+      Column.make ~table ~name ~alias:name ~typ:Phrase.Type.Int ~present:true in
+    let sort = Sort.make ~fds (List.map ~f:(colFn name) cols) in
+    Value.LensMem { records; sort; }
 
   let mem_lens_str fds name data =
     mem_lens (fundepset_of_string fds) name data
 
-  let join_lens_dl l1 l2 on =
-    let sort, on = Lens.Sort.join_lens_sort (Lens.Value.sort l1) (Lens.Value.sort l2) ~on in
-    `LensJoin (l1, l2, on, Lens.Phrase.Constant.bool true, Lens.Phrase.Constant.bool false, sort)
+  let join_lens_dl left right on =
+    let sort, on = Lens.Sort.join_lens_sort (Lens.Value.sort left) (Lens.Value.sort right) ~on in
+    let del_left = Lens.Phrase.Constant.bool true in
+    let del_right = Lens.Phrase.Constant.bool false in
+    Value.LensJoin { left; right; on; del_left; del_right; sort}
 
-  let join_lens_dr l1 l2 on =
-    let sort, on = Lens.Sort.join_lens_sort (Lens.Value.sort l1) (Lens.Value.sort l2) ~on in
-    `LensJoin (l1, l2, on, Lens.Phrase.Constant.bool false, Lens.Phrase.Constant.bool true, sort)
+  let join_lens_dr left right on =
+    let sort, on = Lens.Sort.join_lens_sort (Lens.Value.sort left) (Lens.Value.sort right) ~on in
+    let del_left = Lens.Phrase.Constant.bool false in
+    let del_right = Lens.Phrase.Constant.bool true in
+    Value.LensJoin { left; right; on; del_left; del_right; sort}
 
-  let select_lens l phrase =
-    let sort = Lens.Value.sort l in
-    let sort = LensTypes.select_lens_sort sort phrase in
-    `LensSelect (l, phrase, sort)
+  let select_lens lens predicate =
+    let sort = Lens.Value.sort lens in
+    let sort = Lens.Sort.select_lens_sort sort ~predicate in
+    Lens.Value.LensSelect {lens; predicate; sort}
 
-  let drop_lens l drop key default =
-    let drop' = Lens.Alias.Set.singleton drop in
-    let key' = Lens.Alias.Set.singleton key in
-    let sort = Lens.Value.sort l in
-    let sort = LensTypes.drop_lens_sort sort drop' key' in
-    `LensDrop (l, drop, key, default, sort)
+  let drop_lens lens drop key default =
+    let drop' = Alias.Set.singleton drop in
+    let key' = Alias.Set.singleton key in
+    let sort = Value.sort lens in
+    let sort = Sort.drop_lens_sort sort ~drop:drop' ~key:key' in
+    Value.LensDrop {lens; drop; key; default; sort}
 
   let select_query l predicate =
     let predicate = Some predicate in
     Lens.Value.lens_get_select_opt l ~predicate
 
   let create_table test_ctx db tablename (primary_key : string list) (fields : string list) =
-    let colfn col = col ^ " INTEGER NOT NULL" in
-    let query = "CREATE TABLE " ^ tablename ^ " ( "
-                ^ List.fold_left (fun a b -> a ^ colfn b ^ ", ") "" fields
-                ^ "CONSTRAINT \"PK_" ^ tablename ^ "\" PRIMARY KEY ("
-                ^ List.fold_left (fun a b -> a ^ ", " ^ b) (List.hd primary_key) (List.tl primary_key)
-                ^ "));" in
-    let _ = if display_table_query_opt test_ctx then Debug.print query else () in
-    db#exec query
-
+    let colfn col = let open Database in db.quote_field col ^ " INTEGER NOT NULL" in
+    let query =
+      let open Database in
+      "CREATE TABLE " ^ db.quote_field tablename ^ " ( "
+      ^ List.fold_left (fun a b -> a ^ colfn b ^ ", ") "" fields
+      ^ "CONSTRAINT " ^ db.quote_field ("PK_" ^ tablename) ^ " PRIMARY KEY ("
+      ^ List.fold_left (fun a b -> a ^ ", " ^ b) (List.hd primary_key) (List.tl primary_key)
+      ^ "));" in
+    print_table_query test_ctx query;
+    let open Database in
+    db.execute query
 
   let create_table_easy test_ctx db tablename str =
     let fd = fundep_of_string str in
@@ -129,43 +142,38 @@ module LensTestHelpers = struct
   let value_as_string db =
     function
     | `String s -> "\'" ^ db#escape_string s ^ "\'"
-    | v -> string_of_value v
+    | v -> Links_value.string_of_value v
 
   let row_columns data =
-    let data = unbox_list data in
     let r = List.hd data in
-    List.map fst (unbox_record r)
+    List.map ~f:fst (Phrase.Value.unbox_record r)
 
-  let row_values db data =
-    let data = unbox_list data in
-    let fn = List.map (value_as_string db -<- snd) in
-    let data = List.map (fn -<- unbox_record) data in
-    data
+  let row_values _db data =
+    List.map ~f:(Phrase.Value.unbox_record >> List.map ~f:snd) data
 
   let box_int_record_list cols data =
-    let data = List.map (List.map box_int) data in
-    let data = List.map (List.combine cols) data in
-    let data = List.map box_record data in
-    let data = box_list data in
-    data
+    List.map ~f:(List.map ~f:Phrase.Value.box_int) data
+    |> List.map ~f:(List.zip_exn cols)
+    |> List.map ~f:Phrase.Value.box_record
 
   let insert_rows db table data =
     (* See lib.ml "InsertRows" *)
-    let cols = row_columns data in
-    let rows = row_values db data in
-    Database.execute_insert (table, cols, rows) db
+    let columns = row_columns data in
+    let values = row_values db data in
+    let open Database.Insert in
+    let insert = Format.asprintf "%a" fmt { table; db; columns; values } in
+    let open Database in
+    db.execute insert
 
-  let drop_if_exists test_ctx (db : database) table =
-    let query = "DROP TABLE IF EXISTS " ^ table in
-    let _ = if display_table_query_opt test_ctx then Debug.print query else () in
-    db#exec query
+  let drop_if_exists test_ctx (db : Database.t) table =
+    let open Database in
+    let query = "DROP TABLE IF EXISTS " ^ db.quote_field table in
+    print_table_query test_ctx query;
+    db.execute query
 
-  let drop_if_cleanup test_ctx (db : database) table =
-    if leave_tables_opt test_ctx then
-      ()
-    else
-      let _ = drop_if_exists test_ctx db table in
-      ()
+  let drop_if_cleanup test_ctx (db : Database.t) table =
+    if leave_tables_opt test_ctx |> not then
+      drop_if_exists test_ctx db table
 
   type col_gen_type = [
     | `Seq
@@ -181,8 +189,8 @@ module LensTestHelpers = struct
 
   let gen_data (cols : col_gen_type list) cnt =
     let _ = Random.self_init () in
-    let data = List.map (fun i ->
-        List.map (function
+    let data = List.map ~f:(fun i ->
+        List.map ~f:(function
             | `Seq -> i
             | `Constant n -> n
             | `RandTo n -> 1 + Random.int (if n < 5 then 5 else n)
@@ -191,25 +199,22 @@ module LensTestHelpers = struct
       ) (range 1 cnt) in
     data
 
-  let create_record_type (cols : (string * typ) list) =
-    let cols = List.map (fun (a,b) -> a, `Present b) cols in
-    `Record (Utility.StringMap.from_alist cols, Unionfind.fresh `Closed, false)
+  let create_record_type (cols : (string * Links_core.Types.typ) list) =
+    let cols = List.map ~f:(fun (a,b) -> a, `Present b) cols in
+    `Record (Links_core.Utility.StringMap.from_alist cols, Links_core.Unionfind.fresh `Closed, false)
 
-  let create_lens_db db tablename fd (key : string list) (cols : string list) =
-    let colFn tbl name = {
-      alias = name; name = name; table = tbl; typ = `Primitive Primitive.Int; present = true
-    } in
+  let create_lens_db database tablename fd (key : string list) (cols : string list) =
+    let colFn table name =
+      Column.make ~alias:name ~name ~table ~typ:Phrase.Type.Int ~present:true in
     (* table is `Table of (database * db : str) * tablename : str * keys : string list list * row type *)
-    let colst = List.map (fun a -> a, `Primitive Primitive.Int) cols in
-    let `Record recordType = create_record_type colst in
-    let table = ((db, ""), tablename, [key], recordType) in
+    let table = Database.Table. { name = tablename; keys = [key] } in
     let fds = Lens.Fun_dep.Set.singleton fd in
-    let cols = List.map (colFn tablename) cols in
+    let cols = List.map ~f:(colFn tablename) cols in
     let sort = Lens.Sort.make ~fds cols in
-    let l1 = `Lens (table, sort) in
+    let l1 = Value.Lens { database; table; sort } in
     l1
 
-  let drop_create_populate_table test_ctx (db : database) table str str2 colGen cnt =
+  let drop_create_populate_table test_ctx (db : Database.t) table str str2 colGen cnt =
     let fd = fundep_of_string str in
     let left = Lens.Fun_dep.left fd in
     let cols = colslist_of_string str2 in
@@ -232,14 +237,14 @@ module LensTestHelpers = struct
 
   let time_query _in_mem fn =
     Lens.Statistics.reset ();
-    let res = Debug.debug_time_out fn (fun time -> print_endline ("Total Time: " ^ string_of_int time)) in
+    let res = Lens.Statistics.debug_time_out fn (fun time -> print_endline ("Total Time: " ^ string_of_int time)) in
     print_query_time ();
     res
 
   let time_op fn =
     Lens.Statistics.reset ();
     let ttime = ref 0 in
-    let _ = Debug.debug_time_out fn (fun time -> ttime := time) in
+    let _ = Lens.Statistics.debug_time_out fn (fun time -> ttime := time) in
     (Lens.Statistics.get_query_time (), !ttime)
 
   let time_query_both fn =
@@ -250,8 +255,8 @@ module LensTestHelpers = struct
   let col_list_to_string (cols : string list) (sep : string) =
     List.fold_left (fun a b -> a ^ sep ^ b) (List.hd cols) (List.tl cols)
 
-  let assert_rec_list_eq (actual : Value.t) (expected : Value.t) =
-    if actual = box_list [] || expected = box_list [] then
+  let assert_rec_list_eq (actual : Phrase.Value.t list) (expected : Phrase.Value.t list) =
+    if actual = [] || expected = [] then
       (* cannot construct sorted records without columns, but if one is empty so should the other *)
       assert (actual = expected)
     else

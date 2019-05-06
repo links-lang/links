@@ -1,18 +1,13 @@
-fun request(s) {
-  <html>
-   <body>
-    <h1>Please type a number</h1>
-     <form l:onsubmit="{response(t)}" l:onkeyup="{replaceDocument(request(t))}">
-      <input type="text" value="{s}" l:name="t"/>
-      {
-      if (s =~ /^[0-9]+/)
-       <input type="submit"/>
-      else
-       <input type="submit" disabled="disabled"/>
-      }
-     </form>
-    </body>
-  </html>
+fun lookupFactorials(n) server {
+ var db = database "factorials";
+ var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+ query {
+   for (row <-- factorials)
+    where (row.i <= n)
+    orderby (row.i)
+     [(i=row.i, f=row.f)]
+ }
 }
 
 fun response(s) client {
@@ -34,16 +29,21 @@ fun response(s) client {
  )
 }
 
-fun lookupFactorials(n) server {
- var db = database "factorials";
- var factorials = table "factorials" with (i : Int, f : Int) from db;
-
- query {
-   for (row <-- factorials)
-    where (row.i <= n)
-    orderby (row.i)
-     [(i=row.i, f=row.f)]
- }
+fun request(s) {
+  <html>
+   <body>
+    <h1>Please type a number</h1>
+     <form l:onsubmit="{response(t)}" l:onkeyup="{replaceDocument(request(t))}">
+      <input type="text" value="{s}" l:name="t"/>
+      {
+      if (s =~ /^[0-9]+/)
+       <input type="submit"/>
+      else
+       <input type="submit" disabled="disabled"/>
+      }
+     </form>
+    </body>
+  </html>
 }
 
 fun main() {

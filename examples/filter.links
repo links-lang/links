@@ -1,3 +1,20 @@
+### DOM stuff ###
+fun domValue(id) client {
+  domGetNodeValueFromRef(getNodeById(id))
+}
+
+fun domContent(id) client {
+  getChildNodes(getValue(getNodeById(id)))
+}
+
+fun stringToComparison(s) {
+  switch (s) {
+    case "lt" -> Lt
+    case "eq" -> Eq
+    case "gt" -> Gt
+  }
+}
+
 ### validation ###
 
 fun isPrice(s) {
@@ -214,51 +231,11 @@ fun showResults(wines) client {
   domReplaceChildren(xml, r)
 }
 
-fun manager(atoms, atomss) client {
-  receive {
-    case Constraint(connective, field) ->
-      var a =
-        switch (field) {
-          case Price  -> lookupPrice()
-          case Year   -> lookupYear()
-          case Type   -> lookupType()
-          case Region -> lookupRegion()
-        };
-      switch (a) {
-        case Nothing -> manager(atoms, atomss)
-        case Just(a) ->
-          switch ((atoms, connective)) {
-            case ([], _)  -> domReplaceChildren(<#/>, getNodeById("filter"));
-                             renderAtom(<#/>, a); manager([a], atomss)
-            case (_, And) -> renderAtom(<#> and </#>, a); manager(a::atoms, atomss)
-            case (_, Or)  -> renderAtom(<#> or<br/></#>, a); manager([a], atoms::atomss)
-          }
-      }
-    case Query ->
-      showResults(makeQuery(atoms::atomss)); manager(atoms, atomss)
-    case Reset ->
-      domReplaceChildren(<#>true</#>, getNodeById("filter"));
-      domReplaceChildren(<#/>, getNodeById("results"));
-      domReplaceChildren(<#/>, getNodeById("price-error"));
-      domReplaceChildren(<#/>, getNodeById("year-error"));
-      manager([], [])
-  }
-}
-
-fun stringToComparison(s) {
-  switch (s) {
-    case "lt" -> Lt
-    case "eq" -> Eq
-    case "gt" -> Gt
-  }
-}
-
-fun domValue(id) client {
-  domGetNodeValueFromRef(getNodeById(id))
-}
-
-fun domContent(id) client {
-  getChildNodes(getValue(getNodeById(id)))
+fun lookupRegion() client {
+  var s = domValue("region-value");
+  var id = stringToInt(s);
+  var name = domContent("region" ^^ s);
+  Just(Region(id, name))
 }
 
 fun lookupPrice() client {
@@ -298,13 +275,36 @@ fun lookupType() client {
   Just(Type(id, name))
 }
 
-fun lookupRegion() client {
-  var s = domValue("region-value");
-  var id = stringToInt(s);
-  var name = domContent("region" ^^ s);
-  Just(Region(id, name))
+fun manager(atoms, atomss) client {
+  receive {
+    case Constraint(connective, field) ->
+      var a =
+        switch (field) {
+          case Price  -> lookupPrice()
+          case Year   -> lookupYear()
+          case Type   -> lookupType()
+          case Region -> lookupRegion()
+        };
+      switch (a) {
+        case Nothing -> manager(atoms, atomss)
+        case Just(a) ->
+          switch ((atoms, connective)) {
+            case ([], _)  -> domReplaceChildren(<#/>, getNodeById("filter"));
+                             renderAtom(<#/>, a); manager([a], atomss)
+            case (_, And) -> renderAtom(<#> and </#>, a); manager(a::atoms, atomss)
+            case (_, Or)  -> renderAtom(<#> or<br/></#>, a); manager([a], atoms::atomss)
+          }
+      }
+    case Query ->
+      showResults(makeQuery(atoms::atomss)); manager(atoms, atomss)
+    case Reset ->
+      domReplaceChildren(<#>true</#>, getNodeById("filter"));
+      domReplaceChildren(<#/>, getNodeById("results"));
+      domReplaceChildren(<#/>, getNodeById("price-error"));
+      domReplaceChildren(<#/>, getNodeById("year-error"));
+      manager([], [])
+  }
 }
-
 
 ### fetch the types and regions from the database for display in the dropdowns ###
 fun fetchTypesAndRegions() server {

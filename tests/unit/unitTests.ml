@@ -1,14 +1,16 @@
 open OUnit2
 
 let suites =
-   "All" >::: [
-       "Lenses" >::: [
+   "all" >::: [
+       "lenses" >::: [
+            UnitTestsLensLang.suite;
             UnitTestsLensCommon.suite;
             UnitTestsLensFDHelpers.suite;
             UnitTestsLensDatabase.suite;
             UnitTestsLensSetOperations.suite;
             UnitTestsLensPerformance.suite;
             UnitTestsLensPrimitives.suite;
+            UnitTestsLensLang.suite;
         ];
    ];;
 

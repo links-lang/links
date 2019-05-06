@@ -47,6 +47,57 @@ typename SupervisorState = (lastCard: Int,
                             pack:[Int],
                             players:[PlayerState]);
 
+sig disconnect :
+  (Nickname, [(Nickname, [Int])], LinList(WorkerSend)) ~>
+  ([(Nickname, [Int])], LinList(WorkerSend))
+fun disconnect(nick, players, cs) {
+  switch ((players, cs)) {
+    case ([], LinNil) -> ([], LinNil)
+    case (((name, cards) :: players), LinCons(c, cs)) ->
+      if (nick == name) {
+        cancel(c);
+        (players, cs)
+      } else {
+        var (players, cs) = disconnect(nick, players, cs);
+        ((name, cards)::players, LinCons(c, cs))
+      }
+  }
+}
+
+sig play : (Nickname, Int) ~> Bool
+fun play(nick, card) {
+  var (status, s) = receive(send((nick, card), select Play request(sap)));
+  close(s);
+  status
+}
+
+sig leave : (Nickname) ~> ()
+fun leave(nick) {
+  close(send(nick, select Leave request(sap)))
+}
+
+# reads incoming requests from the client, dispatches each command
+# to the supervisor loop which will broadcast to other session
+# clients
+sig worker : (Nickname, WorkerReceive) ~> ()
+fun worker(nick, c) {
+  try {
+    offer(c) {
+      case Chat(c) ->
+        var (msg, c) = receive(c);
+        chat(nick, msg);
+        c
+      case Play(c) ->
+        var (card, c) = receive(c);
+        send(play(nick, card), c)
+    }
+  } as (c) in {
+    worker(nick, c)
+  } otherwise {
+    leave(nick)
+  }
+}
+
 # Main supervisor loop, containing server state. Awaits
 # (non-session) control messages to update the state, or broadcast
 # instructions to send things along session channels.
@@ -137,45 +188,6 @@ fun supervisor(st, cs) {
   }
 }
 
-# reads incoming requests from the client, dispatches each command
-# to the supervisor loop which will broadcast to other session
-# clients
-sig worker : (Nickname, WorkerReceive) ~> ()
-fun worker(nick, c) {
-  try {
-    offer(c) {
-      case Chat(c) ->
-        var (msg, c) = receive(c);
-        chat(nick, msg);
-        c
-      case Play(c) ->
-        var (card, c) = receive(c);
-        send(play(nick, card), c)
-    }
-  } as (c) in {
-    worker(nick, c)
-  } otherwise {
-    leave(nick)
-  }
-}
-
-sig disconnect :
-  (Nickname, [(Nickname, [Int])], LinList(WorkerSend)) ~>
-  ([(Nickname, [Int])], LinList(WorkerSend))
-fun disconnect(nick, players, cs) {
-  switch ((players, cs)) {
-    case ([], LinNil) -> ([], LinNil)
-    case (((name, cards) :: players), LinCons(c, cs)) ->
-      if (nick == name) {
-        cancel(c);
-        (players, cs)
-      } else {
-        var (players, cs) = disconnect(nick, players, cs);
-        ((name, cards)::players, LinCons(c, cs))
-      }
-  }
-}
-
 sig join : (ChatServer) ~> ()
 fun join(c) {
   close(send(c, select Join request(sap)))
@@ -184,18 +196,6 @@ fun join(c) {
 sig chat : (Nickname, Message) ~> ()
 fun chat(nick, msg) {
   close(send((nick, msg), select Chat request(sap)))
-}
-
-sig play : (Nickname, Int) ~> Bool
-fun play(nick, card) {
-  var (status, s) = receive(send((nick, card), select Play request(sap)));
-  close(s);
-  status
-}
-
-sig leave : (Nickname) ~> ()
-fun leave(nick) {
-  close(send(nick, select Leave request(sap)))
 }
 
 sig acceptor : () ~> ()

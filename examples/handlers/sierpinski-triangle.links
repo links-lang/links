@@ -29,6 +29,15 @@ var dotSize = 25;
 var hoverColor = "#ff0";
 var nonHoverColor = "#61dafb";
 
+sig setValue: (String, String) ~%~> ()
+fun setValue(newVal, id){
+    domSetAttributeFromRef(getNodeById(id), "value", newVal)
+}
+
+sig getValue: (String) ~> String
+fun getValue(id){
+    domGetAttributeFromRef(getNodeById(id), "value")
+}
 #Threading
 
 sig enqueue: (a, Queue(a)) -> Queue(a)
@@ -122,12 +131,110 @@ fun makeFiber(prio, f){
     (prio= prio, f=f)
 }
 
+
+sig tick: (String) ~> ()
+fun tick(nodeId){
+    var sec = intToString((clientTime()) `mod` 10);
+    var id = nodeId ^^ "-text";
+    domReplaceChildren(stringToXml(sec), getNodeById(id));
+    setValue(sec, nodeId)
+}
+
+sig prepareTick: (String) ~> () ~> ()
+fun prepareTick(nodeId){
+    fun(){
+        tick(nodeId)
+    }
+}
+
+sig getCircleStyleAttributeString: (Int, Int, Bool) -> String
+fun getCircleStyleAttributeString(x, y, hover){
+    var s = dotSize;
+    var color = {if(hover) hoverColor
+                else nonHoverColor};
+
+    (" width: " ^^ intToString(s) ^^ "px; " ^^
+    " height: " ^^ intToString(s) ^^ "px; " ^^
+    " left: " ^^ intToString(x) ^^ "px;" ^^
+    " top: " ^^ intToString(y) ^^ "px;" ^^
+    " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
+    " background-color: " ^^ color ^^";")
+}
+
+sig getScaleTransformAttributeString: ((Float, Float, Float)) -> String
+fun getScaleTransformAttributeString(scale){
+    #("transform: scaleX(" ^^ floatToString(scale.1) ^^ ");")
+    ("transform: scaleX(" ^^ floatToString(scale.1) ^^ ") scaleY(" ^^ floatToString(scale.2) ^^");")
+}
+
+sig getDotXml: (Int, Int, (Float, Float, Float), String, String) ~> Xml
+fun getDotXml(x, y, scale, id, text){
+    var style = getCircleStyleAttributeString(x, y, false);
+    var st =  getScaleTransformAttributeString(scale);
+    {<#>
+        <div value="{text}" id="{id}" class="containerStyle" style="{st}">
+            <div class="circle" style="{style}">
+                <span id="{id ^^ "-text"}">{stringToXml(text)}</span>
+            </div>
+        </div>
+    </#>}
+}
+
+sig calculateScale: (Int) ~> (Float, Float,Float)
+fun calculateScale(startTime){
+    var elapsed = clientTimeMilliseconds() - startTime;
+    var n = 70;
+    var t = (elapsed/100) `mod` (2*n);
+    var w = {
+        if(t > n) (2*n) - t
+        else t
+    };
+    var scale = 1.0 +.  (intToFloat(w) /. intToFloat(2*n));
+    #println("scale: " ^^ floatToString(scale/. 2.1));
+    (scale, 1.0, 1.0)
+}
+
+sig drawDot: (Int, Int, String) ~> ()
+fun drawDot(x, y, nodeId){
+    var xml = getDotXml(x, y, calculateScale(clientTimeMilliseconds()), nodeId, "1");
+    appendChildren(xml, getNodeById("container"))
+}
+
+sig replaceDot: (Int, Int, String, Int) ~> ()
+fun replaceDot(x, y, nodeId, startTime){
+    var xml = getDotXml(x, y, calculateScale(startTime), nodeId, getValue(nodeId));
+    domReplaceChildren(xml, getNodeById(nodeId))
+}
+
+sig prepareReplaceDot: (Int) -> (Int, Int, String) ~> ()
+fun prepareReplaceDot(startTime){
+    fun(x, y, nodeId){
+        replaceDot(x, y, nodeId, startTime)
+    }
+}
+
+
+sig makeDot: (Int, Int, Int) {Gensym: Int|e}~> ()
+fun makeDot(x, y, startTime) {
+    var nodeId = "dot-" ^^ intToString(do Gensym);
+    fun g(draw)() {
+        fun f(draw)(){
+            draw(x, y, nodeId):()
+        }
+        setIntervalForF(1000, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
+        f(draw)();                      # Draw the initial triangle
+        setIntervalForF(95, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
+    }
+    sysEnqueue(makeFiber(High, g(drawDot)))
+}
+
 sig forever: () {Yield |e}~> ()
 fun forever(){ yield(); forever()}
 
 sig schedule: (Fiber0({ |e})) {Yield-, Fork- | e}~> ()
 fun schedule(main){
 
+  mutual {
     fun runNext(q){
         switch(fiberDequeue(q)){
             case (None, _) -> ()
@@ -137,7 +244,7 @@ fun schedule(main){
 
     fun runFiber(fiber, runQ){
         #dump(self());
-        handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTime()) -> state){
+        handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) -> state){
             case Return(x) ->
                 runNext(poll(state.runQ))
             case Fork(f, resume) ->
@@ -154,7 +261,7 @@ fun schedule(main){
                         runFiber(f, qq)
                 }
             case Yield(resume) ->
-                var currentTime = clientTime();
+                var currentTime = clientTimeMilliseconds();
                 var buffer = switch(state.prio){
                     case High -> 120
                     case Low -> 30
@@ -169,7 +276,7 @@ fun schedule(main){
 
     #sig makeSchedulerState: (Priority, PrioQueue(a)) ~> SchedulerState(a)
     fun makeSchedulerState(prio, q){
-        (runQ = q, prio = prio, startTime = clientTime())
+        (runQ = q, prio = prio, startTime = clientTimeMilliseconds())
     }
 
     #sig fiber0ToFiber: (Fiber0({ |%e})) ~%~> Fiber({ |%e})
@@ -186,8 +293,9 @@ fun schedule(main){
         var enqueue = map(fiber0ToFiber, sysDequeue());
         fiberBulkEnqueue(enqueue, q)
     }
+  }
 
-    runFiber(main, emptyPrioQueue())
+  runFiber(main, emptyPrioQueue())
 }
 
 fun gensymHandler(f){
@@ -198,15 +306,6 @@ fun gensymHandler(f){
 
 # Page Functionality
 
-sig setValue: (String, String) ~%~> ()
-fun setValue(newVal, id){
-    domSetAttributeFromRef(getNodeById(id), "value", newVal)
-}
-
-sig getValue: (String) ~> String
-fun getValue(id){
-    domGetAttributeFromRef(getNodeById(id), "value")
-}
 
 sig makeSTriangle: (Point, Int, String, [STriangle({ |e})]) -> STriangle({ |e})
 fun makeSTriangle(p, s, text, children){
@@ -243,105 +342,10 @@ fun setUpTriangle(s, text){
     else None
 }
 
-sig calculateScale: (Int) ~> (Float, Float,Float)
-fun calculateScale(startTime){
-    var elapsed = clientTime() - startTime;
-    var n = 70;
-    var t = (elapsed/100) `mod` (2*n);
-    var w = {
-        if(t > n) (2*n) - t
-        else t
-    };
-    var scale = 1.0 +.  (intToFloat(w) /. intToFloat(2*n));
-    #println("scale: " ^^ floatToString(scale/. 2.1));
-    (scale, 1.0, 1.0)
-}
-
-
-sig getCircleStyleAttributeString: (Int, Int, Bool) -> String
-fun getCircleStyleAttributeString(x, y, hover){
-    var s = dotSize;
-    var color = {if(hover) hoverColor
-                else nonHoverColor};
-
-    (" width: " ^^ intToString(s) ^^ "px; " ^^
-    " height: " ^^ intToString(s) ^^ "px; " ^^
-    " left: " ^^ intToString(x) ^^ "px;" ^^
-    " top: " ^^ intToString(y) ^^ "px;" ^^
-    " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
-    " background-color: " ^^ color ^^";")
-}
-
-sig getScaleTransformAttributeString: ((Float, Float, Float)) -> String
-fun getScaleTransformAttributeString(scale){
-    #("transform: scaleX(" ^^ floatToString(scale.1) ^^ ");")
-    ("transform: scaleX(" ^^ floatToString(scale.1) ^^ ") scaleY(" ^^ floatToString(scale.2) ^^");")
-}
-
-sig getDotXml: (Int, Int, (Float, Float, Float), String, String) ~> Xml
-fun getDotXml(x, y, scale, id, text){
-    var style = getCircleStyleAttributeString(x, y, false);
-    var st =  getScaleTransformAttributeString(scale);
-    {<#>
-        <div value="{text}" id="{id}" class="containerStyle" style="{st}">
-            <div class="circle" style="{style}">
-                <span id="{id ^^ "-text"}">{stringToXml(text)}</span>
-            </div>
-        </div>
-    </#>}
-}
-
-sig tick: (String) ~> ()
-fun tick(nodeId){
-    var sec = intToString((clientTime()/1000) `mod` 10);
-    var id = nodeId ^^ "-text";
-    domReplaceChildren(stringToXml(sec), getNodeById(id));
-    setValue(sec, nodeId)
-}
-
-sig drawDot: (Int, Int, String) ~> ()
-fun drawDot(x, y, nodeId){
-    var xml = getDotXml(x, y, calculateScale(clientTime()), nodeId, "1");
-    appendChildren(xml, getNodeById("container"))
-}
-
-sig replaceDot: (Int, Int, String, Int) ~> ()
-fun replaceDot(x, y, nodeId, startTime){
-    var xml = getDotXml(x, y, calculateScale(startTime), nodeId, getValue(nodeId));
-    domReplaceChildren(xml, getNodeById(nodeId))
-}
-
-sig prepareReplaceDot: (Int) -> (Int, Int, String) ~> ()
-fun prepareReplaceDot(startTime){
-    fun(x, y, nodeId){
-        replaceDot(x, y, nodeId, startTime)
-    }
-}
-
-sig prepareTick: (String) ~> () ~> ()
-fun prepareTick(nodeId){
-    fun(){
-        tick(nodeId)
-    }
-}
-
-sig makeDot: (Int, Int, Int) {Gensym: Int|e}~> ()
-fun makeDot(x, y, startTime) {
-    var nodeId = "dot-" ^^ intToString(do Gensym);
-    fun g(draw)() {
-        fun f(draw)(){
-            draw(x, y, nodeId):()
-        }
-        setIntervalForF(1000, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
-        f(draw)();                      # Draw the initial triangle
-        setIntervalForF(95, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
-    }
-    sysEnqueue(makeFiber(High, g(drawDot)))
-}
 
 fun start(){
     var tri = setUpTriangle(400, "1");
-    var startTime = clientTime();
+    var startTime = clientTimeMilliseconds();
     switch(tri){
         case None -> ()
         case Some(triangle) ->

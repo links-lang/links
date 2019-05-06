@@ -1,6 +1,5 @@
 open Utility
-open SourceCode
-open Lexing
+open Scanner
 
 (* NB : For now, positions are resolved eagerly.  It might be better
    to resolve them lazily, i.e. keep the source around and only find
@@ -8,61 +7,17 @@ open Lexing
    occurs.
 *)
 
-type 'a grammar = (Lexing.lexbuf -> Parser.token) -> Lexing.lexbuf -> 'a
+module LinksLexer : (LexerSig with type token         = Parser.token and
+                                   type lexer_context = Lexer.lexer_context) =
+  struct
+    type token         = Parser.token
+    type lexer_context = Lexer.lexer_context
+    type 'a grammar    = (Lexing.lexbuf -> Parser.token) -> Lexing.lexbuf -> 'a
+    let lexer          = Lexer.lexer
+    let fresh_context  = Lexer.fresh_context
+end
 
-class source_code = SourceCode.source_code
-
-(* Read and parse Links source code from the source named `name' via
-   the function `infun'.
-*)
-let read : context:Lexer.lexer_context
-        -> ?nlhook:(unit -> unit)
-        -> parse:('intermediate grammar)
-        -> infun:(bytes -> int -> int)
-        -> name:string
-        -> 'result * source_code =
-fun ~context ?nlhook ~parse ~infun ~name ->
-  let code = new source_code in
-  let lexbuf = {(from_function (code#parse_into infun))
-                 with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in
-    try
-      let p = parse (Lexer.lexer context ~newline_hook:(from_option identity nlhook)) lexbuf in
-        (p, code)
-    with
-      | Parser.Error ->
-          let line, column = code#find_line lexbuf.lex_curr_p in
-            raise
-              (Errors.RichSyntaxError
-                 {Errors.filename = name;
-                  Errors.linespec = string_of_int lexbuf.lex_curr_p.pos_lnum;
-                  Errors.message = "";
-                  Errors.linetext = line;
-                  Errors.marker = String.make column ' ' ^ "^" })
-      | Sugartypes.ConcreteSyntaxError (msg, pos) ->
-          let start, finish = Position.start pos, Position.finish pos in
-          let linespec =
-            if start.pos_lnum = finish.pos_lnum
-            then string_of_int start.pos_lnum
-            else (string_of_int start.pos_lnum  ^ "..."
-                  ^ string_of_int finish.pos_lnum) in
-          let line = code#extract_line_range (start.pos_lnum-1) finish.pos_lnum in
-          let _, column = code#find_line finish in
-            raise
-              (Errors.RichSyntaxError
-                 {Errors.filename = name;
-                  Errors.linespec = linespec;
-                  Errors.message = msg;
-                  Errors.linetext = line;
-                  Errors.marker = String.make column ' ' ^ "^"})
-      | Lexer.LexicalError (lexeme, position) ->
-          let line, column = code#find_line position in
-            raise
-              (Errors.RichSyntaxError
-                 {Errors.filename = name;
-                  Errors.linespec = string_of_int position.pos_lnum;
-                  Errors.message = "Unexpected character : " ^ lexeme;
-                  Errors.linetext = line;
-                  Errors.marker = String.make column ' ' ^ "^"})
+module LinksParser = Scanner (LinksLexer)
 
 (* Given an input channel, return a function suitable for input to
    Lexing.from_function that reads characters from the channel.
@@ -115,9 +70,12 @@ let reader_of_readline ps1 =
   (accessor_fun, populate_fun)
 
 
-let interactive : Sugartypes.sentence grammar = Parser.interactive
-let program : (Sugartypes.binding list * Sugartypes.phrase option) grammar = Parser.file
-let datatype : Sugartypes.Datatype.with_pos grammar = Parser.just_datatype
+let interactive : Sugartypes.sentence LinksLexer.grammar =
+  Parser.interactive
+let program : (Sugartypes.binding list * Sugartypes.phrase option) LinksLexer.grammar =
+  Parser.file
+let datatype : Sugartypes.Datatype.with_pos LinksLexer.grammar =
+  Parser.just_datatype
 
 let normalize_pp = function
   | "" -> None
@@ -127,12 +85,6 @@ let normalize_pp = function
    operator precedences, but more generally is an environment with
    respect to which any parse-time resolution takes place.
 *)
-type context = Lexer.lexer_context
-let fresh_context = Lexer.fresh_context
-
-let normalize_context = function
-  | None -> fresh_context ()
-  | Some c -> c
 
 let default_preprocessor () = (Settings.get_value Basicsettings.pp)
 
@@ -146,18 +98,21 @@ let default_preprocessor () = (Settings.get_value Basicsettings.pp)
 **)
 let parse_string ?(pp=default_preprocessor ()) ?in_context:context grammar string =
   let pp = normalize_pp pp
-  and context = normalize_context context in
-    read ?nlhook:None ~parse:grammar ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context
+  and context = LinksParser.normalize_context context in
+    LinksParser.read ?nlhook:None ~parse:grammar
+      ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context
 
 let parse_channel ?interactive ?in_context:context grammar (channel, name) =
-  let context = normalize_context context in
-    read ?nlhook:interactive ~parse:grammar ~infun:(reader_of_channel channel) ~name:name ~context
+  let context = LinksParser.normalize_context context in
+    LinksParser.read ?nlhook:interactive ~parse:grammar
+      ~infun:(reader_of_channel channel) ~name:name ~context
 
 (* Reads lines in and parses them, given an initial prompt *)
 let parse_readline ps1 ?in_context:context grammar =
-  let context = normalize_context context in
+  let context = LinksParser.normalize_context context in
   let (accessor_fun, populate_fun) = reader_of_readline ps1 in
-  read ?nlhook:(Some populate_fun) ~parse:grammar ~infun:accessor_fun ~name:"<stdin>" ~context
+  LinksParser.read ?nlhook:(Some populate_fun) ~parse:grammar
+    ~infun:accessor_fun ~name:"<stdin>" ~context
 
 let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
   match normalize_pp pp with
@@ -165,12 +120,9 @@ let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filenam
     | Some pp ->
         Utility.call_with_open_infile filename
           (fun channel ->
-             let context = normalize_context context in
-             read ~nlhook:ignore
-                  ~parse:grammar
-                  ~infun:(reader_of_string ~pp (String.concat "\n" (Utility.lines channel)))
-                  ~name:filename
-                  ~context)
-
-type position_context = SourceCode.source_code
-
+             let context = LinksParser.normalize_context context in
+             LinksParser.read ~nlhook:ignore
+               ~parse:grammar
+               ~infun:(reader_of_string ~pp (String.concat "\n" (lines channel)))
+               ~name:filename
+               ~context)

@@ -3,6 +3,7 @@ open OUnit2
 open Links_core
 open UnitTestsLensCommon
 open Value
+open Lens.Phrase.Value
 
 module Sorted = Lens.Sorted_records
 
@@ -123,13 +124,13 @@ let test_merge _test_ctx =
 
 
 let test_minus _test_ctx =
-  let set = box_list [
+  let set = [
       box_record ["a", box_bool true; "b", box_int 5; "str", box_string "abc"];
       box_record ["a", box_bool true; "b", box_int 3; "str", box_string "this"];
       box_record ["a", box_bool false; "b", box_int 9; "str", box_string "0123"];
     ] in
   let recs1 = Sorted.construct ~records:set in
-  let set2 = box_list [
+  let set2 = [
       box_record ["str", box_string "abc"; "b", box_int 5; ];
       box_record ["str", box_string "0123"; "b", box_int 9; ];
     ] in
@@ -139,7 +140,7 @@ let test_minus _test_ctx =
   ()
 
 let test_project _test_ctx =
-  let set = box_list [
+  let set = [
       box_record ["a", box_bool true; "b", box_int 5; "str", box_string "abc"];
       box_record ["a", box_bool true; "b", box_int 3; "str", box_string "this"];
       box_record ["a", box_bool false; "b", box_int 9; "str", box_string "0123"];
@@ -158,7 +159,7 @@ let test_project _test_ctx =
                        ~neg:[])
 
 let test_compare _test_ctx =
-  let set = box_list [
+  let set = [
       box_record ["a", box_bool true; "b", box_int 5; "str", box_string "abc"];
       box_record ["a", box_bool true; "b", box_int 3; "str", box_string "this"];
       box_record ["a", box_bool false; "b", box_int 9; "str", box_string "0123"];
@@ -172,18 +173,18 @@ let test_compare _test_ctx =
 
 
 let test_find_set _test_ctx =
-  let set1 = box_list [
+  let set1 = [
       box_record ["a", box_bool true; "b", box_int 5; "str", box_string "abc"];
       box_record ["a", box_bool true; "b", box_int 3; "str", box_string "this"];
       box_record ["a", box_bool false; "b", box_int 9; "str", box_string "0123"];
     ] in
-  let set2 = box_list [
+  let set2 = [
       box_record ["a", box_bool true; "b", box_int 3; "str", box_string "this"];
     ] in
-  let set3 = box_list [
+  let set3 = [
       box_record ["a", box_bool false; "b", box_int 9; "str", box_string "0123"];
     ] in
-  let _set4 = box_list [
+  let _set4 = [
     ] in
   let find = [box_bool true; box_int 3; box_string "this"] in
   let find2 = [box_bool true; box_int 5; box_string "abc"] in

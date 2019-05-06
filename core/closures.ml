@@ -1,5 +1,7 @@
 open Utility
 open CommonTypes
+open Ir
+open Var
 
 type freevars = {termvars: (Ir.binder list) ; typevars: Types.quantifier list} [@@deriving show]
 type fenv = freevars IntMap.t [@@deriving show]
@@ -104,16 +106,16 @@ struct
 
       method! value = fun v -> match v with
         (* We need to find all types occuring in the given IR fragment *)
-        | `TApp (_, args) ->
+        | TApp (_, args) ->
           let o = List.fold_left (fun o arg -> o#typ arg) o args in
           o#super_value v
-        | `Closure (_, tyargs, _) ->
+        | Closure (_, tyargs, _) ->
           let o = List.fold_left (fun o arg -> o#typ arg) o tyargs in
           o#super_value v
-        | `Inject (_, _, t) ->
+        | Inject (_, _, t) ->
           let o = o#typ (`Type t) in
           o#super_value v
-        | `TAbs (quantifiers, v) ->
+        | TAbs (quantifiers, v) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
           let (_, ti, o) = o#value v in
           let t = `ForAll (Types.box_quantifiers quantifiers, ti) in
@@ -126,12 +128,12 @@ struct
       method! special = fun s ->
         (* We need to find all types occuring in the given IR fragment *)
         let o = match s with
-          | `Table (_, _, _, (t1, t2, t3)) ->
+          | Table (_, _, _, (t1, t2, t3)) ->
             let o1 = o#typ (`Type t1) in
             let o2 = o1#typ (`Type t2) in
             o2#typ (`Type t3)
-          | `Query (_, _, t)
-          | `DoOperation (_, _, t) ->
+          | Query (_, _, t)
+          | DoOperation (_, _, t) ->
             o#typ (`Type t)
           | _ -> o in
         o#super_special s
@@ -159,8 +161,8 @@ struct
         let t = Var.type_of_binder b in
         let o = o#typ (`Type t) in
         match scope with
-        | `Global -> b, o#global (Var.var_of_binder b)
-        | `Local  -> b, o#bound_termvar (Var.var_of_binder b)
+        | Scope.Global -> b, o#global (Var.var_of_binder b)
+        | Scope.Local  -> b, o#bound_termvar (Var.var_of_binder b)
 
       method super_binding = super#binding
 
@@ -184,7 +186,7 @@ struct
           List.rev
             (IntSet.fold
                 (fun x zs ->
-                  (x, (o#lookup_type x, "fv_" ^ string_of_int x, `Local))::zs)
+                  (x, (o#lookup_type x, "fv_" ^ string_of_int x, Scope.Local))::zs)
                 (o#get_free_term_vars)
                 []) in
         (* We are only interested in free variables of the function that actually have a binder "above".
@@ -202,12 +204,13 @@ struct
 
       method! binding =
         function
-        | (`Let (_, (quantifiers, _))) as b->
+        | (Let (_, (quantifiers, _))) as b->
           let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
           let (b, o) = o#super_binding b in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (b, o)
-        | (`Fun (f, (tyvars, xs, body), None, location)) as b when Ir.binding_scope b = `Local ->
+        | (Fun (f, (tyvars, xs, body), None, location)) as b
+             when Scope.isLocal (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -238,15 +241,15 @@ struct
           let f, o = o#binder f in
           let o = o#register_fun (Var.var_of_binder f) fenv_entry in
           (*Debug.print ("fenv: " ^ show_fenv o#get_fenv);*)
-          `Fun (f, (tyvars, xs, body), None, location), o
+          Fun (f, (tyvars, xs, body), None, location), o
 
-        | (`Fun (_, (tyvars, _, _),_,_)) as b (* global *) ->
+        | (Fun (_, (tyvars, _, _),_,_)) as b (* global *) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
           let (b, o) = o#super_binding b in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
           (b, o)
 
-        | (`Rec defs) as b when Ir.binding_scope b = `Local ->
+        | (Rec defs) as b when Scope.isLocal (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -301,8 +304,8 @@ struct
               (fun o (f, _, _, _) ->
                  o#register_fun (Var.var_of_binder f) fenv_entry) o defs in
           let defs = List.rev defs in
-          `Rec defs, o
-        | `Rec defs (* global *) ->
+          Rec defs, o
+        | Rec defs (* global *) ->
           (* it's important to traverse the function binders first in
              order to make sure they're in scope for all of the
              function bodies *)
@@ -348,7 +351,7 @@ struct
               ([], o) in
 
           let defs = List.rev defs in
-          `Rec defs, o
+          Rec defs, o
         | b -> super#binding b
 
       method! program =
@@ -370,14 +373,16 @@ end
 (* mark top-level bindings as global *)
 module Globalise =
 struct
-  let binder (x, (t, name, _)) = (x, (t, name, `Global))
+  let binder (x, (t, name, _)) = (x, (t, name, Scope.Global))
   let fun_def (f, lam, z, location) = (binder f, lam, z, location)
   let binding = function
-    | `Let (x, body) -> `Let (binder x, body)
-    | `Fun def -> `Fun (fun_def def)
-    | `Rec defs -> `Rec (List.map fun_def defs)
-    | `Alien (x, n, language) -> `Alien (binder x, n, language)
-    | `Module _ -> failwith "unimplemented"
+    | Let (x, body) -> Let (binder x, body)
+    | Fun def -> Fun (fun_def def)
+    | Rec defs -> Rec (List.map fun_def defs)
+    | Alien (x, n, language) -> Alien (binder x, n, language)
+    | Module _ ->
+        raise (Errors.internal_error ~filename:"closures.ml"
+          ~message:"Globalisation of modules unimplemented")
   let bindings = List.map binding
   let computation (bs, tc) = (bindings bs, tc)
   let program : Ir.program -> Ir.program = computation
@@ -387,7 +392,7 @@ module ClosureConvert =
 struct
 
   let close f zs tyargs =
-    `Closure (f, tyargs, `Extend (List.fold_right
+    Closure (f, tyargs, Extend (List.fold_right
                             (fun (zname, zv) fields ->
                                StringMap.add zname zv fields)
                             zs
@@ -409,7 +414,7 @@ struct
 
       method! value =
         function
-        | `Variable y ->
+        | Variable y ->
           let y, _, o = o#var y in
 
           let rec var_val x : (Ir.value * Types.datatype ) =
@@ -418,19 +423,19 @@ struct
               (* We cannot return t as the type of the result here. If x refers to a hoisted function that was generalized, then
                  t has additional quantifiers that are not present in the corresponding type of projecting x from parent_env *)
               let projected_t = TypeUtils.project_type (string_of_int x) (snd3 (o#var parent_env)) in
-              `Project (string_of_int x, `Variable parent_env), projected_t
+              Project (string_of_int x, Variable parent_env), projected_t
             else if IntMap.mem x fenv then
               let zs = (IntMap.find x fenv).termvars in
               let tyvars = (IntMap.find x fenv).typevars in
 
               match zs, tyvars with
-              | [], [] -> `Variable x, x_type
+              | [], [] -> Variable x, x_type
               | _ ->
                 let tyargs = List.map Types.type_arg_of_quantifier tyvars in
                 let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false x_type tyargs in
                 let overall_type = Instantiate.datatype instantiation_maps remaining_type in
                 if List.mem_assoc x parents then
-                  `Closure (x, tyargs,`Variable parent_env), overall_type
+                  Closure (x, tyargs,Variable parent_env), overall_type
                 else
                   let zs =
                     List.map
@@ -441,7 +446,7 @@ struct
                   in
                   close x zs tyargs, overall_type
             else
-              `Variable x, x_type
+              Variable x, x_type
           in
           let overall_val, overall_type = var_val y in
           overall_val, overall_type, o
@@ -454,13 +459,13 @@ struct
       method! bindings =
         function
         | [] -> [], o
-        | b :: bs when Ir.binding_scope b = `Global ->
+        | b :: bs when Scope.isGlobal (Ir.binding_scope b) ->
           let b, o = o#binding b in
           let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
-        | `Fun ((f, _) as fb, (tyvars, xs, body), None, location) :: bs ->
-          assert (Var.scope_of_binder fb = `Local);
+        | Fun ((f, _) as fb, (tyvars, xs, body), None, location) :: bs ->
+          assert (Scope.isLocal (Var.scope_of_binder fb));
           let fb = Globalise.binder fb in
           let (xs, o) =
             List.fold_right
@@ -492,7 +497,7 @@ struct
                      zs)
               in
               (* fresh variable for the closure environment *)
-              let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
+              let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, Scope.Local) in
               let z = Var.var_of_binder zb in
               (* HACK: the following line leads to a compiler error in
                  OCaml 4.07.0: Fatal error: exception Ctype.Unify(_)
@@ -505,10 +510,10 @@ struct
           let o = o#set_context parents' parent_env' cvars' in
           let fb, o = o#binder (o# generalize_function_type_for_hoisting fb) in
           let fundef = o#generalize_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
-          let o = o#push_binding (`Fun  fundef) in
+          let o = o#push_binding (Fun  fundef) in
           let bs, o = o#bindings bs in
           bs, o
-        | `Rec defs :: bs ->
+        | Rec defs :: bs ->
             (* it's important to traverse the function binders first in
                order to make sure they're in scope for all of the
                function bodies *)
@@ -526,7 +531,7 @@ struct
               List.fold_left
                 (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location) ->
                    assert (none = None);
-                   assert (Var.scope_of_binder fb = `Local);
+                   assert (Scope.isLocal (Var.scope_of_binder fb));
                    let fb = Globalise.binder fb in
                    let xs, o =
                      List.fold_right
@@ -555,7 +560,7 @@ struct
                               zs)
                        in
                        (* fresh variable for the closure environment *)
-                       let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, `Local) in
+                       let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, Scope.Local) in
                        let _, o = o#binder zb in
                        let z = Var.var_of_binder zb in
                        Some zb, o#set_context fbs z cvars in
@@ -566,7 +571,7 @@ struct
                 ([], o)
                 defs in
             let defs = List.rev defs in
-            let o = o#push_binding (`Rec defs) in
+            let o = o#push_binding (Rec defs) in
             let bs, o = o#bindings bs in
             bs, o
         | b :: bs ->

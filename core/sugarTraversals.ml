@@ -48,7 +48,7 @@ class map =
     method tyunary_op : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t =
       fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
 
-    method binder : Binder.t -> Binder.t =
+    method binder : Binder.with_pos -> Binder.with_pos =
       fun bndr ->
         let name = o#name (Binder.to_name bndr) in
         let ty  = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
@@ -165,8 +165,8 @@ class map =
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                            let _x_i2 = o#location _x_i2 in FunLit (_x, _x1, _x_i1, _x_i2)
       | HandlerLit hnlit ->
-	 let hnlit = o#handlerlit hnlit in
-	 HandlerLit hnlit
+     let hnlit = o#handlerlit hnlit in
+     HandlerLit hnlit
       | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let _given_spawn_location = o#given_spawn_location _given_spawn_location in
           let _block_phr = o#phrase _block_phr in
@@ -265,17 +265,17 @@ class map =
              (fun o (lhs, rhs) ->
                let lhs = o#pattern lhs in
                let rhs = o#phrase rhs in (lhs, rhs)
-	     )
+         )
              sh_effect_cases
-	 in
+     in
          let val_cases =
            o#list
              (fun o (lhs, rhs) ->
                let lhs = o#pattern lhs in
                let rhs = o#phrase rhs in (lhs, rhs)
-	     )
+         )
              sh_value_cases
-	 in
+     in
          Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }
       | Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
@@ -337,7 +337,7 @@ class map =
                  in (_x, _x_i1))
               _x_i2 in
           let _x_i3 = o#phrase _x_i3 in
-	  let _x_i4 = o#phrase _x_i4 in TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4))
+      let _x_i4 = o#phrase _x_i4 in TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4))
       | LensLit ((_x, _x_i1)) ->
               let _x = o#phrase _x in
               let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
@@ -517,23 +517,23 @@ class map =
 
     method handlerlit : handlerlit -> handlerlit =
       fun (depth, m, cases, params) ->
-	let m = o#pattern m in
-	let cases =
+    let m = o#pattern m in
+    let cases =
           o#list
             (fun o (lhs, rhs) ->
               let lhs = o#pattern lhs in
-	      let rhs = o#phrase rhs in (lhs, rhs)
-	    )
+          let rhs = o#phrase rhs in (lhs, rhs)
+        )
             cases
-	in
+    in
         let params =
-	  o#option
-	    (fun o -> o#list
-	      (fun o -> o#list
-	        (fun o -> o#pattern)
-	    )
-	) params in
-	(depth,m,cases,params)
+      o#option
+        (fun o -> o#list
+          (fun o -> o#list
+            (fun o -> o#pattern)
+        )
+    ) params in
+    (depth,m,cases,params)
 
     method handle_params : handler_parameterisation -> handler_parameterisation =
       fun params ->
@@ -593,13 +593,10 @@ class map =
          let _x_i1 = o#datatype _x_i1 in
          let _x_i2 = o#datatype _x_i2 in Table (_x, _x_i1, _x_i2)
       | List _x -> let _x = o#datatype _x in List _x
-      | TypeApplication _x ->
-          let _x =
-            (fun (_x, _x_i1) ->
-               let _x = o#name _x in
-               let _x_i1 = o#list (fun o -> o#type_arg) _x_i1 in (_x, _x_i1))
-              _x
-          in TypeApplication _x
+      | TypeApplication (_x, _x_i1) ->
+          let _x = o#name _x in
+          let _x_i1 = o#list (fun o -> o#type_arg) _x_i1
+          in TypeApplication (_x, _x_i1)
       | Primitive _x -> let _x = o#unknown _x in Primitive _x
       | DB -> DB
       | Input (_x, _x_i1) ->
@@ -688,16 +685,19 @@ class map =
       | QualifiedImport _xs ->
           let _xs = o#list (fun o -> o#name) _xs in
           QualifiedImport _xs
-      | Type ((_x, _x_i1, _x_i2)) ->
-          let _x = o#name _x in
-          let _x_i1 =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let _x = _x (*o#quantifier _x*) in
-                 let _x_i1 = o#unknown _x_i1
-                 in (_x, _x_i1))
-              _x_i1
-          in let _x_i2 = o#datatype' _x_i2 in Type ((_x, _x_i1, _x_i2))
+      | Typenames (ts) ->
+          let ts = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
+            let _x = o#name _x in
+            let _x_i1 =
+              o#list
+                (fun o (_x, _x_i1) ->
+                   let _x = _x (*o#quantifier _x*) in
+                   let _x_i1 = o#unknown _x_i1
+                   in (_x, _x_i1))
+                _x_i1
+            in let _x_i2 = o#datatype' _x_i2 in (_x, _x_i1, _x_i2, _x_i3)
+          ) ts in
+          Typenames ts
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
       | Module (n, bs) ->
@@ -758,7 +758,7 @@ class fold =
     method tyunary_op : tyarg list * UnaryOp.t -> 'self_type =
       fun (_x, _x_i1) -> o#unary_op _x_i1
 
-    method binder : Binder.t -> 'self_type =
+    method binder : Binder.with_pos -> 'self_type =
       fun bndr ->
         let o = o#name (Binder.to_name bndr) in
         let o = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
@@ -864,7 +864,7 @@ class fold =
           let o = o#list (fun o -> o#name) _xs in o
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
       | HandlerLit hnlit ->
-	 let o = o#handlerlit hnlit in o
+     let o = o#handlerlit hnlit in o
       | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let o = o#given_spawn_location _given_spawn_location in
           let o = o#phrase _block_phr in
@@ -936,8 +936,8 @@ class fold =
           let o = o#option (fun o -> o#phrase) _x_i1 in o
       | DoOperation (name,ps,t) ->
          let o = o#name name in
-	 let o = o#option (fun o -> o#unknown) t in
-	 let o = o#list (fun o -> o#phrase) ps in o
+     let o = o#option (fun o -> o#unknown) t in
+     let o = o#list (fun o -> o#phrase) ps in o
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let o = o#phrase sh_expr in
          let o =
@@ -947,18 +947,18 @@ class fold =
            o#list
              (fun o (lhs, rhs) ->
                let o = o#pattern lhs in
-	       let o = o#phrase rhs in o
-	     )
+           let o = o#phrase rhs in o
+         )
              sh_effect_cases
-	 in
+     in
          let o =
            o#list
              (fun o (lhs, rhs) ->
                let o = o#pattern lhs in
-	       let o = o#phrase rhs in o
-	     )
+           let o = o#phrase rhs in o
+         )
              sh_value_cases
-	 in o
+     in o
       | Switch ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o =
@@ -1016,8 +1016,8 @@ class fold =
                  let o = o#list (fun o -> o#fieldconstraint) _x_i1 in o)
               _x_i2 in
           let o = o#phrase _x_i3 in
-	  let o = o#phrase _x_i4 in
-	    o
+      let o = o#phrase _x_i4 in
+        o
       | LensLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#option (fun o -> o#unknown) _x_i1 in
@@ -1185,22 +1185,22 @@ class fold =
 
     method handlerlit : handlerlit -> 'self_type =
       fun (_, m, cases, params) ->
-	let o = o#pattern m in
-	let o =
+    let o = o#pattern m in
+    let o =
           o#list
             (fun o (lhs, rhs) ->
               let o = o#pattern lhs in
-	      let o = o#phrase rhs in o
-	    )
+          let o = o#phrase rhs in o
+        )
             cases
-	in
+    in
         let o =
-	  o#option
-	    (fun o -> o#list
-	      (fun o -> o#list
-	        (fun o -> o#pattern)
-	      )
-	    ) params in o
+      o#option
+        (fun o -> o#list
+          (fun o -> o#list
+            (fun o -> o#pattern)
+          )
+        ) params in o
 
     method handle_params : handler_parameterisation -> 'self_type =
       fun params ->
@@ -1252,13 +1252,9 @@ class fold =
       | Table (_x, _x_i1, _x_i2) ->
           let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
       | List _x -> let o = o#datatype _x in o
-      | TypeApplication _x ->
-          let o =
-            (fun (_x, _x_i1) ->
-               let o = o#name _x in
-               let o = o#list (fun o -> o#type_arg) _x_i1 in o)
-              _x
-          in o
+      | TypeApplication (_x, _x_i1) ->
+          let o = o#name _x in
+          let o = o#list (fun o -> o#type_arg) _x_i1 in o
       | Primitive _x -> let o = o#unknown _x in o
       | DB -> o
       | Input (_x, _x_i1) ->
@@ -1347,16 +1343,17 @@ class fold =
       | QualifiedImport _xs ->
           let o = o#list (fun o -> o#name) _xs in
           o
-      | Type ((_x, _x_i1, _x_i2)) ->
-          let o = o#name _x in
-          let o =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let o = o (* #quantifier _x*) in
-                 let o = o#unknown _x_i1
-                 in o)
-              _x_i1
-          in let o = o#datatype' _x_i2 in o
+      | Typenames (ts) ->
+          let o = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
+            let o = o#name _x in
+            let o =
+              o#list
+                (fun o (_x, _x_i1) ->
+                   let o = o (* #quantifier _x*) in
+                   let o = o#unknown _x_i1
+                   in o) _x_i1
+            in let o = o#datatype' _x_i2 in o) ts in
+          o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
       | Module (n, bs) ->
@@ -1548,8 +1545,8 @@ class fold_map =
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (FunLit (_x, _x1, _x_i1, _x_i2)))
       | HandlerLit hnlit ->
-	 let (o, hnlit) = o#handlerlit hnlit in
-	 (o, HandlerLit hnlit)
+     let (o, hnlit) = o#handlerlit hnlit in
+     (o, HandlerLit hnlit)
       | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let (o, _given_spawn_location) = o#given_spawn_location _given_spawn_location in
           let (o, _block_phr) = o#phrase _block_phr in
@@ -1640,9 +1637,9 @@ class fold_map =
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
           in (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
       | DoOperation (name, ps, t) ->
-	 let (o, t) = o#option (fun o -> o#unknown) t in
-	 let (o, ps) = o#list (fun o -> o#phrase) ps in
-	 (o, DoOperation (name, ps, t))
+     let (o, t) = o#option (fun o -> o#unknown) t in
+     let (o, ps) = o#list (fun o -> o#phrase) ps in
+     (o, DoOperation (name, ps, t))
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let (o, m) = o#phrase sh_expr in
           let (o, params) =
@@ -1653,17 +1650,17 @@ class fold_map =
               (fun o (lhs, rhs) ->
                  let (o, lhs) = o#pattern lhs in
                  let (o, rhs) = o#phrase rhs in (o, (lhs, rhs))
-	      )
+          )
               sh_effect_cases
-	  in
+      in
           let (o, val_cases) =
             o#list
               (fun o (lhs, rhs) ->
                  let (o, lhs) = o#pattern lhs in
                  let (o, rhs) = o#phrase rhs in (o, (lhs, rhs))
-	      )
+          )
               sh_value_cases
-	  in
+      in
           (o, (Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }))
       | Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
@@ -1944,23 +1941,23 @@ class fold_map =
 
     method handlerlit : handlerlit -> ('self_type * handlerlit) =
       fun (depth, m, cases, params) ->
-	let (o, m) = o#pattern m in
-	let (o, cases) =
+    let (o, m) = o#pattern m in
+    let (o, cases) =
           o#list
             (fun o (lhs, rhs ) ->
               let (o, lhs) = o#pattern lhs in
               let (o, rhs) = o#phrase rhs in (o, (lhs, rhs))
-	    )
+        )
             cases
-	in
+    in
         let (o, params) =
-	  o#option
-	    (fun o -> o#list
-	      (fun o -> o#list
-	        (fun o -> o#pattern)
-	    )
-	) params in
-	(o, (depth, m, cases, params))
+      o#option
+        (fun o -> o#list
+          (fun o -> o#list
+            (fun o -> o#pattern)
+        )
+    ) params in
+    (o, (depth, m, cases, params))
 
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
       fun params ->
@@ -2030,14 +2027,10 @@ class fold_map =
           let (o, _x_i1) = o#datatype _x_i1 in
           let (o, _x_i2) = o#datatype _x_i2 in (o, (Table (_x, _x_i1, _x_i2)))
       | List _x -> let (o, _x) = o#datatype _x in (o, (List _x))
-      | TypeApplication _x ->
-          let (o, _x) =
-            (fun (_x, _x_i1) ->
-               let (o, _x) = o#string _x in
-               let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
-               in (o, (_x, _x_i1)))
-              _x
-          in (o, (TypeApplication _x))
+      | TypeApplication (_x, _x_i1) ->
+          let (o, _x) = o#string _x in
+          let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
+          in (o, TypeApplication (_x, _x_i1))
       | Primitive _x ->
           let (o, _x) = o#unknown _x in (o, (Primitive _x))
       | DB -> (o, DB)
@@ -2137,17 +2130,18 @@ class fold_map =
       | QualifiedImport _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, QualifiedImport _xs)
-      | Type ((_x, _x_i1, _x_i2)) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 (*let (o, _x) = o#quantifier _x in*)
-                 let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
-                 in (o, (_x, _x_i1)))
-              _x_i1 in
-          let (o, _x_i2) = o#datatype' _x_i2
-          in (o, (Type ((_x, _x_i1, _x_i2))))
+      | Typenames (ts) ->
+          let (o, ts) = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
+            let (o, _x) = o#name _x in
+            let (o, _x_i1) =
+              o#list
+                (fun o (_x, _x_i1) ->
+                   let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
+                   in (o, (_x, _x_i1)))
+                _x_i1 in
+            let (o, _x_i2) = o#datatype' _x_i2
+            in (o, (_x, _x_i1, _x_i2, _x_i3))) ts
+          in (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
       | Module (n, bs) ->
@@ -2170,7 +2164,7 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
 
-    method binder : Binder.t -> ('self_type * Binder.t) =
+    method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       Binder.traverse_map
         ~o
         ~f_pos:(fun o v -> o#position v)

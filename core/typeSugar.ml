@@ -6,8 +6,10 @@ open SugarConstructors.SugartypesPositions
 open SourceCode
 open SourceCode.WithPos
 
-(* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
+let internal_error message =
+  Errors.internal_error ~filename:"typeSugar.ml" ~message
 
+(* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
 let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
@@ -115,7 +117,7 @@ struct
     | Fun _
     | Funs _
     | Infix
-    | Type _
+    | Typenames _
     | Handler _
     | Foreign _ -> true
     | Exp p -> is_pure p
@@ -489,11 +491,11 @@ end
       let ppr_lt = show_type lt in
       let ppr_rt = show_type rt in
       die pos ("\
-		All the value cases of a handle should have compatible patterns, " ^
+        All the value cases of a handle should have compatible patterns, " ^
                   "but the pattern" ^ nli () ^
                   code lexpr ^ nl () ^
                   "has type" ^ nli () ^
-		  code ppr_lt ^ nl () ^
+          code ppr_lt ^ nl () ^
                   "while the subsequent patterns have type" ^ nli () ^
                   code ppr_rt)
 
@@ -502,24 +504,24 @@ end
       let ppr_lt = show_type lt in
       let ppr_rt = show_type rt in
       die pos ("\
-		All the effect cases of a handle should have compatible patterns, " ^
+        All the effect cases of a handle should have compatible patterns, " ^
                   "but the pattern" ^ nli () ^
                   code lexpr ^ nl () ^
                   "has type" ^ nli () ^
-		  code ppr_lt ^ nl () ^
+          code ppr_lt ^ nl () ^
                   "while the subsequent patterns have type" ^ nli () ^
                   code ppr_rt)
 
     let handle_branches ~pos ~t1:(lexpr, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
       die pos ("\
-		All handler clauses must have the same type, but
-		the clause expression" ^ nl() ^
-		  tab() ^ code lexpr ^ nl() ^
-		  "has type" ^ nl() ^
-		  tab() ^ code (show_type lt) ^ nl() ^
-		  "while the subsequent clauses have type" ^ nl() ^
-		  tab() ^ code (show_type rt))
+        All handler clauses must have the same type, but
+        the clause expression" ^ nl() ^
+          tab() ^ code lexpr ^ nl() ^
+          "has type" ^ nl() ^
+          tab() ^ code (show_type lt) ^ nl() ^
+          "while the subsequent clauses have type" ^ nl() ^
+          tab() ^ code (show_type rt))
 
     let handle_return ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -546,7 +548,7 @@ end
       build_tyvar_names[lt;rt];
       die pos ("The handle has effect type " ^ nl() ^
                   tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
-		  "but, the currently allowed effects are" ^ nl() ^
+          "but, the currently allowed effects are" ^ nl() ^
                   tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
 
 
@@ -607,10 +609,10 @@ end
       let dropDoPrefix = Str.substitute_first (Str.regexp "do ") (fun _ -> "") in
       let operation = dropDoPrefix (code rexpr) in
       die pos ("Invocation of the operation " ^ nl() ^
-		  tab() ^ operation ^ nl() ^
-		  "requires an effect context " ^ nl() ^
-		  tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
-		  "but, the currently allowed effects are" ^ nl()
+          tab() ^ operation ^ nl() ^
+          "requires an effect context " ^ nl() ^
+          tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
+          "but, the currently allowed effects are" ^ nl()
                ^ tab() ^ code ( show_effectrow (TypeUtils.extract_row lt)))
 
     (* BUG: This griper is a bit rubbish because it doesn't distinguish
@@ -1665,6 +1667,8 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
       | `Lens _
       (* TODO: do we need to do something special for session types? *)
       | #Types.session_type
+      (* TODO: or anything special for recursive applications? *)
+      | `RecursiveApplication _
        (* TODO: expand applications? *)
       | `Application _ -> t
   in
@@ -2301,14 +2305,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else () in
 
             let ftype = make_ft lin pats effects (typ body) in
+            (* To correctly determine the arity of nested anonymous functions we
+               need to make sure we only inlcude arguments of the current FunLit
+               and not the nested ones. *)
+            let curried_argument_count = List.length pats in
             let argss =
-              let rec arg_types =
+              let rec arg_types : (Types.datatype * int)
+                               -> (Types.datatype * Types.row) list =
                 function
-                  | (`Function (args, effects, t)) -> (args, effects) :: arg_types t
-                  | (`Lolli (args, effects, t)) -> (args, effects) :: arg_types t
-                  | _ -> []
+                  | _, 0 -> []
+                  | `Function (args, effects, t), c
+                  | `Lolli    (args, effects, t), c ->
+                     (args, effects) :: arg_types (t, c-1)
+                  | _, _ -> failwith "Error reconstructing FunLit Type"
               in
-                arg_types ftype in
+                arg_types (ftype, curried_argument_count) in
 
             (*
               FIXME:
@@ -2329,8 +2340,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let e = FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body), location) in
               if Settings.get_value Instantiate.quantified_instantiation then
                 let (qs, _tyargs), ftype = Utils.generalise context.var_env ftype in
-                let _, ftype = Instantiate.typ ftype in
-                  tabstr (qs, e), ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
+                let tyargs, ftype = Instantiate.typ ftype in
+                let ebody = tappl (tabstr (qs, e), tyargs) in
+                (* this code takes care to ensure that the quantifier
+                   reference in the type matches that of the outer
+                   type abstraction - unfortunately this connection
+                   may be broken by later invocation of concrete_type
+                   *)
+                let e' =
+                  match ftype with
+                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (qs',  WithPos.make ebody)
+                  | _ -> ebody in
+                e', ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
               else
                 e, ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
 
@@ -2368,63 +2389,85 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | LensLit (table, _) ->
            let open Lens in
            let table = tc table in
-           let cols = Types.sort_cols_of_table "" (typ table) in
+           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
            let lens_sort = Sort.make cols in
-           LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
+           let typ = Lens.Type.Lens lens_sort in
+           LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensKeysLit (table, keys, _) ->
            let open Lens in
            let table = tc table in
-           let cols = Types.sort_cols_of_table "" (typ table) in
-           let keys = Types.cols_of_phrase keys in
+           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
+           let keys = Lens_sugar_conv.cols_of_phrase keys in
            let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases cols) in
            let lens_sort = Sort.make ~fds cols in
-           LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
+           let typ = Lens.Type.Lens lens_sort in
+           LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensFunDepsLit (table, fds, _) ->
            let open Lens in
            let table = tc table in
-           let cols = Types.sort_cols_of_table "" (typ table) in
+           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
            let fds = Helpers.Incremental.get_fds fds cols in
            let lens_sort = Sort.make ~fds cols in
-           LensLit (erase table, Some (lens_sort)), `Lens (lens_sort), merge_usages [usages table]
+           let typ = Lens.Type.Lens lens_sort in
+           LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensDropLit (lens, drop, key, default, _) ->
            let open Lens in
            let lens = tc lens
            and default = tc default in
            let sort =
-             Types.drop_lens_sort
-               (Lens.Type.sort (typ lens))
-               (Alias.Set.singleton drop)
-               (Alias.Set.singleton key)
+             Lens.Sort.drop_lens_sort
+               (Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type))
+               ~drop:(Alias.Set.singleton drop)
+               ~key:(Alias.Set.singleton key)
            in
-           LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens (sort), merge_usages [usages lens; usages default]
+           let typ = Lens.Type.Lens sort in
+           LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens typ, merge_usages [usages lens; usages default]
         | LensSelectLit (lens, predicate, _) ->
            let lens = tc lens in
-           let lens_sort = Lens.Type.sort (typ lens) in
-               LensSelectLit(erase lens, predicate, Some (lens_sort)), `Lens(lens_sort), merge_usages [usages lens]
+           let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
+           let lpredicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
+           (match Lens.Phrase.Typesugar.tc_sort ~sort lpredicate with
+           | Result.Ok Lens.Phrase.Type.Bool -> ()
+           | Result.Ok _ ->
+             Gripers.die pos "Lens select predicate does not evaluate to a boolean value."
+           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
+           let typ = Lens.Type.Lens sort in
+               LensSelectLit(erase lens, predicate, Some (sort)), `Lens typ, merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
            let lens1 = tc lens1
            and lens2 = tc lens2 in
-           let sort1 = Lens.Type.sort (typ lens1) in
-           let sort2 = Lens.Type.sort (typ lens2) in
+           let sort1 = Lens.Type.sort (typ lens1 |> Lens_type_conv.lens_type_of_type) in
+           let sort2 = Lens.Type.sort (typ lens2 |> Lens_type_conv.lens_type_of_type) in
+           let lleft = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
+           let lright = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
+           (match Lens.Phrase.Typesugar.tc_sort ~sort:sort1 lleft with
+           | Result.Ok Lens.Phrase.Type.Bool -> ()
+           | Result.Ok _ ->
+             Gripers.die pos "Lens join left predicate does not evaluate to a boolean value."
+           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
+           (match Lens.Phrase.Typesugar.tc_sort ~sort:sort2 lright with
+           | Result.Ok Lens.Phrase.Type.Bool -> ()
+           | Result.Ok _ ->
+             Gripers.die pos "Lens join right predicate does not evaluate to a boolean value."
+           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
            let sort, _ =
              Lens.Sort.join_lens_sort
                sort1
                sort2
-               ~on:(Lens.Types.cols_of_phrase on)
+               ~on:(Lens_sugar_conv.cols_of_phrase on)
            in
-           LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens(sort), merge_usages [usages lens1; usages lens2]
+           let typ = Lens.Type.Lens sort in
+           LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens typ, merge_usages [usages lens1; usages lens2]
         | LensGetLit (lens, _) ->
            let lens = tc lens in
-           let sort = Lens.Type.sort (typ lens) in
-           let trowtype = Lens.Sort.record_type sort in
+           let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
+           let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | LensPutLit (lens, data, _) ->
            let make_tuple_type = Types.make_tuple_type in
            let lens = tc lens in
-           let sort = Lens.Type.sort (typ lens) in
-           let trowtype = Lens.Sort.record_type sort in
            let data = tc data in
-           LensPutLit (erase lens, erase data, Some trowtype), make_tuple_type [], merge_usages [usages lens; usages data]
+           LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], merge_usages [usages lens; usages data]
         | DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in
@@ -3164,9 +3207,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            (** allow_wild adds wild : () to the given effect row *)
            let allow_wild : Types.row -> Types.row
-	     = fun row ->
-	       let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
-	       Types.extend_row fields row
+         = fun row ->
+           let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
+           Types.extend_row fields row
            in
            (** returns a pair of lists whose first component is the
                value clauses, while the second component is the
@@ -3352,7 +3395,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                  (fun (pat, body) cases ->
                    let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
-	                      (pos_and_typ body, no_pos bt) in
+                          (pos_and_typ body, no_pos bt) in
                    let vs = Env.domain (pattern_env pat) in
                    let vs' = Env.domain henv.var_env in
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
@@ -3394,9 +3437,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
-	     = fun row ->
+         = fun row ->
              let (operations, rho, dual) = row in
-	     let operations' =
+         let operations' =
                StringMap.mapi
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
@@ -3405,7 +3448,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                                        make absent operations polymorphic in their presence. *)
                  operations
              in
-	     (operations', rho, dual)
+         (operations', rho, dual)
            in
            let m_context = { context with effect_row = Types.make_empty_open_row (lin_unl, res_any) } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
@@ -3456,20 +3499,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               4. Unify with current effect context
            *)
            if String.compare opname "Return" = 0 then
-	     Gripers.die pos "The implicit effect Return is not invocable"
+         Gripers.die pos "The implicit effect Return is not invocable"
            else
-	     let (row, return_type, args) =
-	       let ps     = List.map tc args in
-	       let inp_t  = List.map typ ps in
-	       let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
-	       let optype = Types.make_pure_function_type inp_t out_t in
+         let (row, return_type, args) =
+           let ps     = List.map tc args in
+           let inp_t  = List.map typ ps in
+           let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
+           let optype = Types.make_pure_function_type inp_t out_t in
                let effrow = Types.make_singleton_open_row (opname, `Present optype) (lin_unl, res_effect) in
-	       (effrow, out_t, ps)
-	     in
-	     let p = Position.resolve_expression pos in
-	     let () = unify ~handle:Gripers.do_operation
-	       (no_pos (`Effect context.effect_row), (p, `Effect row))
-	     in
+           (effrow, out_t, ps)
+         in
+         let p = Position.resolve_expression pos in
+         let () = unify ~handle:Gripers.do_operation
+           (no_pos (`Effect context.effect_row), (p, `Effect row))
+         in
              (DoOperation (opname, List.map erase args, Some return_type), return_type, StringMap.empty)
         | Switch (e, binders, _) ->
             let e = tc e in
@@ -3851,9 +3894,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
            (bind_var empty_context (Binder.to_name bndr, datatype)),
            StringMap.empty)
       | Foreign _ -> assert false
-      | Type (name, vars, (_, Some dt)) as t ->
-          t, bind_tycon empty_context (name, `Alias (List.map (snd ->- val_of) vars, dt)), StringMap.empty
-      | Type _ -> assert false
+      | Typenames ts ->
+          let env = List.fold_left (fun env (name, vars, (_, dt'), _) ->
+              match dt' with
+                | Some dt ->
+                    bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
+                | None -> raise (internal_error "typeSugar.ml: unannotated type")
+          ) empty_context ts in
+          (Typenames ts, env, StringMap.empty)
       | Infix -> Infix, empty_context, StringMap.empty
       | Exp e ->
           let e = tc e in
@@ -3952,7 +4000,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
            Types.make_type_unl a
          else
            Gripers.non_linearity pos uses x a;
-       let (_, grab_ty, _) = type_check context (var "receive") in
+       let grab_ty = (Env.lookup context.var_env "receive") in
        let tyargs =
          match Types.concrete_type grab_ty with
          | `ForAll (qs, _t) ->
@@ -3982,7 +4030,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
              (t, ctype);
        let (p, t, u') = with_channel c s (type_cp (bind_var context (c, s)) p) in
 
-       let (_, give_ty, _) = type_check context (var "send") in
+       let give_ty = (Env.lookup context.var_env "send") in
        let tyargs =
          match Types.concrete_type give_ty with
          | `ForAll (qs, _t) ->
@@ -4054,6 +4102,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
   WithPos.make ~pos p, t, u
 
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
+let show_post_sugar_typing = Basicsettings.TypeSugar.show_post_sugar_typing
 
 let binding_purity_check bindings =
   List.iter (fun ({pos;_} as b) ->
@@ -4070,14 +4119,19 @@ struct
            "before type checking: \n"^ show_program (bindings, body));
       let tyenv', bindings, _ = type_bindings tyenv bindings in
       let tyenv' = Types.normalise_typing_environment tyenv' in
-        if Settings.get_value check_top_level_purity then
-          binding_purity_check bindings; (* TBD: do this only in web mode? *)
+      if Settings.get_value check_top_level_purity then
+        binding_purity_check bindings; (* TBD: do this only in web mode? *)
+      let program, typ, tyenv' =
         match body with
-          | None -> (bindings, None), Types.unit_type, tyenv'
-          | Some body ->
-              let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
-              let typ = Types.normalise_datatype typ in
-                (bindings, Some body), typ, tyenv'
+        | None -> (bindings, None), Types.unit_type, tyenv'
+        | Some body ->
+          let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
+          let typ = Types.normalise_datatype typ in
+          (bindings, Some body), typ, tyenv' in
+      Debug.if_set show_post_sugar_typing
+        (fun () ->
+           ("after type checking: \n"^ show_program program));
+      program, typ, tyenv'
     with
         Unify.Failure (`Msg msg) -> failwith msg
 
@@ -4085,14 +4139,19 @@ struct
     Debug.if_set show_pre_sugar_typing
       (fun () ->
          "before type checking: \n"^ show_sentence sentence);
-    match sentence with
+    let sentence, t, tyenv =
+      match sentence with
       | Definitions bindings ->
-          let tyenv', bindings, _ = type_bindings tyenv bindings in
-          let tyenv' = Types.normalise_typing_environment tyenv' in
-            Definitions bindings, Types.unit_type, tyenv'
+        let tyenv', bindings, _ = type_bindings tyenv bindings in
+        let tyenv' = Types.normalise_typing_environment tyenv' in
+        Definitions bindings, Types.unit_type, tyenv'
       | Expression body ->
-          let body, t, _ = (type_check tyenv body) in
-          let t = Types.normalise_datatype t in
-            Expression body, t, tyenv
-      | Directive d -> Directive d, Types.unit_type, tyenv
+        let body, t, _ = (type_check tyenv body) in
+        let t = Types.normalise_datatype t in
+        Expression body, t, tyenv
+      | Directive d -> Directive d, Types.unit_type, tyenv in
+    Debug.if_set show_post_sugar_typing
+      (fun () ->
+         "after type checking: \n" ^ show_sentence sentence);
+    sentence, t, tyenv
 end

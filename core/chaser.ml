@@ -15,7 +15,7 @@ let assert_no_cycles = function
   | [] -> ()
   | []::_ys -> ()
   | [_x]::_ys -> ()
-  | (x::xs)::_ys -> failwith ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs)))
+  | (x::xs)::_ys -> raise (Errors.module_error ("Error -- cyclic dependencies: " ^ (String.concat ", " (x :: xs))))
 
 (* Traversal to find module import references in the current file *)
 let rec find_module_refs mt path ht =
@@ -75,9 +75,12 @@ let rec add_module_bindings deps dep_map =
         let (bindings, _) = StringMap.find module_name dep_map in
         WithPos.make (Module (module_name, bindings)) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
-        (failwith (Printf.sprintf "Trying to find %s in dep map containing keys: %s\n"
-          module_name (print_list (List.map fst (StringMap.bindings dep_map))))));
-    | _ -> failwith "Internal error: impossible pattern in add_module_bindings"
+        (raise (Errors.internal_error ~filename:"chaser.ml"
+          ~message:(Printf.sprintf "Could not find %s in dependency map containing keys: %s\n"
+          module_name (print_list (List.map fst (StringMap.bindings dep_map)))))));
+    | _ ->
+        raise (Errors.internal_error ~filename:"chaser.ml"
+          ~message:"Impossible pattern in add_module_bindings")
 
 
 let rec add_dependencies_inner module_name module_prog visited deps dep_map =

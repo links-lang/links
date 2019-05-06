@@ -5,7 +5,9 @@ open UnitTestsLensCommon
 open Value
 
 module Phrase = Lens.Phrase
-module Record = Lens.Record
+
+open Lens.Phrase.Value
+module Record = Lens.Phrase.Value.Record
 
 (* let _ = Settings.set_value Debug.debugging_enabled true  *)
 
@@ -36,14 +38,13 @@ let test_join_five test_ctx n =
   (* run tests *)
   let res = Lens.Value.lens_get l8 in
   (* let r = LensTestHelpers.time_query_both (fun () -> lens_put l8 res None) in *)
-  let _ = LensTestHelpers.print_verbose test_ctx (string_of_value res) in
+  let _ = LensTestHelpers.print_verbose test_ctx (show_values res) in
   (* modify res *)
-  let res = unbox_list res in
   let row = List.hd res in
   let row = Record.set row ~key:"a" ~value:(box_int (n + 1)) in
-  let res = box_list (row :: res) in
+  let res = row :: res in
   (* et r = LensTestHelpers.time_query_both (fun () -> lens_put l8 res None) in *)
-  let _ = LensTestHelpers.print_verbose test_ctx (string_of_value res) in
+  let _ = LensTestHelpers.print_verbose test_ctx (show_values res) in
   (* cleanup *)
   let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t1" in
   let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t2" in
@@ -81,8 +82,7 @@ let benchmark_nr_of_lenses_remove test_ctx =
   let _ = List.map (fun i ->
       let l = create_join_n_lens test_ctx db i n in
       let res = Lens.Value.lens_get l in
-      let res = unbox_list res in
-      let _put = box_list (List.tl res) in
+      let _put = List.tl res in
       (* let r = LensTestHelpers.time_query false (fun () -> lens_put l put None) in
          let _ = LensTestHelpers.print_verbose test_ctx (string_of_value r) in *)
       cleanup_join_n_lens test_ctx db i
@@ -97,10 +97,9 @@ let benchmark_nr_of_lenses_add test_ctx =
   let _ = List.map (fun i ->
       let l = create_join_n_lens test_ctx db i n in
       let res = Lens.Value.lens_get l in
-      let res = unbox_list res in
       let r = List.hd res in
       let r = Record.set r ~key:"p_1" ~value:(box_int (n + 1)) in
-      let _put = box_list (r :: List.tl res) in
+      let _put = r :: List.tl res in
       (* let r = LensTestHelpers.time_query false (fun () -> lens_put l put None) in
          let _ = LensTestHelpers.print_verbose test_ctx (string_of_value r) in *)
       cleanup_join_n_lens test_ctx db i
@@ -131,14 +130,12 @@ let test_join_five_remove test_ctx n =
   let l8 = create_join_five_lens test_ctx db n in
   (* modify res *)
   let res = Lens.Value.lens_get l8 in
-  let res = unbox_list res in
   let rm = List.filter (fun r ->
       1 = List.length (List.filter (fun r' -> Record.match_on r r' ~on:["c"]) res)
     ) res in
   (* let _ = print_endline (string_of_value (box_list rm)) in *)
   let rm = List.hd rm in
-  let res = List.filter (fun r -> not (Record.match_on r rm ~on:["a"])) res in
-  let _res = box_list res in
+  let _res = List.filter (fun r -> not (Record.match_on r rm ~on:["a"])) res in
   (* let r = LensTestHelpers.time_query false (fun () -> lens_put l8 res None) in
      let _ = LensTestHelpers.print_verbose test_ctx (string_of_value r) in *)
   (* cleanup *)
@@ -151,9 +148,7 @@ let test_join_five_update test_ctx n =
   let l8 = create_join_five_lens test_ctx db n in
   (* modify res *)
   let res = Lens.Value.lens_get l8 in
-  let res = unbox_list res in
-  let res = Record.set (List.hd res) ~key:"h" ~value:(box_int (1)) :: List.tl res in
-  let _res = box_list res in
+  let _res = Record.set (List.hd res) ~key:"h" ~value:(box_int (1)) :: List.tl res in
   (* let r = LensTestHelpers.time_query false (fun () -> lens_put l8 res None) in
      let _ = LensTestHelpers.print_verbose test_ctx (string_of_value r) in *)
   (* cleanup *)

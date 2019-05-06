@@ -27,7 +27,7 @@ class map :
     method bool            : bool -> bool
     method unary_op        : UnaryOp.t -> UnaryOp.t
     method tyunary_op      : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t
-    method binder          : Binder.t -> Binder.t
+    method binder          : Binder.with_pos -> Binder.with_pos
     method sentence        : sentence -> sentence
     method section         : Section.t -> Section.t
     method subkind         : subkind -> subkind
@@ -96,7 +96,7 @@ class fold :
     method bool            : bool -> 'self
     method unary_op        : UnaryOp.t -> 'self
     method tyunary_op      : tyarg list * UnaryOp.t -> 'self
-    method binder          : Binder.t -> 'self
+    method binder          : Binder.with_pos -> 'self
     method sentence        : sentence -> 'self
     method section         : Section.t -> 'self
     method subkind         : subkind -> 'self
@@ -154,7 +154,7 @@ end
 (* A combination of fold and map *)
 class fold_map :
 object ('self)
-  method binder          : Binder.t -> 'self * Binder.t
+  method binder          : Binder.with_pos -> 'self * Binder.with_pos
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
   method binop           : BinaryOp.t -> 'self * BinaryOp.t

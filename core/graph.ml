@@ -87,8 +87,8 @@ let dfs nodes edges =
     Hashtbl.replace finish u (incr time; !time)
   in
     List.iter (fun u ->
-		 if Hashtbl.find color u = `white
-		 then dfs_visit u) nodes;
+         if Hashtbl.find color u = `white
+         then dfs_visit u) nodes;
     (finish, discover, parent)
 
 (* CLR 23.4 *)

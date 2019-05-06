@@ -11,14 +11,18 @@ open Sugartypes
    stores a single type for each recursive function.
 *)
 
-let rec add_extras =
-  function
+let add_extras pos extras =
+  let rec go = function
     | [], [] -> []
-    | None::extras, tyarg::tyargs -> tyarg :: add_extras (extras, tyargs)
+    | None::extras, tyarg::tyargs -> tyarg :: go (extras, tyargs)
     | Some q::extras, tyargs ->
-      (Types.type_arg_of_quantifier q) :: add_extras (extras, tyargs)
+      (Types.type_arg_of_quantifier q) :: go (extras, tyargs)
     | _, _ ->
-      failwith "Mismatch in number of quantifiers and type arguments"
+      raise (Errors.desugaring_error
+        ~pos
+        ~stage:Errors.DesugarInners
+        ~message:"Mismatch in number of quantifiers and type arguments") in
+  go extras
 
 class desugar_inners env =
 object (o : 'self_type)
@@ -35,30 +39,35 @@ object (o : 'self_type)
   method unbind f =
     {< extra_env = StringMap.remove f extra_env >}
 
-  method! phrasenode = function
-    | TAppl ({node=Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
-        let extras = StringMap.find name extra_env in
-        let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (TAppl (phn, tyargs))
-    | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
-        let extras = StringMap.find name extra_env in
-        let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (InfixAppl ((tyargs, BinaryOp.Name name), e1, e2))
-    | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
-        let extras = StringMap.find name extra_env in
-        let tyargs = add_extras (extras, tyargs) in
-          super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
-            (* HACK: manage the lexical scope of extras *)
-    | Spawn _ as e ->
-        let (o, e, t) = super#phrasenode e in
-          (o#with_extra_env extra_env, e, t)
-    | Escape _ as e ->
-        let (o, e, t) = super#phrasenode e in
-          (o#with_extra_env extra_env, e, t)
-    | Block _ as e ->
-        let (o, e, t) = super#phrasenode e in
-          (o#with_extra_env extra_env, e, t)
-    | e -> super#phrasenode e
+  method! phrase { node; pos } =
+    let add_extras = add_extras pos in
+    let (o, e, t) =
+      match node with
+        | TAppl ({node=Var name;_} as phn, tyargs) when StringMap.mem name extra_env ->
+            let extras = StringMap.find name extra_env in
+            let tyargs = add_extras (extras, tyargs) in
+              super#phrasenode (TAppl (phn, tyargs))
+        | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
+            let extras = StringMap.find name extra_env in
+            let tyargs = add_extras (extras, tyargs) in
+              super#phrasenode (InfixAppl ((tyargs, BinaryOp.Name name), e1, e2))
+        | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
+            let extras = StringMap.find name extra_env in
+            let tyargs = add_extras (extras, tyargs) in
+              super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
+                (* HACK: manage the lexical scope of extras *)
+        | Spawn _ as e ->
+            let (o, e, t) = super#phrasenode e in
+              (o#with_extra_env extra_env, e, t)
+        | Escape _ as e ->
+            let (o, e, t) = super#phrasenode e in
+              (o#with_extra_env extra_env, e, t)
+        | Block _ as e ->
+            let (o, e, t) = super#phrasenode e in
+              (o#with_extra_env extra_env, e, t)
+        | e -> super#phrasenode e in
+    (o, SourceCode.WithPos.make ~pos e, t)
+
 
   method! funlit =
     (* HACK: manage the lexical scope of extras *)
@@ -114,7 +123,7 @@ object (o : 'self_type)
           (o, (Funs defs))
     | b -> super#bindingnode b
 
-  method! binder : Binder.t -> ('self_type * Binder.t) = function
+  method! binder : Binder.with_pos -> ('self_type * Binder.with_pos) = function
       | {node=_, None; _} -> assert false
       | bndr ->
          let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in

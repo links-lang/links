@@ -3,7 +3,7 @@ open Operators
 open SourceCode
 open SourceCode.WithPos
 open Sugartypes
-open Utility.OptionUtils
+open Utility
 
 (* Import module signatures. *)
 module type Pos                  = SugarConstructorsIntf.Pos
@@ -70,9 +70,9 @@ module SugarConstructors (Position : Pos)
     | Sig {node=({node=signame; _}, datatype); pos} ->
        (* Ensure that name in a signature matches name in a declaration. *)
        if signame <> name then
-         raise (ConcreteSyntaxError
-               ("Signature for `" ^ signame ^ "' should precede definition of `"
-                ^ signame ^ "', not `" ^ name ^ "'.", pos));
+         raise (ConcreteSyntaxError (pos,
+               Printf.sprintf "Signature for `%s' should precede definition of `%s', not `%s'."
+                  signame signame name));
        Some datatype
     | NoSig -> None
 
@@ -92,8 +92,8 @@ module SugarConstructors (Position : Pos)
   let record ?(ppos=dp) ?exp lbls = with_pos ppos (RecordLit (lbls, exp))
 
   (* Create a tuple.  Preserves 1-tuples. *)
-  let tuple ?(ppos=dp) = function
-    | [e] -> record ~ppos [("1", e)]
+  let tuple ?(one_tuple_hack=true) ?(ppos=dp) = function
+    | [e] when one_tuple_hack -> record ~ppos [("1", e)]
     | es  -> with_pos ppos (TupleLit es)
 
   let cp_unit ppos = with_pos ppos (CPUnquote ([], tuple ~ppos []))
@@ -225,9 +225,9 @@ module SugarConstructors (Position : Pos)
      *)
   let db_insert ?(ppos=dp) ins_exp lbls exps var_opt =
     if is_empty_db_exps exps && var_opt == None then
-      raise (ConcreteSyntaxError ("Invalid insert statement.  Either provide" ^
-          " a nonempty list of labeled expression or a return variable.",
-           pos ppos));
+      raise (ConcreteSyntaxError (pos ppos, "Invalid insert statement. " ^
+          "Either provide a nonempty list of labeled expression or a return " ^
+          "variable."));
     with_pos ppos (DBInsert (ins_exp, lbls, exps,
        opt_map (fun name -> constant_str ~ppos name) var_opt))
 
@@ -250,17 +250,40 @@ module SugarConstructors (Position : Pos)
     with_pos ppos (UnaryAppl (([], op), arg))
 
   (** XML *)
+  let validate_xml ?tags e = match e with
+    | {node=Xml (name, attr_list, blk_opt, _); pos} ->
+       (* check whether opening and closing tags match *)
+       let () = match tags with
+         | Some (opening, closing) when opening = closing -> ()
+         | Some (opening, closing) ->
+            raise (ConcreteSyntaxError (pos,
+                Printf.sprintf "Closing tag '%s' does not match start tag '%s'."
+                  closing opening))
+         | _ -> () in
+       (* Check uniqueness of attributes *)
+       let xml_sugar_error pos message =
+         let open Errors in
+         raise (desugaring_error ~pos ~stage:CheckXML ~message) in
+
+       let () =
+         let attr_names = fst (List.split attr_list) in
+         if ListUtils.has_duplicates attr_names then
+           xml_sugar_error pos
+            (Printf.sprintf "XML tag '%s' has duplicate attributes" name) in
+       (* Check that XML forests don't have attributes *)
+       let () =
+         if name = "#" && (List.length attr_list != 0 || blk_opt <> None) then
+           xml_sugar_error pos
+            "XML forest literals cannot have attributes" in
+       ()
+    | _ -> assert false
+
   (* Create an XML tree.  Raise an exception if opening and closing tags don't
      match. *)
   let xml ?(ppos=dp) ?tags name attr_list blk_opt contents =
-    let () = match tags with
-      | Some (opening, closing) when opening = closing -> ()
-      | Some (opening, closing) ->
-         raise (ConcreteSyntaxError
-                  ("Closing tag '" ^ closing ^ "' does not match start tag '"
-                   ^ opening ^ "'.", pos ppos))
-      | _ -> () in
-    with_pos ppos (Xml (name, attr_list, blk_opt, contents))
+    let node = with_pos ppos (Xml (name, attr_list, blk_opt, contents)) in
+    let ()   = validate_xml ?tags node in
+    node
 
   (** Handlers *)
   let untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =

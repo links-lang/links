@@ -1,0 +1,4 @@
+mutual {
+  typename Perhaps(a) = [| ForSure:a | PerhapsNot |];
+  typename Bobsleigh = [| RobertSleigh:a |];
+}

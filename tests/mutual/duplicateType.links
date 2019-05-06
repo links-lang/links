@@ -1,0 +1,4 @@
+mutual {
+  typename Foo = Int;
+  typename Foo = String;
+}

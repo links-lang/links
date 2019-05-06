@@ -1,6 +1,9 @@
 open Regex
 open Utility
 
+let internal_error message =
+  Errors.internal_error ~filename:"linksregex.ml" ~message
+
 let unit = `Record []
 
 module type Links_type =
@@ -28,8 +31,8 @@ struct
     | `Variant ("Star", _)     -> Star
     | `Variant ("Plus", _)     -> Plus
     | `Variant ("Question", _) -> Question
-    | v                        -> failwith ("Internal error: attempt to treat "
-                                           ^ Value.show v ^ " as a repeat value")
+    | v                        ->
+        raise (internal_error ("Attempt to treat " ^ Value.show v ^ " as a repeat value"))
   and ofLinksNGroups r = ofLinks r, 0
 end
 
@@ -68,40 +71,41 @@ struct
     | Repeat (repeat, r) -> `Variant ("Repeat", `Record [("1", Repeat.asLinks repeat);
                                                          ("2", asLinks r)])
     | Replace(re, tmpl) -> `Variant ("Replace", `Record [("1", asLinks re);
-							  ("2", Value.box_string tmpl)])
+                              ("2", Value.box_string tmpl)])
 
   let ofLinksNGroups res =
     let rec ofLinksCount count : Value.t -> (regex*int) = function
       | `Variant ("Range", `Record ( [("1", `Char f); ("2", `Char t)]
       | [("2", `Char t); ("1", `Char f)]))
-	-> (Range (f,t), count)
+    -> (Range (f,t), count)
       | `Variant ("Simply", s)     -> Simply (Value.unbox_string s), count
       | `Variant ("Quote", s)     -> Quote (fst (ofLinksCount 0 s)), count
       | `Variant ("Any", _)        -> Any, count
       | `Variant ("StartAnchor", _)        -> StartAnchor, count
       | `Variant ("EndAnchor", _)        -> EndAnchor, count
       | `Variant ("Seq", `List rs) ->
-	  let result = (List.map (ofLinksCount 0) rs) in
-	  let regexes = List.map fst result in
-	  let sum = List.fold_right ((+) -<- snd) result count in
-	  Seq regexes, sum
+      let result = (List.map (ofLinksCount 0) rs) in
+      let regexes = List.map fst result in
+      let sum = List.fold_right ((+) -<- snd) result count in
+      Seq regexes, sum
       | `Variant ("Alternate", `Record([("1", r1); ("2", r2)])) ->
-	  let ((r1', c1), (r2', c2)) = (ofLinksCount 0 r1, ofLinksCount 0 r2)  in
-	    Alternate(r1', r2'), count + c1 + c2
+      let ((r1', c1), (r2', c2)) = (ofLinksCount 0 r1, ofLinksCount 0 r2)  in
+        Alternate(r1', r2'), count + c1 + c2
       | `Variant ("Group", s) ->
-	  let (s', count')  = ofLinksCount (count+1) s in
-	    Group s', count'
+      let (s', count')  = ofLinksCount (count+1) s in
+        Group s', count'
       | `Variant ("Repeat", `Record ([("1", repeat); ("2", r)]
       | [("2", r); ("1", repeat)]))
-	->
-	  let (re, count)  = ofLinksCount count r in
-	     Repeat (Repeat.ofLinks repeat, re), count
+    ->
+      let (re, count)  = ofLinksCount count r in
+         Repeat (Repeat.ofLinks repeat, re), count
       | `Variant ("Replace", `Record ([("1", re); ("2", tmpl)]))
-	->
-	  let (re, count) = ofLinksCount count re in
-	  Replace(re, Value.unbox_string tmpl), count
-      | v  -> failwith ("Internal error: attempt to treat "
-			^ Value.show v ^ " as a regex value") in
+    ->
+      let (re, count) = ofLinksCount count re in
+      Replace(re, Value.unbox_string tmpl), count
+      | v  ->
+          raise (internal_error ("Attempt to treat " ^
+            Value.show v ^ " as a regex value")) in
     ofLinksCount 0 res
 
 

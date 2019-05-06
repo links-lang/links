@@ -10,7 +10,7 @@ license: "GPL-2"
 
 build: [
   [ "dune" "subst" ] {pinned}
-  [ "dune" "exec" "preinstall/preinstall.exe" "--" "-libdir" links:lib ]
+  [ "dune" "exec" "preinstall/preinstall.exe" "--" "-libdir" _:lib ]
   [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
@@ -18,7 +18,7 @@ depends: [
   "ocaml" {>= "4.06.0"}
   "dune" {build}
   "ppx_deriving"
-  "ppx_deriving_yojson"
+  "ppx_deriving_yojson" {>= "3.3"}
   "base64"
   "linenoise"
   "ANSITerminal"

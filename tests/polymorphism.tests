@@ -26,19 +26,19 @@ stderr : @..*
 exit : 1
 
 Polymorphic mutual recursion [1]
-sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } f
+mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } } f
 stdout : @fun : \(_\) ~> Int
 
 Polymorphic mutual recursion [2]
-sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 } f
+mutual { sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 } } f
 stdout : @fun : \(_\) ~> Int
 
 Polymorphic mutual recursion [3]
-sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } f
+mutual { sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } } f
 stdout : @fun : \(_\) ~> Int
 
 Polymorphic mutual recursion [4]
-sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } f
+mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } } f
 stderr : @..*
 exit : 1
 
@@ -52,10 +52,6 @@ stdout : @\(\[5, 6\], \["a", "b"\]\) : \(\[Int\], \[String\]\)
 
 Polymorphic functions in different function bodies
 fun cons(x,l) {[x] ++ l} fun f() { cons(5, [6]) } fun g() { cons("a", ["b"]) } (f(), g())
-stdout : ([5, 6], ["a", "b"]) : ([Int], [String])
-
-Polymorphic functions in different function bodies (not in call order)
-fun f() { cons(5, [6]) } fun cons(x,l) {[x] ++ l} fun g() { cons("a", ["b"]) } (f(), g())
 stdout : ([5, 6], ["a", "b"]) : ([Int], [String])
 
 Signatures on top-level variables
@@ -100,18 +96,22 @@ stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> [(_, _)]
 Unwrap polymorphism
 sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; hd(ids)(3)
 stdout : 3 : Int
+args : --config=tests/enable_quantified_instantiation.config
 
 Bad polymorphism behaviour (1)
 sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> ([a]) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
 stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+args : --config=tests/enable_quantified_instantiation.config
 
 Bad polymorphism behaviour (2)
 sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> (b) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
 stdout : [fun] : [(a::Any) -> a::Any]
+args : --config=tests/enable_quantified_instantiation.config
 
 Nested polymorphism
 sig foo : (forall a.((a) {}~> a)) {}~> (Int) {}~> Int fun foo(f){f} foo(id)(42)
 stdout : 42 : Int
+args : --config=tests/enable_quantified_instantiation.config
 
 Top-level ill-typed polymorphism
 sig foo : forall a.((a) {}~> a) {}~> (Int) {}~> Int fun foo(f){f}

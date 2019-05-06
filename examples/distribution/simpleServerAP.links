@@ -16,15 +16,6 @@ module Client {
     domRemoveAttributeFromRef(buttonRef, "disabled");
   }
 
-  sig commThread : (AP(PingPong)) { hear { :[|SendPing|] } |e}~> ()
-  fun commThread(ap) {
-    # Request a channel from the access point
-    var ch = request(ap);
-    logMessage("Established session connection with the server!");
-    enableButton();
-    commLoop(ch)
-  }
-
   fun logMessage(msg) {
     appendChildren(<#>{stringToXml(msg)}</#>, getNodeById("msgs"));
   }
@@ -43,6 +34,15 @@ module Client {
     }
   }
 
+  sig commThread : (AP(PingPong)) { hear { :[|SendPing|] } |e}~> ()
+  fun commThread(ap) {
+    # Request a channel from the access point
+    var ch = request(ap);
+    logMessage("Established session connection with the server!");
+    enableButton();
+    commLoop(ch)
+  }
+
   fun makePage(clPid) {
     page
       <html>
@@ -58,14 +58,6 @@ module Client {
 
 module Server {
 
-  # Handles client requests
-  sig serverThread : (AP(PingPong)) ~> ()
-  fun serverThread(srvAP) {
-    var ch = accept(srvAP);
-    debug("Accepted connection from client");
-    serverLoop(ch)
-  }
-
   sig serverLoop : (PingPong) ~> ()
   fun serverLoop(ch) {
     var (_, ch) = receive(ch);
@@ -74,8 +66,15 @@ module Server {
     debug("Sent pong to client");
     serverLoop(ch)
   }
-}
 
+  # Handles client requests
+  sig serverThread : (AP(PingPong)) ~> ()
+  fun serverThread(srvAP) {
+    var ch = accept(srvAP);
+    debug("Accepted connection from client");
+    serverLoop(ch)
+  }
+}
 
 module Setup {
 

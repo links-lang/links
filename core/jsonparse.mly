@@ -10,10 +10,8 @@ struct
   module Value = Value
 end
 
-(* let unparse_label = function *)
-(*   | `Char c -> String.make 1 c *)
-(*   | `List (`Char _::_) as s -> Value.unbox_string s *)
-(*   | r -> (failwith "(json) error decoding label " ^ Show.show Value.show_t r) *)
+let internal_error message =
+  raise (Errors.internal_error ~filename:"jsonparse.mly" ~message)
 
 (* BUG: need to unescape strings
    (where they are escaped in json.ml)
@@ -85,7 +83,7 @@ let websocket_req assoc_list =
         let notify_ep = get_and_unbox_str "notify_ep" |> ChannelID.of_string in
         let cancelled_ep = get_and_unbox_str "cancelled_ep" |> ChannelID.of_string in
         ChannelCancellation ( { notify_ep = notify_ep; cancelled_ep = cancelled_ep } )
-    | _ -> failwith "Invalid opcode in websocket message"
+    | _ -> raise (Errors.runtime_error "Invalid opcode in websocket message")
 %}
 
 %token LBRACE RBRACE LBRACKET RBRACKET
@@ -150,7 +148,7 @@ object_:
                                             (Value.unbox_string (List.assoc "name" bs),
                                              Value.unbox_string (List.assoc "args" bs)) in
                                           `Database (Value.db_connect driver params)
-                                    | _ -> failwith ("jsonparse: database value must be a record")
+                                    | _ -> internal_error ("database value must be a record")
                                 end
                             | ["_table", t] ->
                                 begin
@@ -160,30 +158,30 @@ object_:
                                           begin
                                             match List.assoc "db" bs with
                                               | `Database db -> db
-                                              | _ -> failwith ("jsonparse: first argument to a table must be a database")
+                                              | _ -> internal_error ("first argument to a table must be a database")
                                           end
-					and name = Value.unbox_string (List.assoc "name" bs)
+                    and name = Value.unbox_string (List.assoc "name" bs)
                                         and row =
                                           begin
                                             match DesugarDatatypes.read ~aliases:Env.String.empty (Value.unbox_string (List.assoc "row" bs)) with
                                                 | `Record row -> row
-                                                | _ -> failwith ("jsonparse: tables must have record type")
+                                                | _ -> internal_error ("tables must have record type")
                                           end
                                         and keys =
-					  begin
-					    match List.assoc "keys" bs with
-					      | `List keys ->
-						  List.map
-						    (function
-						       | `List part_keys ->
-							   List.map Value.unbox_string part_keys
-						       | _ -> failwith "jsonparse: keys must be lists of strings")
-						    keys
-					      | _ -> failwith ("jsonparse: table keys must have list type")
-					  end
+                      begin
+                        match List.assoc "keys" bs with
+                          | `List keys ->
+                          List.map
+                            (function
+                               | `List part_keys ->
+                               List.map Value.unbox_string part_keys
+                               | _ -> internal_error "keys must be lists of strings")
+                            keys
+                          | _ -> internal_error ("table keys must have list type")
+                      end
                                         in
                                           `Table (db, name, keys, row)
-                                    | _ -> failwith ("jsonparse: table value must be a record")
+                                    | _ -> internal_error ("table value must be a record")
                                 end
                             | ["_xml", t] ->
                               begin
@@ -203,7 +201,7 @@ object_:
                                           let attrs = get_assoc "attributes" in
                                           let attrs = match attrs with
                                             | `Record attrs -> attrs
-                                            | _ -> failwith ("jsonparse: xml attributes should be an attribute record") in
+                                            | _ -> internal_error ("xml attributes should be an attribute record") in
                                           let attrs = List.fold_left (fun attrs (label, value) ->
                                             Value.Attr (label, Value.unbox_string value) :: attrs
                                           ) [] attrs in
@@ -211,14 +209,14 @@ object_:
                                           let body = match body with
                                             | `List body -> List.map (function
                                                 | `XML body -> body
-                                                | _ -> failwith ("jsonparse: xml body should be a list of xmlitems")
+                                                | _ -> internal_error ("xml body should be a list of xmlitems")
                                               ) body
-                                            | _ -> failwith ("jsonparse: xml body should be a list of xmlitems")
+                                            | _ -> internal_error ("xml body should be a list of xmlitems")
                                           in `XML (Value.Node (tag, attrs @ body))
-                                        | _ -> failwith ("Jsonparse: xml of unknown type in jsonparse. Got type: " ^ elemType)
+                                        | _ -> internal_error ("xml of unknown type in jsonparse. Got type: " ^ elemType)
                                       )
-                                  | _ ->  failwith (
-                                      "jsonparse: xml should be either a text node or an element node. Got: " ^
+                                  | _ ->  internal_error (
+                                      "xml should be either a text node or an element node. Got: " ^
                                       Value.string_of_value t
                                     )
                                 end

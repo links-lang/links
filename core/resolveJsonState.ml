@@ -11,7 +11,8 @@ let rec extract_json_values : Value.t -> (handler_id_set * (Value.chan list)) =
   (* Can't-dos *)
   | `PrimitiveFunction _ | `Socket _
   | `Resumption _ | `Continuation _ as r ->
-      failwith ("Can't create json state for " ^ Value.string_of_value r);
+      raise (Errors.runtime_error
+        ("Can't create json state for " ^ Value.string_of_value r))
 
   (* Empties *)
   | `List [] | `SpawnLocation _ | `Pid _
@@ -30,8 +31,7 @@ let rec extract_json_values : Value.t -> (handler_id_set * (Value.chan list)) =
     end
 
   (* Handle lenses similar to primitive values *)
-  | `Lens _ | `LensMem _ | `LensSelect _
-  | `LensDrop _ | `LensJoin _ -> empty_state
+  | `Lens _ -> empty_state
 
   | #Value.primitive_value as p -> (extract_from_primitive p, [])
   | `Variant (_label, value) -> extract_json_values value

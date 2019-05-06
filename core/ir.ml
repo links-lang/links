@@ -2,9 +2,8 @@
 
 open CommonTypes
 
-[@@@ocaml.warning "-39"] (** disables warnings about unused rec flags **)
 
-type scope = Var.scope
+type scope = Var.Scope.t
   [@@deriving show]
 (* term variables *)
 type var = Var.var
@@ -38,58 +37,57 @@ type location = CommonTypes.Location.t
   [@@deriving show]
 
 type value =
-  [ `Constant of Constant.t
-  | `Variable of var
-  | `Extend of (value name_map * value option)
-  | `Project of (name * value)
-  | `Erase of (name_set * value)
-  | `Inject of (name * value * Types.datatype)
+  | Constant   of Constant.t
+  | Variable   of var
+  | Extend     of value name_map * value option
+  | Project    of name * value
+  | Erase      of name_set * value
+  | Inject     of name * value * Types.datatype
 
-  | `TAbs of tyvar list * value
-  | `TApp of value * tyarg list
+  | TAbs       of tyvar list * value
+  | TApp       of value * tyarg list
 
-  | `XmlNode of (name * value name_map * value list)
-  | `ApplyPure of (value * value list)
+  | XmlNode    of name * value name_map * value list
+  | ApplyPure  of value * value list
 
-  | `Closure of var * tyarg list * value
+  | Closure    of var * tyarg list * value
 
-  | `Coerce of (value * Types.datatype)
-  ]
+  | Coerce     of value * Types.datatype
 and tail_computation =
-  [ `Return of (value)
-  | `Apply of (value * value list)
-  (* | `ApplyClosure of (value * value list) *)
+  | Return     of value
+  | Apply      of value * value list
 
-  | `Special of special
+  | Special    of special
 
-  | `Case of (value * (binder * computation) name_map * (binder * computation) option)
-  | `If of (value * computation * computation)
-  ]
+  | Case       of value * (binder * computation) name_map * (binder * computation) option
+  | If         of value * computation * computation
 and fun_def = binder * (tyvar list * binder list * computation) * binder option * location
 and binding =
-  [ `Let of binder * (tyvar list * tail_computation)
-  | `Fun of fun_def
-  | `Rec of fun_def list
-  | `Alien of (binder * name * language)
-  | `Module of (string * binding list option) ]
+  | Let        of binder * (tyvar list * tail_computation)
+  | Fun        of fun_def
+  | Rec        of fun_def list
+  | Alien      of binder * name * language
+  | Module     of string * binding list option
 and special =
-  [ `Wrong of Types.datatype
-  | `Database of value
-  | `Lens of value * Types.lens_sort
-  | `LensDrop of value * string * string * value * Types.lens_sort
-  | `LensSelect of value * Types.lens_phrase * Types.lens_sort
-  | `LensJoin of value * value * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort
-  | `LensGet of value * Types.datatype
-  | `LensPut of value * value * Types.datatype
-  | `Table of (value * value * value * (Types.datatype * Types.datatype * Types.datatype))
-  | `Query of (value * value) option * computation * Types.datatype
-  | `Update of (binder * value) * computation option * computation
-  | `Delete of (binder * value) * computation option
-  | `CallCC of (value)
-  | `Select of (name * value)
-  | `Choice of (value * (binder * computation) name_map)
-  | `Handle of handler
-  | `DoOperation of (name * value list * Types.datatype) ]
+  | Wrong      of Types.datatype
+  | Database   of value
+  | Lens       of value * Lens.Sort.t
+  | LensDrop   of value * string * string * value * Lens.Sort.t
+  | LensSelect of value * Lens.Phrase.t * Lens.Sort.t
+  | LensJoin   of value * value * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Sort.t
+  | LensGet    of value * Types.datatype
+  | LensPut    of value * value * Types.datatype
+  | Table      of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
+  | Query      of (value * value) option * computation * Types.datatype
+  | InsertRows of value * value
+  | InsertReturning of value * value * value
+  | Update     of (binder * value) * computation option * computation
+  | Delete     of (binder * value) * computation option
+  | CallCC     of value
+  | Select     of name * value
+  | Choice     of value * (binder * computation) name_map
+  | Handle     of handler
+  | DoOperation of name * value list * Types.datatype
 and computation = binding list * tail_computation
 and effect_case = binder * binder * computation
 and handler = {
@@ -98,43 +96,42 @@ and handler = {
     ih_return: binder * computation;
     ih_depth: handler_depth;
 }
-and handler_depth = [`Deep of (binder * value) list | `Shallow]
+and handler_depth = | Deep of (binder * value) list | Shallow
   [@@deriving show]
 
 let binding_scope : binding -> scope =
   function
-  | `Let (b, _)
-  | `Fun (b, _, _, _)
-  | `Rec ((b, _, _, _)::_)
-  | `Alien (b, _, _) -> Var.scope_of_binder b
-  | `Rec []
-  | `Module _ -> assert false
+  | Let (b, _)
+  | Fun (b, _, _, _)
+  | Rec ((b, _, _, _)::_)
+  | Alien (b, _, _) -> Var.scope_of_binder b
+  | Rec []
+  | Module _ -> assert false
 
 let binder_of_fun_def (fb, _, _, _) = fb
 
 let tapp (v, tyargs) =
   match tyargs with
     | [] -> v
-    | _ -> `TApp (v, tyargs)
+    | _ -> TApp (v, tyargs)
 
-let letm (b, tc) = `Let (b, ([], tc))
-let letmv (b, v) = letm (b, `Return v)
-(*let letv (b, v) = `Let (b, `Return v)*)
+let letm (b, tc) = Let (b, ([], tc))
+let letmv (b, v) = letm (b, Return v)
 
 let rec is_atom =
   function
-    | `Constant (Constant.Bool  _)
-    | `Constant (Constant.Int   _)
-    | `Constant (Constant.Char  _)
-    | `Constant (Constant.Float _)
-    | `Variable _ -> true
+    | Constant (Constant.Bool  _)
+    | Constant (Constant.Int   _)
+    | Constant (Constant.Char  _)
+    | Constant (Constant.Float _)
+    | Variable _ -> true
 (*
   This can only be an atom if
   Erase is just an upcast, and our language
   is properly parametric.
 *)
-(*    | `Erase (_, v) *)
-    | `Coerce (v, _) -> is_atom v
+(*    | Erase (_, v) *)
+    | Coerce (v, _) -> is_atom v
     | _ -> false
 
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)

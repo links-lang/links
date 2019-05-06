@@ -1,3 +1,10 @@
+fun withSubmit(f) {
+  formlet
+    <#>{f -> v}{submit("Submit")}</#>
+  yields
+    v
+}
+
 fun enterNumbers(n) {
   page
    <html>
@@ -5,13 +12,6 @@ fun enterNumbers(n) {
      {withSubmit(formlets(replicate(n, inputInt))) =>
         fun (xs) {page <html><body>{intToXml(sum(xs))}</body></html>}}
    </html>
-}
-
-fun withSubmit(f) {
-  formlet
-    <#>{f -> v}{submit("Submit")}</#>
-  yields
-    v
 }
 
 page

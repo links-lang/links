@@ -1,3 +1,7 @@
+fun g() client {
+  println("!")
+}
+
 fun f() server {
   var manager = spawnClient {
     fun h() {
@@ -9,14 +13,6 @@ fun f() server {
   };
 
   <div id="hole"><b l:onmousedown="{manager ! Click}">world</b></div>
-}
-
-fun g() client {
-  println("!")
-}
-
-fun dummy() client {
-  ()
 }
 
 page

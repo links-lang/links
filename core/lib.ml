@@ -7,6 +7,18 @@ open Types
 open Utility
 open Proc
 
+(* Error functions *)
+let runtime_error msg = raise (Errors.runtime_error msg)
+
+let internal_error message =
+  Errors.internal_error ~filename:"lib.ml" ~message
+
+let runtime_type_error error =
+  internal_error
+    ("Runtime type error: " ^ error ^ ".\n" ^
+     "This should not happen if the type system / checker is correct. " ^
+     "Please file a bug report.")
+
 (* Alias environment *)
 module AliasEnv = Env.String
 
@@ -20,26 +32,6 @@ let alias_env : Types.tycon_environment =
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
-(*
-  assumption:
-    the only kind of lists that are allowed to be inserted into databases
-    are strings
-*)
-let value_as_string db =
-  function
-    | `String s -> "\'" ^ db # escape_string s ^ "\'"
-    | v -> Value.string_of_value v
-
-let row_columns = function
-  | `List ((`Record fields)::_) -> map fst fields
-  | r -> failwith ("Internal error: forming query from non-row (row_columns): "^ Value.string_of_value r)
-and row_values db = function
-  | `List records ->
-        (List.map (function
-                     | `Record fields -> map (value_as_string db -<- snd) fields
-                     | _ -> failwith "Internal error: forming query from non-row") records)
-  | r -> failwith ("Internal error: forming query from non-row (row_values): "^ Value.string_of_value r)
-
 type primitive =
 [ Value.t
 | `PFun of RequestData.request_data -> Value.t list -> Value.t ]
@@ -50,7 +42,7 @@ type located_primitive = [ `Client | `Server of primitive | primitive ]
 
 let mk_binop_fn impl unbox_fn constr = function
     | [x; y] -> constr (impl (unbox_fn x) (unbox_fn y))
-    | _ -> failwith "arity error in integer operation"
+    | _ -> raise (internal_error "arity error in integer operation")
 
 let int_op impl pure : located_primitive * Types.datatype * pure =
   (`PFun (fun _ -> mk_binop_fn impl Value.unbox_int (fun x -> `Int x))),
@@ -79,7 +71,7 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_pr
 
 let string_to_xml : Value.t -> Value.t = function
   | `String s -> `List [`XML (Value.Text s)]
-  | _ -> failwith "internal error: non-string value passed to xml conversion routine"
+  | _ -> raise (runtime_type_error "non-string value passed to xml conversion routine")
 
 (* The following functions expect 1 argument. Assert false otherwise. *)
 let char_test_op fn pure =
@@ -146,7 +138,10 @@ let rec equal l r =
           List.for_all (one_equal_all rfields) lfields && List.for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> equal_lists l r
-    | l, r ->  failwith ("Comparing "^ Value.string_of_value l ^" with "^ Value.string_of_value r ^" either doesn't make sense or isn't implemented")
+    | l, r ->
+        runtime_error
+          (Printf.sprintf "Comparing %s with %s which either does not make sense or isn't implemented."
+            (Value.string_of_value l) (Value.string_of_value r))
 and equal_lists l r =
   match l,r with
     | [], [] -> true
@@ -172,7 +167,7 @@ let rec less l r =
           | _::rest                -> compare_list rest in
           compare_list (combine lv rv)
     | `List (l), `List (r) -> less_lists (l,r)
-    | l, r ->  failwith ("Cannot yet compare "^ Value.string_of_value l ^" with "^ Value.string_of_value r)
+    | l, r ->  runtime_error ("Cannot yet compare "^ Value.string_of_value l ^" with "^ Value.string_of_value r)
 and less_lists = function
   | _, [] -> false
   | [], (_::_) -> true
@@ -195,11 +190,11 @@ let add_attribute : Value.t * Value.t -> Value.t -> Value.t =
     in let new_attr = match String.split_on_char ':' name with
           | [ n ] -> Value.Attr(n, value)
           | [ ns; n ] -> Value.NsAttr(ns, n, value)
-          | _ -> failwith ("Attribute-name con only contain one colon for namespacing. Multiple found: " ^ name)
+          | _ -> runtime_error ("Attribute-name con only contain one colon for namespacing. Multiple found: " ^ name)
     in function
     | `XML (Value.Node (tag, children))       -> `XML (Value.Node (tag, new_attr :: filter name children))
     | `XML (Value.NsNode (ns, tag, children)) -> `XML (Value.NsNode (ns, tag, new_attr :: filter name children))
-    | r -> failwith ("cannot add attribute to " ^ Value.string_of_value r)
+    | r -> raise (runtime_type_error ("cannot add attribute to " ^ Value.string_of_value r))
 
 let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
   List.fold_right add_attribute
@@ -333,7 +328,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          | `List xmlitems, `List attrs ->
              let attrs = List.map (fun p -> Value.unbox_pair p) attrs in
                `List (List.map (add_attributes attrs) xmlitems)
-         | _ -> failwith "Internal error: addAttributes takes an XML forest and a list of attributes"),
+         | _ -> raise (runtime_type_error "addAttributes takes an XML forest and a list of attributes")),
    datatype "(Xml, [(String, String)]) -> Xml",
    PURE);
 
@@ -364,7 +359,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "haveMail",
   (`PFun(fun _ ->
-           failwith "The haveMail function is not implemented on the server yet"),
+           runtime_error "The haveMail function is not implemented on the server yet"),
    datatype "() {:_|_}~> Bool",
    IMPURE);
 
@@ -507,7 +502,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "hd",
   (p1 (fun lst ->
         match (Value.unbox_list lst) with
-          | [] -> failwith "hd() of empty list"
+          | [] -> runtime_error "hd() of empty list"
           | x :: _ -> x
       ),
    datatype "([a]) ~> a",
@@ -516,7 +511,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "tl",
   (p1 (fun lst ->
          match (Value.unbox_list lst) with
-            | [] -> failwith "tl() of empty list"
+            | [] -> runtime_error "tl() of empty list"
             | _x :: xs -> Value.box_list xs
       ),
    datatype "([a]) ~> [a]",
@@ -544,7 +539,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          function
            | `List [] -> `Variant ("None", `Record [])
            | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
-           | _ -> failwith "Internal error: non-list passed to max"),
+           | _ -> raise (runtime_type_error "Internal error: non-list passed to max")),
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
@@ -553,7 +548,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          function
            | `List [] -> `Variant ("None", `Record [])
            | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
-           | _ -> failwith "Internal error: non-list passed to min"),
+           | _ -> raise (runtime_type_error "Internal error: non-list passed to min")),
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
@@ -572,7 +567,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              | (Value.NsNode _) -> true
              | _ -> false) children in
            `List (map (fun x -> `XML x) children)
-         | _ -> failwith "non-XML given to childNodes"),
+         | _ -> raise (runtime_type_error "non-XML given to childNodes")),
    datatype "(Xml) -> Xml",
   IMPURE);
 
@@ -590,12 +585,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     ) cs with
       | Value.Attr (_, v) -> `Variant ("Just", Value.box_string v)
       | Value.NsAttr (_, _, v) -> `Variant ("Just", Value.box_string v)
-      | _ -> failwith "Internal error in `attribute'"
+      | _ -> raise (runtime_type_error "Incorrect arguments to `attribute' function")
     with NotFound _ -> `Variant ("Nothing", `Record []))
     in match elem with
       | `List [ `XML (Value.Node (_, children)) ] -> find_attr children
       | `List [ `XML (Value.NsNode (_, _, children)) ] -> find_attr children
-      | _ -> failwith "Non-element node given to attribute"),
+      | _ -> raise (runtime_type_error  "Non-element node given to attribute function")),
   datatype "(Xml, String) -> [| Just: String | Nothing |]",
   PURE);
 
@@ -640,7 +635,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "error",
-  (p1 (Value.unbox_string ->- failwith), datatype "(String) ~> a",
+  (p1 (Value.unbox_string ->- runtime_error), datatype "(String) ~> a",
   IMPURE);
 
   (* HACK *)
@@ -722,13 +717,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p3 (fun name attrList children -> match (attrList, children) with
     | (`List attrs, `List cs) -> `XML (Value.Node (Value.unbox_string(name), List.map (function
         | (`XML x) -> x
-        | _ -> failwith "non-XML in makeXml"
+        | _ -> raise (runtime_type_error "non-XML in makeXml")
       ) cs @ (List.map (function
           | `Record [ ("1", key); ("2", value) ] -> Value.Attr (Value.unbox_string(key), Value.unbox_string(value))
-        | _ -> failwith "non-attr in makeXml"
+        | _ -> raise (runtime_type_error "non-attr in makeXml")
       ) attrs))
     )
-    | _ -> failwith "non-XML in makeXml"),
+    | _ -> raise (runtime_type_error "non-XML in makeXml")),
   datatype "(String, [(String, String)], Xml) -> XmlItem",
   IMPURE);
 
@@ -736,12 +731,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "xmlToVariant",
   (p1 (fun v ->
-                  match v with
-                    | `List xs ->
-                        `List (List.map (function
-                                           | (`XML x) -> Value.value_of_xmlitem x
-                                           | _ -> failwith "non-XML passed to xmlToVariant") xs)
-                    | _ -> failwith "non-XML passed to xmlToVariant"),
+        match v with
+          | `List xs ->
+              `List (List.map
+                (function
+                   | (`XML x) -> Value.value_of_xmlitem x
+                   | _ -> raise (runtime_type_error "non-XML passed to xmlToVariant")) xs)
+          | _ -> raise (runtime_type_error "non-XML passed to xmlToVariant")),
   datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |] ]",
   IMPURE);
 
@@ -749,7 +745,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun v ->
       match v with
         | (`XML x) -> Value.value_of_xmlitem x
-        | _ -> failwith "non-XML passed to xmlItemToVariant"),
+        | _ -> raise (runtime_type_error "non-XML passed to xmlItemToVariant")),
     datatype "(XmlItem) ~> mu n. [|Text:String | Attr:(String, String) | Node:(String, [ n ]) | NsAttr: (String, String, String) | NsNode: (String, String, [ n ]) |]",
     IMPURE);
 
@@ -770,7 +766,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          match v with
            | `List [ `XML (Value.Node (name, _)) ]      -> Value.box_string name
            | `List [ `XML (Value.NsNode (_, name, _)) ] -> Value.box_string name
-           | _ -> failwith "non-element passed to getTagName"),
+           | _ -> raise (runtime_type_error "non-element passed to getTagName")),
   datatype "(Xml) ~> String",
   IMPURE);
 
@@ -778,7 +774,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun v -> match v with
     | `List [ `XML (Value.NsNode (ns, _, _)) ] -> Value.box_string ns
     | `List [ `XML (Value.Node (_, _)) ]       -> Value.box_string ""
-    | _ -> failwith "non-element passed to getNamespace"),
+    | _ -> raise (runtime_type_error "non-element passed to getNamespace")),
   datatype "(Xml) ~> String",
   IMPURE);
 
@@ -800,7 +796,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     in match v with
       | `List [ `XML (Value.Node (_, children)) ]      -> `List (map attr_to_record (filter is_attr children))
       | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (map attr_to_record (filter is_attr children))
-      | _ -> failwith "non-element given to getAttributes"),
+      | _ -> raise (runtime_type_error "non-element given to getAttributes")),
   datatype "(Xml) ~> [(String,String)]",
   IMPURE);
 
@@ -820,7 +816,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                `List (map (fun x -> `XML(x)) (filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
            | `List [`XML(Value.NsNode(_, _, children))] ->
                `List (map (fun x -> `XML(x)) (filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
-           | _ -> failwith "non-element given to getChildNodes"),
+           | _ -> raise (runtime_type_error "non-element given to getChildNodes")),
    datatype "(Xml) ~> Xml",
   IMPURE);
 
@@ -1038,12 +1034,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          (* FIXME: This isn't right : it freezes all threads *)
          (*Unix.sleep (int_of_num (Value.unbox_int duration));
          `Record []*)
-      failwith "The sleep function is not implemented on the server yet"
+      runtime_error "The sleep function is not implemented on the server yet"
       ),
    datatype "(Int) ~> ()",
   IMPURE);
 
   "clientTime",
+  (`Client,
+   datatype "() ~> Int",
+   IMPURE);
+
+  "clientTimeMilliseconds",
   (`Client,
    datatype "() ~> Int",
    IMPURE);
@@ -1070,14 +1071,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                  Value.unbox_int (List.assoc s r) in
                let tm = {
                  Unix.tm_sec = lookup "seconds";
-   	         Unix.tm_min = lookup "minutes";
-   	         Unix.tm_hour = lookup "hours";
-   	         Unix.tm_mday = lookup "day";
-   	         Unix.tm_mon = lookup "month";
-   	         Unix.tm_year = (lookup "year" - 1900);
-   	         Unix.tm_wday = 0; (* ignored *)
-   	         Unix.tm_yday =  0; (* ignored *)
-   	         Unix.tm_isdst = false} in
+                Unix.tm_min = lookup "minutes";
+                Unix.tm_hour = lookup "hours";
+                Unix.tm_mday = lookup "day";
+                Unix.tm_mon = lookup "month";
+                Unix.tm_year = (lookup "year" - 1900);
+                Unix.tm_wday = 0; (* ignored *)
+                Unix.tm_yday =  0; (* ignored *)
+                Unix.tm_isdst = false} in
 
                let t, _ = Unix.mktime tm in
                  Value.box_int (int_of_float t)
@@ -1101,63 +1102,21 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* Database functions *)
   "AsList",
-  (p1 (fun _ -> failwith "Unoptimized table access!!!"),
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
    datatype "(TableHandle(r, w, n)) -> [r]",
-  IMPURE);
-
-  "InsertRows",
-  (`Server
-     (p2 (fun table rows ->
-            match table, rows with
-              | `Table _, `List [] -> `Record []
-              | `Table ((db, _params), table_name, _, _), _ ->
-                  let field_names = row_columns rows in
-                  let vss = row_values db rows in
-                    Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-                    (Database.execute_insert (table_name, field_names, vss) db)
-              | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w, n), [s]) ~> ()",
-  IMPURE);
-
-  (* FIXME:
-
-     Choose a semantics for InsertReturning.
-
-     Currently it is well-defined if exactly one row is inserted, but
-     is not necessarily well-defined otherwise.
-
-     Perhaps the easiest course of action is to restrict it to the
-     case of inserting a single row.
-  *)
-  "InsertReturning",
-  (`Server
-     (p3 (fun table rows returning ->
-            match table, rows, returning with
-              | `Table _, `List [], _ ->
-                  failwith "InsertReturning: undefined for empty list of rows"
-              | `Table ((db, _params), table_name, _, _), _, _ ->
-                  let field_names = row_columns rows in
-                  let vss = row_values db rows in
-
-                  let returning = Value.unbox_string returning in
-                    Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
-                                    String.concat "\n"
-                                    (db#make_insert_returning_query(table_name, field_names, vss, returning)));
-                    (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
-              | _ -> failwith "Internal error: insert row into non-database")),
-   datatype "(TableHandle(r, w, n), [s], String) ~> Int",
   IMPURE);
 
   "getDatabaseConfig",
   (`PFun
      (fun _ _ ->
-	let driver = Settings.get_value Basicsettings.database_driver
-	and args = Settings.get_value Basicsettings.database_args in
-	  if driver = "" then
-	    failwith "Internal error: default database driver not defined"
-	  else
-	    `Record(["driver", Value.box_string driver;
-		     "args", Value.box_string args])),
+    let driver = Settings.get_value Basicsettings.database_driver
+    and args = Settings.get_value Basicsettings.database_args in
+      if driver = "" then
+        raise (Errors.settings_error
+          "Default database driver not defined. Set `database_driver`.")
+      else
+        `Record(["driver", Value.box_string driver;
+             "args", Value.box_string args])),
    datatype "() ~> (driver:String, args:String)",
   IMPURE);
 
@@ -1216,19 +1175,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (`Server (p2 (fun s r ->
         let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r
         and string = Value.unbox_string s in
-	let regex = Regex.compile_ocaml re in
-	match (Str.string_match regex string 0) with
-	 false -> `List []
-	| _ ->
-	(let rec accumMatches l : int -> Value.t = function
+    let regex = Regex.compile_ocaml re in
+    match (Str.string_match regex string 0) with
+     false -> `List []
+    | _ ->
+    (let rec accumMatches l : int -> Value.t = function
            0 -> `List ((Value.box_string (Str.matched_group 0 string))::l)
-	|  i ->
-	(try
-	let m = Str.matched_group i string in
+    |  i ->
+    (try
+    let m = Str.matched_group i string in
         accumMatches ((Value.box_string m)::l) (i - 1)
-	with
-	   NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
-	   accumMatches [] ngroups))),
+    with
+       NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
+       accumMatches [] ngroups))),
      datatype "(String, Regex) ~> [String]",
    PURE));
 
@@ -1237,8 +1196,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (`Server (p2 (fun s r ->
         let open Regex in
         match Linksregex.Regex.ofLinks r with
-	| Replace (l, t) ->
-	   let (regex, tmpl) = Regex.compile_ocaml l, t in
+    | Replace (l, t) ->
+       let (regex, tmpl) = Regex.compile_ocaml l, t in
            let string = Value.unbox_string s in
            Value.box_string (Utility.decode_escapes (Str.replace_first regex tmpl string))
         | Any | StartAnchor | EndAnchor | Simply _ | Seq _ | Quote _ | Group _
@@ -1250,38 +1209,42 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* String utilities *)
   ("charAt",
    (p2 (fun s i ->
-	  let int = Value.unbox_int in
-	    try
+      let int = Value.unbox_int in
+        try
               Value.box_char ((Value.unbox_string s).[int i])
-	    with
-		Invalid_argument _ -> failwith "charAt: invalid index"),
+        with
+        Invalid_argument _ -> runtime_error "charAt: invalid index"),
     datatype ("(String, Int) ~> Char"),
     IMPURE));
 
   ("strsub",
    (p3 (fun s start len ->
-	  let int = Value.unbox_int in
-	    try
-	      Value.box_string (String.sub (Value.unbox_string s) (int start) (int len))
-	    with
-		Invalid_argument _ -> failwith "strsub: invalid arguments"),
+      let int = Value.unbox_int in
+        try
+          Value.box_string (String.sub (Value.unbox_string s) (int start) (int len))
+        with
+        Invalid_argument _ -> runtime_error "strsub: invalid arguments"),
     datatype "(String, Int, Int) ~> String",
     IMPURE));
 
   ("strlen",
    (p1 (fun s -> match s with
           | `String s -> `Int (String.length s)
-	  |  _ -> failwith "Internal error: strlen got wrong arguments"),
+          |  _ -> raise (runtime_type_error "strlen got wrong arguments")),
     datatype ("(String) ~> Int "),
     PURE));
 
   ("strescape",
-   (p1 (function | `String s -> `String (String.escaped s) | _ -> failwith "Internal error: strescape got wrong arguments"),
+   (p1 (function
+          | `String s -> `String (String.escaped s)
+          | _ -> raise (runtime_type_error "strescape got wrong arguments")),
    datatype ("(String) ~> String "),
    IMPURE));
 
   ("strunescape",
-   (p1 (function | `String s -> `String (Scanf.unescaped s) | _ -> failwith "Internal error: strunescape got wrong arguments"),
+   (p1 (function
+          | `String s -> `String (Scanf.unescaped s)
+          | _ -> raise (runtime_type_error "Internal error: strunescape got wrong arguments")),
    datatype ("(String) ~> String "),
    IMPURE));
 
@@ -1293,31 +1256,31 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   ("implode",
    (p1 (fun l ->
-		   let chars = List.map Value.unbox_char (Value.unbox_list l) in
-		   let len = List.length chars in
-		   let s = Bytes.create len in
-		   let rec aux i l =
-		     match l with
-		       | [] -> ()
-		       | c :: cs -> Bytes.set s i c; aux (i + 1) cs
-		   in
-		     aux 0 chars;
-		     Value.box_string (Bytes.to_string s)),
+           let chars = List.map Value.unbox_char (Value.unbox_list l) in
+           let len = List.length chars in
+           let s = Bytes.create len in
+           let rec aux i l =
+             match l with
+               | [] -> ()
+               | c :: cs -> Bytes.set s i c; aux (i + 1) cs
+           in
+             aux 0 chars;
+             Value.box_string (Bytes.to_string s)),
     datatype ("([Char]) ~> String"),
     PURE));
 
   ("explode",
    (p1 (fun s -> match s with
-	           | `String s ->
-		       let rec aux i l =
-			 if i < 0 then
-			   l
-			 else
-			   aux (i - 1) (s.[i] :: l)
-		       in
-		       let chars = aux ((String.length s) - 1) [] in
-			 Value.box_list (List.map Value.box_char chars)
-	           | _  -> failwith "Internal error: non-String in implode"),
+               | `String s ->
+               let rec aux i l =
+             if i < 0 then
+               l
+             else
+               aux (i - 1) (s.[i] :: l)
+               in
+               let chars = aux ((String.length s) - 1) [] in
+             Value.box_list (List.map Value.box_char chars)
+               | _  -> raise (runtime_type_error "Internal error: non-String in implode")),
     datatype ("(String) ~> [Char]"),
     PURE));
 
@@ -1368,139 +1331,139 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() -> Float",
    IMPURE);
 
-	(* LINKS GAME LIBRARY *)
+    (* LINKS GAME LIBRARY *)
 
-	(* GENERAL JAVASCRIPT / EVENTS *)
+    (* GENERAL JAVASCRIPT / EVENTS *)
 
-	"jsSetInterval",
-	(`Client, datatype "(() ~e~> (), Int) ~e~> ()", IMPURE);
+    "jsSetInterval",
+    (`Client, datatype "(() ~e~> (), Int) ~e~> ()", IMPURE);
 
-	"jsRequestAnimationFrame",
-	(`Client, datatype "(() ~e~> ()) ~e~> ()", IMPURE);
+    "jsRequestAnimationFrame",
+    (`Client, datatype "(() ~e~> ()) ~e~> ()", IMPURE);
 
-	"jsSave",
-	(`Client, datatype "(a) ~> ()", IMPURE);
+    "jsSave",
+    (`Client, datatype "(a) ~> ()", IMPURE);
 
-	"jsRestore",
-	(`Client, datatype "(a) ~> ()", IMPURE);
+    "jsRestore",
+    (`Client, datatype "(a) ~> ()", IMPURE);
 
-	"jsSetOnKeyDown",
-	(`Client, datatype "(DomNode, (Event) ~e~> ()) ~e~> ()", IMPURE);
+    "jsSetOnKeyDown",
+    (`Client, datatype "(DomNode, (Event) ~e~> ()) ~e~> ()", IMPURE);
 
-	"jsSetOnEvent",
-	(`Client, datatype "(DomNode, String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
+    "jsSetOnEvent",
+    (`Client, datatype "(DomNode, String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
 
-	"jsSetOnLoad",
-	(`Client, datatype "((Event) ~e~> ()) ~e~> ()", IMPURE);
+    "jsSetOnLoad",
+    (`Client, datatype "((Event) ~e~> ()) ~e~> ()", IMPURE);
 
-	(* GLOBAL STATE MANIPULATION *)
+    (* GLOBAL STATE MANIPULATION *)
 
-	"jsSaveGlobalObject",
-	(`Client, datatype "(String, a) ~> ()", IMPURE);
+    "jsSaveGlobalObject",
+    (`Client, datatype "(String, a) ~> ()", IMPURE);
 
-	"jsLoadGlobalObject",
-	(`Client, datatype "(String) ~> a", IMPURE);
+    "jsLoadGlobalObject",
+    (`Client, datatype "(String) ~> a", IMPURE);
 
-	(* CANVAS SPECIFIC *)
+    (* CANVAS SPECIFIC *)
 
-	"jsGetContext2D",
-	(`Client, datatype "(DomNode) ~> a", IMPURE); (* the a here should be something like Context2D *)
+    "jsGetContext2D",
+    (`Client, datatype "(DomNode) ~> a", IMPURE); (* the a here should be something like Context2D *)
 
-	"jsFillText",
-	(`Client, datatype "(a, String, Float, Float) ~> ()", IMPURE);
+    "jsFillText",
+    (`Client, datatype "(a, String, Float, Float) ~> ()", IMPURE);
 
-	"jsCanvasFont",
-	(`Client, datatype "(a, String) ~> ()", IMPURE);
+    "jsCanvasFont",
+    (`Client, datatype "(a, String) ~> ()", IMPURE);
 
-	"jsDrawImage",
-	(`Client, datatype "(a, DomNode, Float, Float) ~> ()", IMPURE);
+    "jsDrawImage",
+    (`Client, datatype "(a, DomNode, Float, Float) ~> ()", IMPURE);
 
-	"jsFillRect",
-	(`Client, datatype "(a, Float, Float, Float, Float) ~> ()", IMPURE);
+    "jsFillRect",
+    (`Client, datatype "(a, Float, Float, Float, Float) ~> ()", IMPURE);
 
-	"jsFillCircle",
-	(`Client, datatype "(a, Float, Float, Float) ~> ()", IMPURE);
+    "jsFillCircle",
+    (`Client, datatype "(a, Float, Float, Float) ~> ()", IMPURE);
 
-	"jsBeginPath",
-	(`Client, datatype "(a) ~> ()", IMPURE);
+    "jsBeginPath",
+    (`Client, datatype "(a) ~> ()", IMPURE);
 
-	"jsClosePath",
-	(`Client, datatype "(a) ~> ()", IMPURE);
+    "jsClosePath",
+    (`Client, datatype "(a) ~> ()", IMPURE);
 
-	"jsFill",
-	(`Client, datatype "(a) ~> ()", IMPURE);
+    "jsFill",
+    (`Client, datatype "(a) ~> ()", IMPURE);
 
-	"jsArc",
-	(`Client, datatype "(a, Float, Float, Float, Float, Float, Bool) ~> ()", IMPURE);
+    "jsArc",
+    (`Client, datatype "(a, Float, Float, Float, Float, Float, Bool) ~> ()", IMPURE);
 
-	"jsMoveTo",
-	(`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
+    "jsMoveTo",
+    (`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
 
-	"jsLineTo",
-	(`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
+    "jsLineTo",
+    (`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
 
-	"jsLineWidth",
-	(`Client, datatype "(a, Float) ~> ()", IMPURE);
+    "jsLineWidth",
+    (`Client, datatype "(a, Float) ~> ()", IMPURE);
 
-	"jsScale",
-	(`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
+    "jsScale",
+    (`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
 
-	"jsTranslate",
-	(`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
+    "jsTranslate",
+    (`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
 
-	"jsStrokeStyle",
-	(`Client, datatype "(a, a) ~> ()", IMPURE);
+    "jsStrokeStyle",
+    (`Client, datatype "(a, a) ~> ()", IMPURE);
 
-	"jsStroke",
-	(`Client, datatype "(a) ~> ()", IMPURE);
+    "jsStroke",
+    (`Client, datatype "(a) ~> ()", IMPURE);
 
-	"jsSetFillColor",
-	(`Client, datatype "(a, String) ~> ()", IMPURE);
+    "jsSetFillColor",
+    (`Client, datatype "(a, String) ~> ()", IMPURE);
 
-	"jsClearRect",
-	(`Client, datatype "(a, Float, Float, Float, Float) ~> ()", IMPURE);
+    "jsClearRect",
+    (`Client, datatype "(a, Float, Float, Float, Float) ~> ()", IMPURE);
 
-	"jsCanvasWidth",
-	(`Client, datatype "(a) ~> Float", IMPURE);
+    "jsCanvasWidth",
+    (`Client, datatype "(a) ~> Float", IMPURE);
 
-	"jsCanvasHeight",
-	(`Client, datatype "(a) ~> Float", IMPURE);
+    "jsCanvasHeight",
+    (`Client, datatype "(a) ~> Float", IMPURE);
 
-	"jsSaveCanvas",
-	(`Client, datatype "(DomNode, DomNode, String) ~> ()", IMPURE);
+    "jsSaveCanvas",
+    (`Client, datatype "(DomNode, DomNode, String) ~> ()", IMPURE);
 
-	(* END OF LINKS GAME LIBRARY *)
+    (* END OF LINKS GAME LIBRARY *)
 
-	(* FOR DEBUGGING *)
+    (* FOR DEBUGGING *)
 
-	"debugGetStats",
-	(`Client, datatype "(String) ~> a", IMPURE);
+    "debugGetStats",
+    (`Client, datatype "(String) ~> a", IMPURE);
 
-	"debugChromiumGC",
-	(`Client, datatype "() ~> ()", IMPURE);
+    "debugChromiumGC",
+    (`Client, datatype "() ~> ()", IMPURE);
 
-	(* END OF DEBUGGING FUNCTIONS *)
-
-
-	(* EQUALITY *)
-
-	"stringEq",
-	(`Client, datatype "(String, String) -> Bool", PURE);
-
-	"intEq",
-	(`Client, datatype "(Int, Int) -> Bool", PURE);
-
-	"floatEq",
-	(`Client, datatype "(Float, Float) -> Bool", PURE);
-
-	"floatNotEq",
-	(`Client, datatype "(Float, Float) -> Bool", PURE);
-
-	"objectEq",
-	(`Client, datatype "(a, a) -> Bool", PURE);
+    (* END OF DEBUGGING FUNCTIONS *)
 
 
-	(* END OF EQUALITY FUNCTIONS *)
+    (* EQUALITY *)
+
+    "stringEq",
+    (`Client, datatype "(String, String) -> Bool", PURE);
+
+    "intEq",
+    (`Client, datatype "(Int, Int) -> Bool", PURE);
+
+    "floatEq",
+    (`Client, datatype "(Float, Float) -> Bool", PURE);
+
+    "floatNotEq",
+    (`Client, datatype "(Float, Float) -> Bool", PURE);
+
+    "objectEq",
+    (`Client, datatype "(a, a) -> Bool", PURE);
+
+
+    (* END OF EQUALITY FUNCTIONS *)
 
         "gensym",
         (let idx = ref 0 in
@@ -1588,7 +1551,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),
-     datatype "(String, (String, Location) ~> a, (String, String, Location) ~> a) ~> ()",
+     (* The `hear' effects on the second argument (request handler)
+        and third argument (error handler) should have different
+        presence variables as they are executed in different
+        contexts. *)
+     datatype "(String, (String, Location) {hear{_}}~> a, (String, String, Location) {hear{_}}~> a) ~> ()",
      IMPURE);
     "servePages",
     (`PFun (fun _ -> assert false),
@@ -1621,7 +1588,11 @@ let patch_prelude_funs tyenv =
   {tyenv with
      var_env =
       List.fold_right
-        (fun (name, t) env -> Env.String.bind env (name, t))
+        (fun (name, t) env ->
+          if Env.String.has env name then
+            Env.String.bind env (name, t)
+          else
+            env)
         [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
          ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
          ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
@@ -1732,8 +1703,8 @@ let primitive_stub_by_code (var : Var.var) : Value.t =
 let apply_pfun_by_code var args req_data =
   match primitive_by_code var with
   | Some #Value.t ->
-      failwith("Attempt to apply primitive non-function "
-	       ^ "(#" ^string_of_int var^ ").")
+      raise (runtime_type_error ("Attempt to apply primitive non-function "
+           ^ "(#" ^string_of_int var^ ")."))
   | Some (`PFun p) -> p req_data args
   | None -> assert false
 
@@ -1755,7 +1726,7 @@ let is_pure_primitive name =
 
 (** Construct IR for application of the primitive [name] to the
     arguments [args]. *)
-let prim_appln name args = `Apply(`Variable(Env.String.lookup nenv name),
+let prim_appln name args = Ir.Apply( Ir.Variable(Env.String.lookup nenv name),
                                   args)
 
 let cohttp_server_response headers body req_data =

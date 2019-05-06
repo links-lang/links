@@ -64,7 +64,7 @@ module type SugarConstructorsSig = sig
   val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
   val cp_unit     : t -> cp_phrase
   val record      : ?ppos:t -> ?exp:phrase -> (name * phrase) list -> phrase
-  val tuple       : ?ppos:t -> phrase list -> phrase
+  val tuple       : ?one_tuple_hack:bool -> ?ppos:t -> phrase list -> phrase
   val list        :
     ?ppos:t -> ?ty:Types.datatype -> phrase list -> phrase
   val constructor :
@@ -76,7 +76,7 @@ module type SugarConstructorsSig = sig
   val constant_char : ?ppos:t -> char       -> phrase
 
   (* Binders *)
-  val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> Binder.t
+  val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> Binder.with_pos
 
   (* Patterns *)
   val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> Pattern.with_pos
@@ -122,7 +122,8 @@ module type SugarConstructorsSig = sig
      -> binding
   val fun_binding'
       : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list
-     -> ?location:Location.t -> ?annotation:datatype' -> Binder.t -> funlit
+     -> ?location:Location.t -> ?annotation:datatype'
+     -> Binder.with_pos -> funlit
      -> binding
   val handler_binding
       : ?ppos:t -> signature -> (name * handlerlit)
@@ -149,6 +150,8 @@ module type SugarConstructorsSig = sig
   val unary_appl  : ?ppos:t ->           UnaryOp.t  -> phrase -> phrase
 
   (* XML *)
+  val validate_xml
+      : ?tags:(string * string) -> phrase -> unit
   val xml
       : ?ppos:t -> ?tags:(string * string) -> name
      -> (name * (phrase list)) list -> phrase option -> phrase list

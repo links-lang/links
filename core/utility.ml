@@ -99,7 +99,7 @@ end
 
 module IntPair = struct
   type t = int * int
-	[@@deriving show]
+    [@@deriving show]
   (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
   let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1
@@ -405,6 +405,11 @@ struct
     if less r l then 1
     else if less l r then -1
     else 0
+
+  (** Checks whether list contains duplicates *)
+  let rec has_duplicates = function
+    | []        -> false
+    | (x :: xs) -> List.mem x xs || has_duplicates xs
 
   (** Remove duplicates from a list, using the given relation to
       determine `duplicates' *)
@@ -977,6 +982,8 @@ let getenv : string -> string option =
 let safe_getenv s =
   try Sys.getenv s
   with NotFound _ ->
+    (* We need to retain this `failwith` since `errors.ml` depends on
+     * Utility.ml *)
     failwith ("The environment variable " ^ s ^ " is not set")
 
 (** Initialise the random number generator *)

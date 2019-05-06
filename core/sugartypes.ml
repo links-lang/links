@@ -8,7 +8,8 @@ open Utility
 type name = string [@@deriving show]
 
 module Binder = struct
-  type t = (name * Types.datatype option) WithPos.t
+  type t = name * Types.datatype option
+  and with_pos = t WithPos.t
   [@@deriving show]
 
   let to_name b = let (n, _ ) = WithPos.node b in n
@@ -16,16 +17,17 @@ module Binder = struct
 
   let to_type_exn b = to_type b |> OptionUtils.val_of
 
-  let set_name b name = WithPos.map ~f:(fun (_, ty) -> name, ty) b
-  let set_type b typ = WithPos.map ~f:(fun (name, _) -> name, Some typ) b
+  let set_name b name = WithPos.map ~f:(fun (_   , ty) -> name, ty      ) b
+  let set_type b typ  = WithPos.map ~f:(fun (name, _ ) -> name, Some typ) b
 
   let erase_type b = WithPos.map ~f:(fun (name, _) -> name, None) b
   let has_type   b = to_type b |> OptionUtils.is_some
 
-  let traverse_map : t -> o:'o -> f_pos:('o -> Position.t -> 'a * Position.t)
+  let traverse_map : with_pos -> o:'o
+            -> f_pos:('o -> Position.t -> 'a * Position.t)
             -> f_name:('a -> name -> 'b * name)
             -> f_ty:('b -> Types.datatype option -> 'c * Types.datatype option)
-            -> 'c * t = fun b ~o ~f_pos ~f_name ~f_ty ->
+            -> 'c * with_pos = fun b ~o ~f_pos ~f_name ~f_ty ->
     WithPos.traverse_map b ~o ~f_pos ~f_node:(fun o (n, ty) ->
         let o, name = f_name o n  in
         let o, typ  = f_ty   o ty in
@@ -69,7 +71,7 @@ type fieldconstraint = Readonly | Default
 module Datatype = struct
   type t =
     | TypeVar         of known_type_variable
-    | QualifiedTypeApplication of (name list * type_arg list)
+    | QualifiedTypeApplication of name list * type_arg list
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
     | Mu              of name * with_pos
@@ -81,7 +83,7 @@ module Datatype = struct
     | Effect          of row
     | Table           of with_pos * with_pos * with_pos
     | List            of with_pos
-    | TypeApplication of (string * type_arg list)
+    | TypeApplication of string * type_arg list
     | Primitive       of Primitive.t
     | DB
     | Input           of with_pos * with_pos
@@ -123,8 +125,8 @@ module Pattern = struct
     | Record   of (name * with_pos) list * with_pos option
     | Tuple    of with_pos list
     | Constant of Constant.t
-    | Variable of Binder.t
-    | As       of Binder.t * with_pos
+    | Variable of Binder.with_pos
+    | As       of Binder.with_pos * with_pos
     | HasType  of with_pos * datatype'
   and with_pos = t WithPos.t
    [@@deriving show]
@@ -147,42 +149,42 @@ and given_spawn_location =
   | SpawnClient (* spawnClient function *)
   | NoSpawnLocation (* spawn function *)
 and regex =
-  | Range     of (char * char)
+  | Range     of char * char
   | Simply    of string
   | Quote     of regex
   | Any
   | StartAnchor
   | EndAnchor
   | Seq       of regex list
-  | Alternate of (regex * regex)
+  | Alternate of regex * regex
   | Group     of regex
-  | Repeat    of (Regex.repeat * regex)
+  | Repeat    of Regex.repeat * regex
   | Splice    of phrase
-  | Replace   of (regex * replace_rhs)
+  | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
 and funlit = Pattern.with_pos list list * phrase
 and handlerlit =
   handler_depth * Pattern.with_pos * clause list *
     Pattern.with_pos list list option (* computation arg, cases, parameters *)
-and handler = {
-  sh_expr: phrase;
-  sh_effect_cases: clause list;
-  sh_value_cases: clause list;
-  sh_descr: handler_descriptor
-}
-and handler_descriptor = {
-  shd_depth: handler_depth;
-  shd_types: Types.row * Types.datatype * Types.row * Types.datatype;
-  shd_raw_row: Types.row;
-  shd_params: handler_parameterisation option
-}
-and handler_parameterisation = {
-  shp_bindings: (phrase * Pattern.with_pos) list;
-  shp_types: Types.datatype list
-}
+and handler =
+  { sh_expr         : phrase
+  ; sh_effect_cases : clause list
+  ; sh_value_cases  : clause list
+  ; sh_descr        : handler_descriptor
+  }
+and handler_descriptor =
+  { shd_depth   : handler_depth
+  ; shd_types   : Types.row * Types.datatype * Types.row * Types.datatype
+  ; shd_raw_row : Types.row
+  ; shd_params  : handler_parameterisation option
+  }
+and handler_parameterisation =
+  { shp_bindings : (phrase * Pattern.with_pos) list
+  ; shp_types    : Types.datatype list
+  }
 and iterpatt =
-  | List  of (Pattern.with_pos * phrase)
-  | Table of (Pattern.with_pos * phrase)
+  | List  of Pattern.with_pos * phrase
+  | Table of Pattern.with_pos * phrase
 and phrasenode =
   | Constant         of Constant.t
   | Var              of name
@@ -196,12 +198,12 @@ and phrasenode =
                           Types.row option
   | Query            of (phrase * phrase) option * phrase *
                           Types.datatype option
-  | RangeLit         of (phrase * phrase)
+  | RangeLit         of phrase * phrase
   | ListLit          of phrase list * Types.datatype option
   | Iteration        of iterpatt list * phrase
                         * (*where:*)   phrase option
                         * (*orderby:*) phrase option
-  | Escape           of Binder.t * phrase
+  | Escape           of Binder.with_pos * phrase
   | Section          of Section.t
   | Conditional      of phrase * phrase * phrase
   | Block            of block_body
@@ -231,17 +233,17 @@ and phrasenode =
   | DBInsert         of phrase * name list * phrase * phrase option
   | DBUpdate         of Pattern.with_pos * phrase * phrase option *
                           (name * phrase) list
-  | LensLit          of phrase * Types.lens_sort option
+  | LensLit          of phrase * Lens.Sort.t option
   (* the lens keys lit is a literal that takes an expression and is converted
      into a LensLit with the corresponding table keys marked in the lens_sort *)
-  | LensKeysLit      of phrase * phrase * Types.lens_sort option
+  | LensKeysLit      of phrase * phrase * Lens.Sort.t option
   | LensFunDepsLit   of phrase * (string list * string list) list *
-                          Types.lens_sort option
+                          Lens.Sort.t option
   | LensDropLit      of phrase * string * string * phrase *
-                          Types.lens_sort option
-  | LensSelectLit    of phrase * phrase * Types.lens_sort option
+                          Lens.Sort.t option
+  | LensSelectLit    of phrase * phrase * Lens.Sort.t option
   | LensJoinLit      of phrase * phrase * phrase * phrase * phrase *
-                          Types.lens_sort option
+                          Lens.Sort.t option
   | LensGetLit       of phrase * Types.datatype option
   | LensPutLit       of phrase * phrase * Types.datatype option
   | Xml              of name * (name * (phrase list)) list * phrase option *
@@ -258,43 +260,49 @@ and phrasenode =
   | Offer            of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
   | CP               of cp_phrase
-  | TryInOtherwise   of (phrase * Pattern.with_pos * phrase * phrase *
-                           Types.datatype option)
+  | TryInOtherwise   of phrase * Pattern.with_pos * phrase * phrase *
+                          Types.datatype option
   | Raise
 and phrase = phrasenode WithPos.t
 and bindingnode =
-  | Val     of (Pattern.with_pos * (tyvar list * phrase) * Location.t *
-                  datatype' option)
-  | Fun     of (Binder.t * DeclaredLinearity.t * (tyvar list * funlit) * Location.t *
-                  datatype' option)
-  | Funs    of (Binder.t * DeclaredLinearity.t *
-                  ((tyvar list *
-                   (Types.datatype * Types.quantifier option list) option)
-                   * funlit) * Location.t * datatype' option * Position.t) list
-  | Handler of (Binder.t * handlerlit * datatype' option)
-  | Foreign of (Binder.t * name * name * name * datatype')
+  | Val     of Pattern.with_pos * (tyvar list * phrase) * Location.t *
+                 datatype' option
+  | Fun     of function_definition
+  | Funs    of recursive_function list
+  | Handler of Binder.with_pos * handlerlit * datatype' option
+  | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | QualifiedImport of name list
-  | Type    of (name * (quantifier * tyvar option) list * datatype')
+  | Typenames of typename list
   | Infix
   | Exp     of phrase
-  | Module  of (name * binding list)
-  | AlienBlock of (name * name * ((Binder.t * datatype') list))
+  | Module  of name * binding list
+  | AlienBlock of name * name * ((Binder.with_pos * datatype') list)
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
-  | CPUnquote     of (binding list * phrase)
+  | CPUnquote     of binding list * phrase
   | CPGrab        of (string * (Types.datatype * tyarg list) option) *
-                       Binder.t option * cp_phrase
+                       Binder.with_pos option * cp_phrase
   | CPGive        of (string * (Types.datatype * tyarg list) option) *
                        phrase option * cp_phrase
-  | CPGiveNothing of Binder.t
-  | CPSelect      of (Binder.t * string * cp_phrase)
-  | CPOffer       of (Binder.t * (string * cp_phrase) list)
-  | CPLink        of (Binder.t * Binder.t)
-  | CPComp        of (Binder.t * cp_phrase * cp_phrase)
+  | CPGiveNothing of Binder.with_pos
+  | CPSelect      of Binder.with_pos * string * cp_phrase
+  | CPOffer       of Binder.with_pos * (string * cp_phrase) list
+  | CPLink        of Binder.with_pos * Binder.with_pos
+  | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
-                  [@@deriving show]
+and typename = (name * (quantifier * tyvar option) list * datatype' * Position.t)
+(* SJF: It would be nice to make these records at some point. *)
+and function_definition =
+  Binder.with_pos * DeclaredLinearity.t * (tyvar list * funlit) *
+                   Location.t * datatype' option
+and recursive_function =
+  (Binder.with_pos * DeclaredLinearity.t *
+    ((tyvar list *
+      (Types.datatype * Types.quantifier option list) option)
+      * funlit) * Location.t * datatype' option * Position.t)
+  [@@deriving show]
 
 type directive = string * string list
                             [@@deriving show]
@@ -309,14 +317,7 @@ type sentence =
 type program = binding list * phrase option
   [@@deriving show]
 
-(* Why does ConcreteSyntaxError take an
-   unresolved position and yet
-   PatternDuplicateNameError and
-   RedundantPatternMatch take resolved positions?
-*)
-exception ConcreteSyntaxError of (string * Position.t)
-exception PatternDuplicateNameError of (Position.t * string)
-exception RedundantPatternMatch of Position.t
+exception ConcreteSyntaxError       of (Position.t * string)
 
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
@@ -386,8 +387,7 @@ struct
     | TupleLit ps -> union_map phrase ps
 
     | LensLit (l, _) -> phrase l
-    (* this should be converted to `LensLit during typeSugar *)
-    | LensFunDepsLit _ -> assert false
+    | LensFunDepsLit (l, _, _) -> phrase l
     | LensKeysLit (l, _, _) -> phrase l
     | LensSelectLit (l, _, _) -> phrase l
     | LensDropLit (l, _, _, _, _) -> phrase l
@@ -496,7 +496,7 @@ struct
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Foreign (bndr, _, _, _, _) -> singleton (Binder.to_name bndr), empty
     | QualifiedImport _
-    | Type _
+    | Typenames _
     | Infix -> empty, empty
     | Exp p -> empty, phrase p
     | AlienBlock (_, _, decls) ->
@@ -506,7 +506,11 @@ struct
             (StringSet.empty) decls in
         bound_foreigns, empty
         (* TODO: this needs to be implemented *)
-    | Module _ -> failwith "Freevars for modules not implemented yet"
+    | Module _ ->
+        raise (
+          Errors.internal_error
+            ~filename:"sugartypes.ml"
+            ~message:"Freevars for modules not implemented yet")
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and handlerlit (_, m, cases, params : handlerlit) : StringSet.t =
@@ -533,7 +537,7 @@ struct
     | Replace (r, Literal _) -> regex r
     | Replace (r, SpliceExpr p) -> union (regex r) (phrase p)
   and cp_phrase p = match WithPos.node p with
-    | CPUnquote e -> block e
+    | CPUnquote (binds, expr) -> block (binds, expr)
     | CPGrab ((c, _t), Some bndr, p) ->
       union (singleton c) (diff (cp_phrase p) (singleton (Binder.to_name bndr)))
     | CPGrab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)

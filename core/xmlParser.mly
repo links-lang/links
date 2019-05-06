@@ -9,12 +9,14 @@ struct
   module Value = Value
 end
 
-let pos (start, finish) : SourceCode.Position.t = SourceCode.Position.make ~start ~finish ~code:None
+let pos (start, finish) : SourceCode.Position.t =
+  SourceCode.Position.make ~start ~finish ~code:None
 
 let ensure_match p (opening : string) (closing : string) = function
   | result when opening = closing -> result
-  | _ -> raise (Sugartypes.ConcreteSyntaxError ("Closing tag '" ^ closing ^ "' does not match start tag '" ^ opening ^ "'.",
-                                     pos p))
+  | _ -> raise (Sugartypes.ConcreteSyntaxError (pos p,
+       Printf.sprintf "Closing tag '%s' does not match start tag '%s'."
+         closing opening))
 
 %}
 

@@ -196,11 +196,7 @@ type t = [
 | primitive_value
 | `List of t list
 | `Record of (string * t) list
-| `Lens of table * Types.lens_sort
-| `LensMem of t * Types.lens_sort
-| `LensDrop of t * string * string * t * Types.lens_sort
-| `LensSelect of t * Types.lens_phrase * Types.lens_sort
-| `LensJoin of t * t * (string * string * string) list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort
+| `Lens of Lens.Value.t
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
@@ -287,3 +283,5 @@ val split_html : xml -> xml * xml
 val is_channel : t -> bool
 
 val session_exception_operation : string
+
+val row_columns_values : database -> t -> string list * string list list

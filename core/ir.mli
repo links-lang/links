@@ -1,7 +1,7 @@
 (** Monadic IR *)
 open CommonTypes
 
-type scope = Var.scope
+type scope = Var.Scope.t
   [@@deriving show]
 
 (* term variables *)
@@ -38,57 +38,57 @@ type location = CommonTypes.Location.t
 (* INVARIANT: all IR binders have unique names *)
 
 type value =
-  [ `Constant of Constant.t                   (* constant: c *)
-  | `Variable of var                          (* variable use: x *)
-  | `Extend of value name_map * value option  (* record extension: (l1=v1, ..., lk=vk|r) or (l1=v1, ..., lk=vk) *)
-  | `Project of name * value                  (* record projection: r.l *)
-  | `Erase of name_set * value                (* erase fields from a record: r\{ls} *)
-  | `Inject of name * value * Types.datatype  (* variant injection: L(v) *)
+  | Constant   of Constant.t                      (* constant: c *)
+  | Variable   of var                             (* variable use: x *)
+  | Extend     of value name_map * value option   (* record extension: (l1=v1, ..., lk=vk|r) or (l1=v1, ..., lk=vk) *)
+  | Project    of name * value                    (* record projection: r.l *)
+  | Erase      of name_set * value                (* erase fields from a record: r\{ls} *)
+  | Inject     of name * value * Types.datatype   (* variant injection: L(v) *)
 
-  | `TAbs of tyvar list * value       (* type abstraction: /\xs.v *)
-  | `TApp of value * tyarg list       (* type application: v ts *)
+  | TAbs       of tyvar list * value       (* type abstraction: /\xs.v *)
+  | TApp       of value * tyarg list       (* type application: v ts *)
 
-  | `XmlNode of name * value name_map * value list
-                                      (* XML node construction: <tag attributes>body</tag> *)
-  | `ApplyPure of value * value list  (* non-side-effecting application: v ws *)
+  | XmlNode    of name * value name_map * value list
+                                       (* XML node construction: <tag attributes>body</tag> *)
+  | ApplyPure  of value * value list   (* non-side-effecting application: v ws *)
 
-  | `Closure of var * tyarg list * value           (* closure creation: f env *)
+  | Closure    of var * tyarg list * value           (* closure creation: f env *)
 
-  | `Coerce of value * Types.datatype (* type coercion: v:A *)
-  ]
+  | Coerce     of value * Types.datatype             (* type coercion: v:A *)
+
 and tail_computation =
-  [ `Return of value
-  | `Apply of value * value list
-  (* | `ApplyClosure of value * value list *)
-  | `Special of special
-  | `Case of value * (binder * computation) name_map * (binder * computation) option
-  | `If of value * computation * computation
-  ]
+  | Return     of value
+  | Apply      of value * value list
+  | Special    of special
+  | Case       of value * (binder * computation) name_map * (binder * computation) option
+  | If         of value * computation * computation
 and fun_def = binder * (tyvar list * binder list * computation) * binder option * location
 and binding =
-  [ `Let of binder * (tyvar list * tail_computation)
-  | `Fun of fun_def
-  | `Rec of fun_def list
-  | `Alien of binder * name * language
-  | `Module of (string * binding list option) ]
+  | Let        of binder * (tyvar list * tail_computation)
+  | Fun        of fun_def
+  | Rec        of fun_def list
+  | Alien      of binder * name * language
+  | Module     of string * binding list option
 and special =
-  [ `Wrong of Types.datatype
-  | `Database of value
-  | `Lens of value * Types.lens_sort
-  | `LensDrop of value * string * string * value* Types.lens_sort
-  | `LensSelect of value * Types.lens_phrase * Types.lens_sort
-  | `LensJoin of value * value * string list * Types.lens_phrase * Types.lens_phrase * Types.lens_sort
-  | `LensGet of value * Types.datatype
-  | `LensPut of value * value * Types.datatype
-  | `Table of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
-  | `Query of (value * value) option * computation * Types.datatype
-  | `Update of (binder * value) * computation option * computation
-  | `Delete of (binder * value) * computation option
-  | `CallCC of value
-  | `Select of (name * value)
-  | `Choice of (value * (binder * computation) name_map)
-  | `Handle of handler
-  | `DoOperation of (name * value list * Types.datatype) ]
+  | Wrong      of Types.datatype
+  | Database   of value
+  | Lens of value * Lens.Sort.t
+  | LensDrop of value * string * string * value* Lens.Sort.t
+  | LensSelect of value * Lens.Phrase.t * Lens.Sort.t
+  | LensJoin of value * value * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Sort.t
+  | LensGet    of value * Types.datatype
+  | LensPut    of value * value * Types.datatype
+  | Table      of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
+  | Query      of (value * value) option * computation * Types.datatype
+  | InsertRows of value * value
+  | InsertReturning of value * value * value
+  | Update     of (binder * value) * computation option * computation
+  | Delete     of (binder * value) * computation option
+  | CallCC     of value
+  | Select     of name * value
+  | Choice     of value * (binder * computation) name_map
+  | Handle     of handler
+  | DoOperation of name * value list * Types.datatype
 and computation = binding list * tail_computation
 and effect_case = binder * binder * computation
 and handler = {
@@ -97,7 +97,7 @@ and handler = {
     ih_return: binder * computation;
     ih_depth: handler_depth;
 }
-and handler_depth = [`Deep of (binder * value) list | `Shallow]
+and handler_depth = | Deep of (binder * value) list | Shallow
   [@@deriving show]
 
 val binding_scope : binding -> scope

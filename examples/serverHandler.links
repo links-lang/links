@@ -1,13 +1,9 @@
-fun f() server {
-  <b l:onmousedown="{g()}">world</b>
-}
-
 fun g() client {
   println("!")
 }
 
-fun dummy() client {
-  ()
+fun f() server {
+  <b l:onmousedown="{g()}">world</b>
 }
 
 page

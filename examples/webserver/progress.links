@@ -1,11 +1,3 @@
-var one = 1;
-fun compute(count, total) server {
- if (count < total) {
-  showProgress(count, total);
-  compute(count+one, total)
- } else "done counting to " ^^ intToString(total)
-}
-
 fun showProgress(count, total) client {
  var percent = 100.0 *. intToFloat(count) /. intToFloat(total);
  replaceNode(
@@ -16,11 +8,19 @@ fun showProgress(count, total) client {
  )
 }
 
+var one = 1;
+fun compute(count, total) server {
+ if (count < total) {
+  showProgress(count, total);
+  compute(count+one, total)
+ } else "done counting to " ^^ intToString(total)
+}
+
 fun showAnswer(answer) client {
  replaceNode(
-	<div id="bar">{stringToXml(answer)}</div>,
+    <div id="bar">{stringToXml(answer)}</div>,
         getNodeById("bar")
-	)
+    )
 }
 
 fun mainPage(_) {
