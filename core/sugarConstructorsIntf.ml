@@ -78,6 +78,9 @@ module type SugarConstructorsSig = sig
   (* Binders *)
   val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> Binder.with_pos
 
+  (* Imports *)
+  val import : ?ppos:t -> name list -> binding
+
   (* Patterns *)
   val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> Pattern.with_pos
   val tuple_pat    : ?ppos:t -> Pattern.with_pos list -> Pattern.with_pos
