@@ -42,7 +42,7 @@ module LensTestHelpers = struct
   let get_db test_ctx =
     (* host port dbname user pw *)
     let conn, _ = get_pg_database_by_string (database_args_opt test_ctx) in
-    Links_core.Lens_database_conv.lens_db_of_db conn
+    Links_core.LensDatabaseConv.lens_db_of_db conn
 
   (** Only print when **)
   let fmt_std_v test_ctx (fn : Format.formatter -> unit) =
