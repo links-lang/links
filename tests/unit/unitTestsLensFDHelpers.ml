@@ -1,7 +1,6 @@
 open UnitTestsLensCommon
 open OUnit2
 open Links_core
-open Utility
 open Links_lens
 open Utility
 open Phrase.Value
@@ -194,7 +193,6 @@ module Tree_form = struct
     assert_equal_fun_dep_tree ~ctxt cmp_tree tree
 
   let key_split_2 ctxt =
-    let open Fun_dep.Tree in
     let fds' = fds "A -> B C D E; B C -> F" in
     let in_tree_form = Fun_dep.Tree.in_tree_form fds' |> H.assert_ok in
     assert_equal_fds ~ctxt
