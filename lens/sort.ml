@@ -79,15 +79,7 @@ module Select_sort_error = struct
     | PredicateDoesntIgnoreOutputs of {fds: Fun_dep.Set.t; columns: Alias.Set.t}
     | TreeFormError of {error: Fun_dep.Tree.Tree_form_error.t}
     | UnboundColumns of Alias.Set.t
-  [@@deriving show]
-
-  let equal v1 v2 =
-    match (v1, v2) with
-    | ( PredicateDoesntIgnoreOutputs {columns; fds}
-      , PredicateDoesntIgnoreOutputs {columns= c'; fds= f'} ) ->
-        Alias.Set.equal columns c' && Fun_dep.Set.equal fds f'
-    | UnboundColumns c, UnboundColumns c' -> Alias.Set.equal c c'
-    | _ -> false
+  [@@deriving show, eq]
 end
 
 let select_lens_sort sort ~predicate:pred =
