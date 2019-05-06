@@ -1,4 +1,4 @@
-open MindSessions;
+import MindSessions;
 
 typename ClientState = (nick:Nickname,
                         numPlayers:Int,

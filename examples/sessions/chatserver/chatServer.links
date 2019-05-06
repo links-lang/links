@@ -1,6 +1,6 @@
-open ChatSessions;
-open ChatClient;
-open LinearList;
+import ChatSessions;
+import ChatClient;
+import LinearList;
 
 typename ServerState = (Topic, [Nickname]);
 
