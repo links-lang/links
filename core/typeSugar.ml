@@ -3469,7 +3469,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              List.map (fun (p, _, body) -> (p, body)) eff_cases
            in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
-           
            let descr = { descr with
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
