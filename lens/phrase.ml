@@ -327,7 +327,7 @@ module Grouped_variables = struct
 
   type elt = Alias.Set.t
 
-  type t = Alias.Set.Set.t
+  type t = Alias.Set.Set.t [@@deriving eq]
 
   module OptionU = Lens_utility.Option
 

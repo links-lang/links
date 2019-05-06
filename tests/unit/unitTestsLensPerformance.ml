@@ -1,7 +1,6 @@
 open OUnit2
 open Links_core
 open UnitTestsLensCommon
-open Value
 module Phrase = Lens.Phrase
 open Lens.Phrase.Value
 module Record = Lens.Phrase.Value.Record

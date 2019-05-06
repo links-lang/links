@@ -1,7 +1,5 @@
 open UnitTestsLensCommon
 open OUnit2
-open Links_lens
-open Lens
 open Lens.Sort
 open Lens.Utility
 module PT = Lens.Phrase.Type
@@ -21,7 +19,7 @@ module Drop = struct
     assert_equal ~ctxt ~cmp:Lens.Sort.Drop_sort_error.equal
       ~printer:Lens.Sort.Drop_sort_error.show v1 v2
 
-  let simple ctxt =
+  let simple _ctxt =
     let sort =
       let fds = fds "A -> B; B -> C" in
       let cols = lcols "A B C" in

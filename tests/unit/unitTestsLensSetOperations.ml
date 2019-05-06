@@ -1,8 +1,6 @@
 open OUnit2
-
 open Links_core
 open UnitTestsLensCommon
-open Value
 open Lens.Phrase.Value
 
 module Sorted = Lens.Sorted_records
