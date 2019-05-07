@@ -915,7 +915,7 @@ record_labels:
 | separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
-| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (QualifiedImport $2) }
+| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (Open $2) }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
