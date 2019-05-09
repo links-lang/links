@@ -396,7 +396,7 @@ alien_datatypes:
 | alien_datatype+                                              { $1 }
 
 links_module:
-| MODULE module_name moduleblock                               { with_pos $loc($2) (Module ($2, $3)) }
+| MODULE module_name LBRACE declarations? RBRACE               { with_pos $loc($2) (Module ($2, Utility.from_option [] $4)) }
 
 alien_block:
 | ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (AlienBlock ($2, $3, $5)) }
@@ -939,9 +939,6 @@ bindings:
 | mutual_binding_block                                         { $1        }
 | bindings mutual_binding_block                                { $1 @ $2   }
 | bindings binding                                             { $1 @ [$2] }
-
-moduleblock:
-| LBRACE declarations RBRACE                                   { $2 }
 
 block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
