@@ -55,7 +55,7 @@ module Epithet = struct
     let components' =
       List.fold_left
         (fun suffix (i, name) ->
-          (if i < 0 then name else Printf.sprintf "%s%d" name i) :: suffix)
+          (if i < 0 then name else Printf.sprintf "%s$%d" name i) :: suffix)
         [] components
     in
     String.concat "." components'
@@ -458,15 +458,24 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
       | b -> super#bindingnode b
 
+    method extension_guard pos =
+      if not (Settings.get_value Basicsettings.modules) then
+           raise (Errors.desugaring_error
+                    ~pos ~stage:Errors.DesugarModules
+                    ~message:("Modules are not enabled. To enable modules set the `modules' setting to true or use the flag `-m'."))
+
     method bindings = function
       | [] -> []
       | { node = Import names; pos } :: bs ->
+         self#extension_guard pos;
          self#import_module pos names; self#bindings bs
       | { node = Open names; pos } :: bs ->
-      (* Affects [scope]. *)
+        (* Affects [scope]. *)
+         self#extension_guard pos;
          self#open_module pos names; self#bindings bs
-      | ({ node = Module (_name, _); _ } as module') :: bs ->
+      | ({ node = Module (_name, _); pos } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
+         self#extension_guard pos;
          let bs', scope' = desugar_module !renamer !scope module' in
          scope := scope'; bs' @ self#bindings bs
       | b :: bs ->
@@ -487,6 +496,8 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
 
 let desugar_program : Sugartypes.program -> Sugartypes.program
   = fun program ->
+  (* TODO move to this logic to the loader. *)
+  let program = Chaser.add_dependencies program in
   (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
   let result = (desugar ~toplevel:true Epithet.empty Scope.empty)#program program in
   (* Printf.fprintf stderr "After elaboration:\n%s\n%!" (Sugartypes.show_program result); *)
@@ -498,6 +509,7 @@ let desugar_sentence : unit -> Sugartypes.sentence -> Sugartypes.sentence
   let scope : Scope.t ref = ref Scope.empty in
   let renamer : Epithet.t ref = ref Epithet.empty in
   fun sentence ->
+  let sentence = Chaser.add_dependencies_sentence sentence in
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in
   scope := visitor#get_scope; renamer := visitor#get_renamer; result

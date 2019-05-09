@@ -15,6 +15,7 @@ type sugar_error_stage =
   | DesugarPages
   | CheckXML
   | DesugarInners
+  | DesugarModules
 
 let string_of_stage = function
   | DesugarFormlets    -> "compiling formlets"
@@ -24,6 +25,7 @@ let string_of_stage = function
   | DesugarPages       -> "compiling page expressions"
   | CheckXML           -> "checking XML"
   | DesugarInners      -> "desugaring inner types"
+  | DesugarModules     -> "desugaring modules"
 
 exception RuntimeError of string
 exception UndefinedVariable of string
@@ -44,6 +46,7 @@ exception TypeApplicationKindMismatch of
 exception SettingsError of string
 exception DynlinkError of string
 exception ModuleError of string * Position.t option
+exception DisabledExtension of Position.t option * (string * bool) option * string option * string
 
 
 let prefix_lines prefix s =
@@ -121,6 +124,40 @@ let format_exception =
         let pos, _ = Position.resolve_start_expr pos in
         pos_prefix ~pos message
      end
+  | DisabledExtension (pos, setting_hint, flag_hint, ext_name) ->
+     let message = Printf.sprintf "%s are not enabled." (String.capitalize_ascii ext_name) in
+     let string_of_bool = function true -> "true" | _ -> "false" in
+     let message =
+       match setting_hint, flag_hint with
+       | Some (setting_name, value), Some flag ->
+          Printf.sprintf
+            "%s To enable %s set the `%s' setting to `%s' or use the flag `%s'."
+            message
+            (String.uncapitalize_ascii ext_name)
+            setting_name
+            (string_of_bool value)
+            flag
+       | Some (setting_name, value), _ ->
+          Printf.sprintf
+            "%s To enable %s set the `%s' setting to `%s'."
+            message
+            (String.uncapitalize_ascii ext_name)
+            setting_name
+            (string_of_bool value)
+       | _, Some flag ->
+          Printf.sprintf
+            "%s To enable %s use the flag `%s'."
+            message
+            (String.uncapitalize_ascii ext_name)
+            flag
+       | _, _ -> message
+     in
+     begin match pos with
+     | Some pos ->
+        let pos, _ = Position.resolve_start_expr pos in
+        pos_prefix ~pos message
+     | None -> pos_prefix message
+     end
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
 
@@ -147,3 +184,5 @@ let settings_error message = (SettingsError message)
 let runtime_error message = (RuntimeError message)
 let dynlink_error message = (DynlinkError message)
 let module_error ?pos message = (ModuleError (message, pos))
+let disabled_extension ?pos ?setting ?flag name =
+  DisabledExtension (pos, setting, flag, name)

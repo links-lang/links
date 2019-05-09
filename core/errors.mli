@@ -13,6 +13,7 @@ type sugar_error_stage =
   | DesugarPages
   | CheckXML
   | DesugarInners
+  | DesugarModules
 
 
 exception RuntimeError of string
@@ -47,3 +48,4 @@ val settings_error: string -> exn
 val runtime_error: string -> exn
 val dynlink_error: string -> exn
 val module_error : ?pos:Position.t -> string -> exn
+val disabled_extension : ?pos:Position.t -> ?setting:(string * bool) -> ?flag:string -> string -> exn
