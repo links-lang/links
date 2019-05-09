@@ -1947,6 +1947,12 @@ struct
   let show_kinds           = BS.Types.Print.show_kinds
   let hide_fresh_type_vars = BS.Types.Print.hide_fresh_type_vars
 
+  let module_name_hack_pat = Str.regexp "\\$[0-9]+"
+  let undo_module_name_hack name =
+    if Settings.get_value Basicsettings.modules
+    then Str.global_replace module_name_hack_pat "" name
+    else name
+
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
@@ -2186,8 +2192,11 @@ struct
                 Lens.Phrase.Type.pp (Lens.Column.typ col) in
             Format.asprintf "Lens(%a)"
               (Lens.Utility.Format.pp_comma_list pp_col) cols
-          | `Alias ((s,[]), _) ->  s
-          | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
+          | `Alias ((s,[]), _) ->  undo_module_name_hack s
+          | `Alias ((s,ts), _) ->
+             Printf.sprintf "%s (%s)"
+               (undo_module_name_hack s)
+               (String.concat "," (List.map (type_arg bound_vars p) ts))
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg bound_vars p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
           | `Application (s, ts) ->
@@ -2196,7 +2205,6 @@ struct
           | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> r_name
           | `RecursiveApplication { r_name; r_args; _ } ->
               r_name ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) r_args) ^")"
-
   and presence bound_vars ((policy, vars) as p) =
     function
       | `Present t ->
