@@ -46,7 +46,7 @@ struct
           if Settings.get_value Basicsettings.modules then
             let prog_with_deps = Chaser.add_dependencies program in
             let ffi_files = ModuleUtils.get_ffi_files prog_with_deps in
-            (DesugarModules.desugarModules prog_with_deps, ffi_files)
+            (DesugarModules.desugar_program prog_with_deps, ffi_files)
           else
             raise (Errors.settings_error ("File contains modules, but modules not enabled. Please set " ^
               "modules flag to true, or run with -m."))
@@ -90,7 +90,8 @@ let program tyenv pos_context program =
     fun tyenv pos_context sentence ->
     let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
     let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
-      ( ExperimentalExtensions.check#sentence
+    ( ExperimentalExtensions.check#sentence
+       ->- (DesugarModules.desugar_sentence ())
        ->- DesugarHandlers.desugar_handlers_early#sentence
        ->- DesugarLAttributes.desugar_lattributes#sentence
        ->- LiftRecursive.lift_funs#sentence

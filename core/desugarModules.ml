@@ -1,7 +1,14 @@
-(* Implementation of desugarModules, simplified *)
+(* Desugaring of modules.
+
+   Eliminates modules from the AST by prefixing names... *)
+
+(* ... aka a poor person's name resolution. *)
+(* I hope this code can be repurposed for a proper name resolution
+   pass later. *)
+
+
 (*
  * Desugars modules into plain binders.
- * Bindingnode -> [Bindingnode]
  *
  * module Foo {
  *    val bobsleigh = ...;
@@ -17,329 +24,480 @@
  *
  *  --->
  *
- * val Foo.bobsleigh = ...;
- * fun Foo.x() { ...}
- * fun Foo.Bar.y() { ... }
- * val x = ...;
+ * val Foo0.bobsleigh0 = ...;
+ * fun Foo0.x1() { ...}
+ * fun Foo0.Bar2.y0() { ... }
+ * val x1 = ...;
  *
-*)
+ *)
+
+
 open Utility
-open Operators
 open Sugartypes
-open Printf
 open SourceCode.WithPos
-open ModuleUtils
 
-let _print_shadow_table st =
-    List.iter (fun (n, fqns) -> printf "%s: %s\n" n (print_list fqns))
-    (StringMap.bindings st)
+(* TODO FIXME: use ropes rather than strings to build names. *)
+module Epithet = struct
+  type t =
+    { mutable next: int;
+      prefix: (int * string) list }
 
-(* After renaming, we can simply discard modules and imports. *)
-let rec flatten_simple = fun () ->
-object(self)
-  inherit SugarTraversals.map as super
+  let empty : t =
+    { next = 0; prefix = [] }
 
-  method! phrasenode : phrasenode -> phrasenode = function
-    | Block (bs, phr) ->
-        let flattened_bindings =
-          List.concat (
-            List.map (fun b -> ((flatten_bindings ())#binding b)#get_bindings) bs
-          ) in
-        let flattened_phrase = self#phrase phr in
-        Block (flattened_bindings, flattened_phrase)
-    | x -> super#phrasenode x
+  (* Persistent *)
+  let remember name st =
+    let next = st.next in
+    st.next <- next + 1;
+    { empty with prefix = (next, name) :: st.prefix }
+
+  let build components =
+    let components' =
+      List.fold_left
+        (fun suffix (i, name) ->
+          (if i < 0 then name else Printf.sprintf "%s%d" name i) :: suffix)
+        [] components
+    in
+    String.concat "." components'
+
+  let expand st name =
+    build ((-1, name) :: st.prefix)
+
+  let expand_escapee st name =
+    let next = st.next in
+    st.next <- next + 1;
+    build ((-1, name) :: (next, "?") :: st.prefix)
 end
 
-(* Flatten modules out. By this point the renaming will already have
- * happened.
- * Also, remove import statements (as they will have been used by the renaming
- * pass already, and we won't need them any more)
- *)
-and flatten_bindings = fun () ->
-object(self)
-  inherit SugarTraversals.fold
+(* The following data structures model scopes. *)
+module BasicScope = struct
+  type t =
+    { modules: module_member StringMap.t;
+      typenames: type_member StringMap.t;
+      terms: term_member StringMap.t }
+  and module_member = t
+  and type_member = string
+  and term_member = string
 
-  val bindings = []
-  method add_binding x = {< bindings = x :: bindings >}
-  method get_bindings = List.rev bindings
+  let empty =
+    { modules = StringMap.empty;
+      typenames = StringMap.empty;
+      terms = StringMap.empty }
 
-  method! binding = function
-    | {node = Module (_, bindings); _} ->
-        self#list (fun o -> o#binding) bindings
-    | {node = Open _; _} -> self
-    | b -> self#add_binding ((flatten_simple ())#binding b)
+  module Resolve = struct
+    let rec module' : name list -> t -> t
+      = fun names scope ->
+      match names with
+      | [] -> assert false
+      | [name] -> StringMap.find name scope.modules
+      | prefix :: names -> module' names (StringMap.find prefix scope.modules)
 
-  method! program = function
-    | (bindings, _body) -> self#list (fun o -> o#binding) bindings
-end
+    let rec var : name list -> t -> name
+      = fun names scope ->
+      match names with
+      | [] -> assert false
+      | [name] -> StringMap.find name scope.terms
+      | prefix :: names ->
+         var names (StringMap.find prefix scope.modules)
 
-let flatten_prog prog =
-  let (_, phr) = prog in
-  let o = (flatten_bindings ())#program prog in
-  (o#get_bindings, phr)
-
-(* Given a *plain* name and a name shadowing table, looks up the FQN *)
-let resolve name ht =
-  try
-    let xs = StringMap.find name ht in
-    List.hd xs
-  with _ ->
-    (* For now, don't rename, and let this be picked up later.
-     * It'd be better to change this at some point, when we get the prelude
-     * better integrated with the module system. *)
-    name
-
-(* Come across binding list:
- * - Group bindings into list of lists
- * - Get shadow table for the binding list
- * - Perform renaming
- *)
-let rec rename_binders_get_shadow_tbl module_table
-            path term_ht type_ht =
-  object (self)
-    inherit SugarTraversals.fold_map as super
-
-    val term_shadow_table = term_ht
-    val type_shadow_table = type_ht
-    method get_term_shadow_table = term_shadow_table
-    method get_type_shadow_table = type_shadow_table
-
-    method bind_shadow_term name fqn =
-        {< term_shadow_table = shadow_binding name fqn term_shadow_table >}
-    method bind_shadow_type name fqn =
-        {< type_shadow_table = shadow_binding name fqn type_shadow_table >}
-
-    method bind_open name fqn =
-        let (term_ht, type_ht) =
-            shadow_open name fqn module_table term_shadow_table type_shadow_table in
-        {< term_shadow_table = term_ht; type_shadow_table = type_ht >}
-
-    method! binder = function
-      | bndr ->
-         let n = Binder.to_name bndr in
-         let fqn = make_path_string path n in
-         (self#bind_shadow_term n fqn, Binder.set_name bndr fqn)
-
-    method! bindingnode = function
-      | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
-          let (o, bnd') = self#binder bnd in
-          (o, Fun (bnd', lin, (tvs, fnlit), loc, dt_opt))
-      | Funs fs ->
-          let (o, fs) = self#list (fun o (bnd, lin, lit, loc, dt_opt, pos) ->
-            let (o, bnd') = o#binder bnd in
-            (o, (bnd', lin, lit, loc, dt_opt, pos))) fs in
-          (o, Funs fs)
-      | Typenames ts ->
-          let (o, ts) = self#list (fun o (n, tvs, dt, pos) ->
-            let fqn = make_path_string path n in
-            let o = o#bind_shadow_type n fqn in
-            (o, (fqn, tvs, dt, pos))) ts in
-          (o, Typenames ts)
-      | (Val  _) as v  -> (self, v )
-      | Exp b -> (self, Exp b)
-      | Foreign (bnd, raw_name, lang, ext_file, dt) ->
-          let (o, bnd') = self#binder bnd in
-          (o, Foreign (bnd', raw_name, lang, ext_file, dt))
-      | AlienBlock (lang, lib, decls) ->
-          let (o, decls') = self#list (fun o (bnd, dt) ->
-            let (o, bnd') = o#binder bnd in
-            (o, (bnd', dt))) decls in
-          (o, AlienBlock (lang, lib, decls'))
-      | Import [] | Open [] -> assert false
-      | Import ((hd :: tl) as ns)
-      | Open ((hd :: tl) as ns) ->
-          (* Try to resolve head of PQN. This will either resolve to itself, or
-           * to a prefix. Once we have the prefix, we can construct the FQN. *)
-          (* Qualified names must (by parser construction) be of at least length 1. *)
-          let final = List.hd (List.rev ns) in
-          let prefix = resolve hd term_shadow_table in
-          let fqn = String.concat module_sep (prefix :: tl) in
-          (self#bind_open final fqn, Open ns)
-      | Module (n, bs) ->
-          let new_path = path @ [n] in
-          let fqn = lst_to_path new_path in
-          (* New FQN for module must shadow n *)
-          let o = self#bind_shadow_term n fqn in
-          let o = o#bind_shadow_type n fqn in
-          let o_term_ht = o#get_term_shadow_table in
-          let o_type_ht = o#get_type_shadow_table in
-          (* Recursively get *and rename* inner scope *)
-          let (_, _, bindings') =
-              process_binding_list bs module_table new_path o_term_ht o_type_ht in
-          (* Finally, return Module with updated bindings. The module itself
-           * will be flattened out on the flattening pass. *)
-          (o, Module (n, bindings'))
-      | b -> super#bindingnode b
+    let rec typename : name list -> t -> name
+      = fun names scope ->
+      match names with
+      | [] -> assert false
+      | [name] -> StringMap.find name scope.typenames
+      | prefix :: names ->
+         typename names (StringMap.find prefix scope.modules)
   end
 
-and perform_renaming module_table path term_ht type_ht =
-  object(self)
-    inherit SugarTraversals.fold_map as super
+  let shadow : t -> t -> t
+    = fun scope mask ->
+    let select_mask _ _ mask = Some mask in
+    let modules =
+      StringMap.union select_mask scope.modules mask.modules
+    in
+    let typenames =
+      StringMap.union select_mask scope.typenames mask.typenames
+    in
+    let terms =
+      StringMap.union select_mask scope.terms mask.terms
+    in
+    { modules; typenames; terms }
 
-    val term_shadow_table = term_ht
-    val type_shadow_table = type_ht
-    method get_term_shadow_table = term_shadow_table
-    method get_type_shadow_table = type_shadow_table
-    method bind_shadow_term name fqn =
-        {< term_shadow_table = shadow_binding name fqn term_shadow_table >}
-    method bind_shadow_type name fqn =
-        {< type_shadow_table = shadow_binding name fqn type_shadow_table >}
+  module Extend = struct
+    let module' module_name module_scope scope =
+      { scope with modules = StringMap.add module_name module_scope scope.modules }
 
-    method! binder = function
-      | bndr ->
-         let n = Binder.to_name bndr in
-         let fqn = make_path_string path n in
-         (self#bind_shadow_term n fqn, Binder.set_name bndr fqn)
+    let typename typename typename' scope =
+      { scope with typenames = StringMap.add typename typename' scope.typenames }
 
-    method! patternnode = function
-      | Pattern.Variant (n, p_opt) ->
-          let fqn = resolve n term_shadow_table in
-          let (o, p_opt') = self#option (fun o -> o#pattern) p_opt in
-          (o, Pattern.Variant (fqn, p_opt'))
-      | p -> super#patternnode p
+    let var name name' scope =
+      { scope with terms = StringMap.add name name' scope.terms }
 
-    method! row = function
-      | (xs, rv) ->
-          let (o, xs') =
-            self#list (fun o (name, fspec) ->
-              let (o, fspec') = o#fieldspec fspec in
-              (o, (name, fspec'))) xs in
-          let (_, rv') = o#row_var rv in
-          (self, (xs', rv'))
+    let rec synthetic_module path module_scope scope =
+      match path with
+      | [] -> assert false
+      | [name] ->
+         { scope with modules = StringMap.add name module_scope scope.modules }
+      | prefix :: path ->
+         synthetic_module path module_scope (StringMap.find prefix scope.modules)
+  end
+end
 
-    method! bindingnode = function
-      | (Module     _) as m  -> (self, m )
-      | (AlienBlock _) as ab -> (self, ab)
-      | (Foreign    _) as f  -> (self, f )
-      | Typenames ts ->
-          let (o, ts) = self#list (fun o (n, tvs, dt, pos) ->
-            (* Type will already have been renamed. *)
-            let (o, dt) = o#datatype' dt in
-            (o, (n, tvs, dt, pos))) ts in
-          (o, Typenames ts)
-      | Val (pat, (tvs, phr), loc, dt_opt) ->
-          let (_, phr') = self#phrase phr in
-          let (o, pat') = self#pattern pat in
-          let (o, dt_opt') = o#option (fun o -> o#datatype') dt_opt in
-          (o, Val (pat', (tvs, phr'), loc, dt_opt'))
-      | Fun (bnd, lin, (tvs, fnlit), loc, dt_opt) ->
-          (* Binder will have been changed. We need to add the funlit pattern
-           * to the env. *)
-          let (_, fnlit') = self#funlit fnlit in
-          let (o, dt_opt') = self#option (fun o -> o#datatype') dt_opt in
-          (o, Fun (bnd, lin, (tvs, fnlit'), loc, dt_opt'))
-      | Funs fs ->
-          let (o, fs) = self#list (fun o (bnd, lin, (tvs, fnlit), loc, dt_opt, pos) ->
-            let (_, fnlit') = o#funlit fnlit in
-            let (o, dt_opt') = o#option (fun o -> o#datatype') dt_opt in
-            (o, (bnd, lin, (tvs, fnlit'), loc, dt_opt', pos))
-          ) fs in
-          (o, Funs fs)
-      | b -> super#bindingnode b
+(* Refined notion of scope. *)
+module Scope = struct
+  module S = BasicScope
+  type scope = S.t
+  type t = { inner: scope; outer: scope }
 
-    method! binop = function
-      | BinaryOp.Name n -> (self, BinaryOp.Name (resolve n term_shadow_table))
-      | bo -> super#binop bo
+  let empty = { inner = S.empty; outer = S.empty }
 
-    method! unary_op = function
-      | UnaryOp.Name n -> (self, UnaryOp.Name (resolve n term_shadow_table))
-      | uo -> super#unary_op uo
+  module Resolve = struct
+    (* We do not produce an error if a name fails to resolve, which
+       happens if a variable is unbound. We defer error handling to the
+       type checker. We produce a "best guess" of its name, which is
+       simply its qualified form. *)
+    let best_guess : name list -> name
+      = String.concat "."
+
+    let module' : name list -> t -> scope
+      = fun names scopes ->
+      try S.Resolve.module' names scopes.inner
+      with Notfound.NotFound _ ->
+        S.Resolve.module' names scopes.outer (* Allow any errors propagate. *)
+
+    let qualified_var : name list -> t -> name
+      = fun names scopes ->
+      try S.Resolve.var names scopes.inner
+      with Notfound.NotFound _ ->
+        try S.Resolve.var names scopes.outer
+        with Notfound.NotFound _ -> best_guess names
+
+    let qualified_typename : name list -> t -> name
+      = fun names scopes ->
+      try S.Resolve.typename names scopes.inner
+      with Notfound.NotFound _ ->
+        try S.Resolve.typename names scopes.outer
+        with Notfound.NotFound _ -> best_guess names
+
+    let var : name -> t -> name
+      = fun name scopes -> qualified_var [name] scopes
+
+    let typename : name -> t -> name
+      = fun name scopes -> qualified_typename [name] scopes
+  end
+
+  module Extend = struct
+    let module' : name -> t -> t -> t
+      = fun module_name module_scope scopes ->
+      { scopes with inner = S.Extend.module' module_name module_scope.inner scopes.inner }
+
+    let var : name -> string -> t -> t
+      = fun term_name prefixed_name scopes ->
+      { scopes with inner = S.Extend.var term_name prefixed_name scopes.inner }
+
+    let typename : name -> string -> t -> t
+      = fun typename prefixed_name scopes ->
+      { scopes with inner = S.Extend.typename typename prefixed_name scopes.inner }
+
+    let synthetic_module : name list -> scope -> t -> t
+      = fun path module_scope scopes ->
+      { scopes with inner = S.Extend.synthetic_module path module_scope scopes.inner }
+  end
+
+  let open_module : scope -> t -> t
+    = fun module_scope scopes ->
+    let inner = S.shadow scopes.inner module_scope in
+    { scopes with inner }
+
+  (* TODO. *)
+  let _import_module : name -> S.t -> t -> t
+    = fun _module_name _module_scope _scopes ->
+    assert false
+
+  let renew : t -> t
+    = fun scopes ->
+    let outer = S.shadow scopes.outer scopes.inner in
+    { outer; inner = S.empty }
+end
+
+let rec desugar_module : Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
+  = fun renamer scope binding ->
+  match binding.node with
+  | Module (name, bs) ->
+     let visitor = desugar ~toplevel:true (Epithet.remember name renamer) (Scope.renew scope) in
+     let bs'    = visitor#bindings bs in
+     let scope' = visitor#get_scope in
+     let scope'' = Scope.Extend.module' name scope' scope in
+     (* Printf.printf "enter_module before:\n%s\n%!" (string_of_scopes scope);
+      * Printf.printf "enter_module after:\n%s\n%!" (string_of_scopes scope''); *)
+     (bs', scope'')
+  | _ -> assert false
+and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
+  let open Sugartypes in
+  object(self : 'self_type)
+    inherit SugarTraversals.map as super
+
+    val scope : Scope.t ref = ref scope
+    val renamer : Epithet.t ref = ref renamer
+    method get_renamer = !renamer
+    method get_scope = !scope
+
+    method clone =
+      desugar ~toplevel:false !renamer !scope
+
+    method type_binder : name -> name
+      = fun name ->
+      (* Construct a prefixed name for [name]. *)
+      let name' =
+        if toplevel then Epithet.expand !renamer name
+        else Epithet.expand_escapee !renamer name
+      in
+      self#bind_type name name'; name'
+
+    method! binder : Binder.with_pos -> Binder.with_pos
+      = fun bndr ->
+      (* let _ = Printf.printf "Top-level binder: %s\n%!" (Binder.to_name bndr) in *)
+      let name = Binder.to_name bndr in
+      let name' = if toplevel then Epithet.expand !renamer name else name in
+      self#bind_term name name';
+      Binder.set_name bndr name'
+
+    method bind_term name name' =
+      (* Printf.printf "Binding [%s] -> %s\n%!" (String.concat ";" [name]) name'; *)
+      scope := Scope.Extend.var name name' !scope
+
+    method bind_type name name' =
+      scope := Scope.Extend.typename name name' !scope
+
+    method open_module pos path =
+      try
+        let module_scope = Scope.Resolve.module' path !scope in
+        scope := Scope.open_module module_scope !scope;
+      with Notfound.NotFound _ ->
+        raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
+
+    method import_module pos path =
+      try
+        let module_scope = Scope.Resolve.module' path !scope in
+        scope := Scope.Extend.synthetic_module path module_scope !scope
+      with Notfound.NotFound _ ->
+        raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
+
+    method! funlit : funlit -> funlit
+      = fun (paramss, body) ->
+      let visitor = self#clone in
+      let paramss' =
+        List.map
+          (fun params ->
+            List.map (fun param -> visitor#pattern param) params)
+          paramss
+      in
+      let body' = visitor#phrase body in
+      (paramss', body')
+
+    method cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list
+      = fun cases ->
+      List.map
+        (fun (pat, body) ->
+          let visitor = self#clone in
+          let pat'  = visitor#pattern pat in
+          let body' = visitor#phrase body in
+          (pat', body'))
+        cases
+
+    method! binop op =
+      let open Operators.BinaryOp in
+      match op with
+      | Name name -> Name (Scope.Resolve.var name !scope)
+      | _ -> super#binop op
+
+    method! unary_op op =
+      let open Operators.UnaryOp in
+      match op with
+      | Name name -> Name (Scope.Resolve.var name !scope)
+      | _ -> super#unary_op op
+
+    method! section sect =
+      let open Operators.Section in
+      match sect with
+      | Name name -> Name (Scope.Resolve.var name !scope)
+      | _ -> super#section sect
 
     method! phrasenode = function
-      | Block (bs, phr) ->
-          (* Process bindings, then process the phrase using
-           * updated shadow table. *)
-          let (term_ht, type_ht, bs') =
-              process_binding_list bs module_table path
-                term_shadow_table type_shadow_table in
-          let (_, phr') =
-              (perform_renaming module_table path
-                term_ht type_ht)#phrase phr in
-          (self, Block (bs', phr'))
-      | Var n -> (self, Var (resolve n term_shadow_table))
-      | RecordLit (xs, p_opt) ->
-          let (_, xs') =
-            self#list (fun o (n, p) ->
-              let (o, p') = o#phrase p in
-              (o, (n, p'))) xs in
-          let (_, p_opt') = self#option (fun o -> o#phrase) p_opt in
-          (self, RecordLit (xs', p_opt'))
-      | Projection (p, n) ->
-          let (_, p') = self#phrase p in
-          (self, Projection (p', n))
-      | ConstructorLit (n, p_opt, dt_opt) ->
-          (* Resolve constructor name using term table *)
-          let fqn = resolve n term_shadow_table in
-          let (_, p_opt') = self#option (fun o -> o#phrase) p_opt in
-          (self, ConstructorLit (fqn, p_opt', dt_opt))
-      | QualifiedVar [] -> assert false
-      | QualifiedVar (hd :: tl) ->
-          (* Similar to qualified imports. *)
-          let prefix = resolve hd term_shadow_table in
-          let fqn = String.concat module_sep (prefix :: tl) in
-          (self, Var fqn)
-      | phr -> super#phrasenode phr
+      | Block (bs, body) ->
+       (* Enters a new scope, which is thrown away on exit. *)
+        let visitor = self#clone in
+        let bs'= visitor#bindings bs in
+        let body' = visitor#phrase body in
+        Block (bs', body')
+      | Var name ->
+        (* Must be resolved. *)
+        Var (Scope.Resolve.var name !scope)
+      | QualifiedVar names ->
+      (* Must be resolved. *)
+        Var (Scope.Resolve.qualified_var names !scope)
+      | Escape (bndr, body) ->
+        let visitor = self#clone in
+        let bndr' = visitor#binder bndr in
+        let body' = visitor#phrase body in
+        Escape (bndr', body')
+      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+         let sh_expr = self#phrase sh_expr in
+         let shd_params =
+           self#option (fun o -> o#handle_params) sh_descr.shd_params
+         in
+         let sh_effect_cases = self#cases sh_effect_cases in
+         let sh_value_cases = self#cases sh_value_cases in
+         Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr = { sh_descr with shd_params } }
+      | Switch (expr, cases, dt) ->
+        let expr' = self#phrase expr in
+        let cases' = self#cases cases in
+        Switch (expr', cases', dt)
+      | Receive (cases, dt) ->
+        let cases' = self#cases cases in
+        Receive (cases', dt)
+      | FormBinding (body, pat) ->
+        let visitor = self#clone in
+        let body' = visitor#phrase body in
+        let pat' = visitor#pattern pat in
+        FormBinding (body', pat')
+      | Offer (expr, cases, dt) ->
+        let expr' = self#phrase expr in
+        let cases' = self#cases cases in
+        Offer (expr', cases', dt)
+      | TryInOtherwise (expr, x, body, catch, dt) ->
+        let expr' = self#phrase expr in
+        let visitor = self#clone in
+        let x' = visitor#pattern x in
+        let body' = visitor#phrase body in
+        let catch' = self#phrase catch in
+        TryInOtherwise (expr', x', body', catch', dt)
+      | p -> super#phrasenode p
 
-    method! datatypenode = let open Datatype in
-      function
-      | Function (dts, row, dt) ->
-          let (_, dts') = self#list (fun o -> o#datatype) dts in
-          let (_, dt') = self#datatype dt in
-          (self, Function (dts', row, dt'))
-      | TypeApplication (n, args) ->
-          let fqn = resolve n type_shadow_table in
-          let (_, args') = self#list (fun o -> o#type_arg) args in
-          (self, TypeApplication (fqn, args'))
-      | QualifiedTypeApplication ([], _args) -> assert false
-      | QualifiedTypeApplication (hd :: tl, args) ->
-          let prefix = resolve hd type_shadow_table in
-          let fqn = String.concat module_sep (prefix :: tl) in
-          let (_, args') = self#list (fun o -> o#type_arg) args in
-          (self, TypeApplication (fqn, args'))
-      | Variant (xs, rv) ->
-          (* Variants need to have constructors renamed *)
-          let (o, xs') =
-            self#list (fun o (name, fspec) ->
-              let fqn = make_path_string path name in
-              let o = o#bind_shadow_term name fqn in
-              let (o, fspec') = o#fieldspec fspec in
-              (o, (fqn, fspec'))) xs in
-          let (o, rv') = o#row_var rv in
-          (o, Variant (xs', rv'))
+    method! datatypenode = let open Datatype in function
+      | TypeApplication (name, args) ->
+      (* Must be resolved. *)
+        let args' = self#list (fun o -> o#type_arg) args in
+        TypeApplication (Scope.Resolve.typename name !scope, args')
+      | QualifiedTypeApplication (names, args) ->
+      (* Must be resolved. *)
+        let args' = self#list (fun o -> o#type_arg) args in
+        TypeApplication (Scope.Resolve.qualified_typename names !scope, args')
       | dt -> super#datatypenode dt
 
+    method! bindingnode = function
+      | Fun (bndr, lin, (tvs, funlit), loc, dt) ->
+       (* It is important to process [bndr] before processing
+          [funlit] as functions are allowed to call themselves. *)
+        let bndr' = self#binder bndr in
+        let dt' = self#option (fun o -> o#datatype') dt in
+        let funlit' = self#funlit funlit in
+        Fun (bndr', lin, (tvs, funlit'), loc, dt')
+      | Funs fs ->
+        (* Assumes mutual typenames have been processed already,
+           which appears to be guaranteed by the parser. *)
+        (* Two passes:
+           1) Register all the names such that they are available
+              inside of each function body.
+           2) Process the function bodies. *)
+        let (fs' : recursive_function list) =
+          List.fold_right
+            (fun (bndr, lin, lit, loc, dt, pos) fs ->
+              (self#binder bndr, lin, lit, loc, dt, pos) :: fs)
+            fs []
+        in
+        let fs'' =
+          List.fold_right
+            (fun (bndr, lin, (tvs, funlit), loc, dt, pos) fs ->
+              let dt' = self#option (fun o -> o#datatype') dt in
+              let funlit' = self#funlit funlit in
+              (bndr, lin, (tvs, funlit'), loc, dt', pos) :: fs)
+            fs' []
+        in
+        Funs fs''
+      | Typenames ts ->
+       (* Must be processed before any mutual function bindings in
+          the same mutual binding group. *)
+       (* Same procedure as above. *)
+         let ts' =
+           List.fold_right
+             (fun (name, tyvars, dt, pos) ts ->
+               (self#type_binder name, tyvars, dt, pos) :: ts)
+               ts []
+         in
+         let ts'' =
+           List.fold_right
+             (fun (name, tyvars, dt, pos) ts ->
+                 let dt' = self#datatype' dt in
+                 (name, tyvars, dt', pos) :: ts)
+             ts' []
+           in
+           Typenames ts''
+      | Val (pat, (tvs, body), loc, dt) ->
+       (* It is important to process [body] before [pat] to avoid
+          inadvertently bringing the binder(s) in [pat] into the
+          scope of [body]. *)
+         let body' = self#phrase body in
+         let pat' = self#pattern pat in
+         let dt' = self#option (fun o -> o#datatype') dt in
+         Val (pat', (tvs, body'), loc, dt')
+      | Foreign (bndr, raw_name, lang, ext_file, dt) ->
+         let dt' = self#datatype' dt in
+         let bndr' = self#binder bndr in
+         Foreign (bndr', raw_name, lang, ext_file, dt')
+      | AlienBlock (lang, lib, decls) ->
+         let decls' =
+           self#list
+             (fun o (bndr, dt) ->
+               let dt' = o#datatype' dt in
+               let bndr' = o#binder bndr in
+               (bndr', dt'))
+             decls
+         in
+         AlienBlock (lang, lib, decls')
+      | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
+      | b -> super#bindingnode b
+
+    method bindings = function
+      | [] -> []
+      | { node = Import names; pos } :: bs ->
+         self#import_module pos names; self#bindings bs
+      | { node = Open names; pos } :: bs ->
+      (* Affects [scope]. *)
+         self#open_module pos names; self#bindings bs
+      | ({ node = Module (_name, _); _ } as module') :: bs ->
+      (* Affects [scope] and hoists [bs'] *)
+         let bs', scope' = desugar_module !renamer !scope module' in
+         scope := scope'; bs' @ self#bindings bs
+      | b :: bs ->
+         let b = self#binding b in
+         b :: self#bindings bs
+
+    method! program (bs, exp) =
+      (* It is crucial that we enforce left-to-right evaluation of
+         [bs] and [exp]. Note that OCaml uses right-to-left evaluation
+         order. *)
+      let bs' = self#bindings bs in
+      (bs', self#option (fun o -> o#phrase) exp)
+
+    method! sentence : sentence -> sentence = function
+      | Definitions defs -> Definitions (self#bindings defs)
+      | s -> super#sentence s
   end
 
-  and process_binding_list : binding list -> module_info stringmap ->
-    string list -> string list stringmap -> string list stringmap ->
-      (string list stringmap * string list stringmap * binding list) =
-          fun binding_list mt path term_ht type_ht ->
+let desugar_program : Sugartypes.program -> Sugartypes.program
+  = fun program ->
+  (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
+  let result = (desugar ~toplevel:true Epithet.empty Scope.empty)#program program in
+  (* Printf.fprintf stderr "After elaboration:\n%s\n%!" (Sugartypes.show_program result); *)
+  result
 
-    let (term_ht, type_ht, bnds_rev) =
-      List.fold_left (fun (term_ht, type_ht, acc) b ->
-        let (o, b) =
-          (rename_binders_get_shadow_tbl mt path
-              term_ht type_ht)#binding b in
-        let term_ht = o#get_term_shadow_table in
-        let type_ht = o#get_type_shadow_table in
-        let (o, b) =
-          (perform_renaming mt path
-              term_ht type_ht)#binding b in
-        let term_ht = o#get_term_shadow_table in
-        let type_ht = o#get_type_shadow_table in
-            (term_ht, type_ht, b :: acc)) (term_ht, type_ht, []) binding_list in
-    (term_ht, type_ht, List.rev bnds_rev)
 
-let rename mt (bindings, phr_opt) =
-  let (term_ht, ty_ht, bindings') =
-      process_binding_list bindings mt [] StringMap.empty StringMap.empty in
-  let (_, phr') =
-      (perform_renaming mt [] term_ht ty_ht)#option
-        (fun o -> o#phrase ) phr_opt in
-  (bindings', phr')
-
-let desugarModules prog =
-  let module_map = create_module_info_map prog in
-  let renamed_prog = rename module_map prog in
-  let flattened_prog = flatten_prog renamed_prog in
-  flattened_prog
+let desugar_sentence : unit -> Sugartypes.sentence -> Sugartypes.sentence
+  = fun () ->
+  let scope : Scope.t ref = ref Scope.empty in
+  let renamer : Epithet.t ref = ref Epithet.empty in
+  fun sentence ->
+  let visitor = desugar ~toplevel:true !renamer !scope in
+  let result = visitor#sentence sentence in
+  scope := visitor#get_scope; renamer := visitor#get_renamer; result
