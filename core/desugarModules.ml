@@ -31,7 +31,6 @@
  *
  *)
 
-
 open Utility
 open Sugartypes
 open SourceCode.WithPos
@@ -43,13 +42,19 @@ module Epithet = struct
       prefix: (int * string) list }
 
   let empty : t =
-    { next = 0; prefix = [] }
+    { next = 0; prefix = []; }
 
   (* Persistent *)
-  let remember name st =
+  let remember ?(escapes=false) name st =
+    let prefix =
+      if escapes
+      then let next = st.next in
+           (st.next <- next + 1; (st.next, "?") :: st.prefix)
+      else st.prefix
+    in
     let next = st.next in
     st.next <- next + 1;
-    { empty with prefix = (next, name) :: st.prefix }
+    { empty with prefix = (next, name) :: prefix }
 
   let build components =
     let components' =
@@ -58,7 +63,7 @@ module Epithet = struct
           (if i < 0 then name else Printf.sprintf "%s$%d" name i) :: suffix)
         [] components
     in
-    String.concat "." components'
+    String.concat "$" components'
 
   let expand st name =
     build ((-1, name) :: st.prefix)
@@ -220,11 +225,11 @@ module Scope = struct
     { outer; inner = S.empty }
 end
 
-let rec desugar_module : Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
-  = fun renamer scope binding ->
+let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
+  = fun ?(toplevel=false) renamer scope binding ->
   match binding.node with
   | Module (name, bs) ->
-     let visitor = desugar ~toplevel:true (Epithet.remember name renamer) (Scope.renew scope) in
+     let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
      let bs'    = visitor#bindings bs in
      let scope' = visitor#get_scope in
      let scope'' = Scope.Extend.module' name scope' scope in
@@ -476,7 +481,7 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
       | ({ node = Module (_name, _); pos } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
          self#extension_guard pos;
-         let bs', scope' = desugar_module !renamer !scope module' in
+         let bs', scope' = desugar_module ~toplevel !renamer !scope module' in
          scope := scope'; bs' @ self#bindings bs
       | b :: bs ->
          let b = self#binding b in
