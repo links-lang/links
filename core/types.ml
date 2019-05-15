@@ -2196,9 +2196,11 @@ struct
           | `Application (s, ts) ->
               let vars = String.concat "," (List.map (type_arg bound_vars p) ts) in
               Printf.sprintf "%s (%s)" (Abstype.name s) vars
-          | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> r_name
+          | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> Module_hacks.Name.prettify r_name
           | `RecursiveApplication { r_name; r_args; _ } ->
-              r_name ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) r_args) ^")"
+             Printf.sprintf "%s (%s)"
+               (Module_hacks.Name.prettify r_name)
+               (String.concat "," (List.map (type_arg bound_vars p) r_args))
   and presence bound_vars ((policy, vars) as p) =
     function
       | `Present t ->

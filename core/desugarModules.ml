@@ -24,11 +24,14 @@
  *
  *  --->
  *
- * val Foo0.bobsleigh0 = ...;
- * fun Foo0.x1() { ...}
- * fun Foo0.Bar2.y0() { ... }
+ * val Foo_0$bobsleigh_0 = ...;
+ * fun Foo_0$x1() { ...}
+ * fun Foo_0$Bar_2$y_0() { ... }
  * val x1 = ...;
  *
+ * The names are internal. The [Name.prettify] function in
+ * [module_hacks.ml] attempts to recover the source representation of
+ * names.
  *)
 
 open Utility
@@ -60,7 +63,7 @@ module Epithet = struct
     let components' =
       List.fold_left
         (fun suffix (i, name) ->
-          (if i < 0 then name else Printf.sprintf "%s$%d" name i) :: suffix)
+          (if i < 0 then name else Printf.sprintf "%s_%d" name i) :: suffix)
         [] components
     in
     String.concat "$" components'

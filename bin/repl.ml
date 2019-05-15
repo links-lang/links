@@ -107,8 +107,9 @@ let rec directives
     ((fun ((_, _, {Types.tycon_env = tycon_env; _ }) as envs) _ ->
         StringSet.iter (fun k ->
                           let s = Env.String.lookup tycon_env k in
-                            Printf.fprintf stderr " %s = %s\n" (Module_hacks.Name.prettify k)
-                              (Types.string_of_tycon_spec s))
+                          Printf.fprintf stderr " %s = %s\n"
+                            (Module_hacks.Name.prettify k)
+                            (Types.string_of_tycon_spec s))
           (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
         envs),
      "display the current type alias environment");
