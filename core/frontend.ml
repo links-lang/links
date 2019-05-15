@@ -39,31 +39,31 @@ struct
   let program_pipeline =
     fun tyenv pos_context program ->
       let program = (ResolvePositions.resolve_positions pos_context)#program program in
-      let program = DesugarAlienBlocks.transform_alien_blocks program in
-      (* Module-y things *)
-      let ffi_files = ModuleUtils.get_ffi_files program in
       let _program = CheckXmlQuasiquotes.checker#program program in
       let () = DesugarSessionExceptions.settings_check program in
-      ((( ExperimentalExtensions.check#program
-       ->- DesugarModules.desugar_program
-       ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
-       ->- DesugarHandlers.desugar_handlers_early#program
-       ->- DesugarLAttributes.desugar_lattributes#program
-       ->- LiftRecursive.lift_funs#program
-       ->- DesugarDatatypes.program tyenv
-       ->- uncurry TypeSugar.Check.program
-        (*->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)*)
-       ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarInners.desugar_inners tyenv)#program ->- snd3)
-       ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.insert_toplevel_handlers tyenv)#program ->- snd3)
-       ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.desugar_session_exceptions tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarFors.desugar_fors tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
-       ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
-        program), ffi_files)
+      let apply =
+        ( ExperimentalExtensions.check#program
+          ->- DesugarModules.desugar_program
+          ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
+          ->- DesugarHandlers.desugar_handlers_early#program
+          ->- DesugarLAttributes.desugar_lattributes#program
+          ->- LiftRecursive.lift_funs#program
+          ->- DesugarDatatypes.program tyenv
+          ->- uncurry TypeSugar.Check.program
+          (*->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)*)
+          ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
+          ->- after_typing ((DesugarInners.desugar_inners tyenv)#program ->- snd3)
+          ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.insert_toplevel_handlers tyenv)#program ->- snd3)
+          ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.desugar_session_exceptions tyenv)#program ->- snd3)
+          ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#program ->- snd3)
+          ->- after_typing ((DesugarFors.desugar_fors tyenv)#program ->- snd3)
+          ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
+          ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
+          ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
+          ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
+      in
+      let (program, _typ, _tenv) as result = apply program in
+      (result, ModuleUtils.get_ffi_files program)
 
 
 let program tyenv pos_context program =

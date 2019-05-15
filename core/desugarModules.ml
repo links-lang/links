@@ -499,6 +499,7 @@ let desugar_program : Sugartypes.program -> Sugartypes.program
   = fun program ->
   (* TODO move to this logic to the loader. *)
   let program = Chaser.add_dependencies program in
+  let program = DesugarAlienBlocks.transform_alien_blocks program in
   (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
   let result = (desugar ~toplevel:true Epithet.empty Scope.empty)#program program in
   (* Printf.fprintf stderr "After elaboration:\n%s\n%!" (Sugartypes.show_program result); *)
@@ -511,6 +512,7 @@ let desugar_sentence : unit -> Sugartypes.sentence -> Sugartypes.sentence
   let renamer : Epithet.t ref = ref Epithet.empty in
   fun sentence ->
   let sentence = Chaser.add_dependencies_sentence sentence in
+  let sentence = DesugarAlienBlocks.sentence sentence in
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in
   scope := visitor#get_scope; renamer := visitor#get_renamer; result
