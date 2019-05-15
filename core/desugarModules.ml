@@ -168,7 +168,7 @@ module Scope = struct
       = fun names scopes ->
       try S.Resolve.module' names scopes.inner
       with Notfound.NotFound _ ->
-        S.Resolve.module' names scopes.outer (* Allow any errors propagate. *)
+        S.Resolve.module' names scopes.outer (* Allow any errors to propagate. *)
 
     let qualified_var : name list -> t -> name
       = fun names scopes ->
@@ -233,8 +233,6 @@ let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.bi
      let bs'    = visitor#bindings bs in
      let scope' = visitor#get_scope in
      let scope'' = Scope.Extend.module' name scope' scope in
-     (* Printf.printf "enter_module before:\n%s\n%!" (string_of_scopes scope);
-      * Printf.printf "enter_module after:\n%s\n%!" (string_of_scopes scope''); *)
      (bs', scope'')
   | _ -> assert false
 and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
@@ -242,49 +240,47 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
   object(self : 'self_type)
     inherit SugarTraversals.map as super
 
-    val scope : Scope.t ref = ref scope
-    val renamer : Epithet.t ref = ref renamer
-    method get_renamer = !renamer
-    method get_scope = !scope
+    val mutable scope = scope
+    val mutable renamer = renamer
+    method get_renamer = renamer
+    method get_scope = scope
 
     method clone =
-      desugar ~toplevel:false !renamer !scope
+      desugar ~toplevel:false renamer scope
 
     method type_binder : name -> name
       = fun name ->
       (* Construct a prefixed name for [name]. *)
       let name' =
-        if toplevel then Epithet.expand !renamer name
-        else Epithet.expand_escapee !renamer name
+        if toplevel then Epithet.expand renamer name
+        else Epithet.expand_escapee renamer name
       in
       self#bind_type name name'; name'
 
     method! binder : Binder.with_pos -> Binder.with_pos
       = fun bndr ->
-      (* let _ = Printf.printf "Top-level binder: %s\n%!" (Binder.to_name bndr) in *)
       let name = Binder.to_name bndr in
-      let name' = if toplevel then Epithet.expand !renamer name else name in
+      let name' = if toplevel then Epithet.expand renamer name else name in
       self#bind_term name name';
       Binder.set_name bndr name'
 
     method bind_term name name' =
-      (* Printf.printf "Binding [%s] -> %s\n%!" (String.concat ";" [name]) name'; *)
-      scope := Scope.Extend.var name name' !scope
+      scope <- Scope.Extend.var name name' scope
 
     method bind_type name name' =
-      scope := Scope.Extend.typename name name' !scope
+      scope <- Scope.Extend.typename name name' scope
 
     method open_module pos path =
       try
-        let module_scope = Scope.Resolve.module' path !scope in
-        scope := Scope.open_module module_scope !scope;
+        let module_scope = Scope.Resolve.module' path scope in
+        scope <- Scope.open_module module_scope scope;
       with Notfound.NotFound _ ->
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
     method import_module pos path =
       try
-        let module_scope = Scope.Resolve.module' path !scope in
-        scope := Scope.Extend.synthetic_module path module_scope !scope
+        let module_scope = Scope.Resolve.module' path scope in
+        scope <- Scope.Extend.synthetic_module path module_scope scope
       with Notfound.NotFound _ ->
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
@@ -313,19 +309,19 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
     method! binop op =
       let open Operators.BinaryOp in
       match op with
-      | Name name -> Name (Scope.Resolve.var name !scope)
+      | Name name -> Name (Scope.Resolve.var name scope)
       | _ -> super#binop op
 
     method! unary_op op =
       let open Operators.UnaryOp in
       match op with
-      | Name name -> Name (Scope.Resolve.var name !scope)
+      | Name name -> Name (Scope.Resolve.var name scope)
       | _ -> super#unary_op op
 
     method! section sect =
       let open Operators.Section in
       match sect with
-      | Name name -> Name (Scope.Resolve.var name !scope)
+      | Name name -> Name (Scope.Resolve.var name scope)
       | _ -> super#section sect
 
     method! phrasenode = function
@@ -337,10 +333,10 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
         Block (bs', body')
       | Var name ->
         (* Must be resolved. *)
-        Var (Scope.Resolve.var name !scope)
+        Var (Scope.Resolve.var name scope)
       | QualifiedVar names ->
       (* Must be resolved. *)
-        Var (Scope.Resolve.qualified_var names !scope)
+        Var (Scope.Resolve.qualified_var names scope)
       | Escape (bndr, body) ->
         let visitor = self#clone in
         let bndr' = visitor#binder bndr in
@@ -383,11 +379,11 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
       | TypeApplication (name, args) ->
       (* Must be resolved. *)
         let args' = self#list (fun o -> o#type_arg) args in
-        TypeApplication (Scope.Resolve.typename name !scope, args')
+        TypeApplication (Scope.Resolve.typename name scope, args')
       | QualifiedTypeApplication (names, args) ->
       (* Must be resolved. *)
         let args' = self#list (fun o -> o#type_arg) args in
-        TypeApplication (Scope.Resolve.qualified_typename names !scope, args')
+        TypeApplication (Scope.Resolve.qualified_typename names scope, args')
       | dt -> super#datatypenode dt
 
     method! bindingnode = function
@@ -481,8 +477,8 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
       | ({ node = Module (_name, _); pos } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
          self#extension_guard pos;
-         let bs', scope' = desugar_module ~toplevel !renamer !scope module' in
-         scope := scope'; bs' @ self#bindings bs
+         let bs', scope' = desugar_module ~toplevel renamer scope module' in
+         scope <- scope'; bs' @ self#bindings bs
       | b :: bs ->
          let b = self#binding b in
          b :: self#bindings bs
