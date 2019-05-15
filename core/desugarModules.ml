@@ -66,7 +66,7 @@ object(self)
   method! binding = function
     | {node = Module (_, bindings); _} ->
         self#list (fun o -> o#binding) bindings
-    | {node = QualifiedImport _; _} -> self
+    | {node = Open _; _} -> self
     | b -> self#add_binding ((flatten_simple ())#binding b)
 
   method! program = function
@@ -90,10 +90,10 @@ let resolve name ht =
     name
 
 (* Come across binding list:
-  * - Group bindings into list of lists
-  * - Get shadow table for the binding list
-  * - Perform renaming
-*)
+ * - Group bindings into list of lists
+ * - Get shadow table for the binding list
+ * - Perform renaming
+ *)
 let rec rename_binders_get_shadow_tbl module_table
             path term_ht type_ht =
   object (self)
@@ -145,15 +145,16 @@ let rec rename_binders_get_shadow_tbl module_table
             let (o, bnd') = o#binder bnd in
             (o, (bnd', dt))) decls in
           (o, AlienBlock (lang, lib, decls'))
-      | QualifiedImport [] -> assert false
-      | QualifiedImport ((hd :: tl) as ns) ->
+      | Import [] | Open [] -> assert false
+      | Import ((hd :: tl) as ns)
+      | Open ((hd :: tl) as ns) ->
           (* Try to resolve head of PQN. This will either resolve to itself, or
            * to a prefix. Once we have the prefix, we can construct the FQN. *)
           (* Qualified names must (by parser construction) be of at least length 1. *)
           let final = List.hd (List.rev ns) in
           let prefix = resolve hd term_shadow_table in
           let fqn = String.concat module_sep (prefix :: tl) in
-          (self#bind_open final fqn, QualifiedImport ns)
+          (self#bind_open final fqn, Open ns)
       | Module (n, bs) ->
           let new_path = path @ [n] in
           let fqn = lst_to_path new_path in

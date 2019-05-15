@@ -272,7 +272,8 @@ and bindingnode =
   | Handler of Binder.with_pos * handlerlit * datatype' option
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
-  | QualifiedImport of name list
+  | Import of name list
+  | Open of name list
   | Typenames of typename list
   | Infix
   | Exp     of phrase
@@ -495,7 +496,8 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Foreign (bndr, _, _, _, _) -> singleton (Binder.to_name bndr), empty
-    | QualifiedImport _
+    | Import _
+    | Open _
     | Typenames _
     | Infix -> empty, empty
     | Exp p -> empty, phrase p

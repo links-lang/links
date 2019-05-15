@@ -116,6 +116,9 @@ module SugarConstructors (Position : Pos)
 
   let binder ?(ppos=dp) ?ty name = with_pos ppos (name, ty)
 
+  (** Imports **)
+
+  let import ?(ppos=dp) names = with_pos ppos (Import names)
 
   (** Patterns *)
 
