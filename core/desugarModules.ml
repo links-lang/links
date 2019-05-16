@@ -34,6 +34,18 @@
  * names.
  *)
 
+(* Resolution strategy: We make use of a two-level scope data
+   structure to build up static scopes. The "outer" level represents
+   the parent scope, whilst the "inner" represents the scope being
+   built. Upon entry to a module scope the "inner" scope becomes an
+   "outer" scope, and exploration of the module initiates with an
+   empty "inner" scope. Meaning that after the exploration, the
+   "inner" scope only contains the top-level bindings of the said
+   module. After exploration we restore the old "outer" and "inner"
+   context, and add the explored module to the "inner" context with
+   its scope. *)
+
+
 open Utility
 open Sugartypes
 open SourceCode.WithPos
@@ -216,11 +228,6 @@ module Scope = struct
     = fun module_scope scopes ->
     let inner = S.shadow scopes.inner module_scope in
     { scopes with inner }
-
-  (* TODO. *)
-  let _import_module : name -> S.t -> t -> t
-    = fun _module_name _module_scope _scopes ->
-    assert false
 
   let renew : t -> t
     = fun scopes ->
