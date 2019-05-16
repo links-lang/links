@@ -205,3 +205,16 @@ Boundary peek
 filemode : true
 args : -m
 stdout : "A1" : String
+
+Import (1)
+./tests/modules/import1.links
+filemode : true
+args : -m --path=tests/modules
+stdout : 42 : Int
+
+Import (2)
+./tests/modules/import2.links
+filemode : true
+args : -m --path=tests/modules
+stderr : @.*
+exit : 1
