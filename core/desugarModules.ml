@@ -335,10 +335,10 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
         let body' = visitor#phrase body in
         Block (bs', body')
       | Var name ->
-        (* Must be resolved. *)
+       (* Must be resolved. *)
         Var (Scope.Resolve.var name scope)
       | QualifiedVar names ->
-      (* Must be resolved. *)
+       (* Must be resolved. *)
         Var (Scope.Resolve.qualified_var names scope)
       | Escape (bndr, body) ->
         let visitor = self#clone in
@@ -376,6 +376,10 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
         let body' = visitor#phrase body in
         let catch' = self#phrase catch in
         TryInOtherwise (expr', x', body', catch', dt)
+      | CP cp_exp ->
+       (* CP introduces a new scope. *)
+         let visitor = self#clone in
+         CP (visitor#cp_phrase cp_exp)
       | p -> super#phrasenode p
 
     method! datatypenode = let open Datatype in function
