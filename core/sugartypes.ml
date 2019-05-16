@@ -163,9 +163,6 @@ and regex =
   | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
 and funlit = Pattern.with_pos list list * phrase
-and handlerlit =
-  handler_depth * Pattern.with_pos * clause list *
-    Pattern.with_pos list list option (* computation arg, cases, parameters *)
 and handler =
   { sh_expr         : phrase
   ; sh_effect_cases : clause list
@@ -191,7 +188,6 @@ and phrasenode =
   | QualifiedVar     of name list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
-  | HandlerLit       of handlerlit
   (* Spawn kind, expression referring to spawn location (client n, server...),
       spawn block, row opt *)
   | Spawn            of spawn_kind * given_spawn_location * phrase *
@@ -269,7 +265,6 @@ and bindingnode =
                  datatype' option
   | Fun     of function_definition
   | Funs    of recursive_function list
-  | Handler of Binder.with_pos * handlerlit * datatype' option
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
   | Import of { pollute: bool; path : name list }
@@ -432,7 +427,6 @@ struct
     | Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | HandlerLit hnlit -> handlerlit hnlit
     | FunLit (_, _, fnlit, _) -> funlit fnlit
     | Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
@@ -481,9 +475,6 @@ struct
       * StringSet.t (* free vars in the rhs *) =
     match WithPos.node binding with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
-    | Handler (bndr, hnlit, _) ->
-       let name = singleton (Binder.to_name bndr) in
-       name, (diff (handlerlit hnlit) name)
     | Fun (bndr, _, (_, fn), _, _) ->
        let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
@@ -515,9 +506,6 @@ struct
             ~message:"Freevars for modules not implemented yet")
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
-  and handlerlit (_, m, cases, params : handlerlit) : StringSet.t =
-    union_all [diff (union_map case cases)
-                 (option_map (union_map (union_map pattern)) params); pattern m]
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

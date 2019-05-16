@@ -245,7 +245,7 @@ end
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE
-%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER
+%token HANDLE SHALLOWHANDLE
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP
@@ -409,17 +409,7 @@ fun_declarations:
 
 fun_declaration:
 | tlfunbinding                                                 { fun_binding     ~ppos:$loc      NoSig   $1 }
-| typed_handler_binding                                        { handler_binding ~ppos:$loc      NoSig   $1 }
 | signature tlfunbinding                                       { fun_binding     ~ppos:$loc($2) (Sig $1) $2 }
-| signature typed_handler_binding                              { handler_binding ~ppos:$loc($2) (Sig $1) $2 }
-
-typed_handler_binding:
-| handler_depth optional_computation_parameter VARIABLE
-                handler_parameterization                       { ($3, hnlit_arg $1 $2 $4) }
-
-optional_computation_parameter:
-| /* empty */                                                  { with_pos $sloc Pattern.Any }
-| LBRACKET pattern RBRACKET                                    { $2 }
 
 perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
@@ -542,18 +532,6 @@ primary_expression:
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
-| handler_depth optional_computation_parameter
-     handler_parameterization                                  { handler_lit ~ppos:$loc (hnlit_arg $1 $2 $3) }
-
-handler_parameterization:
-| arg_lists? handler_body                                      { ($2, $1) }
-
-handler_depth:
-| HANDLER                                                      { Deep    }
-| SHALLOWHANDLER                                               { Shallow }
-
-handler_body:
-| LBRACE cases RBRACE                                          { $2 }
 
 constructor_expression:
 | CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
@@ -923,7 +901,6 @@ binding:
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
-| typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
 | typedecl SEMICOLON | links_module | alien_block
 | links_open SEMICOLON                                         { $1 }
 

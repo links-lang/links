@@ -45,7 +45,6 @@ struct
         ( ExperimentalExtensions.check#program
           ->- DesugarModules.desugar_program
           ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
-          ->- DesugarHandlers.desugar_handlers_early#program
           ->- DesugarLAttributes.desugar_lattributes#program
           ->- LiftRecursive.lift_funs#program
           ->- DesugarDatatypes.program tyenv
@@ -82,9 +81,7 @@ let program tyenv pos_context program =
     fun tyenv pos_context sentence ->
     let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
     let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
-    ( ExperimentalExtensions.check#sentence
-       ->- (DesugarModules.desugar_sentence ())
-       ->- DesugarHandlers.desugar_handlers_early#sentence
+      ( ExperimentalExtensions.check#sentence
        ->- DesugarLAttributes.desugar_lattributes#sentence
        ->- LiftRecursive.lift_funs#sentence
        ->- DesugarDatatypes.sentence tyenv

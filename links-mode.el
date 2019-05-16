@@ -69,7 +69,6 @@
     "fun"
     "formlet"
     "handle"
-    "handler"
     "if"
     "import"
     "in"
@@ -100,7 +99,6 @@
     "server"
     "set"
     "shallowhandle"
-    "shallowhandler"
     "sig"
     "spawn"
     "spawnAngel"
@@ -140,10 +138,6 @@
      (2 font-lock-variable-name-face))
    ;; function names
    '("\\<\\(fun\\|sig\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
-     (1 font-lock-keyword-face)
-     (2 font-lock-function-name-face))
-   ;; handler names
-   '("\\<\\(open handler\\|handler\\|open shallowhandler\\|shallowhandler\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
      (1 font-lock-keyword-face)
      (2 font-lock-function-name-face))
    ;; type operators

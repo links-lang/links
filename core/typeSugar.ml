@@ -49,7 +49,6 @@ struct
     | DatabaseLit _
     | TableLit _
     | TextNode _
-    | HandlerLit _
     | Section _ -> true
 
     | ListLit (ps, _)
@@ -119,7 +118,6 @@ struct
     | Funs _
     | Infix
     | Typenames _
-    | Handler _
     | Foreign _ -> true
     | Exp p -> is_pure p
     | Val (pat, (_, rhs), _, _) ->
@@ -2270,7 +2268,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-        | HandlerLit _ -> assert false (* already desugared at this point *)
         | FunLit (_, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
@@ -3218,17 +3215,24 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
              = fun cases ->
              let ret, ops =
-               List.fold_left
-                 (fun (val_cases, eff_cases) (pat, body) ->
+               List.fold_right
+                 (fun (pat, body) (val_cases, eff_cases) ->
                    match pat.node with
                    | Pattern.Variant ("Return", None) ->
                       Gripers.die pat.pos "Improper pattern-matching on return value"
                    | Pattern.Variant ("Return", Some pat) ->
                       (pat, body) :: val_cases, eff_cases
                    | _ -> val_cases, (pat, body) :: eff_cases)
-                 ([], []) cases
+                 cases ([], [])
              in
-             List.rev ret, List.rev ops
+             let ret = match ret with
+               | [] -> (* insert a synthetic value case: x -> x. *)
+                  let x = "x" in
+                  let id = (variable_pat x, var x) in
+                  [id]
+               | _ -> ret
+             in
+             ret, ops
            in
            (* type parameters *)
            let henv = context in
@@ -3909,7 +3913,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
-      | Handler _
       | Import _
       | Open _
       | AlienBlock _
