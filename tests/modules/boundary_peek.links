@@ -1,0 +1,12 @@
+# c.f. issue #598.
+module A {
+  var x = "A1";
+}
+
+open A;
+
+module A {
+  var x = "A2";
+}
+
+x
