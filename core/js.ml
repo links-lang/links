@@ -7,7 +7,7 @@ struct
   let words =
     CharMap.from_alist
       [ '!', "bang";
-        '$', "dollar";
+        '$', "$";
         '%', "percent";
         '&', "and";
         '*', "star";
@@ -44,7 +44,7 @@ struct
   let wordify name =
     if has_symbols name then
       ("_" ^
-         mapstrcat "_"
+         mapstrcat ""
          (fun ch ->
             if (Utility.Char.isWord ch) then
               String.make 1 ch
