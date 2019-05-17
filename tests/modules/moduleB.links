@@ -1,4 +1,4 @@
-open ModuleC;
+open import ModuleC;
 fun foo() {
   bar()
 }
