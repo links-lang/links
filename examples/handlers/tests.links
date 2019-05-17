@@ -33,56 +33,56 @@ fun stateExamplesEquals((x,xs),(y,ys)) {
 
 var stateExamplesToString = pairToString(intToString, listToString(intToString));
 
+import Shallow_state;
 fun shallow_state() {
-  open Shallow_state;
   assert(stateExamplesEquals, (0, [0,1,2,3,4]), Shallow_state.unitTest(5), stateExamplesToString, "Shallow_state")
 }
 
+import Deep_state;
 fun deep_state() {
-  open Deep_state;
   assert(stateExamplesEquals, (0, [0,1,2,3,4]), Deep_state.unitTest(5), stateExamplesToString, "Deep_state")
 }
 
 # Pipes tests
 
 # fun deep_pipes() {
-#   open Deep_pipes
+#   import Deep_pipes
 #   assert((==), "199.00", Deep_pipes.unitTest(0), id, "Deep_pipes")
 # }
 
 # Exceptions tests
+import Exceptions;
 fun exceptions() {
-  open Exceptions;
   assert((==), 60, Exceptions.unitTest(), intToString, "Exceptions")
 }
 
 # Fringe tests
+import Fringe;
 fun fringe() {
-  open Fringe;
   assert((==), [true, false, false, false, true, true, false, false, true, true], Fringe.unitTest(), listToString(boolToString), "Fringe")
 }
 
 # Parameterised handlers
+import Light_switch;
 fun light_switch() {
-  open Light_switch;
   assert((==), true, Light_switch.unitTest(6), boolToString, "Light_switch")
 }
 
 # Satisfiability and parsing
+import Sat;
 fun sat() {
-  open Sat;
   assert((==), [true, true], Sat.unitTest(), listToString(boolToString), "Sat")
 }
 
 # Pi estimation
 # fun pi() {
-#   open Pi
+#   import Pi
 #   assert((==), true, all(fun(pi) { pi > 3.0 && pi < 4.0 }, Pi.unitTest()), boolToString, "Pi")
 # }
 
 # Delimited continuations
+import Shiftreset;
 fun delim() {
-  open Shiftreset;
   assert((==), [1,2,3], Shiftreset.example(), listToString(intToString), "Shift/reset")
 }
 
