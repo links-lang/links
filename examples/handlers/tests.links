@@ -45,10 +45,10 @@ fun deep_state() {
 
 # Pipes tests
 
-# fun deep_pipes() {
-#   import Deep_pipes
-#   assert((==), "199.00", Deep_pipes.unitTest(0), id, "Deep_pipes")
-# }
+import Pipes;
+fun deep_pipes() {
+  assert((==), [256, 256, 256, 256], Pipes.unitTest(), listToString(intToString), "Deep_pipes")
+}
 
 # Exceptions tests
 import Exceptions;
@@ -90,7 +90,7 @@ fun delim() {
 fun runTests() {
    var tests = [ shallow_state
                , deep_state
-              # , deep_pipes
+               , deep_pipes
                , exceptions
                , fringe
 #               , light_switch
