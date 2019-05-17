@@ -50,7 +50,7 @@ object(self)
     | b -> self#bindingnode b.node
 
   method! bindingnode = function
-    | Import ns
+    | Import { path = ns; _ }
     | Open ns ->
         (* Try to resolve the import; if not, add to ICs list *)
         let lookup_ref = List.hd ns in

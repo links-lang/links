@@ -272,7 +272,7 @@ and bindingnode =
   | Handler of Binder.with_pos * handlerlit * datatype' option
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
-  | Import of name list
+  | Import of { pollute: bool; path : name list }
   | Open of name list
   | Typenames of typename list
   | Infix

@@ -481,9 +481,11 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
 
     method bindings = function
       | [] -> []
-      | { node = Import names; pos } :: bs ->
+      | { node = Import { path; pollute }; pos } :: bs ->
          self#extension_guard pos;
-         self#import_module pos names; self#bindings bs
+         self#import_module pos path;
+         (if pollute then self#open_module pos path);
+         self#bindings bs
       | { node = Open names; pos } :: bs ->
         (* Affects [scope]. *)
          self#extension_guard pos;

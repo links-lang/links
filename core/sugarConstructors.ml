@@ -118,7 +118,7 @@ module SugarConstructors (Position : Pos)
 
   (** Imports **)
 
-  let import ?(ppos=dp) names = with_pos ppos (Import names)
+  let import ?(ppos=dp) ?(pollute=false) names = with_pos ppos (Import { path = names; pollute })
 
   (** Patterns *)
 
