@@ -71,6 +71,7 @@
     "handle"
     "handler"
     "if"
+    "import"
     "in"
     "on"
     "open"
