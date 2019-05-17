@@ -3196,6 +3196,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 Gripers.upcast_subtype pos t2 t1
         | Upcast _ -> assert false
         | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
+           ignore
+             (if not (Settings.get_value Basicsettings.Handlers.enabled)
+              then raise (Errors.disabled_extension
+                            ~pos ~setting:("enable_handlers", true)
+                            ~flag:"--enable-handlers" "Handlers"));
            let rec pop_last = function
              | [] -> assert false
              | [x] -> x, []

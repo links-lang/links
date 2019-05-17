@@ -19,8 +19,6 @@ object
       Errors.settings_error "Code uses relational lenses, but relational lenses are not enabled. Please set the relational lenses flag."
     in
     function
-    | Handle _     when not (get BS.Handlers.enabled) ->
-       raise (Errors.settings_error "Handlers are only allowed with setting enable_handlers set to true.")
     | LensLit _        when relational_lenses_disabled -> raise relational_fail
     | LensKeysLit _    when relational_lenses_disabled -> raise relational_fail
     | LensFunDepsLit _ when relational_lenses_disabled -> raise relational_fail
