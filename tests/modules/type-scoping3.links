@@ -1,0 +1,11 @@
+typename Foo = String;
+
+module A {
+  sig x : Foo
+  var x = "hello";
+
+  typename Foo = Int;
+
+  sig y : Foo
+  var y = 3;
+}

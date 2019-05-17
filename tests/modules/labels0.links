@@ -1,0 +1,14 @@
+module A {
+  typename Foo = [| Bar: String |];
+}
+
+typename Foo = [| Bar: Int |];
+
+sig f : (A.Foo) ~> String
+fun f(x) {
+  switch(x) {
+    case Bar(y) -> y
+  }
+}
+
+f(Bar("Hello!"))
