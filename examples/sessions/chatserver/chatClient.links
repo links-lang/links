@@ -1,4 +1,4 @@
-import open ChatSessions;
+open import ChatSessions;
 
 # DOM stuff #
 var nameBoxId = "name_box";
