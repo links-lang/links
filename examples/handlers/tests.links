@@ -33,13 +33,13 @@ fun stateExamplesEquals((x,xs),(y,ys)) {
 
 var stateExamplesToString = pairToString(intToString, listToString(intToString));
 
+import Shallow_state;
 fun shallow_state() {
-  import Shallow_state;
   assert(stateExamplesEquals, (0, [0,1,2,3,4]), Shallow_state.unitTest(5), stateExamplesToString, "Shallow_state")
 }
 
+import Deep_state;
 fun deep_state() {
-  import Deep_state;
   assert(stateExamplesEquals, (0, [0,1,2,3,4]), Deep_state.unitTest(5), stateExamplesToString, "Deep_state")
 }
 
@@ -51,26 +51,26 @@ fun deep_state() {
 # }
 
 # Exceptions tests
+import Exceptions;
 fun exceptions() {
-  import Exceptions;
   assert((==), 60, Exceptions.unitTest(), intToString, "Exceptions")
 }
 
 # Fringe tests
+import Fringe;
 fun fringe() {
-  import Fringe;
   assert((==), [true, false, false, false, true, true, false, false, true, true], Fringe.unitTest(), listToString(boolToString), "Fringe")
 }
 
 # Parameterised handlers
+import Light_switch;
 fun light_switch() {
-  import Light_switch;
   assert((==), true, Light_switch.unitTest(6), boolToString, "Light_switch")
 }
 
 # Satisfiability and parsing
+import Sat;
 fun sat() {
-  import Sat;
   assert((==), [true, true], Sat.unitTest(), listToString(boolToString), "Sat")
 }
 
@@ -81,8 +81,8 @@ fun sat() {
 # }
 
 # Delimited continuations
+import Shiftreset;
 fun delim() {
-  import Shiftreset;
   assert((==), [1,2,3], Shiftreset.example(), listToString(intToString), "Shift/reset")
 }
 

@@ -1,6 +1,6 @@
-import MindSessions;
-import MindClient;
-import LinearList;
+import open MindSessions;
+import open MindClient;
+import open LinearList;
 
 # game configuration parameters
 var packSize = 100;
