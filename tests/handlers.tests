@@ -145,16 +145,6 @@ sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose- |e},[a]) fun allChoi
 stdout : () : ()
 args : --enable-handlers
 
-Type-and-effect signature for deep handler (4)
-sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose{_}|e},[a]) handler allChoices {case Return(x) -> [x] case Choose(k) -> k(true) ++ k(false)}
-stdout : () : ()
-args : --enable-handlers
-
-Type-and-effect signature for deep handler (5)
-sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose- |e},[a]) handler allChoices {case Return(x) -> [x] case Choose(k) -> k(true) ++ k(false)}
-stdout : () : ()
-args : --enable-handlers
-
 Type-and-effect signature for shallow handler (1)
 sig allChoices : (Comp({Choose:Bool|e},a)) {Choose{_}|e}~> [a] fun allChoices(m) {shallowhandle(m()) {case Return(x) -> [x] case Choose(k) -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
 stdout : () : ()
@@ -167,16 +157,6 @@ args : --enable-handlers
 
 Type-and-effect signature for shallow handler (3)
 sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose- |e},[a]) fun allChoices(m)() {shallowhandle(m()) {case Return(x) -> [x] case Choose(k) -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
-stdout : () : ()
-args : --enable-handlers
-
-Type-and-effect signature for shallow handler (4)
-sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose{_}|e},[a]) shallowhandler allChoices {case Return(x) -> [x] case Choose(k) -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}
-stdout : () : ()
-args : --enable-handlers
-
-Type-and-effect signature for shallow handler (5)
-sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose- |e},[a]) shallowhandler allChoices {case Return(x) -> [x] case Choose(k) -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}
 stdout : () : ()
 args : --enable-handlers
 
@@ -370,43 +350,43 @@ stdout : 42 : Int
 args : --enable-handlers
 
 Deep Handler composition
-handler h1 { case Op1(k) -> k(1) case Return(x) -> x } handler h2 { case Op2(k) -> k(2) case Return(x) -> x } handler h3 { case Op3(k) -> k(3) case Return(x) -> x } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
+fun h1(m)() { handle(m()) { case Op1(k) -> k(1) } } fun h2(m)() { handle(m()) { case Op2(k) -> k(2) } } fun h3(m)() { handle(m()) { case Op3(k) -> k(3) } } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
 stdout : 6 : Int
 args : --enable-handlers
 
 Type annotation on deep continuation parameter
-handler h1 { case Op(k : ((Int) {Op{_}|_}~> Int)) -> k(1) case Return(x) -> x }
+fun h1(m) { handle(m()) { case Op(k : ((Int) {Op{_}|_}~> Int)) -> k(1) } }
 stdout : () : ()
 args : --enable-handlers
 
 Type annotation on shallow continuation parameter
-shallowhandler h1 { case Op(k : ((Int) {Op:Int|_}~> Int)) -> h1(fun() { k(1) })() case Return(x) -> x }
+fun h1(m) { shallowhandle(m()) { case Op(k : ((Int) {Op:Int|_}~> Int)) -> h1(fun() { k(1) }) } }
 stdout : () : ()
 args : --enable-handlers
 
 Shallow addition with a single recursive handler
-{ shallowhandler h1 { case One(k) -> h1(fun() { k(1) })() case Return(x) -> x - 1} h1(fun() { do One + do One })() }
+{ fun h1(m) { shallowhandle(m()) { case One(k) -> h1(fun() { k(1) }) case Return(x) -> x - 1 } } h1(fun() { do One + do One }) }
 stdout : 1 : Int
 args : --enable-handlers
 
 Shallow addition with two mutual recursive handlers
-{ shallowhandler h1 { case One(k) -> h1(fun() { k(1) })() case Return(x) -> x} shallowhandler h2 { case One(k) -> h1(fun() { k(2) })() case Return(x) -> x} h2(fun() { do One + do One })() }
+{ fun h1(m) { shallowhandle(m()) { case One(k) -> h1(fun() { k(1) }) } } fun h2(m) { shallowhandle(m()) { case One(k) -> h1(fun() { k(2) }) } } h2(fun() { do One + do One }) }
 stdout : 3 : Int
 args : --enable-handlers
 
 Shallow handler composition
-{ shallowhandler h1 { case Op1(k) -> h1(fun() { k(1) })() case Return(x) -> x } shallowhandler h2 { case Op2(k) -> h2(fun() { k(2) })() case Return(x) -> x } h1(h2(fun() { do Op1 + do Op2 }))() }
+{ fun h1(m)() { shallowhandle(m()) { case Op1(k) -> h1(fun() { k(1) })() } } fun h2(m)() { shallowhandle(m()) { case Op2(k) -> h2(fun() { k(2) })() } } h1(h2(fun() { do Op1 + do Op2 }))() }
 stdout : 3 : Int
 args : --enable-handlers
 
 Type ascription, parameterised handlers (1)
-{ handler(_ : Int)(_ : Float)(_ : String) { case Op(p,k) -> k(p)(42)(3.14)("Foo") case Return(x) -> x } }
-stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(d) {}-> d|e}~> f) -> () {Op{_}|e}~> f
+{ fun(a : Int)(b : Float)(c : String)(m)() { handle (m())(a -> x, b -> y, c -> z) { case Op(p,k) -> k(c,42,p,"Foo") case Return(_) -> x } } }
+stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(Float) {}-> String|d}~> _) -> () {Op{_}|d}~> Int
 args : --enable-handlers
 
 Type ascription, parameterised handlers (2)
-{ handler(_ : Float,_ : String,_ : Int) { case Op(p,k) -> k(p)(3.14,"Bar",99) case Return(x) -> x } }
-stdout : fun : (Float, String, Int) -> (() {Op:(b) {}-> b|c}~> d) -> () {Op{_}|c}~> d
+{ fun(a : Float, b : String, c : Int)(m)() { handle(m())(a -> x, b -> y, c -> z) { case Op(p,k) -> k(x,p,"Bar",99) case Return(_) -> y } } }
+stdout : fun : (Float, String, Int) -> (() {Op:(Float) {}-> Float|b}~> _) -> () {Op{_}|b}~> String
 args : --enable-handlers
 
 Instantiate.ArityMismatch #132 (RESOLVED)

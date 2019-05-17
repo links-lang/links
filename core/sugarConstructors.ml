@@ -154,14 +154,6 @@ module SugarConstructors (Position : Pos)
   let fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats blk =
     with_pos ppos (FunLit (args, linearity, (pats, blk), location))
 
-  (* Create an argument used by Handler and HandlerLit. *)
-  let hnlit_arg depth computation_param handler_param =
-    (depth, computation_param, fst handler_param, snd handler_param)
-
-  (* Create a HandlerLit. *)
-  let handler_lit ?(ppos=dp) handlerlit =
-    with_pos ppos (HandlerLit handlerlit)
-
   (* Create a Spawn. *)
   let spawn ?(ppos=dp) ?row spawn_kind location blk =
     with_pos ppos (Spawn (spawn_kind, location, blk, row))
@@ -187,11 +179,6 @@ module SugarConstructors (Position : Pos)
         ?(location=loc_unknown) ?annotation bndr fnlit =
     with_pos ppos (Fun (bndr, linearity, (tyvars, fnlit), location, annotation))
 
-
-  (* Create a handler binding. *)
-  let handler_binding ?(ppos=dp) sig_opt (name, handlerlit) =
-    let datatype = datatype_opt_of_sig_opt sig_opt name in
-    with_pos ppos (Handler (binder name, handlerlit, datatype))
 
   (* Create a Val binding.  This function takes either a name for a variable
      pattern or an already constructed pattern.  In the latter case no signature

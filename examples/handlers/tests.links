@@ -45,10 +45,10 @@ fun deep_state() {
 
 # Pipes tests
 
-# fun deep_pipes() {
-#   import Deep_pipes
-#   assert((==), "199.00", Deep_pipes.unitTest(0), id, "Deep_pipes")
-# }
+import Pipes;
+fun deep_pipes() {
+  assert((==), [256, 256, 256, 256], Pipes.unitTest(), listToString(intToString), "Deep_pipes")
+}
 
 # Exceptions tests
 import Exceptions;
@@ -75,10 +75,10 @@ fun sat() {
 }
 
 # Pi estimation
-# fun pi() {
-#   import Pi
-#   assert((==), true, all(fun(pi) { pi > 3.0 && pi < 4.0 }, Pi.unitTest()), boolToString, "Pi")
-# }
+import Pi;
+fun pi() {
+  assert((==), true, all(fun(pi) { pi > 3.0 && pi < 4.0 }, Pi.unitTest()), boolToString, "Pi")
+}
 
 # Delimited continuations
 import Shiftreset;
@@ -90,11 +90,11 @@ fun delim() {
 fun runTests() {
    var tests = [ shallow_state
                , deep_state
-#               , deep_pipes
+               , deep_pipes
                , exceptions
                , fringe
-#               , light_switch
-#               , pi
+               , light_switch
+               , pi
                , delim
                ];
    ignore(map(fun(t) { t() }, tests))

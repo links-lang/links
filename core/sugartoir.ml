@@ -1057,7 +1057,6 @@ struct
           | LensKeysLit _
           | Offer _
           | QualifiedVar _
-          | HandlerLit _
           | DoOperation _
           | TryInOtherwise _
           | Raise
@@ -1147,7 +1146,7 @@ struct
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | Handler _ | Import _ | Open _ | Fun _ | Foreign _
+                | Import _ | Open _ | Fun _ | Foreign _
                 | AlienBlock _ | Module _  -> assert false
             end
 

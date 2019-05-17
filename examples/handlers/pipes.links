@@ -1,147 +1,285 @@
-# Shallow pipes in Links
-
-# SL (30/10/2016): Currently this avoids the syntactic sugar because
-# there appear to be bugs in desugaring of both handler and
-# shallowhandler:
+# Deep and shallow implementations of pipes along with their
+# interencodings.
 #
-#   * Sometimes the wild effect appears more than once in a row
-#
-#   * Sometimes the guardedness check fails when an attempt is made to
-#   unify a row variable with a boxed version of itself
-#
-# TODO: chase down these bugs
+# The direct implementations are adapted from Kammar et al. (2013)
+# whilst the encoded implementations are adapted from Hillerström and
+# Lindley (2018).
 
-#
-# Type aliases
-#
-typename Consumer (e::Row,i,a)   = Comp({Await:i                     |e},  a);
-typename Down     (e::Row,i,a)   = (i)  {Await:i                     |e}~> a ;
-typename Producer (e::Row,o,a)   = Comp({Yield:(o) {}-> ()           |e},  a);
-typename Up       (e::Row,o,a)   = (()) {Yield:(o) {}-> ()           |e}~> a ;
-typename Pipe     (e::Row,i,o,a) = Comp({Await:i, Yield:(o) {}-> ()  |e},  a);
-#typename Pipe     (e::Row,i,o,a) = forall b :: Presence, c :: Presence . Comp({Await{b},Yield{c} |e}, a)
+typename Comp(e::Eff,a) = () ~e~> a;
 
-#
-# Operations
-#
-sig await : Comp({Await:s|_}, s)
-fun await() {do Await}
+# Basic combinators.
+sig await : () { Await: s |e}-> s
+fun await() { do Await }
 
-sig yield : (s) {Yield:(s) {}-> ()|_}~> ()
-fun yield(s) {do Yield(s)}
+sig yield : (s) { Yield: (s) -> () |e}-> ()
+fun yield(s) { do Yield(s) }
 
-sig putString : (String) {PutString:(String) {}-> ()|_}~> ()
-fun putString(str) {do PutString(str)}
+sig forever : (Comp({ |e}, a)) ~e~> b
+fun forever(f) { ignore(f()); forever(f) }
 
-#
-# Operators
-#
-sig <+< : (Consumer({Yield{c} |e}, s, a),
-           Producer({Await{b} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a) # Pipe({Await{b}, Yield{c} |e}, s, s, a)
-op consumer <+< producer {
-   down(consumer)(fun(_) {producer()})
-}
+sig blackhole : Comp({Await:s |e}, a)
+fun blackhole() { forever(await) }
 
-#
-# Handlers
-#
-sig down : (Consumer({Yield{c} |e}, s, a)) ->
-           (Up      ({Await{b} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
-fun down(m)(producer)() {
-  shallowhandle(m) {
-    case Return(x) -> x
-    case Await(k)  -> up(fun() { producer(()) })(k)()
-  }
-}
-
-sig up : (Producer({Await{b} |e}, s, a)) ->
-         (Down    ({Yield{c} |e}, s, a)) -> Comp({Await{b}, Yield{c} |e}, a)
-fun up(m)(consumer)() {
-  shallowhandle(m) {
-    case Return(x)  -> x
-    case Yield(s,k) -> down(fun() { consumer(s) })(k)()
-  }
-}
-
-sig printHandler : (Comp({PutString:(String) {}-> () |e}, a)) {PutString:_ |e}~> a
-fun printHandler(m) {
-  shallowhandle(m) {
-    case Return(x)         -> x
-    case PutString(str,k)  -> { println(str); printHandler(fun() { k(()) }) }
-  }
-}
-
-sig printDeepHandler : (Comp({PutString:(String) {}-> () |e}, a)) {PutString:_ |e}~> a
-fun printDeepHandler(m) {
-  handle(m) {
-    case Return(x)         -> x
-    case PutString(str,k)  -> { println(str); k(()) }
-  }
-}
-
-#
-# Producers and consumers
-#
-sig produceFrom : (Int) -> Producer({ |_}, Int, _)
-fun produceFrom(n)() {
-  yield(n);
-  produceFrom(n+1)()
-}
-
-sig produceFromTo : (Int, Int) -> Producer({ |_}, Int, ())
-fun produceFromTo(start,end)() {
-  if (start > end) { () }
-  else {
-    yield(start);
-    produceFromTo(start+1,end)()
-  }
-}
-
-sig sumTo : (Int)  -> Pipe({ |_}, Int, Int, ())
-fun sumTo(limit)() {
-  fun sumTo_aux(i, limit) {
-    if (i >= limit) { yield(i) }
+sig take1 : (Int) -> Comp({Await:s, Yield:(s) -> () |e}, ())
+fun take1(n)() {
+  fun take0(n) {
+    if (n <= 0) ()
     else {
-      var j = await();
-      sumTo_aux(i+j, limit)
+      var x = await();
+      yield(x);
+      take0(n-1)
+   }
+ }
+ take0(n)
+}
+
+sig produceFrom : (Int) -> Comp({ Yield: (Int) -> () |e}, a)
+fun produceFrom(n)() {
+  fun produceFrom0(n) {
+     yield(n);
+     produceFrom0(n+1)
+  }
+  produceFrom0(n)
+}
+
+fun skip1(n)() {
+  fun skip0(n) {
+    var x = await();
+    if (n <= 0) yield(x)
+    else skip0(n-1)
+  }
+  skip0(n)
+}
+
+fun printer(toString)() {
+  var x = await();
+  print(toString(x))
+}
+
+fun forward() { yield(await()) }
+
+fun collect(m) {
+  handle(m()) {
+    case Return(_) -> []
+    case Yield(x,_) -> [x]
+  }
+}
+
+module Deep {
+  mutual {
+    typename Producer(e::Eff, s, a) = () ~e~> (Consumer({ |e}, s, a)) ~e~> a;
+    typename Consumer(e::Eff, s, a) = (s) ~e~> (Producer({ |e}, s, a)) ~e~> a;
+  }
+
+  typename Pipe(e::Eff, s, a) = forall b::Presence, c::Presence.
+               (Comp({ Await: s, Yield{c} |e}, a)) { Await{b}, Yield{c} |e}~>
+                      (Producer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
+
+  typename Copipe(e::Eff, s, a) = forall b::Presence, c::Presence.
+            (Comp({ Await{b}, Yield: (s) -> () |e}, a)) { Await{b}, Yield{c} |e}~>
+                   (Consumer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
+
+
+  sig expoPipe1 : (Pipe({ |e}, Int, a), Copipe({ |e}, Int, a)) -> (Int) -> Comp({ Await:Int, Yield: (Int) -> () |e}, a)
+  fun expoPipe1(pipe, copipe)(n)() {
+    fun expoPipe0(pipe, copipe, n) {
+      if (n == 0) {
+         forever(fun() {
+           var x = await();
+           yield(x+1)
+         })
+      } else {
+         pipe(fun() {expoPipe0(pipe, copipe, n-1)})(fun() { copipe(fun() {expoPipe0(pipe, copipe, n-1)}) })
+      }
+    }
+    expoPipe0(pipe, copipe, n)
+  }
+
+
+  module Direct {
+    sig pipe : Pipe({ |e}, s, a)
+    fun pipe(cons) {
+      handle(cons()) {
+        case Return(x) -> fun(_) { x }
+        case Await(resume) ->
+          fun(prod : Producer({ Await{b}, Yield{c} |e}, s, a)) {
+            prod()(resume)
+          }
+      }
+    }
+
+    sig copipe : Copipe({ |e}, s, a)
+    fun copipe(prod) {
+      handle(prod()) {
+        case Return(x) -> fun(_) { x }
+        case Yield(s, resume) ->
+          fun(cons : Consumer({ Await{b}, Yield{c} |e}, s, a)) {
+            cons(s)(fun() { resume(()) })
+          }
+      }
+    }
+
+    op producer >+> consumer {
+      fun() { pipe(consumer)(fun() { copipe(producer) }) }
+    }
+
+    fun expoPipe(n) { expoPipe1(pipe, copipe)(n) }
+  }
+
+  module Encoded {
+    sig pipe : Pipe({ |e}, s, a)
+    fun pipe(cons) {
+      fun h(cons) {
+        shallowhandle(cons()) {
+          case Return(x) -> fun(_) { x }
+          case Await(resume) ->
+            var resume0 = fun(x) {
+              h(fun() { resume(x) })
+            };
+            fun(prod : Producer({ Await{b}, Yield{c} |e}, s, a)) {
+              prod()(resume0)
+            }
+        }
+      }
+      h(cons)
+    }
+
+    sig copipe : Copipe({ |e}, s, a)
+    fun copipe(prod) {
+      fun h(prod) {
+        shallowhandle(prod()) {
+          case Return(x) -> fun(_) { x }
+          case Yield(s, resume) ->
+            var resume0 = fun(x) {
+              h(fun() { resume(x) })
+            };
+            fun(cons : Consumer({ Await{b}, Yield{c} |e}, s, a)) {
+              cons(s)(fun() { resume0(()) })
+            }
+        }
+      }
+      h(prod)
+    }
+
+    op producer >+> consumer {
+      fun() { pipe(consumer)(fun() { copipe(producer) }) }
+    }
+
+    fun expoPipe(n) { expoPipe1(pipe, copipe)(n) }
+  }
+}
+
+module Shallow {
+  typename Prod(e::Eff,o,a) = ()   {Yield:(o) {}-> () |e}~> a;
+  typename Cons(e::Eff,i,a) = (i) {Await:i |e}~> a;
+
+  module Direct {
+    mutual {
+      sig pipe : (Prod({ Await{b}                   |e}, s, a),
+                  Comp({ Await:s, Yield{c}          |e}, a)) {Await{b}, Yield{c} |e}~> a
+      fun pipe(prod, cons) {
+        shallowhandle(cons()) {
+          case Await(resume) -> copipe(resume, prod)
+        }
+      }
+
+      sig copipe : (Cons({ Yield{c} |e}, s, a),
+                    Comp({ Await{b}, Yield: (s) -> () |e}, a)) {Await{b}, Yield{c} |e}~> a
+      fun copipe(cons, prod) {
+        shallowhandle(prod()) {
+          case Yield(s, resume) -> pipe(fun() { resume(()) }, fun() { cons(s) })
+        }
+      }
     }
   }
-  sumTo_aux(0, limit)
+
+  module Encoded {
+    mutual {
+      sig pipe : (Prod({ Await{b}                   |e}, s, a),
+                  Comp({ Await:s, Yield{c}          |e}, a)) {Await{b}, Yield{c} |e}~> a
+      fun pipe(prod, cons) {
+        var (_,g) = handle(cons()) {
+          case Return(x) -> (fun() { x }, fun() { x })
+          case Await(resume) ->
+            var resume0 = fun(x) {
+              var (f,_) = resume(x);
+              f()
+            };
+            (fun() { var x = do Await; resume0(x) }, fun() { copipe(resume0, prod) })
+        };
+        g()
+      }
+
+      sig copipe : (Cons({ Yield{c} |e}, s, a),
+                    Comp({ Await{b}, Yield: (s) -> () |e}, a)) {Await{b}, Yield{c} |e}~> a
+      fun copipe(cons, prod) {
+        var (_,g) = handle(prod()) {
+          case Return(x) -> (fun() { x }, fun() { x })
+          case Yield(s, resume) ->
+            var resume0 = fun(x) {
+            var (f,_) = resume(x);
+            f()
+          };
+          (fun() { var x = do Yield(s); resume0(x) }, fun() { pipe(fun() { resume0(()) }, fun() { cons(s) }) })
+        };
+        g()
+      }
+    }
+  }
 }
 
-sig count : Pipe({ |_}, Int, Int, _)
-fun count() {
-  var n = await();
-  yield(n);
-  count()
+
+op producer >+> consumer {
+  fun() { Deep.Direct.pipe(consumer)(fun() { Deep.Direct.copipe(producer) }) }
 }
 
-sig printer : Consumer({PutString:(String) {}-> () |_}, Int, _)
-fun printer() {
-  var x = await();
-  putString(intToString(x));
-  printer()
+sig expoPipe : (Int) -> Comp({ Await: Int, Yield: (Int) -> () |e}, a)
+fun expoPipe(n)() {
+  fun expoPipe0(n) {
+    if (n == 0) {
+       forever(fun() {
+         var x = await();
+         yield(x+1)
+       })
+    } else {
+        Deep.Direct.pipe(fun() {expoPipe0(n-1)})(fun() { Deep.Direct.copipe(fun() {expoPipe0(n-1)}) })
+    }
+  }
+  expoPipe0(n)
 }
 
-#
-# Examples
-#
-# Finite streams
-#   links> printHandler(printer <+< count <+< sumTo(900) <+< produceFromTo(0,100));
-#   903
-#
-#   links> printHandler(printer <+< count <+< sumTo(100) <+< produceFrom(0));
-#   105
-#
-# Infinite streams
-#   links> printHandler(printer <+< count <+< produceFrom(0));
-#   0
-#   1
-#   2
-#   3
-#   4
-#   ... etc
-#
-# Mixing shallow and deep handlers
-#   links> printDeepHandler(printer <+< count <+< sumTo(900) <+< produceFromTo(0,100));
-#   903
+fun nested(start, depth, end) {
+  var pipeline = produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> printer(intToString);
+  pipeline()
+}
+
+fun simple() {
+  var pipeline = produceFrom(0) >+> skip1(1000) >+> printer(intToString);
+  pipeline()
+}
+
+fun nested_example(start, depth, end) {
+  var deep = {
+    open Deep.Direct;
+    produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> forward
+  };
+
+  var deep_encoded = {
+    open Deep.Encoded;
+    produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> forward
+  };
+
+  var shallow = {
+    open Shallow.Direct;
+    produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> forward
+  };
+
+  var shallow_encoded = {
+    open Shallow.Encoded;
+    produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> forward
+  };
+
+  concat([collect(deep), collect(deep_encoded), collect(shallow), collect(shallow_encoded)])
+}
+
+fun unitTest() { nested_example(0, 8, 10) }

@@ -1,2 +1,2 @@
 val desugar_program : Sugartypes.program -> Sugartypes.program
-val desugar_sentence : unit -> Sugartypes.sentence -> Sugartypes.sentence
+val desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence

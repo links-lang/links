@@ -180,7 +180,6 @@ let keywords = [
  "fun"      , FUN;
  "formlet"  , FORMLET;
  "handle"   , HANDLE;
- "handler"  , HANDLER;
  "if"       , IF;
  "in"       , IN;
  "lens"     , LENS;
@@ -214,7 +213,6 @@ let keywords = [
  "server"   , SERVER;
  "set"      , SET;
  "shallowhandle", SHALLOWHANDLE;
- "shallowhandler"  , SHALLOWHANDLER;
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnClient" , SPAWNCLIENT;
