@@ -81,21 +81,24 @@ let program tyenv pos_context program =
     fun tyenv pos_context sentence ->
     let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
     let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
+    let apply =
       ( ExperimentalExtensions.check#sentence
-       ->- DesugarLAttributes.desugar_lattributes#sentence
-       ->- LiftRecursive.lift_funs#sentence
-       ->- DesugarDatatypes.sentence tyenv
-       ->- uncurry TypeSugar.Check.sentence
+        ->- DesugarModules.desugar_sentence
+        ->- DesugarLAttributes.desugar_lattributes#sentence
+        ->- LiftRecursive.lift_funs#sentence
+        ->- DesugarDatatypes.sentence tyenv
+        ->- uncurry TypeSugar.Check.sentence
         (*  ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#sentence ->- snd)*)
-       ->- after_typing ((DesugarCP.desugar_cp tyenv)#sentence ->- snd)
-       ->- after_typing ((DesugarInners.desugar_inners tyenv)#sentence ->- snd)
-       ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#sentence ->- snd)
-       ->- after_typing ((DesugarFors.desugar_fors tyenv)#sentence ->- snd)
-       ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#sentence ->- snd)
-       ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#sentence ->- snd)
-       ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)
-       ->- after_typing ((DesugarFuns.desugar_funs tyenv)#sentence ->- snd)) sentence
-
+        ->- after_typing ((DesugarCP.desugar_cp tyenv)#sentence ->- snd)
+        ->- after_typing ((DesugarInners.desugar_inners tyenv)#sentence ->- snd)
+        ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#sentence ->- snd)
+        ->- after_typing ((DesugarFors.desugar_fors tyenv)#sentence ->- snd)
+        ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#sentence ->- snd)
+        ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#sentence ->- snd)
+        ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)
+        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#sentence ->- snd))
+    in
+    apply sentence
 
 let interactive tyenv pos_context sentence =
   if Settings.get_value Basicsettings.show_pre_frontend_ast then

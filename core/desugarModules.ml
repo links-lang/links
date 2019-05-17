@@ -245,13 +245,13 @@ let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.bi
      let scope'' = Scope.Extend.module' name scope' scope in
      (bs', scope'')
   | _ -> assert false
-and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
+and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
   let open Sugartypes in
   object(self : 'self_type)
     inherit SugarTraversals.map as super
 
-    val mutable scope = scope
-    val mutable renamer = renamer
+    val mutable scope = scope'
+    val mutable renamer = renamer'
     method get_renamer = renamer
     method get_scope = scope
 
@@ -508,6 +508,7 @@ and desugar ?(toplevel=false) (renamer : Epithet.t) (scope : Scope.t) =
 
     method! sentence : sentence -> sentence = function
       | Definitions defs -> Definitions (self#bindings defs)
+      | Expression exp -> Expression (self#phrase exp)
       | s -> super#sentence s
   end
 
@@ -522,11 +523,11 @@ let desugar_program : Sugartypes.program -> Sugartypes.program
   result
 
 
-let desugar_sentence : unit -> Sugartypes.sentence -> Sugartypes.sentence
-  = fun () ->
-  let scope : Scope.t ref = ref Scope.empty in
-  let renamer : Epithet.t ref = ref Epithet.empty in
-  fun sentence ->
+let scope : Scope.t ref = ref Scope.empty
+let renamer : Epithet.t ref = ref Epithet.empty
+
+let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
+  = fun sentence ->
   let sentence = Chaser.add_dependencies_sentence sentence in
   let sentence = DesugarAlienBlocks.sentence sentence in
   let visitor = desugar ~toplevel:true !renamer !scope in
