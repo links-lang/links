@@ -75,10 +75,10 @@ fun sat() {
 }
 
 # Pi estimation
-# fun pi() {
-#   import Pi
-#   assert((==), true, all(fun(pi) { pi > 3.0 && pi < 4.0 }, Pi.unitTest()), boolToString, "Pi")
-# }
+import Pi;
+fun pi() {
+  assert((==), true, all(fun(pi) { pi > 3.0 && pi < 4.0 }, Pi.unitTest()), boolToString, "Pi")
+}
 
 # Delimited continuations
 import Shiftreset;
@@ -93,8 +93,8 @@ fun runTests() {
                , deep_pipes
                , exceptions
                , fringe
-#               , light_switch
-#               , pi
+               , light_switch
+               , pi
                , delim
                ];
    ignore(map(fun(t) { t() }, tests))
