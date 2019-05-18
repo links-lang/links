@@ -694,7 +694,7 @@ struct
   let handle env (m, val_cases, eff_cases, params, desc) =
     let params =
       List.map
-        (fun (body, p, t) -> reify (body env), p, t) params
+        (fun (body, p, t) -> p, reify (body env), t) params
     in
     let val_cases, eff_cases =
       let reify cases =
@@ -889,12 +889,12 @@ struct
                 | None -> empty_env, []
                 | Some { shp_bindings = bindings; shp_types = types } ->
                    let env, bindings =
-                     List.fold_left2
-                       (fun (env, bindings) (body, p) t ->
+                     List.fold_right2
+                       (fun (p, body) t (env, bindings) ->
                          let p, penv = CompilePatterns.desugar_pattern p in
                          let bindings = ((fun env -> eval env body), p, t) :: bindings in
                          ((env ++ penv), bindings))
-                       (empty_env, []) bindings types
+                       bindings types (empty_env, [])
                    in
                    env, List.rev bindings
              in
