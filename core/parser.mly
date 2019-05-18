@@ -901,7 +901,7 @@ binding:
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
-| typedecl SEMICOLON | links_module | alien_block
+| typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
 mutual_binding_block:
