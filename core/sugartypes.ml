@@ -176,7 +176,7 @@ and handler_descriptor =
   ; shd_params  : handler_parameterisation option
   }
 and handler_parameterisation =
-  { shp_bindings : (phrase * Pattern.with_pos) list
+  { shp_bindings : (Pattern.with_pos * phrase) list
   ; shp_types    : Types.datatype list
   }
 and iterpatt =
@@ -443,13 +443,13 @@ struct
                sh_value_cases = val_cases; sh_descr = descr } ->
        let params_bound =
          option_map
-           (fun params -> union_map (snd ->- pattern) params.shp_bindings)
+           (fun params -> union_map (fst ->- pattern) params.shp_bindings)
            descr.shd_params
        in
        union_all [phrase e;
                   union_map case eff_cases;
                   union_map case val_cases;
-                  diff (option_map (fun params -> union_map (fst ->- phrase)
+                  diff (option_map (fun params -> union_map (snd ->- phrase)
                                                     params.shp_bindings)
                           descr.shd_params) params_bound]
     | Switch (p, cases, _)

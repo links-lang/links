@@ -3245,25 +3245,25 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              match descr.shd_params with
              | Some { shp_bindings; _ } ->
                 let _ =
-                  check_for_duplicate_names pos (List.map snd shp_bindings)
+                  check_for_duplicate_names pos (List.map fst shp_bindings)
                 in
-                let type_binding (body, pat) =
+                let type_binding (pat, body) =
                   let body = tc body in
                   let pat = tpc pat in
                   unify ~handle:Gripers.handle_parameter_pattern (ppos_and_typ pat, (pos_and_typ body));
-                  (body, pat)
+                  (pat, body)
                 in
                 let typed_bindings = List.map type_binding shp_bindings in
                 let pat_types =
-                  List.map (snd ->- pattern_typ) typed_bindings
+                  List.map (fst ->- pattern_typ) typed_bindings
                 in
                 let param_env =
                   List.fold_left
                     (fun env p ->
                       env ++ pattern_env p)
-                    henv (List.map snd typed_bindings)
+                    henv (List.map fst typed_bindings)
                 in
-                (param_env, typed_bindings, { descr with shd_params = Some { shp_bindings = List.map (fun (body, pat) -> erase body, erase_pat pat) typed_bindings;
+                (param_env, typed_bindings, { descr with shd_params = Some { shp_bindings = List.map (fun (pat, body) -> erase_pat pat, erase body) typed_bindings;
                                                                              shp_types = pat_types } })
              | None -> (henv, [], descr)
            in
@@ -3500,7 +3500,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            Handle { sh_expr = erase m;
                     sh_effect_cases = erase_cases eff_cases;
                     sh_value_cases = erase_cases val_cases;
-                    sh_descr = descr }, body_type, merge_usages [usage_compat (List.map (fun ((_, _, m),_) -> m) params); usages m; usages_cases eff_cases; usages_cases val_cases]
+                    sh_descr = descr }, body_type, merge_usages [usage_compat (List.map (fun (_,(_, _, m)) -> m) params); usages m; usages_cases eff_cases; usages_cases val_cases]
         | DoOperation (opname, args, _) ->
            (* Strategy:
               1. List.map tc args

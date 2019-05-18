@@ -516,9 +516,10 @@ class map =
       fun params ->
       let bindings =
         o#list
-          (fun o (expr, pat) ->
+          (fun o (pat, expr) ->
             let expr = o#phrase expr in
-            let pat = o#pattern pat in (expr, pat))
+            let pat = o#pattern pat in
+            (pat, expr))
           params.shp_bindings
       in
       { params with shp_bindings = bindings }
@@ -1158,7 +1159,7 @@ class fold =
     method handle_params : handler_parameterisation -> 'self_type =
       fun params ->
         o#list
-          (fun o (expr, pat) ->
+          (fun o (pat, expr) ->
             let o = o#phrase expr in
             o#pattern pat)
           params.shp_bindings
@@ -1892,9 +1893,10 @@ class fold_map =
       fun params ->
         let (o, bindings) =
           o#list
-            (fun o (expr, pat) ->
+            (fun o (pat, expr) ->
               let (o, expr) = o#phrase expr in
-              let (o, pat) = o#pattern pat in (o, (expr, pat)))
+              let (o, pat) = o#pattern pat in
+              (o, (pat, expr)))
             params.shp_bindings
         in
         (o, { params with shp_bindings = bindings })

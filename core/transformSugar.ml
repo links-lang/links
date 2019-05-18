@@ -454,14 +454,14 @@ class transform (env : Types.typing_environment) =
            match sh_descr.shd_params with
            | Some params ->
               let (o, bindings) =
-                List.fold_left
-                  (fun (o, bindings) (body, pat) ->
-                    (* let (o, body, _) = o#phrase body in *)
+                List.fold_right
+                  (fun (pat, body) (o, bindings) ->
+                    let (o, body, _) = o#phrase body in
                     let (o, pat) = o#pattern pat in
-                    (o, (body, pat) :: bindings))
-                  (o, []) params.shp_bindings
+                    (o, (pat, body) :: bindings))
+                  params.shp_bindings (o, [])
               in
-              (o, Some { params with shp_bindings = List.rev bindings })
+              (o, Some { params with shp_bindings = bindings })
            | None -> (o, None)
          in
          let (o, val_cases) =

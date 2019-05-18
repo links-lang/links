@@ -33,7 +33,7 @@ fun flickering_st(n)() {
 
 # Parameterised (deep) handlers are built-in
 fun evalState(st, m) {
-  handle(m())(st -> st) {
+  handle(m())(st <- st) {
     case Return(x) -> x
     case Get(resume) -> resume(st, st)
     case Put(p, resume) -> resume((), p)
@@ -41,7 +41,7 @@ fun evalState(st, m) {
 }
 
 fun logState(m)() {
-  handle(m())([] -> history) {
+  handle(m())(history <- []) {
     case Return(x) -> (x, history)
     case Put(p,resume) -> resume(put(p), history ++ [p])
   }

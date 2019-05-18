@@ -168,7 +168,7 @@ fun schedule(main){
       fun runFiber(fiber, runQ){
           #println("runQ: " ^^ intToString(fiberQueueLength(runQ)));
           #dump(self());
-          handle(fiber.f()) ( (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) -> state){
+          handle(fiber.f()) ( state <- (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) ){
               case Return(x) ->
                   runNext(poll(state.runQ))
               case Fork(f, resume) ->
