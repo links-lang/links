@@ -35,15 +35,14 @@
  *)
 
 (* Resolution strategy: We make use of a two-level scope data
-   structure to build up static scopes. The "outer" level represents
-   the parent scope, whilst the "inner" represents the scope being
-   built. Upon entry to a module scope the "inner" scope becomes an
-   "outer" scope, and exploration of the module initiates with an
-   empty "inner" scope. Meaning that after the exploration, the
-   "inner" scope only contains the top-level bindings of the said
-   module. After exploration we restore the old "outer" and "inner"
-   context, and add the explored module to the "inner" context with
-   its scope. *)
+   structure to build up static scopes. The "visible" level contains
+   everything that is visible in the current scope, whilst the "delta"
+   level contains everything that is *defined* in the immediate
+   scope. The "delta" is emptied upon entry to a module scope. Meaning
+   that after the exploration, the "delta" scope only contains the
+   top-level bindings of the said module. After exploration we restore
+   the previous context, and bind the name of module to the computed
+   "delta" in both the "visible" and "delta" contexts. *)
 
 
 open Utility
@@ -167,9 +166,14 @@ end
 module Scope = struct
   module S = BasicScope
   type scope = S.t
-  type t = { inner: scope; outer: scope }
+  type t =
+    { visible: scope;   (* Everything which is *visible*. *)
+      delta: scope }    (* Everything which is *defined* in the current
+                           scope but not in the parent scope. *)
 
-  let empty = { inner = S.empty; outer = S.empty }
+  let empty =
+    { visible = S.empty;
+      delta = S.empty }
 
   module Resolve = struct
     (* We do not produce an error if a name fails to resolve, which
@@ -179,25 +183,20 @@ module Scope = struct
     let best_guess : name list -> name
       = String.concat "."
 
+    let generic_name_resolve : (name list -> scope -> name) -> name list -> t -> name
+      = fun resolver prefix scopes ->
+      try resolver prefix scopes.visible
+      with Notfound.NotFound _ -> best_guess prefix
+
     let module' : name list -> t -> scope
       = fun names scopes ->
-      try S.Resolve.module' names scopes.inner
-      with Notfound.NotFound _ ->
-        S.Resolve.module' names scopes.outer (* Allow any errors to propagate. *)
+      S.Resolve.module' names scopes.visible (* Allow any errors to propagate. *)
 
     let qualified_var : name list -> t -> name
-      = fun names scopes ->
-      try S.Resolve.var names scopes.inner
-      with Notfound.NotFound _ ->
-        try S.Resolve.var names scopes.outer
-        with Notfound.NotFound _ -> best_guess names
+      = generic_name_resolve S.Resolve.var
 
     let qualified_typename : name list -> t -> name
-      = fun names scopes ->
-      try S.Resolve.typename names scopes.inner
-      with Notfound.NotFound _ ->
-        try S.Resolve.typename names scopes.outer
-        with Notfound.NotFound _ -> best_guess names
+      = generic_name_resolve S.Resolve.typename
 
     let var : name -> t -> name
       = fun name scopes -> qualified_var [name] scopes
@@ -209,30 +208,35 @@ module Scope = struct
   module Extend = struct
     let module' : name -> t -> t -> t
       = fun module_name module_scope scopes ->
-      { scopes with inner = S.Extend.module' module_name module_scope.inner scopes.inner }
+      let delta = S.Extend.module' module_name module_scope.delta scopes.delta in
+      let visible = S.Extend.module' module_name module_scope.delta scopes.visible in
+      { visible; delta }
 
     let var : name -> string -> t -> t
       = fun term_name prefixed_name scopes ->
-      { scopes with inner = S.Extend.var term_name prefixed_name scopes.inner }
+      let delta = S.Extend.var term_name prefixed_name scopes.delta in
+      let visible = S.Extend.var term_name prefixed_name scopes.visible in
+      { visible; delta }
 
     let typename : name -> string -> t -> t
       = fun typename prefixed_name scopes ->
-      { scopes with inner = S.Extend.typename typename prefixed_name scopes.inner }
+      let delta = S.Extend.typename typename prefixed_name scopes.delta in
+      let visible = S.Extend.typename typename prefixed_name scopes.visible in
+      { visible; delta }
 
     let synthetic_module : name list -> scope -> t -> t
       = fun path module_scope scopes ->
-      { scopes with inner = S.Extend.synthetic_module path module_scope scopes.inner }
+      let visible = S.Extend.synthetic_module path module_scope scopes.visible in
+      { scopes with visible }
   end
 
   let open_module : scope -> t -> t
     = fun module_scope scopes ->
-    let inner = S.shadow scopes.inner module_scope in
-    { scopes with inner }
+    { scopes with visible = S.shadow scopes.visible module_scope }
 
   let renew : t -> t
     = fun scopes ->
-    let outer = S.shadow scopes.outer scopes.inner in
-    { outer; inner = S.empty }
+    { scopes with delta = S.empty }
 end
 
 let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
