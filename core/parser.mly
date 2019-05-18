@@ -235,6 +235,7 @@ end
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP
+%token LANGLE RANGLE
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -1236,6 +1237,8 @@ parenthesized_pattern:
 | LPAREN pattern RPAREN                                        { $2 }
 | LPAREN pattern COMMA patterns RPAREN                         { with_pos $loc (Pattern.Tuple ($2 :: $4)) }
 | LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (Pattern.Record ($2, $3))  }
+| LANGLE constr = pattern RARROW resumption = pattern RANGLE   { constr }
+| LANGLE constr = pattern RANGLE                               { constr }
 
 primary_pattern:
 | VARIABLE                                                     { variable_pat ~ppos:$loc $1   }
