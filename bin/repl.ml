@@ -124,7 +124,7 @@ let rec directives
               let name =
                 if Settings.get_value Debug.debugging_enabled
                 then Printf.sprintf "%s(%d)" name var
-                else name
+                else (Module_hacks.Name.prettify name)
               in
                Printf.fprintf stderr " %-16s : %s\n"
                  name ty)
@@ -257,6 +257,7 @@ let evaluate_parse_result envs parse_result =
 
 (** Interactive loop *)
 let interact envs =
+  Settings.set_value Basicsettings.interactive_mode true;
   (* Ensure we retain history *)
   let history_path = Basicsettings.Readline.readline_history_path () in
   ignore (LNoise.history_load ~filename:history_path);

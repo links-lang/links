@@ -516,19 +516,25 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       | s -> super#sentence s
   end
 
+(* To make modules behave as expected in interactive mode, we need to
+   keep a little bit of state around. *)
+let scope : Scope.t ref = ref Scope.empty
+let renamer : Epithet.t ref = ref Epithet.empty
+
 let desugar_program : Sugartypes.program -> Sugartypes.program
   = fun program ->
+  let interacting = Settings.get_value Basicsettings.interactive_mode in
   (* TODO move to this logic to the loader. *)
   let program = Chaser.add_dependencies program in
   let program = DesugarAlienBlocks.transform_alien_blocks program in
   (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
-  let result = (desugar ~toplevel:true Epithet.empty Scope.empty)#program program in
+  let renamer', scope' = if interacting then !renamer, !scope else Epithet.empty, Scope.empty in
+  let desugar = desugar ~toplevel:true renamer' scope' in
+  let result = desugar#program program in
   (* Printf.fprintf stderr "After elaboration:\n%s\n%!" (Sugartypes.show_program result); *)
+  ignore (if interacting then (scope := desugar#get_scope; renamer := desugar#get_renamer));
   result
 
-
-let scope : Scope.t ref = ref Scope.empty
-let renamer : Epithet.t ref = ref Epithet.empty
 
 let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
   = fun sentence ->
