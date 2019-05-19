@@ -154,6 +154,8 @@ module Pattern = struct
     | List     of with_pos list
     | Variant  of name * with_pos option
     | Effect   of name * with_pos list * with_pos
+    (* | Operation of name * with_pos * with_pos option *)
+    (* | MultiOperation of (name * with_pos list) list *)
     | Negative of name list
     | Record   of (name * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -162,7 +164,50 @@ module Pattern = struct
     | As       of Binder.with_pos * with_pos
     | HasType  of with_pos * datatype'
   and with_pos = t WithPos.t
-   [@@deriving show]
+     [@@deriving show]
+
+  (* open WithPos
+   * let is_operation : with_pos -> bool = function
+   *   | { node = Operation _; _ } -> true
+   *   | _ -> false
+   *)
+  module Syntax = struct
+    module Operation = struct
+      open WithPos
+      let elucidate : (name * with_pos option) list -> with_pos = function
+        | [] -> assert false
+        | [(label, param)] -> assert false (* Operation (label, param, None) *)
+        | xs -> assert false (* MultiOperation xs *)
+
+      (* let  *)
+    end
+    (* let rec check : bool -> bool -> with_pos -> with_pos
+     *   = fun in_handler toplevel pat ->
+     *   let check = check in_handler false in
+     *   let node = match pat.node with
+     *     | Effect (ps, p) when in_handler && toplevel ->
+     *        let p = opt_map check p in
+     *        begin match ps with
+     *        | [] -> assert false
+     *        | [{ node = Operation _; _ }] -> Effect (ps, p)
+     *        | [{ node = Tuple ps'; _ }] when List.exists is_operation ps' ->
+     *           Effect (List.map check ps', p)
+     *        | _ -> assert false (\* Syntax error. *\)
+     *        end
+     *     | Effect _ -> assert false (\* Syntax error. *\)
+     *     | Cons (hd, tl) -> Cons (check hd, check tl)
+     *     | List ps       -> List (List.map check ps)
+     *     | Variant (label, p) -> Variant (label, opt_map check p)
+     *     | Operation (p, p') when in_handler -> Operation (check p, opt_map check p')
+     *     | Operation _ -> assert false (\* Syntax error. *\)
+     *     | Record (ps, p) -> Record (List.map (fun (label, p) -> (label, check p)) ps, opt_map check p)
+     *     | Tuple ps -> Tuple (List.map check ps)
+     *     | As (bndr, p) -> As (bndr, check p)
+     *     | HasType (p, dt) -> HasType (check p, dt)
+     *     | _ -> pat.node
+     *   in
+     *   WithPos.make ~pos:pat.pos nod *)
+  end
 end
 
 type spawn_kind = Angel | Demon | Wait
