@@ -96,7 +96,7 @@ let default_db_driver_search_folders =
 let db_driver_path = Settings.add_string ("db_driver_path", String.concat ":" default_db_driver_search_folders, `System)
 
 (** The banner *)
-let version = "0.8 (Merchiston)"
+let version = "0.9 (Burghmuirhead)"
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
