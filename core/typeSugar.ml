@@ -9,6 +9,13 @@ open SourceCode.WithPos
 let internal_error message =
   Errors.internal_error ~filename:"typeSugar.ml" ~message
 
+let relational_lenses_guard pos =
+  let relational_lenses_disabled pos =
+    Errors.disabled_extension ~pos ~setting:("relational_lenses", true) "Relational lenses"
+  in
+  if not (Settings.get_value Basicsettings.RelationalLenses.relational_lenses)
+  then raise (relational_lenses_disabled pos)
+
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
@@ -2385,6 +2392,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               merge_usages [usages tname; usages db]
         | TableLit _ -> assert false
         | LensLit (table, _) ->
+           relational_lenses_guard pos;
            let open Lens in
            let table = tc table in
            let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
@@ -2392,6 +2400,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens lens_sort in
            LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensKeysLit (table, keys, _) ->
+           relational_lenses_guard pos;
            let open Lens in
            let table = tc table in
            let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
@@ -2401,6 +2410,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens lens_sort in
            LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensFunDepsLit (table, fds, _) ->
+           relational_lenses_guard pos;
            let open Lens in
            let table = tc table in
            let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
@@ -2409,6 +2419,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens lens_sort in
            LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensDropLit (lens, drop, key, default, _) ->
+           relational_lenses_guard pos;
            let open Lens in
            let lens = tc lens
            and default = tc default in
@@ -2421,6 +2432,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens sort in
            LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens typ, merge_usages [usages lens; usages default]
         | LensSelectLit (lens, predicate, _) ->
+           relational_lenses_guard pos;
            let lens = tc lens in
            let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
            let lpredicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
@@ -2432,6 +2444,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens sort in
                LensSelectLit(erase lens, predicate, Some (sort)), `Lens typ, merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
+           relational_lenses_guard pos;
            let lens1 = tc lens1
            and lens2 = tc lens2 in
            let sort1 = Lens.Type.sort (typ lens1 |> Lens_type_conv.lens_type_of_type) in
@@ -2457,11 +2470,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens sort in
            LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens typ, merge_usages [usages lens1; usages lens2]
         | LensGetLit (lens, _) ->
+           relational_lenses_guard pos;
            let lens = tc lens in
            let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
            let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | LensPutLit (lens, data, _) ->
+           relational_lenses_guard pos;
            let make_tuple_type = Types.make_tuple_type in
            let lens = tc lens in
            let data = tc data in
