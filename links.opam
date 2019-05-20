@@ -6,6 +6,7 @@ homepage: "https://github.com/links-lang/links"
 dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-2"
+version: "0.9"
 
 
 build: [
