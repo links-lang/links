@@ -754,7 +754,7 @@ page_placement:
 
 session_expression:
 | SELECT field_label exp                                       { with_pos $loc (Select ($2, $3))      }
-| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { with_pos $loc (Offer ($3, $6, None)) }
+| OFFER LPAREN exp RPAREN LBRACE case* RBRACE                  { with_pos $loc (Offer ($3, $6, None)) }
 
 conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
@@ -762,26 +762,19 @@ conditional_expression:
 case:
 | CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
 
-cases:
-| case+                                                        { $1 }
-
-perhaps_cases:
-| case*                                                        { $1 }
-
 case_expression:
-| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Switch ($3, $6, None)) }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
-| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE perhaps_cases RBRACE
-                                                               { with_pos $loc (Handle (untyped_handler ~parameters:(List.rev $6)
-                                                                                         $3 $9 Deep)) }
+| SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
+| RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE case* RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
+| HANDLE LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
+| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE case* RBRACE
+                                                               { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
 | RAISE                                                        { with_pos $loc (Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
 
 handle_params:
-| rev(separated_nonempty_list(COMMA,
-      separated_pair(logical_expression, RARROW, pattern)))    { $1 }
+| separated_nonempty_list(COMMA,
+    separated_pair(pattern, LARROW, exp))                      { $1 }
 
 iteration_expression:
 | FOR LPAREN perhaps_generators RPAREN
