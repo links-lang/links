@@ -149,7 +149,7 @@ struct
           let cs = queries gs cond vs in
             Node ([], cs)
         | If (cond', v, Concat []) ->
-          query gs (Q.Eval.reduce_and (cond, cond')) v
+           query gs (Q.Eval.reduce_and (cond, cond')) v
         | For (_, gs', os, Concat vs) ->
           let os' = lift_vals os @ lift_gens gs' in
           let cs = queries (gs @ gs') cond vs in

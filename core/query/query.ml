@@ -31,8 +31,10 @@ struct
       | Erase     of t * StringSet.t
       | Variant   of string * t
       | XML       of Value.xmlitem
-      | Apply     of string * t list
+      | Apply     of t * t list
+      | ApplyPrim of string * t list
       | Closure   of (Ir.var list * Ir.computation) * env
+      | Case      of t * (binder * t) StringMap.t * (binder * t) option
       | Primitive of string
       | Var       of Var.var * Types.datatype StringMap.t
       | Constant  of Constant.t
@@ -128,8 +130,10 @@ struct
     | Erase     of pt * StringSet.t
     | Variant   of string * pt
     | XML       of Value.xmlitem
-    | Apply     of string * pt list
+    | Apply     of pt * pt list
+    | ApplyPrim of string * pt list
     | Lam       of Ir.var list * Ir.computation
+    | Case      of pt * (binder * pt) StringMap.t * (binder * pt) option
     | Primitive of string
     | Var       of (Var.var * Types.datatype StringMap.t)
     | Constant  of Constant.t
@@ -151,7 +155,9 @@ struct
         | Q.XML xmlitem -> XML xmlitem
         | Q.Project (v, name) -> Project (bt v, name)
         | Q.Erase (v, names) -> Erase (bt v, names)
-        | Q.Apply (f, vs) -> Apply (f, List.map bt vs)
+        | Q.Apply (u, vs) -> Apply (bt u, List.map bt vs)
+        | Q.ApplyPrim (f, vs) -> ApplyPrim (f, List.map bt vs)
+        | Q.Case (u, cl, d) -> Case (bt u, StringMap.map (fun (x,y) -> (x, bt y)) cl, opt_app (fun (x,y) -> Some (x, bt y)) None d)
         | Q.Closure ((xs, e), _) -> Lam (xs, e)
         | Q.Primitive f -> Primitive f
         | Q.Var (v, t) -> Var (v, t)
@@ -194,8 +200,8 @@ let rec type_of_expression : Q.t -> Types.datatype = fun v ->
       | Constant (Constant.Float  _) -> Types.float_type
       | Constant (Constant.String _) -> Types.string_type
       | Project (Var (_, field_types), name) -> StringMap.find name field_types
-      | Apply ("Empty", _) -> Types.bool_type (* HACK *)
-      | Apply (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
+      | ApplyPrim ("Empty", _) -> Types.bool_type (* HACK *)
+      | ApplyPrim (f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
       | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
 let default_of_base_type =
@@ -256,10 +262,12 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       | XML xmlitem -> XML xmlitem
       | Project (v, name) -> Project (ffb v, name)
       | Erase (v, names) -> Erase (ffb v, names)
-      | Apply (f, vs) -> Apply (f, List.map ffb vs)
+      | Apply (u, vs) -> Apply (ffb u, List.map ffb vs)
+      | ApplyPrim (f, vs) -> ApplyPrim (f, List.map ffb vs)
       | Closure (a, c) ->
         (* we don't attempt to freshen closure bindings *)
         Closure (a, c)
+      | Case (u, cl, d) -> Case (ffb u, StringMap.map (fun (x,y) -> (x, ffb y)) cl, opt_app (fun (x,y) -> Some (x, ffb y)) None d)
       | Primitive f -> Primitive f
       | Var (x, ts) ->
         begin
@@ -307,8 +315,6 @@ let is_list =
     | _ -> false
 
 
-      (* TODO: Clean up and unify with Queryshredding.Eval *)
-
 module Eval =
 struct
   exception DbEvaluationError of string
@@ -323,8 +329,7 @@ struct
   let (++) (venv, eenv) (venv', eenv') =
     Value.Env.shadow venv ~by:venv', Env.Int.extend eenv eenv'
 
-  let lookup_fun (f, fvs) =
-    let open Q in
+  let lookup_fun (f, fvs) : Q.t option =
     match Tables.lookup Tables.fun_defs f with
     | Some (finfo, (xs, body), z, location) ->
       Some
@@ -347,7 +352,7 @@ struct
                   | None, None       -> Value.Env.empty
                   | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) Value.Env.empty
                   | _, _ -> assert false in
-                Closure ((xs, body), env_of_value_env env)
+                 Closure ((xs, body), env_of_value_env env)
             | Location.Client ->
               raise (Errors.runtime_error ("Attempt to use client function: " ^
                 Js.var_name_binder (f, finfo) ^ " in query"))
@@ -505,8 +510,8 @@ struct
           Q.Singleton (Q.XML (Value.Node (tag, children)))
 
     | ApplyPure (f, ps) ->
-        apply env (xlate env f, List.map (xlate env) ps)
-    | Closure (f, _, v) ->
+        Apply (xlate env f, List.map (xlate env) ps)
+    | Closure (f, _, v) -> 
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)
@@ -526,28 +531,6 @@ struct
       (* end *)
     | Coerce (v, _) -> xlate env v
 
-  and apply env : Q.t * Q.t list -> Q.t = let open Q in function
-    (* this performs some normalisation steps as part of closure applications *)
-    | Closure ((xs, body), closure_env), args ->
-      (* Debug.print ("Applying closure"); *)
-      (* Debug.print ("body: " ^ Ir.show_computation body); *)
-      (* Debug.print("Applying query closure: " ^ show_t (`Closure ((xs, body), closure_env))); *)
-      (* Debug.print("args: " ^ mapstrcat ", " show_t args); *)
-        let env = env ++ closure_env in
-        let env = List.fold_right2 (fun x arg env ->
-            bind env (x, arg)) xs args env in
-        (* Debug.print("Applied"); *)
-          computation env body
-    | Primitive "Cons", [x; xs] ->
-        Concat [Singleton x; xs]
-    | Primitive "Concat", [xs; ys] -> 
-        Concat [xs; ys]
-    | Primitive f, args -> Apply (f, args)
-    | If (c, t, e), args ->
-        If (c, apply env (t, args), apply env (e, args))
-    | Apply (f, args), args' ->
-        Apply (f, args @ args')
-    | _ -> eval_error "Application of non-function"
   and computation env (binders, tailcomp) : Q.t =
     let open Ir in
     match binders with
@@ -574,7 +557,7 @@ struct
   and tail_computation env : Ir.tail_computation -> Q.t = let open Ir in function
     | Return v -> xlate env v
     | Apply (f, args) ->
-        apply env (xlate env f, List.map (xlate env) args)
+        Apply (xlate env f, List.map (xlate env) args)
     | Special (Ir.Query (None, e, _)) -> computation env e
     | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
        (** WR: this case is because shredding needs to access the keys of tables
@@ -602,26 +585,10 @@ struct
          SML#.)  *)
       raise (Errors.runtime_error "special not allowed in query block")
     | Case (v, cases, default) ->
-      (* WR: this seems to imply v is always translated to a Variant or If *)
-      let rec xlate_case (v, cases, default) =
-        match v with
-          | Q.Variant (label, v) as w ->
-            begin
-              match StringMap.lookup label cases, default with
-                | Some ((x, _), c), _ ->
-                  computation (bind env (x, v)) c
-                | None, Some ((z, _), c) ->
-                  computation (bind env (z, w)) c
-                | None, None -> eval_error "Pattern matching failed"
-            end
-          | Q.If (c, t, e) ->
-            Q.If
-              (c,
-               xlate_case (t, cases, default),
-               xlate_case (e, cases, default))
-          |  _ -> assert false
-      in
-        xlate_case (xlate env v, cases, default)
+        let v' = xlate env v in
+        let cases' = StringMap.map (fun (x,y) -> (x, computation env y)) cases in
+        let default' = opt_app (fun (x,y) -> Some (x, computation env y)) None default in
+        Case (v', cases', default')
     | If (c, t, e) ->
       let c = xlate env c in
       let t = computation env t in
@@ -736,7 +703,7 @@ struct
       (*     failwith "ill-formed closure in query compilation" *)
       (* end *)
       *)
-    | Q.Apply ("ConcatMap", [f; xs]) ->
+    | Q.ApplyPrim ("ConcatMap", [f; xs]) ->
         begin
           match norm env f with
             | Q.Closure (([x], body), closure_env) ->
@@ -746,7 +713,7 @@ struct
                   norm env (computation env body))
             | _ -> assert false
         end
-    | Q.Apply ("Map", [f; xs]) ->
+    | Q.ApplyPrim ("Map", [f; xs]) ->
         begin
           match norm env f with
             | Closure (([x], body), closure_env) ->
@@ -756,11 +723,11 @@ struct
                   Singleton (norm env (computation env body)))
             | _ -> assert false
         end
-    | Q.Apply ("SortBy", [f; xs]) ->
+    | Q.ApplyPrim ("SortBy", [f; xs]) ->
         begin
           let xs = norm env xs in
           match xs with
-            | Concat [] -> Concat []
+            | Concat [] -> xs
             | _ ->
                 let gs, os', body =
                   match xs with
@@ -789,20 +756,19 @@ struct
                       | _ -> assert false
                   end
         end
-    | Q.Apply ("not", [v]) ->
+    | Q.ApplyPrim ("not", [v]) ->
       reduce_not env (v)
-    | Q.Apply ("&&", [v; w]) ->
+    | Q.ApplyPrim ("&&", [v; w]) ->
       reduce_and env (v, w)
-    | Q.Apply ("||", [v; w]) ->
+    | Q.ApplyPrim  ("||", [v; w]) ->
       reduce_or env (v, w)
-    | Q.Apply ("==", [v; w]) ->
+    | Q.ApplyPrim  ("==", [v; w]) ->
       reduce_eq env (v, w)
-    | Q.Apply (f, args) ->
-        Q.Apply (f, List.map (norm env) args)
+    | Q.ApplyPrim  (f, args) ->
+        Q.ApplyPrim  (f, List.map (norm env) args)
     | Q.If (c, t, e) ->
         reduce_if_condition env (c, norm env t, norm env e)
-(*
-    | Case (v, cases, default) ->
+    | Q.Case (v, cases, default) ->
       let rec reduce_case (v, cases, default) =
         match norm env v with
           | Q.Variant (label, v) as w ->
@@ -822,7 +788,6 @@ struct
           |  _ -> assert false
       in
         reduce_case (norm env v, cases, default)
-*)
     | v -> v
   and reduce_concat env vs =
     let vs = List.map (norm env) vs in
@@ -947,7 +912,7 @@ struct
       | x, Constant (Constant.Bool true)
       | (Constant (Constant.Bool false) as x), _
       | _, (Constant (Constant.Bool false) as x) -> x
-      | _ -> Apply ("&&", [a; b])
+      | _ -> ApplyPrim  ("&&", [a; b])
   and reduce_or env (a, b) =
     let open Q in
     match norm env a, norm env b with
@@ -955,13 +920,13 @@ struct
       | _, (Constant (Constant.Bool true) as x)
       | Constant (Constant.Bool false), x
       | x, Constant (Constant.Bool false) -> x
-      | _ -> Apply ("||", [a; b])
+      | _ -> ApplyPrim  ("||", [a; b])
   and reduce_not env a =
     let open Q in
     match norm env a with
       | Constant (Constant.Bool false) -> Constant (Constant.Bool true)
       | Constant (Constant.Bool true)  -> Constant (Constant.Bool false)
-      | _                       -> Apply ("not", [a])
+      | _                       -> ApplyPrim  ("not", [a])
   and reduce_eq env (a, b) =
     let open Q in
     let bool x = Constant (Constant.Bool x) in
@@ -972,7 +937,7 @@ struct
         | (Constant.Float a , Constant.Float b)  -> bool (a = b)
         | (Constant.Char a  , Constant.Char b)   -> bool (a = b)
         | (Constant.String a, Constant.String b) -> bool (a = b)
-        | (a, b)                 -> Apply ("==", [Constant a; Constant b])
+        | (a, b)                 -> ApplyPrim  ("==", [Constant a; Constant b])
     in
       match norm env a, norm env b with
         | (Constant a, Constant b) -> eq_constant (a, b)
@@ -988,12 +953,12 @@ struct
             (StringMap.to_alist lfields)
             (StringMap.to_alist rfields)
             (Constant (Constant.Bool true))
-        | (a, b) -> Apply ("==", [a; b])
+        | (a, b) -> ApplyPrim  ("==", [a; b])
 
   let eval env e =
 (*    Debug.print ("e: "^Ir.show_computation e); *)
     norm (env_of_value_env env) (computation (env_of_value_env env) e)
-
+  
 end
 
 let prepare_clauses : Q.t -> Q.t list =
@@ -1122,7 +1087,7 @@ and base : Value.database -> index -> Q.t -> Sql.base = fun db index ->
   function
     | If (c, t, e) ->
       Sql.Case (base db index c, base db index t, base db index e)
-    | Apply ("tilde", [s; r]) ->
+    | ApplyPrim ("tilde", [s; r]) ->
       begin
         match likeify r with
           | Some r ->
@@ -1137,11 +1102,11 @@ and base : Value.database -> index -> Q.t -> Sql.base = fun db index ->
                 in
                   Sql.Apply ("RLIKE", [base db index s; r])
         end
-    | Apply ("Empty", [v]) ->
+    | ApplyPrim ("Empty", [v]) ->
         Sql.Empty (unit_query db v)
-    | Apply ("length", [v]) ->
+    | ApplyPrim ("length", [v]) ->
         Sql.Length (unit_query db v)
-    | Apply (f, vs) ->
+    | ApplyPrim (f, vs) ->
         Sql.Apply (f, List.map (base db index) vs)
     | Project (Var (x, _field_types), name) ->
         Sql.Project (x, name)

@@ -21,8 +21,10 @@ sig
       | Erase     of t * StringSet.t
       | Variant   of string * t
       | XML       of Value.xmlitem
-      | Apply     of string * t list
-      | Closure   of (Ir.var list * Ir.computation) * env
+      | Apply     of t * t list
+      | ApplyPrim of string * t list
+      | Closure   of (Var.var list * Ir.computation) * env
+      | Case      of t * (Var.binder * t) StringMap.t * (Var.binder * t) option
       | Primitive of string
       | Var       of Var.var * Types.datatype StringMap.t
       | Constant  of Constant.t
@@ -62,8 +64,8 @@ sig
   val bind : 'a * 'b Env.Int.t -> Env.Int.name * 'b -> 'a * 'b Env.Int.t
   val eta_expand_var : Var.var * Types.datatype StringMap.t -> Lang.t
   val computation : Value.t Value.Env.t * Lang.t Env.Int.t -> Ir.computation -> Lang.t
-  val reduce_where_then : Value.t Value.Env.t * Lang.t Env.Int.t -> Lang.t * Lang.t -> Lang.t
-  val reduce_and : Value.t Value.Env.t * Lang.t Env.Int.t -> Lang.t * Lang.t -> Lang.t 
+  val reduce_where_then : Lang.t * Lang.t -> Lang.t
+  val reduce_and : Lang.t * Lang.t -> Lang.t 
   val eval : Value.t Value.Env.t -> Ir.computation -> Lang.t
 end
 
