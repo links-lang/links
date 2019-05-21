@@ -326,5 +326,5 @@ module Readline = struct
 end
 
 module Sessions = struct
-  let exceptions_enabled = Settings.add_bool ("session_exceptions", false, `User)
+  let exceptions_enabled = Settings.add_bool ("session_exceptions", false, `System)
 end

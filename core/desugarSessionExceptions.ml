@@ -1,3 +1,4 @@
+open CommonTypes
 open SourceCode.WithPos
 open Sugartypes
 open SugarConstructors.DummyPositions
@@ -26,11 +27,20 @@ object (o: 'self_type)
   method! phrasenode = function
     | (Spawn (Wait, _, _, _)) as sw ->
         super#phrasenode sw
-    | Spawn (k, spawn_loc, {node=body;_}, Some inner_effects) ->
+    | Spawn (k, spawn_loc, ({node=body; pos} as body_phr), Some inner_effects) ->
         let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
-        let as_pat = variable_pat ~ty:`Not_typed as_var in
+        let (_, _, body_dt) = o#phrasenode body in
         let unit_phr = with_dummy_pos (RecordLit ([], None)) in
 
+        let var = Pattern.Variable (
+          SourceCode.WithPos.make ~pos (Utility.gensym ~prefix:"dsh" (), Some body_dt)) in
+        let ignore_pat = SourceCode.WithPos.make ~pos var in
+        let ignore_body =
+          SourceCode.WithPos.make ~pos (Block
+            ([SourceCode.WithPos.make ~pos
+                (Val (ignore_pat, ([], body_phr), Location.Unknown, Some body_dt))], unit_phr)) in
+
+        let as_pat = variable_pat ~ty:(Types.unit_type) as_var in
         let (o, spawn_loc) = o#given_spawn_location spawn_loc in
         let envs = o#backup_envs in
         let (o, inner_effects) = o#row inner_effects in
@@ -38,7 +48,7 @@ object (o: 'self_type)
         let o = o#with_effects inner_effects in
         let (o, body, _) = o#phrasenode body in
         let body =
-          TryInOtherwise (with_dummy_pos body, as_pat,
+          TryInOtherwise (with_dummy_pos ignore_body, as_pat,
                           var as_var, unit_phr, Some (Types.unit_type)) in
         let o = o#restore_envs envs in
         (o, Spawn (k, spawn_loc, with_dummy_pos body, Some inner_effects), process_type)
@@ -52,7 +62,9 @@ object (o : 'self_type)
 
   method! phrasenode = function
     | Raise ->
-        (o, DoOperation (failure_op_name, [], Some `Not_typed), `Not_typed)
+        let ty =
+          Types.fresh_type_variable (CommonTypes.lin_any, CommonTypes.res_any) in
+        (o, DoOperation (failure_op_name, [], Some ty), ty)
     | TryInOtherwise (_, _, _, _, None) -> assert false
     | TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
         let (o, try_phr, try_dt) = o#phrase try_phr in
@@ -68,7 +80,8 @@ object (o : 'self_type)
          * we'll never use the continuation (and this is invoked after pattern
          * deanonymisation in desugarHandlers), generate a fresh name for the
          * continuation argument. *)
-        let cont_pat = variable_pat ~ty:`Not_typed (Utility.gensym ~prefix:"dsh" ()) in
+        let cont_pat_ty = Types.make_pure_function_type [] (Types.unit_type) in
+        let cont_pat = variable_pat ~ty:cont_pat_ty (Utility.gensym ~prefix:"dsh" ()) in
 
         let otherwise_pat : Sugartypes.Pattern.with_pos =
           with_dummy_pos (Pattern.Effect (failure_op_name, [], cont_pat)) in
@@ -156,29 +169,27 @@ let contains_session_exceptions prog =
  *   case Nothing -> N
  * }
  *)
-let wrap_linear_handlers prog =
-  let o =
-    object
-      inherit SugarTraversals.map as super
-      method! phrase = function
-        | {node=TryInOtherwise (l, x, m, n, dtopt); _} ->
-            let fresh_var = Utility.gensym ?prefix:(Some "try_x") () in
-            let fresh_pat = variable_pat fresh_var in
+let wrap_linear_handlers =
+  object
+    inherit SugarTraversals.map as super
+    method! phrase = function
+      | {node=TryInOtherwise (l, x, m, n, dtopt); _} ->
+          let fresh_var = Utility.gensym ?prefix:(Some "try_x") () in
+          let fresh_pat = variable_pat fresh_var in
+          with_dummy_pos
+          (Switch (
             with_dummy_pos
-            (Switch (
-              with_dummy_pos
-               (TryInOtherwise
-                (super#phrase l,
-                 fresh_pat,
-                 constructor ~body:(var fresh_var) "Just",
-                 constructor "Nothing", dtopt)),
-              [
-                (with_dummy_pos (Pattern.Variant ("Just", (Some x))), super#phrase m);
-                (with_dummy_pos (Pattern.Variant ("Nothing", None)), super#phrase n)
-              ], None))
-        | p -> super#phrase p
-    end
-  in o#program prog
+             (TryInOtherwise
+              (super#phrase l,
+               fresh_pat,
+               constructor ~body:(var fresh_var) "Just",
+               constructor "Nothing", dtopt)),
+            [
+              (with_dummy_pos (Pattern.Variant ("Just", (Some x))), super#phrase m);
+              (with_dummy_pos (Pattern.Variant ("Nothing", None)), super#phrase n)
+            ], None))
+      | p -> super#phrase p
+  end
 
 let settings_check prog =
   if not (contains_session_exceptions prog) then () else

@@ -498,7 +498,7 @@ class transform (env : Types.typing_environment) =
           let (o, otherwise_phr, _) = o#phrase otherwise_phr in
           let (o, dt) = o#datatype dt in
           (o, TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)), dt)
-      | Raise -> (o, Raise, `Not_typed) (* TEMP *)
+      | Raise -> (o, Raise, Types.fresh_type_variable (lin_any, res_any))
       | Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =

@@ -3524,20 +3524,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               4. Unify with current effect context
            *)
            if String.compare opname "Return" = 0 then
-         Gripers.die pos "The implicit effect Return is not invocable"
+             Gripers.die pos "The implicit effect Return is not invocable"
+           else if String.compare opname Value.session_exception_operation = 0 then
+             Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
            else
-         let (row, return_type, args) =
-           let ps     = List.map tc args in
-           let inp_t  = List.map typ ps in
-           let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
-           let optype = Types.make_pure_function_type inp_t out_t in
-               let effrow = Types.make_singleton_open_row (opname, `Present optype) (lin_unl, res_effect) in
-           (effrow, out_t, ps)
-         in
-         let p = Position.resolve_expression pos in
-         let () = unify ~handle:Gripers.do_operation
-           (no_pos (`Effect context.effect_row), (p, `Effect row))
-         in
+           let (row, return_type, args) =
+             let ps     = List.map tc args in
+             let inp_t  = List.map typ ps in
+             let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
+             let optype = Types.make_pure_function_type inp_t out_t in
+                 let effrow = Types.make_singleton_open_row (opname, `Present optype) (lin_unl, res_effect) in
+             (effrow, out_t, ps)
+           in
+           let p = Position.resolve_expression pos in
+           let () = unify ~handle:Gripers.do_operation
+             (no_pos (`Effect context.effect_row), (p, `Effect row))
+           in
              (DoOperation (opname, List.map erase args, Some return_type), return_type, StringMap.empty)
         | Switch (e, binders, _) ->
             let e = tc e in

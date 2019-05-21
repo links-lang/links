@@ -43,7 +43,7 @@ struct
       let () = DesugarSessionExceptions.settings_check program in
       let apply =
         ( DesugarModules.desugar_program
-          ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
+          ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers#program
           ->- DesugarLAttributes.desugar_lattributes#program
           ->- LiftRecursive.lift_funs#program
           ->- DesugarDatatypes.program tyenv
@@ -82,6 +82,7 @@ let program tyenv pos_context program =
     let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
     let apply =
       ( DesugarModules.desugar_sentence
+        ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers#sentence
         ->- DesugarLAttributes.desugar_lattributes#sentence
         ->- LiftRecursive.lift_funs#sentence
         ->- DesugarDatatypes.sentence tyenv
@@ -89,6 +90,8 @@ let program tyenv pos_context program =
         (*  ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#sentence ->- snd)*)
         ->- after_typing ((DesugarCP.desugar_cp tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarInners.desugar_inners tyenv)#sentence ->- snd)
+        ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.insert_toplevel_handlers tyenv)#sentence ->- snd)
+        ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.desugar_session_exceptions tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarFors.desugar_fors tyenv)#sentence ->- snd)
         ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#sentence ->- snd)
