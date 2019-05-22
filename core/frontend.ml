@@ -25,6 +25,10 @@ struct
 
   let session_exceptions = Settings.get_value Basicsettings.Sessions.exceptions_enabled
 
+  let repeat_type_check =
+    Settings.get_value
+      Basicsettings.TypeSugar.check_frontend_transformations
+
 
   let for_side_effects ignored_transformer program  =
     let _ = ignored_transformer program in
@@ -103,7 +107,13 @@ let program prev_tyenv pos_context program =
 
 
   let apply_post_tc_transformer program transformer =
-    transformer prev_tyenv program in
+    let post = transformer prev_tyenv program in
+    if repeat_type_check then
+      let _ = fst3 (TypeSugar.Check.program prev_tyenv post) in
+      post
+    else
+      post
+  in
   let result_program =
     List.fold_left
       apply_post_tc_transformer
@@ -176,7 +186,13 @@ let interactive prev_tyenv pos_context sentence =
     TypeSugar.Check.sentence prev_tyenv pre_tc_sentence in
 
   let apply_post_tc_transformer sentence transformer =
-    transformer prev_tyenv sentence in
+    let post = transformer prev_tyenv sentence in
+    if repeat_type_check then
+      let _ = fst3 (TypeSugar.Check.sentence prev_tyenv post) in
+      post
+    else
+      post
+  in
   let result_sentence =
     List.fold_left
       apply_post_tc_transformer
