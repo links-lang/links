@@ -44,10 +44,14 @@ object (o: 'self_type)
         let as_pat = variable_pat ~ty:(Types.unit_type) as_var in
         let (o, spawn_loc) = o#given_spawn_location spawn_loc in
         let envs = o#backup_envs in
-        let (o, inner_effects) = o#row inner_effects in
+        (* Now, process body using inner effects *)
+        let outer_effects = o#lookup_effects in
+        (* let (o, inner_effects) = o#row inner_effects in *)
         let process_type = `Application (Types.process, [`Row inner_effects]) in
         let o = o#with_effects inner_effects in
-        let (o, body, _) = o#phrase body in
+        let (o, body, _body_dt) = o#phrase body in
+        (* Restore outer effects *)
+        let o = o#with_effects outer_effects in
         let body =
           TryInOtherwise (body, as_pat,
                           var as_var, unit_phr, Some (Types.unit_type)) in
@@ -82,15 +86,18 @@ object (o : 'self_type)
          * deanonymisation in desugarHandlers), generate a fresh name for the
          * continuation argument. *)
         let outer_effects = o#lookup_effects in
+
+        let fail_cont_ty =
+          Types.make_pure_function_type [] (Types.unit_type) in
+
         let inner_effects =
           effect_row
-            |> Types.row_with (failure_op_name, `Present Types.unit_type)
+            |> Types.row_with (failure_op_name, `Present fail_cont_ty)
             |> Types.flatten_row in
 
-        let cont_pat_ty =
-          Types.make_function_type [] inner_effects (Types.unit_type) in
 
-        let cont_pat = variable_pat ~ty:cont_pat_ty (Utility.gensym ~prefix:"dsh" ()) in
+        let cont_pat = variable_pat ~ty:(Types.make_function_type [] inner_effects (Types.unit_type))
+          (Utility.gensym ~prefix:"dsh" ()) in
 
         let otherwise_pat : Sugartypes.Pattern.with_pos =
           with_dummy_pos (Pattern.Effect (failure_op_name, [], cont_pat)) in
@@ -107,7 +114,7 @@ object (o : 'self_type)
           (inner_effects, try_dt, outer_effects, otherwise_dt) in
 
         let hndl_desc = {
-          shd_depth = Deep;
+          shd_depth = Shallow;
           shd_types = types;
           shd_raw_row = raw_row;
           shd_params = None;

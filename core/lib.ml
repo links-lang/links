@@ -379,7 +379,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(() { SessionFail |e}~@ _) ~> Process ({ |e })"
+      datatype "(() { SessionFail:(() {}-> ()) |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -389,9 +389,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(Location, (() { SessionFail |e}~@ _)) ~> Process ({ |e })"
+      datatype "((() { SessionFail:(() {}-> ()) |e}~@ _), Location) ~> Process ({ |e })"
     else
-      datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })"
+      datatype "((() ~e~@ _), Location) ~> Process ({ |e })"
     end,
    IMPURE);
 
@@ -399,7 +399,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(() { SessionFail |e}~@ _) ~> Process ({ |e })"
+      datatype "(() { SessionFail:(() {}-> ()) |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -409,7 +409,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(() { SessionFail |e}~@ _) ~> Process ({ |e })"
+      datatype "(() { SessionFail:(() {}-> ()) |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -419,9 +419,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(() { SessionFail |e}~@ _) ~> Process ({ |e })"
+      datatype "(() { SessionFail:(() {}-> ()) |e}~@ _) ~> Process ({ |e })"
     else
-      datatype "(() ~e~@ _) ~> Process ({ |e })"
+      datatype "((() ~e~@ _), Location) ~> Process ({ |e })"
     end,
    IMPURE);
 

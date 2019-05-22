@@ -2701,7 +2701,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             (* (() -e-> _) -> Process (e) *)
             let inner_effects =
               if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-                Types.make_singleton_open_row ("SessionFail", `Present Types.unit_type) (lin_any, res_any)
+                let ty = Types.make_pure_function_type [] (Types.unit_type) in
+                Types.make_singleton_open_row ("SessionFail", `Present ty) (lin_any, res_any)
               else
                 Types.make_empty_open_row (lin_any, res_any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in

@@ -48,8 +48,8 @@ object (o : 'self_type)
         let spawn_loc_phr =
           match spawn_loc with
             | ExplicitSpawnLocation phr -> phr
-            | SpawnClient -> fn_appl "there" [] [tuple []]
-            | NoSpawnLocation -> fn_appl "here" [] [tuple []] in
+            | SpawnClient -> fn_appl "there" [`Row outer_eff] []
+            | NoSpawnLocation -> fn_appl "here" [`Row outer_eff] [] in
 
         let spawn_fun =
           match k with

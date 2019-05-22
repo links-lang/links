@@ -128,7 +128,7 @@ and type_arg =
 
 type session_type = (typ, row) session_type_basis
 
-type datatype = typ
+type datatype = typ [@@deriving show]
 
 (* base kind stuff *)
 val is_base_type : datatype -> bool
