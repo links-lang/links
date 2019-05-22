@@ -624,7 +624,7 @@ struct
             ~drop:[drop]
             ~default:[default]
             ~key:(Alias.Set.singleton key)
-          |> LensErrors.unpack_type_drop_lens_result ~die:(eval_error "%s")
+          |> Lens_errors.unpack_type_drop_lens_result ~die:(eval_error "%s")
         in
 
         apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
@@ -635,7 +635,7 @@ struct
           Lens.Sort.select_lens_sort
             (Lens.Value.sort lens)
             ~predicate
-          |> LensErrors.unpack_sort_select_result ~die:(eval_error "%s")
+          |> Lens_errors.unpack_sort_select_result ~die:(eval_error "%s")
         in
         apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
     | LensJoin (lens1, lens2, on, del_left, del_right, _sort) ->
@@ -654,7 +654,7 @@ struct
           Lens.Sort.join_lens_sort
             (Lens.Value.sort lens1)
             (Lens.Value.sort lens2) ~on
-          |> LensErrors.unpack_sort_join_result ~die:(eval_error "%s") in
+          |> Lens_errors.unpack_sort_join_result ~die:(eval_error "%s") in
         apply_cont cont env (`Lens (Value.LensJoin {left; right; on; del_left; del_right; sort}))
     | LensGet (lens, _rtype) ->
         let lens = value env lens |> get_lens in
@@ -665,12 +665,12 @@ struct
     | LensPut (lens, data, _rtype) ->
         let lens = value env lens |> get_lens in
         let data = value env data |> Value.unbox_list in
-        let data = List.map LensValueConv.lens_phrase_value_of_value data in
+        let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let behaviour =
           match Settings.get_value Basicsettings.RelationalLenses.classic_lenses with
           | true -> Lens.Eval.Classic
           | false -> Lens.Eval.Incremental in
-        Lens.Eval.put ~behaviour lens data |> LensErrors.unpack_eval_error ~die:(eval_error "%s");
+        Lens.Eval.put ~behaviour lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
         Value.box_unit () |> apply_cont cont env
     | Table (db, name, keys, (readtype, _, _)) ->
       begin

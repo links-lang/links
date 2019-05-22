@@ -2396,8 +2396,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | LensKeysLit (table, keys, _) ->
            let open Lens in
            let table = tc table in
-           let columns = LensTypeConv.sort_cols_of_table ~table:"" (typ table) in
-           let keys = LensSugarConv.cols_of_phrase keys in
+           let columns = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
+           let keys = Lens_sugar_conv.cols_of_phrase keys in
            let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases columns) in
            let lens_sort = Sort.make ~fds columns in
            let typ = Lens.Type.Lens lens_sort in
@@ -2405,50 +2405,50 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | LensFunDepsLit (table, fds, _) ->
            let open Lens in
            let table = tc table in
-           let columns = LensTypeConv.sort_cols_of_table ~table:"" (typ table) in
+           let columns = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
            let typ =
              Lens.Type.type_lens_fun_dep ~fds ~columns
-             |> LensErrors.unpack_type_lens_result ~die:(Gripers.die pos) in
+             |> Lens_errors.unpack_type_lens_result ~die:(Gripers.die pos) in
            LensLit (erase table, Some (Type.sort typ)), `Lens typ, merge_usages [usages table]
         | LensDropLit (lens, drop, key, default, _) ->
            let open Lens in
            let lens = tc lens in
            let default = tc default in
            let typ =
-             let lens = typ lens |> LensTypeConv.lens_type_of_type in
-             let default = typ default |> LensTypeConv.lens_phrase_type_of_type |> fun a -> [a] in
+             let lens = typ lens |> Lens_type_conv.lens_type_of_type in
+             let default = typ default |> Lens_type_conv.lens_phrase_type_of_type |> fun a -> [a] in
              let drop = [drop] in
              let key = Alias.Set.singleton key in
              Type.type_drop_lens lens ~default ~drop ~key
-             |> LensErrors.unpack_type_drop_lens_result ~die:(Gripers.die pos) in
+             |> Lens_errors.unpack_type_drop_lens_result ~die:(Gripers.die pos) in
            let sort = Type.sort typ in
            LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens typ, merge_usages [usages lens; usages default]
         | LensSelectLit (lens, predicate, _) ->
            let lens = tc lens in
            let typ =
-             let lens = typ lens |> LensTypeConv.lens_type_of_type in
-             let predicate = LensSugarConv.lens_sugar_phrase_of_sugar predicate in
+             let lens = typ lens |> Lens_type_conv.lens_type_of_type in
+             let predicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
              Lens.Type.type_select_lens lens ~predicate
-             |> LensErrors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
+             |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
            let sort = Lens.Type.sort typ in
            LensSelectLit(erase lens, predicate, Some (sort)), `Lens typ, merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
            let lens1 = tc lens1
            and lens2 = tc lens2 in
            let typ =
-             let lens1 = typ lens1 |> LensTypeConv.lens_type_of_type in
-             let lens2 = typ lens2 |> LensTypeConv.lens_type_of_type in
-             let on = LensSugarConv.cols_of_phrase on |> List.map (fun a -> a, a, a) in
-             let del_left = LensSugarConv.lens_sugar_phrase_of_sugar left in
-             let del_right = LensSugarConv.lens_sugar_phrase_of_sugar right in
+             let lens1 = typ lens1 |> Lens_type_conv.lens_type_of_type in
+             let lens2 = typ lens2 |> Lens_type_conv.lens_type_of_type in
+             let on = Lens_sugar_conv.cols_of_phrase on |> List.map (fun a -> a, a, a) in
+             let del_left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
+             let del_right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
              Lens.Type.type_join_lens lens1 lens2 ~on ~del_left ~del_right
-           |> LensErrors.unpack_type_join_lens_result ~die:(Gripers.die pos) in
+           |> Lens_errors.unpack_type_join_lens_result ~die:(Gripers.die pos) in
            let sort = Lens.Type.sort typ in
            LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens typ, merge_usages [usages lens1; usages lens2]
         | LensGetLit (lens, _) ->
            let lens = tc lens in
-           let sort = Lens.Type.sort (typ lens |> LensTypeConv.lens_type_of_type) in
-           let trowtype = Lens.Sort.record_type sort |> LensTypeConv.type_of_lens_phrase_type in
+           let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
+           let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | LensPutLit (lens, data, _) ->
            let make_tuple_type = Types.make_tuple_type in
