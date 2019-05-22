@@ -169,7 +169,7 @@ let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overs
 (*   which is wrong; the formal parameter should be wrapped inside a `Record. *)
 (* *\) (\*error ("arg_types: " ^ (string_of_datatype t') ^ ", ret: " ^ string_of_datatype t'')*\) *)
   | (t, _) ->
-     error ("Attempt to take arg types of non-function: " ^ Types.show_datatype t) (* string_of_datatype t) *)
+     error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 
 let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers)  with
   | (`ForAll (_, t), true) -> effect_row t
