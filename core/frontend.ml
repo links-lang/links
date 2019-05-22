@@ -63,7 +63,6 @@ struct
     ]
 
 
-
   (* Program transformations after type-checking programs (i.e., non-REPL mode *)
   let program_post_typing_transformers
       : post_typing_program_transformer list =
@@ -83,8 +82,6 @@ struct
       DesugarPages.desugar_program;
       DesugarFuns.desugar_program;
     ]
-
-
 
 
 let program prev_tyenv pos_context program =
@@ -126,9 +123,6 @@ let program prev_tyenv pos_context program =
     Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_program result_program);
 
   (result_program, t, cur_tyenv), ffi_files
-
-
-
 
 
   type pre_typing_sentence_transformer =
