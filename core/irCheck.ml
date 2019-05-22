@@ -891,11 +891,9 @@ struct
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            Choice (v, bs), t, o
         | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
-            Debug.print "Entering handler checking.";
           (* outer effects is R_d in the IR formalization *)
           let outer_effects = Types.flatten_row allowed_effects in
 
-          Debug.print "Checking return clauses.";
           (* return_t is A_d in the IR formalization *)
           let (return, return_t, return_binder_type, o) =
             let return_binder, return_computation = ih_return in
@@ -913,7 +911,6 @@ struct
           let resumption_effects : Types.row option ref = ref None in
           let resumption_return_type : Types.datatype option ref = ref None in
 
-          Debug.print "Checking cases.";
           let (cases, branch_presence_spec_types, o) =
             o#name_map
               (fun o (x, resume, c) ->
@@ -923,7 +920,7 @@ struct
                   let resume_type = Var.type_of_binder resume in
                   let (cur_resume_args, cur_resume_effects, cur_resume_ret) = match TypeUtils.concrete_type resume_type with
                     | `Function (a, b, c) -> a, b, c
-                    | _ -> raise_ir_type_error "Resumption has non-function type" (SSpec special) in
+                    | _ -> raise_ir_type_error "Resumptions has non-function type" (SSpec special) in
 
                   let presence_spec_funtype = `Function (x_type, Types.make_empty_closed_row (), cur_resume_args) in
 
@@ -945,6 +942,7 @@ struct
                   (x, resume, c), presence_spec_funtype, o)
               ih_cases in
 
+
           (* We now construct the inner effects from the outer effects and branch_presence_spec_types *)
           let (outer_effects_map, outer_effects_var, outer_effects_dualized) = outer_effects in
           (* For each case branch, the corresponding entry goes directly into the field spec map of the inner effect row *)
@@ -958,12 +956,10 @@ struct
             )  inner_effects_map_from_branches outer_effects_map in
           let inner_effects = (inner_effects_map, outer_effects_var, outer_effects_dualized) in
 
-          Debug.print "Checking outer effects.";
         (if not (Types.is_closed_row outer_effects) then
           let outer_effects_contain e = StringMap.mem e outer_effects_map in
           ensure (StringMap.for_all (fun e _ -> outer_effects_contain e) cases) "Outer effects are open but do not mention an effect handled by handler" (SSpec special));
 
-          Debug.print "Checking computations.";
           (* comp_t  is A_c in the IR formalization *)
           let o, _ = o#set_allowed_effects inner_effects in
           let (comp, comp_t, o) = o#computation ih_comp in
@@ -984,10 +980,8 @@ struct
             | Shallow -> Shallow, o in
           let o, _ = o#set_allowed_effects outer_effects in
 
-          Debug.print "Checking return binder type against computation type.";
           o#check_eq_types return_binder_type comp_t (SSpec special);
 
-        Debug.print "Checking resumption effects and resumption return types.";
         (match !resumption_effects, !resumption_return_type, depth with
           | Some re, Some rrt, (Deep _) ->
             o#check_eq_types (`Effect re) (`Effect outer_effects) (SSpec special);
@@ -996,7 +990,6 @@ struct
             o#check_eq_types (`Effect re) (`Effect inner_effects) (SSpec special);
             o#check_eq_types comp_t rrt (SSpec special)
           | _ -> ());
-        Debug.print "Checked handler successfully";
 
 
           Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, return_t, o
