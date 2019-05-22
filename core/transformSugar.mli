@@ -109,3 +109,6 @@ object ('self)
 end
 
 val fun_effects : Types.datatype -> Sugartypes.Pattern.with_pos list list -> Types.row
+
+type program_transformer = Types.typing_environment -> Sugartypes.program -> Sugartypes.program
+type sentence_transformer = Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence
