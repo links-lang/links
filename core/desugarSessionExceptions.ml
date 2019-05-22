@@ -29,24 +29,23 @@ object (o: 'self_type)
         super#phrasenode sw
     | Spawn (_, _, _, None) -> assert false
     | Spawn (k, spawn_loc, ({node=body; pos} as body_phr), Some inner_effects) ->
-        let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
+        (* First, bind the body result to a dummy variable. *)
         let (_, _, body_dt) = o#phrasenode body in
         let unit_phr = with_dummy_pos (RecordLit ([], None)) in
-
-        let pat_var = Pattern.Variable (
-          SourceCode.WithPos.make ~pos (Utility.gensym ~prefix:"dsh" (), Some body_dt)) in
-        let ignore_pat = SourceCode.WithPos.make ~pos pat_var in
+        let with_pos = fun node -> SourceCode.WithPos.make ~pos node in
+        let ignore_pat = with_pos (Pattern.Variable (
+          with_pos (Utility.gensym ~prefix:"dsh" (), Some body_dt))) in
         let body =
-          SourceCode.WithPos.make ~pos (Block
-            ([SourceCode.WithPos.make ~pos
-                (Val (ignore_pat, ([], body_phr), Location.Unknown, None))], unit_phr)) in
+          with_pos (Block
+            ([ with_pos (Val (ignore_pat, ([], body_phr), Location.Unknown, None))], unit_phr)) in
 
+        (* Next, we need to construct a try-as-in-otherwise with the above body *)
+        let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
         let as_pat = variable_pat ~ty:(Types.unit_type) as_var in
         let (o, spawn_loc) = o#given_spawn_location spawn_loc in
         let envs = o#backup_envs in
         (* Now, process body using inner effects *)
         let outer_effects = o#lookup_effects in
-        (* let (o, inner_effects) = o#row inner_effects in *)
         let process_type = `Application (Types.process, [`Row inner_effects]) in
         let o = o#with_effects inner_effects in
         let (o, body, _body_dt) = o#phrase body in
@@ -94,7 +93,6 @@ object (o : 'self_type)
           effect_row
             |> Types.row_with (failure_op_name, `Present fail_cont_ty)
             |> Types.flatten_row in
-
 
         let cont_pat = variable_pat ~ty:(Types.make_function_type [] inner_effects (Types.unit_type))
           (Utility.gensym ~prefix:"dsh" ()) in
