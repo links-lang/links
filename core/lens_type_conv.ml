@@ -57,7 +57,9 @@ let rec lens_phrase_type_of_type t =
            Types.pp_typ t
 
 let lens_type_of_type t =
-  match t with `Lens l -> l | _ -> failwith "Expected a lens type."
+  match t with
+  | `Lens l -> l
+  | _ -> failwith "Expected a lens type."
 
 let sort_cols_of_table t ~table =
   let record_fields rt =
