@@ -389,7 +389,7 @@ let test_join_lens_2 n test_ctx =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
       [`Seq; `RandTo 40] upto
   in
-  let l3 = H.join_lens_dl l1 l2 ["b", "b", "b"] in
+  let l3 = H.join_lens_dl l1 l2 [("b", "b", "b")] in
   let res =
     Query.filter (Query.lt 40 << Query.col "b") (Lens.Value.lens_get l3)
   in
@@ -417,7 +417,7 @@ let test_join_lens_dr_2 n test_ctx =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
       [`Seq; `RandTo 40] 50
   in
-  let l3 = H.join_lens_dr l1 l2 ["b", "b", "b"] in
+  let l3 = H.join_lens_dr l1 l2 [("b", "b", "b")] in
   let res =
     Query.filter (Query.lt 20 << Query.col "c") (Lens.Value.lens_get l3)
   in

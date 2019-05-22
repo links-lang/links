@@ -29,9 +29,10 @@ module Set = struct
       |> Result.is_error
       |> assert_bool "is not disjoint"
 
-
     let suite =
-      ["disjoint_1" >:: test_disjoint_1; "disjoint_2" >:: test_disjoint_2; "disjoint_3" >:: test_disjoint_3]
+      [ "disjoint_1" >:: test_disjoint_1
+      ; "disjoint_2" >:: test_disjoint_2
+      ; "disjoint_3" >:: test_disjoint_3 ]
   end
 
   let suite = ["set" >::: Set.suite]

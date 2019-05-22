@@ -195,9 +195,7 @@ module Tree_form = struct
   let key_split_2 ctxt =
     let fds' = fds "A -> B C D E; B C -> F" in
     let in_tree_form = Fun_dep.Tree.in_tree_form fds' |> H.assert_ok in
-    assert_equal_fds ~ctxt
-      (fds "A -> B C; A -> D E; B C -> F")
-      in_tree_form
+    assert_equal_fds ~ctxt (fds "A -> B C; A -> D E; B C -> F") in_tree_form
 
   let recursive ctxt =
     let open Fun_dep.Tree in

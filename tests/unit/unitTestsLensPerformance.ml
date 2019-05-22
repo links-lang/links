@@ -93,8 +93,8 @@ let create_join_n_lens test_ctx db n rows =
   let _, l =
     List.fold_left
       (fun (i, l) r ->
-         let col = "p_" ^ string_of_int i in
-        (i + 1, LensTestHelpers.join_lens_dl l r [col, col, col]) )
+        let col = "p_" ^ string_of_int i in
+        (i + 1, LensTestHelpers.join_lens_dl l r [(col, col, col)]) )
       (2, List.hd ls)
       (List.tl ls)
   in

@@ -84,8 +84,8 @@ module Drop = struct
   let suite =
     [ "simple" >:: simple
     ; "unbound_column" >:: unbound_column
-    ; "defining_fd_not_found" >:: drop_not_defined_by_key;
-    "column_type_error" >:: column_type_error]
+    ; "defining_fd_not_found" >:: drop_not_defined_by_key
+    ; "column_type_error" >:: column_type_error ]
 end
 
 let suite = "lens_sort" >::: ["drop" >::: Drop.suite]
