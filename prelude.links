@@ -1147,7 +1147,7 @@ fun sendSuspend(pagef) {
 
 #### SESSION TYPING STUFF ####
 
-sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
+#sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1156,7 +1156,7 @@ fun fork(f) {
   request(ap)
 }
 
-sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+#sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
 fun linFork(f) {
   var ap = new();
   var _ = spawnAngel {
@@ -1165,7 +1165,7 @@ fun linFork(f) {
   request(ap)
 }
 
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+#sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
 fun reproduce(ap, f) {
   var x = accept(ap);
   var _ = spawn {f(x)};
@@ -1181,7 +1181,7 @@ fun reproduce(ap, f) {
 # spawnAngel which allows us to spawn a process that will continue to
 # run even if the main process terminates.)
 
-sig connect : forall s::Session,e::Row.((s) ~e~> (), (~s) ~e~> a) ~e~> a
+#sig connect : forall s::Session,e::Row.((s) ~e~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
   var ap = new();
   var done = new();
@@ -1221,7 +1221,7 @@ fun makeEndBang() {
 
 # with split ends we synchronise on the termination of each spawned
 # child process
-sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+#sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
 fun forkSync(f) {
   var ap = new();
   var _ = spawn {
@@ -1232,7 +1232,7 @@ fun forkSync(f) {
   request(ap)
 }
 
-sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
+#sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
   var ap = new();
   var _ = spawn {
@@ -1243,13 +1243,13 @@ fun linForkSync(f) {
   request(ap)
 }
 
-sig linkSync : forall s::Session.(s, ~s) ~> EndBang
+#sig linkSync : forall s::Session.(s, ~s) ~> EndBang
 fun linkSync(s, c) {
   link(s, c);
   makeEndBang()
 }
 
-sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
+#sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
 fun runSync(f) {
   var c = forkSync(f);
   var (v, c) = receive(c);

@@ -2696,8 +2696,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   let _ = unify ~handle:Gripers.spawn_location (pos_and_typ t, no_pos target_ty) in ()
               | _ -> ());
 
+            (* If session exceptions are enabled, then the spawned body may raise the
+             * SessionFail exception. *)
             (* (() -e-> _) -> Process (e) *)
-            let inner_effects = Types.make_empty_open_row (lin_any, res_any) in
+            let inner_effects =
+              if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+                Types.make_singleton_open_row ("SessionFail", `Present Types.unit_type) (lin_any, res_any)
+              else
+                Types.make_empty_open_row (lin_any, res_any) in
             let pid_type = `Application (Types.process, [`Row inner_effects]) in
             let () =
               let outer_effects =

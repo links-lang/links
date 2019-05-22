@@ -27,18 +27,19 @@ object (o: 'self_type)
   method! phrasenode = function
     | (Spawn (Wait, _, _, _)) as sw ->
         super#phrasenode sw
+    | Spawn (_, _, _, None) -> assert false
     | Spawn (k, spawn_loc, ({node=body; pos} as body_phr), Some inner_effects) ->
         let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
         let (_, _, body_dt) = o#phrasenode body in
         let unit_phr = with_dummy_pos (RecordLit ([], None)) in
 
-        let var = Pattern.Variable (
+        let pat_var = Pattern.Variable (
           SourceCode.WithPos.make ~pos (Utility.gensym ~prefix:"dsh" (), Some body_dt)) in
-        let ignore_pat = SourceCode.WithPos.make ~pos var in
-        let ignore_body =
+        let ignore_pat = SourceCode.WithPos.make ~pos pat_var in
+        let body =
           SourceCode.WithPos.make ~pos (Block
             ([SourceCode.WithPos.make ~pos
-                (Val (ignore_pat, ([], body_phr), Location.Unknown, Some body_dt))], unit_phr)) in
+                (Val (ignore_pat, ([], body_phr), Location.Unknown, None))], unit_phr)) in
 
         let as_pat = variable_pat ~ty:(Types.unit_type) as_var in
         let (o, spawn_loc) = o#given_spawn_location spawn_loc in
@@ -46,9 +47,9 @@ object (o: 'self_type)
         let (o, inner_effects) = o#row inner_effects in
         let process_type = `Application (Types.process, [`Row inner_effects]) in
         let o = o#with_effects inner_effects in
-        let (o, body, _) = o#phrasenode body in
+        let (o, body, _) = o#phrase body in
         let body =
-          TryInOtherwise (with_dummy_pos ignore_body, as_pat,
+          TryInOtherwise (body, as_pat,
                           var as_var, unit_phr, Some (Types.unit_type)) in
         let o = o#restore_envs envs in
         (o, Spawn (k, spawn_loc, with_dummy_pos body, Some inner_effects), process_type)
@@ -80,7 +81,15 @@ object (o : 'self_type)
          * we'll never use the continuation (and this is invoked after pattern
          * deanonymisation in desugarHandlers), generate a fresh name for the
          * continuation argument. *)
-        let cont_pat_ty = Types.make_pure_function_type [] (Types.unit_type) in
+        let outer_effects = o#lookup_effects in
+        let inner_effects =
+          effect_row
+            |> Types.row_with (failure_op_name, `Present Types.unit_type)
+            |> Types.flatten_row in
+
+        let cont_pat_ty =
+          Types.make_function_type [] inner_effects (Types.unit_type) in
+
         let cont_pat = variable_pat ~ty:cont_pat_ty (Utility.gensym ~prefix:"dsh" ()) in
 
         let otherwise_pat : Sugartypes.Pattern.with_pos =
@@ -92,22 +101,10 @@ object (o : 'self_type)
         let effect_cases = [otherwise_clause] in
 
         (* Manually construct a row with the two hardwired handler cases. *)
-        let raw_row =
-          Types.make_empty_closed_row ()
-            |> Types.row_with ("Return", (`Present try_dt))
-            |> Types.row_with (failure_op_name, (`Present (otherwise_dt))) in
-
-        let inner_eff =
-            Types.make_empty_closed_row ()
-            |> Types.row_with ("wild", `Present Types.unit_type)
-            |> Types.row_with (failure_op_name, `Present otherwise_dt)
-            |> Types.flatten_row
-        in
-
+        let raw_row = Types.row_with ("Return", (`Present try_dt)) inner_effects in
         (* Dummy types *)
         let types =
-          (inner_eff, try_dt,
-           Types.make_empty_closed_row (), otherwise_dt) in
+          (inner_effects, try_dt, outer_effects, otherwise_dt) in
 
         let hndl_desc = {
           shd_depth = Deep;
