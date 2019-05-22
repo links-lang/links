@@ -219,6 +219,13 @@ args : -m --path=tests/modules
 stderr : @.*
 exit : 1
 
+Import via open
+./tests/modules/import_via_open0.links
+filemode : true
+args : -m --path=tests/modules
+stderr : @.*
+exit : 1
+
 Open is not include
 ./tests/modules/open_is_not_include2.links
 filemode : true

@@ -1,5 +1,5 @@
-open Comparators;
-open BinaryTree;
+open import Comparators;
+open import BinaryTree;
 
 fun print_list(xs) {
   fun print_list_inner(xs) {
