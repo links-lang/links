@@ -55,7 +55,7 @@ let rec lens_sugar_phrase_of_sugar p =
       let p = conv p in
       LPS.UnaryAppl (op, p)
   | S.Constant c ->
-      LPS.Constant (LensValueConv.lens_phrase_value_of_constant c)
+      LPS.Constant (Lens_value_conv.lens_phrase_value_of_constant c)
   | S.Var v -> LPS.Var v
   | _ -> failwith "Unsupported sugar phrase." )
   |> fun v -> (pos, v)

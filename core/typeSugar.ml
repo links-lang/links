@@ -2395,7 +2395,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            relational_lenses_guard pos;
            let open Lens in
            let table = tc table in
-           let cols = LensTypeConv.sort_cols_of_table ~table:"" (typ table) in
+           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
            let lens_sort = Sort.make cols in
            let typ = Lens.Type.Lens lens_sort in
            LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]

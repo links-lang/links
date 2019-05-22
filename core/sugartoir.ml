@@ -942,14 +942,14 @@ struct
                 I.lens_drop_handle (lens, drop, key, default, t)
           | LensSelectLit (lens, pred, Some t) ->
               let lens = ev lens in
-              let pred = LensSugarConv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
+              let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
                 I.lens_select_handle (lens, pred, t)
           | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
-              let on = LensSugarConv.cols_of_phrase on in
-              let left = LensSugarConv.lens_sugar_phrase_of_sugar left |> Lens.Phrase.of_sugar in
-              let right = LensSugarConv.lens_sugar_phrase_of_sugar right |> Lens.Phrase.of_sugar in
+              let on = Lens_sugar_conv.cols_of_phrase on in
+              let left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left |> Lens.Phrase.of_sugar in
+              let right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right |> Lens.Phrase.of_sugar in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
           | LensGetLit (lens, Some t) ->
               let lens = ev lens in

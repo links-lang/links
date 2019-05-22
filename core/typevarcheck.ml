@@ -202,7 +202,7 @@ and is_negative_lens_type : TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t ->
     let sort = Lens.Type.sort typ in
     let cols = Lens.Sort.cols sort in
     List.exists (Lens.Column.typ ->-
-                 LensTypeConv.type_of_lens_phrase_type ->-
+                 Lens_type_conv.type_of_lens_phrase_type ->-
                  is_positive bound_vars expanded_apps var) cols
 
 and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
@@ -296,7 +296,7 @@ and is_positive_lens_typ: TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t -> b
     let sort = Lens.Type.sort typ in
     let cols = Lens.Sort.cols sort in
     List.exists (Lens.Column.typ ->-
-                 LensTypeConv.type_of_lens_phrase_type ->-
+                 Lens_type_conv.type_of_lens_phrase_type ->-
                  is_positive bound_vars expanded_apps var) cols
 
 let is_guarded = is_guarded TypeVarSet.empty StringSet.empty
