@@ -982,6 +982,8 @@ let getenv : string -> string option =
 let safe_getenv s =
   try Sys.getenv s
   with NotFound _ ->
+    (* We need to retain this `failwith` since `errors.ml` depends on
+     * Utility.ml *)
     failwith ("The environment variable " ^ s ^ " is not set")
 
 (** Initialise the random number generator *)

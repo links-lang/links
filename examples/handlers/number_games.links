@@ -25,7 +25,7 @@ fun isNil(xs) {
 
 sig input : ([Int], Comp({Read:Int |e}, a)) {Read{_} |e}~> ()
 fun input(guesses, m) {
-  handle(m())(guesses -> guesses) {
+  handle(m())(guesses <- guesses) {
     case Return(x) -> ()
     case Read(resume) ->
        switch(guesses) {
@@ -48,7 +48,7 @@ fun mySecret(secret, m) {
 
 sig logger : (Comp({Guess:(Int) -> Answer|e}, a)) {Guess:(Int) -> Answer|e}~> [(Int,Answer)]
 fun logger(m) {
-  handle(m())([] -> log) {
+  handle(m())(log <- []) {
     case Return(_) -> log
     case Guess(n, resume) ->
        var an = do Guess(n);

@@ -137,3 +137,97 @@ Qualified names allowed without parentheses
 filemode : true
 args : -m --path=tests/modules
 stdout : () : ()
+
+Scoping/Shadowing of type names (1)
+./tests/modules/type-scoping1.links
+filemode : true
+args : -m --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (2)
+./tests/modules/type-scoping2.links
+filemode : true
+args : -m --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (3)
+./tests/modules/type-scoping3.links
+filemode : true
+args : -m --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (4)
+./tests/modules/type-scoping4.links
+filemode : true
+args : -m --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (5)
+./tests/modules/type-scoping5.links
+filemode : true
+args : -m --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (6)
+./tests/modules/type-scoping6.links
+filemode : true
+args : -m --path=tests/modules
+stdout : () : ()
+
+Broken scoping of type names (1)
+./tests/modules/type-scoping-bad1.links
+filemode : true
+args : -m --path=tests/modules
+stderr : @.*
+exit : 1
+
+Import alien functions
+./tests/modules/alien_blocks_importer.links
+filemode : true
+args : -m --path=tests/modules
+stdout : 42 : Int
+
+Structural labels (1)
+./tests/modules/labels0.links
+filemode : true
+args : -m
+stdout : "Hello!" : String
+
+Structural labels (2)
+./tests/modules/labels1.links
+filemode : true
+args : -m
+stderr : @.*
+exit : 1
+
+Boundary peek
+./tests/modules/boundary_peek.links
+filemode : true
+args : -m
+stdout : "A1" : String
+
+Import (1)
+./tests/modules/import1.links
+filemode : true
+args : -m --path=tests/modules
+stdout : 42 : Int
+
+Import (2)
+./tests/modules/import2.links
+filemode : true
+args : -m --path=tests/modules
+stderr : @.*
+exit : 1
+
+Import via open
+./tests/modules/import_via_open0.links
+filemode : true
+args : -m --path=tests/modules
+stderr : @.*
+exit : 1
+
+Open is not include
+./tests/modules/open_is_not_include2.links
+filemode : true
+args : -m --path=tests/modules
+stdout : [1, 2] : [Int]

@@ -78,6 +78,9 @@ module type SugarConstructorsSig = sig
   (* Binders *)
   val binder   : ?ppos:t -> ?ty:Types.datatype -> name -> Binder.with_pos
 
+  (* Imports *)
+  val import : ?ppos:t -> ?pollute:bool -> name list -> binding
+
   (* Patterns *)
   val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> Pattern.with_pos
   val tuple_pat    : ?ppos:t -> Pattern.with_pos list -> Pattern.with_pos
@@ -97,12 +100,6 @@ module type SugarConstructorsSig = sig
      -> ?location:Location.t -> DeclaredLinearity.t
      -> Pattern.with_pos list list -> phrase
      -> phrase
-  val hnlit_arg
-      : handler_depth -> Pattern.with_pos
-     -> clause list * Pattern.with_pos list list option
-     -> handlerlit
-  val handler_lit
-      : ?ppos:t -> handlerlit -> phrase
   val spawn
       : ?ppos:t
      -> ?row:Types.row -> spawn_kind -> given_spawn_location -> phrase
@@ -124,9 +121,6 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list
      -> ?location:Location.t -> ?annotation:datatype'
      -> Binder.with_pos -> funlit
-     -> binding
-  val handler_binding
-      : ?ppos:t -> signature -> (name * handlerlit)
      -> binding
   val val_binding'
       : ?ppos:t -> signature -> (name_or_pat * phrase * Location.t)
@@ -160,7 +154,7 @@ module type SugarConstructorsSig = sig
   (* Handlers *)
   val untyped_handler
       : ?val_cases:(clause list)
-     -> ?parameters:((phrase * Pattern.with_pos) list)
+     -> ?parameters:((Pattern.with_pos * phrase) list)
      -> phrase -> clause list -> handler_depth
      -> handler
 end

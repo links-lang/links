@@ -1,0 +1,21 @@
+typename Foo = String;
+
+module A {
+  module A {
+    typename Foo = Float;
+  }
+
+  open A;
+
+  typename Foo = Int;
+}
+
+open A;
+
+sig x : Foo
+var x = 3;
+
+open A;
+
+sig y : Foo
+var y = 3.0;

@@ -4,7 +4,7 @@ open Ir
 open Var
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"irTraversals.ml" ~message)
+  Errors.internal_error ~filename:"irTraversals.ml" ~message
 
 (** Traversal with type reconstruction
 
@@ -212,12 +212,12 @@ struct
                   TApp (v, ts), t, o
               with
                   Instantiate.ArityMismatch _ ->
-                  internal_error
+                  raise (internal_error
                     (Printf.sprintf
                        "Arity mismatch in type application (Ir.Transform). Expression: %s\n type: %s\n args: %s\n"
                        (show_value (TApp (v, ts)))
                        (Types.string_of_datatype t)
-                       (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts)))
+                       (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts))))
               end
         | XmlNode (tag, attributes, children) ->
             let (attributes, _, o) = o#name_map (fun o -> o#value) attributes in
@@ -862,7 +862,10 @@ module CheckForCycles =
            (* Debug.print ("Method typ, mu_vars is " ^ Utility.IntSet.show mu_vars); *)
            match List.assoc_opt t seen_types with
            | Some _ ->
-                failwith "descending into type cycle"
+               raise (
+                Errors.internal_error
+                  ~filename:"irTraversals.ml"
+                  ~message:"descending into type cycle")
            | None ->
               let o' = {<seen_types =  (t,()) :: seen_types>} in
               let (t, _) = o'#typ_super t in
@@ -870,7 +873,10 @@ module CheckForCycles =
 
          method! row r =
            match List.assoc_opt r seen_rows with
-           | Some _ ->  failwith "descending into row cycle"
+           | Some _ ->
+               raise (Errors.internal_error
+                 ~filename:"irTraversals.ml"
+                 ~message:"descending into row cycle")
            | None ->
               let o' = {<seen_rows =  (r,()) :: seen_rows>} in
               let (r,_) = o'#row_super r in

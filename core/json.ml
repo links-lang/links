@@ -71,13 +71,13 @@ let rec string_listify : string list -> string = function
 
 let rec jsonize_value' : Value.t -> json_string =
   function
-  | `Lens _ -> failwith "relational lens serialization not supported"
+  | `Lens _ -> raise (Errors.runtime_error "relational lens serialization not supported")
   | `PrimitiveFunction _
   | `Resumption _
   | `Continuation _
   | `Socket _
       as r ->
-      failwith ("Can't jsonize " ^ Value.string_of_value r);
+      raise (Errors.runtime_error ("Can't jsonize " ^ Value.string_of_value r));
   | `FunctionPtr (f, fvs) ->
     let (_, _, _, location) = Tables.find Tables.fun_defs f in
     let location = jsonize_location location in
@@ -152,7 +152,7 @@ and json_of_xmlitem = function
           "\"children\":" ^ string_listify body ^
         "}"
   | Value.Node (name, children) -> json_of_xmlitem (Value.NsNode ("", name, children))
-  | _ -> failwith "Cannot jsonize a detached attribute."
+  | _ -> raise (Errors.runtime_error "Cannot jsonize a detached attribute.")
 
 and jsonize_values : Value.t list -> string list  =
   fun vs ->

@@ -5,7 +5,7 @@ open Types
 exception ArityMismatch of (int * int)
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"instantiate.ml" ~message)
+  Errors.internal_error ~filename:"instantiate.ml" ~message
 
 let show_recursion = Basicsettings.Instantiate.show_recursion
 let show_instantiation = Basicsettings.Instantiate.show_instantiation
@@ -34,7 +34,7 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
         match datatype with
-          | `Not_typed -> internal_error "`Not_typed' passed to `instantiate'"
+          | `Not_typed -> raise (internal_error "`Not_typed' passed to `instantiate'")
           | `Primitive _  -> datatype
           | `MetaTypeVar point ->
               let t = Unionfind.find point in
@@ -318,10 +318,10 @@ let populate_instantiation_maps dt_str qs tyargs =
          | (var, _, `Presence _), `Presence f ->
              (tenv, renv, IntMap.add var f penv)
          | _ ->
-             internal_error
+             raise (internal_error
                ("Kind mismatch in type application: " ^
                 dt_str ^ " applied to type arguments: " ^
-                mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs))
+                mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs)))
     qs tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
 
 let instantiation_maps_of_type_arguments :
@@ -422,14 +422,15 @@ let alias name tyargs env =
   *)
   match (SEnv.find env name : Types.tycon_spec option) with
     | None ->
-        internal_error (Printf.sprintf "Unrecognised type constructor: %s" name)
+        raise (internal_error (Printf.sprintf "Unrecognised type constructor: %s" name))
     | Some (`Abstract _)
     | Some (`Mutual _) ->
-        internal_error (Printf.sprintf "The type constructor: %s is not an alias" name)
+        raise (internal_error (Printf.sprintf "The type constructor: %s is not an alias" name))
     | Some (`Alias (vars, _)) when List.length vars <> List.length tyargs ->
-        internal_error (Printf.sprintf
+        raise (internal_error
+        (Printf.sprintf
           "Type alias %s applied with incorrect arity (%d instead of %d). This should have been checked prior to instantiation."
-          name (List.length tyargs) (List.length vars))
+          name (List.length tyargs) (List.length vars)))
     | Some (`Alias (vars, body)) ->
         let tenv, renv, penv = populate_instantiation_maps name vars tyargs in
         (* instantiate the type variables bound by the alias

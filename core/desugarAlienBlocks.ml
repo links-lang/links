@@ -61,3 +61,10 @@ let flatten_prog prog =
 
 let transform_alien_blocks = flatten_prog
 
+(* This has the same problem as the above (c.f. issue #604). *)
+let sentence = function
+  | Definitions _ as sentence ->
+     let o = (flatten_bindings ())#sentence sentence in
+     Definitions (o#get_bindings)
+  | sentence -> sentence
+

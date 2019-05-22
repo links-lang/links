@@ -8,7 +8,7 @@ open Utility
 module TyEnv = Env.String
 
 let internal_error message =
-  raise (Errors.internal_error ~filename:"transformSugar.ml" ~message)
+  Errors.internal_error ~filename:"transformSugar.ml" ~message
 
 let type_section env =
   let open Section in function
@@ -243,7 +243,7 @@ class transform (env : Types.typing_environment) =
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
       | Var var -> (o, Var var, o#lookup_type var)
       | FunLit (Some argss, lin, lam, location) ->
-          let inner_e = snd (try last argss with Invalid_argument s -> raise (Invalid_argument ("@" ^ s))) in
+          let inner_e = snd (last argss) in
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
             List.fold_right
@@ -255,7 +255,6 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
             (o, FunLit (Some argss, lin, lam, location), t)
-      | HandlerLit _ -> assert false
       | Spawn (Wait, loc, body, Some inner_effects) ->
           assert (loc = NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
@@ -455,14 +454,14 @@ class transform (env : Types.typing_environment) =
            match sh_descr.shd_params with
            | Some params ->
               let (o, bindings) =
-                List.fold_left
-                  (fun (o, bindings) (body, pat) ->
-                    (* let (o, body, _) = o#phrase body in *)
+                List.fold_right
+                  (fun (pat, body) (o, bindings) ->
+                    let (o, body, _) = o#phrase body in
                     let (o, pat) = o#pattern pat in
-                    (o, (body, pat) :: bindings))
-                  (o, []) params.shp_bindings
+                    (o, (pat, body) :: bindings))
+                  params.shp_bindings (o, [])
               in
-              (o, Some { params with shp_bindings = List.rev bindings })
+              (o, Some { params with shp_bindings = bindings })
            | None -> (o, None)
          in
          let (o, val_cases) =
@@ -627,7 +626,7 @@ class transform (env : Types.typing_environment) =
          let o = o#with_formlet_env formlet_env in
          (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
          (o, FormBinding (f, p), Types.xml_type)
-      | e -> internal_error ("oops: "^show_phrasenode  e)
+      | e -> raise (internal_error ("oops: "^show_phrasenode  e))
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun {node; pos} ->
@@ -695,24 +694,6 @@ class transform (env : Types.typing_environment) =
         let (o, e, t) = o#phrase e in
         let o = o#restore_envs envs in
         (o, (pss, e), t)
-
-    method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun _ _ -> internal_error "method handlerlit not yet implemented!" (*
-      let envs = o#backup_envs in
-      let (o, m) =
-    match m with
-      `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
-    | `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
-      in
-      let (o, cases) =
-        listu o
-          (fun o (p, e) ->
-               let (o, p) = o#pattern p in
-               let (o, e, _) = o#phrase e in (o, (p, e)))
-          cases
-      in
-      let o = o#restore_envs envs in
-      (o, (m, cases, params), t)*)
 
     method constant : Constant.t -> ('self_type * Constant.t * Types.datatype) =
       function
@@ -799,7 +780,7 @@ class transform (env : Types.typing_environment) =
          let (o, bndr) = o#binder bndr in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Fun (bndr, lin, (tyvars, lam), location, t))
-      | Fun _ -> internal_error "Unannotated non-recursive function binding"
+      | Fun _ -> raise (internal_error "Unannotated non-recursive function binding")
       | Funs defs ->
          (* put the inner bindings in the environment *)
          let o = o#rec_activate_inner_bindings defs in
@@ -810,7 +791,6 @@ class transform (env : Types.typing_environment) =
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
          (o, (Funs defs))
-      | Handler _ -> assert false
       | Foreign (f, raw_name, language, file, t) ->
          let (o, f) = o#binder f in
          (o, Foreign (f, raw_name, language, file, t))
@@ -821,14 +801,15 @@ class transform (env : Types.typing_environment) =
                    let o = o#bind_tycon name
                      (`Alias (List.map (snd ->- val_of) vars, dt)) in
                    (o, (name, vars, (x, dt'), pos))
-                | None -> internal_error "Unannotated type alias"
+                | None -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
       | AlienBlock _ -> assert false
       | Module _ -> assert false
-      | QualifiedImport _ -> assert false
+      | Import _ -> assert false
+      | Open _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
       WithPos.traverse_map
@@ -878,8 +859,8 @@ class transform (env : Types.typing_environment) =
          let o, c = o#binder c in
          let o = o#restore_envs envs in
          o, CPGiveNothing c, Types.make_endbang_type
-      | CPGrab _ -> internal_error "Malformed grab in TransformSugar"
-      | CPGive _ -> internal_error "Malformed give in TransformSugar"
+      | CPGrab _ -> raise (internal_error "Malformed grab in TransformSugar")
+      | CPGive _ -> raise (internal_error "Malformed give in TransformSugar")
       | CPSelect (b, label, p) ->
          let envs = o#backup_envs in
          let o, b = o#binder b in

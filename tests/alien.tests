@@ -1,0 +1,9 @@
+Alien declaration below toplevel
+if (true) { alien javascript "foo.js" foo : () ~> (); foo() } else { () }
+stderr : @.*
+exit : 1
+
+Alien blocks below toplevel
+if (true) { alien javascript "foo.js" { foo : () ~> (); } foo() } else { () }
+stderr : @.*
+exit : 1

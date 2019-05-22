@@ -3,6 +3,9 @@ open CommonTypes
 
 [@@@ocaml.warning "-32"] (** disable warnings about unused functions in this module**)
 
+let internal_error message =
+  Errors.internal_error ~filename:"types.ml" ~message
+
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
@@ -1136,7 +1139,12 @@ let rec concrete_field_spec f =
             | `Var _ -> f
             | `Body f -> concrete_field_spec f
         end
+    (* The following may be tempting, but can lead to an infinite loop *)
+    (* | `Present t -> `Present (concrete_type IntSet.empty t) *)
     | _ -> f
+
+let concrete_fields =
+  FieldEnv.map concrete_field_spec
 
 let free_type_vars, free_row_type_vars, free_tyarg_vars =
   let module S = TypeVarSet in
@@ -1296,13 +1304,7 @@ let is_empty_row : row -> bool =
   in
     is_empty TypeVarSet.empty
 
-(*
-  get rid of any `Body constructors inside a presence flag
-*)
-let normalise_field_spec = concrete_field_spec
 
-let normalise_fields =
-  FieldEnv.map normalise_field_spec
 
 type var_map = (bool * meta_type_var) TypeVarMap.t
 
@@ -1456,7 +1458,7 @@ and flatten_row : row -> row = fun (field_env, row_var, dual) ->
         assert (is_flattened_row row');
         row' in
   let field_env, row_var, dual = flatten_row' IntMap.empty (field_env, row_var, dual) in
-  let field_env = normalise_fields field_env in
+  let field_env = concrete_fields field_env in
     field_env, row_var, dual
 
 (*
@@ -1494,24 +1496,22 @@ and unwrap_row : row -> (row * row_var option) = fun (field_env, row_var, dual) 
         assert (is_flattened_row (fst row'));
         row' in
   let (field_env, row_var, dual), rec_row = unwrap_row' IntMap.empty (field_env, row_var, dual) in
-  let field_env = normalise_fields field_env in
+  let field_env = concrete_fields field_env in
     (field_env, row_var, dual), rec_row
 
 
-let dual_type = dual_type TypeVarMap.empty
-let dual_row = dual_row TypeVarMap.empty
 
 
 (* TODO: tidy up all this normalisation / concretisation code *)
-let rec normalise_datatype rec_names t =
+and normalise_datatype rec_names t =
   let nt = normalise_datatype rec_names in
-  let nr = normalise_row in
+  let nr = normalise_row rec_names in
     hoist_quantifiers t;
     match t with
       | `Not_typed
       | `Primitive _             -> t
       | `Function (f, m, t)      ->
-          `Function (nt f, nr m, nt t)
+         `Function (nt f, nr m, nt t)
       | `Lolli (f, m, t)         ->
            `Lolli (nt f, nr m, nt t)
       | `Record row              -> `Record (nr row)
@@ -1551,31 +1551,60 @@ let rec normalise_datatype rec_names t =
       | `Output (t, s)        -> `Output (nt t, nt s)
       | `Select r             -> `Select (nr r)
       | `Choice r             -> `Choice (nr r)
-      | `Dual s               -> dual_type (nt s)
+      | `Dual s               -> dual_type TypeVarMap.empty (nt s)
       | `End                  -> `End
 
-and normalise_row row =
+and normalise_row rec_names row =
   (* WARNING:
 
      We cannot use unwrap_row here, as that would lead to
      non-termination.
   *)
   let fields, row_var, dual = flatten_row row in
+  let closed = is_closed_row (fields, row_var, dual) in
   let fields =
-    FieldEnv.map
-      (fun f -> normalise_field_spec f)
+    FieldEnv.fold
+      (fun l f fields ->
+        match f with
+        (* strip absent fields from closed rows *)
+        | `Absent when closed -> fields
+        | _ -> FieldEnv.add l (normalise_field_spec rec_names f) fields)
       fields
+      FieldEnv.empty
   in
     (fields, row_var, dual)
 and normalise_type_arg rec_names type_arg =
   match type_arg with
     | `Type t -> `Type (normalise_datatype rec_names t)
-    | `Row row -> `Row (normalise_row row)
-    | `Presence f -> `Presence (normalise_field_spec f)
+    | `Row row -> `Row (normalise_row rec_names row)
+    | `Presence f -> `Presence (normalise_field_spec rec_names f)
+
+(*
+  get rid of any `Body constructors inside a presence flag
+*)
+and normalise_field_spec rec_names f =
+  match f with
+    | `Var point ->
+        begin
+          match Unionfind.find point with
+            | `Var _ -> f
+            | `Body f -> normalise_field_spec rec_names f
+        end
+    | `Present t -> `Present (normalise_datatype rec_names t)
+    | _ -> f
+
+and normalise_fields rec_names =
+  FieldEnv.map (normalise_field_spec rec_names)
+
+
+let dual_type = dual_type TypeVarMap.empty
+let dual_row = dual_row TypeVarMap.empty
+
 
 let concrete_type = concrete_type IntSet.empty
 
 let normalise_datatype = normalise_datatype IntSet.empty
+let normalise_row = normalise_row IntSet.empty
 
 (** building quantified types *)
 
@@ -2165,17 +2194,21 @@ struct
               (Lens.Utility.Format.pp_comma_list pp_col) cols
               Lens.Database.fmt_phrase_dummy predicate
               Lens.Fun_dep.Set.pp_pretty fds
-          | `Alias ((s,[]), _) ->  s
-          | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
+          | `Alias ((s,[]), _) ->  Module_hacks.Name.prettify s
+          | `Alias ((s,ts), _) ->
+             Printf.sprintf "%s (%s)"
+               (Module_hacks.Name.prettify s)
+               (String.concat "," (List.map (type_arg bound_vars p) ts))
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg bound_vars p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
           | `Application (s, ts) ->
               let vars = String.concat "," (List.map (type_arg bound_vars p) ts) in
               Printf.sprintf "%s (%s)" (Abstype.name s) vars
-          | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> r_name
+          | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> Module_hacks.Name.prettify r_name
           | `RecursiveApplication { r_name; r_args; _ } ->
-              r_name ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) r_args) ^")"
-
+             Printf.sprintf "%s (%s)"
+               (Module_hacks.Name.prettify r_name)
+               (String.concat "," (List.map (type_arg bound_vars p) r_args))
   and presence bound_vars ((policy, vars) as p) =
     function
       | `Present t ->
@@ -2606,7 +2639,7 @@ let is_sub_type, is_sub_row =
           let lrow, _ = unwrap_row row
           and rrow, _ = unwrap_row row' in
             is_sub_row rec_vars (lrow, rrow)
-      | `Table _, `Table _ -> failwith "not implemented subtyping on tables yet"
+      | `Table _, `Table _ -> raise (internal_error "not implemented subtyping on tables yet")
       | `Application (labs, _), `Application (rabs, _) ->
           (* WARNING:
 
@@ -2623,7 +2656,7 @@ let is_sub_type, is_sub_row =
               | `Body t, _ -> is_sub_type rec_vars (t, t')
               | _, `Body t -> is_sub_type rec_vars (t, t')
               | `Recursive _, `Recursive _ ->
-                  failwith "not implemented subtyping on recursive types yet"
+                  raise (internal_error "not implemented subtyping on recursive types yet")
               | _, _ -> false
           end
       | `MetaTypeVar point, _ ->
@@ -2644,7 +2677,7 @@ let is_sub_type, is_sub_row =
       | (`Alias (_, t)), t'
       | t, (`Alias (_, t')) -> is_sub_type rec_vars (t, t')
       | `ForAll _, `ForAll _ ->
-          failwith "not implemented subtyping on forall types yet"
+          raise (internal_error "not implemented subtyping on forall types yet")
       | _, _ -> false
   (* This is like standard row sub-typing, but the field types must be invariant.
      Ultimately we might want more flexibility. For instance, we might expect
@@ -2706,7 +2739,7 @@ let is_sub_type, is_sub_row =
           | `Body lrow, _ -> is_sub_row rec_vars (dual_if ldual lrow, rrow)
           | _, `Body rrow -> is_sub_row rec_vars (lrow, dual_if rdual rrow)
           | `Recursive _, `Recursive _ ->
-              failwith "not implemented subtyping on recursive rows yet"
+              raise (internal_error "not implemented subtyping on recursive rows yet")
           | _, _ -> false
       in
         sub_fields && sub_row_vars
@@ -2751,9 +2784,12 @@ let make_variant_type ts = `Variant (make_closed_row ts)
 let make_table_type (r, w, n) = `Table (r, w, n)
 let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
 
-let make_function_type : datatype list -> row -> datatype -> datatype
-  = fun args effs range ->
-  `Function (make_tuple_type args, effs, range)
+let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> datatype
+  = fun ?(linear=false) args effs range ->
+  if linear then
+    `Lolli (make_tuple_type args, effs, range)
+  else
+    `Function (make_tuple_type args, effs, range)
 
 let make_pure_function_type : datatype list -> datatype -> datatype
   = fun domain range -> make_function_type domain (make_empty_closed_row ()) range

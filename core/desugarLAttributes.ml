@@ -15,7 +15,7 @@ open SourceCode.WithPos
 
 let desugaring_error pos message =
   let open Errors in
-  raise (desugaring_error ~pos ~stage:DesugarLAttributes ~message)
+  desugaring_error ~pos ~stage:DesugarLAttributes ~message
 
 let has_lattrs : phrase -> bool = function
   | { node=Xml (_, attrs, _, _); _ } ->
@@ -47,9 +47,9 @@ let desugar_lhref : phrase -> phrase = function
                                             target]])
               :: rest
           | _ ->
-              desugaring_error pos
+              raise (desugaring_error pos
                 ("Invalid l:href: check that there are no " ^
-                 "multiple l:href attributes")
+                 "multiple l:href attributes"))
       in WithPos.make ~pos (Xml (a, attrs, attrexp, children))
   | e -> e
 
@@ -70,9 +70,9 @@ let desugar_laction : phrase -> phrase = function
             WithPos.make ~pos
               (Xml (form, action::rest, attrexp, hidden::children))
         | _ ->
-            desugaring_error pos
+            raise (desugaring_error pos
               ("Invalid l:action: check that there are no " ^
-               "multiple l:action attributes")
+               "multiple l:action attributes"))
       end
   | e -> e
 
@@ -108,7 +108,7 @@ let desugar_lnames (p : phrase) : phrase * (string * string) StringMap.t =
             [("name", [constant_str name]);
              ("id"  , [constant_str id  ])]
       | "l:name", _ ->
-          desugaring_error pos "The value of an l:name attribute must be a string constant"
+          raise (desugaring_error pos "The value of an l:name attribute must be a string constant")
       | a -> [a] in
   let rec aux : phrase -> phrase  = function
     | { node=Xml (tag, attrs, attrexp, children); pos } ->
@@ -143,7 +143,7 @@ let desugar_form : phrase -> phrase = function
       let lnames =
         try List.fold_left StringMap.union_disjoint StringMap.empty lnames
         with StringMap.Not_disjoint (item, _) ->
-          desugaring_error pos ("Duplicate l:name binding: " ^ item) in
+          raise (desugaring_error pos ("Duplicate l:name binding: " ^ item)) in
       let attrs = List.map (bind_lname_vars lnames) attrs in
         WithPos.make ~pos
           (Xml (form, attrs, attrexp, children))
@@ -155,7 +155,7 @@ let replace_lattrs : phrase -> phrase =
      if (has_lattrs xml) then
        match xml with
          | { node=Xml (_tag, _attributes, _, _); pos } ->
-            desugaring_error pos "Illegal l: attribute in XML node"
+            raise (desugaring_error pos "Illegal l: attribute in XML node")
          | _ -> assert false
      else
        xml)

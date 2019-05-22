@@ -1,0 +1,4 @@
+# c.f. issue #292.
+alien javascript "/my/js/file.js" {
+  foo: () ~> ();
+}

@@ -6,11 +6,12 @@ homepage: "https://github.com/links-lang/links"
 dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-2"
+version: "0.9"
 
 
 build: [
   [ "dune" "subst" ] {pinned}
-  [ "dune" "exec" "preinstall/preinstall.exe" "--" "-libdir" links:lib ]
+  [ "dune" "exec" "preinstall/preinstall.exe" "--" "-libdir" _:lib ]
   [ "dune" "build" "-p" name "-j" jobs ]
 ]
 

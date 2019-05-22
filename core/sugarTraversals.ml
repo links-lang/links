@@ -164,9 +164,6 @@ class map =
           let _xs = o#list (fun o -> o#name) _xs in QualifiedVar _xs
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
                                            let _x_i2 = o#location _x_i2 in FunLit (_x, _x1, _x_i1, _x_i2)
-      | HandlerLit hnlit ->
-     let hnlit = o#handlerlit hnlit in
-     HandlerLit hnlit
       | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let _given_spawn_location = o#given_spawn_location _given_spawn_location in
           let _block_phr = o#phrase _block_phr in
@@ -515,36 +512,17 @@ class map =
         let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
 
-    method handlerlit : handlerlit -> handlerlit =
-      fun (depth, m, cases, params) ->
-    let m = o#pattern m in
-    let cases =
-          o#list
-            (fun o (lhs, rhs) ->
-              let lhs = o#pattern lhs in
-          let rhs = o#phrase rhs in (lhs, rhs)
-        )
-            cases
-    in
-        let params =
-      o#option
-        (fun o -> o#list
-          (fun o -> o#list
-            (fun o -> o#pattern)
-        )
-    ) params in
-    (depth,m,cases,params)
-
     method handle_params : handler_parameterisation -> handler_parameterisation =
       fun params ->
-        let bindings =
-          o#list
-            (fun o (expr, pat) ->
-              let expr = o#phrase expr in
-              let pat = o#pattern pat in (expr, pat))
-            params.shp_bindings
-        in
-        { params with shp_bindings = bindings }
+      let bindings =
+        o#list
+          (fun o (pat, expr) ->
+            let expr = o#phrase expr in
+            let pat = o#pattern pat in
+            (pat, expr))
+          params.shp_bindings
+      in
+      { params with shp_bindings = bindings }
 
     method fieldspec : Datatype.fieldspec -> Datatype.fieldspec =
       let open Datatype in function
@@ -670,11 +648,6 @@ class map =
                  in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
               _x
           in Funs _x
-      | Handler (b, hnlit, t) ->
-          let b = o#binder b in
-          let hnlit = o#handlerlit hnlit in
-          let t     = o#option (fun o -> o#unknown) t in
-          Handler (b, hnlit, t)
       | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
@@ -682,9 +655,11 @@ class map =
           let _x_i3 = o#name _x_i3 in
           let _x_i4 = o#datatype' _x_i4 in
           Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))
-      | QualifiedImport _xs ->
+      | Import { pollute; path } ->
+         Import { pollute; path = o#list (fun o -> o#name) path }
+      | Open _xs ->
           let _xs = o#list (fun o -> o#name) _xs in
-          QualifiedImport _xs
+          Open _xs
       | Typenames (ts) ->
           let ts = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
             let _x = o#name _x in
@@ -863,12 +838,10 @@ class fold =
       | QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
-      | HandlerLit hnlit ->
-     let o = o#handlerlit hnlit in o
       | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
-          let o = o#given_spawn_location _given_spawn_location in
-          let o = o#phrase _block_phr in
-          o
+         let o = o#given_spawn_location _given_spawn_location in
+         let o = o#phrase _block_phr in
+         o
       | Query (_x, _x_i1, _x_i2) ->
           let o =
             o#option
@@ -1183,29 +1156,10 @@ class fold =
         let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let o = o#phrase _x_i1 in o
 
-    method handlerlit : handlerlit -> 'self_type =
-      fun (_, m, cases, params) ->
-    let o = o#pattern m in
-    let o =
-          o#list
-            (fun o (lhs, rhs) ->
-              let o = o#pattern lhs in
-          let o = o#phrase rhs in o
-        )
-            cases
-    in
-        let o =
-      o#option
-        (fun o -> o#list
-          (fun o -> o#list
-            (fun o -> o#pattern)
-          )
-        ) params in o
-
     method handle_params : handler_parameterisation -> 'self_type =
       fun params ->
         o#list
-          (fun o (expr, pat) ->
+          (fun o (pat, expr) ->
             let o = o#phrase expr in
             o#pattern pat)
           params.shp_bindings
@@ -1330,17 +1284,16 @@ class fold =
                  let o = o#position _x_i5 in o)
               _x
           in o
-      | Handler (b, hnlit, t) ->
-          let o = o#binder b in
-          let o = o#handlerlit hnlit in
-          let o = o#option (fun o -> o#unknown) t in o
       | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in
           let o = o#name _x_i2 in
           let o = o#name _x_i3 in
           let o = o#datatype' _x_i4 in o
-      | QualifiedImport _xs ->
+      | Import { path; _ } ->
+         let o = o#list (fun o -> o#name) path in
+          o
+      | Open _xs ->
           let o = o#list (fun o -> o#name) _xs in
           o
       | Typenames (ts) ->
@@ -1544,9 +1497,6 @@ class fold_map =
       | FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
         let (o, _x_i2) = o#location _x_i2 in (o, (FunLit (_x, _x1, _x_i1, _x_i2)))
-      | HandlerLit hnlit ->
-     let (o, hnlit) = o#handlerlit hnlit in
-     (o, HandlerLit hnlit)
       | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let (o, _given_spawn_location) = o#given_spawn_location _given_spawn_location in
           let (o, _block_phr) = o#phrase _block_phr in
@@ -1939,33 +1889,14 @@ class fold_map =
         let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
 
-    method handlerlit : handlerlit -> ('self_type * handlerlit) =
-      fun (depth, m, cases, params) ->
-    let (o, m) = o#pattern m in
-    let (o, cases) =
-          o#list
-            (fun o (lhs, rhs ) ->
-              let (o, lhs) = o#pattern lhs in
-              let (o, rhs) = o#phrase rhs in (o, (lhs, rhs))
-        )
-            cases
-    in
-        let (o, params) =
-      o#option
-        (fun o -> o#list
-          (fun o -> o#list
-            (fun o -> o#pattern)
-        )
-    ) params in
-    (o, (depth, m, cases, params))
-
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
       fun params ->
         let (o, bindings) =
           o#list
-            (fun o (expr, pat) ->
+            (fun o (pat, expr) ->
               let (o, expr) = o#phrase expr in
-              let (o, pat) = o#pattern pat in (o, (expr, pat)))
+              let (o, pat) = o#pattern pat in
+              (o, (pat, expr)))
             params.shp_bindings
         in
         (o, { params with shp_bindings = bindings })
@@ -2115,11 +2046,6 @@ class fold_map =
                  in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
               _x
           in (o, (Funs _x))
-      | Handler (b, hnlit, t) ->
-          let (o, b) = o#binder b in
-          let (o, hnlit) = o#handlerlit hnlit in
-          let (o, t) = o#option (fun o -> o#unknown) t in
-          (o, Handler (b, hnlit, t))
       | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#name _x_i1 in
@@ -2127,9 +2053,12 @@ class fold_map =
           let (o, _x_i3) = o#name _x_i3 in
           let (o, _x_i4) = o#datatype' _x_i4
           in (o, (Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
-      | QualifiedImport _xs ->
+      | Import { pollute; path } ->
+          let (o, path') = o#list (fun o n -> o#name n) path in
+          (o, Import { pollute; path = path' })
+      | Open _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
-          (o, QualifiedImport _xs)
+          (o, Open _xs)
       | Typenames (ts) ->
           let (o, ts) = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
             let (o, _x) = o#name _x in

@@ -20,10 +20,10 @@ Deletion (1 node)
 ./tests/stdlibtests/binaryTree/remove1.links
 filemode : true
 args : -m
-stdout : BinaryTree.Node(BinaryTree.Node(BinaryTree.Leaf, 1, BinaryTree.Leaf), 3, BinaryTree.Node(BinaryTree.Leaf, 4, BinaryTree.Leaf)) : BinaryTree.BinaryTree (Int)
+stdout : Node(Node(Leaf, 1, Leaf), 3, Node(Leaf, 4, Leaf)) : BinaryTree.BinaryTree (Int)
 
 Deletion (2 nodes)
 ./tests/stdlibtests/binaryTree/remove2.links
 filemode : true
 args : -m
-stdout : BinaryTree.Node(BinaryTree.Node(BinaryTree.Node(BinaryTree.Leaf, 1, BinaryTree.Leaf), 2, BinaryTree.Leaf), 4, BinaryTree.Node(BinaryTree.Node(BinaryTree.Leaf, 1, BinaryTree.Leaf), 2, BinaryTree.Leaf)) : BinaryTree.BinaryTree (Int)
+stdout : Node(Node(Node(Leaf, 1, Leaf), 2, Leaf), 4, Node(Node(Leaf, 1, Leaf), 2, Leaf)) : BinaryTree.BinaryTree (Int)

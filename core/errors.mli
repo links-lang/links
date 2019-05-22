@@ -12,9 +12,11 @@ type sugar_error_stage =
   | DesugarLAttributes
   | DesugarPages
   | CheckXML
+  | DesugarInners
+  | DesugarModules
 
 
-exception Runtime_error of string
+exception RuntimeError of string
 exception UndefinedVariable of string
 exception InvalidMutualBinding of Position.t
 exception Type_error of (Position.t * string)
@@ -31,6 +33,9 @@ exception TypeApplicationArityMismatch of
 exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
+exception SettingsError of string
+exception DynlinkError of string
+exception ModuleError of string * Position.t option
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string
@@ -39,3 +44,8 @@ val display : ?default:(exn -> 'a) -> ?stream:out_channel -> ('a lazy_t) -> 'a
 
 val internal_error : filename:string -> message:string -> exn (* filename in which internal error occurred *)
 val desugaring_error: pos:Position.t -> stage:sugar_error_stage -> message:string -> exn
+val settings_error: string -> exn
+val runtime_error: string -> exn
+val dynlink_error: string -> exn
+val module_error : ?pos:Position.t -> string -> exn
+val disabled_extension : ?pos:Position.t -> ?setting:(string * bool) -> ?flag:string -> string -> exn
