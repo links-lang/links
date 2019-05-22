@@ -602,22 +602,22 @@ struct
     | Lens (table, sort) ->
       let open Lens in
       begin
-          let typ = Sort.record_type sort |> LensTypeConv.type_of_lens_phrase_type in
+          let typ = Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
           match value env table, (TypeUtils.concrete_type typ) with
             | `Table (((db,_), table, _, _) as tinfo), `Record _row ->
-              let database = LensDatabaseConv.lens_db_of_db db in
+              let database = Lens_database_conv.lens_db_of_db db in
               let sort = Sort.update_table_name sort ~table in
-              let table = LensDatabaseConv.lens_table_of_table tinfo in
+              let table = Lens_database_conv.lens_table_of_table tinfo in
                  apply_cont cont env (`Lens (Value.Lens { sort; database; table; }))
             | `List records, `Record _row ->
-              let records = List.map LensValueConv.lens_phrase_value_of_value records in
+              let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
               apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
             | _ -> internal_error ("Unsupported underlying lens value.")
       end
     | LensDrop (lens, drop, key, def, _sort) ->
         let open Lens in
         let lens = value env lens |> get_lens in
-        let default = value env def |> LensValueConv.lens_phrase_value_of_value in
+        let default = value env def |> Lens_value_conv.lens_phrase_value_of_value in
         let sort =
           Lens.Sort.drop_lens_sort
             (Lens.Value.sort lens)
@@ -660,7 +660,7 @@ struct
         let lens = value env lens |> get_lens in
         (* let callfn = fun fnptr -> fnptr in *)
         let res = Lens.Value.lens_get lens in
-        let res = List.map LensValueConv.value_of_lens_phrase_value res |> Value.box_list in
+        let res = List.map Lens_value_conv.value_of_lens_phrase_value res |> Value.box_list in
           apply_cont cont env res
     | LensPut (lens, data, _rtype) ->
         let lens = value env lens |> get_lens in

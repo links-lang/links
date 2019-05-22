@@ -10,7 +10,9 @@
 module Unary = struct
   type t = Minus | Not [@@deriving show]
 
-  let to_string = function Minus -> "-" | Not -> "!"
+  let to_string = function
+    | Minus -> "-"
+    | Not -> "!"
 
   let of_string s =
     match s with

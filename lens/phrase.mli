@@ -106,7 +106,6 @@ module Option : sig
   (** Tries to execute and simplify as much of the equation as possible using the
       given variables. *)
   val partial_eval : t -> lookup:(string -> Value.t option) -> t
-
 end
 
 module List : sig
@@ -182,6 +181,7 @@ module Grouped_variables : sig
   type phrase = t
 
   type elt = Alias.Set.t
+
   type t = Alias.Set.Set.t [@@deriving eq]
 
   (** Generate a grouped type variable value from a list of lists of column

@@ -18,12 +18,10 @@ let rec pp_pretty f v =
   | Float -> const "Float"
   | String -> const "String"
   | Char -> const "Char"
-  | Tuple l ->
-    Format.fprintf f "Tuple(%a)" (Format.pp_comma_list pp_pretty) l
+  | Tuple l -> Format.fprintf f "Tuple(%a)" (Format.pp_comma_list pp_pretty) l
   | Record r ->
-    let pp_entry f (key,t) =
-      Format.fprintf f "%s : %a" key pp_pretty t in
-    String.Map.to_list (fun a b -> a, b) r
-    |> Format.fprintf f "Record(%a)" (Format.pp_comma_list pp_entry)
+      let pp_entry f (key, t) = Format.fprintf f "%s : %a" key pp_pretty t in
+      String.Map.to_list (fun a b -> (a, b)) r
+      |> Format.fprintf f "Record(%a)" (Format.pp_comma_list pp_entry)
 
 let equal s t = s = t

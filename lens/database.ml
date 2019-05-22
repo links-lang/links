@@ -70,7 +70,11 @@ let rec fmt_phrase ~db ~map f expr =
   | Phrase.TupleLit l ->
       Format.fprintf f "(%a)" (Format.pp_print_list ~pp_sep fmt) l
   | Phrase.UnaryAppl (op, a) ->
-      let op = match op with Unary.Not -> "NOT" | _ -> Unary.to_string op in
+      let op =
+        match op with
+        | Unary.Not -> "NOT"
+        | _ -> Unary.to_string op
+      in
       Format.fprintf f "%s (%a)" op fmt a
   | Phrase.In (names, vals) -> (
       let fmt_name f v = Format.fprintf f "%s" (map v) in
@@ -119,7 +123,7 @@ module Select = struct
 
   let select t ~predicate =
     let predicate = Phrase.Option.combine_and t.predicate predicate in
-    { t with predicate }
+    {t with predicate}
 
   let of_sort t ~sort =
     let predicate = Sort.query sort in
@@ -222,9 +226,9 @@ module Insert = struct
 
   let fmt f v =
     let db = v.db in
-    let fmt_vals f v = Format.fprintf f "(%a)"
-      (fmt_phrase_value ~db |> Format.pp_comma_list)
-      v in
+    let fmt_vals f v =
+      Format.fprintf f "(%a)" (fmt_phrase_value ~db |> Format.pp_comma_list) v
+    in
     Format.fprintf f "INSERT INTO %a (%a) VALUES %a" (fmt_table ~db) v.table
       (fmt_col ~db |> Format.pp_comma_list)
       v.columns

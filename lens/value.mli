@@ -15,7 +15,7 @@ type t =
       ; key: string
       ; default: Phrase_value.t
       ; sort: Sort.t }
-      [@@deriving show]
+[@@deriving show]
 
 val string_of_value : t -> string
 

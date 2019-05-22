@@ -54,8 +54,8 @@ let satisfies_fds sort records =
       Sorted_records.total_size proj_both > Sorted_records.total_size proj_left
     then Error.raise (Error.ViolatesFunDepConstraint fd)
   in
-  try Fun_dep.Set.iter check_fd fds |> Result.return with Error.E e ->
-    Result.error e
+  try Fun_dep.Set.iter check_fd fds |> Result.return
+  with Error.E e -> Result.error e
 
 let put ?(behaviour = Incremental) lens data =
   let open Result.O in

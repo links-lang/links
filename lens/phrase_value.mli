@@ -47,15 +47,15 @@ val type_of : t -> Phrase_type.t
 val default_value : Phrase_type.t -> t
 
 module Record : sig
-  val get : t -> key:string -> t option
   (** Get a record values field [key]. Returns [None] if the field is not found. *)
+  val get : t -> key:string -> t option
 
-  val get_exn : t -> key:string -> t
   (** Get a record values field [key]. Throw an exception if the field is not found. *)
+  val get_exn : t -> key:string -> t
 
-  val set : t -> key:string -> value:t -> t
   (** Set a record values [field] to [value]. *)
+  val set : t -> key:string -> value:t -> t
 
-  val match_on : t -> t -> on:string list -> bool
   (** Determine if two records have the same values for the fields specified in [on]. *)
+  val match_on : t -> t -> on:string list -> bool
 end
