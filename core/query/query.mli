@@ -22,7 +22,6 @@ sig
       | Variant   of string * t
       | XML       of Value.xmlitem
       | Apply     of t * t list
-      | ApplyPrim of string * t list
       | Closure   of (Var.var list * Ir.computation) * env
       | Case      of t * (Var.binder * t) StringMap.t * (Var.binder * t) option
       | Primitive of string
