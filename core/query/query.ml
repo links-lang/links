@@ -46,7 +46,7 @@ struct
         | For (_, _gs, _os, Singleton (Record fields)) -> Record fields
         | For (_tag, _gs, _os, If (_, t, Concat [])) -> tt (For (_tag, _gs, _os, t))
         | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
-  
+
   (** Return the type associated with an expression *)
   (* Inferring the type of an expression is straightforward because all
      variables are annotated with their types. *)
@@ -72,7 +72,7 @@ struct
         | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
 		| Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
         | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
-  
+
   let default_of_base_type =
     function
       | Primitive.Bool   -> Constant (Constant.Bool false)
@@ -81,7 +81,7 @@ struct
       | Primitive.Float  -> Constant (Constant.Float 0.0)
       | Primitive.String -> Constant (Constant.String "")
       | _                -> assert false
-  
+
   let rec value_of_expression = fun v ->
     let ve = value_of_expression in
     let value_of_singleton = fun s ->
@@ -104,7 +104,7 @@ struct
                                                  (name, ve v)::fields)
                                  fields []))
         | _ -> assert false
-  
+
   let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
     fun env v ->
       let ffb = freshen_for_bindings env in
@@ -152,7 +152,7 @@ struct
     function
       | XML xmlitem -> xmlitem
       | _ -> raise (runtime_type_error "failed to unbox XML")
-  
+
   let unbox_pair =
     function
       | Record fields ->
@@ -160,13 +160,13 @@ struct
           let y = StringMap.find "2" fields in
             x, y
       | _ -> raise (runtime_type_error "failed to unbox pair")
-  
+
   let rec unbox_list =
     function
       | Concat vs -> concat_map unbox_list vs
       | Singleton v -> [v]
       | _ -> raise (runtime_type_error "failed to unbox list")
-  
+
   let unbox_string =
     function
       | Constant (Constant.String s) -> s
@@ -185,7 +185,7 @@ struct
       | Singleton (Record fields) -> StringMap.map type_of_expression fields
       | Table table -> table_field_types table
       | _ -> assert false
-  
+
   (* takes a normal form expression and returns true iff it has list type *)
   let is_list =
     function
@@ -500,7 +500,7 @@ struct
 
     | ApplyPure (f, ps) ->
         Q.Apply (xlate env f, List.map (xlate env) ps)
-    | Closure (f, _, v) -> 
+    | Closure (f, _, v) ->
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)
@@ -584,8 +584,8 @@ struct
       let e = computation env e in
         Q.If (c, t, e)
 
-  let rec norm env : Q.t -> Q.t = 
-    function 
+  let rec norm env : Q.t -> Q.t =
+    function
     | Q.Record fl -> Q.Record (StringMap.map (norm env) fl)
     | Q.Concat xs -> reduce_concat env xs
     | Q.Project (r, label) ->
@@ -726,14 +726,14 @@ struct
       reduce_or env (v, w)
     | Q.Primitive "==", [v; w] ->
       reduce_eq env (v, w)
-    | Q.Primitive f, args -> 
+    | Q.Primitive f, args ->
         Q.Apply (Q.Primitive f, args)
     | Q.If (c, t, e), args ->
         reduce_if_condition env (c, apply env (t, args), apply env (e, args))
     | Q.Apply (f, args), args' ->
         apply env (f, args @ args')
     | t, _ -> eval_error "Application of non-function: %s" (string_of_t t)
-   
+
   and reduce_concat env vs =
     let vs = List.map (norm env) vs in
     let vs =
@@ -822,8 +822,8 @@ struct
         If (c, t, Concat [])
   and reduce_if_body env (c, t, e) =
     let open Q in
-    (* WR: I believe t and e here are always normalized, so no reason to 
-       re-normalize them? 
+    (* WR: I believe t and e here are always normalized, so no reason to
+       re-normalize them?
     let t = norm env t in
     *)
     match t with
@@ -902,16 +902,16 @@ struct
             (StringMap.to_alist rfields)
             (Constant (Constant.Bool true))
         | (a, b) -> Apply (Primitive "==", [a; b])
-  and norm_comp env c = norm env (computation env c) 
+  and norm_comp env c = norm env (computation env c)
 
 (*
-  let norm env t0 = 
+  let norm env t0 =
     begin
       Printf.printf "NORM: input %s\n" (string_of_t t0);
       let res = norm env t0 in
       Printf.printf "NORM: output %s\n\n" (string_of_t res);
       res
-    end 
+    end
 	*)
 
   let eval env e =
@@ -921,7 +921,7 @@ struct
   let reduce_where_then = reduce_where_then (Value.Env.empty, Env.Int.empty)
 
   let reduce_and = reduce_and (Value.Env.empty, Env.Int.empty)
-  
+
 end
 
 let prepare_clauses : Q.t -> Q.t list =
