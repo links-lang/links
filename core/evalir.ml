@@ -703,6 +703,7 @@ struct
                   | _ -> assert false
                 in
                 let execute_shredded_raw (q, t) =
+                  let q = Sql.string_of_query db range q in
                   Database.execute_select_result (get_fields t) q db, t in
                 let raw_results =
                   EvalNestedQuery.Shred.pmap execute_shredded_raw p in
@@ -723,6 +724,7 @@ struct
            match EvalQuery.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
+               let q = Sql.string_of_query db range q in
                let (fieldMap, _, _), _ =
                Types.unwrap_row(TypeUtils.extract_row t) in
                let fields =
