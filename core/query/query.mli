@@ -31,10 +31,6 @@ sig
 
 end
 
-type index = (Var.var * string) list
-type let_clause = Var.var * Lang.t * Var.var * Lang.t
-type let_query = let_clause list
-
 val unbox_xml : Lang.t -> Value.xmlitem
 
 
@@ -53,8 +49,12 @@ val record_field_types : Types.datatype -> Types.datatype StringMap.t
 val table_field_types : Value.table -> Types.typ Utility.StringMap.t
 val is_list : Lang.t -> bool
 
-val clause : Value.database -> index -> bool -> Lang.t -> Sql.query
-val query : Value.database -> let_query -> Sql.query
+val query : Lang.t -> Sql.query
+
+(* Specific to nested queries *)
+type let_clause = Var.var * Lang.t * Var.var * Lang.t
+type let_query = let_clause list
+val let_query : let_query -> Sql.query
 
 module Eval :
 sig

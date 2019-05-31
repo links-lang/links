@@ -3,8 +3,9 @@ open CommonTypes
 
 type query =
   | UnionAll  of query list * int
-  | Select    of (base * string) list * (string * Var.var) list * base * base list
+  | Select    of select_clause
   | With      of Var.var * query * Var.var * query
+and select_clause = (base * string) list * (string * Var.var) list * base * base list
 and base =
   | Case      of base * base * base
   | Constant  of Constant.t
