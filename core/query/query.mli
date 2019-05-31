@@ -33,7 +33,6 @@ end
 
 val unbox_xml : Lang.t -> Value.xmlitem
 
-
 val used_database : Lang.t -> Value.database option
 
 val string_of_t : Lang.t -> string
@@ -49,12 +48,12 @@ val record_field_types : Types.datatype -> Types.datatype StringMap.t
 val table_field_types : Value.table -> Types.typ Utility.StringMap.t
 val is_list : Lang.t -> bool
 
-val query : Lang.t -> Sql.query
+val sql_of_query : Lang.t -> Sql.query
 
 (* Specific to nested queries *)
 type let_clause = Var.var * Lang.t * Var.var * Lang.t
 type let_query = let_clause list
-val let_query : let_query -> Sql.query
+val sql_of_let_query : let_query -> Sql.query
 
 module Eval :
 sig

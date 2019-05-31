@@ -296,7 +296,7 @@ let ordered_query db range v =
   S.reset_dummy_counter ();
   let vs, n = Order.ordered_query v in
   (* Debug.print ("concat vs: "^Q.string_of_t (`Concat vs)); *)
-  let q = Sql.UnionAll (List.map Q.query vs, n) in
+  let q = Sql.UnionAll (List.map Q.sql_of_query vs, n) in
     S.string_of_query db range q
 
 let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * string * Types.datatype) option =

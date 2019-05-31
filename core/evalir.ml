@@ -690,31 +690,34 @@ struct
          | Some (limit, offset) ->
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
        if Settings.get_value Basicsettings.Shredding.shredding then
-         match EvalNestedQuery.compile_shredded env (range, e) with
-         | None -> computation env cont e
-         | Some (db, p) ->
-            if db#supports_shredding () then
-              let get_fields t =
-                match t with
-                | `Record fields ->
-                   StringMap.to_list (fun name p -> (name, `Primitive p)) fields
-                | _ -> assert false
-              in
-              let execute_shredded_raw (q, t) =
-                Database.execute_select_result (get_fields t) q db, t in
-              let raw_results =
-                EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-              let mapped_results =
-                EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-              apply_cont cont env
-                (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
-            else
-              let error_msg =
-                Printf.sprintf
-                  "The database driver '%s' does not support shredding."
-                  (db#driver_name ())
-              in
-              raise (Errors.runtime_error error_msg)
+         begin
+           if range != None then eval_error "Range is not supported for nested queries";
+           match EvalNestedQuery.compile_shredded env e with
+           | None -> computation env cont e
+           | Some (db, p) ->
+              if db#supports_shredding () then
+                let get_fields t =
+                  match t with
+                  | `Record fields ->
+                     StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                  | _ -> assert false
+                in
+                let execute_shredded_raw (q, t) =
+                  Database.execute_select_result (get_fields t) q db, t in
+                let raw_results =
+                  EvalNestedQuery.Shred.pmap execute_shredded_raw p in
+                let mapped_results =
+                  EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+                apply_cont cont env
+                  (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+              else
+                let error_msg =
+                  Printf.sprintf
+                    "The database driver '%s' does not support shredding."
+                    (db#driver_name ())
+                in
+                raise (Errors.runtime_error error_msg)
+           end
        else (* shredding disabled *)
          begin
            match EvalQuery.compile env (range, e) with
@@ -735,7 +738,7 @@ struct
                apply_cont cont env (Database.execute_select fields q db)
          end
     | InsertRows (source, rows) ->
-	begin
+	      begin
           match value env source, value env rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
           | `Table ((db, _params), table_name, _, _), rows ->
@@ -744,7 +747,7 @@ struct
               let () = ignore (Database.execute_insert (table_name, field_names, vss) db) in
 	      apply_cont cont env (`Record [])
           | _ -> raise (internal_error "insert row into non-database")
-	end
+	      end
   (* FIXME:
 
      Choose a semantics for InsertReturning.
@@ -756,7 +759,7 @@ struct
      case of inserting a single row.
   *)
     | InsertReturning (source, rows, returning) ->
-	begin
+        begin
           match value env source, value env rows, value env returning with
           | `Table _, `List [], _ ->
               raise (internal_error "InsertReturning: undefined for empty list of rows")
@@ -768,7 +771,7 @@ struct
                              (db#make_insert_returning_query(table_name, field_names, vss, returning)));
               apply_cont cont env (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
           | _ -> raise (internal_error "insert row into non-database")
-	end
+	      end
     | Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with

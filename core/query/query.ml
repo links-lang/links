@@ -948,13 +948,7 @@ let rec likeify v =
       | Variant ("EndAnchor", _) -> Some ""
       | _ -> assert false
 
-(* This type definition is only really relevant to the shredding
-   query generation but is threaded through the following mutual recursion
-   so we need to define it here. (at least, we have to if we want to 
-   document the type of clause. *)
-type index = (Var.var * string) list
-
-let rec select_clause : index -> bool -> Q.t -> Sql.select_clause = 
+let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause = 
   fun index unit_query v ->
   (*  Debug.print ("select_clause: "^string_of_t v); *)
   let open Q in
@@ -976,16 +970,8 @@ let rec select_clause : index -> bool -> Q.t -> Sql.select_clause =
          this earlier on.  *)
       let c = base index c in
       let (fields, tables, c', os) = select_clause index unit_query body in
-      let c = match c, c' with
-               (* optimisations *)
-               | Sql.Constant (Constant.Bool true), c
-               | c, Sql.Constant (Constant.Bool true) -> c
-               | Sql.Constant (Constant.Bool false), _
-               | _, Sql.Constant (Constant.Bool false) ->
-                  Sql.Constant (Constant.Bool false)
-               (* default case *)
-               | c, c' -> Sql.Apply ("&&", [c; c'])
-      in (fields, tables, c, os)
+      let c = Sql.smart_and c c' in 
+      (fields, tables, c, os)
     | Table (_db, table, _keys, (fields, _, _)) ->
       (* eta expand tables. We might want to do this earlier on.  *)
       (* In fact this should never be necessary as it is impossible
@@ -1017,9 +1003,9 @@ let rec select_clause : index -> bool -> Q.t -> Sql.select_clause =
       in
         (fields, [], Sql.Constant (Constant.Bool true), [])
     | _ -> assert false
-and clause : index -> bool -> Q.t -> Sql.query = 
+and clause : Sql.index -> bool -> Q.t -> Sql.query = 
   fun index unit_query v -> Sql.Select(select_clause index unit_query v)
-and base : index -> Q.t -> Sql.base = fun index ->
+and base : Sql.index -> Q.t -> Sql.base = fun index ->
   let open Q in
   function
     | If (c, t, e) ->
@@ -1065,7 +1051,7 @@ and unit_query v =
      (where we don't care about what data they return)
   *)
   Sql.UnionAll (List.map (clause [] true) (prepare_clauses v), 0)
-and query v = 
+and sql_of_query v = 
   clause [] false v
 
 (* The following code is specific to nested queries *)
@@ -1100,9 +1086,10 @@ let gens_index (gs : (Var.var * Q.t) list)   =
            labels
            [])
   in
-  if Settings.get_value Basicsettings.use_keys_in_shredding
-  then concat_map (table_index key_fields) gs
-  else concat_map (table_index all_fields) gs
+  let get_fields = if Settings.get_value Basicsettings.use_keys_in_shredding
+                   then key_fields
+                   else all_fields
+  in concat_map (table_index get_fields) gs
 
 let outer_index gs_out = gens_index gs_out
 let inner_index z gs_in =
@@ -1123,7 +1110,7 @@ let let_clause : let_clause -> Sql.query =
              z,
              clause (inner_index z gs_in) false inner)
 
-let let_query : let_query -> Sql.query =
+let sql_of_let_query : let_query -> Sql.query =
   fun cs ->
     Sql.UnionAll (List.map (let_clause) cs, 0)
 

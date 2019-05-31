@@ -1,6 +1,8 @@
 open Utility
 open CommonTypes
 
+type index = (Var.var * string) list
+
 type query =
   | UnionAll  of query list * int
   | Select    of select_clause
@@ -15,6 +17,19 @@ and base =
   | Length    of query
   | RowNumber of (Var.var * string) list
     [@@deriving show]
+
+(* optimizing smart constructor for && *)
+let smart_and c c' = 
+  let open Constant in 
+  match c, c' with
+  (* optimisations *)
+  | Constant (Bool true), c
+  | c, Constant (Bool true) -> c
+  | Constant (Bool false), _
+  | _, Constant (Bool false) ->
+    Constant (Bool false)
+  (* default case *)
+  | c, c' -> Apply ("&&", [c; c'])
 
 (* Table variables that are actually used are always bound in a for
    comprehension. In this case the IR variable from the for
