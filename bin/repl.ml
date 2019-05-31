@@ -107,8 +107,9 @@ let rec directives
     ((fun ((_, _, {Types.tycon_env = tycon_env; _ }) as envs) _ ->
         StringSet.iter (fun k ->
                           let s = Env.String.lookup tycon_env k in
-                            Printf.fprintf stderr " %s = %s\n" k
-                              (Types.string_of_tycon_spec s))
+                          Printf.fprintf stderr " %s = %s\n"
+                            (Module_hacks.Name.prettify k)
+                            (Types.string_of_tycon_spec s))
           (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
         envs),
      "display the current type alias environment");
@@ -123,7 +124,7 @@ let rec directives
               let name =
                 if Settings.get_value Debug.debugging_enabled
                 then Printf.sprintf "%s(%d)" name var
-                else name
+                else (Module_hacks.Name.prettify name)
               in
                Printf.fprintf stderr " %-16s : %s\n"
                  name ty)
@@ -209,8 +210,9 @@ let evaluate_parse_result envs parse_result =
 
           Env.String.fold (* TBD: Make Env.String.foreach. *)
             (fun name spec () ->
-                  print_endline (name ^" = "^
-                                Types.string_of_tycon_spec spec); ())
+              Printf.printf "%s = %s\n%!"
+                (Module_hacks.Name.prettify name)
+                (Types.string_of_tycon_spec spec))
             (tyenv'.Types.tycon_env)
             ();
 
@@ -236,9 +238,10 @@ let evaluate_parse_result envs parse_result =
                     let t = Var.info_type finfo in v, t
                   | _ -> assert false
                 in
-                print_endline(name
-                              ^" = "^Value.string_of_value v
-                              ^" : "^Types.string_of_datatype t))
+                Printf.printf "%s = %s : %s\n%!"
+                  (Module_hacks.Name.prettify name)
+                  (Value.string_of_value v)
+                  (Types.string_of_datatype t))
             nenv'
             ();
 
@@ -254,6 +257,7 @@ let evaluate_parse_result envs parse_result =
 
 (** Interactive loop *)
 let interact envs =
+  Settings.set_value Basicsettings.interactive_mode true;
   (* Ensure we retain history *)
   let history_path = Basicsettings.Readline.readline_history_path () in
   ignore (LNoise.history_load ~filename:history_path);

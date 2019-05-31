@@ -1,0 +1,7 @@
+
+module A {
+  typename Foo = Int;
+}
+
+sig x : Foo
+var x = 3;

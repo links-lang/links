@@ -462,7 +462,7 @@ fun game(){
 
 sig runState : (() {Get:s, Set:(s) -> () |e}~> a, s) -> () {Get-, Set- |e}~> (a, s)
 fun runState(f, st0)(){
-    handle(f())(st0 -> st){
+    handle(f())(st <- st0){
         case Return(x) -> (x, st)
         case Set(st1, resume) -> resume((), st1)
         case Get(resume) -> resume(st, st)

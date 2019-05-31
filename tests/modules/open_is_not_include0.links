@@ -1,0 +1,4 @@
+# c.f. issue #606
+fun concat(xs) {
+  fold_right((^^), "", xs)
+}

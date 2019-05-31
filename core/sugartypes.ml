@@ -163,9 +163,6 @@ and regex =
   | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
 and funlit = Pattern.with_pos list list * phrase
-and handlerlit =
-  handler_depth * Pattern.with_pos * clause list *
-    Pattern.with_pos list list option (* computation arg, cases, parameters *)
 and handler =
   { sh_expr         : phrase
   ; sh_effect_cases : clause list
@@ -179,7 +176,7 @@ and handler_descriptor =
   ; shd_params  : handler_parameterisation option
   }
 and handler_parameterisation =
-  { shp_bindings : (phrase * Pattern.with_pos) list
+  { shp_bindings : (Pattern.with_pos * phrase) list
   ; shp_types    : Types.datatype list
   }
 and iterpatt =
@@ -191,7 +188,6 @@ and phrasenode =
   | QualifiedVar     of name list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
-  | HandlerLit       of handlerlit
   (* Spawn kind, expression referring to spawn location (client n, server...),
       spawn block, row opt *)
   | Spawn            of spawn_kind * given_spawn_location * phrase *
@@ -269,10 +265,10 @@ and bindingnode =
                  datatype' option
   | Fun     of function_definition
   | Funs    of recursive_function list
-  | Handler of Binder.with_pos * handlerlit * datatype' option
   | Foreign of Binder.with_pos * name * name * name * datatype'
                (* Binder, raw function name, language, external file, type *)
-  | QualifiedImport of name list
+  | Import of { pollute: bool; path : name list }
+  | Open of name list
   | Typenames of typename list
   | Infix
   | Exp     of phrase
@@ -431,7 +427,6 @@ struct
     | Formlet (xml, yields) ->
         let binds = formlet_bound xml in
           union (phrase xml) (diff (phrase yields) binds)
-    | HandlerLit hnlit -> handlerlit hnlit
     | FunLit (_, _, fnlit, _) -> funlit fnlit
     | Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
@@ -448,13 +443,13 @@ struct
                sh_value_cases = val_cases; sh_descr = descr } ->
        let params_bound =
          option_map
-           (fun params -> union_map (snd ->- pattern) params.shp_bindings)
+           (fun params -> union_map (fst ->- pattern) params.shp_bindings)
            descr.shd_params
        in
        union_all [phrase e;
                   union_map case eff_cases;
                   union_map case val_cases;
-                  diff (option_map (fun params -> union_map (fst ->- phrase)
+                  diff (option_map (fun params -> union_map (snd ->- phrase)
                                                     params.shp_bindings)
                           descr.shd_params) params_bound]
     | Switch (p, cases, _)
@@ -480,9 +475,6 @@ struct
       * StringSet.t (* free vars in the rhs *) =
     match WithPos.node binding with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
-    | Handler (bndr, hnlit, _) ->
-       let name = singleton (Binder.to_name bndr) in
-       name, (diff (handlerlit hnlit) name)
     | Fun (bndr, _, (_, fn), _, _) ->
        let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
@@ -495,7 +487,8 @@ struct
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Foreign (bndr, _, _, _, _) -> singleton (Binder.to_name bndr), empty
-    | QualifiedImport _
+    | Import _
+    | Open _
     | Typenames _
     | Infix -> empty, empty
     | Exp p -> empty, phrase p
@@ -513,9 +506,6 @@ struct
             ~message:"Freevars for modules not implemented yet")
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
-  and handlerlit (_, m, cases, params : handlerlit) : StringSet.t =
-    union_all [diff (union_map case cases)
-                 (option_map (union_map (union_map pattern)) params); pattern m]
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

@@ -245,7 +245,7 @@ end
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE
-%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER
+%token HANDLE SHALLOWHANDLE
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP
@@ -275,8 +275,8 @@ end
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU FORALL ALIEN SIG OPEN
-%token MODULE MUTUAL
+%token MU FORALL ALIEN SIG
+%token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
@@ -387,6 +387,7 @@ nofun_declaration:
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
+| pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -408,17 +409,7 @@ fun_declarations:
 
 fun_declaration:
 | tlfunbinding                                                 { fun_binding     ~ppos:$loc      NoSig   $1 }
-| typed_handler_binding                                        { handler_binding ~ppos:$loc      NoSig   $1 }
 | signature tlfunbinding                                       { fun_binding     ~ppos:$loc($2) (Sig $1) $2 }
-| signature typed_handler_binding                              { handler_binding ~ppos:$loc($2) (Sig $1) $2 }
-
-typed_handler_binding:
-| handler_depth optional_computation_parameter VARIABLE
-                handler_parameterization                       { ($3, hnlit_arg $1 $2 $4) }
-
-optional_computation_parameter:
-| /* empty */                                                  { with_pos $sloc Pattern.Any }
-| LBRACKET pattern RBRACKET                                    { $2 }
 
 perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
@@ -541,18 +532,6 @@ primary_expression:
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
-| handler_depth optional_computation_parameter
-     handler_parameterization                                  { handler_lit ~ppos:$loc (hnlit_arg $1 $2 $3) }
-
-handler_parameterization:
-| arg_lists? handler_body                                      { ($2, $1) }
-
-handler_depth:
-| HANDLER                                                      { Deep    }
-| SHALLOWHANDLER                                               { Shallow }
-
-handler_body:
-| LBRACE cases RBRACE                                          { $2 }
 
 constructor_expression:
 | CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
@@ -775,7 +754,7 @@ page_placement:
 
 session_expression:
 | SELECT field_label exp                                       { with_pos $loc (Select ($2, $3))      }
-| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { with_pos $loc (Offer ($3, $6, None)) }
+| OFFER LPAREN exp RPAREN LBRACE case* RBRACE                  { with_pos $loc (Offer ($3, $6, None)) }
 
 conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
@@ -783,26 +762,19 @@ conditional_expression:
 case:
 | CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
 
-cases:
-| case+                                                        { $1 }
-
-perhaps_cases:
-| case*                                                        { $1 }
-
 case_expression:
-| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Switch ($3, $6, None)) }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
-| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE perhaps_cases RBRACE
-                                                               { with_pos $loc (Handle (untyped_handler ~parameters:(List.rev $6)
-                                                                                         $3 $9 Deep)) }
+| SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
+| RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE case* RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
+| HANDLE LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
+| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE case* RBRACE
+                                                               { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
 | RAISE                                                        { with_pos $loc (Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
 
 handle_params:
-| rev(separated_nonempty_list(COMMA,
-      separated_pair(logical_expression, RARROW, pattern)))    { $1 }
+| separated_nonempty_list(COMMA,
+    separated_pair(pattern, LARROW, exp))                      { $1 }
 
 iteration_expression:
 | FOR LPAREN perhaps_generators RPAREN
@@ -915,15 +887,14 @@ record_labels:
 | separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
-| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (QualifiedImport $2) }
+| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (Open $2) }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
-| typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
-| typedecl SEMICOLON | links_module | alien_block
+| typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
 mutual_binding_block:

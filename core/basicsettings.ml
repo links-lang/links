@@ -4,6 +4,9 @@ let debugging_enabled = Settings.add_bool ("debug", false, `User)
 (** [true] if we're in web mode *)
 let web_mode = Settings.add_bool ("web_mode", false, `System)
 
+(** [true] if we're in interactive mode *)
+let interactive_mode = Settings.add_bool ("interactive_mode", false, `System)
+
 (** If [true], then wait for all child processes to finish before
     terminating *)
 let wait_for_child_processes = Settings.add_bool ("wait_for_child_processes", false, `User)
@@ -93,7 +96,7 @@ let default_db_driver_search_folders =
 let db_driver_path = Settings.add_string ("db_driver_path", String.concat ":" default_db_driver_search_folders, `System)
 
 (** The banner *)
-let version = "0.8 (Merchiston)"
+let version = "0.9 (Burghmuirhead)"
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\

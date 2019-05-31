@@ -2186,17 +2186,21 @@ struct
                 Lens.Phrase.Type.pp (Lens.Column.typ col) in
             Format.asprintf "Lens(%a)"
               (Lens.Utility.Format.pp_comma_list pp_col) cols
-          | `Alias ((s,[]), _) ->  s
-          | `Alias ((s,ts), _) ->  s ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) ts) ^")"
+          | `Alias ((s,[]), _) ->  Module_hacks.Name.prettify s
+          | `Alias ((s,ts), _) ->
+             Printf.sprintf "%s (%s)"
+               (Module_hacks.Name.prettify s)
+               (String.concat "," (List.map (type_arg bound_vars p) ts))
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg bound_vars p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
           | `Application (s, ts) ->
               let vars = String.concat "," (List.map (type_arg bound_vars p) ts) in
               Printf.sprintf "%s (%s)" (Abstype.name s) vars
-          | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> r_name
+          | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> Module_hacks.Name.prettify r_name
           | `RecursiveApplication { r_name; r_args; _ } ->
-              r_name ^ " ("^ String.concat "," (List.map (type_arg bound_vars p) r_args) ^")"
-
+             Printf.sprintf "%s (%s)"
+               (Module_hacks.Name.prettify r_name)
+               (String.concat "," (List.map (type_arg bound_vars p) r_args))
   and presence bound_vars ((policy, vars) as p) =
     function
       | `Present t ->

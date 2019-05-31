@@ -38,8 +38,19 @@ object(self)
     let (shadow_table, _) = shadow_open name fqn mt shadow_table shadow_table in
     {< shadow_table = shadow_table >}
 
+  method extension_guard pos =
+    if not (Settings.get_value Basicsettings.modules) then
+      raise (Errors.disabled_extension ~pos ~setting:("modules", true) ~flag:"-m" "Modules")
+
+  method! binding = let open SourceCode.WithPos in function
+    | ({ node = Import _; pos } as b)
+    | ({ node = Open _; pos } as b) ->
+       self#extension_guard pos;
+       self#bindingnode b.node
+    | b -> self#bindingnode b.node
+
   method! bindingnode = function
-    | QualifiedImport ns ->
+    | Import { path = ns; _ } ->
         (* Try to resolve the import; if not, add to ICs list *)
         let lookup_ref = List.hd ns in
         (try
@@ -120,3 +131,7 @@ let add_dependencies module_prog =
    * the position data type to keep track of the module filename we're importing from. *)
   let module_bindings = add_module_bindings sorted_deps dep_binding_map in
   (module_bindings @ bindings, phrase)
+
+let add_dependencies_sentence = function
+  | Definitions defs -> Definitions (fst (add_dependencies (defs, None)))
+  | s -> s
