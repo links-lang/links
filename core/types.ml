@@ -1946,18 +1946,20 @@ struct
   let show_flavours        = BS.Types.Print.show_flavours
   let show_kinds           = BS.Types.Print.show_kinds
   let hide_fresh_type_vars = BS.Types.Print.hide_fresh_type_vars
+  let shared_effect_vars   = BS.Types.shared_effect_vars
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string}
+  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; shared_effect_vars:bool}
   type names  = (int, string * Vars.spec) Hashtbl.t
 
   let default_policy () =
     {quantifiers=Settings.get_value show_quantifiers;
      flavours=Settings.get_value show_flavours;
      hide_fresh=Settings.get_value hide_fresh_type_vars;
-     kinds=Settings.get_value show_kinds}
+     kinds=Settings.get_value show_kinds;
+     shared_effect_vars=Settings.get_value shared_effect_vars}
 
   let has_kind =
     function
@@ -2070,14 +2072,45 @@ struct
 
        (* Checks that field environment contains exactly the values passed in in
           a list *)
-       let fields_present values =
+       let fields_present_in fields values =
          FieldEnv.size fields = List.length values &&
-         List.fold_left (fun acc v -> acc && FieldEnv.mem v fields
-                                          && is_present (FieldEnv.find v fields))
-                        true values in
+         List.for_all (fun v -> FieldEnv.mem v fields
+                            && is_present (FieldEnv.find v fields))
+                        values in
+       let fields_present = fields_present_in fields in
+
+       let policy =
+         let get_var var = match Unionfind.find var with
+           | `Var (var, _, _) -> Some var
+           | _ -> None in
+         let row_var = get_var row_var in
+         if policy.shared_effect_vars && policy.hide_fresh && not policy.quantifiers && OptionUtils.is_some row_var then
+           let obj = object(self)
+             inherit Transform.visitor as super
+
+             val all_same = true
+             method all_same = all_same
+
+             method! typ =
+               function
+               | typ when not all_same -> (typ, self)
+               | (`Function (_, effects, _) | `Lolli (_, effects, _)) as typ ->
+                  let fields', row_var', _ = unwrap effects in
+                  if (fields_present_in fields' [] || fields_present_in fields' ["wild"]) && get_var row_var' = row_var then
+                    super#typ typ
+                  else
+                    (typ, {<all_same = false>})
+               | typ -> super#typ typ
+           end in
+           { policy with shared_effect_vars = (obj#typ t |> snd)#all_same }
+         else { policy with shared_effect_vars = false } in
+       let p = (policy, vars) in
+       let sd = datatype bound_vars p in
 
        let ppr_arrow () =
-         if fields_present [] then
+         if policy.shared_effect_vars && fields_present [] then "-" ^ ah
+         else if policy.shared_effect_vars && fields_present ["wild"] then "~" ^ ah
+         else if fields_present [] then
            ppr_row_var args row_var ("{}-" ^ ah)
                ("-%-" ^ ah, fun name -> "-%" ^ name ^ "-" ^ ah)
                ("-"   ^ ah, fun name -> "-"  ^ name ^ "-" ^ ah)

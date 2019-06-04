@@ -51,6 +51,20 @@ fun (x) {x:a} : a
 stderr : @.*
 exit : 1
 
+Infers effect variables
+fun (f, x: Int) { f(x) + 0 }
+stdout : @fun : \(\(Int\) -a-> Int, Int\) -a-> Int
+
+Printer shares type variables
+fun (f, x: Int) { f(x) + 0 }
+stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
+args : --config=tests/functions.tests.shared_effect_vars.config
+
+Parser shares type variables
+fun (f, x: Int) { f(x) + 0 } : ((Int) -> Int, Int) -> Int
+stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
+args : --config=tests/functions.tests.shared_effect_vars.config
+
 Typename [1]
 typename Foo = Int; fun f(x:Foo) {x} f(1)
 stdout : 1 : Foo
