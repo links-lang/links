@@ -692,7 +692,7 @@ typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
 typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
 typename Handler (a) = (a) {}~> Page;
 
-sig pickleCont : (() -> Page) ~> String
+sig pickleCont : (() -_-> Page) ~> String
 fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
 
 sig unitP : Page
@@ -726,7 +726,7 @@ fun plugP(context, (i, k, fs)) {
   (i, fun (xs) {context(k(xs))}, fs)
 }
 
-sig mkForm : ((Env) ~> Page, Xml, Attributes) ~> Xml
+sig mkForm : ((Env) ~_~> Page, Xml, Attributes) ~> Xml
 fun mkForm(cont, contents, attributes) {
   <form enctype="application/x-www-form-urlencoded"
         action="#" method="POST" {attributes}>
@@ -754,7 +754,7 @@ fun validate(c, h, k, zs, i, attributes) (env) {
   }
 }
 
-sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) ~> Xml
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -_-> (MultiXmlContext, RecForms, Int) ~> Xml
 fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
   mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
 }
@@ -977,7 +977,7 @@ fun preludeOptionKeyed (key, (data,text), selected) {
   }
 }
 
-sig preludeOptionsKeyed : ([(String,(a,String))], a) ~>
+sig preludeOptionsKeyed : ([(String,(a,String))], a) ~_~>
                          (Xml, (String) -> [a])
 fun preludeOptionsKeyed(items, def) {
   switch (items) {
@@ -990,7 +990,7 @@ fun preludeOptionsKeyed(items, def) {
 }
 
 sig preludeMultiOptionsKeyed
-    : ([(String, (a,String,Bool))]) ~> (Xml, (String) -> [a])
+    : ([(String, (a,String,Bool))]) ~_~> (Xml, (String) -> [a])
 fun preludeMultiOptionsKeyed(items) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))

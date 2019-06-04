@@ -48,13 +48,63 @@ class basic_freshener = object
   method! known_type_variable =
     let module SC = SugarConstructors.SugartypesPositions in
     function
-    | ("_", None, freedom) ->
+    | (("_" | "_anon"), None, freedom) ->
        SC.fresh_known_type_variable freedom
        |> super#known_type_variable
     | v ->  super#known_type_variable v
 end
 
-let freshen_vars = new basic_freshener
+let freshen_vars =
+  let module SC = SugarConstructors.SugartypesPositions in
+  (* Determine if this is an "anonymous" effect type variable, and so introduced
+     within a simple arrow (->, ~>, -@, ~>) *)
+  let is_anon_effect = function
+    | Datatype.Open ("_anon", None, `Rigid) -> true
+    | _ -> false in
+  (* If this function type is exclusively composed of anonymous effect type
+     variables. Or rather, there are no explicitly mentioned effect variables. *)
+  let all_anon_effects = object
+    inherit SugarTraversals.fold as super
+
+    val all_anon = true
+    method all_anon = all_anon
+
+    method! datatypenode = let open Datatype in
+      function
+      | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _)
+           when not (is_anon_effect eff_var) -> {<all_anon = false>}
+      | ty -> super#datatypenode ty
+  end in
+
+  let basic_refresh = new basic_freshener
+  and shared_refresh var = object
+    inherit basic_freshener as super
+    method! datatypenode = let open Datatype in
+      function
+      | Function (args, (effects, eff_var), ret) when is_anon_effect eff_var
+        -> super#datatypenode (Function (args, (effects, var), ret))
+      | Lolli (args, (effects, eff_var), ret) when is_anon_effect eff_var
+        -> super#datatypenode (Lolli (args, (effects, var), ret))
+      | ty -> super#datatypenode ty
+  end in
+
+  object
+    inherit basic_freshener as super
+    method! datatypenode = let open Datatype in
+      function
+      | (Function _ | Lolli _) as dt ->
+         (* If shared_effect_vars is enabled, and all variables are fresh (and so
+            not explicitly named), then we will substitute the same variable
+            across all arrows. Otherwise every arrow gets its own row
+            variable, as normal. *)
+         if Settings.get_value Basicsettings.Types.shared_effect_vars
+            && (all_anon_effects#datatypenode dt)#all_anon then
+           let var = Datatype.Open (SC.fresh_known_type_variable `Rigid) in
+           (shared_refresh var)#datatypenode dt
+         else
+           basic_refresh#datatypenode dt
+      | dt -> super#datatypenode dt
+  end
 
 (* Find all unbound type variables in a term *)
 let typevars =

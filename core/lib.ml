@@ -402,7 +402,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawnWait",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~> a) ~> a",
+   datatype "(() ~_~> a) ~> a",
    IMPURE);
 
   "spawnWait'",
@@ -902,7 +902,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
   (`PFun (fun _ -> assert false),
-  datatype "([(String, (Event) ~> ())]) ~> String",
+  datatype "([(String, (Event) ~_~> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)
@@ -1296,7 +1296,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      in the prelude and is just a wrapper for this function.
    *)
    (`Server (p1 (Value.marshal_value ->- Value.box_string)),
-    datatype "(() -> a) ~> String",
+    datatype "(() -_-> a) ~> String",
     IMPURE));
 
   (* REDUNDANT *)
