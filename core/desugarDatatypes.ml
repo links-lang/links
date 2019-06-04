@@ -41,6 +41,21 @@ let concrete_subkind =
   | Some subkind -> subkind
   | None         -> default_subkind
 
+(** Replaces all placeholder variables with a fresh one. *)
+class basic_freshener = object
+  inherit SugarTraversals.map as super
+
+  method! known_type_variable =
+    let module SC = SugarConstructors.SugartypesPositions in
+    function
+    | ("_", None, freedom) ->
+       SC.fresh_known_type_variable freedom
+       |> super#known_type_variable
+    | v ->  super#known_type_variable v
+end
+
+let freshen_vars = new basic_freshener
+
 (* Find all unbound type variables in a term *)
 let typevars =
 object (self)
@@ -617,10 +632,12 @@ object (self)
 end
 
 let phrase alias_env p =
+  let p = freshen_vars#phrase p in
   let tvars = (typevars#phrase p)#tyvar_list in
     (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#phrase p
 
 let binding alias_env b =
+  let b = freshen_vars#binding b in
   let tvars = (typevars#binding b)#tyvar_list in
     (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#binding b
 
@@ -652,7 +669,7 @@ let sentence typing_env = function
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
+  let dt = freshen_vars#datatype dt in
   let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
   let () = List.iter Generalise.rigidify_quantifier vars in
     (Types.for_all (vars, Desugar.datatype var_env aliases dt))
-
