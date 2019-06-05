@@ -64,10 +64,10 @@ let freshen_vars =
   (* If this function type is exclusively composed of anonymous effect type
      variables. Or rather, there are no explicitly mentioned effect variables. *)
   let all_anon_effects = object
-    inherit SugarTraversals.fold as super
+    inherit SugarTraversals.predicate as super
 
     val all_anon = true
-    method all_anon = all_anon
+    method satisfied = all_anon
 
     method! datatypenode = let open Datatype in
       function
@@ -93,12 +93,12 @@ let freshen_vars =
     method! datatypenode = let open Datatype in
       function
       | (Function _ | Lolli _) as dt ->
-         (* If shared_effect_vars is enabled, and all variables are fresh (and so
-            not explicitly named), then we will substitute the same variable
-            across all arrows. Otherwise every arrow gets its own row
-            variable, as normal. *)
-         if Settings.get_value Basicsettings.Types.shared_effect_vars
-            && (all_anon_effects#datatypenode dt)#all_anon then
+         (* If effect_sugar is enabled, and all variables are fresh (and so not
+            explicitly named), then we will substitute the same variable across
+            all arrows. Otherwise every arrow gets its own row variable, as
+            normal. *)
+         if Settings.get_value Basicsettings.Types.effect_sugar
+            && (all_anon_effects#datatypenode dt)#satisfied then
            let var = Datatype.Open (SC.fresh_known_type_variable `Rigid) in
            (shared_refresh var)#datatypenode dt
          else

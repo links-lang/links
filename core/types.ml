@@ -1946,12 +1946,12 @@ struct
   let show_flavours        = BS.Types.Print.show_flavours
   let show_kinds           = BS.Types.Print.show_kinds
   let hide_fresh_type_vars = BS.Types.Print.hide_fresh_type_vars
-  let shared_effect_vars   = BS.Types.shared_effect_vars
+  let effect_sugar         = BS.Types.effect_sugar
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; shared_effect_vars:bool}
+  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
   type names  = (int, string * Vars.spec) Hashtbl.t
   type shared_effect = Unknown | Shared of int | Distinct
   type context = { bound_vars: TypeVarSet.t; shared_effect: shared_effect }
@@ -1961,7 +1961,7 @@ struct
      flavours=Settings.get_value show_flavours;
      hide_fresh=Settings.get_value hide_fresh_type_vars;
      kinds=Settings.get_value show_kinds;
-     shared_effect_vars=Settings.get_value shared_effect_vars}
+     effect_sugar=Settings.get_value effect_sugar}
 
   let empty_context = { bound_vars = TypeVarSet.empty; shared_effect = Unknown }
 
@@ -2145,7 +2145,7 @@ struct
        let fields_present = fields_present_in fields in
 
        let context =
-         if policy.shared_effect_vars then
+         if policy.effect_sugar then
            let shared_effect = find_shared_effect context vars args fields row_var t in
            { context with shared_effect }
          else context in
@@ -2154,7 +2154,7 @@ struct
          | Shared _ -> true
          | _ -> false in
        let hidden line =
-         if policy.shared_effect_vars then line ^ "_" ^ line ^ ah else line ^ ah in
+         if policy.effect_sugar then line ^ "_" ^ line ^ ah else line ^ ah in
        let sd = datatype context p in
 
        let ppr_arrow () =

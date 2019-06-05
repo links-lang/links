@@ -972,8 +972,8 @@ squiggly_arrow:
   squig_arrow_prefix SQUIGRARROW datatype                      { Datatype.Function ($1, row_with_wp $2, $4) }
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGLOLLI datatype                       { Datatype.Lolli    ($1, row_with_wp $2, $4) }
-| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp (fresh_effects), $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp (fresh_effects), $3) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp fresh_effects, $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu ($2, with_pos $loc($4) $4) }

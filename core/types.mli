@@ -47,7 +47,7 @@ module Vars : sig
 end
 
 module Print : sig
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; shared_effect_vars:bool}
+  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
 
   val default_policy : unit -> policy
 end
