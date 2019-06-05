@@ -55,14 +55,24 @@ Infers effect variables
 fun (f, x: Int) { f(x) + 0 }
 stdout : @fun : \(\(Int\) -a-> Int, Int\) -a-> Int
 
-Printer shares type variables
+Parser shares implicit effect variables
 fun (f, x: Int) { f(x) + 0 }
 stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
 args : --config=tests/functions.tests.shared_effect_vars.config
 
-Parser shares type variables
+Printer shares effect variables
 fun (f, x: Int) { f(x) + 0 } : ((Int) -> Int, Int) -> Int
 stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
+args : --config=tests/functions.tests.shared_effect_vars.config
+
+Printer shows non-shared, single-use variables
+pickleCont
+stdout : @fun : \(\(\) -_-> Page\) ~_~> String
+args : --config=tests/functions.tests.shared_effect_vars.config
+
+Printer shows shared effect variables used elsewhere
+typename Ty (a::Eff) = Int; (fun(){}, 0) : (() -e-> (), Ty({ |e}))
+stdout : @\(fun, 0\) : \(\(\) -a-> \(\), Ty \(\{ \|a \}\)\)
 args : --config=tests/functions.tests.shared_effect_vars.config
 
 Typename [1]
