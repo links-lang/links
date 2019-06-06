@@ -1,3 +1,4 @@
+open Utility
 open SourceCode.WithPos
 open Sugartypes
 open SugarConstructors.DummyPositions
@@ -203,7 +204,10 @@ let desugar_session_exceptions env =
   ((new desugar_session_exceptions env) :
     desugar_session_exceptions :> TransformSugar.transform)
 
+let desugar_program : TransformSugar.program_transformer =
+  fun env program -> snd3 ((desugar_session_exceptions env)#program program)
+
+
 let show prog =
   Printf.printf "%s\n\n" (Sugartypes.show_program prog);
   prog
-

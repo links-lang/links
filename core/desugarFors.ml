@@ -196,6 +196,12 @@ end
 let desugar_fors env = ((new desugar_fors env)
                           : desugar_fors :> TransformSugar.transform)
 
+let desugar_program : TransformSugar.program_transformer =
+  fun env program -> snd3 ((desugar_fors env)#program program)
+
+let desugar_sentence : TransformSugar.sentence_transformer =
+  fun env sentence -> snd ((desugar_fors env)#sentence sentence)
+
 let has_no_fors =
 object
   inherit SugarTraversals.predicate as super
