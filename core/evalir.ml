@@ -740,16 +740,16 @@ struct
                apply_cont cont env (Database.execute_select fields q db)
          end
     | InsertRows (source, rows) ->
-	      begin
+        begin
           match value env source, value env rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
           | `Table ((db, _params), table_name, _, _), rows ->
               let (field_names,vss) = Value.row_columns_values db rows in
               Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
               let () = ignore (Database.execute_insert (table_name, field_names, vss) db) in
-	      apply_cont cont env (`Record [])
+              apply_cont cont env (`Record [])
           | _ -> raise (internal_error "insert row into non-database")
-	      end
+        end
   (* FIXME:
 
      Choose a semantics for InsertReturning.
@@ -773,7 +773,7 @@ struct
                              (db#make_insert_returning_query(table_name, field_names, vss, returning)));
               apply_cont cont env (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
           | _ -> raise (internal_error "insert row into non-database")
-	      end
+        end
     | Update ((xb, source), where, body) ->
       let db, table, field_types =
         match value env source with
