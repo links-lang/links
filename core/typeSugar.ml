@@ -218,19 +218,19 @@ sig
   val switch_patterns : griper
   val switch_branches : griper
 
-  val handle_parameter_pattern : griper
+  (* val handle_parameter_pattern : griper *)
   val handle_value_patterns : griper
-  val handle_effect_patterns : griper
+  val handle_operation_patterns : griper
   val handle_branches : griper
   val handle_combine_effect_rows : griper
-  val type_resumption_with_annotation : griper
-  val deep_resumption : griper
-  val deep_resumption_effects : griper
-  val shallow_resumption : griper
-  val shallow_resumption_effects : griper
-  val handle_return : griper
-  val handle_comp_effects : griper
-  val handle_unify_with_context : griper
+  (* val type_resumption_with_annotation : griper
+   * val deep_resumption : griper
+   * val deep_resumption_effects : griper
+   * val shallow_resumption : griper
+   * val shallow_resumption_effects : griper
+   * val handle_return : griper
+   * val handle_comp_effects : griper
+   * val handle_unify_with_context : griper *)
 
   val do_operation : griper
 
@@ -517,37 +517,37 @@ end
                   "while the subsequent expressions have type" ^ nli () ^
                   code ppr_rt)
 
-    let handle_parameter_pattern ~pos ~t1:l ~t2:(rexpr, rt) ~error:_ =
-      build_tyvar_names [snd l; rt];
-        with_but2things pos
-          ("The parameter pattern must match the expression in a handle parameter binding")
-          ("pattern", l) ("expression", (rexpr, rt))
+    (* let handle_parameter_pattern ~pos ~t1:l ~t2:(rexpr, rt) ~error:_ =
+     *   build_tyvar_names [snd l; rt];
+     *     with_but2things pos
+     *       ("The parameter pattern must match the expression in a handle parameter binding")
+     *       ("pattern", l) ("expression", (rexpr, rt)) *)
 
-    let handle_value_patterns ~pos ~t1:(lexpr,lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
+    let handle_value_patterns ~pos ~t1:(_,expected) ~t2:(rexpr, actual) ~error:_ =
+      build_tyvar_names [expected;actual];
+      let ppr_lt = show_type expected in
+      let ppr_rt = show_type actual in
       die pos ("\
         All the value cases of a handle should have compatible patterns, " ^
-                  "but the pattern" ^ nli () ^
-                  code lexpr ^ nl () ^
-                  "has type" ^ nli () ^
-          code ppr_lt ^ nl () ^
-                  "while the subsequent patterns have type" ^ nli () ^
-                  code ppr_rt)
+                 "but the pattern" ^ nli () ^
+                   code rexpr ^ nl () ^
+                     "has type" ^ nli () ^
+                       code ppr_lt ^ nl () ^
+                         "while the subsequent patterns have type" ^ nli () ^
+                           code ppr_rt)
 
-    let handle_effect_patterns ~pos ~t1:(lexpr,lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
+    let handle_operation_patterns ~pos ~t1:(_,expected) ~t2:(rexpr, actual) ~error:_ =
+      build_tyvar_names [expected;actual];
+      let ppr_lt = show_type expected in
+      let ppr_rt = show_type actual in
       die pos ("\
-        All the effect cases of a handle should have compatible patterns, " ^
-                  "but the pattern" ^ nli () ^
-                  code lexpr ^ nl () ^
-                  "has type" ^ nli () ^
-          code ppr_lt ^ nl () ^
+        The operation cases of a handle should have compatible patterns, " ^
+          "but the pattern" ^ nli () ^
+            code rexpr ^ nl () ^
+              "has type" ^ nli () ^
+                code ppr_lt ^ nl () ^
                   "while the subsequent patterns have type" ^ nli () ^
-                  code ppr_rt)
+                    code ppr_rt)
 
     let handle_branches ~pos ~t1:(lexpr, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -560,95 +560,95 @@ end
           "while the subsequent clauses have type" ^ nl() ^
           tab() ^ code (show_type rt))
 
-    let handle_return ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("The type of an input to a handle should match the type of " ^
-               "its value patterns, but the expression" ^ nl() ^
-               tab() ^ code hexpr ^ nl() ^
-               "has type" ^ nl() ^
-               tab() ^ code (show_type lt) ^ nl () ^
-               "while the value patterns have type" ^ nl() ^
-               tab() ^ code (show_type rt))
-
-    let handle_comp_effects ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("The effect type of an input to a handle should match the type of " ^
-               "its computation patterns, but the expression" ^ nl() ^
-               tab() ^ code hexpr ^ nl() ^
-               "has effect type" ^ nl() ^
-               tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
-               "while the handler handles effects" ^ nl() ^
-               tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
-
-
-    let handle_unify_with_context ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names[lt;rt];
-      die pos ("The handle has effect type " ^ nl() ^
-                  tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
-          "but, the currently allowed effects are" ^ nl() ^
-                  tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
-
-
-    let type_resumption_with_annotation ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("\
-                The resumption" ^ nl() ^
-                  tab() ^ code resume ^ nl() ^
-                  "has type" ^ nl() ^
-                  tab() ^ code (show_type lt) ^ nl() ^
-                  "but it is annotated with type" ^ nl() ^
-                  tab() ^ code (show_type rt))
-
-    let deep_resumption ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("\
-                 The return type of a deep resumption must be the same as the body type of its handler, " ^ nl() ^
-                 "but the deep resumption" ^ nl() ^
-                  tab() ^ code resume ^ nl() ^
-                  "has return type" ^ nl() ^
-                  tab() ^ code (show_type lt) ^ nl() ^
-                  "while the body type of its handler is" ^ nl() ^
-                  tab() ^ code (show_type rt))
-
-    let deep_resumption_effects ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("A deep resumption may only perform the same effects as its handler, " ^ nl() ^
-                  "but the deep resumption" ^nl() ^
-                  tab() ^ code resume ^ nl() ^
-                  "can perform effects" ^ nl() ^
-                  tab() ^ code (show_type lt) ^ nl() ^
-                  "while its handler can perform effects" ^ nl() ^
-                  tab() ^ code (show_type rt))
-
-    let shallow_resumption ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("\
-                 The return type of a shallow resumption must be the same as the return type of the computation being handled, " ^ nl() ^
-                  "but the shallow resumption" ^ nl() ^
-                  tab() ^ code resume ^ nl() ^
-                  "has return type" ^ nl() ^
-                  tab() ^ code (show_type lt) ^ nl() ^
-                  "while the computation has return type" ^ nl() ^
-                  tab() ^ code (show_type rt))
-
-    let shallow_resumption_effects ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("A shallow resumption may only perform the same effects as the computation being handled, " ^ nl() ^
-                  "but the shallow resumption" ^nl() ^
-                  tab() ^ code resume ^ nl() ^
-                  "can perform effects" ^ nl() ^
-                  tab() ^ code (show_type lt) ^ nl() ^
-                  "while the computation can perform effects" ^ nl() ^
-                    tab() ^ code (show_type rt))
+    (* let handle_return ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
+     *   build_tyvar_names [lt;rt];
+     *   die pos ("The type of an input to a handle should match the type of " ^
+     *            "its value patterns, but the expression" ^ nl() ^
+     *            tab() ^ code hexpr ^ nl() ^
+     *            "has type" ^ nl() ^
+     *            tab() ^ code (show_type lt) ^ nl () ^
+     *            "while the value patterns have type" ^ nl() ^
+     *            tab() ^ code (show_type rt))
+     * 
+     * let handle_comp_effects ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
+     *   build_tyvar_names [lt;rt];
+     *   die pos ("The effect type of an input to a handle should match the type of " ^
+     *            "its computation patterns, but the expression" ^ nl() ^
+     *            tab() ^ code hexpr ^ nl() ^
+     *            "has effect type" ^ nl() ^
+     *            tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
+     *            "while the handler handles effects" ^ nl() ^
+     *            tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
+     * 
+     * 
+     * let handle_unify_with_context ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+     *   build_tyvar_names[lt;rt];
+     *   die pos ("The handle has effect type " ^ nl() ^
+     *               tab() ^ code (show_effectrow (TypeUtils.extract_row lt)) ^ nl() ^
+     *       "but, the currently allowed effects are" ^ nl() ^
+     *               tab() ^ code (show_effectrow (TypeUtils.extract_row rt)))
+     * 
+     * 
+     * let type_resumption_with_annotation ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+     *   build_tyvar_names [lt;rt];
+     *   die pos ("\
+     *             The resumption" ^ nl() ^
+     *               tab() ^ code resume ^ nl() ^
+     *               "has type" ^ nl() ^
+     *               tab() ^ code (show_type lt) ^ nl() ^
+     *               "but it is annotated with type" ^ nl() ^
+     *               tab() ^ code (show_type rt))
+     * 
+     * let deep_resumption ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+     *   build_tyvar_names [lt;rt];
+     *   die pos ("\
+     *              The return type of a deep resumption must be the same as the body type of its handler, " ^ nl() ^
+     *              "but the deep resumption" ^ nl() ^
+     *               tab() ^ code resume ^ nl() ^
+     *               "has return type" ^ nl() ^
+     *               tab() ^ code (show_type lt) ^ nl() ^
+     *               "while the body type of its handler is" ^ nl() ^
+     *               tab() ^ code (show_type rt))
+     * 
+     * let deep_resumption_effects ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+     *   build_tyvar_names [lt;rt];
+     *   die pos ("A deep resumption may only perform the same effects as its handler, " ^ nl() ^
+     *               "but the deep resumption" ^nl() ^
+     *               tab() ^ code resume ^ nl() ^
+     *               "can perform effects" ^ nl() ^
+     *               tab() ^ code (show_type lt) ^ nl() ^
+     *               "while its handler can perform effects" ^ nl() ^
+     *               tab() ^ code (show_type rt))
+     * 
+     * let shallow_resumption ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+     *   build_tyvar_names [lt;rt];
+     *   die pos ("\
+     *              The return type of a shallow resumption must be the same as the return type of the computation being handled, " ^ nl() ^
+     *               "but the shallow resumption" ^ nl() ^
+     *               tab() ^ code resume ^ nl() ^
+     *               "has return type" ^ nl() ^
+     *               tab() ^ code (show_type lt) ^ nl() ^
+     *               "while the computation has return type" ^ nl() ^
+     *               tab() ^ code (show_type rt))
+     * 
+     * let shallow_resumption_effects ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
+     *   build_tyvar_names [lt;rt];
+     *   die pos ("A shallow resumption may only perform the same effects as the computation being handled, " ^ nl() ^
+     *               "but the shallow resumption" ^nl() ^
+     *               tab() ^ code resume ^ nl() ^
+     *               "can perform effects" ^ nl() ^
+     *               tab() ^ code (show_type lt) ^ nl() ^
+     *               "while the computation can perform effects" ^ nl() ^
+     *                 tab() ^ code (show_type rt)) *)
 
     let handle_combine_effect_rows ~pos ~t1:(_, expected) ~t2:(comp,actual) ~error:_ =
       build_tyvar_names [expected; actual];
-      die pos ("The computations of a handle must admit compatible effect signatures, " ^ nl() ^
-                 "but the computation" ^ nl() ^
+      die pos ("The expressions of handle must admit compatible effect signatures, " ^ nl() ^
+                 "but the expression" ^ nl() ^
                    tab () ^ code comp ^ nl () ^
-                     "has effect signature" ^ nl () ^
+                     "may perform effects" ^ nl () ^
                        tab () ^ code (show_type actual) ^ nl () ^
-                         "while the context expects" ^ nl () ^
+                         "while the current context allows" ^ nl () ^
                            tab () ^ code (show_type expected))
 
     let do_operation ~pos ~t1:(_,lt) ~t2:(rexpr,rt) ~error:_ =
@@ -3612,18 +3612,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              close_pattern_types arity value_matrix value_types;
              close_pattern_types arity effect_matrix operation_types;
              (* Type check bodies. *)
-             let pattern_env' = function
-               | [] -> raise (Invalid_argument "empty patterns")
-               | pattern :: patterns ->
-                  List.fold_left
-                    (fun context pat -> context ++ pattern_env pat)
-                    (pattern_env pattern) patterns
+             let extend context patterns =
+               List.fold_left
+                 (fun context pat -> context ++ pattern_env pat)
+                 context patterns
+             in
+             let pattern_env' patterns =
+               List.fold_left
+                 (fun env pat -> Env.extend env (pattern_env pat))
+                 Env.empty patterns
              in
              let body_type =
                let body_type = Types.fresh_type_variable (lin_unl, res_any) in
                List.fold_left
                  (fun cases (patterns, resumption, body) ->
-                   let body = type_check (context ++ pattern_env' patterns) body in
+                   let body = type_check (extend context patterns) body in
                    let () =
                      unify ~handle:Gripers.handle_branches (no_pos body_type, pos_and_typ body)
                    in
