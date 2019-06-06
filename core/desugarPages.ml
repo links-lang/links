@@ -1,3 +1,4 @@
+open Utility
 open CommonTypes
 open Sugartypes
 open SugarConstructors.DummyPositions
@@ -71,6 +72,12 @@ object
           (o, e.node, page_type)
     | e -> super#phrasenode e
 end
+
+let desugar_program : TransformSugar.program_transformer =
+  fun env program -> snd3 ((desugar_pages env)#program program)
+
+let desugar_sentence : TransformSugar.sentence_transformer =
+  fun env sentence -> snd ((desugar_pages env)#sentence sentence)
 
 let is_pageless =
 object

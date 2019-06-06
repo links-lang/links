@@ -1,0 +1,3 @@
+# Cannot "import" external compilation units using the "open" statement.
+open Import_via_open1;
+println(x)

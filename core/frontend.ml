@@ -25,89 +25,178 @@ struct
 
   let session_exceptions = Settings.get_value Basicsettings.Sessions.exceptions_enabled
 
-  (* (These functions correspond to 'first' in an arrow) *)
-  let after_typing f (a, b, c) = (f a, b, c)
-  let _after_alias_expansion f (a, b) = (f a, b)
-  let extension enabled f g (a, b, c) =
-    if enabled
-    then f g (a, b, c)
-    else (a, b, c)
-
-  let after_typing_ext enabled = extension enabled after_typing
-  let before_typing_ext enabled f x = if enabled then f x else x
-
-  let program_pipeline =
-    fun tyenv pos_context program ->
-      let program = (ResolvePositions.resolve_positions pos_context)#program program in
-      let _program = CheckXmlQuasiquotes.checker#program program in
-      let () = DesugarSessionExceptions.settings_check program in
-      let apply =
-        ( DesugarModules.desugar_program
-          ->- before_typing_ext session_exceptions DesugarSessionExceptions.wrap_linear_handlers
-          ->- DesugarLAttributes.desugar_lattributes#program
-          ->- LiftRecursive.lift_funs#program
-          ->- DesugarDatatypes.program tyenv
-          ->- uncurry TypeSugar.Check.program
-          (*->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)*)
-          ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
-          ->- after_typing ((DesugarInners.desugar_inners tyenv)#program ->- snd3)
-          ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.insert_toplevel_handlers tyenv)#program ->- snd3)
-          ->- after_typing_ext session_exceptions ((DesugarSessionExceptions.desugar_session_exceptions tyenv)#program ->- snd3)
-          ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#program ->- snd3)
-          ->- after_typing ((DesugarFors.desugar_fors tyenv)#program ->- snd3)
-          ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#program ->- snd3)
-          ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#program ->- snd3)
-          ->- after_typing ((DesugarPages.desugar_pages tyenv)#program ->- snd3)
-          ->- after_typing ((DesugarFuns.desugar_funs tyenv)#program ->- snd3))
-      in
-      let (program, _typ, _tenv) as result = apply program in
-      (result, ModuleUtils.get_ffi_files program)
+  let repeat_type_check =
+    Settings.get_value
+      Basicsettings.TypeSugar.check_frontend_transformations
 
 
-let program tyenv pos_context program =
+  let for_side_effects ignored_transformer program  =
+    let _ = ignored_transformer program in
+    program
+
+  type pre_typing_program_transformer =
+    Sugartypes.program -> Sugartypes.program
+
+  type post_typing_program_transformer =
+    Types.typing_environment -> Sugartypes.program -> Sugartypes.program
+
+
+  (* Program transformations before type-checking on programs (i.e., non-REPL mode *)
+  let program_pre_typing_transformers
+    (pos_context : SourceCode.source_code)
+    (prev_tyenv : Types.typing_environment) (* type env before checking current program *)
+      : pre_typing_program_transformer list =
+    let only_if enabled f x =
+      if enabled then f x else x in
+    [
+      (ResolvePositions.resolve_positions pos_context)#program;
+      for_side_effects
+        CheckXmlQuasiquotes.checker#program;
+      for_side_effects
+        (DesugarSessionExceptions.settings_check);
+      DesugarModules.desugar_program;
+      only_if session_exceptions
+        DesugarSessionExceptions.wrap_linear_handlers;
+      DesugarLAttributes.desugar_lattributes#program;
+      LiftRecursive.lift_funs#program;
+      DesugarDatatypes.program prev_tyenv;
+    ]
+
+
+  (* Program transformations after type-checking programs (i.e., non-REPL mode *)
+  let program_post_typing_transformers
+      : post_typing_program_transformer list =
+    let only_if enabled f x y =
+      if enabled then f x y else y in
+    [
+      DesugarCP.desugar_program;
+      DesugarInners.desugar_program;
+      (*only_if session_exceptions
+        DesugarSessionExceptions.insert_toplevel_handlers; TODO*)
+      only_if session_exceptions
+        DesugarSessionExceptions.desugar_program;
+      DesugarProcesses.desugar_program;
+      DesugarFors.desugar_program;
+      DesugarRegexes.desugar_program;
+      DesugarFormlets.desugar_program;
+      DesugarPages.desugar_program;
+      DesugarFuns.desugar_program;
+    ]
+
+
+let program prev_tyenv pos_context program =
   if Settings.get_value Basicsettings.show_pre_frontend_ast then
     Debug.print ("Pre-Frontend AST:\n" ^ Sugartypes.show_program program);
 
-  let ((post_program, _, _), _) as result = program_pipeline tyenv pos_context program in
+
+  let pre_transformers =
+    program_pre_typing_transformers pos_context prev_tyenv in
+  let apply_pre_tc_transformer program transformer =
+    transformer program in
+  let pre_tc_program =
+    List.fold_left
+      apply_pre_tc_transformer
+      program
+      pre_transformers in
+
+  let post_tc_program, t, cur_tyenv =
+    TypeSugar.Check.program prev_tyenv pre_tc_program in
+
+
+  let apply_post_tc_transformer program transformer =
+    let post = transformer prev_tyenv program in
+    if repeat_type_check then
+      let _ = fst3 (TypeSugar.Check.program prev_tyenv post) in
+      post
+    else
+      post
+  in
+  let result_program =
+    List.fold_left
+      apply_post_tc_transformer
+      post_tc_program
+      program_post_typing_transformers in
+
+  let ffi_files = ModuleUtils.get_ffi_files result_program in
 
   if Settings.get_value Basicsettings.show_post_frontend_ast then
-    Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_program post_program);
+    Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_program result_program);
 
-  result
+  (result_program, t, cur_tyenv), ffi_files
 
 
-  let interactive_pipeline =
-    fun tyenv pos_context sentence ->
-    let sentence = (ResolvePositions.resolve_positions pos_context)#sentence sentence in
-    let _sentence = CheckXmlQuasiquotes.checker#sentence sentence in
-    let apply =
-      ( DesugarModules.desugar_sentence
-        ->- DesugarLAttributes.desugar_lattributes#sentence
-        ->- LiftRecursive.lift_funs#sentence
-        ->- DesugarDatatypes.sentence tyenv
-        ->- uncurry TypeSugar.Check.sentence
-        (*  ->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#sentence ->- snd)*)
-        ->- after_typing ((DesugarCP.desugar_cp tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarInners.desugar_inners tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarProcesses.desugar_processes tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarFors.desugar_fors tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarRegexes.desugar_regexes tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarFormlets.desugar_formlets tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarPages.desugar_pages tyenv)#sentence ->- snd)
-        ->- after_typing ((DesugarFuns.desugar_funs tyenv)#sentence ->- snd))
-    in
-    apply sentence
+  type pre_typing_sentence_transformer =
+    Sugartypes.sentence -> Sugartypes.sentence
 
-let interactive tyenv pos_context sentence =
+  type post_typing_sentence_transformer =
+    Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence
+
+  (* Program transformations before type-checking on sentences (i.e., REPL mode *)
+  let interactive_pre_typing_transformers
+    (pos_context : SourceCode.source_code)
+    (prev_tyenv : Types.typing_environment) (* type env before checking current program *)
+      : pre_typing_sentence_transformer list =
+    [
+      (ResolvePositions.resolve_positions pos_context)#sentence;
+      for_side_effects
+        CheckXmlQuasiquotes.checker#sentence;
+      DesugarModules.desugar_sentence;
+      DesugarLAttributes.desugar_lattributes#sentence;
+      LiftRecursive.lift_funs#sentence;
+      DesugarDatatypes.sentence prev_tyenv;
+    ]
+
+
+  (* Program transformations after type-checking sentences (i.e., REPL mode *)
+  let interactive_post_typing_transformers
+      : post_typing_sentence_transformer list =
+    [
+      DesugarCP.desugar_sentence;
+      DesugarInners.desugar_sentence;
+      DesugarProcesses.desugar_sentence;
+      DesugarFors.desugar_sentence;
+      DesugarRegexes.desugar_sentence;
+      DesugarFormlets.desugar_sentence;
+      DesugarPages.desugar_sentence;
+      DesugarFuns.desugar_sentence;
+    ]
+
+
+let interactive prev_tyenv pos_context sentence =
   if Settings.get_value Basicsettings.show_pre_frontend_ast then
     Debug.print ("Pre-Frontend AST:\n" ^ Sugartypes.show_sentence sentence);
 
-  let (post_sentence, _, _) as result = interactive_pipeline tyenv pos_context sentence in
+  let pre_transformers =
+    interactive_pre_typing_transformers pos_context prev_tyenv in
+  let apply_pre_tc_transformer sentence transformer =
+    transformer sentence in
+  let pre_tc_sentence =
+    List.fold_left
+      apply_pre_tc_transformer
+      sentence
+      pre_transformers in
+
+  let (post_tc_sentence, t, post_tyenv) =
+    TypeSugar.Check.sentence prev_tyenv pre_tc_sentence in
+
+  let apply_post_tc_transformer sentence transformer =
+    let post = transformer prev_tyenv sentence in
+    if repeat_type_check then
+      let _ = fst3 (TypeSugar.Check.sentence prev_tyenv post) in
+      post
+    else
+      post
+  in
+  let result_sentence =
+    List.fold_left
+      apply_post_tc_transformer
+      post_tc_sentence
+      interactive_post_typing_transformers in
 
   if Settings.get_value Basicsettings.show_post_frontend_ast then
-    Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_sentence post_sentence);
+    Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_sentence result_sentence);
 
-  result
+   (result_sentence, t, post_tyenv)
 
 
 end
