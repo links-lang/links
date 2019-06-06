@@ -7,6 +7,9 @@ open Utility
 
 module TyEnv = Env.String
 
+type program_transformer = Types.typing_environment -> Sugartypes.program -> Sugartypes.program
+type sentence_transformer = Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence
+
 let internal_error message =
   Errors.internal_error ~filename:"transformSugar.ml" ~message
 

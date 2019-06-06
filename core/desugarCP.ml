@@ -116,3 +116,9 @@ object (o : 'self_type)
 end
 
 let desugar_cp env = ((new desugar_cp env) : desugar_cp :> TransformSugar.transform)
+
+let desugar_program : TransformSugar.program_transformer =
+  fun env program -> snd3 ((desugar_cp env)#program program)
+
+let desugar_sentence : TransformSugar.sentence_transformer =
+  fun env sentence -> snd ((desugar_cp env)#sentence sentence)

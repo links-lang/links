@@ -635,24 +635,23 @@ let toplevel_bindings alias_env bs =
   in (alias_env, List.rev bnds)
 
 let program typing_env (bindings, p : Sugartypes.program) :
-    (Types.typing_environment * Sugartypes.program) =
+    Sugartypes.program =
   let alias_env = typing_env.tycon_env in
   let alias_env, bindings =
     toplevel_bindings alias_env bindings in
-  let typing_env = { typing_env with tycon_env = alias_env } in
-  (typing_env, (bindings, opt_map ((phrase alias_env) ->- snd) p))
+  (* let typing_env = { typing_env with tycon_env = alias_env } in *)
+  (bindings, opt_map ((phrase alias_env) ->- snd) p)
 
 let sentence typing_env = function
   | Definitions bs ->
-      let alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
-        {typing_env with tycon_env = alias_env}, Definitions bs'
-  | Expression  p  -> let o, p = phrase typing_env.tycon_env p in
-      {typing_env with tycon_env = o#aliases}, Expression p
-  | Directive   d  -> typing_env, Directive d
+      let _alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
+        Definitions bs'
+  | Expression  p  -> let _o, p = phrase typing_env.tycon_env p in
+      Expression p
+  | Directive   d  -> Directive d
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
   let () = List.iter Generalise.rigidify_quantifier vars in
     (Types.for_all (vars, Desugar.datatype var_env aliases dt))
-
