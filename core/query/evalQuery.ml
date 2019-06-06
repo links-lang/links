@@ -290,7 +290,7 @@ struct
 end
 
 (* WR: the following is logically part of Sql, but... *)
-let ordered_query db range v =
+let ordered_query v =
   (* Debug.print ("v: "^Q.string_of_t v); *)
   Sql.reset_dummy_counter ();
   let vs, n = Order.ordered_query v in
@@ -306,6 +306,6 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
         | None -> None
         | Some db ->
             let t = Types.unwrap_list_type (Q.type_of_expression v) in
-            let q = ordered_query db range v in
+            let q = ordered_query v in
               Debug.print ("Generated query: "^(Sql.string_of_query db range q));
               Some (db, q, t)
