@@ -1089,7 +1089,7 @@ struct
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
-                | Fun (bndr, _, (tyvars, ([ps], body)), location, _)
+                | Fun { fun_binder = bndr; fun_definition = (tyvars, ([ps], body)); fun_location = location; _ }
                      when Binder.has_type bndr ->
                     let f  = Binder.to_name bndr in
                     let ft = Binder.to_type bndr in
@@ -1110,7 +1110,8 @@ struct
                 | Funs defs ->
                     let fs, inner_fts, outer_fts =
                       List.fold_right
-                        (fun (bndr, _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                        (fun { rec_binder = bndr; rec_definition = ((_tyvars, inner_opt), _); _ }
+                             (fs, inner_fts, outer_fts) ->
                           let f = Binder.to_name bndr in
                           let outer  = Binder.to_type bndr in
                           let (inner, _) = OptionUtils.val_of inner_opt in
@@ -1119,7 +1120,7 @@ struct
                         ([], [], []) in
                     let defs =
                       List.map
-                        (fun (bndr, _, ((tyvars, _), (pss, body)), location, _, _) ->
+                        (fun { rec_binder = bndr; rec_definition = ((tyvars, _), (pss, body)); rec_location = location; _ } ->
                           assert (List.length pss = 1);
                           let f  = Binder.to_name bndr in
                           let ft = Binder.to_type bndr in

@@ -3681,7 +3681,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
             {empty_context with
               var_env = penv},
             usage
-      | Fun (bndr, lin, (_, (pats, body)), location, t) ->
+      | Fun { fun_binder = bndr; fun_linearity = lin;
+              fun_definition = (_, (pats, body));
+              fun_location; fun_signature = t } ->
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let pats = List.map (List.map tpc) pats in
@@ -3750,10 +3752,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
           (* generalise*)
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
           let ft = Instantiate.freshen_quantifiers ft in
-            (Fun (Binder.set_type bndr ft,
-                   lin,
-                   (tyvars, (List.map (List.map erase_pat) pats, erase body)),
-                   location, t),
+            (Fun { fun_binder = Binder.set_type bndr ft;
+                   fun_linearity = lin;
+                   fun_definition = (tyvars, (List.map (List.map erase_pat) pats, erase body));
+                   fun_location; fun_signature = t },
              {empty_context with
                 var_env = Env.bind Env.empty (name, ft)},
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
@@ -3775,7 +3777,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
           let inner_env, patss =
             List.fold_left
-              (fun (inner_env, patss) (bndr, lin, (_, (pats, _body)), _, t, pos) ->
+              (fun (inner_env, patss)
+                   { rec_binder = bndr; rec_linearity = lin;
+                     rec_definition = (_, (pats, _));
+                     rec_signature = t; rec_pos = pos; _ } ->
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
@@ -3820,7 +3825,11 @@ and type_binding : context -> binding -> binding * context * usagemap =
             List.split
               (List.rev
                 (List.fold_left2
-                   (fun defs_and_uses (bndr, lin, (_, (_, body)), location, t, pos) pats ->
+                   (fun defs_and_uses
+                        { rec_binder = bndr; rec_linearity = lin;
+                          rec_definition = (_, (_, body));
+                          rec_location = location; rec_signature = t; rec_pos = pos; }
+                        pats ->
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let context' = {context with var_env = Env.extend body_env pat_env} in
@@ -3898,13 +3907,15 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
-                     ((Binder.set_type bndr outer, lin, ((tyvars, Some inner), (pats, body)), location, t, pos)::defs,
+                   ({ rec_binder = Binder.set_type bndr outer; rec_linearity = lin;
+                      rec_definition = ((tyvars, Some inner), (pats, body));
+                      rec_location = location; rec_signature = t; rec_pos = pos }::defs,
                       Env.bind outer_env (name, outer)))
                 ([], Env.empty) defs patss
             in
               List.rev defs, outer_env in
 
-          let defined = List.map (fun (bndr, _, _, _, _, _) -> Binder.to_name bndr) defs
+          let defined = List.map (fun x -> Binder.to_name x.rec_binder) defs
 
           in
             Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))

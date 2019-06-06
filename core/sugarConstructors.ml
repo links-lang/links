@@ -153,12 +153,19 @@ module SugarConstructors (Position : Pos)
   (* Create a function binding. *)
   let fun_binding ?(ppos=dp) sig_opt (linearity, bndr, args, location, blk) =
     let datatype = datatype_opt_of_sig_opt sig_opt bndr in
-    with_pos ppos (Fun (binder bndr, linearity,
-                         ([], (args, blk)), location, datatype))
+    with_pos ppos (Fun { fun_binder = binder bndr;
+                         fun_linearity = linearity;
+                         fun_definition = ([], (args, blk));
+                         fun_location = location;
+                         fun_signature = datatype })
 
   let fun_binding' ?(ppos=dp) ?(linearity=dl_unl) ?(tyvars=[])
         ?(location=loc_unknown) ?annotation bndr fnlit =
-    with_pos ppos (Fun (bndr, linearity, (tyvars, fnlit), location, annotation))
+    with_pos ppos (Fun { fun_binder = bndr;
+                         fun_linearity = linearity;
+                         fun_definition = (tyvars, fnlit);
+                         fun_location = location;
+                         fun_signature = annotation })
 
 
   (* Create a Val binding.  This function takes either a name for a variable

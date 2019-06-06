@@ -212,7 +212,7 @@ module MutualBindings = struct
     if StringMap.cardinal dups > 0 then
       raise (Errors.MultiplyDefinedMutualNames dups) in
 
-  let fun_name (bndr, _, _, _, _) = Binder.to_name bndr in
+  let fun_name fn = Binder.to_name fn.fun_binder in
   let ty_name (n, _, _, _) = n in
   let tys_with_pos =
       List.map (fun (n, qs, dt, pos) -> ((n, qs, dt, pos), pos)) tys in
@@ -228,9 +228,13 @@ module MutualBindings = struct
       | [(f, pos)] -> [WithPos.make ~pos (Fun f)]
       | fs ->
           let fs =
-            List.map (fun ((bnd, lin, (tvs, fl), loc, dt), pos) ->
-                      (bnd, lin, ((tvs, None), fl), loc, dt, pos)) fs
-            |> List.rev in
+            List.rev_map (fun (({ fun_definition = (tvs, fl); _ } as fn), pos) ->
+                { rec_binder = fn.fun_binder;
+                  rec_linearity = fn.fun_linearity;
+                  rec_definition = ((tvs, None), fl);
+                  rec_location = fn.fun_location;
+                  rec_signature = fn.fun_signature;
+                  rec_pos = pos; }) fs in
           [WithPos.make ~pos:mut_pos (Funs fs)] in
 
     let type_binding = function

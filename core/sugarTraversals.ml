@@ -631,22 +631,40 @@ class map =
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
           in Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
-      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Fun { fun_binder = _x;
+              fun_linearity = _x1;
+              fun_definition = (_x_i1, _x_i2);
+              fun_location = _x_i3;
+              fun_signature = _x_i4 } ->
           let _x = o#binder _x in
           let _x_i2 = o#funlit _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))
+          in Fun { fun_binder = _x;
+                   fun_linearity = _x1;
+                   fun_definition = (_x_i1, _x_i2);
+                   fun_location = _x_i3;
+                   fun_signature = _x_i4; }
       | Funs _x ->
           let _x =
             o#list
-              (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
+              (fun o { rec_binder = _x;
+                       rec_linearity = _x1;
+                       rec_definition = (_x_i1, _x_i2);
+                       rec_location = _x_i3;
+                       rec_signature = _x_i4;
+                       rec_pos = _x_i5 } ->
                  let _x = o#binder _x in
                  let _x_i2 = o#funlit _x_i2 in
                  let _x_i3 = o#location _x_i3 in
                  let _x_i4 = o#option (fun o -> o#datatype') _x_i4 in
                  let _x_i5 = o#position _x_i5
-                 in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
+                 in { rec_binder = _x;
+                      rec_linearity = _x1;
+                      rec_definition = (_x_i1, _x_i2);
+                      rec_location = _x_i3;
+                      rec_signature = _x_i4;
+                      rec_pos = _x_i5; })
               _x
           in Funs _x
       | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
@@ -1266,7 +1284,11 @@ class fold =
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
-      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Fun { fun_binder = _x;
+              fun_linearity = _x1;
+              fun_definition = (_x_i1, _x_i2);
+              fun_location = _x_i3;
+              fun_signature = _x_i4 } ->
           let o = o#binder _x in
           let o = o#list (fun o -> o#tyvar) _x_i1 in
           let o = o#funlit _x_i2 in
@@ -1275,7 +1297,12 @@ class fold =
       | Funs _x ->
           let o =
             o#list
-              (fun o (_x, _x1, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
+              (fun o { rec_binder = _x;
+                       rec_linearity = _x1;
+                       rec_definition = ((_x_i1, _), _x_i2);
+                       rec_location = _x_i3;
+                       rec_signature = _x_i4;
+                       rec_pos = _x_i5 } ->
                  let o = o#binder _x in
                  let o = o#list (fun o -> o#tyvar) _x_i1 in
                  let o = o#funlit _x_i2 in
@@ -2027,22 +2054,40 @@ class fold_map =
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
           in (o, (Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
-      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
+      | Fun  { fun_binder = _x;
+               fun_linearity = _x1;
+               fun_definition = (_x_i1, _x_i2);
+               fun_location = _x_i3;
+               fun_signature = _x_i4; }->
           let (o, _x) = o#binder _x in
           let (o, _x_i2) = o#funlit _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
+          in (o, (Fun { fun_binder = _x;
+                        fun_linearity = _x1;
+                        fun_definition = (_x_i1, _x_i2);
+                        fun_location = _x_i3;
+                        fun_signature = _x_i4; }))
       | Funs _x ->
           let (o, _x) =
             o#list
-              (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
+              (fun o { rec_binder = _x;
+                       rec_linearity = _x1;
+                       rec_definition = (_x_i1, _x_i2);
+                       rec_location = _x_i3;
+                       rec_signature = _x_i4;
+                       rec_pos = _x_i5 } ->
                  let (o, _x) = o#binder _x in
                  let (o, _x_i2) = o#funlit _x_i2 in
                  let (o, _x_i3) = o#location _x_i3 in
                  let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4 in
                  let (o, _x_i5) = o#position _x_i5
-                 in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
+                 in (o, { rec_binder = _x;
+                          rec_linearity = _x1;
+                          rec_definition = (_x_i1, _x_i2);
+                          rec_location = _x_i3;
+                          rec_signature = _x_i4;
+                          rec_pos = _x_i5 }))
               _x
           in (o, (Funs _x))
       | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->

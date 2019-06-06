@@ -130,13 +130,21 @@ let freshen_vars =
            basic_refresh#datatypenode dt
       | dt -> super#datatypenode dt
 
-    method recursive_function (bind, lin, (tyvars, fl), loc, dt, pos) =
-      let bind = self#binder bind in
+    method recursive_function {
+               rec_binder; rec_linearity;
+               rec_definition = (tyvars, fl); rec_location;
+               rec_signature; rec_pos
+             } : recursive_function =
+      let rec_binder = self#binder rec_binder in
       let fl = self#funlit fl in
-      let loc = self#location loc in
-      let dt = self#option (fun x -> x#datatype') dt in
-      let pos = self#position pos in
-      (bind, lin, (tyvars, fl), loc, dt, pos)
+      let rec_location = self#location rec_location in
+      let rec_signature = self#option (fun x -> x#datatype') rec_signature in
+      let rec_pos = self#position rec_pos in
+      {
+        rec_binder; rec_linearity;
+        rec_definition = (tyvars, fl); rec_location;
+        rec_signature; rec_pos
+      }
   end
 
 (** Ensure this variable has some kind, if {!Basicsettings.Types.infer_kinds} is disabled. *)
@@ -703,13 +711,21 @@ object (self)
         self, Foreign (bind, raw_name, lang, file, dt')
     | b -> super#bindingnode b
 
-   method recursive_function ((bind, lin, (tyvars, fl), loc, dt, pos) : recursive_function) =
-     let o, bind = self#binder bind in
+  method recursive_function {
+             rec_binder; rec_linearity;
+             rec_definition = (tyvars, fl); rec_location;
+             rec_signature; rec_pos
+           } : 'self * recursive_function =
+     let o, rec_binder = self#binder rec_binder in
      let o, fl = o#funlit fl in
-     let o, loc = o#location loc in
-     let    dt = opt_map (Desugar.datatype' map alias_env) dt in
-     let o, pos = o#position pos in
-     (o, (bind, lin, (tyvars, fl), loc, dt, pos))
+     let o, rec_location = o#location rec_location in
+     let    rec_signature = opt_map (Desugar.datatype' map alias_env) rec_signature in
+     let o, rec_pos = o#position rec_pos in
+     (o, {
+        rec_binder; rec_linearity;
+        rec_definition = (tyvars, fl); rec_location;
+        rec_signature; rec_pos
+     })
 
   method! sentence =
     (* return any aliases bound to the interactive loop so that they
