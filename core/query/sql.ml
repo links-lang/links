@@ -19,8 +19,8 @@ and base =
     [@@deriving show]
 
 (* optimizing smart constructor for && *)
-let smart_and c c' = 
-  let open Constant in 
+let smart_and c c' =
+  let open Constant in
   match c, c' with
   (* optimisations *)
   | Constant (Bool true), c

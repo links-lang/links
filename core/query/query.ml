@@ -948,7 +948,7 @@ let rec likeify v =
       | Variant ("EndAnchor", _) -> Some ""
       | _ -> assert false
 
-let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause = 
+let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
   fun index unit_query v ->
   (*  Debug.print ("select_clause: "^string_of_t v); *)
   let open Q in
@@ -970,7 +970,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
          this earlier on.  *)
       let c = base index c in
       let (fields, tables, c', os) = select_clause index unit_query body in
-      let c = Sql.smart_and c c' in 
+      let c = Sql.smart_and c c' in
       (fields, tables, c, os)
     | Table (_db, table, _keys, (fields, _, _)) ->
       (* eta expand tables. We might want to do this earlier on.  *)
@@ -1003,7 +1003,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
       in
         (fields, [], Sql.Constant (Constant.Bool true), [])
     | _ -> assert false
-and clause : Sql.index -> bool -> Q.t -> Sql.query = 
+and clause : Sql.index -> bool -> Q.t -> Sql.query =
   fun index unit_query v -> Sql.Select(select_clause index unit_query v)
 and base : Sql.index -> Q.t -> Sql.base = fun index ->
   let open Q in
@@ -1034,7 +1034,7 @@ and base : Sql.index -> Q.t -> Sql.base = fun index ->
     | Project (Var (x, _field_types), name) ->
         Sql.Project (x, name)
     | Constant c -> Sql.Constant c
-    | Primitive "index" -> 
+    | Primitive "index" ->
         (* This is the only place the index parameter is ever materially used. *)
         Sql.RowNumber index
     | e ->
@@ -1046,20 +1046,20 @@ and unit_query v =
     function
       | Q.Concat vs -> vs
       | v -> [v]
-  in 
+  in
   (* queries passed to Empty and Length
      (where we don't care about what data they return)
   *)
   Sql.UnionAll (List.map (clause [] true) (prepare_clauses v), 0)
-and sql_of_query v = 
+and sql_of_query v =
   clause [] false v
 
 (* The following code is specific to nested queries *)
-(* The index parameter is essentially a free variable in the query 
+(* The index parameter is essentially a free variable in the query
    that can only be replaced by Sql.RowNumber index.
    It would be nice to be able to remove this parameter and just
-   substitute the SQL RowNumber expression when we generate SQL. 
-   Then the following nesting-specific code could live somewhere else, such as 
+   substitute the SQL RowNumber expression when we generate SQL.
+   Then the following nesting-specific code could live somewhere else, such as
    evalNestedQuery. *)
 
 type let_clause = Var.var * Q.t * Var.var * Q.t

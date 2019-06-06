@@ -778,12 +778,12 @@ let unordered_query_package t v =
   let shredded_w = Shred.shred_query tagged_w t in
   let lins_w = Shred.pmap (LetInsertion.lins_query) shredded_w in
   let flat_w = Shred.pmap (FlattenRecords.flatten_query) lins_w in
-  let query_package = 
+  let query_package =
     Shred.pmap Q.sql_of_let_query flat_w in
   let shredded_t = Shred.shred_query_type t in
-  let query_type_package = 
+  let query_type_package =
     Shred.pmap (FlattenRecords.flatten_query_type) shredded_t in
-  let typed_query_package = 
+  let typed_query_package =
     Shred.pzip query_package query_type_package in
   typed_query_package
 
