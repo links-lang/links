@@ -48,7 +48,7 @@ class basic_freshener = object
   method! known_type_variable =
     let module SC = SugarConstructors.SugartypesPositions in
     function
-    | (("_" | "_anon"), None, freedom) ->
+    | (("$" | "$anon"), None, freedom) ->
        SC.fresh_known_type_variable freedom
        |> super#known_type_variable
     | v ->  super#known_type_variable v
@@ -59,7 +59,7 @@ let freshen_vars =
   (* Determine if this is an "anonymous" effect type variable, and so introduced
      within a simple arrow (->, ~>, -@, ~>) *)
   let is_anon_effect = function
-    | Datatype.Open ("_anon", None, `Rigid) -> true
+    | Datatype.Open ("$anon", None, `Rigid) -> true
     | _ -> false in
   (* If this function type is exclusively composed of anonymous effect type
      variables. Or rather, there are no explicitly mentioned effect variables. *)

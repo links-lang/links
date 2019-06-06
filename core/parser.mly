@@ -171,8 +171,8 @@ let parseRegexFlags f =
               | 'g' -> RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
-let fresh_typevar freedom = ("_", None, freedom)
-let fresh_effects = ([], Datatype.Open ("_anon", None, `Rigid))
+let fresh_typevar freedom = ("$", None, freedom)
+let fresh_effects = ([], Datatype.Open ("$anon", None, `Rigid))
 
 module MutualBindings = struct
 
