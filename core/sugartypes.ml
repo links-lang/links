@@ -5,6 +5,8 @@ open Utility
 
 (** The syntax tree created by the parser. *)
 
+exception ConcreteSyntaxError       of (Position.t * string)
+
 type name = string [@@deriving show]
 
 module Binder: sig
@@ -153,9 +155,8 @@ module Pattern = struct
     | Cons     of with_pos * with_pos
     | List     of with_pos list
     | Variant  of name * with_pos option
-    | Effect   of name * with_pos list * with_pos
-    (* | Operation of name * with_pos * with_pos option *)
-    (* | MultiOperation of (name * with_pos list) list *)
+    | Operation of { label: name; parameters: with_pos list; resumption: (with_pos * Types.datatype) option }
+    | MultiOperation of with_pos list
     | Negative of name list
     | Record   of (name * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -165,49 +166,6 @@ module Pattern = struct
     | HasType  of with_pos * datatype'
   and with_pos = t WithPos.t
      [@@deriving show]
-
-  (* open WithPos
-   * let is_operation : with_pos -> bool = function
-   *   | { node = Operation _; _ } -> true
-   *   | _ -> false
-   *)
-  module Syntax = struct
-    module Operation = struct
-      open WithPos
-      let elucidate : (name * with_pos option) list -> with_pos = function
-        | [] -> assert false
-        | [(label, param)] -> assert false (* Operation (label, param, None) *)
-        | xs -> assert false (* MultiOperation xs *)
-
-      (* let  *)
-    end
-    (* let rec check : bool -> bool -> with_pos -> with_pos
-     *   = fun in_handler toplevel pat ->
-     *   let check = check in_handler false in
-     *   let node = match pat.node with
-     *     | Effect (ps, p) when in_handler && toplevel ->
-     *        let p = opt_map check p in
-     *        begin match ps with
-     *        | [] -> assert false
-     *        | [{ node = Operation _; _ }] -> Effect (ps, p)
-     *        | [{ node = Tuple ps'; _ }] when List.exists is_operation ps' ->
-     *           Effect (List.map check ps', p)
-     *        | _ -> assert false (\* Syntax error. *\)
-     *        end
-     *     | Effect _ -> assert false (\* Syntax error. *\)
-     *     | Cons (hd, tl) -> Cons (check hd, check tl)
-     *     | List ps       -> List (List.map check ps)
-     *     | Variant (label, p) -> Variant (label, opt_map check p)
-     *     | Operation (p, p') when in_handler -> Operation (check p, opt_map check p')
-     *     | Operation _ -> assert false (\* Syntax error. *\)
-     *     | Record (ps, p) -> Record (List.map (fun (label, p) -> (label, check p)) ps, opt_map check p)
-     *     | Tuple ps -> Tuple (List.map check ps)
-     *     | As (bndr, p) -> As (bndr, check p)
-     *     | HasType (p, dt) -> HasType (check p, dt)
-     *     | _ -> pat.node
-     *   in
-     *   WithPos.make ~pos:pat.pos nod *)
-  end
 end
 
 type spawn_kind = Angel | Demon | Wait
@@ -240,13 +198,11 @@ and regex =
   | Splice    of phrase
   | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
+and effect_clause =
+  { patterns: Pattern.with_pos list;
+    resumption: (Pattern.with_pos * Types.datatype) option;
+    body: phrase }
 and funlit = Pattern.with_pos list list * phrase
-and handler =
-  { sh_expr         : phrase
-  ; sh_effect_cases : clause list
-  ; sh_value_cases  : clause list
-  ; sh_descr        : handler_descriptor
-  }
 and handler_descriptor =
   { shd_depth   : handler_depth
   ; shd_types   : Types.row * Types.datatype * Types.row * Types.datatype
@@ -299,7 +255,7 @@ and phrasenode =
   | Generalise       of phrase
   | ConstructorLit   of name * phrase option * Types.datatype option
   | DoOperation      of name * phrase list * Types.datatype option
-  | Handle           of handler
+  | Handle           of { expressions: phrase list; cases: effect_clause list; descriptor: handler_descriptor }
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
   | Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
@@ -406,8 +362,6 @@ type sentence =
 type program = binding list * phrase option
   [@@deriving show]
 
-exception ConcreteSyntaxError       of (Position.t * string)
-
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
@@ -450,7 +404,9 @@ struct
     | List ps               -> union_map pattern ps
     | Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | Variant (_, popt)     -> option_map pattern popt
-    | Effect (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
+    | Operation { parameters = ps; resumption = kopt; _ } ->
+       union (union_map pattern ps) (option_map (fst ->- pattern) kopt)
+    | MultiOperation ps -> union_map pattern ps
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)
@@ -551,19 +507,17 @@ struct
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
                      diff (option_map phrase orderby) pat_bound]
-    | Handle { sh_expr = e; sh_effect_cases = eff_cases;
-               sh_value_cases = val_cases; sh_descr = descr } ->
+    | Handle { expressions; cases; descriptor } ->
        let params_bound =
          option_map
            (fun params -> union_map (fst ->- pattern) params.shp_bindings)
-           descr.shd_params
+           descriptor.shd_params
        in
-       union_all [phrase e;
-                  union_map case eff_cases;
-                  union_map case val_cases;
+       union_all [union_map phrase expressions;
+                  union_map effect_case cases;
                   diff (option_map (fun params -> union_map (snd ->- phrase)
                                                     params.shp_bindings)
-                          descr.shd_params) params_bound]
+                          descriptor.shd_params) params_bound]
     | Switch (p, cases, _)
     | Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | CP cp -> cp_phrase cp
@@ -625,6 +579,12 @@ struct
             let patbound, exprfree = binding bind in
               union exprfree (diff bodyfree patbound))
   and case (pat, body) : StringSet.t = diff (phrase body) (pattern pat)
+  and effect_case { patterns; resumption; body } : StringSet.t =
+    diff
+      (phrase body)
+      (union
+         (union_map pattern patterns)
+         (option_map (fst ->- pattern) resumption))
   and regex = function
     | Range _
     | Simply _

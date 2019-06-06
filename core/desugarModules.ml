@@ -321,6 +321,17 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
           (pat', body'))
         cases
 
+    method effect_cases : effect_clause list -> effect_clause list
+      = fun cases ->
+      List.map
+        (fun { patterns; resumption; body } ->
+          let visitor = self#clone in
+          let patterns = List.map visitor#pattern patterns in
+          let resumption = opt_map (fun (p, dt) -> (visitor#pattern p, dt)) resumption in
+          let body = visitor#phrase body in
+          { patterns; resumption; body })
+        cases
+
     method! binop op =
       let open Operators.BinaryOp in
       match op with
@@ -357,14 +368,13 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         let bndr' = visitor#binder bndr in
         let body' = visitor#phrase body in
         Escape (bndr', body')
-      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
-         let sh_expr = self#phrase sh_expr in
+      | Handle { expressions; cases; descriptor } ->
+         let expressions = self#list (fun o -> o#phrase) expressions in
          let shd_params =
-           self#option (fun o -> o#handle_params) sh_descr.shd_params
+           self#option (fun o -> o#handle_params) descriptor.shd_params
          in
-         let sh_effect_cases = self#cases sh_effect_cases in
-         let sh_value_cases = self#cases sh_value_cases in
-         Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr = { sh_descr with shd_params } }
+         let cases = self#effect_cases cases in
+         Handle { expressions; cases; descriptor = { descriptor with shd_params } }
       | Switch (expr, cases, dt) ->
         let expr' = self#phrase expr in
         let cases' = self#cases cases in

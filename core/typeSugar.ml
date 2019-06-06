@@ -152,8 +152,10 @@ struct
     | Tuple ps -> List.for_all is_safe_pattern ps
     | HasType (p, _)
     | As (_, p) -> is_safe_pattern p
-    | Effect (_, ps, k) ->
-       List.for_all is_safe_pattern ps && is_safe_pattern k
+    | Operation { parameters; resumption; _ } ->
+       List.for_all is_safe_pattern parameters && opt_app (fst ->- is_safe_pattern) true resumption
+    | MultiOperation ps ->
+       List.for_all is_safe_pattern ps
   and is_pure_regex = function
       (* don't check whether it can fail; just check whether it
          contains non-generilisable sub-expressions *)
@@ -220,6 +222,7 @@ sig
   val handle_value_patterns : griper
   val handle_effect_patterns : griper
   val handle_branches : griper
+  val handle_combine_effect_rows : griper
   val type_resumption_with_annotation : griper
   val deep_resumption : griper
   val deep_resumption_effects : griper
@@ -636,7 +639,17 @@ end
                   "can perform effects" ^ nl() ^
                   tab() ^ code (show_type lt) ^ nl() ^
                   "while the computation can perform effects" ^ nl() ^
-                  tab() ^ code (show_type rt))
+                    tab() ^ code (show_type rt))
+
+    let handle_combine_effect_rows ~pos ~t1:(_, expected) ~t2:(comp,actual) ~error:_ =
+      build_tyvar_names [expected; actual];
+      die pos ("The computations of a handle must admit compatible effect signatures, " ^ nl() ^
+                 "but the computation" ^ nl() ^
+                   tab () ^ code comp ^ nl () ^
+                     "has effect signature" ^ nl () ^
+                       tab () ^ code (show_type actual) ^ nl () ^
+                         "while the context expects" ^ nl () ^
+                           tab () ^ code (show_type expected))
 
     let do_operation ~pos ~t1:(_,lt) ~t2:(rexpr,rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -1652,7 +1665,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | As (_, p) | HasType (p, _) -> unwrap_at i p
               | Tuple ps ->
                   List.nth ps i
-              | Nil | Cons _ | List _ | Record _ | Variant _ | Negative _ | Effect _ -> assert false in
+              | Nil | Cons _ | List _ | Record _ | Variant _ | Negative _ | Operation _ | MultiOperation _ -> assert false in
           let fields =
             StringMap.fold(* true if the row variable is dualised *)
 
@@ -1682,7 +1695,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                         | None -> assert false
                         | Some p -> unwrap_at name p
                     end
-              | Nil | Cons _ | List _ | Tuple _ | Variant _ | Negative _ | Effect _ -> assert false in
+              | Nil | Cons _ | List _ | Tuple _ | Variant _ | Negative _ | Operation _ | MultiOperation _ -> assert false in
           let fields =
             StringMap.fold
               (fun name ->
@@ -1709,7 +1722,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | Variant _ -> []
               | Negative names when List.mem name names -> []
               | Negative _ -> [ with_pos p.pos Pattern.Any ]
-              | Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Effect _ -> assert false in
+              | Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _ | MultiOperation _ -> assert false in
           let rec are_open : Pattern.with_pos list -> bool =
             let open Pattern in
             function
@@ -1717,7 +1730,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | {node = (Variable _ | Any | Negative _); _} :: _ -> true
               | {node = (As (_, p) | HasType (p, _)); _} :: ps -> are_open (p :: ps)
               | {node = (Variant _); _} :: ps -> are_open ps
-              | {node = (Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Effect _); _} :: _ -> assert false in
+              | {node = (Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _ | MultiOperation _); _} :: _ -> assert false in
           let fields =
             StringMap.fold
               (fun name field_spec env ->
@@ -1753,8 +1766,9 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
           let unwrap_at : string -> Pattern.with_pos -> Pattern.with_pos list = fun name p ->
             let open Pattern in
             match p.node with
-              | Effect (name', ps, _) when name=name' -> ps
-              | Effect _ -> []
+              | Operation { label; parameters; _ } when String.equal name label -> parameters
+              | Operation _ -> []
+              | MultiOperation ps -> ps
               | Variable _ | Any | As _ | HasType _ | Negative _
               | Nil | Cons _ | List _ | Tuple _ | Record _ | Variant _ | Constant _ -> assert false in
           let fields =
@@ -1825,7 +1839,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | Cons (p1, p2) -> p1 :: unwrap p2
               | List ps -> ps
               | As (_, p) | HasType (p, _) -> unwrap p
-              | Variant _ | Negative _ | Record _ | Tuple _ | Effect _ -> assert false in
+              | Variant _ | Negative _ | Record _ | Tuple _ | Operation _ | MultiOperation _ -> assert false in
           let pats = concat_map unwrap pats in
             `Application (Types.list, [`Type (cpt pats t)])
       | `ForAll (qs, t) -> `ForAll (qs, cpt pats t)
@@ -1910,11 +1924,13 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
           List.fold_right (fun p binderss -> gather binderss p) ps binderss
       | Variant (_, p) ->
          opt_app (fun p -> gather binderss p) binderss p
-      | Effect (_, ps, k) ->
+      | Operation { parameters; resumption; _ } ->
          let binderss' =
-           List.fold_right (fun p binderss -> gather binderss p) ps binderss
+           List.fold_right (fun p binderss -> gather binderss p) parameters binderss
          in
-         gather binderss' k
+         opt_app (fst ->- gather binderss') binderss' resumption
+      | MultiOperation ps ->
+         List.fold_right (fun p binderss -> gather binderss p) ps binderss
       | Negative _ -> binderss
       | Record (ps, p) ->
           let binderss = List.fold_right (fun (_, p) binderss -> gather binderss p) ps binderss in
@@ -1927,7 +1943,8 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
       | As (bndr, p) ->
           let binderss = gather binderss p in
             add (Binder.to_name bndr) bndr binderss
-      | HasType (p, _) -> gather binderss p in
+      | HasType (p, _) -> gather binderss p
+  in
 
   let binderss =
     List.fold_left gather StringMap.empty ps in
@@ -2051,64 +2068,66 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
         let p = tp p in
         let vtype typ = `Variant (make_singleton_row (name, `Present (typ p))) in
         Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
-      | Effect (name, ps, k) ->
-         (* Auxiliary machinery for typing effect patterns *)
-         let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * Types.environment * (Types.datatype * Types.datatype) =
-           let fresh_resumption_type () =
-             let domain   = Types.fresh_type_variable (lin_any, res_any) in
-             let codomain = Types.fresh_type_variable (lin_any, res_any) in
-             let effrow   = Types.make_empty_open_row default_effect_subkind in
-             Types.make_function_type [domain] effrow codomain
-           in
-           let pos' = kpat.pos in
-           let open Pattern in
-           match kpat.node with
-           | Any ->
-              let t = fresh_resumption_type () in
-              kpat, Env.empty, (t, t)
-           | Variable bndr ->
-              let xtype = fresh_resumption_type () in
-              ( with_pos pos' (Variable (Binder.set_type bndr xtype))
-              , Env.bind Env.empty (Binder.to_name bndr, xtype), (xtype, xtype))
-           | As (bndr, pat') ->
-              let p = type_resumption_pat pat' in
-              let env' = Env.bind (env p) (Binder.to_name bndr, it p) in
-              with_pos pos' (As ((Binder.set_type bndr (it p), erase p))), env', (ot p, it p)
-           | HasType (p, (_, Some t)) ->
-              let p = type_resumption_pat p in
-              let () = unify ~handle:Gripers.type_resumption_with_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
-              erase p, env p, (ot p, t)
-           | _ -> Gripers.die pos' "Improper pattern matching on resumption"
-         in
-         (* Typing of effect patterns *)
-         let ps = List.map tp ps in
-         let k = type_resumption_pat k in
-         let eff typ =
-           let domain = List.map typ ps in
-           let codomain = TypeUtils.arg_types (typ k) in
-           let t =
-             (* Construct operation type, i.e. op : A -> B or op : B *)
-             match domain, codomain with
-             | [], [] | _, [] -> assert false (* The continuation is at least unary *)
-             | [], [t] -> `Function (Types.unit_type, Types.make_empty_closed_row (), t)
-             | [], ts -> Types.make_tuple_type ts
-             | ts, [t] ->
-                Types.make_function_type ts (Types.make_empty_closed_row ()) t
-             | ts, ts' ->
-                (* parameterised continuation *)
-                let t = ListUtils.last ts' in
-                Types.make_function_type ts (Types.make_empty_closed_row ()) t
-           in
-           `Effect (make_singleton_row (name, `Present t))
-         in
-         let env =
-           let penv =
-             List.fold_right (env ->- (++)) ps Env.empty
-           in
-           let kenv = env k in
-           penv ++ kenv
-         in
-         Effect (name, List.map erase ps, erase k), env, (eff ot, eff it)
+      (* | Effect (name, ps, k) ->
+       *    (\* Auxiliary machinery for typing effect patterns *\)
+       *    let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * Types.environment * (Types.datatype * Types.datatype) =
+       *      let fresh_resumption_type () =
+       *        let domain   = Types.fresh_type_variable (lin_unl, res_any) in
+       *        let codomain = Types.fresh_type_variable (lin_unl, res_any) in
+       *        let effrow   = Types.make_empty_open_row (lin_unl, res_any) in
+       *        Types.make_function_type [domain] effrow codomain
+       *      in
+       *      let pos' = kpat.pos in
+       *      let open Pattern in
+       *      match kpat.node with
+       *      | Any ->
+       *         let t = fresh_resumption_type () in
+       *         kpat, Env.empty, (t, t)
+       *      | Variable bndr ->
+       *         let xtype = fresh_resumption_type () in
+       *         ( with_pos pos' (Variable (Binder.set_type bndr xtype))
+       *         , Env.bind Env.empty (Binder.to_name bndr, xtype), (xtype, xtype))
+       *      | As (bndr, pat') ->
+       *         let p = type_resumption_pat pat' in
+       *         let env' = Env.bind (env p) (Binder.to_name bndr, it p) in
+       *         with_pos pos' (As ((Binder.set_type bndr (it p), erase p))), env', (ot p, it p)
+       *      | HasType (p, (_, Some t)) ->
+       *         let p = type_resumption_pat p in
+       *         let () = unify ~handle:Gripers.type_resumption_with_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
+       *         erase p, env p, (ot p, t)
+       *      | _ -> Gripers.die pos' "Improper pattern matching on resumption"
+       *    in
+       *    (\* Typing of effect patterns *\)
+       *    let ps = List.map tp ps in
+       *    let k = type_resumption_pat k in
+       *    let eff typ =
+       *      let domain = List.map typ ps in
+       *      let codomain = TypeUtils.arg_types (typ k) in
+       *      let t =
+       *        (\* Construct operation type, i.e. op : A -> B or op : B *\)
+       *        match domain, codomain with
+       *        | [], [] | _, [] -> assert false (\* The continuation is at least unary *\)
+       *        | [], [t] -> `Function (Types.unit_type, Types.make_empty_closed_row (), t)
+       *        | [], ts -> Types.make_tuple_type ts
+       *        | ts, [t] ->
+       *           Types.make_function_type ts (Types.make_empty_closed_row ()) t
+       *        | ts, ts' ->
+       *           (\* parameterised continuation *\)
+       *           let t = ListUtils.last ts' in
+       *           Types.make_function_type ts (Types.make_empty_closed_row ()) t
+       *      in
+       *      `Effect (make_singleton_row (name, `Present t))
+       *    in
+       *    let env =
+       *      let penv =
+       *        List.fold_right (env ->- (++)) ps Env.empty
+       *      in
+       *      let kenv = env k in
+       *      penv ++ kenv
+       *    in
+       *    Effect (name, List.map erase ps, erase k), env, (eff ot, eff it) *)
+      | Operation _ -> assert false
+      | MultiOperation _ -> assert false
       | Negative names ->
         let row_var = Types.fresh_row_variable (lin_any, res_any) in
 
@@ -2185,9 +2204,14 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | HasType (p,_) -> pattern_env p
     | Variant (_, Some p) -> pattern_env p
     | Variant (_, None) -> Env.empty
-    | Effect (_, ps, k) ->
-      let env = List.fold_right (pattern_env ->- Env.extend) ps Env.empty in
-      Env.extend env (pattern_env k)
+    | Operation { parameters; resumption; _ } ->
+       let env = List.fold_right (pattern_env ->- Env.extend) parameters Env.empty in
+       begin match resumption with
+       | None -> env
+       | Some (p, _) -> Env.extend env (pattern_env p)
+       end
+    | MultiOperation ps ->
+       List.fold_right (pattern_env ->- Env.extend) ps Env.empty
     | Negative _ -> Env.empty
     | Record (ps, Some p) ->
        List.fold_right (snd ->- pattern_env ->- Env.extend) ps (pattern_env p)
@@ -3494,313 +3518,445 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else
                 Gripers.upcast_subtype pos t2 t1
         | Upcast _ -> assert false
-        | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
+        | Handle { expressions; cases; _ } ->
            ignore
              (if not (Settings.get_value Basicsettings.Handlers.enabled)
               then raise (Errors.disabled_extension
                             ~pos ~setting:("enable_handlers", true)
                             ~flag:"--enable-handlers" "Handlers"));
-           let rec pop_last = function
-             | [] -> assert false
-             | [x] -> x, []
-             | x' :: xs ->
-                let (x, xs') = pop_last xs in
-                x, x' :: xs'
-           in
-           (* allow_wild adds wild : () to the given effect row *)
-           let allow_wild : Types.row -> Types.row
-         = fun row ->
-           let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
-           Types.extend_row fields row
-           in
-           (* returns a pair of lists whose first component is the
-               value clauses, while the second component is the
-               operation clauses *)
-           let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
-             = fun cases ->
-             let ret, ops =
-               List.fold_right
-                 (fun (pat, body) (val_cases, eff_cases) ->
-                   match pat.node with
-                   | Pattern.Variant ("Return", None) ->
-                      Gripers.die pat.pos "Improper pattern-matching on return value"
-                   | Pattern.Variant ("Return", Some pat) ->
-                      (pat, body) :: val_cases, eff_cases
-                   | _ -> val_cases, (pat, body) :: eff_cases)
-                 cases ([], [])
-             in
-             let ret = match ret with
-               | [] -> (* insert a synthetic value case: x -> x. *)
-                  let x = "x" in
-                  let id = (variable_pat x, var x) in
-                  [id]
-               | _ -> ret
-             in
-             ret, ops
-           in
-           (* type parameters *)
-           let henv = context in
-           let (henv, params, descr) =
-             match descr.shd_params with
-             | Some { shp_bindings; _ } ->
-                let _ =
-                  check_for_duplicate_names pos (List.map fst shp_bindings)
-                in
-                let type_binding (pat, body) =
-                  let body = tc body in
-                  let pat = tpc pat in
-                  unify ~handle:Gripers.handle_parameter_pattern (ppos_and_typ pat, (pos_and_typ body));
-                  (pat, body)
-                in
-                let typed_bindings = List.map type_binding shp_bindings in
-                let pat_types =
-                  List.map (fst ->- pattern_typ) typed_bindings
-                in
-                let param_env =
-                  List.fold_left
-                    (fun env p ->
-                      env ++ pattern_env p)
-                    henv (List.map fst typed_bindings)
-                in
-                (param_env, typed_bindings, { descr with shd_params = Some { shp_bindings = List.map (fun (pat, body) -> erase_pat pat, erase body) typed_bindings;
-                                                                             shp_types = pat_types } })
-             | None -> (henv, [], descr)
-           in
-           let type_cases val_cases eff_cases =
-             let wild_row () =
-               let fresh_row = Types.make_empty_open_row default_effect_subkind in
-               allow_wild fresh_row
-             in
-             let rt = Types.fresh_type_variable (lin_any, res_any) in
-             let bt = Types.fresh_type_variable (lin_any, res_any) in
-             let inner_eff = wild_row () in
-             let outer_eff = wild_row () in
-             (* Type value patterns *)
-             let val_cases, val_pats =
-               List.fold_right
-                 (fun (pat, body) (cases, pats) ->
-                   let pat = tpo pat in
-                   let () =
-                     unify ~handle:Gripers.handle_value_patterns
-                       (ppos_and_typ pat, no_pos rt)
-                   in
-                   (pat, body)::cases, pat :: pats)
-                 val_cases ([], [])
-             in
-             let rt = close_pattern_type (List.map fst3 val_pats) rt in
-             (* Type effect patterns *)
-             let eff_cases =
-               List.fold_right
-                 (fun (pat, body) cases ->
-                   let pat =
-                     let open Pattern in
-                     match pat with
-                     | { node = Variant (opname, Some pat'); _ } ->
-                        begin match pat'.node with
-                        | Tuple [] ->
-                           with_dummy_pos (Effect (opname, [], with_dummy_pos Pattern.Any))
-                        | Tuple ps ->
-                           let kpat, pats = pop_last ps in
-                           with_dummy_pos (Effect (opname, pats, kpat))
-                        | _ -> with_pos pos (Effect (opname, [], pat'))
-                        end
-                     | { node = Variant (opname, None); pos } ->
-                        with_pos pos (Effect (opname, [], with_dummy_pos Pattern.Any))
-                     (* already compiled to an effect *)
-                     | { node = Effect _; pos = _ } ->
-                        pat
-                     | { pos; _ } -> Gripers.die pos "Improper pattern matching" in
-                   let pat = tpo pat in
-                   unify ~handle:Gripers.handle_effect_patterns
-                         (ppos_and_typ pat, no_pos (`Effect inner_eff));
-                   (* We may have to patch up the inferred resumption
-                      type as `type_pattern' cannot infer the
-                      principal type for a resumption in a
-                      parameterised handler since it requires access
-                      to information which is not conveyed by
-                      pattern. TODO: perhaps augment the pattern with
-                      arity information. *)
-                   let (pat, env, effrow) = pat in
-                   let effname, kpat =
-                     match pat.node with
-                     | Pattern.Effect (name, _, kpat) -> name, kpat
-                     | _ -> assert false
-                   in
-                   let pat, kpat =
-                     let rec find_effect_type eff = function
-                       | (eff', t) :: _ when eff = eff' ->
-                          begin match t with
-                          | `Present t -> t
-                          | _ -> assert false
-                          end
-                       | _ :: xs -> find_effect_type eff xs
-                       | [] -> raise Not_found
-                     in
-                     match descr.shd_params with
-                     | Some params when descr.shd_depth = Deep ->
-                        let handler_params = params.shp_types in
-                        let open Pattern in
-                        begin match kpat.node with
-                        | Any ->
-                           let kt =
-                             let domain =
-                               (Types.fresh_type_variable (lin_unl, res_any)) :: handler_params
-                             in
-                             let effects = Types.make_empty_open_row default_effect_subkind in
-                             let codomain =  Types.fresh_type_variable (lin_unl, res_any) in
-                             Types.make_function_type domain effects codomain
-                           in
-                           (pat, env, effrow), (kpat, Env.empty, kt)
-                        | As (bndr,_)
-                        | Variable bndr ->
-                           let kname = Binder.to_name bndr in
-                           let kt =
-                             let (fields,_,_) = TypeUtils.extract_row effrow in
-                             let kt = find_effect_type effname (StringMap.to_alist fields) in
-                             let op_param = TypeUtils.return_type kt in
-                             let typ = Env.lookup env kname in
-                             let domain =
-                               op_param :: handler_params
-                             in
-                             let effs, codomain =
-                               TypeUtils.(effect_row typ, return_type typ)
-                             in
-                             Types.make_function_type domain effs codomain
-                           in
-                           let env = Env.bind env (kname, kt) in
-                           let env' = Env.bind Env.empty (kname, kt) in
-                           (pat, env, effrow), (kpat, env', kt)
-                        | _ -> assert false
-                        end
-                     | _ ->
-                        let open Pattern in
-                        match kpat.node with
-                        | As (bndr,_)
-                        | Variable bndr ->
-                           let kname = Binder.to_name bndr in
-                           let kt =
-                             match Env.find env kname with
-                             | Some t -> t
-                             | None -> assert false
-                           in
-                           let env' = Env.bind Env.empty (kname, kt) in
-                           (pat, env, effrow), (kpat, env', kt)
-                        | Any ->
-                           let kt =
-                             Types.make_function_type
-                               [Types.fresh_type_variable (lin_unl, res_any)]
-                               (Types.make_empty_open_row default_effect_subkind)
-                               (Types.fresh_type_variable (lin_unl, res_any))
-                           in
-                           (pat, env, effrow), (kpat, Env.empty, kt)
-                        | _ -> assert false
-                   in
-                   (pat, kpat, body) :: cases)
-                 eff_cases []
-             in
-             (* Closing of subpatterns in effect patterns *)
-             let inner_eff = TypeUtils.extract_row (close_pattern_type (List.map (fst3 ->- fst3) eff_cases) (`Effect inner_eff)) in
-             (* Type value clause bodies *)
-             let val_cases =
-               List.fold_right
-                 (fun (pat, body) cases ->
-                   let body = type_check (henv ++ pattern_env pat) body in
-                   let () = unify ~handle:Gripers.handle_branches
-                          (pos_and_typ body, no_pos bt) in
-                   let vs = Env.domain (pattern_env pat) in
-                   let vs' = Env.domain henv.var_env in
-                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
-                   (pat, update_usages body us) :: cases)
-                 val_cases []
-             in
-             (* Type operation clause bodies and resumptions *)
-             let eff_cases =
-               List.fold_right
-                 (fun (pat, (kpat : Pattern.with_pos * Types.datatype Env.t * Types.datatype), body) cases ->
-                   let body = type_check (henv ++ pattern_env pat) body in
-                   let () = unify ~handle:Gripers.handle_branches
-                              (pos_and_typ body, no_pos bt)
-                   in
-                   let vs = Env.domain (pattern_env pat) in
-                   let vs' = Env.domain henv.var_env in
-                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
-                   let () =
-                     let pos' = (fst3 kpat) |> WithPos.pos |> Position.resolve_expression in
-                     let kt = TypeUtils.return_type (pattern_typ kpat) in
-                     match descr.shd_depth with
-                     | Deep ->
-                        let eff = context.effect_row in
-                        unify ~handle:Gripers.deep_resumption
-                          ((pos', kt), no_pos bt);
-                        unify ~handle:Gripers.deep_resumption_effects
-                          ((pos', `Effect eff), no_pos (`Effect outer_eff))
-                     | Shallow ->
-                        let eff = TypeUtils.effect_row (pattern_typ kpat) in
-                        unify ~handle:Gripers.shallow_resumption
-                          ((pos', kt), no_pos rt);
-                        unify ~handle:Gripers.shallow_resumption_effects
-                          ((pos', `Effect eff), no_pos (`Effect inner_eff))
-                   in
-                   (pat, kpat, update_usages body us) :: cases)
-                 eff_cases []
-             in
-             (val_cases, rt), eff_cases, bt, inner_eff, outer_eff
-           in
-           (* make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
+          (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
-         = fun row ->
+             = fun row ->
              let (operations, rho, dual) = row in
-         let operations' =
+             let operations' =
                StringMap.mapi
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
                    then p
                    else Types.fresh_presence_variable (lin_unl, res_any)) (* It is questionable whether it is ever correct to
-                                                                       make absent operations polymorphic in their presence. *)
+                                                                             make absent operations polymorphic in their presence. *)
                  operations
              in
-         (operations', rho, dual)
+             (operations', rho, dual)
            in
-           let m_context = { context with effect_row = Types.make_empty_open_row default_effect_subkind } in
-           let m = type_check m_context m in (* Type-check the input computation m under current context *)
-           let m_effects = `Effect m_context.effect_row in
-           (* Most of the work is done by `type_cases'. *)
-           let (val_cases, eff_cases) =
-             (* The following is a slight hack until I get rid of the
-                 `handler' sugar. It is necessary because of "old
-                 fashioned" parameterised handlers. *)
-             match val_cases with
-             | [] -> split_handler_cases eff_cases
-             | _  -> val_cases, eff_cases
+           let arity = List.length expressions in
+           let type_expressions context exps =
+             let type_expression context exp =
+               (* Refresh the effect context. *)
+               let context = { context with effect_row = Types.make_empty_open_row (lin_unl, res_any) } in
+               let exp = type_check context exp in (* Type-check the input computation m under current context *)
+               (exp, context.effect_row)
+             in
+             let expressions = List.map (type_expression context) exps in
+             (* Union all the effect rows *)
+             let eff = match expressions with
+               | [] -> assert false
+               | exp :: exps ->
+                  List.fold_left
+                    (fun eff (exp, eff') ->
+                      unify ~handle:Gripers.handle_combine_effect_rows (no_pos (`Effect eff), (exp_pos exp, `Effect eff'));
+                      eff)
+                    (snd exp) exps
+             in
+             (expressions, eff)
            in
-           let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases val_cases eff_cases in
-           (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
-           (* Patch the result type of `m' *)
-           let () =
-              unify ~handle:Gripers.handle_return (pos_and_typ m, no_pos rt)
+           let type_effect_cases context arity cases =
+             let arity_check { patterns; _ } =
+               if List.length patterns <> arity
+               then raise (Errors.handle_arity_mismatch pos)
+               else ()
+             in
+             List.iter arity_check cases;
+             (* Type check the operation patterns and value patterns
+                against the inferred effect signatures and return
+                values. *)
+             let allocate_type_vector arity =
+               Array.init arity (fun _ -> Types.fresh_type_variable (lin_unl, res_any))
+             in
+             let is_operation_pattern = function
+               | { node = Pattern.Operation _ | Pattern.MultiOperation _; _ } -> true
+               | _ -> false
+             in
+             let value_types = allocate_type_vector arity in
+             let operation_types = allocate_type_vector arity in
+             (* Type patterns. *)
+             let value_matrix = Hashtbl.create arity in
+             let effect_matrix = Hashtbl.create arity in
+             let classify i pat =
+               let matrix =
+                 if is_operation_pattern (fst3 pat)
+                 then (unify ~handle:Gripers.handle_operation_patterns (no_pos operation_types.(i), ppos_and_typ pat); effect_matrix)
+                 else (unify ~handle:Gripers.handle_value_patterns (no_pos value_types.(i), ppos_and_typ pat); value_matrix)
+               in
+               Hashtbl.add matrix i (fst3 pat)
+             in
+             let cases =
+               List.fold_left
+                 (fun cases { patterns; resumption; body } ->
+                   (* Type each pattern. *)
+                   let patterns' = List.map tpo patterns in
+                   let () = List.iteri classify patterns' in
+                   let resumption' = opt_map (fun (p, _) -> tpo p) resumption in
+                   (patterns', resumption', body) :: cases)
+                 [] cases
+             in
+             (* Close value and operation patterns. *)
+             let close_pattern_types arity matrix types =
+               for i = 0 to arity - 1 do
+                 match Hashtbl.find_all matrix i with
+                 | [] -> ()
+                 | patterns ->
+                    types.(i) <- close_pattern_type patterns types.(i)
+               done
+             in
+             close_pattern_types arity value_matrix value_types;
+             close_pattern_types arity effect_matrix operation_types;
+             (* Type check bodies. *)
+             let pattern_env' = function
+               | [] -> raise (Invalid_argument "empty patterns")
+               | pattern :: patterns ->
+                  List.fold_left
+                    (fun context pat -> context ++ pattern_env pat)
+                    (pattern_env pattern) patterns
+             in
+             let body_type =
+               let body_type = Types.fresh_type_variable (lin_unl, res_any) in
+               List.fold_left
+                 (fun cases (patterns, resumption, body) ->
+                   let body = type_check (context ++ pattern_env' patterns) body in
+                   let () =
+                     unify ~handle:Gripers.handle_branches (no_pos body_type, pos_and_typ body)
+                   in
+                   let () =
+                     Env.iter
+                       (fun v t ->
+                         let uses = uses_of v (usages body) in
+                         if uses <> 1
+                         then if Types.type_can_be_unl t
+                              then Types.make_type_unl t
+                              else Gripers.non_linearity pos uses v t)
+                       (pattern_env' patterns)
+                   in
+                   let vs = Env.domain (pattern_env' patterns) in
+                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
+                   (patterns, resumption, update_usages body us) :: cases)
+                 [] cases
+             in
+             (* Type check deep resumptions. *)
+             (* Type check shallow resumptions. *)
+             (* Type check the bodies. *)
+             (* let type_effect_case context arity return_types body_type { pattern; resumption; body } =
+              *   let body = type_check context body
+              *   assert false
+              * in *)
+             assert false
            in
-           (* Finalise construction of the effect row of the input computation *)
-           let inner_eff, outer_eff =
-             let m_pos = exp_pos m in
-             let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
-             let inner_eff' = make_operations_presence_polymorphic inner_eff in
-             (* Printf.printf "inner_eff': %s\n%!" (Types.string_of_row inner_eff'); *)
-             let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect inner_eff'), no_pos (`Effect outer_eff)) in
-             let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect outer_eff), no_pos (`Effect context.effect_row)) in
-             inner_eff, outer_eff
-           in
-           let eff_cases =
-             List.map (fun (p, _, body) -> (p, body)) eff_cases
-           in
-           (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
-           let descr = { descr with
-                         shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
-                         shd_raw_row = Types.make_empty_closed_row (); }
-           in
-           Handle { sh_expr = erase m;
-                    sh_effect_cases = erase_cases eff_cases;
-                    sh_value_cases = erase_cases val_cases;
-                    sh_descr = descr }, body_type, merge_usages [usage_compat (List.map (fun (_,(_, _, m)) -> m) params); usages m; usages_cases eff_cases; usages_cases val_cases]
+           let (expressions, _inner_eff) = type_expressions context expressions in
+           (* let return_types =
+            *   List.map (fun (exp, _) -> typ exp) expressions
+            * in *)
+           (* let _ = type_effect_cases context arity return_types cases in *)
+           assert false
+         (*   let rec pop_last = function
+          *     | [] -> assert false
+          *     | [x] -> x, []
+          *     | x' :: xs ->
+          *        let (x, xs') = pop_last xs in
+          *        x, x' :: xs'
+          *   in
+          *   (\** allow_wild adds wild : () to the given effect row *\)
+          *   let allow_wild : Types.row -> Types.row
+          * = fun row ->
+          *   let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
+          *   Types.extend_row fields row
+          *   in
+          *   (\** returns a pair of lists whose first component is the
+          *       value clauses, while the second component is the
+          *       operation clauses *\)
+          *   let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
+          *     = fun cases ->
+          *     let ret, ops =
+          *       List.fold_right
+          *         (fun (pat, body) (val_cases, eff_cases) ->
+          *           match pat.node with
+          *           | Pattern.Variant ("Return", None) ->
+          *              Gripers.die pat.pos "Improper pattern-matching on return value"
+          *           | Pattern.Variant ("Return", Some pat) ->
+          *              (pat, body) :: val_cases, eff_cases
+          *           | _ -> val_cases, (pat, body) :: eff_cases)
+          *         cases ([], [])
+          *     in
+          *     let ret = match ret with
+          *       | [] -> (\* insert a synthetic value case: x -> x. *\)
+          *          let x = "x" in
+          *          let id = (variable_pat x, var x) in
+          *          [id]
+          *       | _ -> ret
+          *     in
+          *     ret, ops
+          *   in
+          *   (\* type parameters *\)
+          *   let henv = context in
+          *   let (henv, params, descr) =
+          *     match descr.shd_params with
+          *     | Some { shp_bindings; _ } ->
+          *        let _ =
+          *          check_for_duplicate_names pos (List.map fst shp_bindings)
+          *        in
+          *        let type_binding (pat, body) =
+          *          let body = tc body in
+          *          let pat = tpc pat in
+          *          unify ~handle:Gripers.handle_parameter_pattern (ppos_and_typ pat, (pos_and_typ body));
+          *          (pat, body)
+          *        in
+          *        let typed_bindings = List.map type_binding shp_bindings in
+          *        let pat_types =
+          *          List.map (fst ->- pattern_typ) typed_bindings
+          *        in
+          *        let param_env =
+          *          List.fold_left
+          *            (fun env p ->
+          *              env ++ pattern_env p)
+          *            henv (List.map fst typed_bindings)
+          *        in
+          *        (param_env, typed_bindings, { descr with shd_params = Some { shp_bindings = List.map (fun (pat, body) -> erase_pat pat, erase body) typed_bindings;
+          *                                                                     shp_types = pat_types } })
+          *     | None -> (henv, [], descr)
+          *   in
+          *   let type_cases val_cases eff_cases =
+          *     let wild_row () =
+          *       let fresh_row = Types.make_empty_open_row (lin_unl, res_any) in
+          *       allow_wild fresh_row
+          *     in
+          *     let rt = Types.fresh_type_variable (lin_unl, res_any) in
+          *     let bt = Types.fresh_type_variable (lin_unl, res_any) in
+          *     let inner_eff = wild_row () in
+          *     let outer_eff = wild_row () in
+          *     (\* Type value patterns *\)
+          *     let val_cases, val_pats =
+          *       List.fold_right
+          *         (fun (pat, body) (cases, pats) ->
+          *           let pat = tpo pat in
+          *           let () =
+          *             unify ~handle:Gripers.handle_value_patterns
+          *               (ppos_and_typ pat, no_pos rt)
+          *           in
+          *           (pat, body)::cases, pat :: pats)
+          *         val_cases ([], [])
+          *     in
+          *     let rt = close_pattern_type (List.map fst3 val_pats) rt in
+          *     (\* Type effect patterns *\)
+          *     let eff_cases =
+          *       List.fold_right
+          *         (fun (pat, body) cases ->
+          *           let pat =
+          *             let open Pattern in
+          *             match pat with
+          *             | { node = Variant (opname, Some pat'); _ } ->
+          *                begin match pat'.node with
+          *                | Tuple [] ->
+          *                   with_dummy_pos (Effect (opname, [], with_dummy_pos Pattern.Any))
+          *                | Tuple ps ->
+          *                   let kpat, pats = pop_last ps in
+          *                   with_dummy_pos (Effect (opname, pats, kpat))
+          *                | _ -> with_pos pos (Effect (opname, [], pat'))
+          *                end
+          *             | { node = Variant (opname, None); pos } ->
+          *                with_pos pos (Effect (opname, [], with_dummy_pos Pattern.Any))
+          *             | {pos;_} -> Gripers.die pos "Improper pattern matching"
+          *           in
+          *           let pat = tpo pat in
+          *           unify ~handle:Gripers.handle_effect_patterns
+          *                 (ppos_and_typ pat, no_pos (`Effect inner_eff));
+          *           (\* We may have to patch up the inferred resumption
+          *              type as `type_pattern' cannot infer the
+          *              principal type for a resumption in a
+          *              parameterised handler since it requires access
+          *              to information which is not conveyed by
+          *              pattern. TODO: perhaps augment the pattern with
+          *              arity information. *\)
+          *           let (pat, env, effrow) = pat in
+          *           let effname, kpat =
+          *             match pat.node with
+          *             | Pattern.Effect (name, _, kpat) -> name, kpat
+          *             | _ -> assert false
+          *           in
+          *           let pat, kpat =
+          *             let rec find_effect_type eff = function
+          *               | (eff', t) :: _ when eff = eff' ->
+          *                  begin match t with
+          *                  | `Present t -> t
+          *                  | _ -> assert false
+          *                  end
+          *               | _ :: xs -> find_effect_type eff xs
+          *               | [] -> raise Not_found
+          *             in
+          *             match descr.shd_params with
+          *             | Some params when descr.shd_depth = Deep ->
+          *                let handler_params = params.shp_types in
+          *                let open Pattern in
+          *                begin match kpat.node with
+          *                | Any ->
+          *                   let kt =
+          *                     let domain =
+          *                       (Types.fresh_type_variable (lin_unl, res_any)) :: handler_params
+          *                     in
+          *                     let effects = Types.make_empty_open_row (lin_unl, res_any) in
+          *                     let codomain =  Types.fresh_type_variable (lin_unl, res_any) in
+          *                     Types.make_function_type domain effects codomain
+          *                   in
+          *                   (pat, env, effrow), (kpat, Env.empty, kt)
+          *                | As (bndr,_)
+          *                | Variable bndr ->
+          *                   let kname = Binder.to_name bndr in
+          *                   let kt =
+          *                     let (fields,_,_) = TypeUtils.extract_row effrow in
+          *                     let kt = find_effect_type effname (StringMap.to_alist fields) in
+          *                     let op_param = TypeUtils.return_type kt in
+          *                     let typ = Env.lookup env kname in
+          *                     let domain =
+          *                       op_param :: handler_params
+          *                     in
+          *                     let effs, codomain =
+          *                       TypeUtils.(effect_row typ, return_type typ)
+          *                     in
+          *                     Types.make_function_type domain effs codomain
+          *                   in
+          *                   let env = Env.bind env (kname, kt) in
+          *                   let env' = Env.bind Env.empty (kname, kt) in
+          *                   (pat, env, effrow), (kpat, env', kt)
+          *                | _ -> assert false
+          *                end
+          *             | _ ->
+          *                let open Pattern in
+          *                match kpat.node with
+          *                | As (bndr,_)
+          *                | Variable bndr ->
+          *                   let kname = Binder.to_name bndr in
+          *                   let kt =
+          *                     match Env.find env kname with
+          *                     | Some t -> t
+          *                     | None -> assert false
+          *                   in
+          *                   let env' = Env.bind Env.empty (kname, kt) in
+          *                   (pat, env, effrow), (kpat, env', kt)
+          *                | Any ->
+          *                   let kt =
+          *                     Types.make_function_type
+          *                       [Types.fresh_type_variable (lin_unl, res_any)]
+          *                       (Types.make_empty_open_row (lin_unl, res_any))
+          *                       (Types.fresh_type_variable (lin_unl, res_any))
+          *                   in
+          *                   (pat, env, effrow), (kpat, Env.empty, kt)
+          *                | _ -> assert false
+          *           in
+          *           (pat, kpat, body) :: cases)
+          *         eff_cases []
+          *     in
+          *     (\* Closing of subpatterns in effect patterns *\)
+          *     let inner_eff = TypeUtils.extract_row (close_pattern_type (List.map (fst3 ->- fst3) eff_cases) (`Effect inner_eff)) in
+          *     (\* Type value clause bodies *\)
+          *     let val_cases =
+          *       List.fold_right
+          *         (fun (pat, body) cases ->
+          *           let body = type_check (henv ++ pattern_env pat) body in
+          *           let () = unify ~handle:Gripers.handle_branches
+          *                  (pos_and_typ body, no_pos bt) in
+          *           let vs = Env.domain (pattern_env pat) in
+          *           let vs' = Env.domain henv.var_env in
+          *           let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
+          *           (pat, update_usages body us) :: cases)
+          *         val_cases []
+          *     in
+          *     (\* Type operation clause bodies and resumptions *\)
+          *     let eff_cases =
+          *       List.fold_right
+          *         (fun (pat, (kpat : Pattern.with_pos * Types.datatype Env.t * Types.datatype), body) cases ->
+          *           let body = type_check (henv ++ pattern_env pat) body in
+          *           let () = unify ~handle:Gripers.handle_branches
+          *                      (pos_and_typ body, no_pos bt)
+          *           in
+          *           let vs = Env.domain (pattern_env pat) in
+          *           let vs' = Env.domain henv.var_env in
+          *           let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
+          *           let () =
+          *             let pos' = (fst3 kpat) |> WithPos.pos |> Position.resolve_expression in
+          *             let kt = TypeUtils.return_type (pattern_typ kpat) in
+          *             match descr.shd_depth with
+          *             | Deep ->
+          *                let eff = context.effect_row in
+          *                unify ~handle:Gripers.deep_resumption
+          *                  ((pos', kt), no_pos bt);
+          *                unify ~handle:Gripers.deep_resumption_effects
+          *                  ((pos', `Effect eff), no_pos (`Effect outer_eff))
+          *             | Shallow ->
+          *                let eff = TypeUtils.effect_row (pattern_typ kpat) in
+          *                unify ~handle:Gripers.shallow_resumption
+          *                  ((pos', kt), no_pos rt);
+          *                unify ~handle:Gripers.shallow_resumption_effects
+          *                  ((pos', `Effect eff), no_pos (`Effect inner_eff))
+          *           in
+          *           (pat, kpat, update_usages body us) :: cases)
+          *         eff_cases []
+          *     in
+          *     (val_cases, rt), eff_cases, bt, inner_eff, outer_eff
+          *   in
+          *   (\** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *\)
+          *   let make_operations_presence_polymorphic : Types.row -> Types.row
+          * = fun row ->
+          *     let (operations, rho, dual) = row in
+          * let operations' =
+          *       StringMap.mapi
+          *         (fun name p ->
+          *           if TypeUtils.is_builtin_effect name
+          *           then p
+          *           else Types.fresh_presence_variable (lin_unl, res_any)) (\* It is questionable whether it is ever correct to
+          *                                                               make absent operations polymorphic in their presence. *\)
+          *         operations
+          *     in
+          * (operations', rho, dual)
+          *   in
+          *   let m_context = { context with effect_row = Types.make_empty_open_row (lin_unl, res_any) } in
+          *   let m = type_check m_context m in (\* Type-check the input computation m under current context *\)
+          *   let m_effects = `Effect m_context.effect_row in
+          *   (\** Most of the work is done by `type_cases'. *\)
+          *   let (val_cases, eff_cases) =
+          *     (\** The following is a slight hack until I get rid of the
+          *         `handler' sugar. It is necessary because of "old
+          *         fashioned" parameterised handlers. *\)
+          *     match val_cases with
+          *     | [] -> split_handler_cases eff_cases
+          *     | _  -> val_cases, eff_cases
+          *   in
+          *   let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases val_cases eff_cases in
+          *   (\* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *\)
+          *   (\** Patch the result type of `m' *\)
+          *   let () =
+          *      unify ~handle:Gripers.handle_return (pos_and_typ m, no_pos rt)
+          *   in
+          *   (\** Finalise construction of the effect row of the input computation *\)
+          *   let inner_eff, outer_eff =
+          *     let m_pos = exp_pos m in
+          *     let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
+          *     let inner_eff' = make_operations_presence_polymorphic inner_eff in
+          *     (\* Printf.printf "inner_eff': %s\n%!" (Types.string_of_row inner_eff'); *\)
+          *     let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect inner_eff'), no_pos (`Effect outer_eff)) in
+          *     let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect outer_eff), no_pos (`Effect context.effect_row)) in
+          *     inner_eff, outer_eff
+          *   in
+          *   let eff_cases =
+          *     List.map (fun (p, _, body) -> (p, body)) eff_cases
+          *   in
+          *   (\* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *\)
+          *   (\***\)
+          *   let descr = { descr with
+          *                 shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
+          *                 shd_raw_row = Types.make_empty_closed_row (); }
+          *   in
+          *   Handle { sh_expr = erase m;
+          *            sh_effect_cases = erase_cases eff_cases;
+          *            sh_value_cases = erase_cases val_cases;
+          *            sh_descr = descr }, body_type, merge_usages [usage_compat (List.map (fun (_,(_, _, m)) -> m) params); usages m; usages_cases eff_cases; usages_cases val_cases] *)
         | DoOperation (opname, args, _) ->
            (* Strategy:
               1. List.map tc args

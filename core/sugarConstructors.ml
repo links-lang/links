@@ -117,6 +117,27 @@ module SugarConstructors (Position : Pos)
 
   let any_pat ppos = with_pos ppos Pattern.Any
 
+  let operation_pat ?(ppos=dp) ?resumption constructors =
+    let pat = match constructors, resumption with
+      | [], _ -> assert false
+      | [(label, parameters)], _ ->
+         let resumption =
+           opt_map (fun pat -> pat, `Not_typed) resumption
+         in
+         Pattern.Operation { label; parameters; resumption }
+      | _ :: _ :: _, Some pat ->
+         raise (ConcreteSyntaxError (pat.pos, "Multi-operation patterns do not allow resumption patterns."))
+      | _, None ->
+         let operations =
+           List.map
+             (fun (label, parameters) ->
+               with_pos ppos (Pattern.Operation { label; parameters; resumption = None }))
+             constructors
+         in
+         Pattern.MultiOperation operations
+    in
+    with_pos ppos pat
+
   (** Fieldspec *)
 
   let present        = Datatype.Present (WithPos.dummy Datatype.Unit)
@@ -274,19 +295,26 @@ module SugarConstructors (Position : Pos)
     node
 
   (** Handlers *)
-  let untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =
-    { sh_expr         = expr;
-      sh_effect_cases = eff_cases;
-      sh_value_cases  = val_cases;
-      sh_descr = {
-          shd_depth = depth;
-          shd_types = ( Types.make_empty_closed_row (), `Not_typed
-                      , Types.make_empty_closed_row (), `Not_typed);
-          shd_raw_row = Types.make_empty_closed_row ();
-          shd_params = opt_map (fun pps -> {shp_bindings = pps; shp_types = []})
-                               parameters
-        };
-    }
+  let untyped_handler ?(ppos=dp) ?parameters expressions cases =
+    let node =
+      Handle { expressions;
+               cases;
+               descriptor =
+                 { shd_depth = Deep;
+                   shd_types = ( Types.make_empty_closed_row (), `Not_typed
+                               , Types.make_empty_closed_row (), `Not_typed);
+                   shd_raw_row = Types.make_empty_closed_row ();
+                   shd_params = opt_map (fun pps -> {shp_bindings = pps; shp_types = []}) parameters }
+        }
+    in
+    with_pos ppos node
+
+  let nary_effect_case ~resumption patterns body =
+    let resumption = opt_map (fun p -> (p, `Not_typed)) resumption in
+    { patterns; resumption; body }
+
+  let unary_effect_case ~resumption pattern body =
+    nary_effect_case ~resumption [pattern] body
 
 end
 

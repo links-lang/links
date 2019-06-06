@@ -48,6 +48,8 @@ exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception DisabledExtension of Position.t option * (string * bool) option * string option * string
 exception PrimeAlien of Position.t
+exception EffectPatternBelowToplevel of Position.t
+exception HandleArityMismatch of Position.t
 
 
 let prefix_lines prefix s =
@@ -164,6 +166,13 @@ let format_exception =
      let message =
        Printf.sprintf "Syntax error: Foreign binders cannot contain single quotes `'`.\nIn expression: %s." expr
      in
+  | EffectPatternBelowToplevel pos ->
+     let message = "Effect patterns must be at the top level of a handler case." in
+     let pos, _ = Position.resolve_start_expr pos in
+     pos_prefix ~pos message
+  | HandleArityMismatch pos ->
+     let message = "Arity mismatch: a handler case must have as many patterns as the handle has input computations." in
+     let pos, _ = Position.resolve_start_expr pos in
      pos_prefix ~pos message
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
@@ -194,3 +203,7 @@ let module_error ?pos message = (ModuleError (message, pos))
 let disabled_extension ?pos ?setting ?flag name =
   DisabledExtension (pos, setting, flag, name)
 let prime_alien pos = PrimeAlien pos
+let effect_pattern_below_toplevel pos =
+  EffectPatternBelowToplevel pos
+let handle_arity_mismatch pos =
+  HandleArityMismatch pos

@@ -79,6 +79,7 @@ module type SugarConstructorsSig = sig
   val variable_pat : ?ppos:t -> ?ty:Types.datatype -> name -> Pattern.with_pos
   val tuple_pat    : ?ppos:t -> Pattern.with_pos list -> Pattern.with_pos
   val any_pat      : t -> Pattern.with_pos
+  val operation_pat : ?ppos:t -> ?resumption:Pattern.with_pos -> (name * Pattern.with_pos list) list -> Pattern.with_pos
 
   (* Fieldspec *)
   val present : Datatype.fieldspec
@@ -149,8 +150,9 @@ module type SugarConstructorsSig = sig
 
   (* Handlers *)
   val untyped_handler
-      : ?val_cases:(clause list)
-     -> ?parameters:((Pattern.with_pos * phrase) list)
-     -> phrase -> clause list -> handler_depth
-     -> handler
+      : ?ppos:t -> ?parameters:((Pattern.with_pos * phrase) list)
+     -> phrase list -> effect_clause list -> phrase
+
+  val unary_effect_case : resumption:Pattern.with_pos option -> Pattern.with_pos -> phrase -> effect_clause
+  val nary_effect_case : resumption:Pattern.with_pos option -> Pattern.with_pos list -> phrase -> effect_clause
 end

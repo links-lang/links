@@ -50,3 +50,6 @@ val dynlink_error: string -> exn
 val module_error : ?pos:Position.t -> string -> exn
 val disabled_extension : ?pos:Position.t -> ?setting:(string * bool) -> ?flag:string -> string -> exn
 val prime_alien : Position.t -> exn
+val effect_pattern_below_toplevel : Position.t -> exn
+val handle_arity_mismatch : Position.t -> exn
+

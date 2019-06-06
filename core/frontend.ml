@@ -108,7 +108,6 @@ let program prev_tyenv pos_context program =
   if Settings.get_value Basicsettings.show_pre_frontend_ast then
     Debug.print ("Pre-Frontend AST:\n" ^ Sugartypes.show_program program);
 
-
   let pre_transformers =
     program_pre_typing_transformers pos_context prev_tyenv in
   let apply_pre_tc_transformer program transformer =
@@ -140,7 +139,6 @@ let program prev_tyenv pos_context program =
       program_post_typing_transformers in
 
   let ffi_files = ModuleUtils.get_ffi_files result_program in
-
   if Settings.get_value Basicsettings.show_post_frontend_ast then
     Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_program result_program);
 

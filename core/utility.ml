@@ -563,6 +563,12 @@ struct
     | [] :: xss -> transpose xss
     | (x :: xs) :: xss ->
        (x :: (List.map List.hd xss)) :: transpose (xs :: List.map List.tl xss)
+
+  let fold_left1 : ('a -> 'a -> 'a) -> 'a list -> 'a
+    = fun f xs ->
+    match xs with
+    | [] -> raise (Invalid_argument "empty list")
+    | x :: xs -> List.fold_left f x xs
 end
 include ListUtils
 

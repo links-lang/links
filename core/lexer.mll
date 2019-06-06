@@ -234,7 +234,6 @@ let keywords = [
  "select"   , SELECT;
  "server"   , SERVER;
  "set"      , SET;
- "shallowhandle", SHALLOWHANDLE;
  "sig"      , SIG;
  "spawn"    , SPAWN;
  "spawnClient" , SPAWNCLIENT;

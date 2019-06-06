@@ -895,42 +895,37 @@ struct
           | DoOperation (name, ps, Some t) ->
              let vs = evs ps in
              I.do_operation (name, vs, t)
-          | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
-             (* it happens that the ambient effects are the right ones
-                for all of the patterns here (they match those of the
-                initial computations for parameterised handlers and
-                the bodies of the cases) *)
-             let eff = lookup_effects env in
-             let henv, params =
-               let empty_env = (NEnv.empty, TEnv.empty, eff) in
-                match (sh_descr.shd_params) with
-                | None -> empty_env, []
-                | Some { shp_bindings = bindings; shp_types = types } ->
-                   let env, bindings =
-                     List.fold_right2
-                       (fun (p, body) t (env, bindings) ->
-                         let p, penv = CompilePatterns.desugar_pattern eff p in
-                         let bindings = ((fun env -> eval env body), p, t) :: bindings in
-                         ((env ++ penv), bindings))
-                       bindings types (empty_env, [])
-                   in
-                   env, List.rev bindings
-             in
-             let eff_cases =
-               List.map
-                 (fun (p, body) ->
-                   let p, penv = CompilePatterns.desugar_pattern eff p in
-                   (p, fun env -> eval ((env ++ henv) ++ penv) body))
-                 sh_effect_cases
-             in
-             let val_cases =
-                List.map
-                  (fun (p, body) ->
-                    let p, penv = CompilePatterns.desugar_pattern eff p in
-                    (p, fun env -> eval ((env ++ henv) ++ penv) body))
-                  sh_value_cases
-             in
-             I.handle env (ec sh_expr, val_cases, eff_cases, params, sh_descr)
+          | Handle _ -> assert false
+             (* let henv, params =
+              *   let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
+              *    match (sh_descr.shd_params) with
+              *    | None -> empty_env, []
+              *    | Some { shp_bindings = bindings; shp_types = types } ->
+              *       let env, bindings =
+              *         List.fold_right2
+              *           (fun (p, body) t (env, bindings) ->
+              *             let p, penv = CompilePatterns.desugar_pattern p in
+              *             let bindings = ((fun env -> eval env body), p, t) :: bindings in
+              *             ((env ++ penv), bindings))
+              *           bindings types (empty_env, [])
+              *       in
+              *       env, List.rev bindings
+              * in
+              * let eff_cases =
+              *   List.map
+              *     (fun (p, body) ->
+              *       let p, penv = CompilePatterns.desugar_pattern p in
+              *       (p, fun env -> eval ((env ++ henv) ++ penv) body))
+              *     sh_effect_cases
+              * in
+              * let val_cases =
+              *    List.map
+              *      (fun (p, body) ->
+              *        let p, penv = CompilePatterns.desugar_pattern p in
+              *        (p, fun env -> eval ((env ++ henv) ++ penv) body))
+              *      sh_value_cases
+              * in
+              * I.handle env (ec sh_expr, val_cases, eff_cases, params, sh_descr) *)
           | Switch (e, cases, Some t) ->
               let cases =
                 List.map

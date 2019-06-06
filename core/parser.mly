@@ -231,7 +231,7 @@ end
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE
-%token HANDLE SHALLOWHANDLE
+%token HANDLE
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP
@@ -769,25 +769,31 @@ case:
 | CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
 /* | CASE separated_nonempty_list(VBAR, pattern) RARROW block_contents { List.hd $2, block ~ppos:$loc($4) $4 } */
 
-deep_case:
-| CASE pattern WITH pattern RARROW block_contents         { $2, block ~ppos:$loc($6) $6 }
+/* deep_case: */
+/* | CASE pattern WITH pattern RARROW block_contents         { $2, block ~ppos:$loc($6) $6 } */
 
-effect_cases:
-| case effect_cases { $1 :: $2 }
-| deep_case effect_cases { $1 :: $2 }
-| /* empty */ { [] }
+/* effect_cases: */
+/* | case effect_cases { $1 :: $2 } */
+/* | deep_case effect_cases { $1 :: $2 } */
+/*   | /\* empty *\/ { [] } */
+
+unary_effect_case:
+| CASE pattern resumption = option(preceded(WITH, pattern))
+      RARROW block_contents                                    { unary_effect_case ~resumption $2 (block ~ppos:$loc($5) $5) }
+
+nary_effect_case:
+| CASE LPAREN separated_nonempty_list(COMMA, pattern) RPAREN
+    resumption = option(preceded(WITH, pattern))
+      RARROW block_contents                                    { nary_effect_case ~resumption $3 (block ~ppos:$loc($7) $7) }
 
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
 | RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE effect_cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN
-    separated_nonempty_list(COMMA, exp)
-  RPAREN LBRACE effect_cases RBRACE                                  { with_pos $loc (Handle (untyped_handler (List.hd $3) $6 Deep   )) }
-| HANDLE LPAREN
-    separated_nonempty_list(COMMA, exp)
-  RPAREN LPAREN handle_params RPAREN
-  LBRACE effect_cases RBRACE                                          { with_pos $loc (Handle (untyped_handler ~parameters:$6 (List.hd $3) $9 Deep)) }
+| HANDLE LPAREN exp RPAREN LBRACE unary_effect_case* RBRACE    { untyped_handler ~ppos:$loc [$3] $6 }
+| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN
+    LBRACE unary_effect_case* RBRACE                           { untyped_handler ~ppos:$loc ~parameters:$6 [$3] $9 }
+| HANDLE LPAREN exp COMMA separated_nonempty_list(COMMA, exp)
+         RPAREN LBRACE nary_effect_case* RBRACE                { untyped_handler ~ppos:$loc ($3 :: $5) $8 }
 | RAISE                                                        { with_pos $loc (Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
 
@@ -1250,17 +1256,26 @@ parenthesized_pattern:
 | LPAREN pattern RPAREN                                        { $2 }
 | LPAREN pattern COMMA patterns RPAREN                         { with_pos $loc (Pattern.Tuple ($2 :: $4)) }
 | LPAREN labeled_patterns preceded(VBAR, pattern)? RPAREN      { with_pos $loc (Pattern.Record ($2, $3))  }
-| LANGLE CONSTRUCTOR parenthesized_pattern?
-    RARROW resumption = pattern RANGLE                         { with_pos $loc (Pattern.Variant ($2, None)) }
-| LANGLE separated_nonempty_list(VBAR,
-    pair(CONSTRUCTOR, parenthesized_pattern?)) RANGLE          { with_pos $loc (Pattern.Variant (fst (List.hd $2), None)) }
+| operation_pattern { $1 }
+
+
+operation_pattern:
+| LANGLE perhaps_multi_constructor_pattern RANGLE { operation_pat ~ppos:$loc $2 }
+| LANGLE perhaps_multi_constructor_pattern RARROW resumption = pattern RANGLE  { operation_pat ~ppos:$loc ~resumption $2 }
+
+perhaps_multi_constructor_pattern:
+| separated_nonempty_list(VBAR, nary_constructor_pattern) { $1 }
+
+nary_constructor_pattern:
+| CONSTRUCTOR delimited(LPAREN, patterns, RPAREN) { ($1, $2) }
+| CONSTRUCTOR LPAREN RPAREN | CONSTRUCTOR         { ($1, []) }
 
 primary_pattern:
-| VARIABLE                                                     { variable_pat ~ppos:$loc $1   }
-| UNDERSCORE                                                   { any_pat $loc                 }
-| constant                                                     { with_pos $loc (Pattern.Constant $1) }
-| LBRACKET RBRACKET                                            { with_pos $loc Pattern.Nil           }
-| LBRACKET patterns RBRACKET                                   { with_pos $loc (Pattern.List $2)     }
+| VARIABLE                                                     { variable_pat ~ppos:$loc($1) $1   }
+| UNDERSCORE                                                   { any_pat $loc($1)                 }
+| constant                                                     { with_pos $loc($1) (Pattern.Constant $1) }
+| LBRACKET RBRACKET                                            { with_pos $loc($1) Pattern.Nil           }
+| LBRACKET patterns RBRACKET                                   { with_pos $loc($1) (Pattern.List $2)     }
 | parenthesized_pattern                                        { $1 }
 
 patterns:

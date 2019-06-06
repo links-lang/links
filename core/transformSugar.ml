@@ -459,51 +459,51 @@ class transform (env : Types.typing_environment) =
       | DoOperation (name, ps, Some t) ->
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
          (o, DoOperation (name, ps, Some t), t)
-      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
-         let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
-         let (o, expr, _) = o#phrase sh_expr in
-         let envs = o#backup_envs in
-         let (o, params) =
-           match sh_descr.shd_params with
-           | Some params ->
-              let (o, bindings) =
-                List.fold_right
-                  (fun (pat, body) (o, bindings) ->
-                    let (o, body, _) = o#phrase body in
-                    let (o, pat) = o#pattern pat in
-                    (o, (pat, body) :: bindings))
-                  params.shp_bindings (o, [])
-              in
-              (o, Some { params with shp_bindings = bindings })
-           | None -> (o, None)
-         in
-         let (o, val_cases) =
-           listu o
-              (fun o (p, e) ->
-                let (o, p) = o#pattern p in
-                let (o, e, _) = o#phrase e in (o, (p, e)))
-              sh_value_cases
-         in
-         let (o, eff_cases) =
-           listu o
-              (fun o (p, e) ->
-                let (o, p) = o#pattern p in
-                let (o, e, _) = o#phrase e in (o, (p, e)))
-              sh_effect_cases
-         in
-         let o = o#restore_envs envs in
-         let (o, input_row) = o#row input_row in
-         let (o, input_t) = o#datatype input_t in
-         let (o, output_row) = o#row output_row in
-         let (o, output_t) = o#datatype output_t in
-         let (o, raw_row) = o#row sh_descr.shd_raw_row in
-         let descr = {
-           shd_depth = sh_descr.shd_depth;
-           shd_types = (input_row, input_t, output_row, output_t);
-           shd_raw_row = raw_row;
-           shd_params = params}
-         in
-         (o, Handle { sh_expr = expr; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr }, output_t)
+      | Handle _ -> assert false
+         (* let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
+          * let (o, expr, _) = o#phrase sh_expr in
+          * let envs = o#backup_envs in
+          * let (o, params) =
+          *   match sh_descr.shd_params with
+          *   | Some params ->
+          *      let (o, bindings) =
+          *        List.fold_right
+          *          (fun (pat, body) (o, bindings) ->
+          *            let (o, body, _) = o#phrase body in
+          *            let (o, pat) = o#pattern pat in
+          *            (o, (pat, body) :: bindings))
+          *          params.shp_bindings (o, [])
+          *      in
+          *      (o, Some { params with shp_bindings = bindings })
+          *   | None -> (o, None)
+          * in
+          * let (o, val_cases) =
+          *   listu o
+          *      (fun o (p, e) ->
+          *        let (o, p) = o#pattern p in
+          *        let (o, e, _) = o#phrase e in (o, (p, e)))
+          *      sh_value_cases
+          * in
+          * let (o, eff_cases) =
+          *   listu o
+          *      (fun o (p, e) ->
+          *        let (o, p) = o#pattern p in
+          *        let (o, e, _) = o#phrase e in (o, (p, e)))
+          *      sh_effect_cases
+          * in
+          * let o = o#restore_envs envs in
+          * let (o, input_row) = o#row input_row in
+          * let (o, input_t) = o#datatype input_t in
+          * let (o, output_row) = o#row output_row in
+          * let (o, output_t) = o#datatype output_t in
+          * let (o, raw_row) = o#row sh_descr.shd_raw_row in
+          * let descr = {
+          *   shd_depth = sh_descr.shd_depth;
+          *   shd_types = (input_row, input_t, output_row, output_t);
+          *   shd_raw_row = raw_row;
+          *   shd_params = params}
+          * in
+          * (o, Handle { sh_expr = expr; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr }, output_t) *)
       | TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->
           let (o, try_phr, _) = o#phrase try_phr in
           let (o, as_pat) = o#pattern as_pat in
@@ -664,10 +664,20 @@ class transform (env : Types.typing_environment) =
       | Variant (name, p) ->
           let (o, p) = optionu o (fun o -> o#pattern) p
           in (o, Variant (name, p))
-      | Effect (name, ps, k) ->
-         let (o, ps) = listu o (fun o -> o#pattern) ps in
-         let (o, k)  = o#pattern k in
-         (o, Effect (name, ps, k))
+      | Operation ({ parameters; resumption; _ } as d) ->
+         let (o, parameters') = listu o (fun o -> o#pattern) parameters in
+         let (o, resumption') =
+           optionu o
+             (fun o (p, dt) ->
+               let (o, p') = o#pattern p in
+               let (o, dt') = o#datatype dt in
+               (o, (p', dt')))
+             resumption
+         in
+         (o, Operation { d with parameters = parameters'; resumption = resumption' })
+      | MultiOperation ps ->
+         let (o, ps') = listu o (fun o -> o#pattern) ps in
+         (o, MultiOperation ps')
       | Negative name -> (o, Negative name)
       | Record (fields, rest) ->
           let (o, fields) =
