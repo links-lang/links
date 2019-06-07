@@ -223,6 +223,8 @@ sig
   val handle_operation_patterns : griper
   val handle_branches : griper
   val handle_combine_effect_rows : griper
+  val handle_deep_resumption_codomain : griper
+  val resumption_type_annotation : griper
   (* val type_resumption_with_annotation : griper
    * val deep_resumption : griper
    * val deep_resumption_effects : griper
@@ -558,7 +560,16 @@ end
           "has type" ^ nl() ^
           tab() ^ code (show_type lt) ^ nl() ^
           "while the subsequent clauses have type" ^ nl() ^
-          tab() ^ code (show_type rt))
+            tab() ^ code (show_type rt))
+
+    let resumption_type_annotation ~pos ~t1:(_, lt) ~t2:(resume, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      die pos ("The resumption" ^ nl() ^
+                 tab() ^ code resume ^ nl() ^
+                   "has inferred type" ^ nl() ^
+                     tab () ^ code (show_type rt) ^ nl () ^
+                       "but it is annotated with type" ^ nl () ^
+                         tab () ^ code (show_type lt))
 
     (* let handle_return ~pos ~t1:(hexpr, lt) ~t2:(_, rt) ~error:_ =
      *   build_tyvar_names [lt;rt];
@@ -649,6 +660,16 @@ end
                      "may perform effects" ^ nl () ^
                        tab () ^ code (show_type actual) ^ nl () ^
                          "while the current context allows" ^ nl () ^
+                           tab () ^ code (show_type expected))
+
+    let handle_deep_resumption_codomain ~pos ~t1:(_body, expected) ~t2:(resumption, actual) ~error:_ =
+      build_tyvar_names [expected; actual];
+      die pos ("The return type of a deep resumption must be the same as the body type of the handler, " ^ nl() ^
+                 "but the resumption" ^ nl() ^
+                   tab () ^ code resumption ^ nl() ^
+                     "has return type" ^ nl() ^
+                       tab () ^ code (show_type actual) ^ nl() ^
+                         "while the body type of the handler is" ^ nl () ^
                            tab () ^ code (show_type expected))
 
     let do_operation ~pos ~t1:(_,lt) ~t2:(rexpr,rt) ~error:_ =
@@ -1954,6 +1975,7 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
     else
       List.map fst (StringMap.bindings binderss)
 
+
 let map_effects fn =
   let transform = object(o)
     inherit Types.Transform.visitor as super
@@ -1994,6 +2016,44 @@ let check_unsafe_signature context unify inner = function
      unify ~handle:Gripers.bind_unsafe_fun_annotation (inner, unsafe);
      unsafe
   | Some (_, None) -> raise (internal_error "Sugartypes.datatype' without a Types.typ instance")
+
+let rec type_resumption_pattern : ?arity:int -> Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype
+  = fun ?(arity=1) pat ->
+  let unify (l, r) = unify_or_raise ~pos:pat.pos (l, r) in
+  let pos {pos = p;_} = Position.Resolved.resolve p |> Position.Resolved.source_expression in
+  let typ (_, _, typ) = typ in
+  let pos_and_typ (pat, _, typ) = (pos pat, typ) in
+  let env (_, env, _) = env in
+  let erase (pat, _, _) = pat in
+  let fresh_resumption_type arity =
+    let fresh_type_var _ =
+      Types.fresh_type_variable (lin_unl, res_any)
+    in
+    let domain = ListUtils.init fresh_type_var arity in
+    let effects = Types.make_empty_open_row (lin_unl, res_effect) in
+    let codomain = fresh_type_var () in
+    Types.make_function_type domain effects codomain
+  in
+  let open Pattern in
+  let pat' = match pat.node with
+    | Any -> (Pattern.Any, Env.empty, fresh_resumption_type arity)
+    | Variable bndr ->
+       let t = fresh_resumption_type arity in
+       let bndr = Binder.set_type bndr t in
+       let name = Binder.to_name bndr in
+       (Variable bndr, Env.bind Env.empty (name, t), t)
+    | As (bndr, pat') ->
+       let p = type_resumption_pattern pat' in
+       let env' = Env.bind (env p) (Binder.to_name bndr, typ p) in
+       As (Binder.set_type bndr (typ p), erase p), env', typ p
+    | HasType (pat, ((_, Some t') as dt)) ->
+       let pat' = type_resumption_pattern ~arity pat in
+       let () = unify ~handle:Gripers.resumption_type_annotation ((pos pat, t'), pos_and_typ pat') in
+       HasType ((erase pat'), dt), env pat', t'
+    | HasType _ -> assert false
+    | _ -> Gripers.die pat.pos "Improper pattern matching on resumption parameter"
+  in
+  with_pos pat.pos (erase pat'), env pat', typ pat'
 
 let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
   let make_singleton_row =
@@ -3596,7 +3656,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    (* Type each pattern. *)
                    let patterns' = List.map tpo patterns in
                    let () = List.iteri classify patterns' in
-                   let resumption' = opt_map (fun (p, _) -> tpo p) resumption in
+                   let resumption' = opt_map (fun (p, _) -> type_resumption_pattern p) resumption in
                    (patterns', resumption', body) :: cases)
                  [] cases
              in
@@ -3612,12 +3672,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              close_pattern_types arity value_matrix value_types;
              close_pattern_types arity effect_matrix operation_types;
              (* Type check bodies. *)
-             let extend context patterns =
-               List.fold_left
-                 (fun context pat -> context ++ pattern_env pat)
-                 context patterns
-             in
-             let pattern_env' patterns =
+             (* let extend context patterns =
+              *   List.fold_left
+              *     (fun context pat -> context ++ pattern_env pat)
+              *     context patterns
+              * in *)
+             let patterns_env patterns =
                List.fold_left
                  (fun env pat -> Env.extend env (pattern_env pat))
                  Env.empty patterns
@@ -3626,9 +3686,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                let body_type = Types.fresh_type_variable (lin_unl, res_any) in
                List.fold_left
                  (fun cases (patterns, resumption, body) ->
-                   let body = type_check (extend context patterns) body in
+                   let env =
+                     match resumption with
+                     | None -> patterns_env patterns
+                     | Some pat -> patterns_env (pat :: patterns)
+                   in
+                   let body = type_check (context ++ env) body in
                    let () =
                      unify ~handle:Gripers.handle_branches (no_pos body_type, pos_and_typ body)
+                   in
+                   let () =
+                     match resumption with
+                     | None -> ()
+                     | Some resumption ->
+                        unify ~handle:Gripers.handle_deep_resumption_codomain (pos_and_typ body, ppos_and_typ resumption)
                    in
                    let () =
                      Env.iter
@@ -3638,9 +3709,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                          then if Types.type_can_be_unl t
                               then Types.make_type_unl t
                               else Gripers.non_linearity pos uses v t)
-                       (pattern_env' patterns)
+                       env
                    in
-                   let vs = Env.domain (pattern_env' patterns) in
+                   let vs = Env.domain env in
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
                    (patterns, resumption, update_usages body us) :: cases)
                  [] cases

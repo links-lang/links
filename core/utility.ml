@@ -569,6 +569,11 @@ struct
     match xs with
     | [] -> raise (Invalid_argument "empty list")
     | x :: xs -> List.fold_left f x xs
+
+  let rec init : (int -> 'a) -> int -> 'a list
+    = fun f n ->
+    if n <= 0 then []
+    else f n :: init f (n - 1)
 end
 include ListUtils
 
