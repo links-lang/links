@@ -28,11 +28,12 @@ steps:
   condition: eq( variables['Agent.OS'], 'Linux' )
   displayName: 'OCaml system compiler'
 - bash: |
-     brew update && brew install ocaml
+     brew update && brew install ocaml && brew install opam && echo "opam \$@" > opam2_local
   condition: eq( variables['Agent.OS'], 'Darwin' )
-  displayName: 'OCaml system compiler'
+  displayName: 'OCaml environment'
 - script: |
     /usr/bin/env bash ./install_local_opam2.sh
+  condition: eq( variables['Agent.OS'], 'Linux' )
   displayName: 'OPAM 2'
 - script: |
     /usr/bin/env bash ./opam2_local switch create ocaml-base-compiler.4.06.1
