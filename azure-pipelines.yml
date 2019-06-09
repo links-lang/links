@@ -25,19 +25,19 @@ steps:
   displayName: 'Rule check'
 - bash: |
      case $AGENT_OS in
-       "Linux") sudo apt install ocaml
+       "Linux") sudo apt install ocaml ;;
        "Darwin") brew update &&
-                 brew install ocaml
-       *) exit 1
+                 brew install ocaml ;;
+       *) exit 1 ;;
   displayName: 'OCaml system compiler'
 - bash: |
     case $AGENT_OS in
-      "Linux")  ./install_local_opam2.sh
+      "Linux")  ./install_local_opam2.sh ;;
       "Darwin") brew update &&
                 brew install opam &&
                 opam init --disable-sandboxing -n &&
-                echo "opam \$@" > opam2_local
-      *) exit 1
+                echo "opam \$@" > opam2_local ;;
+      *) exit 1 ;;
   displayName: 'OPAM 2'
 - script: |
     ./opam2_local switch create ocaml-base-compiler.4.06.1
