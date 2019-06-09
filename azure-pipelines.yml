@@ -37,7 +37,8 @@ steps:
       "Darwin") brew update &&
                 brew install opam &&
                 opam init --disable-sandboxing -n &&
-                echo "opam \$@" > opam2_local ;;
+                echo "opam \$@" > opam2_local &&
+                chmod a+x opam2_local ;;
       *) exit 1 ;;
     esac
   displayName: 'OPAM 2'
