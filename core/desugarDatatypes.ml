@@ -41,6 +41,71 @@ let concrete_subkind =
   | Some subkind -> subkind
   | None         -> default_subkind
 
+(** Replaces all placeholder variables with a fresh one. *)
+class basic_freshener = object
+  inherit SugarTraversals.map as super
+
+  method! known_type_variable =
+    let module SC = SugarConstructors.SugartypesPositions in
+    function
+    | (("$" | "$anon"), None, freedom) ->
+       SC.fresh_known_type_variable freedom
+       |> super#known_type_variable
+    | v ->  super#known_type_variable v
+end
+
+let freshen_vars =
+  let module SC = SugarConstructors.SugartypesPositions in
+  (* Determine if this is an "anonymous" effect type variable, and so introduced
+     within a simple arrow (->, ~>, -@, ~>) *)
+  let is_anon_effect = function
+    | Datatype.Open ("$anon", None, `Rigid) -> true
+    | _ -> false in
+  (* If this function type is exclusively composed of anonymous effect type
+     variables. Or rather, there are no explicitly mentioned effect variables. *)
+  let all_anon_effects = object
+    inherit SugarTraversals.predicate as super
+
+    val all_anon = true
+    method satisfied = all_anon
+
+    method! datatypenode = let open Datatype in
+      function
+      | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _)
+           when not (is_anon_effect eff_var) -> {<all_anon = false>}
+      | ty -> super#datatypenode ty
+  end in
+
+  let basic_refresh = new basic_freshener
+  and shared_refresh var = object
+    inherit basic_freshener as super
+    method! datatypenode = let open Datatype in
+      function
+      | Function (args, (effects, eff_var), ret) when is_anon_effect eff_var
+        -> super#datatypenode (Function (args, (effects, var), ret))
+      | Lolli (args, (effects, eff_var), ret) when is_anon_effect eff_var
+        -> super#datatypenode (Lolli (args, (effects, var), ret))
+      | ty -> super#datatypenode ty
+  end in
+
+  object
+    inherit basic_freshener as super
+    method! datatypenode = let open Datatype in
+      function
+      | (Function _ | Lolli _) as dt ->
+         (* If effect_sugar is enabled, and all variables are fresh (and so not
+            explicitly named), then we will substitute the same variable across
+            all arrows. Otherwise every arrow gets its own row variable, as
+            normal. *)
+         if Settings.get_value Basicsettings.Types.effect_sugar
+            && (all_anon_effects#datatypenode dt)#satisfied then
+           let var = Datatype.Open (SC.fresh_known_type_variable `Rigid) in
+           (shared_refresh var)#datatypenode dt
+         else
+           basic_refresh#datatypenode dt
+      | dt -> super#datatypenode dt
+  end
+
 (* Find all unbound type variables in a term *)
 let typevars =
 object (self)
@@ -617,10 +682,12 @@ object (self)
 end
 
 let phrase alias_env p =
+  let p = freshen_vars#phrase p in
   let tvars = (typevars#phrase p)#tyvar_list in
     (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#phrase p
 
 let binding alias_env b =
+  let b = freshen_vars#binding b in
   let tvars = (typevars#binding b)#tyvar_list in
     (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#binding b
 
@@ -652,6 +719,7 @@ let sentence typing_env = function
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
+  let dt = freshen_vars#datatype dt in
   let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
   let () = List.iter Generalise.rigidify_quantifier vars in
     (Types.for_all (vars, Desugar.datatype var_env aliases dt))

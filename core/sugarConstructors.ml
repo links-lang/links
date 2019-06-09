@@ -25,30 +25,9 @@ module SugarConstructors (Position : Pos)
 
   let type_variable_counter = ref 0
 
-  let fresh_type_variable () : Datatype.t =
+  let fresh_known_type_variable freedom : known_type_variable =
     incr type_variable_counter;
-    Datatype.TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
-
-  let fresh_rigid_type_variable () : Datatype.t =
-    incr type_variable_counter;
-    Datatype.TypeVar ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
-
-  let fresh_row_variable () : Datatype.row_var =
-    incr type_variable_counter;
-    Datatype.Open ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
-
-  let fresh_rigid_row_variable () : Datatype.row_var =
-    incr type_variable_counter;
-    Datatype.Open ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
-
-  let fresh_presence_variable () : Datatype.fieldspec =
-    incr type_variable_counter;
-    Datatype.Var ("_" ^ string_of_int (!type_variable_counter), None, `Flexible)
-
-  let fresh_rigid_presence_variable () : Datatype.fieldspec =
-    incr type_variable_counter;
-    Datatype.Var ("_" ^ string_of_int (!type_variable_counter), None, `Rigid)
-
+    ("_" ^ string_of_int (!type_variable_counter), None, freedom)
 
   (** Helper data types and functions for passing arguments to smart
       constructors. *)
@@ -141,7 +120,6 @@ module SugarConstructors (Position : Pos)
 
   (** Rows *)
 
-  let fresh_row   unit                    = ([], fresh_rigid_row_variable unit)
   let row_with    field (fields, row_var) = (field::fields, row_var)
   let row_with_wp fields                  = row_with wild_present fields
   let hear_arrow_prefix presence fields =
