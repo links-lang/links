@@ -23,24 +23,24 @@ steps:
 - script: |
     make rule-check
   displayName: 'Rule check'
-- script: |
-     sudo apt install ocaml
-  condition: eq( variables['Agent.OS'], 'Linux' )
+- bash: |
+     case $AGENT_OS in
+       "Linux") sudo apt install ocaml
+       "Darwin") brew update &&
+                 brew install ocaml
+       *) exit 1
   displayName: 'OCaml system compiler'
 - bash: |
-     brew update &&
-     brew install ocaml &&
-     brew install opam &&
-     opam init --disable-sandboxing -n &&
-     echo "opam \$@" > opam2_local
-  condition: eq( variables['Agent.OS'], 'Darwin' )
-  displayName: 'OCaml environment'
-- script: |
-    /usr/bin/env bash ./install_local_opam2.sh
-  condition: eq( variables['Agent.OS'], 'Linux' )
+    case $AGENT_OS in
+      "Linux")  ./install_local_opam2.sh
+      "Darwin") brew update &&
+                brew install opam &&
+                opam init --disable-sandboxing -n &&
+                echo "opam \$@" > opam2_local
+      *) exit 1
   displayName: 'OPAM 2'
 - script: |
-    /usr/bin/env bash ./opam2_local switch create ocaml-base-compiler.4.06.1
+    ./opam2_local switch create ocaml-base-compiler.4.06.1
     eval `./opam2_local config env`
   condition: eq( variables['Agent.OS'], 'Linux' )
   displayName: 'OCaml compiler'
@@ -78,14 +78,14 @@ steps:
   displayName: 'Server-side tests'
 - script: |
     eval `./opam2_local env`
-    /usr/bin/env bash ./run-tests db-only shredding
+    ./run-tests db-only shredding
   displayName: 'Database shredding tests'
 - script: |
     eval `./opam2_local env`
-    /usr/bin/env bash ./run-tests db-only relational-lenses
+    ./run-tests db-only relational-lenses
   displayName: 'Relational lenses tests'
 - script: |
     eval `./opam2_local env`
-    /usr/bin/env bash ./opam2_local install -y oUnit
-    /usr/bin/env bash ./run-tests unit
+    ./opam2_local install -y oUnit
+    ./run-tests unit
   displayName: 'Unit tests'
