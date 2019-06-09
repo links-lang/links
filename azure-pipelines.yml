@@ -19,8 +19,6 @@ strategy:
 pool:
   vmImage: $(imageName)
 
-jobs:
-
 steps:
 - script: |
     make rule-check
