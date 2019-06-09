@@ -66,9 +66,9 @@ steps:
   displayName: 'Databases'
 - script: |
     eval `./opam2_local env`
-    /usr/bin/env bash ./opam2_local pin add links . -y
-    /usr/bin/env bash ./opam2_local pin add links-postgresql . -y
-    /usr/bin/env bash ./opam2_local pin add links-sqlite3 . -y
+    ./opam2_local pin add links . -y
+    ./opam2_local pin add links-postgresql . -y
+    ./opam2_local pin add links-sqlite3 . -y
   displayName: 'Links dependencies'
 - script: |
     eval `./opam2_local env`
