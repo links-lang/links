@@ -28,7 +28,11 @@ steps:
   condition: eq( variables['Agent.OS'], 'Linux' )
   displayName: 'OCaml system compiler'
 - bash: |
-     brew update && brew install ocaml && brew install opam && echo "opam \$@" > opam2_local
+     brew update &&
+     brew install ocaml &&
+     brew install opam &&
+     opam init --disable-sandboxing -n &&
+     echo "opam \$@" > opam2_local
   condition: eq( variables['Agent.OS'], 'Darwin' )
   displayName: 'OCaml environment'
 - script: |
