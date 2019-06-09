@@ -59,7 +59,7 @@ steps:
     brew services start postgres &&
     sleep 3 &&
     /usr/local/opt/postgres/bin/createuser -s $(whoami) &&
-    /usr/local/opt/postgres/bin/createdb -O $(whoami) links &&
+    /usr/local/opt/postgres/bin/createdb -O $(whoami) links
   condition: eq( variables['Agent.OS'], 'Darwin' )
   displayName: 'Databases'
 - script: |
