@@ -43,7 +43,7 @@ EOF
 # Attempt to locate pg_hba.conf.
 HBA_CONFS=()
 PG_HBA=
-for conf in $(locate --regex 'pg_hba.conf$'); do
+for conf in $(locate -b '\pg_hba.conf'); do
     HBA_CONFS+=("$conf")
 done
 
