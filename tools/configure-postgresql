@@ -40,16 +40,10 @@ EOF
 }
 
 
-# Set the appropriate locate command
-LOCATE=$(command -v glocate)
-if [[ $? -ne 0 ]]; then
-    LOCATE="locate"
-fi
-
 # Attempt to locate pg_hba.conf.
 HBA_CONFS=()
 PG_HBA=
-for conf in $("$LOCATE" -b '\pg_hba.conf'); do
+for conf in $(locate -b '\pg_hba.conf'); do
     HBA_CONFS+=("$conf")
 done
 
