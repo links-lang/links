@@ -46,23 +46,23 @@ steps:
     eval `./opam2_local config env`
   condition: eq( variables['Agent.OS'], 'Linux' )
   displayName: 'OCaml compiler'
-- script: |
-    sudo apt install postgresql libpq-dev sqlite3 libsqlite3-dev
-    sudo LINKS_CI=1 tools/configure-postgresql
-    sudo systemctl reload postgresql
-    sudo -u postgres createuser -s $(whoami)
-    sudo -u postgres createdb -O $(whoami) links
-  condition: eq( variables['Agent.OS'], 'Linux' )
-  displayName: 'Databases'
 - bash: |
-    brew update &&
-    brew install postgres libpq sqlite3 &&
-    sudo LINKS_CI=1 tools/configure-postgresql &&
-    brew services start postgres &&
-    sleep 3 &&
-    /usr/local/opt/postgres/bin/createuser -s $(whoami) &&
-    /usr/local/opt/postgres/bin/createdb -O $(whoami) links
-  condition: eq( variables['Agent.OS'], 'Darwin' )
+    case $AGENT_OS in
+      "Linux") sudo apt install postgresql libpq-dev sqlite3 libsqlite3-dev &&
+               sudo LINKS_CI=1 tools/configure-postgresql &&
+               sudo systemctl reload postgresql &&
+               sudo -u postgres createuser -s $(whoami) &&
+               sudo -u postgres createdb -O $(whoami) links ;;
+      "Darwin") brew update &&
+                brew install postgres libpq sqlite3 &&
+                sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist &&
+                sudo LINKS_CI=1 tools/configure-postgresql &&
+                brew services start postgres &&
+                sleep 3 &&
+                /usr/local/opt/postgres/bin/createuser -s $(whoami) &&
+                /usr/local/opt/postgres/bin/createdb -O $(whoami) links ;;
+      *) exit 1 ;;
+    esac
   displayName: 'Databases'
 - script: |
     eval `./opam2_local env`
