@@ -26,4 +26,4 @@ fi
 chmod u+x "$OPAM_EXEC"
 
 # Initialise OPAM.
-eval "./$OPAM_EXEC init --disable-sandboxing -n"
+/usr/bin/env bash "./$OPAM_EXEC" init --disable-sandboxing -n
