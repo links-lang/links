@@ -23,7 +23,7 @@ if [[ $? -ne 0 || ! -f "./$OPAM_EXEC" ]]; then
 fi
 
 # Make the script executable for the owner.
-chmod u+x "$OPAM_EXEC"
+chmod a+x "$OPAM_EXEC"
 
 # Initialise OPAM.
 /usr/bin/env bash "./$OPAM_EXEC" init --disable-sandboxing -n
