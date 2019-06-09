@@ -44,7 +44,6 @@ steps:
 - script: |
     ./opam2_local switch create ocaml-base-compiler.4.06.1
     eval `./opam2_local config env`
-  condition: eq( variables['Agent.OS'], 'Linux' )
   displayName: 'OCaml compiler'
 - bash: |
     case $AGENT_OS in
