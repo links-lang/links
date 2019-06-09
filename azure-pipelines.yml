@@ -32,7 +32,7 @@ steps:
   condition: eq( variables['Agent.OS'], 'Darwin' )
   displayName: 'OCaml system compiler'
 - script: |
-    ./install_local_opam2.sh
+    /usr/bin/env bash ./install_local_opam2.sh
   displayName: 'OPAM 2'
 - script: |
     ./opam2_local switch create ocaml-base-compiler.4.06.1
