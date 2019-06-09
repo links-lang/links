@@ -60,7 +60,6 @@ steps:
                 brew install postgres libpq sqlite3 &&
                 brew services start postgres &&
                 sleep 3 &&
-                /usr/local/opt/postgres/bin/createuser -s $(whoami) &&
                 /usr/local/opt/postgres/bin/createdb -O $(whoami) links ;;
       *) exit 1 ;;
     esac
