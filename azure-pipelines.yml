@@ -19,12 +19,19 @@ strategy:
 pool:
   vmImage: $(imageName)
 
+jobs:
+
 steps:
 - script: |
     make rule-check
   displayName: 'Rule check'
 - script: |
      sudo apt install ocaml
+  condition: eq( variables['Agent.OS'], 'Linux' )
+  displayName: 'OCaml system compiler'
+- bash: |
+     brew update && brew install ocaml
+  condition: eq( variables['Agent.OS'], 'Darwin' )
   displayName: 'OCaml system compiler'
 - script: |
     ./install_local_opam2.sh
@@ -32,6 +39,7 @@ steps:
 - script: |
     ./opam2_local switch create ocaml-base-compiler.4.06.1
     eval `./opam2_local config env`
+    condition: eq( variables['Agent.OS'], 'Linux' )
   displayName: 'OCaml compiler'
 - script: |
     sudo apt install postgresql libpq-dev sqlite3 libsqlite3-dev
@@ -39,6 +47,17 @@ steps:
     sudo systemctl reload postgresql
     sudo -u postgres createuser -s $(whoami)
     sudo -u postgres createdb -O $(whoami) links
+  condition: eq( variables['Agent.OS'], 'Linux' )
+  displayName: 'Databases'
+- bash: |
+    brew update &&
+    brew install postgres libpq sqlite3 &&
+    sudo LINKS_CI=1 tools/configure-postgresql &&
+    brew services start postgres &&
+    sleep 3 &&
+    /usr/local/opt/postgres/bin/createuser -s $(whoami) &&
+    /usr/local/opt/postgres/bin/createdb -O $(whoami) links &&
+  condition: eq( variables['Agent.OS'], 'Darwin' )
   displayName: 'Databases'
 - script: |
     eval `./opam2_local env`
