@@ -21,6 +21,9 @@ pool:
 
 steps:
 - script: |
+    printenv
+  displayName: Environment
+- script: |
     make rule-check
   displayName: 'Rule check'
 - bash: |
@@ -55,7 +58,6 @@ steps:
                sudo -u postgres createdb -O $(whoami) links ;;
       "Darwin") brew update &&
                 brew install postgres libpq sqlite3 &&
-                sudo LINKS_CI=1 tools/configure-postgresql &&
                 brew services start postgres &&
                 sleep 3 &&
                 /usr/local/opt/postgres/bin/createuser -s $(whoami) &&
