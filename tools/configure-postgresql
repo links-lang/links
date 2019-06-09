@@ -41,10 +41,9 @@ EOF
 
 
 # Attempt to locate pg_hba.conf.
-POSTGRES_HOME="/etc/postgresql"
 HBA_CONFS=()
 PG_HBA=
-for conf in $(find "$POSTGRES_HOME" -name "pg_hba.conf"); do
+for conf in $(locate --regex 'pg_hba.conf$'); do
     HBA_CONFS+=("$conf")
 done
 

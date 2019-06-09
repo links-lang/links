@@ -9,8 +9,15 @@ pr:
     include:
       - '*'  # must quote since "*" is a YAML reserved character.
 
+strategy:
+  matrix:
+    linux:
+      imageName: 'ubuntu-latest'
+    mac:
+      imageName: 'macos-latest'
+
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: $(imageName)
 
 steps:
 - script: |
