@@ -38,7 +38,7 @@ steps:
     case $AGENT_OS in
       "Linux")  ./install_local_opam2.sh ;;
       "Darwin") brew update &&
-                brew install opam &&
+                brew install opam pkg-config &&
                 opam init --disable-sandboxing -n &&
                 echo "opam \$@" > opam2_local &&
                 chmod a+x opam2_local ;;
