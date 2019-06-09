@@ -52,7 +52,8 @@ steps:
                sudo systemctl reload postgresql &&
                sudo -u postgres createuser -s $(whoami) &&
                sudo -u postgres createdb -O $(whoami) links ;;
-      "Darwin") brew update &&
+      "Darwin") brew update && brew install findutils
+                alias locate=glocate
                 brew install postgres libpq sqlite3 &&
                 sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist &&
                 sudo LINKS_CI=1 tools/configure-postgresql &&
