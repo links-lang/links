@@ -1,0 +1,62 @@
+# Azure Pipelines configuration.
+
+trigger:
+- master
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+      - '*'  # must quote since "*" is a YAML reserved character.
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- script: |
+    make rule-check
+  displayName: 'Rule check'
+- script: |
+     sudo apt install ocaml
+  displayName: 'OCaml system compiler'
+- script: |
+    ./install_local_opam2.sh
+  displayName: 'OPAM 2'
+- script: |
+    ./opam2_local switch create ocaml-base-compiler.4.06.1
+    eval `./opam2_local config env`
+  displayName: 'OCaml compiler'
+- script: |
+    sudo apt install postgresql libpq-dev sqlite3 libsqlite3-dev
+    sudo LINKS_CI=1 tools/configure-postgresql
+    sudo systemctl reload postgresql
+    sudo -u postgres createuser -s $(whoami)
+    sudo -u postgres createdb -O $(whoami) links
+  displayName: 'Databases'
+- script: |
+    eval `./opam2_local env`
+    ./opam2_local pin add links . -y
+    ./opam2_local pin add links-postgresql . -y
+    ./opam2_local pin add links-sqlite3 . -y
+  displayName: 'Links dependencies'
+- script: |
+    eval `./opam2_local env`
+    make all-release
+  displayName: 'Build Links (release)'
+- script: |
+    eval `./opam2_local env`
+    make tests
+  displayName: 'Server-side tests'
+- script: |
+    eval `./opam2_local env`
+    ./run-tests db-only shredding
+  displayName: 'Database shredding tests'
+- script: |
+    eval `./opam2_local env`
+    ./run-tests db-only relational-lenses
+  displayName: 'Relational lenses tests'
+- script: |
+    eval `./opam2_local env`
+    ./opam2_local install -y oUnit
+    ./run-tests unit
+  displayName: 'Unit tests'
