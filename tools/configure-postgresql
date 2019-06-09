@@ -43,7 +43,7 @@ EOF
 # Attempt to locate pg_hba.conf.
 HBA_CONFS=()
 PG_HBA=
-for conf in $(find /etc/postgresql /opt/local/var/db -name 'pg_hba.conf' 2> /dev/null); do
+for conf in $(find /etc/postgresql /opt/local/var -name 'pg_hba.conf' 2> /dev/null); do
     HBA_CONFS+=("$conf")
 done
 
