@@ -1,0 +1,9 @@
+fun nested_quantified (x) {
+  ignore(x : a);
+
+  sig f : forall a. (a) -> ()
+  fun f (x) { }
+
+  f(0);
+  f(x : a);
+}

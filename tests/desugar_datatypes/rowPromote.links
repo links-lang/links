@@ -1,0 +1,5 @@
+typename PolyPingPong =
+  [+|
+    Go: forall a::Row. !a.?a.PolyPingPong,
+    Stop: EndQuery
+  |+];
