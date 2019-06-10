@@ -924,16 +924,16 @@ let xml_unescape s =
 
 (** (0 base64 Routines) *)
 let base64decode s =
-  try B64.decode (Str.global_replace (Str.regexp " ") "+" s)
+  try Base64.decode_exn (Str.global_replace (Str.regexp " ") "+" s)
   with Invalid_argument s as e ->
     if s = "B64.decode" then
       raise (Invalid_argument ("base64 decode gave error: " ^ s))
     else
       raise e
 
-let base64encode =
-  (* We may want to use B64.uri_safe_alphabet rather than the default alphabet *)
-  B64.encode ~alphabet:B64.default_alphabet ~pad:true
+let base64encode s =
+  (* We may want to use Base64.uri_safe_alphabet rather than the default alphabet *)
+  Base64.encode_exn ~alphabet:Base64.default_alphabet ~pad:true s
 
 let gensym_counter = ref 0
 

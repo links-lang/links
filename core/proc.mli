@@ -49,7 +49,6 @@ module type WEBSOCKETS =
     val accept :
       client_id ->
       Cohttp.Request.t ->
-      Conduit_lwt_unix.flow ->
       (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t
 
     (** Sends a message to the given PID. *)

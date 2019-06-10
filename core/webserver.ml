@@ -147,7 +147,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt render_cont conn req body =
+    let callback rt render_cont _conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt.Body.to_string body >>= fun body_string ->
@@ -284,7 +284,7 @@ struct
         Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
           (ClientID.to_string client_id));
         Cohttp_lwt.Body.drain_body body >>= fun () ->
-        Proc.Websockets.accept client_id req (fst conn)
+        Proc.Websockets.accept client_id req
       else
         route rt in
 
