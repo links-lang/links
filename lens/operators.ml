@@ -6,18 +6,32 @@
      ::     is also used in patterns
      ~      triggers a lexer state switch
 *)
+open Lens_utility
+
+module Operator_not_found_exception = struct
+  type t = string
+
+  let to_string v =
+    Format.asprintf "Relational lenses do not support operator %s." v
+
+  let get_op v = v
+end
 
 module Unary = struct
   type t = Minus | Not [@@deriving show]
 
-  let to_string = function Minus -> "-" | Not -> "!"
+  let to_string = function
+    | Minus -> "-"
+    | Not -> "!"
 
   let of_string s =
+    let open Result in
     match s with
-    | "-" -> Minus
-    | "!" -> Not
-    | _ as op ->
-        failwith @@ "Operator " ^ op ^ " not supported by Unary.of_string."
+    | "-" -> return Minus
+    | "!" -> return Not
+    | _ -> error s
+
+  let of_string_exn s = of_string s |> Result.ok_exn
 
   let fmt f v = Format.fprintf f "%s" (to_string v)
 end
@@ -50,20 +64,23 @@ module Binary = struct
     | LogicalAnd -> "AND"
     | LogicalOr -> "OR"
 
-  let of_string : string -> t = function
-    | "-" -> Minus
-    | "*" -> Multiply
-    | "/" -> Divide
-    | "&&" -> LogicalAnd
-    | "||" -> LogicalOr
-    | "=" -> Equal
-    | "+" -> Plus
-    | ">" -> Greater
-    | ">=" -> GreaterEqual
-    | "<" -> Less
-    | "<=" -> LessEqual
-    | _ as op ->
-        failwith @@ "Operator " ^ op ^ " not supported by Binary.of_string."
+  let of_string op =
+    let open Result in
+    match op with
+    | "-" -> return Minus
+    | "*" -> return Multiply
+    | "/" -> return Divide
+    | "&&" -> return LogicalAnd
+    | "||" -> return LogicalOr
+    | "=" -> return Equal
+    | "+" -> return Plus
+    | ">" -> return Greater
+    | ">=" -> return GreaterEqual
+    | "<" -> return Less
+    | "<=" -> return LessEqual
+    | _ -> error op
+
+  let of_string_exn op = of_string op |> Result.ok_exn
 
   let fmt f v = Format.fprintf f "%s" (to_string v)
 end

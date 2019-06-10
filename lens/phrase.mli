@@ -1,9 +1,8 @@
-[@@@ocamlformat "doc-comments=before"]
 (** This module manages expressions for relational lenses. Expressions
     are considered to be executed within the environment of a row, meaning
-    we may have the row (A = 3; B = 10) and then we could evaluate the expression
-    `var "A" > 7 && var "B" < 20` using this row as the context. Expressions are
-    translatable to SQL*)
+    we may have the row (A = 3; B = 10) and then we could evaluate the
+    expression `var "A" > 7 && var "B" < 20` using this row as the context.
+    Expressions are translatable to SQL*)
 
 module Value = Phrase_value
 
@@ -43,14 +42,20 @@ val tuple : t list -> t
 (** Create a tuple of a single phrase. *)
 val tuple_singleton : t -> t
 
-(** Traverse a lens phrase, applying [dosth] to each nod and then replacing the result. *)
+(** Traverse a lens phrase, applying [dosth] to each nod and then replacing the
+    result. *)
 val traverse : t -> f:(t -> t) -> t
 
 (** Get a list of variables in the expression. *)
 val get_vars : t -> Alias.Set.t
 
-(** Calculate the vale of an expression given a lookup function for variables. *)
+(** Calculate the value of an expression given a lookup function for
+    variables. *)
 val eval : t -> (string -> Value.t) -> Value.t
+
+(** Tries to execute and simplify as much of the equation as possible using the
+    given variables. *)
+val partial_eval : t -> lookup:(string -> Value.t option) -> t
 
 (** Rename all variables with an entry in the given map. *)
 val rename_var : t -> replace:string Alias.Map.t -> t
@@ -90,6 +95,17 @@ module Option : sig
 
   (** Construct an in expression phrase option  *)
   val in_expr : string list -> Value.t list list -> t
+
+  (** Calculate the vale of an expression given a lookup function for variables.
+      Defaults to true if the phrase is [None]. *)
+  val eval : t -> (string -> Value.t) -> Value.t
+
+  (** Get a list of variables in the expression. *)
+  val get_vars : t -> Alias.Set.t
+
+  (** Tries to execute and simplify as much of the equation as possible using the
+      given variables. *)
+  val partial_eval : t -> lookup:(string -> Value.t option) -> t
 end
 
 module List : sig
@@ -121,7 +137,8 @@ module Record : sig
   val eval : t -> record -> record
 end
 
-(** This module contains operators and short hand constructors for producing phrase expressions.
+(** This module contains operators and short hand constructors for producing
+    phrase expressions.
 
   Example:
 
@@ -133,21 +150,20 @@ end
   ]}
 *)
 module O : sig
-
   (** Greater than comparison. *)
-  val (>) : t -> t -> t
+  val ( > ) : t -> t -> t
 
   (** Less than comparison. *)
-  val (<) : t -> t -> t
+  val ( < ) : t -> t -> t
 
   (** Equality comparison. *)
-  val (=) : t -> t -> t
+  val ( = ) : t -> t -> t
 
   (** Logical and operator. *)
-  val (&&) : t -> t -> t
+  val ( && ) : t -> t -> t
 
   (** Logical or operator. *)
-  val (||) : t -> t -> t
+  val ( || ) : t -> t -> t
 
   (** Variable reference. *)
   val v : string -> t
@@ -159,15 +175,17 @@ module O : sig
   val b : bool -> t
 end
 
-(** This module is a simple algorithm for determining which variables affect each other during
-    execution. *)
+(** This module is a simple algorithm for determining which variables affect
+    each other during execution. *)
 module Grouped_variables : sig
   type phrase = t
 
-  include Lens_set.S with type elt = Alias.Set.t
+  type elt = Alias.Set.t
 
-  (** Generate a grouped type variable value from a list of lists of column names.
-      This is mainly useful for debugging. *)
+  type t = Alias.Set.Set.t [@@deriving eq]
+
+  (** Generate a grouped type variable value from a list of lists of column
+      names. This is mainly useful for debugging. *)
   val of_lists : string list list -> t
 
   (** Calculate the grouped type variables from a phrase. *)
@@ -183,4 +201,10 @@ module Grouped_variables : sig
       variables. If it is called with cols `C`, then it returns true, because
       the group `C D` contains the column `D` in addition to the column `C`. *)
   val has_partial_overlaps : t -> cols:elt -> bool
+
+  module Error : sig
+    type t = Overlaps of Alias.Set.t [@@deriving eq]
+  end
+
+  val no_partial_overlaps : t -> cols:Alias.Set.t -> (unit, Error.t) result
 end

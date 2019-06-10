@@ -5,6 +5,8 @@ module type S = sig
 
   val show : 'a Lens_format.fmt_fn -> 'a t -> string
 
+  val find_exn : 'a t -> key:key -> 'a
+
   val find : 'a t -> key:key -> 'a option
 
   val from_alist : (key * 'a) list -> 'a t

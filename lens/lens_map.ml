@@ -9,12 +9,13 @@ module type S = Lens_map_intf.S
 module Make (Ord : OrderedShow) = struct
   include Map.Make (Ord)
 
+  let find_exn m ~key = find key m
+
   let find m ~key = find_opt key m
 
-  let from_alist l = List.fold_right (fun (k,v) m -> add k v m) l empty
+  let from_alist l = List.fold_right (fun (k, v) m -> add k v m) l empty
 
-  let to_list f m =
-    fold (fun k v l -> (f k v) :: l) m []
+  let to_list f m = fold (fun k v l -> f k v :: l) m []
 
   let pp af formatter map =
     Format.pp_open_box formatter 0 ;

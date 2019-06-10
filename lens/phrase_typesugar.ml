@@ -64,9 +64,9 @@ and tc ~env (data, phrase) =
   | Sugar.InfixAppl (op, p, q) -> tc_infix ~env ~data ~op p q
   | Sugar.UnaryAppl (op, p) -> tc_unary ~env ~data ~op p
 
-let tc_sort ~sort phrase =
+let tc_columns ~columns phrase =
   let env =
-    Sort.cols sort
+    columns
     |> List.map ~f:(fun c -> (Column.alias c, Column.typ c))
     |> Alias.Map.from_alist
   in

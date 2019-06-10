@@ -7,5 +7,5 @@ type 'a t =
   | Var of name
   | UnaryAppl of Unary.t * 'a phrase
   | InfixAppl of Binary.t * 'a phrase * 'a phrase
-and 'a phrase =
-  'a * 'a t
+
+and 'a phrase = 'a * 'a t

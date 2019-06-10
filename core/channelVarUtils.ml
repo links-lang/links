@@ -95,6 +95,7 @@ let variables_in_computation comp =
           traverse_computation c) clauses
     | Lens (value, _)
     | LensSelect (value, _, _)
+    | LensCheck (value, _)
     | LensGet (value, _) -> traverse_value value
     | LensDrop (v1, _, _, v2, _)
     | LensJoin (v1, v2, _, _, _, _)

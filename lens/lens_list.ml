@@ -1,5 +1,4 @@
 include List
-
 module Seq = Lens_seq
 
 let rec mem t v ~equal =
@@ -7,19 +6,44 @@ let rec mem t v ~equal =
   | [] -> false
   | x :: xs -> if equal x v then true else mem xs v ~equal
 
-let map t ~f =
-  map f t
+let iter t ~f = iter f t
 
-let rec find t ~f =
+let map t ~f = map f t
+
+let rec map_result t ~f =
   match t with
-  | [] -> None
-  | x :: xs -> if f x then Some x else find xs ~f
+  | [] -> Lens_result.return []
+  | x :: xs -> (
+    match f x with
+    | Result.Ok x -> (
+      match map_result xs ~f with
+      | Result.Ok xs -> x :: xs |> Lens_result.return
+      | Result.Error _ as err -> err )
+    | Result.Error _ as err -> err )
 
-let find_exn t ~f =
-  find t ~f |> fun v -> Lens_option.value_exn v
+let map_if t ~b ~f =
+  let f x = if b x then f x else x in
+  map ~f t
 
-let for_all t ~f =
-  for_all f t
+let findi t ~f =
+  let rec fr t ind =
+    match t with
+    | [] -> None
+    | x :: xs -> if f x then Some (ind, x) else fr xs (ind + 1)
+  in
+  fr t 0
+
+let find t ~f = findi t ~f |> Lens_option.map ~f:snd
+
+let find_exn t ~f = find t ~f |> fun v -> Lens_option.value_exn v
+
+let for_all t ~f = for_all f t
+
+let rec for_all_or_error t ~f ~error =
+  match t with
+  | [] -> Result.Ok ()
+  | x :: xs ->
+      if f x then for_all_or_error xs ~f ~error else Result.Error (error x)
 
 let rec filter_opt t =
   match t with
@@ -30,35 +54,34 @@ let rec filter_opt t =
 let rec filter_map t ~f =
   match t with
   | [] -> []
-  | x :: xs ->
-    (match f x with
-     | None -> filter_map xs ~f
-     | Some y -> y :: filter_map xs ~f)
+  | x :: xs -> (
+    match f x with
+    | None -> filter_map xs ~f
+    | Some y -> y :: filter_map xs ~f )
 
 let rec unzip3 l =
   match l with
   | (v1, v2, v3) :: ys ->
-    let l1, l2, l3 = unzip3 ys in
-    v1 :: l1, v2 :: l2, v3 :: l3
-  | [] -> [], [], []
+      let l1, l2, l3 = unzip3 ys in
+      (v1 :: l1, v2 :: l2, v3 :: l3)
+  | [] -> ([], [], [])
 
 let rec take l ~n =
-  match l, n with
-  | [], _
-  | _, 0 -> []
-  | x :: xs, n -> x :: take xs ~n:(n-1)
+  match (l, n) with
+  | [], _ | _, 0 -> []
+  | x :: xs, n -> x :: take xs ~n:(n - 1)
 
 let rec drop l ~n =
-  match l, n with
+  match (l, n) with
   | l, 0 -> l
-  | _ :: xs, n -> drop xs ~n:(n-1)
+  | _ :: xs, n -> drop xs ~n:(n - 1)
   | [], _ -> []
 
 let zip_exn = combine
 
 let rec zip_nofail l1 l2 =
-  match l1, l2 with
-  | x :: xs, y :: ys -> (x,y) :: zip_nofail xs ys
+  match (l1, l2) with
+  | x :: xs, y :: ys -> (x, y) :: zip_nofail xs ys
   | _, _ -> []
 
 let rec to_seq l () =

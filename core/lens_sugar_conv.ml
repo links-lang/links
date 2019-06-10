@@ -41,6 +41,12 @@ let cols_of_phrase key : string list =
   | Var name -> [name]
   | _ -> failwith "Expected a tuple or a variable."
 
+let is_dynamic p =
+  match WithPos.node p with
+  | S.FunLit _ -> true
+  | S.Var _ -> true
+  | _ -> false
+
 let rec lens_sugar_phrase_of_sugar p =
   let conv p = lens_sugar_phrase_of_sugar p in
   let pos = WithPos.pos p in

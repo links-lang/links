@@ -8,6 +8,10 @@ type t =
   | Record of (string * t) list
 [@@deriving show]
 
+module Unbox_error : sig
+  exception E of {value: t; expected: string}
+end
+
 type values = t list [@@deriving show]
 
 val equal : t -> t -> bool
@@ -36,16 +40,22 @@ val box_record : (string * t) list -> t
 
 val unbox_record : t -> (string * t) list
 
+(** Determine the type of a value. *)
+val type_of : t -> Phrase_type.t
+
+(** Get a default value of a type. *)
+val default_value : Phrase_type.t -> t
+
 module Record : sig
-  val get : t -> key:string -> t option
   (** Get a record values field [key]. Returns [None] if the field is not found. *)
+  val get : t -> key:string -> t option
 
-  val get_exn : t -> key:string -> t
   (** Get a record values field [key]. Throw an exception if the field is not found. *)
+  val get_exn : t -> key:string -> t
 
-  val set : t -> key:string -> value:t -> t
   (** Set a record values [field] to [value]. *)
+  val set : t -> key:string -> value:t -> t
 
-  val match_on : t -> t -> on:string list -> bool
   (** Determine if two records have the same values for the fields specified in [on]. *)
+  val match_on : t -> t -> on:string list -> bool
 end

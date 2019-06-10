@@ -269,7 +269,7 @@ end
 %token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
-%token LENSPUT LENSGET
+%token LENSPUT LENSGET LENSCHECK
 %token READONLY DEFAULT
 %token ESCAPE
 %token CLIENT SERVER NATIVE
@@ -897,6 +897,7 @@ lens_expression:
                                                                                        with_pos $loc (Constant (Constant.Bool true )),
                                                                                        with_pos $loc (Constant (Constant.Bool false)), None)) }
 | LENSGET exp                                                  { with_pos $loc (LensGetLit ($2, None)) }
+| LENSCHECK exp                                                { with_pos $loc (LensCheckLit ($2, None)) }
 | LENSPUT exp WITH exp                                         { with_pos $loc (LensPutLit ($2, $4, None)) }
 
 

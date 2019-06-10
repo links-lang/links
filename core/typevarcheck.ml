@@ -291,7 +291,7 @@ and is_positive_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> boo
       | `Type t -> is_positive bound_vars expanded_apps var t
       | `Row r -> is_positive_row bound_vars expanded_apps var r
       | `Presence f -> is_positive_presence bound_vars expanded_apps var f
-and is_positive_lens_typ: TypeVarSet.t  -> StringSet.t-> int -> Lens.Type.t -> bool =
+and is_positive_lens_typ: TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t -> bool =
   fun bound_vars expanded_apps var typ ->
     let sort = Lens.Type.sort typ in
     let cols = Lens.Sort.cols sort in
