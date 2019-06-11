@@ -1,0 +1,4 @@
+typename FPolyRowPingPong3 =
+  [| Go: forall a:: Type. forall a::Row. ((|a)) {}-> ((a),FPolyRowPingPong3)
+   | Stop: ()
+  |];

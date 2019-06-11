@@ -65,6 +65,10 @@ type quantifier = type_variable
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
+let string_of_type_variable ((var, (kind, subkind), _) : type_variable) =
+  let subkind = OptionUtils.opt_app string_of_subkind "" subkind in
+  var ^ "::" ^ PrimaryKind.to_string kind ^ subkind
+
 type fieldconstraint = Readonly | Default
     [@@deriving show]
 

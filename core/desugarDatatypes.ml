@@ -21,21 +21,13 @@ let typevar_primary_kind_mismatch pos var ~expected ~actual =
           (CommonTypes.PrimaryKind.to_string expected) )
 
 let typevar_mismatch pos (v1 : type_variable) (v2 : type_variable) =
-  let open CommonTypes in
-  let show (var, (kind, subkind), _) =
-    let subkind =
-      match subkind with
-      | None -> ""
-      | Some (lin, res) ->
-          Printf.sprintf "(%s,%s)" (Linearity.to_string lin) (Restriction.to_string res)
-    in
-    var ^ "::" ^ PrimaryKind.to_string kind ^ subkind
-  in
   let var, _, _ = v1 in
   Type_error
     ( pos,
       Printf.sprintf "Mismatch in kind for type variable `%s'.\n" var
-      ^ Printf.sprintf "  Declared as `%s' and `%s'." (show v1) (show v2) )
+      ^ Printf.sprintf "  Declared as `%s' and `%s'."
+          (string_of_type_variable v1)
+          (string_of_type_variable v2) )
 
 let duplicate_var pos var =
   Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)
@@ -173,7 +165,7 @@ object (self)
   method bind tv = self#register tv
 
   method add ((name, (pk, sk), freedom) as tv) =
-    if StringMap.mem name tyvars then (
+    if StringMap.mem name tyvars then begin
       let (_, (pk', sk'), freedom') = StringMap.find name tyvars in
       (* monotonically increase subkinding information *)
       let (sk, sk') =
@@ -186,8 +178,8 @@ object (self)
       (* check that duplicate type variables have the same kind *)
       if tv <> tv' then
         raise (typevar_mismatch Position.dummy tv tv');
-      self#register tv )
-    else (self#register tv)#add_name name
+      self#register tv
+    end else (self#register tv)#add_name name
 
   method quantified action qs =
     let o = List.fold_left (fun o q -> o#bind (rigidify q)) self qs in
@@ -222,7 +214,7 @@ object (self)
     | Var (x, k, freedom) -> self#add (x, (pk_presence, k), freedom)
 end
 
-type var_env = { tyvars : meta_var StringMap.t }
+type var_env = { tyvars : meta_var StringMap.t } [@@unboxed]
 
 let empty_env = { tyvars = StringMap.empty }
 

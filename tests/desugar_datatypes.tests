@@ -1,5 +1,11 @@
-Type variables are correctly scoped
+Type variables are correctly scoped [1]
 typename A = forall a::Eff. forall a::Type. () ~a~> ();
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'.*
+
+Type variables are correctly scoped [2]
+./tests/desugar_datatypes/shadowKinds.links
+filemode : true
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'.*
 
@@ -54,3 +60,13 @@ Rows can be promoted to types
 filemode : true
 stdout : () : ()
 ignore : Not sure if a good idea yet.
+
+Type aliases cannot repeat variables
+typename T(a::Type, a::Type) = a;
+exit : 1
+stderr : @.*Multiple definitions of type variable `a'.\.*
+
+foralls cannot repeat variables
+() : forall a::Type, a::Type. a
+exit : 1
+stderr : @.*Multiple definitions of type variable `a'.\.*
