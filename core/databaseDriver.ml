@@ -5,8 +5,21 @@ exception IllformedPluginDescription of string
 exception DependencyLoadFailure of string * Dynlink.error
 exception LoadFailure of string * Dynlink.error
 
-(* Convention: For a driver named mydriver, we expect the corresponding
-   library file to be named links_mydriver.cma or links_mydriver.cmxs. *)
+(* There are two artifacts associated with a dynamic loadable database
+   driver:
+
+      1) An OCaml plugin that implements the database driver
+         interface.
+      2) The second artifact is a description of the plugin's
+         dependencies (OCaml packages).
+
+   The description format is an ad-hoc JSON format. The plugin is
+   assumed to have name 'links_<driver>.cma' where the extension is
+   (Dynlink) adaptable. The dependency file is assumed to be named
+   'links_driver_dependencies.json'. The plugin is assumed to live in
+   directory named 'lib/links-<driver>', whilst the dependency
+   description is assumed to live in 'share/links-<driver>'.  *)
+
 let plugin_file basic_name =
   Dynlink.adapt_filename (Printf.sprintf "%s.cma" basic_name)
 
