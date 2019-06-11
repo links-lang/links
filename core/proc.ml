@@ -313,7 +313,7 @@ module type WEBSOCKETS =
     val accept :
       client_id ->
       Cohttp.Request.t ->
-      (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t
+      Cohttp_lwt_unix.Server.response_action Lwt.t
 
     (** Sends a message to the given PID. *)
     val deliver_process_message :
@@ -540,9 +540,7 @@ struct
       Debug.print @@ "Registering websocket for client " ^ (ClientID.to_string client_id);
       register_websocket client_id links_ws;
       send_buffered_messages client_id links_ws >>= fun _ ->
-      match resp with
-      | `Response resp -> Lwt.return resp
-      | `Expert _ -> assert false
+      Lwt.return resp
 
   let send_or_buffer_message cid msg =
     match lookup_websocket_safe cid with

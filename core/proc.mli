@@ -49,7 +49,7 @@ module type WEBSOCKETS =
     val accept :
       client_id ->
       Cohttp.Request.t ->
-      (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t
+      Cohttp_lwt_unix.Server.response_action Lwt.t
 
     (** Sends a message to the given PID. *)
     val deliver_process_message :
