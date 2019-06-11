@@ -165,21 +165,23 @@ object (self)
   method bind tv = self#register tv
 
   method add ((name, (pk, sk), freedom) as tv) =
-    if StringMap.mem name tyvars then begin
-      let (_, (pk', sk'), freedom') = StringMap.find name tyvars in
-      (* monotonically increase subkinding information *)
-      let (sk, sk') =
-        match sk, sk' with
-        | Some sk, None  -> Some sk, Some sk
-        | None, Some sk' -> Some sk', Some sk'
-        | _, _           -> sk, sk' in
-      let tv = (name, (pk, sk), freedom) in
-      let tv' = (name, (pk', sk'), freedom') in
-      (* check that duplicate type variables have the same kind *)
-      if tv <> tv' then
-        raise (typevar_mismatch Position.dummy tv tv');
-      self#register tv
-    end else (self#register tv)#add_name name
+    if StringMap.mem name tyvars then
+      begin
+        let (_, (pk', sk'), freedom') = StringMap.find name tyvars in
+        (* monotonically increase subkinding information *)
+        let (sk, sk') =
+          match sk, sk' with
+          | Some sk, None  -> Some sk, Some sk
+          | None, Some sk' -> Some sk', Some sk'
+          | _, _           -> sk, sk' in
+        let tv = (name, (pk, sk), freedom) in
+        let tv' = (name, (pk', sk'), freedom') in
+        (* check that duplicate type variables have the same kind *)
+        if tv <> tv' then
+          raise (typevar_mismatch Position.dummy tv tv');
+        self#register tv
+      end
+    else (self#register tv)#add_name name
 
   method quantified action qs =
     let o = List.fold_left (fun o q -> o#bind (rigidify q)) self qs in

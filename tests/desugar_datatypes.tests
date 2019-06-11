@@ -55,12 +55,6 @@ filemode : true
 exit : 1
 stderr : @.*Unbound type variable `a'.*
 
-Rows can be promoted to types
-./tests/desugar_datatypes/rowPromote.links
-filemode : true
-stdout : () : ()
-ignore : Not sure if a good idea yet.
-
 Type aliases cannot repeat variables
 typename T(a::Type, a::Type) = a;
 exit : 1
