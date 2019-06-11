@@ -84,7 +84,10 @@ module DatabaseDrivers = struct
     let module Glob = Glob.Make(DefaultPolicy) in
     let _build = Filename.(dirname (dirname (dirname Sys.argv.(0)))) in
     let install = Filename.concat _build "install" in
-    let files = Glob.files install (Str.regexp "links_[A-Za-z0-9]+_dependencies\\.json$") in
+    let files =
+      try Glob.files install (Str.regexp "links_[A-Za-z0-9]+_dependencies\\.json$")
+      with Disk.AccessError _ -> []
+    in
     let paths = List.map Disk.File.dirname files in
     String.concat ":" paths
 

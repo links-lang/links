@@ -1177,7 +1177,7 @@ end = struct
     let make = make
 
     let of_path path =
-      if Sys.is_directory path
+      if Sys.file_exists path && Sys.is_directory path
       then make path []
       else raise (AccessError path)
 
@@ -1215,7 +1215,7 @@ end = struct
 
     let of_directory dir =
       let filepath = Directory.to_filename dir in
-      if Sys.is_directory filepath
+      if Sys.file_exists filepath && Sys.is_directory filepath
       then
         try { handle = opendir filepath;
               file_obj = dir }
@@ -1307,8 +1307,8 @@ end = struct
       | (_, q) :: _ ->
          Queue.push dir q
 
+    open Disk
     let files root pattern =
-      let open Disk in
       let rec scan_next st pattern =
         match st.todo with
         | [] -> assert false
@@ -1317,10 +1317,17 @@ end = struct
            st.todo <- todo; scan_next st pattern
         | (_, q) :: _ ->
            let dir = Queue.pop q in
-           loop st pattern (Disk.Iterator.of_directory dir)
+             begin match try Some (Iterator.of_directory dir)
+                         with AccessError _ -> None
+             with
+             | None -> scan_next st pattern
+             | Some it -> loop st pattern it
+             end
       and loop st pattern it =
         match Iterator.next it with
         | inode -> process_inode st pattern it inode
+        | exception AccessError _ ->
+           loop st pattern it
         | exception End_of_stream ->
            Iterator.finalise it;
            scan_next st pattern
