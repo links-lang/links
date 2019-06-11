@@ -551,12 +551,7 @@ object (self)
 
   val alias_env = initial_alias_env
 
-  method! patternnode = function
-    | Pattern.HasType (pat, dt) ->
-        let o, pat = self#pattern pat in
-          o, Pattern.HasType (pat, Desugar.datatype' map alias_env dt)
-    | p -> super#patternnode p
-
+  method! datatype' node = (self, Desugar.datatype' map alias_env node)
 
   method! phrasenode = function
     | Block (bs, p) ->
@@ -569,16 +564,10 @@ object (self)
              to the outer scope; any aliases bound in _o are
              unreachable from outside the block *)
           self, Block (bs, p)
-    | TypeAnnotation (p, dt) ->
-        let o, p = self#phrase p in
-          o, TypeAnnotation (p, Desugar.datatype' map self#aliases dt)
-    | Upcast (p, dt1, dt2) ->
-        let o, p = self#phrase p in
-          o, Upcast (p, Desugar.datatype' map alias_env dt1, Desugar.datatype' map alias_env dt2)
     | TableLit (t, (dt, _), cs, keys, p) ->
         let read, write, needed = Desugar.tableLit alias_env cs dt in
         let o, t = self#phrase t in
-    let o, keys = o#phrase keys in
+        let o, keys = o#phrase keys in
         let o, p = o#phrase p in
           o, TableLit (t, (dt, Some (read, write, needed)), cs, keys, p)
     (* Switch and receive type annotations are never filled in by
@@ -694,19 +683,6 @@ object (self)
         ) alias_env desugared_mutuals in
 
         ({< alias_env = alias_env >}, Typenames desugared_mutuals)
-    | Val (pat, (tyvars, p), loc, dt) ->
-        let o, pat = self#pattern pat in
-        let o, p   = o#phrase p in
-        let o, loc = o#location loc in
-          o, Val (pat, (tyvars, p), loc, opt_map (Desugar.datatype' map alias_env) dt)
-    | Fun (bind, lin, (tyvars, fl), loc, dt) ->
-        let o, bind = self#binder bind in
-        let o, fl   = o#funlit fl in
-        let o, loc  = o#location loc in
-          o, Fun (bind, lin, (tyvars, fl), loc, opt_map (Desugar.datatype' map alias_env) dt)
-    | Funs binds ->
-        let o, binds = super#list (fun o -> o#recursive_function) binds
-        in o, Funs binds
     | Foreign (bind, raw_name, lang, file, dt) ->
         let _, bind = self#binder bind in
         let dt' = Desugar.foreign alias_env dt in
