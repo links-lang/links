@@ -14,6 +14,16 @@ Subkind declaration mismatches are reported
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'\..*
 
+Subkind declaration mismatches are reported in foralls
+() : forall a::Base. a::Any
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'\..*
+
+Subkind declaration mismatches are reported in type aliases
+typename A(a::Base) = a::Any;
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'\..*
+
 Kind declaration mismatches are reported
 () : forall a::Row. (a) ~a~> ()
 exit : 1

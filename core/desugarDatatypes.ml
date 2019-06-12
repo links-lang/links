@@ -189,10 +189,18 @@ object (self)
     List.fold_left (fun o (q, _, _) -> o#replace q tyvars) o qs
 
   method! bindingnode = function
-    (* type declarations bind variables; exclude those from the
-       analysis. *)
-    | Typenames _  -> self
-    | b            -> super#bindingnode b
+    | Typenames ts ->
+       (* Type declarations are visited in isolated environments, as they do not
+          capture variables from the outside scope. *)
+       List.iter (fun (_, qs, t, _) ->
+           let o = List.fold_left
+                     (fun o (q, _) -> o#bind (rigidify q))
+                     {<tyvar_list = []; tyvars = StringMap.empty>}
+                     qs
+           in
+           o#datatype' t |> ignore) ts;
+       self
+    | b -> super#bindingnode b
 
   method! datatype ({ pos; _ } as ty) =
     try super#datatype ty
