@@ -231,6 +231,7 @@ module Types = struct
   let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, `User)
   let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
   let effect_sugar = Settings.add_bool ("effect_sugar", false, `User)
+  let infer_kinds = Settings.add_bool ("infer_kinds", false, `User)
   module Print = struct
     let show_quantifiers     = Settings.add_bool   ("show_quantifiers"    , false    , `User)
     let show_flavours        = Settings.add_bool   ("show_flavours"       , false    , `User)

@@ -101,7 +101,7 @@ let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string    pos lin  in
   let r = restriction_of_string  pos rest in
-  (p, Some (l, r))
+  (Some p, Some (l, r))
 
 let full_subkind_of pos lin rest =
   let l = linearity_of_string   pos lin  in
@@ -120,14 +120,14 @@ perhaps. *)
 let kind_of p =
   function
   (* primary kind abbreviation  *)
-  | "Type"     -> (pk_type, None)
-  | "Row"      -> (pk_row, None)
-  | "Presence" -> (pk_presence, None)
+  | "Type"     -> (Some pk_type, None)
+  | "Row"      -> (Some pk_row, None)
+  | "Presence" -> (Some pk_presence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (pk_type, Some (lin_any, res_any))
-  | "Base"     -> (pk_type, Some (lin_unl, res_base))
-  | "Session"  -> (pk_type, Some (lin_any, res_session))
-  | "Eff"      -> (pk_row , Some (lin_unl, res_effect))
+  | "Any"      -> (Some pk_type, Some (lin_any, res_any))
+  | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
+  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
+  | "Eff"      -> (Some pk_row , Some (lin_unl, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
@@ -451,7 +451,7 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (($1, (PrimaryKind.Type, None), `Rigid), None) }
+| VARIABLE                                                     { (($1, (None, None), `Rigid), None) }
 | VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
 
 varlist:
