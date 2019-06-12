@@ -68,7 +68,8 @@ steps:
                  sudo systemctl reload postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
                  sudo -u postgres createdb -O $(whoami) links ;;
-        "Darwin") brew update &&
+        "Darwin") chown -R $(whoami) /Users/$(whoami) &&
+                  brew update &&
                   brew install postgres libpq sqlite3 &&
                   brew services start postgres &&
                   sleep 3 &&
