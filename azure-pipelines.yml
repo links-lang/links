@@ -29,10 +29,13 @@ steps:
       make rule-check
     displayName: 'Rule check'
 
+# The ownership change command in the Darwin case is a terrible hack
+# to make `brew' function correctly. DO NOT TRY THIS AT HOME.
   - bash: |
       case $AGENT_OS in
         "Linux") sudo apt-get update ;;
-        "Darwin") brew update ;;
+        "Darwin") sudo chown -R $(whoami) $(brew --prefix)/*
+                  brew update ;;
         *) exit 1 ;;
       esac
     displayName: Initialise system package managers
@@ -68,9 +71,7 @@ steps:
                  sudo systemctl reload postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
                  sudo -u postgres createdb -O $(whoami) links ;;
-        "Darwin") chown -R $(whoami) /Users/$(whoami) &&
-                  brew update &&
-                  brew install postgres libpq sqlite3 &&
+        "Darwin") brew install postgres libpq sqlite3 &&
                   brew services start postgres &&
                   sleep 3 &&
                   /usr/local/opt/postgres/bin/createdb -O $(whoami) links ;;
