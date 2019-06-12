@@ -50,7 +50,7 @@ type tyarg = Types.type_arg
 
 let default_subkind : subkind = (lin_unl, res_any)
 
-type kind = PrimaryKind.t * subkind option
+type kind = PrimaryKind.t option * subkind option
     [@@deriving show]
 
 type type_variable = name * kind * freedom
@@ -66,8 +66,11 @@ type quantifier = type_variable
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
 let string_of_type_variable ((var, (kind, subkind), _) : type_variable) =
-  let subkind = OptionUtils.opt_app string_of_subkind "" subkind in
-  var ^ "::" ^ PrimaryKind.to_string kind ^ subkind
+  match kind with
+  | None -> var
+  | Some kind ->
+     let subkind = OptionUtils.opt_app string_of_subkind "" subkind in
+     var ^ "::" ^ PrimaryKind.to_string kind ^ subkind
 
 type fieldconstraint = Readonly | Default
     [@@deriving show]

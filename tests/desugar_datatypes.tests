@@ -44,10 +44,13 @@ Quantifiers within nested definitions are allowed [2]
 filemode : true
 stdout : () : ()
 
-Qualified type variables default to a kind of Type
+Qualified type variables can infer their kind in typename
 typename Arrow (a) = () -a-> ();
-exit : 1
-stderr : @.*Mismatch in kind for type variable `a'.*
+stdout : () : ()
+
+Qualified type variables can infer their kind in forall
+sig f : forall a. () -a-> () fun f() {}
+stdout : () : ()
 
 Free type variables are detected
 typename A = a;

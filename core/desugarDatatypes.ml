@@ -148,13 +148,15 @@ object (self)
   val tyvars : type_variable StringMap.t = StringMap.empty
 
   (* fill in subkind with the default *)
-  val fill =
-    function
-    | (_, (_, Some _), _) as tv -> tv
-    | (name, (pk, None), rest) -> (name, (pk, Some default_subkind), rest)
+  val fill = fun (name, (kind, subkind), freedom) ->
+    (name,
+     (Some (from_option PrimaryKind.Type kind), Some (from_option default_subkind subkind)),
+     freedom)
 
   method tyvar_list =
     List.map (fun name -> fill (StringMap.find name tyvars)) (List.rev tyvar_list)
+
+  method tyvars = StringMap.map fill tyvars;
 
   method add_name name = {<tyvar_list = name :: tyvar_list>}
 
@@ -168,12 +170,13 @@ object (self)
     if StringMap.mem name tyvars then
       begin
         let (_, (pk', sk'), freedom') = StringMap.find name tyvars in
+        let union = function
+          | Some x, None | None, Some x -> Some x, Some x
+          | x, y -> x, y
+        in
         (* monotonically increase subkinding information *)
-        let (sk, sk') =
-          match sk, sk' with
-          | Some sk, None  -> Some sk, Some sk
-          | None, Some sk' -> Some sk', Some sk'
-          | _, _           -> sk, sk' in
+        let (sk, sk') = union (sk, sk') in
+        let (pk, pk') = union (pk, pk') in
         let tv = (name, (pk, sk), freedom) in
         let tv' = (name, (pk', sk'), freedom') in
         (* check that duplicate type variables have the same kind *)
@@ -189,18 +192,10 @@ object (self)
     List.fold_left (fun o (q, _, _) -> o#replace q tyvars) o qs
 
   method! bindingnode = function
-    | Typenames ts ->
-       (* Type declarations are visited in isolated environments, as they do not
-          capture variables from the outside scope. *)
-       List.iter (fun (_, qs, t, _) ->
-           let o = List.fold_left
-                     (fun o (q, _) -> o#bind (rigidify q))
-                     {<tyvar_list = []; tyvars = StringMap.empty>}
-                     qs
-           in
-           o#datatype' t |> ignore) ts;
-       self
-    | b -> super#bindingnode b
+    (* Type declarations bind variables; exclude those from the
+       analysis. We'll handle these specially later on *)
+    | Typenames _  -> self
+    | b            -> super#bindingnode b
 
   method! datatype ({ pos; _ } as ty) =
     try super#datatype ty
@@ -208,20 +203,20 @@ object (self)
 
   method! datatypenode = let open Datatype in
     function
-    | TypeVar (x, k, freedom) -> self#add (x, (pk_type, k), freedom)
-    | Mu (v, t)       -> self#quantified (fun o -> o#datatype t) [(v, (pk_type, None), `Rigid)]
+    | TypeVar (x, k, freedom) -> self#add (x, (Some pk_type, k), freedom)
+    | Mu (v, t)       -> self#quantified (fun o -> o#datatype t) [(v, (Some pk_type, None), `Rigid)]
     | Forall (qs, t)  -> self#quantified (fun o -> o#datatype t) qs
     | dt -> super#datatypenode dt
 
   method! row_var = let open Datatype in function
     | Closed               -> self
-    | Open (x, k, freedom) -> self#add (x, (pk_row, k), freedom)
-    | Recursive (s, r)     -> self#quantified (fun o -> o#row r) [(s, (pk_row, None), `Rigid)]
+    | Open (x, k, freedom) -> self#add (x, (Some pk_row, k), freedom)
+    | Recursive (s, r)     -> self#quantified (fun o -> o#row r) [(s, (Some pk_row, None), `Rigid)]
 
   method! fieldspec = let open Datatype in function
     | Absent -> self
     | Present t -> self#datatype t
-    | Var (x, k, freedom) -> self#add (x, (pk_presence, k), freedom)
+    | Var (x, k, freedom) -> self#add (x, (Some pk_presence, k), freedom)
 end
 
 type var_env = { tyvars : meta_var StringMap.t } [@@unboxed]
@@ -258,31 +253,39 @@ module Desugar = struct
   (* Desugars quantifiers into Types.quantifiers,
    * returning updated variable environment.
    * Lifted / deduplicated from `typename` and `Forall` desugaring. *)
-  let desugar_quantifiers (var_env: var_env) (qs: Sugartypes.quantifier list) pos :
+  let desugar_quantifiers (var_env: var_env) (qs: Sugartypes.quantifier list) body pos :
       (Types.quantifier list * var_env) =
-    let quants, _, env =
-      ListLabels.fold_right ~init:([], StringSet.empty, var_env) qs
+    (* Bind all quantified variables, and then do a naive {!typevars} pass over this set to infer
+       any unannotated kinds, and verify existing kinds/subkinds match up.
+
+       Also verify no duplicate variables exist. *)
+    let tvs, _ = List.fold_left
+      (fun (o, names) ((name, _, _) as v) ->
+        if StringSet.mem name names then raise (duplicate_var pos name);
+        (o#bind v, StringSet.add name names)) (typevars, StringSet.empty) qs in
+    let tvs = (tvs#datatype body)#tyvars in
+    let qs = List.map (fun (name, _, _) -> StringMap.find name tvs) qs in
+
+    ListLabels.fold_right ~init:([], var_env) qs
       ~f:(fun (name, (primarykind, subkind), _freedom)
-              (args, arg_names, { tyvars }) ->
-            if StringSet.mem name arg_names then raise (duplicate_var pos name);
+              (args, { tyvars }) ->
             let var = Types.fresh_raw_variable () in
             let subkind = concrete_subkind subkind in
             let quant, def =
               match primarykind with
-              | PrimaryKind.Type ->
+              | Some PrimaryKind.Type ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                   ((var, subkind, `Type point), `Type point)
-              | PrimaryKind.Row ->
+              | Some PrimaryKind.Row ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                   ((var, subkind, `Row point), `Row point)
-              | PrimaryKind.Presence ->
+              | Some PrimaryKind.Presence ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
                   ((var, subkind, `Presence point), `Presence point)
+              | None -> raise (internal_error "Undesugared kind")
             in
             (quant :: args,
-             StringSet.add name arg_names,
              { tyvars = StringMap.add name def tyvars }) )
-    in quants, env
 
   let rec datatype var_env (alias_env : Types.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
@@ -308,7 +311,7 @@ module Desugar = struct
             let _ = Unionfind.change point (`Recursive (var, datatype { tyvars } t)) in
               `MetaTypeVar point
         | Forall (qs, t) ->
-            let (qs: Types.quantifier list), var_env = desugar_quantifiers var_env qs pos in
+            let (qs: Types.quantifier list), var_env = desugar_quantifiers var_env qs t pos in
             let t = datatype var_env t in
               `ForAll (Types.box_quantifiers qs, t)
         | Unit -> Types.unit_type
@@ -488,16 +491,16 @@ module Desugar = struct
            let var = Types.fresh_raw_variable () in
              fun (x, kind, freedom) ->
              match (kind, freedom) with
-             | (PrimaryKind.Type, Some subkind), freedom ->
+             | (Some PrimaryKind.Type, Some subkind), freedom ->
                let t = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Type t)::vars, addt x t envs
-             | (PrimaryKind.Row, Some subkind), freedom ->
+             | (Some PrimaryKind.Row, Some subkind), freedom ->
                let r = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Row r)::vars, addr x r envs
-             | (PrimaryKind.Presence, Some subkind), freedom ->
+             | (Some PrimaryKind.Presence, Some subkind), freedom ->
                let f = Unionfind.fresh (`Var (var, subkind, freedom)) in
                  (var, subkind, `Presence f)::vars, addf x f envs
-             | (_, None), _ ->
+             | (_, None), _ | (None, _), _ ->
                (* Shouldn't occur; we are assuming that all subkinds have been
                 * filled in*)
                assert false)
@@ -596,9 +599,9 @@ object (self)
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
         let (mutual_env, venvs_map) =
-          List.fold_left (fun (alias_env, venvs_map) (t, args, _, pos) ->
-            let qs = List.map (fst) args in
-            let qs, var_env =  Desugar.desugar_quantifiers empty_env qs pos in
+          List.fold_left (fun (alias_env, venvs_map) (t, args, (d, _), pos) ->
+            let qs = List.map fst args in
+            let qs, var_env =  Desugar.desugar_quantifiers empty_env qs d pos in
             let venvs_map = StringMap.add t var_env venvs_map in
             (SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)), venvs_map) )
             (alias_env, venvs_map) ts in
