@@ -147,7 +147,7 @@ struct
         | Not_found -> s,"" in
       List.map one_assoc assocs in
 
-    let callback rt render_cont conn req body =
+    let callback rt render_cont _conn req body =
       let req_hs = Request.headers req in
       let content_type = Header.get req_hs "content-type" in
       Cohttp_lwt.Body.to_string body >>= fun body_string ->
@@ -223,13 +223,16 @@ struct
                    loop rest in
             loop mime_types in
           Debug.print (Printf.sprintf "Responding to static request;\n    Requested: %s\n    Providing: %s\n" path fname);
-          Cohttp_lwt_unix.Server.respond_file ~headers ~fname () in
+          Cohttp_lwt_unix.Server.respond_file ~headers ~fname () >>= fun resp ->
+          Lwt.return (`Response resp) in
 
       let is_websocket_request = is_prefix_of ws_url in
 
       let route rt =
         let rec up = function
-          | [], _ -> Cohttp_lwt_unix.Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" ()
+          | [], _ ->
+              Cohttp_lwt_unix.Server.respond_string ~status:`Not_found ~body:"<html><body><h1>Nope</h1></body></html>" () >>= fun resp ->
+              Lwt.return (`Response resp)
           | ([] as remaining, { as_page = Some (Left (file_path, mime_types)); _ }) :: _, true
           | (remaining, { as_directory = Some (Left (file_path, mime_types)); _ }) :: _, true ->
              serve_static file_path (String.concat "/" remaining) mime_types
@@ -284,7 +287,7 @@ struct
         Debug.print (Printf.sprintf "Creating websocket for client with ID %s\n"
           (ClientID.to_string client_id));
         Cohttp_lwt.Body.drain_body body >>= fun () ->
-        Proc.Websockets.accept client_id req (fst conn)
+        Proc.Websockets.accept client_id req
       else
         route rt in
 
@@ -304,7 +307,8 @@ struct
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
       let ctx = Cohttp_lwt_unix.Net.init ~ctx () in
       Debug.print ("Starting server (2)?\n");
-      Cohttp_lwt_unix.Server.create ~ctx ~mode:(`TCP (`Port port)) (Cohttp_lwt_unix.Server.make ~callback:(callback rt render_cont) ()) in
+      Cohttp_lwt_unix.Server.create ~ctx ~mode:(`TCP (`Port port))
+        (Cohttp_lwt_unix.Server.make_response_action ~callback:(callback rt render_cont) ()) in
 
     Debug.print ("Starting server?\n");
     Lwt.async_exception_hook :=
