@@ -29,12 +29,14 @@ steps:
       make rule-check
     displayName: 'Rule check'
 
-# The ownership change command in the Darwin case is a terrible hack
-# to make `brew' function correctly. DO NOT TRY THIS AT HOME.
+# Hack: the uninstall and reinstall of `brew' is intended to fix the
+# permissions bug on macOS. It's at best silly, but really, it's
+# ridiculous.
   - bash: |
       case $AGENT_OS in
         "Linux") sudo apt-get update ;;
-        "Darwin") sudo chown -R $(whoami) $(brew --prefix)/*
+        "Darwin") /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/uninstall)"
+                  /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
                   brew update ;;
         *) exit 1 ;;
       esac
