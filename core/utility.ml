@@ -86,6 +86,26 @@ module String = struct
   include String
   let pp = Format.pp_print_string
   let show = fun x -> x
+
+  let rev_concat sep l =
+    match l with
+    | [] -> ""
+    | hd :: tl ->
+       let num_sep = ref 0 in
+       let len = ref (-1) in
+       List.iter (fun s -> incr num_sep; len := !len + length s) l;
+       let size = !len + length sep * !num_sep in
+       let bs = Bytes.create size in
+       let pos = ref (size - length hd) in
+       blit hd 0 bs !pos (length hd);
+       List.iter
+         (fun s ->
+           pos := !pos - length sep;
+           blit sep 0 bs !pos (length sep);
+           pos := !pos - length s;
+           blit s 0 bs !pos (length s))
+         tl;
+       Bytes.to_string bs
 end
 
 module Int = struct
@@ -1043,3 +1063,299 @@ let strip_slashes = (strip_leading_slash -<- strip_trailing_slash)
 
 
 let format_omission : Format.formatter -> unit = fun fmt -> Format.pp_print_string fmt "..."
+
+module Disk: sig
+  exception End_of_stream
+  exception AccessError of string
+  exception BadLink
+
+  type dir_t
+  type file_t
+  type link_t
+
+  type item = Directory of dir_t
+            | File of file_t
+            | Link of link_t
+  type inode = { no: int; data: item }
+
+  module Directory: sig
+    type t = dir_t
+    val basename : t -> string
+    val dirname : t -> string
+    val to_filename : t -> string
+    (* May raise [AccessError]. *)
+    val of_path : string -> t
+  end
+
+  module File: sig
+    type t = file_t
+    val basename : t -> string
+    val dirname : t -> string
+    val relative_name : t -> string
+    val to_filename : t -> string
+  end
+
+  module Link: sig
+    type t = link_t
+    (* May raise [BadLink]. *)
+    val follow : t -> inode
+  end
+
+  module Iterator: sig
+    type t
+
+    (* May raise [End_of_stream] or [AccessError]. *)
+    val next : t -> inode
+    val finalise : t -> unit
+    (* May raise [AccessError]. *)
+    val of_directory : Directory.t -> t
+  end
+end = struct
+
+  exception End_of_stream
+  exception AccessError of string
+  exception BadLink
+
+  type dir_t =
+    { root: string;
+      rev_suffix: string list }
+  type file_t = dir_t
+  type link_t = dir_t
+
+  let to_string root rev_suffix =
+    Filename.concat root (String.rev_concat Filename.dir_sep rev_suffix)
+
+  let to_filename f =
+    to_string f.root f.rev_suffix
+
+  let basename { rev_suffix; _ } =
+    List.hd rev_suffix
+
+  let dirname { root; rev_suffix } =
+    Filename.concat root (String.rev_concat Filename.dir_sep (List.tl rev_suffix))
+
+  let make root rev_suffix = { root; rev_suffix }
+
+  type item =
+    | Directory of dir_t
+    | File of file_t
+    | Link of link_t
+  and inode = { no: int; data: item }
+
+  let make_file no f = { no; data = File f }
+  let make_link no l = { no; data = Link l }
+  let make_dir no d = { no; data = Directory d }
+
+  open Unix
+  module rec File: sig
+    type t = file_t
+    val basename : t -> string
+    val relative_name : t -> string
+    val dirname : t -> string
+    val make : string -> string list -> t
+    val to_filename : t -> string
+  end = struct
+    type t = file_t
+    let basename = basename
+    let dirname = dirname
+    let relative_name f =
+      String.rev_concat Filename.dir_sep f.rev_suffix
+    let make = make
+    let to_filename = to_filename
+  end and Directory: sig
+    type t = dir_t
+    val basename : t -> string
+    val dirname : t -> string
+    val to_filename : t -> string
+    val make : string -> string list -> t
+    val of_path : string -> t
+  end = struct
+    type t = dir_t
+    let basename = basename
+    let dirname = dirname
+    let to_filename = to_filename
+    let make = make
+
+    let of_path path =
+      if Sys.file_exists path && Sys.is_directory path
+      then make path []
+      else raise (AccessError path)
+
+  end and Iterator: sig
+    type t
+    val next : t -> inode
+    val finalise : t -> unit
+    val of_directory : Directory.t -> t
+  end = struct
+    type t =
+      { handle: Unix.dir_handle;
+        file_obj: file_t }
+
+    let finalise { handle; _ } =
+      try closedir handle
+      with Unix_error (Unix.EBADF, "closedir", _) -> ()
+
+    let rec next it =
+      let exception Next in
+      try
+        let item = readdir it.handle in
+        (if String.equal "." item || String.equal ".." item
+         then raise Next);
+        let suffix = item :: it.file_obj.rev_suffix in
+        let node = lstat (to_string it.file_obj.root suffix) in
+        match node.st_kind with
+        | S_REG -> make_file node.st_ino (File.make it.file_obj.root suffix)
+        | S_DIR -> make_dir node.st_ino (Directory.make it.file_obj.root suffix)
+        | S_LNK -> make_link node.st_ino (Link.make it.file_obj.root suffix)
+        | _ -> raise Next
+      with
+      | Next -> next it
+      | End_of_file ->
+         finalise it; raise End_of_stream
+
+    let of_directory dir =
+      let filepath = Directory.to_filename dir in
+      if Sys.file_exists filepath && Sys.is_directory filepath
+      then
+        try { handle = opendir filepath;
+              file_obj = dir }
+        with _ -> raise (AccessError filepath)
+      else raise (AccessError filepath)
+
+  end and Link: sig
+    type t = link_t
+    val follow : t -> inode
+    val make : string -> string list -> t
+  end = struct
+    type t = link_t
+
+    let follow link =
+      let node = Unix.stat (to_filename link) in
+      match node.st_kind with
+      | S_REG -> make_file node.st_ino (File.make link.root link.rev_suffix)
+      | S_DIR -> make_dir node.st_ino (Directory.make link.root link.rev_suffix)
+      | S_LNK -> make_link node.st_ino (Link.make link.root link.rev_suffix)
+      | _ -> raise BadLink
+
+    let make = make
+  end
+end
+
+module type GLOB_POLICY = sig
+  val symlinks : [`AlwaysFollow | `FollowOnce | `FollowOnceQuietly ]
+  val scan_depth : [`Bounded of int | `SystemDefault ]
+end
+
+module DefaultPolicy : GLOB_POLICY = struct
+  let symlinks = `FollowOnceQuietly
+  let scan_depth = `SystemDefault
+end
+
+module Glob: sig
+  module type S = sig
+    exception CyclicLinkError
+    val files : string -> Str.regexp -> Disk.File.t list
+    val files_ext : string -> string list -> Disk.File.t list
+  end
+
+  module Make(P : GLOB_POLICY): sig
+    include S
+  end
+end = struct
+  module type S = sig
+    exception CyclicLinkError
+    val files : string -> Str.regexp -> Disk.File.t list
+    val files_ext : string -> string list -> Disk.File.t list
+  end
+
+  module Make(P : GLOB_POLICY) = struct
+    exception CyclicLinkError
+    type state =
+      { mutable todo: (int * Disk.Directory.t Queue.t) list;
+        mutable files: Disk.File.t list;
+        visited: (int, unit) Hashtbl.t }
+
+    let empty () = { todo = []; files = []; visited = Hashtbl.create 17 }
+
+    let is_match : Str.regexp -> Disk.File.t -> bool
+      = fun pattern file ->
+      match Str.search_forward pattern (Disk.File.basename file) 0 with
+      | _ -> true
+      | exception Notfound.NotFound _ -> false
+
+    let depth { todo; _ } =
+      match todo with
+      | [] -> assert false
+      | (d, _) :: _ -> d
+
+    let max_depth = match P.scan_depth with
+      | `Bounded max -> max
+      | `SystemDefault -> max_int
+
+    let follow_symlink st inode =
+      match P.symlinks with
+      | `FollowOnce ->
+         if Hashtbl.mem st.visited inode.Disk.no
+         then raise CyclicLinkError
+         else true
+      | `FollowOnceQuietly -> not (Hashtbl.mem st.visited inode.Disk.no)
+      | `AlwaysFollow -> true
+
+    let add_todo st dir =
+      match st.todo with
+      | [] -> assert false
+      | (_, q) :: _ ->
+         Queue.push dir q
+
+    open Disk
+    let files root pattern =
+      let rec scan_next st pattern =
+        match st.todo with
+        | [] -> assert false
+        | [(_, q)] when Queue.is_empty q -> st.files
+        | (_, q) :: todo when Queue.is_empty q ->
+           st.todo <- todo; scan_next st pattern
+        | (_, q) :: _ ->
+           let dir = Queue.pop q in
+             begin match try Some (Iterator.of_directory dir)
+                         with AccessError _ -> None
+             with
+             | None -> scan_next st pattern
+             | Some it -> loop st pattern it
+             end
+      and loop st pattern it =
+        match Iterator.next it with
+        | inode -> process_inode st pattern it inode
+        | exception AccessError _ ->
+           loop st pattern it
+        | exception End_of_stream ->
+           Iterator.finalise it;
+           scan_next st pattern
+      and process_inode st pattern it inode =
+        match inode.data with
+        | File file when is_match pattern file ->
+           st.files <- file :: st.files;
+           loop st pattern it
+        | Directory dir when depth st < max_depth ->
+           add_todo st dir;
+           loop st pattern it
+        | Link link when follow_symlink st inode ->
+           Hashtbl.add st.visited inode.no ();
+           begin match Disk.Link.follow link with
+           | inode -> process_inode st pattern it inode
+           | exception Disk.BadLink -> loop st pattern it
+           end
+        | _ -> loop st pattern it
+      in
+      let st =
+        let q = Queue.create () in
+        Queue.push (Disk.Directory.of_path root) q;
+        { (empty ()) with todo = [(0, q)] }
+      in
+      scan_next st pattern
+
+    let files_ext root extensions =
+      let pattern = Printf.sprintf "\\.\\(%s\\)$" (String.concat "\\|" extensions) in
+      files root (Str.regexp pattern)
+  end
+end
