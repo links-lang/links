@@ -32,10 +32,7 @@ steps:
   - bash: |
       case $AGENT_OS in
         "Linux") sudo apt-get update ;;
-        "Darwin") brew doctor
-                  brew upgrade
-                  brew cleanup
-                  brew update ;;
+        "Darwin") brew update ;;
         *) exit 1 ;;
       esac
     displayName: Initialise system package managers
@@ -71,9 +68,9 @@ steps:
                  sudo systemctl reload postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
                  sudo -u postgres createdb -O $(whoami) links ;;
-        "Darwin") brew install postgres libpq sqlite3 &&
-                  brew services start postgres &&
-                  sleep 3 &&
+        "Darwin") brew install postgresql libpq sqlite3 &&
+                  pg_ctl -D /usr/local/var/postgres start &&
+                  sleep 5 &&
                   /usr/local/opt/postgres/bin/createdb -O $(whoami) links ;;
         *) exit 1 ;;
       esac
