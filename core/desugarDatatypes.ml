@@ -139,6 +139,12 @@ let freshen_vars =
       (bind, lin, (tyvars, fl), loc, dt, pos)
   end
 
+(** Ensure this variable has some kind, if {!Basicsettings.Types.infer_kinds} is disabled. *)
+let ensure_kinded = function
+  | name, (None, subkind), freedom when not (Settings.get_value Basicsettings.Types.infer_kinds) ->
+      (name, (Some pk_type, subkind), freedom)
+  | v -> v
+
 (* Find all unbound type variables in a term *)
 let typevars =
 object (self)
@@ -187,7 +193,10 @@ object (self)
     else (self#register tv)#add_name name
 
   method quantified action qs =
-    let o = List.fold_left (fun o q -> o#bind (rigidify q)) self qs in
+    let o = List.fold_left (fun o q ->
+      let q = ensure_kinded (rigidify q) in
+      o#bind (rigidify q)) self qs
+    in
     let o = action o in
     List.fold_left (fun o (q, _, _) -> o#replace q tyvars) o qs
 
@@ -262,7 +271,7 @@ module Desugar = struct
     let tvs, _ = List.fold_left
       (fun (o, names) ((name, _, _) as v) ->
         if StringSet.mem name names then raise (duplicate_var pos name);
-        (o#bind v, StringSet.add name names)) (typevars, StringSet.empty) qs in
+        (o#bind (ensure_kinded v), StringSet.add name names)) (typevars, StringSet.empty) qs in
     let tvs = (tvs#datatype body)#tyvars in
     let qs = List.map (fun (name, _, _) -> StringMap.find name tvs) qs in
 
