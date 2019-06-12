@@ -48,6 +48,9 @@ if [[ "$1" != "db-only" ]]; then
         if [[ -f "$i.config" ]]; then
             cmnd="$cmnd $i.config"
         fi
+        if [[ -n "${LINKS_TEST_EXPORT+x}" ]]; then
+           cmnd="$cmnd --junit=$i.xml"
+        fi
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?

@@ -2,23 +2,15 @@
 
 links = './links'
 
-import sys, re, time
-import concurrent.futures, threading, multiprocessing
-from subprocess import Popen, PIPE
+import argparse, sys, re, time
+import concurrent.futures, multiprocessing
+from subprocess import Popen, PIPE, TimeoutExpired
+from xml.etree.ElementTree import Element, ElementTree
 
-successes = failures = ignored = 0
 TIMEOUT = 15 # seconds before a test is timed out.
-
-the_lock = threading.Lock()
 
 def FAIL(name, msg):
     return ('  error: %s' % name,'      (%s)' % msg)
-
-# must only be called while having the lock
-def OK(name):
-    global successes
-    successes+=1
-    print(' SUCCESS: %s' % name)
 
 def parse(stream):
     """Read test information separated by blank lines.  The first line
@@ -67,75 +59,99 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
     if config_file != None:
         for arg in arg_array:
             if arg.startswith("--config"):
-                print(
-                    "Test \"%s\" comes with an args entry to specify the config file," % name +
-                    " but a config file was also passed as a command-line argument to the test harness" )
-                exit(1)
+                return ("error",
+                        "Test \"%s\" comes with an args entry to specify the config file," % name +
+                        " but a config file was also passed as a command-line argument to the test harness")
 
         arg_array += ["--config=" + config_file]
 
     if not filemode.startswith('true'):
         arg_array += ["-e"]
 
-    proc = Popen([links] + arg_array + [code], stdout=PIPE, stderr=PIPE, env=env)
+    proc = Popen([links] + arg_array + [code], stdout=PIPE, stderr=PIPE, universal_newlines=True, env=env)
+    try:
+        proc_stdout, proc_stderr = proc.communicate(timeout=TIMEOUT)
+        passed = True
+        errors = []
 
-    passed = True
-    errors = []
-    for i in range(0, TIMEOUT*100):
-        rc = proc.poll()
-        if rc != None:
-            passed &= check_expected(name, 'return code', str(rc), exit, errors)
-            passed &= check_expected(name, 'stdout', proc.stdout.read().decode('ascii'), stdout, errors)
-            passed &= check_expected(name, 'stderr', str(proc.stderr.read().decode('ascii')), stderr, errors)
-            if passed:
-                with the_lock:
-                    OK(name)
-            else:
-                if ignore != None:
-                    global ignored
-                    with the_lock:
-                        ignored += 1
-                        print('?IGNORED: %s (%s)' % (name, ignore))
-                else:
-                    global failures
-                    with the_lock:
-                        failures += 1
-                        print('!FAILURE: %s' % name)
-                        for i, j in errors:
-                            print(i)
-                            print(j)
-            return
+        passed &= check_expected(name, 'return code', str(proc.returncode), exit, errors)
+        passed &= check_expected(name, 'stdout', proc_stdout, stdout, errors)
+        passed &= check_expected(name, 'stderr', proc_stderr, stderr, errors)
+        if passed:
+            return "success", ""
+        elif ignore != None:
+            return "ignored", ""
         else:
-            time.sleep(0.01)
-
-    with the_lock:
-        failures += 1
-        print('!FAILURE: %s [TIMED OUT]' % name)
+            return "failure", "\n".join(msg + "\n" + detail for msg, detail in errors)
+    except TimeoutExpired:
+        proc.kill()
+        return "error", "Timed out"
 
 def main():
-    config_file = None
-
-    if len(sys.argv) == 3:
-        filename = sys.argv[1]
-        config_file =  sys.argv[2]
-    elif len(sys.argv) == 2:
-        filename =  sys.argv[1]
-    else:
-        raise SystemExit('Usage: run <test file> [<links config file>]')
+    args = argparse.ArgumentParser(description="Runs programs specified in a '.tests' file, and compares their results.")
+    args.add_argument("filename", help="The path to the '.tests' file.")
+    args.add_argument("config", nargs="?", help="An optional config file to use.")
+    args.add_argument("--junit", help="The path to write a JUnit XML file to.")
+    args = args.parse_args()
 
     cpus=multiprocessing.cpu_count()
-    tp = concurrent.futures.ThreadPoolExecutor(max_workers=cpus)
-    for name, code, opts in parse(open(filename, 'r')):
-        # enqueues execution of
-        # evaluate(name, code, config_file, **opts)
-        # in the thread pool
-        tp.submit(evaluate, name, code, config_file, **opts)
 
-    # Wait for all jobs to finish
-    tp.shutdown(wait=True)
+    def work(task):
+        name, code, opts = task
+        start = time.time()
+        status, message = evaluate(name, code, args.config, **opts)
+        duration = time.time() - start
+        return { "name": name, "time": duration, "status": status, "message": message }
 
-    print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
-    if failures > 0:
+    testsuite = Element("testsuite", { "name": args.filename })
+    count, counts = 0, { "ignored": 0, "success": 0, "failure": 0, "error": 0 }
+    start = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=cpus) as tp,\
+         open(args.filename, "r") as handle:
+
+        for result in tp.map(work, parse(handle)):
+            status = result["status"]
+            count += 1
+            counts[status] += 1
+
+            # Display the result to the console
+            print("%8s: %s" % (status.upper(), result["name"]))
+            if result["message"] != "":
+                print(result["message"])
+
+            # Build up an XML node
+            testcase = Element("testcase", {
+                "name": result["name"],
+                "time": "%.03f" % result["time"],
+                "classname": args.filename,
+            })
+
+            if status == "success":
+                pass
+            elif status == "ignored":
+                testcase.append(Element("skipped"))
+            else:
+                testcase.append(Element(status, { "name": "Error", "message": result["message"] }))
+            testsuite.append(testcase)
+
+        # Wait for all jobs to finish
+        tp.shutdown(wait=True)
+    duration = time.time() - start
+
+    testsuite.set("tests", str(count))
+    testsuites = Element("testsuites", {
+        "tests": str(count),
+        "failures": str(counts["failure"]),
+        "errors": str(counts["error"]),
+        "time": "%.03f" % duration,
+    })
+    testsuites.append(testsuite)
+    if args.junit is not None:
+        ElementTree(testsuites).write(args.junit)
+
+    counts["failure"] += counts["error"]
+    print("{failure:d} failures (+{ignored:d} ignored)\n{success:d} successes\n".format(**counts))
+    if counts["failure"] > 0:
         sys.exit(1)
     else:
         sys.exit(0)

@@ -90,7 +90,7 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      make tests
+      LINKS_TEST_EXPORT=1 make tests
     displayName: 'Server-side tests'
 
   - script: |
@@ -106,5 +106,22 @@ steps:
   - script: |
       eval `./opam2_local env`
       ./opam2_local install -y oUnit
-      ./run-tests unit
+      ./run-tests unit -output-junit-file tests/unit/results.xml
     displayName: 'Unit tests'
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    displayName: 'Publish server-side tests'
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: '**/*.tests.xml'
+      testRunTitle: 'Server-side tests'
+      mergeTestResults: true
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    displayName: 'Publish Unit tests'
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: 'tests/unit/results.xml'
+      testRunTitle: 'Unit tests'
