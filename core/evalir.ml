@@ -562,14 +562,14 @@ struct
                 frame &> cont)
            in
            tail_computation env cont' tc
-          (* function definitions are stored in the global fun map *)
-          | Fun _ ->
-            computation env cont (bs, tailcomp)
-          | Rec _ ->
-            computation env cont (bs, tailcomp)
-          | Alien _ ->
-            computation env cont (bs, tailcomp)
-          | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
+        (* function definitions are stored in the global fun map *)
+        | Fun _ ->
+          computation env cont (bs, tailcomp)
+        | Rec _ ->
+          computation env cont (bs, tailcomp)
+        | Alien ((var, _) as b, _, _) ->
+          computation (Value.Env.bind var (`Alien, Var.scope_of_binder b) env) cont (bs, tailcomp)
+        | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     | Ir.Return v   -> apply_cont cont env (value env v)
     | Apply (f, ps) -> apply cont env (value env f, List.map (value env) ps)
