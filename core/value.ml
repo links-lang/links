@@ -112,7 +112,7 @@ let resolve_database_driver driver_name =
   match List.assoc_opt driver_name !database_drivers with
   | Some driver -> driver
   | None ->
-     DbDriverDynload.load driver_name;
+     DatabaseDriver.load driver_name;
      (* Loading driver should make it register*)
      List.assoc driver_name !database_drivers
 

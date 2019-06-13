@@ -2,7 +2,6 @@ open Utility
 open CommonTypes
 module Q = Query
 module QL = Query.Lang
-module S = Sql
 
 (* generate a unique tag for each comprehension in
    a normalised query
@@ -771,36 +770,33 @@ Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usua
 end
 
 
-(* FIXME:
-
-   either deal with the range argument properly or get rid of it
-*)
-let unordered_query_package db (range: (int * int) option) t v =
+let unordered_query_package t v =
   let t = Shred.nested_type_of_type t in
   (* Debug.print ("v: "^string_of_t v); *)
-  S.reset_dummy_counter ();
+  Sql.reset_dummy_counter ();
   let w = QL.Concat (Split.query v) in
     (* Debug.print ("w: "^string_of_t w); *)
   let tagged_w = tag_query w in
   let shredded_w = Shred.shred_query tagged_w t in
   let lins_w = Shred.pmap (LetInsertion.lins_query) shredded_w in
   let flat_w = Shred.pmap (FlattenRecords.flatten_query) lins_w in
-  let query_package = Shred.pmap ((S.string_of_query db range) -<- (Q.query db)) flat_w in
-
+  let query_package =
+    Shred.pmap Q.sql_of_let_query flat_w in
   let shredded_t = Shred.shred_query_type t in
-  let query_type_package = Shred.pmap (FlattenRecords.flatten_query_type) shredded_t in
+  let query_type_package =
+    Shred.pmap (FlattenRecords.flatten_query_type) shredded_t in
+  let typed_query_package =
+    Shred.pzip query_package query_type_package in
+  typed_query_package
 
-  let typed_query_package = Shred.pzip query_package query_type_package in
-    typed_query_package
-
-let compile_shredded : Value.env -> (int * int) option * Ir.computation
-                       -> (Value.database * (string * Shred.flat_type) Shred.package) option =
-  fun env (range, e) ->
+let compile_shredded : Value.env -> Ir.computation
+                       -> (Value.database * (Sql.query * Shred.flat_type) Shred.package) option =
+  fun env e ->
     let v = Q.Eval.eval env e in
       match Q.used_database v with
         | None    -> None
         | Some db ->
           let t = Q.type_of_expression v in
-          let p = unordered_query_package db range t v in
+          let p = unordered_query_package t v in
             Some (db, p)
 

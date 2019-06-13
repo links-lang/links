@@ -2,7 +2,6 @@ open Utility
 open CommonTypes
 module Q = Query
 module QL = Query.Lang
-module S = Sql
 
 (* Introducing ordering indexes in order to support a list
    semantics. *)
@@ -291,15 +290,14 @@ struct
 end
 
 (* WR: the following is logically part of Sql, but... *)
-let ordered_query db range v =
+let ordered_query v =
   (* Debug.print ("v: "^Q.string_of_t v); *)
-  S.reset_dummy_counter ();
+  Sql.reset_dummy_counter ();
   let vs, n = Order.ordered_query v in
   (* Debug.print ("concat vs: "^Q.string_of_t (`Concat vs)); *)
-  let q = Sql.UnionAll (List.map (Q.clause db [] false) vs, n) in
-    S.string_of_query db range q
+  Sql.UnionAll (List.map Q.sql_of_query vs, n)
 
-let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * string * Types.datatype) option =
+let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
   fun env (range, e) ->
     (* Debug.print ("e: "^Ir.show_computation e); *)
     let v = Q.Eval.eval env e in
@@ -308,6 +306,6 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
         | None -> None
         | Some db ->
             let t = Types.unwrap_list_type (Q.type_of_expression v) in
-            let q = ordered_query db range v in
-              Debug.print ("Generated query: "^q);
+            let q = ordered_query v in
+              Debug.print ("Generated query: "^(Sql.string_of_query db range q));
               Some (db, q, t)
