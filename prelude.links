@@ -257,30 +257,31 @@ fun join(glue,list) {
 # elemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # notElemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
+sig span : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+fun span(p, xs) {
+  fun go(acc, xs) {
+    switch(xs) {
+      case [] -> (acc, [])
+      case x :: xs ->
+        if (p(x)) {
+          go(x :: acc, xs)
+        } else {
+          (reverse(acc), x :: xs)
+        }
+    }
+  }
+  go([], xs)
+}
 # splitAt :: Int -> ([a]) -> ([a],[a])
 
 sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun takeWhile(pred, list) {
-  switch (list) {
-    case [] -> []
-    case (h::t) ->
-      switch (pred(h)) {
-        case true -> h :: takeWhile(pred, t)
-        case false -> []
-      }
-  }
+  first(span(pred, list))
 }
 
 sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun dropWhile(pred, list) {
-  switch (list) {
-    case [] -> []
-    case (h::t) ->
-      switch (pred(h)) {
-        case true -> dropWhile(pred, t)
-        case false -> list
-      }
-  }
+  second(span(pred, list))
 }
 
 # until :: ((a) -> Bool) -> ((a) -> a) -> (a) -> a
@@ -1329,6 +1330,23 @@ fun maximum(a,b) {
 }
 
 ####
+
+sig partition : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+fun partition(pred, xs) {
+  fun go(ayes, noes, xs) {
+    switch(xs) {
+      case [] -> (ayes, noes)
+      case x :: xs ->
+        if (pred(x)) {
+          go(x :: ayes, noes, xs)
+        } else {
+          go(ayes, x :: noes, xs)
+        }
+    }
+  }
+  go([], [], xs)
+}
+
 sig groupByFlat : ((a) -b-> c, [a]) -b-> [(c, [a])]
 fun groupByFlat(project, ts) {
   for(t <- ts)
