@@ -218,7 +218,7 @@ and env = t Env.t
 
 type delegated_chan = (chan * (t list))
 
-val project : string -> [> `Record of (string * 'b) list ] -> 'b
+val project : string -> t -> t
 val untuple : t -> t list
 
 val box_bool : 'a -> [> `Bool of 'a ]
