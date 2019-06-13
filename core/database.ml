@@ -24,7 +24,14 @@ let value_of_db_string (value:string) t =
         Value.box_bool (value = "1" || value = "t" || value = "true")
     | `Primitive Primitive.Char -> Value.box_char (String.get value 0)
     | `Primitive Primitive.String -> Value.box_string value
-    | `Primitive Primitive.Int  -> Value.box_int (int_of_string value)
+    | `Primitive Primitive.Int  ->
+        if value = "" then
+          if Settings.get_value (Basicsettings.Database.coerce_null_integers) then
+            Value.box_int (Settings.get_value Basicsettings.Database.null_integer)
+          else
+            raise (Errors.RuntimeError ("Attempted to read null integer from the database"))
+        else
+          Value.box_int (int_of_string value)
     | `Primitive Primitive.Float ->
        if value = "" then Value.box_float 0.00      (* HACK HACK *)
        else Value.box_float (float_of_string value)
