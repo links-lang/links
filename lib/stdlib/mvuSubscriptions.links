@@ -1,4 +1,4 @@
-open MvuEvents;
+open import MvuEvents;
 
 typename Sub(a :: Type(Any, Any)) =
   [| SubEmpty

@@ -1,4 +1,4 @@
-open MvuAttrs;
+open import MvuAttrs;
 
 # HTML Type
 typename HTML(a :: Type(Any, Any)) =
