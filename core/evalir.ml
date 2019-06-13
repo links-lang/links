@@ -55,7 +55,10 @@ struct
   let error msg : 'a = raise (Exceptions.EvaluationError msg)
 
   let eval_error fmt : 'r =
-    Printf.kprintf error fmt
+    Printf.ksprintf error fmt
+
+  let type_error ~action expected value =
+    eval_error "Attempting to %s %s (need %s instead)" action (Value.string_of_value value) expected
 
   let db_connect : Value.t -> Value.database * string = fun db ->
     let driver = Value.unbox_string (Value.project "driver" db)
@@ -182,14 +185,14 @@ struct
 (*                               (label, value env v)::fs) *)
 (*                            fields *)
 (*                            fs) *)
-            | _ -> eval_error "Error adding fields: non-record"
+            | v -> type_error ~action:"add field to" "record" v
         end
     | Project (label, r) ->
         begin
           match value env r with
             | `Record fields when List.mem_assoc label fields ->
                 List.assoc label fields
-            | _ -> eval_error "Error projecting label %s" label
+            | v -> type_error ~action:("projecting label " ^ label) "record" v
         end
     | Erase (labels, r) ->
         begin
@@ -197,7 +200,9 @@ struct
             | `Record fields when
                 StringSet.for_all (fun label -> List.mem_assoc label fields) labels ->
                 `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields)
-            | _ -> eval_error "Error erasing labels {%s}" (String.concat "," (StringSet.elements labels))
+            | v ->
+               type_error ~action:(Printf.sprintf "erase labels {%s}" (String.concat "," (StringSet.elements labels)))
+                 "record" v
         end
     | Inject (label, v, _) -> `Variant (label, value env v)
     | TAbs (_, v) -> value env v
@@ -544,7 +549,8 @@ struct
        eval_error "Continuation applied to multiple (or zero) arguments"
     | `Resumption r, vs ->
        resume env cont r vs
-    | _                        -> eval_error "Application of non-function"
+    | `Alien, _ -> eval_error "Can't make alien call on the server.";
+    | v, _ -> type_error ~action:"apply" "function" v
   and resume env (cont : continuation) (r : resumption) vs =
     Proc.yield (fun () -> K.Eval.resume ~env cont r vs)
   and apply_cont (cont : continuation) env v =
@@ -562,14 +568,14 @@ struct
                 frame &> cont)
            in
            tail_computation env cont' tc
-          (* function definitions are stored in the global fun map *)
-          | Fun _ ->
-            computation env cont (bs, tailcomp)
-          | Rec _ ->
-            computation env cont (bs, tailcomp)
-          | Alien _ ->
-            computation env cont (bs, tailcomp)
-          | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
+        (* function definitions are stored in the global fun map *)
+        | Fun _ ->
+          computation env cont (bs, tailcomp)
+        | Rec _ ->
+          computation env cont (bs, tailcomp)
+        | Alien ((var, _) as b, _, _) ->
+          computation (Value.Env.bind var (`Alien, Var.scope_of_binder b) env) cont (bs, tailcomp)
+        | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     | Ir.Return v   -> apply_cont cont env (value env v)
     | Apply (f, ps) -> apply cont env (value env f, List.map (value env) ps)
@@ -585,7 +591,7 @@ struct
             | None, _, #Value.t -> eval_error "Pattern matching failed on %s" label
             | _ -> assert false (* v not a variant *)
           end
-        | _ -> eval_error "Case of non-variant"
+        | v -> type_error ~action:"take case of" "variant" v
       end
     | If (c,t,e)    ->
         computation env cont
@@ -896,7 +902,7 @@ struct
         Proc.run (fun () -> computation env cont program)
       ) with
         | NotFound s -> raise (internal_error ("NotFound " ^ s ^
-					" while interpreting."))
+                    " while interpreting."))
 
   let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     fun env program ->
