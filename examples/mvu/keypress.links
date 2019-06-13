@@ -7,7 +7,7 @@ open import MvuSubscriptions;
 typename Model = Maybe(KeyboardEvent);
 typename Msg = [| UpdateEvent: KeyboardEvent |];
 
-sig updt : (Msg, Model) ~%e~> Model
+sig updt : (Msg, Model) ~> Model
 fun updt(msg, _) {
   switch(msg) {
     case UpdateEvent(evt) -> Just(evt)
@@ -21,7 +21,7 @@ fun textPar((k, v)) {
 fun i2s(i) { intToString(i) }
 fun b2s(b) { if(b) { "true" } else { "false"} }
 
-sig view : (Model) ~%e~> HTML(Msg)
+sig view : (Model) ~> HTML(Msg)
 fun view(model) {
   switch(model) {
     case Nothing -> textNode("Press a key!")

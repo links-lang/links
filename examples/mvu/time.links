@@ -40,7 +40,7 @@ fun pad(t) {
   }
 }
 
-sig updt : (Msg, Model) ~%e~> Model
+sig updt : (Msg, Model) ~> Model
 fun updt(msg, model) {
   switch(msg) {
     case Tick ->
@@ -64,7 +64,7 @@ var ae = MvuAttrs.empty;
 var he = MvuHTML.empty;
 fun ch(xs) { MvuHTML.concat(xs) }
 
-sig view : (Model) ~%e~> MvuHTML.HTML(Msg)
+sig view : (Model) ~> MvuHTML.HTML(Msg)
 fun view(model) {
     open MvuHTML;
     open MvuAttrs;

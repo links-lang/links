@@ -151,7 +151,7 @@ fun movePaddle(player, direction, scoreUpdate) {
   }
 }
 
-sig updt : (Msg, Game) ~%e~> Game
+sig updt : (Msg, Game) ~> Game
 fun updt(msg, game) {
   var score1 =
     if (game.ball.x > width) { 1 } else { 0 };
@@ -191,7 +191,7 @@ fun updt(msg, game) {
     }
 }
 
-sig view : (Game) ~%e~> HTML(Msg)
+sig view : (Game) ~> HTML(Msg)
 fun view(game) {
   div (class ("canvas"), ch([
     drawCircle(game.ball.x,game.ball.y),

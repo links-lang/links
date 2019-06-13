@@ -9,7 +9,7 @@ typename Msg = [| UpdateMouseEvent: MouseEvent |];
 
 var mouseMoveHandler = onMouseMove(fun(evt) { Just(UpdateMouseEvent(evt)) });
 
-sig updt : (Msg, Model) ~%e~> Model
+sig updt : (Msg, Model) ~> Model
 fun updt(msg, _) {
   switch(msg) {
     case UpdateMouseEvent(mouseEvt) -> Just(mouseEvt)
@@ -33,7 +33,7 @@ fun textPar((k, v)) {
 fun i2s(i) { intToString(i) }
 fun b2s(b) { if(b) { "true" } else { "false"} }
 
-sig view : (Model) ~%e~> HTML(Msg)
+sig view : (Model) ~> HTML(Msg)
 fun view(model) {
   switch(model) {
     case Nothing -> textNode("Move the mouse!")

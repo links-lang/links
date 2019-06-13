@@ -70,7 +70,7 @@ fun getUpdatedEntries(model) {
   }
 }
 
-sig updt : (Msg, Model) ~%e~> Model
+sig updt : (Msg, Model) ~> Model
 fun updt(msg, model) {
   switch (msg) {
     case NoOp ->
@@ -256,7 +256,7 @@ fun viewControls(visibility, entries) {
   ]))
 }
 
-sig view : (Model) ~%~> HTML(Msg)
+sig view : (Model) ~> HTML(Msg)
 fun view(model) {
   div (class ("todomvc-wrapper"),
     section (class ("todoapp"), ch([
