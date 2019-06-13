@@ -160,8 +160,11 @@ let format_exception =
      | None -> pos_prefix message
      end
   | PrimeAlien pos ->
-     let pos, _ = Position.resolve_start_expr pos in
-     pos_prefix ~pos "Foreign binders cannot contain single quotes `'`."
+     let pos, expr = Position.resolve_start_expr pos in
+     let message =
+       Printf.sprintf "Syntax error: Foreign binders cannot contain single quotes `'`.\nIn expression: %s." expr
+     in
+     pos_prefix ~pos message
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
 
