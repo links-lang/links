@@ -119,6 +119,7 @@ let rec jsonize_value' : Value.t -> json_string =
       "{\"_clientSpawnLoc\":" ^ (ClientID.to_json client_id) ^ "}"
   | `SpawnLocation (`ServerSpawnLoc) ->
       "{\"_serverSpawnLoc\": [] }"
+  | `Alien -> raise (Errors.runtime_error "Can't jsonize alien")
 and jsonize_primitive : Value.primitive_value -> string  = function
   | `Bool value -> string_of_bool value
   | `Int value -> string_of_int value
