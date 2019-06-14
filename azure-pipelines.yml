@@ -21,12 +21,12 @@ steps:
     displayName: Environment
 
   - script: |
-      make rule-check
-    displayName: 'Rule check'
+      opam install ocamlformat -y
+    displayName: 'Ocamlformat'
 
   - script: |
-      opam install ocamlformat
-    displayName: 'Ocamlformat'
+      make rule-check
+    displayName: 'Rule check'
 
   - script: |
       opam switch create ocaml-base-compiler.4.06.1
