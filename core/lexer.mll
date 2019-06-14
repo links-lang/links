@@ -238,7 +238,7 @@ let keywords = [
 exception LexicalError of (string * Lexing.position)
 }
 
-let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*)
+let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9' '\'']*)
 let module_name = (['A'-'Z'] (['A'-'Z' 'a'-'z'])*)
 let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
