@@ -101,7 +101,7 @@ let rec desugar_pattern : Sugartypes.Pattern.with_pos -> Pattern.t * raw_env =
     let fresh_binder (nenv, tenv, eff) bndr =
       assert (Sugartypes.Binder.has_type bndr);
       let name = Sugartypes.Binder.to_name bndr in
-      let t = Sugartypes.Binder.to_type_exn bndr in
+      let t = Sugartypes.Binder.to_type bndr in
       let xb, x = Var.fresh_var (t, name, Scope.Local) in
       xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
     in

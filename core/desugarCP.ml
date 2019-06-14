@@ -34,7 +34,9 @@ object (o : 'self_type)
             o, block_node
                 ([val_binding (any_pat dp) (fn_appl_var wait_str c)],
                  with_dummy_pos e), t
-         | CPGrab ((c, Some (`Input (_a, s), grab_tyargs)), Some {node=x, Some u; _}, p) -> (* FYI: a = u *)
+         | CPGrab ((c, Some (`Input (_a, s), grab_tyargs)), Some bndr, p) -> (* FYI: a = u *)
+            let x = Binder.to_name bndr in
+            let u = Binder.to_type bndr in
             let envs = o#backup_envs in
             let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ()) (x, u))
                                   (c, s) in
@@ -62,9 +64,13 @@ object (o : 'self_type)
                 ([val_binding (variable_pat ~ty:s c)
                               (fn_appl send_str give_tyargs [e; var c])],
                  with_dummy_pos p), t
-         | CPGiveNothing ({node=c, Some t; _}) ->
+         | CPGiveNothing bndr ->
+            let c = Binder.to_name bndr in
+            let t = Binder.to_type bndr in
             o, Var c, t
-         | CPSelect ({node=c, Some s; _}, label, p) ->
+         | CPSelect (bndr, label, p) ->
+            let c = Binder.to_name bndr in
+            let s = Binder.to_type bndr in
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
             let (o, p, t) = desugar_cp o p in
@@ -73,7 +79,9 @@ object (o : 'self_type)
                 ([val_binding (variable_pat ~ty:(TypeUtils.select_type label s) c)
                                (with_dummy_pos (Select (label, var c)))],
                  with_dummy_pos p), t
-         | CPOffer ({node=c, Some s; _}, cases) ->
+         | CPOffer (bndr, cases) ->
+            let c = Binder.to_name bndr in
+            let s = Binder.to_type bndr in
             let desugar_branch (label, p) (o, cases) =
               let envs = o#backup_envs in
               let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.choice_at label s) >} in
@@ -86,11 +94,16 @@ object (o : 'self_type)
                 | (_, []) -> assert false (* Case list cannot be empty *)
                 | (cases, t :: _ts) ->
                     o, Offer (var c, cases, Some t), t)
-         | CPLink ({node=c, Some ct; _}, {node=d, Some _; _}) ->
+         | CPLink (bndr, bndr') ->
+            let c = Binder.to_name bndr in
+            let ct = Binder.to_type bndr in
+            let d = Binder.to_name bndr' in
             o, fn_appl_node link_sync_str [`Type ct; `Row o#lookup_effects]
                             [var c; var d],
             Types.make_endbang_type
-         | CPComp ({node=c, Some s; _}, left, right) ->
+         | CPComp (bndr, left, right) ->
+            let c = Binder.to_name bndr in
+            let s = Binder.to_type bndr in
             let envs = o#backup_envs in
             let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in

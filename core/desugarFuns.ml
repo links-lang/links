@@ -54,8 +54,9 @@ open SugarConstructors.DummyPositions
 (* unwrap a curried function definition as
    a collection of nested functions
 *)
-let unwrap_def ({node=f, ft; _}, linearity, (tyvars, lam), location, t) =
-  let ft = val_of ft in
+let unwrap_def (bndr, linearity, (tyvars, lam), location, t) =
+  let f = Binder.to_name bndr in
+  let ft = Binder.to_type bndr in
   let rt = TypeUtils.return_type ft in
   let lam =
     let rec make_lam t : funlit -> funlit =
