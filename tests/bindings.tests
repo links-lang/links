@@ -104,3 +104,11 @@ Function names may contain primes (3)
 fun 'f() { () }
 exit : 1
 stderr : @.*
+
+Function names may contain primes (4)
+fun f'(x) { x } f'("f'")
+stdout : "f'" : String
+
+A character not a variable name.
+var a' = 42; 'a'
+stdout : 'a' : Char
