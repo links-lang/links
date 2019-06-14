@@ -20,3 +20,12 @@ Alien functions may not be applied in the interpreter
 alien javascript "fun.js" f : () ~> (); f()
 exit : 1
 stderr : @.*Can't make alien call on the server\..*
+
+Alien binders cannot contain primes
+alien javascript "" f' : () -> ();
+exit : 1
+stderr : @.*
+
+Alien type variables can contain primes
+alien javascript "" f : (a', b') -> c';
+stdout : () : ()

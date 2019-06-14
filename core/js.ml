@@ -23,7 +23,8 @@ struct
         '-', "hyphen";
         '.', "fullstop";
         '|', "pipe";
-        '_', "underscore"]
+        '_', "underscore";
+        '\'', "prime"]
 
   let js_keywords= ["break";"else";"new";"var";"case";"finally";"return";"void";
                     "catch";"for";"switch";"while";"continue";"function";"this";

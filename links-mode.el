@@ -132,13 +132,13 @@
    ;; special operations
    `(,(regexp-opt links-keywords 'words) . font-lock-keyword-face)
    ;; types & variant tags
-   '("\\<[A-Z][A-Za-z0-9_]*\\>" . font-lock-type-face)
+   '("\\<[A-Z][A-Za-z0-9_']*\\>" . font-lock-type-face)
    ;; variable names
-   '("\\<\\(var\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+   '("\\<\\(var\\) +\\([a-z][A-Za-z0-9_']*\\)\\>"
      (1 font-lock-keyword-face)
      (2 font-lock-variable-name-face))
    ;; function names
-   '("\\<\\(fun\\|sig\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+   '("\\<\\(fun\\|sig\\) +\\([a-z][A-Za-z0-9_']*\\)\\>"
      (1 font-lock-keyword-face)
      (2 font-lock-function-name-face))
    ;; type operators
