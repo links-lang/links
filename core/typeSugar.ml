@@ -3912,6 +3912,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
 
       | Foreign (bndr, raw_name, language, file, (dt1, Some datatype)) ->
+          ignore (if String.contains (Binder.to_name bndr) '\'' then raise (Errors.prime_alien pos));
           (* Ensure that we quantify FTVs *)
           let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
           let datatype = Instantiate.freshen_quantifiers datatype in
