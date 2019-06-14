@@ -675,10 +675,10 @@ class map =
           Typenames ts
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
-      | Module (n, bs) ->
-          let n = o#name n in
+      | Module (bndr, bs) ->
+          let bndr = o#binder bndr in
           let bs = o#list (fun o -> o#binding) bs in
-          Module (n, bs)
+          Module (bndr, bs)
       | AlienBlock (lang, lib, dts) ->
           let lang = o#name lang in
           let lib = o#name lib in
@@ -1309,8 +1309,8 @@ class fold =
           o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
-      | Module (n, bs) ->
-          let o = o#name n in
+      | Module (bndr, bs) ->
+          let o = o#binder bndr in
           let o = o#list (fun o -> o#binding) bs in
           o
       | AlienBlock (lang, lib, dts) ->
@@ -2073,10 +2073,10 @@ class fold_map =
           in (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
-      | Module (n, bs) ->
-          let (o, n) = o#string n in
+      | Module (bndr, bs) ->
+          let (o, bndr) = o#binder bndr in
           let (o, bs) = o#list (fun o -> o#binding) bs in
-          (o, (Module (n, bs)))
+          (o, (Module (bndr, bs)))
       | AlienBlock (lang, lib, dts) ->
           let (o, lang) = o#name lang in
           let (o, lib) = o#name lib in

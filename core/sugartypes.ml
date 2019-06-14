@@ -279,7 +279,7 @@ and bindingnode =
   | Typenames of typename list
   | Infix
   | Exp     of phrase
-  | Module  of name * binding list
+  | Module  of Binder.with_pos * binding list
   | AlienBlock of name * name * ((Binder.with_pos * datatype') list)
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
@@ -477,10 +477,10 @@ struct
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
     | Raise -> empty
-  and binding (binding: binding)
+  and binding (binding': binding)
       : StringSet.t (* vars bound in the pattern *)
       * StringSet.t (* free vars in the rhs *) =
-    match WithPos.node binding with
+    match WithPos.node binding' with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
     | Fun (bndr, _, (_, fn), _, _) ->
        let name = singleton (Binder.to_name bndr) in
@@ -505,12 +505,13 @@ struct
               StringSet.add (Binder.to_name bndr) acc)
             (StringSet.empty) decls in
         bound_foreigns, empty
-        (* TODO: this needs to be implemented *)
-    | Module _ ->
-        raise (
-          Errors.internal_error
-            ~filename:"sugartypes.ml"
-            ~message:"Freevars for modules not implemented yet")
+    | Module (_, bindings) ->
+       List.fold_left
+         (fun (bnd, fvs) b ->
+           let bnd', fvs' = binding b in
+           let fvs'' = diff fvs' bnd in
+           union bnd bnd', union fvs fvs'')
+         (empty, empty) bindings
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and block (binds, expr : binding list * phrase) : StringSet.t =

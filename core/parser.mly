@@ -399,13 +399,10 @@ alien_datatypes:
 | alien_datatype+                                              { $1 }
 
 links_module:
-| MODULE module_name moduleblock                               { with_pos $loc($2) (Module ($2, $3)) }
+| MODULE CONSTRUCTOR moduleblock                               { with_pos $loc($2) (Module (binder ~ppos:$loc($2) $2, $3)) }
 
 alien_block:
 | ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (AlienBlock ($2, $3, $5)) }
-
-module_name:
-| CONSTRUCTOR                                                  { $1 }
 
 fun_declarations:
 | fun_declaration+                                             { $1 }
