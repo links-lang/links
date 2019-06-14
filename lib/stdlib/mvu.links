@@ -1,0 +1,77 @@
+### VDOM STUFF ###
+open import MvuAttrs;
+open import MvuEvents;
+open import MvuHTML;
+open import MvuSubscriptions;
+
+# Needed to ensure that virtual-dom is open
+module VirtualDom {
+  alien javascript "/lib/virtual-dom.js" {
+    dummy : ();
+  }
+}
+
+# Loads the "vdom.js" file, exposes runDom and updateDom.
+module VDom {
+  alien javascript "/lib/vdom.js" {
+    runDom : forall a :: Type(Any, Any) .
+      (String, HTML(a), AP(?a.End), Sub(a)) ~> ();
+    updateDom : forall a :: Type(Any, Any) . (HTML(a), Sub(a)) ~> ();
+  }
+}
+
+######
+
+# Main event loop
+sig evtLoop :
+ forall msg, model.
+  (AP(?msg.End),
+   model,
+   (model) ~e~> HTML(msg),
+   (msg, model) ~e~> model,
+   (model) ~e~> Sub(msg),
+   Sub(msg)) ~e~> ()
+fun evtLoop(ap, model, view, updt, subscriptionsFn, prevSubscriptions) {
+  var (message, s) = receive(accept(ap));
+  close(s);
+  var model = updt(message, model);
+  # Get new subscriptions
+  var newSubscriptions = subscriptionsFn(model);
+  # Update DOM
+  VDom.updateDom(view(model), newSubscriptions);
+  # Loop with new state
+  evtLoop(ap, model, view, updt, subscriptionsFn, newSubscriptions)
+}
+
+# User-facing function (assuming an unrestricted model)
+sig run:
+  forall msg, model.
+  (String,
+    model,
+    (model) ~e~> HTML(msg),
+    (msg, model) ~e~> (model),
+    (model) ~e~> Sub(msg)) ~f~> ()
+fun run(placeholder, model, view, updt, subscriptions) {
+  var evtHandler = spawnClient {
+    var ap = new();
+    VDom.runDom(placeholder, view(model), ap, subscriptions(model));
+    evtLoop(ap, model, view, updt, subscriptions, subscriptions(model))
+  };
+  ()
+}
+
+sig runSimple : forall msg, model .
+  (String,
+    model,
+    (model) ~e~> HTML(msg),
+    (msg, model) ~e~> model) ~f~> ()
+fun runSimple(placeholder, model, view, updt) {
+  run(placeholder, model, view, updt, fun(_) { SubEmpty } )
+}
+
+sig runStatic :
+  forall model .
+  (String, model, (model) ~e~> HTML(())) ~f~> ()
+fun runStatic(placeholder, model, view) {
+  runSimple(placeholder, model, view, fun(_, model) { model })
+}
