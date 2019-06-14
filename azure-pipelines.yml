@@ -8,17 +8,10 @@ pr:
   branches:
     include:
       - '*'  # must quote since "*" is a YAML reserved character.
-
-strategy:
-  matrix:
-    linux:
-      imageName: 'ubuntu-latest'
-    mac:
-      imageName: 'macos-latest'
-
 pool:
-  vmImage: $(imageName)
+  vmImage: 'ubuntu-18.04'
 
+container: ocaml/opam2:ubuntu
 
 steps:
   - script: |
@@ -50,7 +43,7 @@ steps:
                   chmod a+x opam2_local ;;
         *) exit 1 ;;
       esac
-    displayName: 'OPAM 2'
+    dmisplayName: 'OPAM 2'
 
   - script: |
       ./opam2_local switch create ocaml-base-compiler.4.06.1
