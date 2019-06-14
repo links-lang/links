@@ -21,26 +21,15 @@ steps:
     displayName: Environment
 
   - script: |
+      sudo apt-get install m4
+    displayName: 'System dependencies'
+
+  - script: |
       sudo -u opam opam install ocamlformat -y
     displayName: 'Ocamlformat'
 
   - script: |
       sudo -u opam make rule-check
-    displayName: 'Rule check'
-
-  - script: |
-      opam switch create ocaml-base-compiler.4.06.1
-      eval `opam config env`
-    displayName: 'OCaml compiler'
-
-  - script: |
-      eval `./opam2_local env`
-      ./opam2_local install ocamlformat -y
-    displayName: 'Ocamlformat'
-
-  - script: |
-      eval `./opam2_local env`
-      make rule-check
     displayName: 'Rule check'
 
   - bash: |
@@ -59,20 +48,17 @@ steps:
     displayName: 'Databases'
 
   - script: |
-      eval `opam env`
-      opam pin add links . -y
-      opam pin add links-postgresql . -y
-      opam pin add links-sqlite3 . -y
+      sudo -u opam opam pin add links . -y
+      sudo -u opam opam pin add links-postgresql . -y
+      sudo -u opam opam pin add links-sqlite3 . -y
     displayName: 'Links dependencies'
 
   - script: |
-      eval `opam env`
-      make all-release
+      sudo -u opam make all-release
     displayName: 'Build Links (release)'
 
   - script: |
-      eval `opam env`
-      make tests
+      sudo -u opam make tests
     displayName: 'Server-side tests'
 
   - script: |
