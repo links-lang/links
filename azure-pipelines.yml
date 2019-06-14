@@ -21,11 +21,11 @@ steps:
     displayName: Environment
 
   - script: |
-      opam install ocamlformat -y
+      sudo -u opam opam install ocamlformat -y
     displayName: 'Ocamlformat'
 
   - script: |
-      make rule-check
+      sudo -u opam make rule-check
     displayName: 'Rule check'
 
   - script: |
