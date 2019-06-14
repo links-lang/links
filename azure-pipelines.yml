@@ -43,7 +43,7 @@ steps:
                   chmod a+x opam2_local ;;
         *) exit 1 ;;
       esac
-    dmisplayName: 'OPAM 2'
+    displayName: 'OPAM 2'
 
   - script: |
       ./opam2_local switch create ocaml-base-compiler.4.06.1
