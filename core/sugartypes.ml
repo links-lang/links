@@ -322,7 +322,7 @@ and function_definition = {
     fun_linearity: DeclaredLinearity.t;
     fun_definition: tyvar list * funlit;
     fun_location: Location.t;
-    fun_signature: datatype' option
+    fun_signature: datatype' option;
   }
 and recursive_function = {
     rec_binder: Binder.with_pos;
