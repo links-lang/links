@@ -1,4 +1,4 @@
-break-cases=all
+break-cases=toplevel
 doc-comments=before
 module-item-spacing=preserve
 disable=true
