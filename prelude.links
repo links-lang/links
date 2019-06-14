@@ -259,18 +259,18 @@ fun join(glue,list) {
 # span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
 sig span : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
 fun span(p, xs) {
-  fun go(acc, xs) {
+  fun go(acc, xs, p) {
     switch(xs) {
       case [] -> (acc, [])
       case x :: xs ->
         if (p(x)) {
-          go(x :: acc, xs)
+          go(x :: acc, xs, p)
         } else {
           (reverse(acc), x :: xs)
         }
     }
   }
-  go([], xs)
+  go([], xs, p)
 }
 # splitAt :: Int -> ([a]) -> ([a],[a])
 
