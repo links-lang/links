@@ -95,10 +95,11 @@ object (o : 'self_type)
           let rec list o =
             function
               | [] -> (o, [])
-              | ({node=_, Some outer; _} as f, lin, ((tyvars, Some (_inner, extras)), lam), location, t, pos)::defs ->
-                  let (o, defs) = list o defs in
-                  let extras = List.map (fun _ -> None) extras in
-                    (o, (f, lin, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
+              | (bndr, lin, ((tyvars, Some (_inner, extras)), lam), location, t, pos)::defs ->
+                 let outer = Binder.to_type bndr in
+                 let (o, defs) = list o defs in
+                 let extras = List.map (fun _ -> None) extras in
+                 (o, (bndr, lin, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
               | _ -> assert false
           in
             list o defs in
@@ -123,11 +124,10 @@ object (o : 'self_type)
           (o, (Funs defs))
     | b -> super#bindingnode b
 
-  method! binder : Binder.with_pos -> ('self_type * Binder.with_pos) = function
-      | {node=_, None; _} -> assert false
-      | bndr ->
-         let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in
-         ({< var_env=var_env; extra_env=extra_env >}, bndr)
+  method! binder : Binder.with_pos -> ('self_type * Binder.with_pos)
+    = fun bndr ->
+    let var_env = Env.String.bind var_env (Binder.to_name bndr, Binder.to_type bndr) in
+    ({< var_env=var_env; extra_env=extra_env >}, bndr)
 end
 
 let desugar_inners env = ((new desugar_inners env) : desugar_inners :> TransformSugar.transform)

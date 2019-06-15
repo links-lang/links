@@ -1981,10 +1981,9 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | Cons (h,t) -> Env.extend (pattern_env h) (pattern_env t)
     | List ps
     | Tuple ps -> List.fold_right (pattern_env ->- Env.extend) ps Env.empty
-    | Variable {node=v, Some t; _} -> Env.bind Env.empty (v, t)
-    | Variable {node=_, None; _} -> assert false
-    | As       ({node=v, Some t; _}, p) -> Env.bind (pattern_env p) (v, t)
-    | As       ({node=_, None; _}, _) -> assert false
+    | Variable bndr ->
+       Env.bind Env.empty Binder.(to_name bndr, to_type bndr)
+    | As (bndr, p) -> Env.bind (pattern_env p) Binder.(to_name bndr, to_type bndr)
 
 
 let update_pattern_vars env =
