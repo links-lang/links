@@ -279,7 +279,7 @@ and bindingnode =
   | Typenames of typename list
   | Infix
   | Exp     of phrase
-  | Module  of Binder.with_pos * binding list
+  | Module  of { binder: Binder.with_pos; members: binding list }
   | AlienBlock of name * name * ((Binder.with_pos * datatype') list)
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
@@ -505,13 +505,13 @@ struct
               StringSet.add (Binder.to_name bndr) acc)
             (StringSet.empty) decls in
         bound_foreigns, empty
-    | Module (_, bindings) ->
+    | Module { members; _ } ->
        List.fold_left
          (fun (bnd, fvs) b ->
            let bnd', fvs' = binding b in
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
-         (empty, empty) bindings
+         (empty, empty) members
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and block (binds, expr : binding list * phrase) : StringSet.t =

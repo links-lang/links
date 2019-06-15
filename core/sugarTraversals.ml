@@ -675,10 +675,10 @@ class map =
           Typenames ts
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
-      | Module (bndr, bs) ->
-          let bndr = o#binder bndr in
-          let bs = o#list (fun o -> o#binding) bs in
-          Module (bndr, bs)
+      | Module { binder; members } ->
+          let binder = o#binder binder in
+          let members = o#list (fun o -> o#binding) members in
+          Module { binder; members }
       | AlienBlock (lang, lib, dts) ->
           let lang = o#name lang in
           let lib = o#name lib in
@@ -1309,10 +1309,9 @@ class fold =
           o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
-      | Module (bndr, bs) ->
-          let o = o#binder bndr in
-          let o = o#list (fun o -> o#binding) bs in
-          o
+      | Module { binder; members } ->
+          let o = o#binder binder in
+          o#list (fun o -> o#binding) members
       | AlienBlock (lang, lib, dts) ->
           let o = o#name lang in
           let o = o#name lib in
@@ -2073,10 +2072,10 @@ class fold_map =
           in (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
-      | Module (bndr, bs) ->
-          let (o, bndr) = o#binder bndr in
-          let (o, bs) = o#list (fun o -> o#binding) bs in
-          (o, (Module (bndr, bs)))
+      | Module { binder; members } ->
+          let (o, binder) = o#binder binder in
+          let (o, members) = o#list (fun o -> o#binding) members in
+          (o, (Module { binder; members }))
       | AlienBlock (lang, lib, dts) ->
           let (o, lang) = o#name lang in
           let (o, lib) = o#name lib in

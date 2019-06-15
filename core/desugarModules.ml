@@ -242,10 +242,10 @@ end
 let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
   = fun ?(toplevel=false) renamer scope binding ->
   match binding.node with
-  | Module (bndr, bs) ->
-     let name = Binder.to_name bndr in
+  | Module { binder; members } ->
+     let name = Binder.to_name binder in
      let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
-     let bs'    = visitor#bindings bs in
+     let bs'    = visitor#bindings members in
      let scope' = visitor#get_scope in
      let scope'' = Scope.Extend.module' name scope' scope in
      (bs', scope'')
