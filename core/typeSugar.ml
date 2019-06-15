@@ -2354,7 +2354,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    *)
                 let e' =
                   match ftype with
-                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (qs',  WithPos.make ebody)
+                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (Types.unbox_quantifiers qs',  WithPos.make ebody)
                   | _ -> ebody in
                 e', ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
               else
@@ -2881,7 +2881,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               end
         | TAbstr (qs, e) ->
             let e, t, u = tc e in
-            let qs = Types.unbox_quantifiers qs in
             let t = Types.for_all(qs, t) in
               tabstr (qs, e.node), t, u
         | TAppl (e, _qs) ->

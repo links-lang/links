@@ -364,7 +364,7 @@ class transform (env : Types.typing_environment) =
             (o, FnAppl (f, args), TypeUtils.return_type ft)
       | TAbstr (tyvars, e) ->
           let outer_tyvars = o#backup_quantifiers in
-          let (o, qs) = o#quantifiers (Types.unbox_quantifiers tyvars) in
+          let (o, qs) = o#quantifiers tyvars in
           let (o, e, t) = o#phrase e in
           let o = o#restore_quantifiers outer_tyvars in
           let t = Types.for_all (qs, t) in

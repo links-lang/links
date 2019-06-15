@@ -837,7 +837,7 @@ struct
               I.apply (ev e, evs es)
           | TAbstr (tyvars, e) ->
               let v = ev e in
-                cofv (I.tabstr (Types.unbox_quantifiers tyvars, v))
+                cofv (I.tabstr (tyvars, v))
           | TAppl (e, tyargs) ->
               let v = ev e in
               let vt = I.sem_type v in

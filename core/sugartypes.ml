@@ -214,7 +214,7 @@ and phrasenode =
   | Regex            of regex
   | UnaryAppl        of (tyarg list * UnaryOp.t) * phrase
   | FnAppl           of phrase * phrase list
-  | TAbstr           of tyvar list ref * phrase
+  | TAbstr           of tyvar list * phrase
   | TAppl            of phrase * tyarg list
   | TupleLit         of phrase list
   | RecordLit        of (name * phrase) list * phrase option
@@ -325,7 +325,7 @@ exception ConcreteSyntaxError       of (Position.t * string)
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
-    | _  -> TAbstr (Types.box_quantifiers tyvars, WithPos.make e)
+    | _  -> TAbstr (tyvars, WithPos.make e)
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with

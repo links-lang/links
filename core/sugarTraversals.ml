@@ -877,7 +877,7 @@ class fold =
           let o = o#phrase _x in
           let o = o#list (fun o -> o#phrase) _x_i1 in o
       | TAbstr ((_x, _x_i1)) ->
-          let o = o#list (fun o -> o#tyvar) (Types.unbox_quantifiers _x) in
+          let o = o#list (fun o -> o#tyvar) (_x) in
           let o = o#phrase _x_i1 in o
       | TAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in o
