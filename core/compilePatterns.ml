@@ -102,7 +102,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
     let fresh_binder (nenv, tenv, eff) bndr =
       assert (Sugartypes.Binder.has_type bndr);
       let name = Sugartypes.Binder.to_name bndr in
-      let t = Sugartypes.Binder.to_type_exn bndr in
+      let t = Sugartypes.Binder.to_type bndr in
       let xb, x = Var.fresh_var (t, name, Scope.Local) in
       xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
     in
@@ -911,18 +911,18 @@ let handle_parameter_pattern : raw_env -> (Pattern.t * Types.datatype) -> Ir.com
     in
     (pb, Variable p'), (inner_bindings, outer_bindings)
 
-let compile_handle_parameters : raw_env -> (Ir.computation * Pattern.t * Types.datatype) list -> (Ir.binder * Ir.value) list * ((Ir.computation -> Ir.computation) * Ir.binding list)
+let compile_handle_parameters : raw_env -> (Pattern.t * Ir.computation * Types.datatype) list -> (Ir.binder * Ir.value) list * ((Ir.computation -> Ir.computation) * Ir.binding list)
   = fun env parameters ->
-    List.fold_right
-      (fun (body, pat, t) (bvs, (inner, outer)) ->
+    List.fold_left
+      (fun (bvs, (inner, outer)) (pat, body, t) ->
         let (bv, (inner', outer')) =
           handle_parameter_pattern env (pat, t) body
         in
         (bv :: bvs, ((fun comp -> inner' (inner comp)), outer' @ outer)))
-      parameters ([], ((fun x -> x), []))
+      ([], ((fun x -> x), [])) parameters
 
 let compile_handle_cases
-    : raw_env -> (raw_clause list * raw_clause list * (Ir.computation * Pattern.t * Types.datatype) list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
+    : raw_env -> (raw_clause list * raw_clause list * (Pattern.t * Ir.computation * Types.datatype) list * Sugartypes.handler_descriptor) -> Ir.computation -> Ir.computation =
   fun (nenv, tenv, eff) (raw_value_clauses, raw_effect_clauses, params, desc) m ->
   (* Observation: reduced continuation patterns are always trivial,
      i.e. a reduced continuation pattern is either a variable or a

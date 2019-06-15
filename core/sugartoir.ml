@@ -694,7 +694,7 @@ struct
   let handle env (m, val_cases, eff_cases, params, desc) =
     let params =
       List.map
-        (fun (body, p, t) -> reify (body env), p, t) params
+        (fun (body, p, t) -> p, reify (body env), t) params
     in
     let val_cases, eff_cases =
       let reify cases =
@@ -789,7 +789,7 @@ struct
                                  [ev e; ev (WithPos.make ~pos (ListLit (es, Some t)))]))
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
-             let kt = Binder.to_type_exn bndr in
+             let kt = Binder.to_type bndr in
              I.escape ((kt, k, Scope.Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | Section (Section.Minus) -> cofv (lookup_var "-")
           | Section (Section.FloatMinus) -> cofv (lookup_var "-.")
@@ -838,7 +838,7 @@ struct
               I.apply (ev e, evs es)
           | TAbstr (tyvars, e) ->
               let v = ev e in
-                cofv (I.tabstr (Types.unbox_quantifiers tyvars, v))
+                cofv (I.tabstr (tyvars, v))
           | TAppl (e, tyargs) ->
               let v = ev e in
               let vt = I.sem_type v in
@@ -895,12 +895,12 @@ struct
                 | None -> empty_env, []
                 | Some { shp_bindings = bindings; shp_types = types } ->
                    let env, bindings =
-                     List.fold_left2
-                       (fun (env, bindings) (body, p) t ->
+                     List.fold_right2
+                       (fun (p, body) t (env, bindings) ->
                          let p, penv = CompilePatterns.desugar_pattern eff p in
                          let bindings = ((fun env -> eval env body), p, t) :: bindings in
                          ((env ++ penv), bindings))
-                       (empty_env, []) bindings types
+                       bindings types (empty_env, [])
                    in
                    env, List.rev bindings
              in
@@ -1064,7 +1064,6 @@ struct
           | LensKeysLit _
           | Offer _
           | QualifiedVar _
-          | HandlerLit _
           | DoOperation _
           | TryInOtherwise _
           | Raise
@@ -1084,7 +1083,7 @@ struct
                 | Val ({node=Pattern.Variable bndr; _}, (_, body), _, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
-                    let xt = Binder.to_type_exn bndr in
+                    let xt = Binder.to_type bndr in
                     let x_info = (xt, x, scope) in
                       I.letvar
                         (x_info,
@@ -1100,7 +1099,7 @@ struct
                 | Fun (bndr, _, (tyvars, ([ps], body)), location, _)
                      when Binder.has_type bndr ->
                     let f  = Binder.to_name bndr in
-                    let ft = Binder.to_type_exn bndr in
+                    let ft = Binder.to_type bndr in
                     let eff = TypeUtils.effect_row ft in
                     let ps, body_env =
                       List.fold_right
@@ -1123,7 +1122,7 @@ struct
                       List.fold_right
                         (fun (bndr, _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
                           let f = Binder.to_name bndr in
-                          let outer  = Binder.to_type_exn bndr in
+                          let outer  = Binder.to_type bndr in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
                         defs
@@ -1133,7 +1132,7 @@ struct
                         (fun (bndr, _, ((tyvars, _), (pss, body)), location, _, _) ->
                           assert (List.length pss = 1);
                           let f  = Binder.to_name bndr in
-                          let ft = Binder.to_type_exn bndr in
+                          let ft = Binder.to_type bndr in
                           let eff = TypeUtils.effect_row ft in
                           let ps = List.hd pss in
                           let ps, body_env =
@@ -1151,14 +1150,14 @@ struct
                 | Foreign (bndr, raw_name, language, _file, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
-                    let xt = Binder.to_type_exn bndr in
+                    let xt = Binder.to_type bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Typenames _
                 | Infix ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
-                | Handler _ | QualifiedImport _ | Fun _ | Foreign _
+                | Import _ | Open _ | Fun _ | Foreign _
                 | AlienBlock _ | Module _  -> assert false
             end
 

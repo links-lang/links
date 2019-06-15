@@ -7,7 +7,7 @@ struct
   let words =
     CharMap.from_alist
       [ '!', "bang";
-        '$', "dollar";
+        '$', "$";
         '%', "percent";
         '&', "and";
         '*', "star";
@@ -23,7 +23,8 @@ struct
         '-', "hyphen";
         '.', "fullstop";
         '|', "pipe";
-        '_', "underscore"]
+        '_', "underscore";
+        '\'', "prime"]
 
   let js_keywords= ["break";"else";"new";"var";"case";"finally";"return";"void";
                     "catch";"for";"switch";"while";"continue";"function";"this";
@@ -44,7 +45,7 @@ struct
   let wordify name =
     if has_symbols name then
       ("_" ^
-         mapstrcat "_"
+         mapstrcat ""
          (fun ch ->
             if (Utility.Char.isWord ch) then
               String.make 1 ch

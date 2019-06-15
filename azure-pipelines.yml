@@ -1,0 +1,116 @@
+# Azure Pipelines configuration.
+
+trigger:
+- master
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+      - '*'  # must quote since "*" is a YAML reserved character.
+
+strategy:
+  matrix:
+    linux:
+      imageName: 'ubuntu-latest'
+    mac:
+      imageName: 'macos-latest'
+
+pool:
+  vmImage: $(imageName)
+
+
+steps:
+  - script: |
+      printenv
+    displayName: Environment
+
+  - bash: |
+      case $AGENT_OS in
+        "Linux") sudo apt-get update ;;
+        "Darwin") brew update ;;
+        *) exit 1 ;;
+      esac
+    displayName: Initialise system package managers
+
+  - bash: |
+      case $AGENT_OS in
+        "Linux") sudo apt-get install ocaml ;;
+        "Darwin") brew install ocaml ;;
+        *) exit 1 ;;
+      esac
+    displayName: 'OCaml system compiler'
+
+  - bash: |
+      case $AGENT_OS in
+        "Linux")  ./install_local_opam2.sh ;;
+        "Darwin") brew install opam pkg-config &&
+                  opam init --disable-sandboxing -n &&
+                  echo "opam \$@" > opam2_local &&
+                  chmod a+x opam2_local ;;
+        *) exit 1 ;;
+      esac
+    displayName: 'OPAM 2'
+
+  - script: |
+      ./opam2_local switch create ocaml-base-compiler.4.06.1
+      eval `./opam2_local config env`
+    displayName: 'OCaml compiler'
+
+  - script: |
+      eval `./opam2_local env`
+      ./opam2_local install ocamlformat -y
+    displayName: 'Ocamlformat'
+
+  - script: |
+      eval `./opam2_local env`
+      make rule-check
+    displayName: 'Rule check'
+
+  - bash: |
+      case $AGENT_OS in
+        "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev &&
+                 sudo LINKS_CI=1 tools/configure-postgresql &&
+                 sudo systemctl reload postgresql &&
+                 sudo -u postgres createuser -s $(whoami) &&
+                 sudo -u postgres createdb -O $(whoami) links ;;
+        "Darwin") brew install postgresql libpq sqlite3 &&
+                  pg_ctl -D /usr/local/var/postgres start &&
+                  sleep 5 &&
+                  /usr/local/opt/postgres/bin/createdb -O $(whoami) links ;;
+        *) exit 1 ;;
+      esac
+    displayName: 'Databases'
+
+  - script: |
+      eval `./opam2_local env`
+      ./opam2_local pin add links . -y
+      ./opam2_local pin add links-postgresql . -y
+      ./opam2_local pin add links-sqlite3 . -y
+    displayName: 'Links dependencies'
+
+  - script: |
+      eval `./opam2_local env`
+      make all-release
+    displayName: 'Build Links (release)'
+
+  - script: |
+      eval `./opam2_local env`
+      make tests
+    displayName: 'Server-side tests'
+
+  - script: |
+      eval `./opam2_local env`
+      ./run-tests db-only shredding
+    displayName: 'Database shredding tests'
+
+  - script: |
+      eval `./opam2_local env`
+      ./run-tests db-only relational-lenses
+    displayName: 'Relational lenses tests'
+
+  - script: |
+      eval `./opam2_local env`
+      ./opam2_local install -y oUnit
+      ./run-tests unit
+    displayName: 'Unit tests'

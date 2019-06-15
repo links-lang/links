@@ -38,8 +38,19 @@ object(self)
     let (shadow_table, _) = shadow_open name fqn mt shadow_table shadow_table in
     {< shadow_table = shadow_table >}
 
+  method extension_guard pos =
+    if not (Settings.get_value Basicsettings.modules) then
+      raise (Errors.disabled_extension ~pos ~setting:("modules", true) ~flag:"-m" "Modules")
+
+  method! binding = let open SourceCode.WithPos in function
+    | ({ node = Import _; pos } as b)
+    | ({ node = Open _; pos } as b) ->
+       self#extension_guard pos;
+       self#bindingnode b.node
+    | b -> self#bindingnode b.node
+
   method! bindingnode = function
-    | QualifiedImport ns ->
+    | Import { path = ns; _ } ->
         (* Try to resolve the import; if not, add to ICs list *)
         let lookup_ref = List.hd ns in
         (try
@@ -47,16 +58,17 @@ object(self)
            self
          with
            _ -> self#add_import_candidate lookup_ref)
-    | Module (n, bs) ->
-        let new_path = path @ [n] in
+    | Module { binder; members } ->
+        let name = Binder.to_name binder in
+        let new_path = path @ [name] in
         let fqn = lst_to_path new_path in
-        let o = self#bind_shadow n fqn in
+        let o = self#bind_shadow name fqn in
         let shadow_ht = o#get_shadow_table in
         (* Now, recursively check the module, with this one in scope *)
         let o_bindings =
-          List.fold_left (fun o b -> o#binding b) (find_module_refs mt new_path shadow_ht) bs in
+          List.fold_left (fun o b -> o#binding b) (find_module_refs mt new_path shadow_ht) members in
         let ics = o_bindings#get_import_candidates in
-        (o#bind_open n fqn)#add_import_candidates ics
+        (o#bind_open name fqn)#add_import_candidates ics
     | bn -> super#bindingnode bn
 end
 
@@ -70,14 +82,15 @@ let rec add_module_bindings deps dep_map =
     | [] -> []
     (* Don't re-inline bindings of base module *)
     | [""]::ys -> add_module_bindings ys dep_map
-    | [module_name]::ys ->
+    | [name]::ys ->
       (try
-        let (bindings, _) = StringMap.find module_name dep_map in
-        WithPos.make (Module (module_name, bindings)) :: (add_module_bindings ys dep_map)
+         let (members, _) = StringMap.find name dep_map in
+         let binder = SourceCode.WithPos.make (Binder.make ~name ()) in
+        WithPos.make (Module { binder; members }) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
         (raise (Errors.internal_error ~filename:"chaser.ml"
           ~message:(Printf.sprintf "Could not find %s in dependency map containing keys: %s\n"
-          module_name (print_list (List.map fst (StringMap.bindings dep_map)))))));
+          name (print_list (List.map fst (StringMap.bindings dep_map)))))));
     | _ ->
         raise (Errors.internal_error ~filename:"chaser.ml"
           ~message:"Impossible pattern in add_module_bindings")
@@ -120,3 +133,7 @@ let add_dependencies module_prog =
    * the position data type to keep track of the module filename we're importing from. *)
   let module_bindings = add_module_bindings sorted_deps dep_binding_map in
   (module_bindings @ bindings, phrase)
+
+let add_dependencies_sentence = function
+  | Definitions defs -> Definitions (fst (add_dependencies (defs, None)))
+  | s -> s

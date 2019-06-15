@@ -86,3 +86,8 @@ Use structural unification if nominal unification fails (type error)
 filemode : true
 stderr : @.*
 exit : 1
+
+Top level functions within a mutal do not share type variables
+./tests/mutual/sharedTyvar.links
+filemode : true
+stdout : () : ()

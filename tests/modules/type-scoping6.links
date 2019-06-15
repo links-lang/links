@@ -1,0 +1,18 @@
+module A {
+  typename Foo = Int;
+}
+
+sig x : A.Foo
+var x = 3;
+
+open A;
+
+module A {
+  typename Foo = String;
+}
+
+sig y : A.Foo
+var y = "123";
+
+sig z : Foo
+var z = 4;

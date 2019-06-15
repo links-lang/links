@@ -1,0 +1,7 @@
+mutual {
+  sig f : () {hear{a} |_}~> ()
+  fun f() { g() }
+
+  sig g : () {hear{_} |a}~> ()
+  fun g() { f() }
+}

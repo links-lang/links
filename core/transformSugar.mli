@@ -57,7 +57,6 @@ object ('self)
   method binop           : BinaryOp.t -> 'self * BinaryOp.t * Types.datatype
   method constant        : Constant.t -> 'self * Constant.t * Types.datatype
   method funlit          : Types.row -> funlit -> 'self * funlit * Types.datatype
-  method handlerlit      : Types.datatype -> handlerlit -> 'self * handlerlit * Types.datatype
   method iterpatt        : iterpatt -> 'self * iterpatt
 
   method quantifiers     : Types.quantifier list -> 'self * Types.quantifier list
@@ -110,3 +109,6 @@ object ('self)
 end
 
 val fun_effects : Types.datatype -> Sugartypes.Pattern.with_pos list list -> Types.row
+
+type program_transformer = Types.typing_environment -> Sugartypes.program -> Sugartypes.program
+type sentence_transformer = Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence

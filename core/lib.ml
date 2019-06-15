@@ -402,7 +402,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawnWait",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~> a) ~> a",
+   datatype "(() { |_}~> a) ~> a",
    IMPURE);
 
   "spawnWait'",
@@ -902,7 +902,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
   (`PFun (fun _ -> assert false),
-  datatype "([(String, (Event) ~> ())]) ~> String",
+  datatype "([(String, (Event) { |_}~> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)
@@ -1296,7 +1296,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      in the prelude and is just a wrapper for this function.
    *)
    (`Server (p1 (Value.marshal_value ->- Value.box_string)),
-    datatype "(() -> a) ~> String",
+    datatype "(() { |_}-> a) ~> String",
     IMPURE));
 
   (* REDUNDANT *)
@@ -1731,6 +1731,7 @@ let prim_appln name args = Ir.Apply( Ir.Variable(Env.String.lookup nenv name),
                                   args)
 
 let cohttp_server_response headers body req_data =
+  let open Lwt in
   (* Debug.print (Printf.sprintf "Attempting to return:\n%s\n" body); *)
   let resp_headers = RequestData.get_http_response_headers req_data in
   let resp_code = RequestData.get_http_response_code req_data in
@@ -1739,7 +1740,7 @@ let cohttp_server_response headers body req_data =
     ?headers:(Some h)
     ~status:(Cohttp.Code.status_of_code resp_code)
     ~body:body
-    ()
+    () >>= fun resp -> Lwt.return (`Response resp)
 
 (** Output the headers and content to stdout *)
 let print_http_response headers body req_data =

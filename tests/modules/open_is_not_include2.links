@@ -1,0 +1,9 @@
+# c.f. issue #606
+import Open_is_not_include1;
+open Open_is_not_include1;
+
+fun main() {
+  concat([[1], [2], []])
+}
+
+main()

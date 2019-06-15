@@ -437,7 +437,7 @@ mutual {
 
   sig parse : (Parser({ |e}, a), [Char]) -> Comp({Choose-,Satisfies-,Peek-,Fail: Zero |e}, a)
   fun parse(m, input)() {
-    handle(m())(input -> tokens) {
+    handle(m())(tokens <- input) {
       case Return(x) -> x
       case Peek(resume) ->
          switch (tokens) {

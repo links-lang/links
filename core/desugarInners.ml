@@ -140,10 +140,11 @@ object (o : 'self_type)
           let rec list o =
             function
               | [] -> (o, [])
-              | ({node=_, Some outer; _} as f, lin, ((tyvars, Some (_inner, extras)), lam), location, t, pos)::defs ->
-                  let (o, defs) = list o defs in
-                  let extras = List.map (fun _ -> None) extras in
-                    (o, (f, lin, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
+              | (bndr, lin, ((tyvars, Some (_inner, extras)), lam), location, t, pos)::defs ->
+                 let outer = Binder.to_type bndr in
+                 let (o, defs) = list o defs in
+                 let extras = List.map (fun _ -> None) extras in
+                 (o, (bndr, lin, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
               | _ -> assert false
           in
             list o defs in
@@ -183,6 +184,12 @@ object (o : 'self_type)
 end
 
 let desugar_inners env = ((new desugar_inners env) : desugar_inners :> TransformSugar.transform)
+
+let desugar_program : TransformSugar.program_transformer =
+  fun env program -> snd3 ((desugar_inners env)#program program)
+
+let desugar_sentence : TransformSugar.sentence_transformer =
+  fun env sentence -> snd ((desugar_inners env)#sentence sentence)
 
 let has_no_inners =
 object

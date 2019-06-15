@@ -33,10 +33,11 @@ let program =
         Env.String.lookup env x
 
       method! binder =
-        fun {node=x,t; pos} ->
-          o#option
-            (fun o t -> o#bind (x, t, pos))
-            t
+        let open Sugartypes in
+        fun bndr ->
+        if Binder.has_type bndr
+        then o#bind (Binder.to_name bndr, Binder.to_type bndr, pos bndr)
+        else o
 
       method! phrase =
         function

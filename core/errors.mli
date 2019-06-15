@@ -13,6 +13,7 @@ type sugar_error_stage =
   | DesugarPages
   | CheckXML
   | DesugarInners
+  | DesugarModules
 
 
 exception RuntimeError of string
@@ -34,7 +35,7 @@ exception TypeApplicationKindMismatch of
     expected: string; provided: string }
 exception SettingsError of string
 exception DynlinkError of string
-exception ModuleError of string
+exception ModuleError of string * Position.t option
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string
@@ -46,4 +47,6 @@ val desugaring_error: pos:Position.t -> stage:sugar_error_stage -> message:strin
 val settings_error: string -> exn
 val runtime_error: string -> exn
 val dynlink_error: string -> exn
-val module_error : string -> exn
+val module_error : ?pos:Position.t -> string -> exn
+val disabled_extension : ?pos:Position.t -> ?setting:(string * bool) -> ?flag:string -> string -> exn
+val prime_alien : Position.t -> exn

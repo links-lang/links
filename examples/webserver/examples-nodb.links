@@ -1,20 +1,20 @@
-open Draggable;
-open Progress;
+import Draggable;
+import Progress;
 
-open Buttons;
-open FormsTest;
-open Validate;
+import Buttons;
+import FormsTest;
+import Validate;
 
-open LoginFlow;
-open Mandelbrot;
-open Mandelcolor;
-open Todo;
-open Crop;
+import LoginFlow;
+import Mandelbrot;
+import Mandelcolor;
+import Todo;
+import Crop;
 
-open Twentyfortyeight;
-open Breakout;
-open Tetris;
-open Pacman;
+import Twentyfortyeight;
+import Breakout;
+import Tetris;
+import Pacman;
 
 fun main() {
   addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);

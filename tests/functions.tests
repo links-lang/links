@@ -51,6 +51,30 @@ fun (x) {x:a} : a
 stderr : @.*
 exit : 1
 
+Infers effect variables
+fun (f, x: Int) { f(x) + 0 }
+stdout : @fun : \(\(Int\) -a-> Int, Int\) -a-> Int
+
+Parser supports sugar for shared effect variables
+fun (f, x: Int) { f(x) + 0 }
+stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
+args : --config=tests/functions.tests.effect_sugar.config
+
+Printer supports sugar for shared effect variables
+fun (f, x: Int) { f(x) + 0 } : ((Int) -> Int, Int) -> Int
+stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
+args : --config=tests/functions.tests.effect_sugar.config
+
+Printer shows non-shared, single-use variables
+pickleCont
+stdout : @fun : \(\(\) -_-> Page\) ~_~> String
+args : --config=tests/functions.tests.effect_sugar.config
+
+Printer shows shared effect variables used elsewhere
+typename Ty (a::Eff) = Int; (fun(){}, 0) : (() -e-> (), Ty({ |e}))
+stdout : @\(fun, 0\) : \(\(\) -a-> \(\), Ty \(\{ \|a \}\)\)
+args : --config=tests/functions.tests.effect_sugar.config
+
 Typename [1]
 typename Foo = Int; fun f(x:Foo) {x} f(1)
 stdout : 1 : Foo

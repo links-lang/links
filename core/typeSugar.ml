@@ -9,6 +9,13 @@ open SourceCode.WithPos
 let internal_error message =
   Errors.internal_error ~filename:"typeSugar.ml" ~message
 
+let relational_lenses_guard pos =
+  let relational_lenses_disabled pos =
+    Errors.disabled_extension ~pos ~setting:("relational_lenses", true) "Relational lenses"
+  in
+  if not (Settings.get_value Basicsettings.RelationalLenses.relational_lenses)
+  then raise (relational_lenses_disabled pos)
+
 (* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
 let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
@@ -49,7 +56,6 @@ struct
     | DatabaseLit _
     | TableLit _
     | TextNode _
-    | HandlerLit _
     | Section _ -> true
 
     | ListLit (ps, _)
@@ -111,14 +117,14 @@ struct
     | DBUpdate _ -> false
   and is_pure_binding ({node ; _ }: binding) = match node with
       (* need to check that pattern matching cannot fail *)
-    | QualifiedImport _
+    | Import _
+    | Open _
     | AlienBlock _
     | Module _
     | Fun _
     | Funs _
     | Infix
     | Typenames _
-    | Handler _
     | Foreign _ -> true
     | Exp p -> is_pure p
     | Val (pat, (_, rhs), _, _) ->
@@ -1979,10 +1985,9 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | Cons (h,t) -> Env.extend (pattern_env h) (pattern_env t)
     | List ps
     | Tuple ps -> List.fold_right (pattern_env ->- Env.extend) ps Env.empty
-    | Variable {node=v, Some t; _} -> Env.bind Env.empty (v, t)
-    | Variable {node=_, None; _} -> assert false
-    | As       ({node=v, Some t; _}, p) -> Env.bind (pattern_env p) (v, t)
-    | As       ({node=_, None; _}, _) -> assert false
+    | Variable bndr ->
+       Env.bind Env.empty Binder.(to_name bndr, to_type bndr)
+    | As (bndr, p) -> Env.bind (pattern_env p) Binder.(to_name bndr, to_type bndr)
 
 
 let update_pattern_vars env =
@@ -2271,7 +2276,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-        | HandlerLit _ -> assert false (* already desugared at this point *)
         | FunLit (_, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
@@ -2351,7 +2355,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    *)
                 let e' =
                   match ftype with
-                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (qs',  WithPos.make ebody)
+                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (Types.unbox_quantifiers qs',  WithPos.make ebody)
                   | _ -> ebody in
                 e', ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
               else
@@ -2389,6 +2393,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               merge_usages [usages tname; usages db]
         | TableLit _ -> assert false
         | LensLit (table, _) ->
+           relational_lenses_guard pos;
            let open Lens in
            let table = tc table in
            let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
@@ -2396,6 +2401,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens lens_sort in
            LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensKeysLit (table, keys, _) ->
+           relational_lenses_guard pos;
            let open Lens in
            let table = tc table in
            let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
@@ -2405,6 +2411,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens lens_sort in
            LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensFunDepsLit (table, fds, _) ->
+           relational_lenses_guard pos;
            let open Lens in
            let table = tc table in
            let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
@@ -2413,6 +2420,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens lens_sort in
            LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
         | LensDropLit (lens, drop, key, default, _) ->
+           relational_lenses_guard pos;
            let open Lens in
            let lens = tc lens
            and default = tc default in
@@ -2425,6 +2433,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens sort in
            LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens typ, merge_usages [usages lens; usages default]
         | LensSelectLit (lens, predicate, _) ->
+           relational_lenses_guard pos;
            let lens = tc lens in
            let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
            let lpredicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
@@ -2436,6 +2445,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens sort in
                LensSelectLit(erase lens, predicate, Some (sort)), `Lens typ, merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
+           relational_lenses_guard pos;
            let lens1 = tc lens1
            and lens2 = tc lens2 in
            let sort1 = Lens.Type.sort (typ lens1 |> Lens_type_conv.lens_type_of_type) in
@@ -2461,11 +2471,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = Lens.Type.Lens sort in
            LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens typ, merge_usages [usages lens1; usages lens2]
         | LensGetLit (lens, _) ->
+           relational_lenses_guard pos;
            let lens = tc lens in
            let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
            let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | LensPutLit (lens, data, _) ->
+           relational_lenses_guard pos;
            let make_tuple_type = Types.make_tuple_type in
            let lens = tc lens in
            let data = tc data in
@@ -2870,7 +2882,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               end
         | TAbstr (qs, e) ->
             let e, t, u = tc e in
-            let qs = Types.unbox_quantifiers qs in
             let t = Types.for_all(qs, t) in
               tabstr (qs, e.node), t, u
         | TAppl (e, _qs) ->
@@ -3202,6 +3213,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 Gripers.upcast_subtype pos t2 t1
         | Upcast _ -> assert false
         | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
+           ignore
+             (if not (Settings.get_value Basicsettings.Handlers.enabled)
+              then raise (Errors.disabled_extension
+                            ~pos ~setting:("enable_handlers", true)
+                            ~flag:"--enable-handlers" "Handlers"));
            let rec pop_last = function
              | [] -> assert false
              | [x] -> x, []
@@ -3221,17 +3237,24 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
              = fun cases ->
              let ret, ops =
-               List.fold_left
-                 (fun (val_cases, eff_cases) (pat, body) ->
+               List.fold_right
+                 (fun (pat, body) (val_cases, eff_cases) ->
                    match pat.node with
                    | Pattern.Variant ("Return", None) ->
                       Gripers.die pat.pos "Improper pattern-matching on return value"
                    | Pattern.Variant ("Return", Some pat) ->
                       (pat, body) :: val_cases, eff_cases
                    | _ -> val_cases, (pat, body) :: eff_cases)
-                 ([], []) cases
+                 cases ([], [])
              in
-             List.rev ret, List.rev ops
+             let ret = match ret with
+               | [] -> (* insert a synthetic value case: x -> x. *)
+                  let x = "x" in
+                  let id = (variable_pat x, var x) in
+                  [id]
+               | _ -> ret
+             in
+             ret, ops
            in
            (* type parameters *)
            let henv = context in
@@ -3239,25 +3262,25 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              match descr.shd_params with
              | Some { shp_bindings; _ } ->
                 let _ =
-                  check_for_duplicate_names pos (List.map snd shp_bindings)
+                  check_for_duplicate_names pos (List.map fst shp_bindings)
                 in
-                let type_binding (body, pat) =
+                let type_binding (pat, body) =
                   let body = tc body in
                   let pat = tpc pat in
                   unify ~handle:Gripers.handle_parameter_pattern (ppos_and_typ pat, (pos_and_typ body));
-                  (body, pat)
+                  (pat, body)
                 in
                 let typed_bindings = List.map type_binding shp_bindings in
                 let pat_types =
-                  List.map (snd ->- pattern_typ) typed_bindings
+                  List.map (fst ->- pattern_typ) typed_bindings
                 in
                 let param_env =
                   List.fold_left
                     (fun env p ->
                       env ++ pattern_env p)
-                    henv (List.map snd typed_bindings)
+                    henv (List.map fst typed_bindings)
                 in
-                (param_env, typed_bindings, { descr with shd_params = Some { shp_bindings = List.map (fun (body, pat) -> erase body, erase_pat pat) typed_bindings;
+                (param_env, typed_bindings, { descr with shd_params = Some { shp_bindings = List.map (fun (pat, body) -> erase_pat pat, erase body) typed_bindings;
                                                                              shp_types = pat_types } })
              | None -> (henv, [], descr)
            in
@@ -3496,7 +3519,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            Handle { sh_expr = erase m;
                     sh_effect_cases = erase_cases eff_cases;
                     sh_value_cases = erase_cases val_cases;
-                    sh_descr = descr }, body_type, merge_usages [usage_compat (List.map (fun ((_, _, m),_) -> m) params); usages m; usages_cases eff_cases; usages_cases val_cases]
+                    sh_descr = descr }, body_type, merge_usages [usage_compat (List.map (fun (_,(_, _, m)) -> m) params); usages m; usages_cases eff_cases; usages_cases val_cases]
         | DoOperation (opname, args, _) ->
            (* Strategy:
               1. List.map tc args
@@ -3966,6 +3989,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
 
       | Foreign (bndr, raw_name, language, file, (dt1, Some datatype)) ->
+          ignore (if String.contains (Binder.to_name bndr) '\'' then raise (Errors.prime_alien pos));
           (* Ensure that we quantify FTVs *)
           let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
           let datatype = Instantiate.freshen_quantifiers datatype in
@@ -3987,8 +4011,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
-      | Handler _
-      | QualifiedImport _
+      | Import _
+      | Open _
       | AlienBlock _
       | Module _ -> assert false
     in

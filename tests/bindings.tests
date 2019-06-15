@@ -78,3 +78,37 @@ stdout : () : ()
 Bug in interaction between pattern-matching and anonymous functions
 (fun (l) { switch (l) { case x::xs -> fun (x) { x } } })([1])(2)
 stdout : 2 : Int
+
+Variable names may contain primes (1)
+var x' = 42; x'
+stdout : 42 : Int
+
+Variable names may contain primes (2)
+var x'''y = 128; x'''y
+stdout : 128 : Int
+
+Variable names may contain primes (3)
+var 'x = 42;
+exit : 1
+stderr : @.*
+
+Function names may contain primes (1)
+fun f'() { 42 } f'()
+stdout : 42 : Int
+
+Function names may contain primes (2)
+sig f'''y : (a') -> a' fun f'''y(x) { x } f'''y(128)
+stdout : 128 : Int
+
+Function names may contain primes (3)
+fun 'f() { () }
+exit : 1
+stderr : @.*
+
+Function names may contain primes (4)
+fun f'(x) { x } f'("f'")
+stdout : "f'" : String
+
+A character not a variable name.
+var a' = 42; 'a'
+stdout : 'a' : Char

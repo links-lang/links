@@ -101,7 +101,7 @@ let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string    pos lin  in
   let r = restriction_of_string  pos rest in
-  (p, Some (l, r))
+  (Some p, Some (l, r))
 
 let full_subkind_of pos lin rest =
   let l = linearity_of_string   pos lin  in
@@ -120,14 +120,14 @@ perhaps. *)
 let kind_of p =
   function
   (* primary kind abbreviation  *)
-  | "Type"     -> (pk_type, None)
-  | "Row"      -> (pk_row, None)
-  | "Presence" -> (pk_presence, None)
+  | "Type"     -> (Some pk_type, None)
+  | "Row"      -> (Some pk_row, None)
+  | "Presence" -> (Some pk_presence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (pk_type, Some (lin_any, res_any))
-  | "Base"     -> (pk_type, Some (lin_unl, res_base))
-  | "Session"  -> (pk_type, Some (lin_any, res_session))
-  | "Eff"      -> (pk_row , Some (lin_unl, res_effect))
+  | "Any"      -> (Some pk_type, Some (lin_any, res_any))
+  | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
+  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
+  | "Eff"      -> (Some pk_row , Some (lin_unl, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
@@ -170,6 +170,9 @@ let parseRegexFlags f =
               | 'n' -> RegexNative
               | 'g' -> RegexGlobal
               | _ -> assert false) (asList f 0 [])
+
+let fresh_typevar freedom = ("$", None, freedom)
+let fresh_effects = ([], Datatype.Open ("$anon", None, `Rigid))
 
 module MutualBindings = struct
 
@@ -245,7 +248,7 @@ end
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH RECEIVE CASE
-%token HANDLE SHALLOWHANDLE HANDLER SHALLOWHANDLER
+%token HANDLE SHALLOWHANDLE
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP
@@ -275,8 +278,8 @@ end
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU FORALL ALIEN SIG OPEN
-%token MODULE MUTUAL
+%token MU FORALL ALIEN SIG
+%token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
 %token <char*char> RANGE
@@ -387,6 +390,7 @@ nofun_declaration:
                                                                  with_pos $loc Infix }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
+| pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -395,30 +399,17 @@ alien_datatypes:
 | alien_datatype+                                              { $1 }
 
 links_module:
-| MODULE module_name moduleblock                               { with_pos $loc($2) (Module ($2, $3)) }
+| MODULE name = CONSTRUCTOR members = moduleblock              { module_binding ~ppos:$loc($1) (binder ~ppos:$loc(name) name) members }
 
 alien_block:
 | ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (AlienBlock ($2, $3, $5)) }
-
-module_name:
-| CONSTRUCTOR                                                  { $1 }
 
 fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
 | tlfunbinding                                                 { fun_binding     ~ppos:$loc      NoSig   $1 }
-| typed_handler_binding                                        { handler_binding ~ppos:$loc      NoSig   $1 }
 | signature tlfunbinding                                       { fun_binding     ~ppos:$loc($2) (Sig $1) $2 }
-| signature typed_handler_binding                              { handler_binding ~ppos:$loc($2) (Sig $1) $2 }
-
-typed_handler_binding:
-| handler_depth optional_computation_parameter VARIABLE
-                handler_parameterization                       { ($3, hnlit_arg $1 $2 $4) }
-
-optional_computation_parameter:
-| /* empty */                                                  { with_pos $sloc Pattern.Any }
-| LBRACKET pattern RBRACKET                                    { $2 }
 
 perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
@@ -457,7 +448,7 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (($1, (PrimaryKind.Type, None), `Rigid), None) }
+| VARIABLE                                                     { (($1, (None, None), `Rigid), None) }
 | VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
 
 varlist:
@@ -541,18 +532,6 @@ primary_expression:
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
-| handler_depth optional_computation_parameter
-     handler_parameterization                                  { handler_lit ~ppos:$loc (hnlit_arg $1 $2 $3) }
-
-handler_parameterization:
-| arg_lists? handler_body                                      { ($2, $1) }
-
-handler_depth:
-| HANDLER                                                      { Deep    }
-| SHALLOWHANDLER                                               { Shallow }
-
-handler_body:
-| LBRACE cases RBRACE                                          { $2 }
 
 constructor_expression:
 | CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
@@ -775,7 +754,7 @@ page_placement:
 
 session_expression:
 | SELECT field_label exp                                       { with_pos $loc (Select ($2, $3))      }
-| OFFER LPAREN exp RPAREN LBRACE perhaps_cases RBRACE          { with_pos $loc (Offer ($3, $6, None)) }
+| OFFER LPAREN exp RPAREN LBRACE case* RBRACE                  { with_pos $loc (Offer ($3, $6, None)) }
 
 conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
@@ -783,26 +762,19 @@ conditional_expression:
 case:
 | CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
 
-cases:
-| case+                                                        { $1 }
-
-perhaps_cases:
-| case*                                                        { $1 }
-
 case_expression:
-| SWITCH LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Switch ($3, $6, None)) }
-| RECEIVE LBRACE perhaps_cases RBRACE                          { with_pos $loc (Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE perhaps_cases RBRACE         { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
-| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE perhaps_cases RBRACE
-                                                               { with_pos $loc (Handle (untyped_handler ~parameters:(List.rev $6)
-                                                                                         $3 $9 Deep)) }
+| SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
+| RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE case* RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
+| HANDLE LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
+| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE case* RBRACE
+                                                               { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
 | RAISE                                                        { with_pos $loc (Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
 
 handle_params:
-| rev(separated_nonempty_list(COMMA,
-      separated_pair(logical_expression, RARROW, pattern)))    { $1 }
+| separated_nonempty_list(COMMA,
+    separated_pair(pattern, LARROW, exp))                      { $1 }
 
 iteration_expression:
 | FOR LPAREN perhaps_generators RPAREN
@@ -915,15 +887,14 @@ record_labels:
 | separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
-| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (QualifiedImport $2) }
+| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (Open $2) }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
 | linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
-| typed_handler_binding                                        { handler_binding ~ppos:$loc NoSig $1 }
-| typedecl SEMICOLON | links_module | alien_block
+| typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
 mutual_binding_block:
@@ -990,16 +961,16 @@ straight_arrow:
   straight_arrow_prefix RARROW datatype                        { Datatype.Function ($1, $2, $4) }
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_row (), $3) }
-| parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_row (), $3) }
+| parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_effects, $3) }
+| parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_effects, $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGRARROW datatype                      { Datatype.Function ($1, row_with_wp $2, $4) }
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGLOLLI datatype                       { Datatype.Lolli    ($1, row_with_wp $2, $4) }
-| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp (fresh_row ()), $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp (fresh_row ()), $3) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp fresh_effects, $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu ($2, with_pos $loc($4) $4) }
@@ -1071,8 +1042,8 @@ primary_datatype:
 type_var:
 | VARIABLE                                                     { Datatype.TypeVar ($1, None, `Rigid)    }
 | PERCENTVAR                                                   { Datatype.TypeVar ($1, None, `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_type_variable ()   }
-| PERCENT                                                      { fresh_type_variable ()         }
+| UNDERSCORE                                                   { Datatype.TypeVar (fresh_typevar `Rigid)    }
+| PERCENT                                                      { Datatype.TypeVar (fresh_typevar `Flexible) }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind ($1, $2) }
@@ -1162,14 +1133,14 @@ fieldspec:
 | LBRACE MINUS RBRACE                                          { Datatype.Absent }
 | LBRACE VARIABLE RBRACE                                       { Datatype.Var ($2, None, `Rigid) }
 | LBRACE PERCENTVAR RBRACE                                     { Datatype.Var ($2, None, `Flexible) }
-| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
-| LBRACE PERCENT RBRACE                                        { fresh_presence_variable ()       }
+| LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar `Rigid)    }
+| LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar `Flexible) }
 
 nonrec_row_var:
 | VARIABLE                                                     { Datatype.Open ($1, None, `Rigid   ) }
 | PERCENTVAR                                                   { Datatype.Open ($1, None, `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_row_variable () }
-| PERCENT                                                      { fresh_row_variable ()       }
+| UNDERSCORE                                                   { Datatype.Open (fresh_typevar `Rigid)    }
+| PERCENT                                                      { Datatype.Open (fresh_typevar `Flexible) }
 
 /* FIXME:
  *

@@ -7,6 +7,9 @@ open Utility
 
 module TyEnv = Env.String
 
+type program_transformer = Types.typing_environment -> Sugartypes.program -> Sugartypes.program
+type sentence_transformer = Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence
+
 let internal_error message =
   Errors.internal_error ~filename:"transformSugar.ml" ~message
 
@@ -255,7 +258,6 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
             (o, FunLit (Some argss, lin, lam, location), t)
-      | HandlerLit _ -> assert false
       | Spawn (Wait, loc, body, Some inner_effects) ->
           assert (loc = NoSpawnLocation);
           (* bring the inner effects into scope, then restore the
@@ -362,7 +364,7 @@ class transform (env : Types.typing_environment) =
             (o, FnAppl (f, args), TypeUtils.return_type ft)
       | TAbstr (tyvars, e) ->
           let outer_tyvars = o#backup_quantifiers in
-          let (o, qs) = o#quantifiers (Types.unbox_quantifiers tyvars) in
+          let (o, qs) = o#quantifiers tyvars in
           let (o, e, t) = o#phrase e in
           let o = o#restore_quantifiers outer_tyvars in
           let t = Types.for_all (qs, t) in
@@ -455,14 +457,14 @@ class transform (env : Types.typing_environment) =
            match sh_descr.shd_params with
            | Some params ->
               let (o, bindings) =
-                List.fold_left
-                  (fun (o, bindings) (body, pat) ->
-                    (* let (o, body, _) = o#phrase body in *)
+                List.fold_right
+                  (fun (pat, body) (o, bindings) ->
+                    let (o, body, _) = o#phrase body in
                     let (o, pat) = o#pattern pat in
-                    (o, (body, pat) :: bindings))
-                  (o, []) params.shp_bindings
+                    (o, (pat, body) :: bindings))
+                  params.shp_bindings (o, [])
               in
-              (o, Some { params with shp_bindings = List.rev bindings })
+              (o, Some { params with shp_bindings = bindings })
            | None -> (o, None)
          in
          let (o, val_cases) =
@@ -696,24 +698,6 @@ class transform (env : Types.typing_environment) =
         let o = o#restore_envs envs in
         (o, (pss, e), t)
 
-    method handlerlit : Types.datatype -> handlerlit -> ('self_type * handlerlit * Types.datatype) =
-      fun _ _ -> raise (internal_error "method handlerlit not yet implemented!") (*
-      let envs = o#backup_envs in
-      let (o, m) =
-    match m with
-      `Phrase p  -> let (o, m) = o#phrase p in (o, `Phrase m)
-    | `Pattern p -> let (o, m) = o#pattern p in (o, `Pattern m)
-      in
-      let (o, cases) =
-        listu o
-          (fun o (p, e) ->
-               let (o, p) = o#pattern p in
-               let (o, e, _) = o#phrase e in (o, (p, e)))
-          cases
-      in
-      let o = o#restore_envs envs in
-      (o, (m, cases, params), t)*)
-
     method constant : Constant.t -> ('self_type * Constant.t * Types.datatype) =
       function
         | Constant.Float v  -> (o, Constant.Float v , Types.float_type )
@@ -793,7 +777,7 @@ class transform (env : Types.typing_environment) =
       | Fun (bndr, lin, (tyvars, lam), location, t) when Binder.has_type bndr ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let inner_effects = fun_effects (Binder.to_type_exn bndr) (fst lam) in
+         let inner_effects = fun_effects (Binder.to_type bndr) (fst lam) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, bndr) = o#binder bndr in
@@ -810,7 +794,6 @@ class transform (env : Types.typing_environment) =
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
          (o, (Funs defs))
-      | Handler _ -> assert false
       | Foreign (f, raw_name, language, file, t) ->
          let (o, f) = o#binder f in
          (o, Foreign (f, raw_name, language, file, t))
@@ -828,7 +811,8 @@ class transform (env : Types.typing_environment) =
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
       | AlienBlock _ -> assert false
       | Module _ -> assert false
-      | QualifiedImport _ -> assert false
+      | Import _ -> assert false
+      | Open _ -> assert false
 
     method binding : binding -> ('self_type * binding) =
       WithPos.traverse_map
@@ -839,7 +823,7 @@ class transform (env : Types.typing_environment) =
     method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       fun bndr ->
       assert (Binder.has_type bndr);
-      let var_env = TyEnv.bind var_env (Binder.to_name bndr, Binder.to_type_exn bndr) in
+      let var_env = TyEnv.bind var_env (Binder.to_name bndr, Binder.to_type bndr) in
       ({< var_env=var_env >}, bndr)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
@@ -899,12 +883,13 @@ class transform (env : Types.typing_environment) =
            | _ -> assert false
          end
       | CPLink (c, d) -> o, CPLink (c, d), Types.unit_type
-      | CPComp ({node = c, Some s; _} as bndr, left, right) ->
+      | CPComp (bndr, left, right) ->
+         let c = Binder.to_name bndr in
+         let s = Binder.to_type bndr in
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
          o, CPComp (bndr, left, right), t
-      | CPComp _ -> assert false
   end

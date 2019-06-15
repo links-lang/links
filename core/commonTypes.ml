@@ -81,6 +81,9 @@ let res_effect  = Restriction.Effect
 type subkind = Linearity.t * Restriction.t
     [@@deriving eq,show]
 
+let string_of_subkind (lin, res) =
+  Printf.sprintf "(%s,%s)" (Linearity.to_string lin) (Restriction.to_string res)
+
 module PrimaryKind = struct
   type t =
     | Type
