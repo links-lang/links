@@ -176,6 +176,9 @@ module SugarConstructors (Position : Pos)
   let val_binding ?(ppos=dp) pat phrase =
     val_binding' ~ppos NoSig (Pat pat, phrase, loc_unknown)
 
+  (* Create a module binding. *)
+  let module_binding ?(ppos=dp) binder members =
+    with_pos ppos (Module { binder; members })
 
   (** Database queries *)
 

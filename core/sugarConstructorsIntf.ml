@@ -123,6 +123,10 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> Pattern.with_pos -> phrase
      -> binding
 
+  val module_binding
+      : ?ppos:t -> Binder.with_pos -> binding list
+     -> binding
+
   (* Database queries *)
   val db_exps
       : ?ppos:t -> (name * phrase) list -> phrase
