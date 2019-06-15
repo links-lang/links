@@ -53,8 +53,8 @@ class map =
         let name = o#name (Binder.to_name bndr) in
         let ty  = Binder.to_type bndr in
         let pos = WithPos.pos bndr |> o#position in
-        let bndr' = Binder.make ~name ~ty () in
-        WithPos.make ~pos bndr'
+        let bndr' = Binder.(set_type (set_name bndr name) ty) in
+        WithPos.map2 bndr' ~f_pos:(fun _ -> pos) ~f_node:(fun x -> x)
 
     method sentence : sentence -> sentence =
       function
