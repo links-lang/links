@@ -1,0 +1,15 @@
+.swatch {
+	margin: 0 auto;
+	text-align: center;
+}
+
+.footer {
+	margin-top: 50px;
+	font-size: 12px;
+	font-family: helvetica;
+	color: gray;
+}
+
+h1 {
+	font-size: 100px;
+}

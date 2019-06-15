@@ -7,26 +7,47 @@ open Utility
 
 type name = string [@@deriving show]
 
-module Binder = struct
-  type t = name * Types.datatype option
+module Binder: sig
+  type t
   and with_pos = t WithPos.t
   [@@deriving show]
+
+  val make : ?name:name -> ?ty:Types.datatype -> unit -> t
+
+  val to_name : with_pos -> string
+  val to_type : with_pos -> Types.datatype
+
+  val set_name : with_pos -> name -> with_pos
+  val set_type : with_pos -> Types.datatype -> with_pos
+
+  val erase_type : with_pos -> with_pos
+  val has_type : with_pos -> bool
+
+  val traverse_map : with_pos -> o:'o
+                     -> f_pos:('o -> Position.t -> 'a * Position.t)
+                     -> f_name:('a -> name -> 'b * name)
+                     -> f_ty:('b -> Types.datatype -> 'c * Types.datatype)
+                     -> 'c * with_pos
+end = struct
+  type t = name * Types.datatype
+  and with_pos = t WithPos.t
+  [@@deriving show]
+
+  let make ?(name="") ?(ty=`Not_typed) () = (name, ty)
 
   let to_name b = let (n, _ ) = WithPos.node b in n
   let to_type b = let (_, ty) = WithPos.node b in ty
 
-  let to_type_exn b = to_type b |> OptionUtils.val_of
+  let set_name b name = WithPos.map ~f:(fun (_   , ty) -> name, ty ) b
+  let set_type b typ  = WithPos.map ~f:(fun (name, _ ) -> name, typ) b
 
-  let set_name b name = WithPos.map ~f:(fun (_   , ty) -> name, ty      ) b
-  let set_type b typ  = WithPos.map ~f:(fun (name, _ ) -> name, Some typ) b
-
-  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, None) b
-  let has_type   b = to_type b |> OptionUtils.is_some
+  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, `Not_typed) b
+  let has_type   b = match to_type b with `Not_typed -> false | _ -> true
 
   let traverse_map : with_pos -> o:'o
             -> f_pos:('o -> Position.t -> 'a * Position.t)
             -> f_name:('a -> name -> 'b * name)
-            -> f_ty:('b -> Types.datatype option -> 'c * Types.datatype option)
+            -> f_ty:('b -> Types.datatype -> 'c * Types.datatype)
             -> 'c * with_pos = fun b ~o ~f_pos ~f_name ~f_ty ->
     WithPos.traverse_map b ~o ~f_pos ~f_node:(fun o (n, ty) ->
         let o, name = f_name o n  in
@@ -214,7 +235,7 @@ and phrasenode =
   | Regex            of regex
   | UnaryAppl        of (tyarg list * UnaryOp.t) * phrase
   | FnAppl           of phrase * phrase list
-  | TAbstr           of tyvar list ref * phrase
+  | TAbstr           of tyvar list * phrase
   | TAppl            of phrase * tyarg list
   | TupleLit         of phrase list
   | RecordLit        of (name * phrase) list * phrase option
@@ -279,7 +300,7 @@ and bindingnode =
   | Typenames of typename list
   | Infix
   | Exp     of phrase
-  | Module  of name * binding list
+  | Module  of { binder: Binder.with_pos; members: binding list }
   | AlienBlock of name * name * ((Binder.with_pos * datatype') list)
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
@@ -325,7 +346,7 @@ exception ConcreteSyntaxError       of (Position.t * string)
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
-    | _  -> TAbstr (Types.box_quantifiers tyvars, WithPos.make e)
+    | _  -> TAbstr (tyvars, WithPos.make e)
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
@@ -477,10 +498,10 @@ struct
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
     | Raise -> empty
-  and binding (binding: binding)
+  and binding (binding': binding)
       : StringSet.t (* vars bound in the pattern *)
       * StringSet.t (* free vars in the rhs *) =
-    match WithPos.node binding with
+    match WithPos.node binding' with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
     | Fun (bndr, _, (_, fn), _, _) ->
        let name = singleton (Binder.to_name bndr) in
@@ -505,12 +526,13 @@ struct
               StringSet.add (Binder.to_name bndr) acc)
             (StringSet.empty) decls in
         bound_foreigns, empty
-        (* TODO: this needs to be implemented *)
-    | Module _ ->
-        raise (
-          Errors.internal_error
-            ~filename:"sugartypes.ml"
-            ~message:"Freevars for modules not implemented yet")
+    | Module { members; _ } ->
+       List.fold_left
+         (fun (bnd, fvs) b ->
+           let bnd', fvs' = binding b in
+           let fvs'' = diff fvs' bnd in
+           union bnd bnd', union fvs fvs'')
+         (empty, empty) members
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and block (binds, expr : binding list * phrase) : StringSet.t =

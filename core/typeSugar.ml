@@ -1981,10 +1981,9 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | Cons (h,t) -> Env.extend (pattern_env h) (pattern_env t)
     | List ps
     | Tuple ps -> List.fold_right (pattern_env ->- Env.extend) ps Env.empty
-    | Variable {node=v, Some t; _} -> Env.bind Env.empty (v, t)
-    | Variable {node=_, None; _} -> assert false
-    | As       ({node=v, Some t; _}, p) -> Env.bind (pattern_env p) (v, t)
-    | As       ({node=_, None; _}, _) -> assert false
+    | Variable bndr ->
+       Env.bind Env.empty Binder.(to_name bndr, to_type bndr)
+    | As (bndr, p) -> Env.bind (pattern_env p) Binder.(to_name bndr, to_type bndr)
 
 
 let update_pattern_vars env =
@@ -2354,7 +2353,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    *)
                 let e' =
                   match ftype with
-                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (qs',  WithPos.make ebody)
+                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (Types.unbox_quantifiers qs',  WithPos.make ebody)
                   | _ -> ebody in
                 e', ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
               else
@@ -2881,7 +2880,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               end
         | TAbstr (qs, e) ->
             let e, t, u = tc e in
-            let qs = Types.unbox_quantifiers qs in
             let t = Types.for_all(qs, t) in
               tabstr (qs, e.node), t, u
         | TAppl (e, _qs) ->

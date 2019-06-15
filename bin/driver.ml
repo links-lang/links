@@ -138,9 +138,6 @@ struct
 
       let tyenv = Lib.patch_prelude_funs tyenv in
 
-      Lib.prelude_tyenv := Some tyenv;
-      Lib.prelude_nenv := Some nenv;
-
       let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
 
       let globals = Backend.transform_prelude tenv globals in

@@ -51,9 +51,10 @@ class map =
     method binder : Binder.with_pos -> Binder.with_pos =
       fun bndr ->
         let name = o#name (Binder.to_name bndr) in
-        let ty  = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
+        let ty  = Binder.to_type bndr in
         let pos = WithPos.pos bndr |> o#position in
-        WithPos.make ~pos (name,ty)
+        let bndr' = Binder.(set_type (set_name bndr name) ty) in
+        WithPos.map2 bndr' ~f_pos:(fun _ -> pos) ~f_node:(fun x -> x)
 
     method sentence : sentence -> sentence =
       function
@@ -675,10 +676,10 @@ class map =
           Typenames ts
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
-      | Module (n, bs) ->
-          let n = o#name n in
-          let bs = o#list (fun o -> o#binding) bs in
-          Module (n, bs)
+      | Module { binder; members } ->
+          let binder = o#binder binder in
+          let members = o#list (fun o -> o#binding) members in
+          Module { binder; members }
       | AlienBlock (lang, lib, dts) ->
           let lang = o#name lang in
           let lib = o#name lib in
@@ -736,7 +737,6 @@ class fold =
     method binder : Binder.with_pos -> 'self_type =
       fun bndr ->
         let o = o#name (Binder.to_name bndr) in
-        let o = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
         let o = o#position (WithPos.pos bndr) in o
 
     method sentence : sentence -> 'self_type =
@@ -877,7 +877,7 @@ class fold =
           let o = o#phrase _x in
           let o = o#list (fun o -> o#phrase) _x_i1 in o
       | TAbstr ((_x, _x_i1)) ->
-          let o = o#list (fun o -> o#tyvar) (Types.unbox_quantifiers _x) in
+          let o = o#list (fun o -> o#tyvar) (_x) in
           let o = o#phrase _x_i1 in o
       | TAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in o
@@ -1309,10 +1309,9 @@ class fold =
           o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
-      | Module (n, bs) ->
-          let o = o#name n in
-          let o = o#list (fun o -> o#binding) bs in
-          o
+      | Module { binder; members } ->
+          let o = o#binder binder in
+          o#list (fun o -> o#binding) members
       | AlienBlock (lang, lib, dts) ->
           let o = o#name lang in
           let o = o#name lib in
@@ -2073,10 +2072,10 @@ class fold_map =
           in (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
-      | Module (n, bs) ->
-          let (o, n) = o#string n in
-          let (o, bs) = o#list (fun o -> o#binding) bs in
-          (o, (Module (n, bs)))
+      | Module { binder; members } ->
+          let (o, binder) = o#binder binder in
+          let (o, members) = o#list (fun o -> o#binding) members in
+          (o, (Module { binder; members }))
       | AlienBlock (lang, lib, dts) ->
           let (o, lang) = o#name lang in
           let (o, lib) = o#name lib in
@@ -2098,7 +2097,7 @@ class fold_map =
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_name:(fun o v -> o#name v)
-        ~f_ty:(fun o v -> o#option (fun o -> o#unknown) v)
+        ~f_ty:(fun o v -> o, v)
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
   end

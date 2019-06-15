@@ -788,7 +788,7 @@ struct
                                  [ev e; ev (WithPos.make ~pos (ListLit (es, Some t)))]))
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
-             let kt = Binder.to_type_exn bndr in
+             let kt = Binder.to_type bndr in
              I.escape ((kt, k, Scope.Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | Section (Section.Minus) -> cofv (lookup_var "-")
           | Section (Section.FloatMinus) -> cofv (lookup_var "-.")
@@ -837,7 +837,7 @@ struct
               I.apply (ev e, evs es)
           | TAbstr (tyvars, e) ->
               let v = ev e in
-                cofv (I.tabstr (Types.unbox_quantifiers tyvars, v))
+                cofv (I.tabstr (tyvars, v))
           | TAppl (e, tyargs) ->
               let v = ev e in
               let vt = I.sem_type v in
@@ -1076,7 +1076,7 @@ struct
                 | Val ({node=Pattern.Variable bndr; _}, (_, body), _, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
-                    let xt = Binder.to_type_exn bndr in
+                    let xt = Binder.to_type bndr in
                     let x_info = (xt, x, scope) in
                       I.letvar
                         (x_info,
@@ -1092,7 +1092,7 @@ struct
                 | Fun (bndr, _, (tyvars, ([ps], body)), location, _)
                      when Binder.has_type bndr ->
                     let f  = Binder.to_name bndr in
-                    let ft = Binder.to_type_exn bndr in
+                    let ft = Binder.to_type bndr in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
@@ -1112,7 +1112,7 @@ struct
                       List.fold_right
                         (fun (bndr, _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
                           let f = Binder.to_name bndr in
-                          let outer  = Binder.to_type_exn bndr in
+                          let outer  = Binder.to_type bndr in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
                         defs
@@ -1122,7 +1122,7 @@ struct
                         (fun (bndr, _, ((tyvars, _), (pss, body)), location, _, _) ->
                           assert (List.length pss = 1);
                           let f  = Binder.to_name bndr in
-                          let ft = Binder.to_type_exn bndr in
+                          let ft = Binder.to_type bndr in
                           let ps = List.hd pss in
                            let ps, body_env =
                              List.fold_right
@@ -1139,7 +1139,7 @@ struct
                 | Foreign (bndr, raw_name, language, _file, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
-                    let xt = Binder.to_type_exn bndr in
+                    let xt = Binder.to_type bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Typenames _
                 | Infix ->

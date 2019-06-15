@@ -29,7 +29,8 @@ object (o: 'self_type)
         super#phrasenode sw
     | Spawn (k, spawn_loc, {node=body;_}, Some inner_effects) ->
         let as_var = Utility.gensym ~prefix:"spawn_aspat" () in
-        let as_pat = variable_pat ~ty:`Not_typed as_var in
+        let bogus_type = `Primitive CommonTypes.Primitive.Bool in (* temporary hack until Simon lands #621. *)
+        let as_pat = variable_pat ~ty:bogus_type as_var in
         let unit_phr = with_dummy_pos (RecordLit ([], None)) in
 
         let (o, spawn_loc) = o#given_spawn_location spawn_loc in
@@ -69,7 +70,8 @@ object (o : 'self_type)
          * we'll never use the continuation (and this is invoked after pattern
          * deanonymisation in desugarHandlers), generate a fresh name for the
          * continuation argument. *)
-        let cont_pat = variable_pat ~ty:`Not_typed (Utility.gensym ~prefix:"dsh" ()) in
+        let bogus_type = `Primitive CommonTypes.Primitive.Bool in (* temporary hack until Simon lands #621. *)
+        let cont_pat = variable_pat ~ty:bogus_type (Utility.gensym ~prefix:"dsh" ()) in
 
         let otherwise_pat : Sugartypes.Pattern.with_pos =
           with_dummy_pos (Pattern.Effect (failure_op_name, [], cont_pat)) in

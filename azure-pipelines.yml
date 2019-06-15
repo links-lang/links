@@ -25,10 +25,6 @@ steps:
       printenv
     displayName: Environment
 
-  - script: |
-      make rule-check
-    displayName: 'Rule check'
-
   - bash: |
       case $AGENT_OS in
         "Linux") sudo apt-get update ;;
@@ -60,6 +56,16 @@ steps:
       ./opam2_local switch create ocaml-base-compiler.4.06.1
       eval `./opam2_local config env`
     displayName: 'OCaml compiler'
+
+  - script: |
+      eval `./opam2_local env`
+      ./opam2_local install ocamlformat -y
+    displayName: 'Ocamlformat'
+
+  - script: |
+      eval `./opam2_local env`
+      make rule-check
+    displayName: 'Rule check'
 
   - bash: |
       case $AGENT_OS in

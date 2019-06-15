@@ -93,7 +93,10 @@ module SugarConstructors (Position : Pos)
 
   (** Binders **)
 
-  let binder ?(ppos=dp) ?ty name = with_pos ppos (name, ty)
+  let binder ?(ppos=dp) ?ty name =
+    match ty with
+    | None -> with_pos ppos (Binder.make ~name ())
+    | Some ty -> with_pos ppos (Binder.make ~name ~ty ())
 
   (** Imports **)
 
@@ -176,6 +179,9 @@ module SugarConstructors (Position : Pos)
   let val_binding ?(ppos=dp) pat phrase =
     val_binding' ~ppos NoSig (Pat pat, phrase, loc_unknown)
 
+  (* Create a module binding. *)
+  let module_binding ?(ppos=dp) binder members =
+    with_pos ppos (Module { binder; members })
 
   (** Database queries *)
 
