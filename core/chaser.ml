@@ -82,15 +82,15 @@ let rec add_module_bindings deps dep_map =
     | [] -> []
     (* Don't re-inline bindings of base module *)
     | [""]::ys -> add_module_bindings ys dep_map
-    | [module_name]::ys ->
+    | [name]::ys ->
       (try
-         let (members, _) = StringMap.find module_name dep_map in
-         let binder = SourceCode.WithPos.make (module_name, None) in (* Need to use Binder.make once #646 has landed. *)
+         let (members, _) = StringMap.find name dep_map in
+         let binder = SourceCode.WithPos.make (Binder.make ~name ()) in
         WithPos.make (Module { binder; members }) :: (add_module_bindings ys dep_map)
       with Notfound.NotFound _ ->
         (raise (Errors.internal_error ~filename:"chaser.ml"
           ~message:(Printf.sprintf "Could not find %s in dependency map containing keys: %s\n"
-          module_name (print_list (List.map fst (StringMap.bindings dep_map)))))));
+          name (print_list (List.map fst (StringMap.bindings dep_map)))))));
     | _ ->
         raise (Errors.internal_error ~filename:"chaser.ml"
           ~message:"Impossible pattern in add_module_bindings")
