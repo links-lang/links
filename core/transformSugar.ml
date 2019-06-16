@@ -732,11 +732,12 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> o, []
-          | { rec_binder; rec_signature; _ } as fn :: defs ->
+          | { rec_binder; rec_signature; rec_unsafe_signature; _ } as fn :: defs ->
               let (o, rec_binder) = o#binder rec_binder in
               let (o, defs) = list o defs in
               let (o, rec_signature) = optionu o (fun o -> o#datatype') rec_signature in
-              (o, { fn with rec_binder; rec_signature } :: defs)
+              let (o, rec_unsafe_signature) = optionu o (fun o -> o#datatype') rec_unsafe_signature in
+              (o, { fn with rec_binder; rec_signature; rec_unsafe_signature } :: defs)
       in
         list o
 
@@ -761,7 +762,7 @@ class transform (env : Types.typing_environment) =
          let (o, p) = o#pattern p in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Val (p, (tyvars, e), location, t))
-      | Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature }
+      | Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature }
            when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
@@ -770,7 +771,8 @@ class transform (env : Types.typing_environment) =
          let o = o#restore_quantifiers outer_tyvars in
          let (o, fun_binder) = o#binder fun_binder in
          let (o, fun_signature) = optionu o (fun o -> o#datatype') fun_signature in
-         (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature })
+         let (o, fun_unsafe_signature) = optionu o (fun o -> o#datatype') fun_unsafe_signature in
+         (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature })
       | Fun _ -> raise (internal_error "Unannotated non-recursive function binding")
       | Funs defs ->
          (* put the inner bindings in the environment *)

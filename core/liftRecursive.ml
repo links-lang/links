@@ -29,6 +29,7 @@ object ((self : 'self_type))
                       rec_definition = ((tvs, None), fnlit);
                       rec_location = fn.fun_location;
                       rec_signature = fn.fun_signature;
+                      rec_unsafe_signature = fn.fun_unsafe_signature;
                       rec_pos = pos;
                     }]
             else

@@ -234,6 +234,7 @@ module MutualBindings = struct
                   rec_definition = ((tvs, None), fl);
                   rec_location = fn.fun_location;
                   rec_signature = fn.fun_signature;
+                  rec_unsafe_signature = fn.fun_unsafe_signature;
                   rec_pos = pos; }) fs in
           [WithPos.make ~pos:mut_pos (Funs fs)] in
 
@@ -282,7 +283,7 @@ end
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU FORALL ALIEN SIG
+%token MU FORALL ALIEN SIG UNSAFE
 %token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
@@ -392,7 +393,7 @@ nofun_declaration:
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                  set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
-| signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) (sig_of_opt $1) $2 }
+| signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
@@ -412,8 +413,8 @@ fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { fun_binding     ~ppos:$loc      NoSig   $1 }
-| signature tlfunbinding                                       { fun_binding     ~ppos:$loc($2) (Sig $1) $2 }
+| tlfunbinding                                                 { fun_binding ~ppos:$loc($1) (None, None) $1 }
+| signatures tlfunbinding                                      { fun_binding ~ppos:$loc($2) $1 $2 }
 
 perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
@@ -431,9 +432,16 @@ tlfunbinding:
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
 
+signatures:
+| signature unsafe_signature?                                  { (Some $1, $2) }
+| unsafe_signature signature?                                  { ($2, Some $1) }
+
 signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
 | SIG op COLON datatype                                        { with_pos $loc ($2, datatype $4) }
+
+unsafe_signature:
+| UNSAFE signature                                             { $2 }
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5, (pos $loc))]) }
@@ -896,8 +904,8 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signature linearity VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (Sig $1) ($2, $3, $4, loc_unknown, $5) }
-| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc  NoSig   ($1, $2, $3, loc_unknown, $4) }
+| signatures linearity VARIABLE arg_lists block                { fun_binding ~ppos:$loc $1 ($2, $3, $4, loc_unknown, $5) }
+| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc (None, None) ($1, $2, $3, loc_unknown, $4) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
