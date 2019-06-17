@@ -16,8 +16,6 @@ val nenv : Var.var Env.String.t
 
 val primitive_vars : Utility.IntSet.t
 
-val patch_prelude_funs : Types.typing_environment -> Types.typing_environment
-
 val apply_pfun : string -> Value.t list -> RequestData.request_data -> Value.t
 val primitive_stub : string -> Value.t
 

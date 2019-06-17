@@ -36,3 +36,21 @@ exit : 1
 Close recursive patterns (issue #360)
 switch (Var(0)) { case (_ : (mu a . [|Lam:(Int, a)|Var:Int|])) -> 42 }
 stdout : 42 : Int
+
+Unsafe type annotations on non-recursive functions
+unsafe sig f : (String) -> () fun f(x) { print(x) } f
+stdout : fun : (String) -> ()
+
+Unsafe type annotations on recursive functions
+unsafe sig f : (String) -> () fun f(x) { f(x) } f
+stdout : fun : (String) -> ()
+
+Invalid unsafe type annotations on non-recursive functions
+unsafe sig f : (Int) -> () fun f(x) { print(x) } f
+stderr : @.+
+exit : 1
+
+Invalid unsafe type annotations on recursive functions
+unsafe sig f : (String) -> () fun f(x) { f(x + 1) } f
+stderr : @.+
+exit : 1

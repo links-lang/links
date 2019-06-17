@@ -322,6 +322,8 @@ sig
   val bind_rec_annotation : griper
   val bind_rec_rec : griper
 
+  val bind_unsafe_fun_annotation : griper
+
   val bind_exp : griper
 
   val list_pattern : griper
@@ -1131,6 +1133,15 @@ end
                "but its previously inferred type is"        ^ nli () ^
                 code ppr_rt)
 
+    let bind_unsafe_fun_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The function definition has an unsafe type of "   ^ nli () ^
+                code ppr_rt                                       ^ nl  () ^
+               "but this is incompatible with the actual type of" ^ nli () ^
+                code ppr_lt)
+
     let bind_exp ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
       fixed_type pos "Side-effect expressions" t l
@@ -1762,6 +1773,16 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
       Gripers.duplicate_names_in_pattern pos
     else
       List.map fst (StringMap.bindings binderss)
+
+let type_unsafe context unify inner = function
+  | None -> inner
+  | Some (_, Some unsafe) ->
+     let (_, ft) = Generalise.generalise_rigid context.var_env unsafe in
+     let _, fti = Instantiate.typ ft in
+     let _, inneri = Instantiate.typ inner in
+     unify ~handle:Gripers.bind_unsafe_fun_annotation (inneri, fti);
+     ft
+  | Some (_, None) -> failwith "Sugartypes.datatype' without a Types.typ instance"
 
 let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
   let make_singleton_row =
@@ -3626,8 +3647,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
  *)
 and type_binding : context -> binding -> binding * context * usagemap =
   fun context {node = def; pos} ->
+    let _UNKNOWN_POS_ = "<unknown>" in
+    let no_pos t = (_UNKNOWN_POS_, t) in
     let type_check = type_check in
-    let unify pos (l, r) = unify_or_raise ~pos:pos (l, r)
+    let unify pos (l, r) = unify_or_raise ~pos (l, r) in
+    let unify_nopos pos ~handle (l, r) = unify_or_raise ~pos ~handle (no_pos l, no_pos r)
     and typ (_,t,_) = t
     and erase (e, _, _) = e
     and usages (_,_,u) = u
@@ -3637,8 +3661,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
     and tpc = type_pattern `Closed
     and pattern_env (_, e, _) = e
     and (++) ctxt env' = {ctxt with var_env = Env.extend ctxt.var_env env'} in
-    let _UNKNOWN_POS_ = "<unknown>" in
-    let no_pos t = (_UNKNOWN_POS_, t) in
     let pattern_pos ({pos=p;_},_,_) = Position.resolve_expression p in
     let ppos_and_typ p = (pattern_pos p, pattern_typ p) in
     let uexp_pos p = WithPos.pos p |> Position.resolve_expression in
@@ -3752,6 +3774,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
           (* generalise*)
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
+          let ft = type_unsafe context (unify_nopos pos) ft ut in
           let ft = Instantiate.freshen_quantifiers ft in
             (Fun { fun_binder = Binder.set_type bndr ft;
                    fun_linearity = lin;
@@ -3809,7 +3832,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          let _, fti = Instantiate.typ ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos fti) in
                            ft
-                     | Some _ -> assert false
+                     | Some _ -> failwith "Sugartypes.datatype without Types.typ"
                  in
                    Env.bind inner_env (name, inner), pats::patss)
               (Env.empty, []) defs in
@@ -3827,10 +3850,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
               (List.rev
                 (List.fold_left2
                    (fun defs_and_uses
-                        { rec_binder = bndr; rec_linearity = lin;
-                          rec_definition = (_, (_, body));
-                          rec_location = location; rec_signature = t; rec_unsafe_signature = ut;
-                          rec_pos = pos; }
+                        ({ rec_binder = bndr; rec_linearity = lin;
+                           rec_definition = (_, (_, body));
+                           rec_pos = pos; _ } as fn)
                         pats ->
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
@@ -3877,15 +3899,17 @@ and type_binding : context -> binding -> binding * context * usagemap =
                           else
                             ft in
                       let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft) in
-                      ((Binder.erase_type bndr, lin, (([], None), (pats, body)), location, t, ut, pos), used) :: defs_and_uses) [] defs patss)) in
+                      ((fn, Binder.erase_type bndr, (([], None), (pats, body))), used) :: defs_and_uses) [] defs patss)) in
 
           (* Generalise to obtain the outer types *)
           let defs, outer_env =
             let defs, outer_env =
               List.fold_left2
-                (fun (defs, outer_env) (bndr, lin, (_, (_, body)), location, t, ut, pos) pats ->
+                (fun (defs, outer_env) (fn, bndr, (_, (_, body))) pats ->
                    let name = Binder.to_name bndr in
                    let inner = Env.lookup inner_env name in
+
+                   let inner = type_unsafe context (unify_nopos pos) inner fn.rec_unsafe_signature in
                    let inner, outer, tyvars =
                      match inner with
                        | `ForAll (inner_tyvars, inner_body) ->
@@ -3909,10 +3933,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
-                   ({ rec_binder = Binder.set_type bndr outer; rec_linearity = lin;
-                      rec_definition = ((tyvars, Some inner), (pats, body));
-                      rec_location = location; rec_signature = t; rec_unsafe_signature = ut;
-                      rec_pos = pos }::defs,
+                   ({ fn with rec_binder = Binder.set_type bndr outer;
+                              rec_definition = ((tyvars, Some inner), (pats, body)); }::defs,
                       Env.bind outer_env (name, outer)))
                 ([], Env.empty) defs patss
             in
