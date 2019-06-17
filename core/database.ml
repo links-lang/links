@@ -25,6 +25,13 @@ let value_of_db_string (value:string) t =
     | `Primitive Primitive.Char -> Value.box_char (String.get value 0)
     | `Primitive Primitive.String -> Value.box_string value
     | `Primitive Primitive.Int  ->
+        (* HACK: Currently Links does not properly handle integers
+         * if they are null. This is a temporary workaround (hack) to
+         * allow us to at least interface with DBs containing nulls,
+         * until we manage to do the research required to do something
+         * more principled.
+         * If "coerce_null_integers" is true and a null integer is found,
+         * then instead of crashing, "null_integer" is used instead. *)
         if value = "" then
           if Settings.get_value (Basicsettings.Database.coerce_null_integers) then
             Value.box_int (Settings.get_value Basicsettings.Database.null_integer)
