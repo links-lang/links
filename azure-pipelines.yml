@@ -22,7 +22,7 @@ steps:
 
   - script: |
       OID=`id -u opam`
-      sudo usermod -u opam 789
+      sudo usermod -u 789 opam
       sudo usermod -u $OID -d /home/opam `whoami`
     displayName: 'Steal home directory'
 
