@@ -365,7 +365,7 @@ class map =
           LensDropLit((_x, _x_i1, _x_i2, _x_i3, _x_i4))
       | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
-          (* let _x_i1 = o#phrase _x_i1 in *)
+          let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
           LensSelectLit ((_x, _x_i1, _x_i2))
       | LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
@@ -1052,7 +1052,7 @@ class fold =
             o
       | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
-          (* let o = o#phrase _x_i1 in *)
+          let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
       | LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
@@ -1769,7 +1769,7 @@ class fold_map =
             (o, (LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
       | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
-          (* let (o, _x_i1) = o#phrase _x_i1 in *)
+          let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2 in
             (o, (LensSelectLit ((_x, _x_i1, _x_i2))))
 
