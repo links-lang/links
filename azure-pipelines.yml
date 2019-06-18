@@ -25,6 +25,7 @@ steps:
         #!/bin/bash
         
         if [ "$1" == "env" ]; then
+          echo env
           /usr/bin/opam env
         else
           sudo -u opam /usr/bin/opam $@
