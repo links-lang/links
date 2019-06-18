@@ -23,6 +23,7 @@ steps:
   - script: |
       whoami
       echo ~
+      cat /etc/group
       sudo usermod -a -G opam `whoami`
       ls -lah ~/.opam/4.07/.opam-switch/lock
       # sudo chown `whoami`:`whoami` ~/.opam/4.07/.opam-switch/lock
