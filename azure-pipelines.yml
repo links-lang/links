@@ -21,8 +21,9 @@ steps:
     displayName: Environment
 
   - script: |
-      sudo chown `whoami`:`whoami` /home/opam -R
-      sudo usermod -d /home/opam `whoami`
+      OID=`id -u opam`
+      sudo usermod -u opam 789
+      sudo usermod -u $OID -d /home/opam `whoami`
     displayName: 'Steal home directory'
 
   - script: |
