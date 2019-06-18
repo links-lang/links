@@ -21,15 +21,20 @@ steps:
     displayName: Environment
 
   - script: |
+      sudo chown `whoami`:`whoami` /home/opam -R
+      sudo usermod -d /home/opam `whoami`
+    displayName: 'Steal home directory'
+
+  - script: |
       sudo apt-get install m4 -y
     displayName: 'System dependencies'
 
-  - script: |
-      sudo -u opam opam install ocamlformat -y
+  - bash: |
+      opam install ocamlformat -y
     displayName: 'Ocamlformat'
 
-  - script: |
-      sudo -u opam make rule-check
+  - bash: |
+      make rule-check
     displayName: 'Rule check'
 
   - bash: |
@@ -47,14 +52,14 @@ steps:
       esac
     displayName: 'Databases'
 
-  - script: |
-      sudo -u opam opam pin add links . -y
-      sudo -u opam opam pin add links-postgresql . -y
-      sudo -u opam opam pin add links-sqlite3 . -y
+  - bash: |
+      opam pin add links . -y
+      opam pin add links-postgresql . -y
+      opam pin add links-sqlite3 . -y
     displayName: 'Links dependencies'
 
   - script: |
-      sudo -u opam make all-release
+      make all-release
     displayName: 'Build Links (release)'
 
   - script: |
