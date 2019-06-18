@@ -44,14 +44,13 @@ steps:
     displayName: 'Ocamlformat'
 
   - bash: |
-      opam env
       eval $(opam env)
       make rule-check
     displayName: 'Rule check'
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev &&
+        "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev -y &&
                  sudo LINKS_CI=1 tools/configure-postgresql &&
                  sudo systemctl reload postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
@@ -87,12 +86,12 @@ steps:
     displayName: 'Database shredding tests'
 
   - script: |
-      eval `opam env`
+      eval $(opam env)
       ./run-tests db-only relational-lenses
     displayName: 'Relational lenses tests'
 
   - script: |
-      eval `opam env`
+      eval $(opam env)
       opam install -y oUnit
       ./run-tests unit
     displayName: 'Unit tests'
