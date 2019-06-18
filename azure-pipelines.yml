@@ -24,7 +24,7 @@ steps:
       cat >/tmp/opam  <<-EOF
         #!/bin/bash
         
-        if [ "$1" -eq "env" ]; then
+        if [ "$1" == "env" ]; then
           /usr/bin/opam env
         else
           sudo -u opam /usr/bin/opam $@
