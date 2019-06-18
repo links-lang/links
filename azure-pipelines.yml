@@ -26,7 +26,7 @@ steps:
         
         sudo -u opam /usr/bin/opam @$
       EOF
-      sudo chmod +x /usr/bin/opam
+      sudo chmod +x /usr/local/bin/opam
     displayName: 'Setup environment'
 
   - script: |
