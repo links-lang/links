@@ -1774,14 +1774,34 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
     else
       List.map fst (StringMap.bindings binderss)
 
+(** Strips the wild effect from an inferred type, and ensures the given "unsafe"
+   type is equivalent. *)
 let type_unsafe context unify inner = function
   | None -> inner
   | Some (_, Some unsafe) ->
-     let (_, ft) = Generalise.generalise_rigid context.var_env unsafe in
-     let _, fti = Instantiate.typ ft in
-     let _, inneri = Instantiate.typ inner in
-     unify ~handle:Gripers.bind_unsafe_fun_annotation (inneri, fti);
-     ft
+     let transform = object(o)
+         inherit Types.Transform.visitor as super
+
+         method! typ = function
+           | `Function (at, e, rt) -> super#typ (`Function (at, o#eff_row e, rt))
+           | `Lolli (at, e, rt) -> super#typ (`Lolli (at, o#eff_row e, rt))
+           | dt -> super#typ dt
+
+         method eff_row (fsp, rv, d) =
+           let fsp = StringMap.filter (fun k v ->
+               match k, v with
+               | "wild", `Present v when v = Types.unit_type -> false
+               | _ -> true) fsp
+           in
+           (fsp, rv, d)
+       end
+     in
+     let _, unsafei = Instantiate.typ_rigid unsafe in
+     let _, inner = Generalise.generalise context.var_env inner in
+     let _, inner = Instantiate.typ inner in
+     let inner, _ = transform#typ inner in
+     unify ~handle:Gripers.bind_unsafe_fun_annotation (inner, unsafei);
+     unsafe
   | Some (_, None) -> raise (internal_error "Sugartypes.datatype' without a Types.typ instance")
 
 let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
@@ -3773,8 +3793,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
             else () in
 
           (* generalise*)
-          let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
           let ft = type_unsafe context (unify_nopos pos) ft ut in
+          let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
           let ft = Instantiate.freshen_quantifiers ft in
             (Fun { fun_binder = Binder.set_type bndr ft;
                    fun_linearity = lin;
