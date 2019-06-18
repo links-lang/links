@@ -52,7 +52,7 @@ steps:
       case $AGENT_OS in
         "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev -y &&
                  sudo LINKS_CI=1 tools/configure-postgresql &&
-                 sudo service reload postgresql &&
+                 sudo service postgresql reload &&
                  sudo -u postgres createuser -s $(whoami) &&
                  sudo -u postgres createdb -O $(whoami) links ;;
         "Darwin") brew install postgresql libpq sqlite3 &&
