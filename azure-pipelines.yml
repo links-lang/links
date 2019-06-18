@@ -21,12 +21,13 @@ steps:
     displayName: Environment
 
   - script: |
-      sudo cat >/usr/local/bin/opam <<-EOF
+      cat >/tmp/opam  <<-EOF
         #!/bin/bash
         
         sudo -u opam /usr/bin/opam @$
       EOF
-      sudo chmod +x /usr/local/bin/opam
+      sudo chmod +x /tmp/opam
+      sudo mv /tmp/opam /usr/local/bin/
     displayName: 'Setup environment'
 
   - script: |
