@@ -24,8 +24,7 @@ steps:
       cat >/tmp/opam  <<-EOF
         #!/bin/bash
         
-        echo "opam args $@"
-        sudo -u opam /usr/bin/opam $@
+        sudo -u opam /usr/bin/opam \$@
       EOF
       sudo chmod +x /tmp/opam
       sudo mv /tmp/opam /usr/local/bin/
