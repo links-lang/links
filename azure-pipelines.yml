@@ -21,6 +21,8 @@ steps:
     displayName: Environment
 
   - script: |
+      whoami
+      echo ~
       sudo usermod -a -G opam `whoami`
       ln -s /home/opam/.opam ~/
     displayName: 'Steal home directory'
