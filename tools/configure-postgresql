@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+if [[ $LINKS_CI -ne 1 ]]; then
+    echo "error: did not detect continuous integration environment."
+    exit 1
+fi
+
+# WARNING: This script is only intended for use by continuous
+# integration services. DO NOT USE otherwise.
+
+relax_authentication()
+{
+    local conf="$1"
+    cat <<-EOF > "$conf"
+# PostgreSQL Client Authentication Configuration File
+# ===================================================
+#
+# This authentication configuration is intended for use by Links
+# continuous integration services only! DO NOT USE otherwise.
+
+# Database administrative login by Unix domain socket
+local   all             postgres                                trust
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# "local" is for Unix domain socket connections only
+local   all             links                                   trust
+local   all             all                                     trust
+# IPv4 local connections:
+host    all             links           127.0.0.1/32            trust
+host    all             all             127.0.0.1/32            trust
+# IPv6 local connections:
+host    all             all             ::1/128                 trust
+# Allow replication connections from localhost, by a user with the
+# replication privilege.
+local   replication     all                                     trust
+host    replication     all             127.0.0.1/32            trust
+host    replication     all             ::1/128                 trust
+EOF
+}
+
+
+# Attempt to locate pg_hba.conf.
+HBA_CONFS=()
+PG_HBA=
+for conf in $(find /etc/postgresql -name 'pg_hba.conf' 2> /dev/null); do
+    HBA_CONFS+=("$conf")
+done
+
+if [[ ${#HBA_CONFS[@]} -eq 1 ]]; then
+    echo "info: found ${HBA_CONFS[0]}"
+    PG_HBA=${HBA_CONFS[0]}
+elif [[ ${#HBA_CONFS[@]} -gt 1 ]]; then
+    echo "error: multiple \`pg_hba.conf'"
+    for f in ${HBA_CONFS[@]}; do
+        echo "   - $f"
+    done
+    exit 1
+else
+    echo "error: cannot locate \`pg_hba.conf'"
+    exit 1
+fi
+
+# Replace pg_hba.conf
+relax_authentication "$PG_HBA"
+exit 0

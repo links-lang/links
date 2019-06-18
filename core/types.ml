@@ -144,7 +144,8 @@ and rec_appl = {
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
 }
-and typ =    [ `Not_typed
+and typ =
+    [ `Not_typed
     | `Primitive of Primitive.t
     | `Function of (typ * row * typ)
     | `Lolli of (typ * row * typ)
@@ -1946,23 +1947,96 @@ struct
   let show_flavours        = BS.Types.Print.show_flavours
   let show_kinds           = BS.Types.Print.show_kinds
   let hide_fresh_type_vars = BS.Types.Print.hide_fresh_type_vars
+  let effect_sugar         = BS.Types.effect_sugar
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string}
+  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
   type names  = (int, string * Vars.spec) Hashtbl.t
+  type shared_effect = Unknown | Shared of int | Distinct
+  type context = { bound_vars: TypeVarSet.t; shared_effect: shared_effect }
 
   let default_policy () =
     {quantifiers=Settings.get_value show_quantifiers;
      flavours=Settings.get_value show_flavours;
      hide_fresh=Settings.get_value hide_fresh_type_vars;
-     kinds=Settings.get_value show_kinds}
+     kinds=Settings.get_value show_kinds;
+     effect_sugar=Settings.get_value effect_sugar}
+
+  let empty_context = { bound_vars = TypeVarSet.empty; shared_effect = Unknown }
 
   let has_kind =
     function
     | "" -> ""
     | s -> "::" ^ s
+
+  (** Checks that a field environment contains exactly the values passed in a
+     list *)
+  let fields_present_in fields values =
+    FieldEnv.size fields = List.length values &&
+      List.for_all (fun v -> FieldEnv.mem v fields
+                             && is_present (FieldEnv.find v fields))
+        values
+
+  let find_shared_effect { bound_vars; shared_effect } vars args fields row_var ret =
+    let var_eq known resolve=
+      match Unionfind.find resolve with
+      | `Var (var, _, _) when var = known -> true
+      | _ -> false
+    in
+    match shared_effect with
+    | Distinct -> Distinct
+    | Shared var ->
+       (* If we encounter a row variable, it /must/ be equivalent to our shared one. *)
+       assert (var_eq var row_var);
+       Shared var
+    | Unknown -> (
+      match Unionfind.find row_var with
+      | `Var (var, _, _) when not (TypeVarSet.mem var bound_vars) ->
+          let obj =
+            object (self)
+              inherit Transform.visitor as super
+
+              val all_same = true
+              val count = 1
+              method all_same = all_same
+              method count = count
+
+              method! typ =
+                function
+                | typ when not all_same -> (typ, self)
+                | (`Function (args, effects, ret) | `Lolli (args, effects, ret)) as typ ->
+                    let fields, row_var, _ = unwrap_row effects |> fst in
+                    if
+                      (fields_present_in fields [] || fields_present_in fields [ "wild" ])
+                      && var_eq var row_var
+                    then
+                      let (_, self) = self#typ args in
+                      let (_, self) = self#typ ret in
+                      let (_, self) = self#field_spec_map fields in
+                      (typ, {<count = count + 1; all_same = self#all_same>})
+                    else (
+                      (typ, {<all_same = false>})
+                    )
+                | `Alias ((_, args), _) as ty ->
+                    let self = List.fold_left (fun o arg -> o#type_arg arg |> snd) self args in
+                    (ty, self)
+                | typ -> super#typ typ
+
+              method! row_var row_var =
+                if var_eq var row_var then
+                  (row_var, {<all_same = false>})
+                else
+                  super#row_var row_var
+            end
+          in
+          let (_, obj) = obj#typ args in
+          let (_, obj) = obj#typ ret in
+          let (_, obj) = obj#field_spec_map fields in
+          let _, (_, _, count) = Vars.find_spec var vars in
+          if obj#all_same && obj#count = count then Shared var else Distinct
+      | _ -> Distinct )
 
   let subkind : (policy * names) -> subkind -> string =
     let full (l, r) = "(" ^ Linearity.to_string l ^ "," ^
@@ -2019,9 +2093,9 @@ struct
       in
         prefix ^ Vars.find (var_of_quantifier q) vars ^ has_kind (kind (policy, vars) k)
 
-  let rec datatype : TypeVarSet.t -> policy * names -> datatype -> string =
-    fun bound_vars ((policy, vars) as p) t ->
-      let sd = datatype bound_vars p in
+  let rec datatype : context -> policy * names -> datatype -> string =
+    fun ({ bound_vars; _ } as context) ((policy, vars) as p) t ->
+      let sd = datatype context p in
       let sk k = has_kind (subkind p k) in
 
       let hide_fresh_check var (flavour, _, count) =
@@ -2030,7 +2104,7 @@ struct
 
       let unwrap = fst -<- unwrap_row in
         (* precondition: the row is unwrapped *)
-      let string_of_tuple (field_env, _, _) =
+      let string_of_tuple context (field_env, _, _) =
         let tuple_env =
           FieldEnv.fold
             (fun i f tuple_env ->
@@ -2039,7 +2113,7 @@ struct
                  | (`Absent | `Var _) -> assert false)
             field_env
             IntMap.empty in
-        let ss = List.rev (IntMap.fold (fun _ t ss -> (sd t) :: ss) tuple_env []) in
+        let ss = List.rev (IntMap.fold (fun _ t ss -> (datatype context p t) :: ss) tuple_env []) in
           "(" ^ String.concat ", " ss ^  ")" in
 
       (* If type variable names are hidden return a generic name n1.
@@ -2050,15 +2124,16 @@ struct
         if hide_fresh_check var spec then n1 else (n2 name) in
 
       (* Pretty-prints a row variable *)
-      let ppr_row_var args to_match closed (flex_name_hidden, flex_name)
-                           (name_hidden, name) =
+      let ppr_row_var context args to_match closed
+            (flex_name_hidden, flex_name)
+            (name_hidden, name) =
         match Unionfind.find to_match with
         | `Var (var, _, `Flexible) when policy.flavours ->
            name_of_type var flex_name_hidden flex_name
         | `Var (var, _, _) ->
            name_of_type var name_hidden name
         | `Closed      -> closed
-        | `Body t'     -> sd (`Function (args, t', t))
+        | `Body t'     -> datatype context p (`Function (args, t', t))
         | `Recursive _ -> assert false in
 
       (* Pretty-prints function spaces.
@@ -2068,28 +2143,37 @@ struct
        let (fields, row_var, dual) = unwrap effects in
        assert (not dual);
 
-       (* Checks that field environment contains exactly the values passed in in
-          a list *)
-       let fields_present values =
-         FieldEnv.size fields = List.length values &&
-         List.fold_left (fun acc v -> acc && FieldEnv.mem v fields
-                                          && is_present (FieldEnv.find v fields))
-                        true values in
+       let fields_present = fields_present_in fields in
+
+       let context =
+         if policy.effect_sugar then
+           let shared_effect = find_shared_effect context vars args fields row_var t in
+           { context with shared_effect }
+         else context in
+       let is_shared =
+         match context.shared_effect with
+         | Shared _ -> true
+         | _ -> false in
+       let hidden line =
+         if policy.effect_sugar then line ^ "_" ^ line ^ ah else line ^ ah in
+       let sd = datatype context p in
 
        let ppr_arrow () =
          if fields_present [] then
-           ppr_row_var args row_var ("{}-" ^ ah)
+           if policy.hide_fresh && is_shared then "-" ^ ah else
+           ppr_row_var context args row_var ("{}-" ^ ah)
                ("-%-" ^ ah, fun name -> "-%" ^ name ^ "-" ^ ah)
-               ("-"   ^ ah, fun name -> "-"  ^ name ^ "-" ^ ah)
+               (hidden "-", fun name -> "-"  ^ name ^ "-" ^ ah)
          else if fields_present ["wild"]
          then
-           ppr_row_var args row_var ("{}~" ^ ah)
+           if policy.hide_fresh && is_shared then "~" ^ ah else
+           ppr_row_var context args row_var ("{}~" ^ ah)
                ("~%~" ^ ah, fun name -> "~%" ^ name ^ "~" ^ ah)
-               ("~"   ^ ah, fun name -> "~"  ^ name ^ "~" ^ ah)
+               (hidden "~", fun name -> "~"  ^ name ^ "~" ^ ah)
          else if fields_present ["hear"; "wild"]
          then
            let ht' = ht fields in
-           ppr_row_var args row_var ("{:" ^ ht' ^ "}~" ^ ah)
+           ppr_row_var context args row_var ("{:" ^ ht' ^ "}~" ^ ah)
                ("{:" ^ ht' ^ "|%}~" ^ ah, fun name -> "{:" ^ ht' ^ "|%" ^ name ^ "}~" ^ ah)
                ("{:" ^ ht' ^ "|_}~" ^ ah, fun name -> "{:" ^ ht' ^ "|"  ^ name ^ "}~" ^ ah)
          else
@@ -2098,15 +2182,15 @@ struct
                 the effect row *)
            if FieldEnv.mem "wild" fields &&
              is_present (FieldEnv.find "wild" fields) then
-             "{" ^ row ~strip_wild:true "," bound_vars p effects ^ "}~" ^ ah
+             "{" ^ row ~strip_wild:true "," context p effects ^ "}~" ^ ah
            else
-             "{" ^ row "," bound_vars p effects ^ "}-" ^ ah
+             "{" ^ row "," context p effects ^ "}-" ^ ah
          in begin match concrete_type args with
             | `Record row when is_tuple ~allow_onetuples:true row ->
                (* Let bindings are needed here to ensure left-to-right
                   generation of type variable names.
                   See Note [Variable names in error messages] *)
-               let row_str   = string_of_tuple row in
+               let row_str   = string_of_tuple context row in
                let arrow_str = ppr_arrow () in
                let sd_str    = sd t in
                row_str ^ " " ^ arrow_str ^ " " ^ sd_str
@@ -2128,7 +2212,7 @@ struct
                         Vars.find var vars
                       else
                         "mu " ^ Vars.find var vars ^ " . " ^
-                          datatype (TypeVarSet.add var bound_vars) p body
+                          datatype { context with bound_vars = TypeVarSet.add var bound_vars } p body
                   | `Body t -> sd t
               end
           | `Function (args, effects, t) ->
@@ -2145,10 +2229,10 @@ struct
              in ppr_function_type args effects t "@" ht
           | `Record r ->
               let ur = unwrap r in
-                (if is_tuple ur then string_of_tuple r
-                 else "(" ^ row "," bound_vars p r ^ ")")
-          | `Variant r -> "[|" ^ row "|" bound_vars p r ^ "|]"
-          | `Effect r -> "{" ^ row "," bound_vars p r ^ "}"
+                (if is_tuple ur then string_of_tuple context r
+                 else "(" ^ row "," context p r ^ ")")
+          | `Variant r -> "[|" ^ row "|" context p r ^ "|]"
+          | `Effect r -> "{" ^ row "," context p r ^ "}"
           | `ForAll (tyvars, body) ->
               let tyvars = unbox_quantifiers tyvars in
               let bound_vars =
@@ -2160,23 +2244,23 @@ struct
                 if not (policy.flavours) then
                   let tyvars = List.filter is_rigid_quantifier tyvars in
                     match tyvars with
-                      | [] -> datatype bound_vars p body
+                      | [] -> datatype { context with bound_vars } p body
                       | _ ->
-                          "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
+                          "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
                 else
-                  "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype bound_vars p body
-          | `Input  (t, s) -> "?(" ^ datatype bound_vars p t ^ ")." ^ datatype bound_vars p s
-          | `Output (t, s) -> "!(" ^ datatype bound_vars p t ^ ")." ^ datatype bound_vars p s
-          | `Select bs -> "[+|" ^ row "," bound_vars p bs ^ "|+]"
-          | `Choice bs -> "[&|" ^ row "," bound_vars p bs ^ "|&]"
-          | `Dual s -> "~" ^ datatype bound_vars p s
+                  "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
+          | `Input  (t, s) -> "?(" ^ sd t ^ ")." ^ sd s
+          | `Output (t, s) -> "!(" ^ sd t ^ ")." ^ sd s
+          | `Select bs -> "[+|" ^ row "," context p bs ^ "|+]"
+          | `Choice bs -> "[&|" ^ row "," context p bs ^ "|&]"
+          | `Dual s -> "~" ^ sd s
           | `End -> "End"
           | `Table (r, w, n)   ->
              (* TODO: pretty-print this using constraints? *)
              "TableHandle(" ^
-               datatype bound_vars p r ^ "," ^
-               datatype bound_vars p w ^ "," ^
-               datatype bound_vars p n ^ ")"
+               sd r ^ "," ^
+               sd w ^ "," ^
+               sd n ^ ")"
           | `Lens typ ->
             let sort = Lens.Type.sort typ in
             let cols = Lens.Sort.cols sort in
@@ -2190,24 +2274,24 @@ struct
           | `Alias ((s,ts), _) ->
              Printf.sprintf "%s (%s)"
                (Module_hacks.Name.prettify s)
-               (String.concat "," (List.map (type_arg bound_vars p) ts))
-          | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg bound_vars p) elems ^"]"
+               (String.concat "," (List.map (type_arg context p) ts))
+          | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg context p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
           | `Application (s, ts) ->
-              let vars = String.concat "," (List.map (type_arg bound_vars p) ts) in
+              let vars = String.concat "," (List.map (type_arg context p) ts) in
               Printf.sprintf "%s (%s)" (Abstype.name s) vars
           | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> Module_hacks.Name.prettify r_name
           | `RecursiveApplication { r_name; r_args; _ } ->
              Printf.sprintf "%s (%s)"
                (Module_hacks.Name.prettify r_name)
-               (String.concat "," (List.map (type_arg bound_vars p) r_args))
-  and presence bound_vars ((policy, vars) as p) =
+               (String.concat "," (List.map (type_arg context p) r_args))
+  and presence ({ bound_vars; _ } as context) ((policy, vars) as p) =
     function
       | `Present t ->
         begin
           match concrete_type t with
           | `Record row when is_empty_row row -> ""
-          | _                                 -> ":" ^ datatype bound_vars p t
+          | _                                 -> ":" ^ datatype context p t
         end
       | `Absent -> "-"
       | `Var point ->
@@ -2222,10 +2306,10 @@ struct
               | `Var (var, _, _) ->
                  name_of_type var "{_}" (fun name -> "{" ^ name ^ "}")
               | `Body f ->
-                  presence bound_vars p f
+                  presence context p f
           end
 
-  and row ?(strip_wild=false) sep bound_vars p (field_env, rv, dual) =
+  and row ?(strip_wild=false) sep context p (field_env, rv, dual) =
     (* FIXME:
 
        should quote labels when necessary, i.e., when they
@@ -2237,17 +2321,17 @@ struct
           if strip_wild && label = "wild" then
             field_strings
           else
-            (label ^ presence bound_vars p f) :: field_strings)
+            (label ^ presence context p f) :: field_strings)
         field_env [] in
 
-    let row_var_string = row_var sep bound_vars p rv in
+    let row_var_string = row_var sep context p rv in
       String.concat sep (List.rev (field_strings)) ^
         begin
           match row_var_string with
             | None -> ""
             | Some s -> "|"^ (if dual then "~" else "") ^ s
         end
-  and row_var sep bound_vars ((policy, vars) as p) rv =
+  and row_var sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
     let name_of_type var k n1 n2 =
      let name, (_, _, count) = Vars.find_spec var vars in
      Some ((if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars)
@@ -2265,16 +2349,16 @@ struct
             Some (Vars.find var vars)
           else
             Some ("(mu " ^ Vars.find var vars ^ " . " ^
-                    row sep (TypeVarSet.add var bound_vars) p r ^ ")")
-      | `Body r -> Some (row sep bound_vars p r)
+                    row sep { context with bound_vars = TypeVarSet.add var bound_vars } p r ^ ")")
+      | `Body r -> Some (row sep context p r)
 
-  and type_arg bound_vars p =
+  and type_arg context p =
     function
-      | `Type t -> datatype bound_vars p t
-      | `Row r -> "{ " ^ row "," bound_vars p r ^ " }"
-      | `Presence f -> "::Presence (" ^ presence bound_vars p f ^ ")"
+      | `Type t -> datatype context p t
+      | `Row r -> "{ " ^ row "," context p r ^ " }"
+      | `Presence f -> "::Presence (" ^ presence context p f ^ ")"
 
-  let tycon_spec bound_vars p =
+  let tycon_spec ({ bound_vars; _ } as context) p =
     let bound_vars tyvars =
       List.fold_left
         (fun bound_vars tyvar ->
@@ -2283,11 +2367,11 @@ struct
 
     function
       | `Alias (tyvars, body) ->
-          let bvs = bound_vars tyvars in
+          let ctx = { context with bound_vars = bound_vars tyvars } in
           begin
             match tyvars with
-              | [] -> datatype bvs p body
-              | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ datatype bvs p body
+              | [] -> datatype ctx p body
+              | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ datatype ctx p body
           end
       | `Mutual _ -> "mutual"
       | `Abstract _ -> "abstract"
@@ -2443,7 +2527,7 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
     let t = if policy.Print.quantifiers then t
             else Print.strip_quantifiers t in
     if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
-    Print.datatype TypeVarSet.empty (policy, Vars.tyvar_name_map) t
+    Print.datatype Print.empty_context (policy, Vars.tyvar_name_map) t
   else
     show_datatype (DecycleTypes.datatype t)
 
@@ -2451,7 +2535,7 @@ let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row
   if Settings.get_value Basicsettings.print_types_pretty then
     begin
     if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
-    Print.row "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row
+    Print.row "," Print.empty_context (policy (), Vars.tyvar_name_map) row
     end
   else
     show_row (DecycleTypes.row row)
@@ -2460,25 +2544,25 @@ let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
                        (f : field_spec) =
   if refresh_tyvar_names then
     build_tyvar_names (fun x -> free_bound_field_spec_type_vars x) [f];
-  Print.presence TypeVarSet.empty (policy (), Vars.tyvar_name_map) f
+  Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
 
 let string_of_type_arg ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
   if refresh_tyvar_names then
     build_tyvar_names (fun x -> free_bound_type_arg_type_vars x) [arg];
-  Print.type_arg TypeVarSet.empty (policy (), Vars.tyvar_name_map) arg
+  Print.type_arg Print.empty_context (policy (), Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row_var =
   if refresh_tyvar_names then
     build_tyvar_names (fun x -> free_bound_row_var_vars x) [row_var];
-  match Print.row_var "," TypeVarSet.empty (policy (), Vars.tyvar_name_map) row_var
+  match Print.row_var "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
   with | None -> ""
        | Some s -> s
 
 let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
   if refresh_tyvar_names then
     build_tyvar_names (fun x -> free_bound_tycon_type_vars x) [tycon];
-  Print.tycon_spec TypeVarSet.empty (policy (), Vars.tyvar_name_map) tycon
+  Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
 let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
   if refresh_tyvar_names then

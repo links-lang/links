@@ -257,30 +257,31 @@ fun join(glue,list) {
 # elemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # notElemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
+sig span : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+fun span(p, xs) {
+  fun go(acc, xs, p) {
+    switch(xs) {
+      case [] -> (acc, [])
+      case x :: xs ->
+        if (p(x)) {
+          go(x :: acc, xs, p)
+        } else {
+          (reverse(acc), x :: xs)
+        }
+    }
+  }
+  go([], xs, p)
+}
 # splitAt :: Int -> ([a]) -> ([a],[a])
 
 sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun takeWhile(pred, list) {
-  switch (list) {
-    case [] -> []
-    case (h::t) ->
-      switch (pred(h)) {
-        case true -> h :: takeWhile(pred, t)
-        case false -> []
-      }
-  }
+  first(span(pred, list))
 }
 
 sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun dropWhile(pred, list) {
-  switch (list) {
-    case [] -> []
-    case (h::t) ->
-      switch (pred(h)) {
-        case true -> dropWhile(pred, t)
-        case false -> list
-      }
-  }
+  second(span(pred, list))
 }
 
 # until :: ((a) -> Bool) -> ((a) -> a) -> (a) -> a
@@ -692,7 +693,7 @@ typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
 typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
 typename Handler (a) = (a) {}~> Page;
 
-sig pickleCont : (() -> Page) ~> String
+sig pickleCont : (() { |_}-> Page) ~> String
 fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
 
 sig unitP : Page
@@ -726,7 +727,7 @@ fun plugP(context, (i, k, fs)) {
   (i, fun (xs) {context(k(xs))}, fs)
 }
 
-sig mkForm : ((Env) ~> Page, Xml, Attributes) ~> Xml
+sig mkForm : ((Env) { |_}~> Page, Xml, Attributes) ~> Xml
 fun mkForm(cont, contents, attributes) {
   <form enctype="application/x-www-form-urlencoded"
         action="#" method="POST" {attributes}>
@@ -754,7 +755,7 @@ fun validate(c, h, k, zs, i, attributes) (env) {
   }
 }
 
-sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) -> (MultiXmlContext, RecForms, Int) ~> Xml
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) { |_}-> (MultiXmlContext, RecForms, Int) ~> Xml
 fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
   mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
 }
@@ -977,7 +978,7 @@ fun preludeOptionKeyed (key, (data,text), selected) {
   }
 }
 
-sig preludeOptionsKeyed : ([(String,(a,String))], a) ~>
+sig preludeOptionsKeyed : ([(String,(a,String))], a) { |_}~>
                          (Xml, (String) -> [a])
 fun preludeOptionsKeyed(items, def) {
   switch (items) {
@@ -990,7 +991,7 @@ fun preludeOptionsKeyed(items, def) {
 }
 
 sig preludeMultiOptionsKeyed
-    : ([(String, (a,String,Bool))]) ~> (Xml, (String) -> [a])
+    : ([(String, (a,String,Bool))]) { |_}~> (Xml, (String) -> [a])
 fun preludeMultiOptionsKeyed(items) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))
@@ -1329,6 +1330,23 @@ fun maximum(a,b) {
 }
 
 ####
+
+sig partition : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+fun partition(pred, xs) {
+  fun go(ayes, noes, xs) {
+    switch(xs) {
+      case [] -> (ayes, noes)
+      case x :: xs ->
+        if (pred(x)) {
+          go(x :: ayes, noes, xs)
+        } else {
+          go(ayes, x :: noes, xs)
+        }
+    }
+  }
+  go([], [], xs)
+}
+
 sig groupByFlat : ((a) -b-> c, [a]) -b-> [(c, [a])]
 fun groupByFlat(project, ts) {
   for(t <- ts)

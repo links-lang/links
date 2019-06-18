@@ -313,8 +313,7 @@ module type WEBSOCKETS =
     val accept :
       client_id ->
       Cohttp.Request.t ->
-      Conduit_lwt_unix.flow ->
-      (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t
+      Cohttp_lwt_unix.Server.response_action Lwt.t
 
     (** Sends a message to the given PID. *)
     val deliver_process_message :
@@ -427,11 +426,10 @@ end
 
 module rec Websockets : WEBSOCKETS =
 struct
-  open Websocket_cohttp_lwt
 
   type links_websocket = {
     client_id : client_id;
-    send_fn : Websocket_cohttp_lwt.Frame.t option -> unit
+    send_fn : Websocket.Frame.t option -> unit
   }
 
   let client_websockets : (client_id, links_websocket) Hashtbl.t =
@@ -464,7 +462,7 @@ struct
 
   let send_message wsocket str_msg =
     Lwt.wrap1 (wsocket.send_fn) @@ (
-      Some (Websocket_cohttp_lwt.Frame.create ~content:str_msg ())
+      Some (Websocket.Frame.create ~content:str_msg ())
     )
 
   let send_buffered_messages cid wsocket =
@@ -508,7 +506,7 @@ struct
           Session.handle_remote_cancel ~notify_ep:notify_ep ~cancelled_ep:cancelled_ep
 
     let recvLoop client_id frame =
-    let open Frame in
+    let open Websocket.Frame in
     let rec loop () =
       match frame.opcode with
         | Opcode.Close ->
@@ -534,15 +532,15 @@ struct
       in
     loop ()
 
-  let accept client_id req flow =
+  let accept client_id req =
       Websocket_cohttp_lwt.upgrade_connection
-        req flow (recvLoop client_id)
-      >>= fun (resp, body, send_fn) ->
+        req (recvLoop client_id)
+      >>= fun (resp, send_fn) ->
       let links_ws = make_links_websocket client_id send_fn in
       Debug.print @@ "Registering websocket for client " ^ (ClientID.to_string client_id);
       register_websocket client_id links_ws;
       send_buffered_messages client_id links_ws >>= fun _ ->
-      Lwt.return (resp, body)
+      Lwt.return resp
 
   let send_or_buffer_message cid msg =
     match lookup_websocket_safe cid with

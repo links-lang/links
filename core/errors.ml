@@ -47,6 +47,7 @@ exception SettingsError of string
 exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception DisabledExtension of Position.t option * (string * bool) option * string option * string
+exception PrimeAlien of Position.t
 
 
 let prefix_lines prefix s =
@@ -158,6 +159,12 @@ let format_exception =
         pos_prefix ~pos message
      | None -> pos_prefix message
      end
+  | PrimeAlien pos ->
+     let pos, expr = Position.resolve_start_expr pos in
+     let message =
+       Printf.sprintf "Syntax error: Foreign binders cannot contain single quotes `'`.\nIn expression: %s." expr
+     in
+     pos_prefix ~pos message
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
 
@@ -186,3 +193,4 @@ let dynlink_error message = (DynlinkError message)
 let module_error ?pos message = (ModuleError (message, pos))
 let disabled_extension ?pos ?setting ?flag name =
   DisabledExtension (pos, setting, flag, name)
+let prime_alien pos = PrimeAlien pos

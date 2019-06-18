@@ -1,4 +1,5 @@
 open CommonTypes
+open Utility
 open SourceCode.WithPos
 open Sugartypes
 open SugarConstructors.DummyPositions
@@ -34,7 +35,10 @@ object (o: 'self_type)
         let unit_phr = with_dummy_pos (RecordLit ([], None)) in
         let with_pos = fun node -> SourceCode.WithPos.make ~pos node in
         let ignore_pat = with_pos (Pattern.Variable (
-          with_pos (Utility.gensym ~prefix:"dsh" (), Some body_dt))) in
+          with_pos <|
+            Binder.make
+              ~name:(Utility.gensym ~prefix:"dsh" ())
+              ~ty:body_dt ())) in
         let body =
           with_pos (Block
             ([ with_pos (Val (ignore_pat, ([], body_phr), Location.Unknown, None))], unit_phr)) in
@@ -216,7 +220,10 @@ let desugar_session_exceptions env =
   ((new desugar_session_exceptions env) :
     desugar_session_exceptions :> TransformSugar.transform)
 
+let desugar_program : TransformSugar.program_transformer =
+  fun env program -> snd3 ((desugar_session_exceptions env)#program program)
+
+
 let show prog =
   Printf.printf "%s\n\n" (Sugartypes.show_program prog);
   prog
-

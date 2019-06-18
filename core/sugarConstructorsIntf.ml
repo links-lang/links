@@ -40,12 +40,7 @@ module type SugarConstructorsSig = sig
   val with_dummy_pos : 'a -> 'a WithPos.t
 
   (* Fresh type variables. *)
-  val fresh_type_variable           : unit -> Datatype.t
-  val fresh_rigid_type_variable     : unit -> Datatype.t
-  val fresh_row_variable            : unit -> Datatype.row_var
-  val fresh_rigid_row_variable      : unit -> Datatype.row_var
-  val fresh_presence_variable       : unit -> Datatype.fieldspec
-  val fresh_rigid_presence_variable : unit -> Datatype.fieldspec
+  val fresh_known_type_variable  : freedom -> known_type_variable
 
   (* Helper data types and functions for passing arguments to smart
      constructors.  *)
@@ -90,7 +85,6 @@ module type SugarConstructorsSig = sig
   val present : Datatype.fieldspec
 
   (* Rows *)
-  val fresh_row         : unit -> Datatype.row
   val row_with_wp       : Datatype.row -> Datatype.row
   val hear_arrow_prefix : Datatype.with_pos -> Datatype.row -> Datatype.row
 
@@ -127,6 +121,10 @@ module type SugarConstructorsSig = sig
      -> binding
   val val_binding
       : ?ppos:t -> Pattern.with_pos -> phrase
+     -> binding
+
+  val module_binding
+      : ?ppos:t -> Binder.with_pos -> binding list
      -> binding
 
   (* Database queries *)

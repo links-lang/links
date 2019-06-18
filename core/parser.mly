@@ -101,7 +101,7 @@ let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string    pos lin  in
   let r = restriction_of_string  pos rest in
-  (p, Some (l, r))
+  (Some p, Some (l, r))
 
 let full_subkind_of pos lin rest =
   let l = linearity_of_string   pos lin  in
@@ -120,14 +120,14 @@ perhaps. *)
 let kind_of p =
   function
   (* primary kind abbreviation  *)
-  | "Type"     -> (pk_type, None)
-  | "Row"      -> (pk_row, None)
-  | "Presence" -> (pk_presence, None)
+  | "Type"     -> (Some pk_type, None)
+  | "Row"      -> (Some pk_row, None)
+  | "Presence" -> (Some pk_presence, None)
   (* subkind of type abbreviations *)
-  | "Any"      -> (pk_type, Some (lin_any, res_any))
-  | "Base"     -> (pk_type, Some (lin_unl, res_base))
-  | "Session"  -> (pk_type, Some (lin_any, res_session))
-  | "Eff"      -> (pk_row , Some (lin_unl, res_effect))
+  | "Any"      -> (Some pk_type, Some (lin_any, res_any))
+  | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
+  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
+  | "Eff"      -> (Some pk_row , Some (lin_unl, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
@@ -170,6 +170,9 @@ let parseRegexFlags f =
               | 'n' -> RegexNative
               | 'g' -> RegexGlobal
               | _ -> assert false) (asList f 0 [])
+
+let fresh_typevar freedom = ("$", None, freedom)
+let fresh_effects = ([], Datatype.Open ("$anon", None, `Rigid))
 
 module MutualBindings = struct
 
@@ -396,13 +399,10 @@ alien_datatypes:
 | alien_datatype+                                              { $1 }
 
 links_module:
-| MODULE module_name moduleblock                               { with_pos $loc($2) (Module ($2, $3)) }
+| MODULE name = CONSTRUCTOR members = moduleblock              { module_binding ~ppos:$loc($1) (binder ~ppos:$loc(name) name) members }
 
 alien_block:
 | ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (AlienBlock ($2, $3, $5)) }
-
-module_name:
-| CONSTRUCTOR                                                  { $1 }
 
 fun_declarations:
 | fun_declaration+                                             { $1 }
@@ -448,7 +448,7 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (($1, (PrimaryKind.Type, None), `Rigid), None) }
+| VARIABLE                                                     { (($1, (None, None), `Rigid), None) }
 | VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
 
 varlist:
@@ -961,16 +961,16 @@ straight_arrow:
   straight_arrow_prefix RARROW datatype                        { Datatype.Function ($1, $2, $4) }
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_row (), $3) }
-| parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_row (), $3) }
+| parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_effects, $3) }
+| parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_effects, $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGRARROW datatype                      { Datatype.Function ($1, row_with_wp $2, $4) }
 | parenthesized_datatypes
   squig_arrow_prefix SQUIGLOLLI datatype                       { Datatype.Lolli    ($1, row_with_wp $2, $4) }
-| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp (fresh_row ()), $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp (fresh_row ()), $3) }
+| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp fresh_effects, $3) }
+| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu ($2, with_pos $loc($4) $4) }
@@ -1042,8 +1042,8 @@ primary_datatype:
 type_var:
 | VARIABLE                                                     { Datatype.TypeVar ($1, None, `Rigid)    }
 | PERCENTVAR                                                   { Datatype.TypeVar ($1, None, `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_type_variable ()   }
-| PERCENT                                                      { fresh_type_variable ()         }
+| UNDERSCORE                                                   { Datatype.TypeVar (fresh_typevar `Rigid)    }
+| PERCENT                                                      { Datatype.TypeVar (fresh_typevar `Flexible) }
 
 kinded_type_var:
 | type_var subkind                                             { attach_subkind ($1, $2) }
@@ -1133,14 +1133,14 @@ fieldspec:
 | LBRACE MINUS RBRACE                                          { Datatype.Absent }
 | LBRACE VARIABLE RBRACE                                       { Datatype.Var ($2, None, `Rigid) }
 | LBRACE PERCENTVAR RBRACE                                     { Datatype.Var ($2, None, `Flexible) }
-| LBRACE UNDERSCORE RBRACE                                     { fresh_rigid_presence_variable () }
-| LBRACE PERCENT RBRACE                                        { fresh_presence_variable ()       }
+| LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar `Rigid)    }
+| LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar `Flexible) }
 
 nonrec_row_var:
 | VARIABLE                                                     { Datatype.Open ($1, None, `Rigid   ) }
 | PERCENTVAR                                                   { Datatype.Open ($1, None, `Flexible) }
-| UNDERSCORE                                                   { fresh_rigid_row_variable () }
-| PERCENT                                                      { fresh_row_variable ()       }
+| UNDERSCORE                                                   { Datatype.Open (fresh_typevar `Rigid)    }
+| PERCENT                                                      { Datatype.Open (fresh_typevar `Flexible) }
 
 /* FIXME:
  *

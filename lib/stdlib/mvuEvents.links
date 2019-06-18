@@ -1,0 +1,63 @@
+# MVU Event handlers, used by both attributes and subscriptions
+
+## Properties of DOM elements
+typename PropertyName = String;
+typename PropertyValue = String;
+
+## Properties of event objects
+typename EventName = String;
+typename EventKey = String;
+typename EventValue = String;
+
+
+
+typename MouseEvent =
+  (altKey: Bool,
+   button: Int,
+   buttons: Int,
+   clientX: Int,
+   clientY: Int,
+   ctrlKey: Bool,
+   metaKey: Bool,
+   movementX: Int,
+   movementY: Int,
+   offsetX: Int,
+   offsetY: Int,
+   pageX: Int,
+   pageY:  Int,
+   # CR SJF: Maybe consider supporting hit regions
+   screenX: Int,
+   screenY: Int,
+   shiftKey: Bool,
+   which: Int,
+   x: Int,
+   y: Int);
+
+# SJF: Restricting this to non-deprecated properties.
+typename KeyboardEvent =
+  (altKey: Bool,
+   code: Int,
+   ctrlKey: Bool,
+   isComposing: Bool,
+   key: String,
+   locale: String,
+   location: Int,
+   metaKey: Bool,
+   repeat: Bool,
+   shiftKey: Bool);
+
+# Event handler attributes
+typename EventHandler(a :: Type(Any, Any)) =
+  [| # CR SJF: I think this is somewhat too restrictive right now for two
+     # reasons: each event invocation only allows *one* property to be retrieved,
+     # and the value of the property must be a string rather than a JS value.
+     PropertyHandler:
+      (EventName, PropertyName, (PropertyValue) {}~> Maybe(a))
+   # EventDataHandler deprecated in favour of KeyboardEventHandler and MouseEventHandler
+   #| EventDataHandler:
+   #   (EventName, EventKey, (EventValue) {}~> Maybe(a))
+   | UnitHandler: (EventName, () {}~> a)
+   | MouseEventHandler: (EventName, (MouseEvent) {}~> Maybe(a))
+   | KeyboardEventHandler: (EventName, (KeyboardEvent) {}~> Maybe(a))
+   |];
+

@@ -78,22 +78,23 @@ let config_file_path = match Utility.getenv "LINKS_CONFIG" with
             None
 
 
-let default_db_driver_search_folders =
-  let links_executable_folder = Filename.dirname Sys.argv.(0) in
-  let remove_build_subdirs = Str.regexp "_build/default/bin/?$" in
-  let links_base_folder =  Str.global_replace remove_build_subdirs "" links_executable_folder in
-  let install_path = Filename.concat links_base_folder "_build/install/default" in
-  let start_folders = List.map (Filename.concat install_path)  ["lib"; "share"] in
-  let existing_start_folders = List.filter (Sys.file_exists) start_folders in
-  let potential_search_folders = List.map (fun folder ->
-                                 List.map (Filename.concat folder) (Array.to_list (Sys.readdir folder) ))
-                               existing_start_folders in
-  let links_db_driver_folder_regexp = Str.regexp ".+/links-[^/]+/?" in
-  List.filter (fun s -> Sys.is_directory s &&  Str.string_match links_db_driver_folder_regexp s 0) (List.flatten potential_search_folders)
+module DatabaseDrivers = struct
+  let default_path_string () =
+    let open Utility in
+    let module Glob = Glob.Make(DefaultPolicy) in
+    let _build = Filename.(dirname (dirname (dirname Sys.argv.(0)))) in
+    let install = Filename.concat _build "install" in
+    let files =
+      try Glob.files install (Str.regexp "links_[A-Za-z0-9]+_dependencies\\.json$")
+      with Disk.AccessError _ -> []
+    in
+    let paths = List.map Disk.File.dirname files in
+    String.concat ":" paths
 
-(** List of directories where to look for database drivers, split by ':'
-    Initialized to point to where the drivers are compiled to if building in the current directory **)
-let db_driver_path = Settings.add_string ("db_driver_path", String.concat ":" default_db_driver_search_folders, `System)
+  (** List of directories where to look for database drivers, split by ':'
+      Initialized to point to where the drivers are compiled to if building in the current directory **)
+  let path = Settings.add_string ("db_driver_path", default_path_string (), `System)
+end
 
 (** The banner *)
 let version = "0.9 (Burghmuirhead)"
@@ -219,12 +220,18 @@ module TypeSugar = struct
   let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
   let show_post_sugar_typing = Settings.add_bool("show_post_sugar_typing", false, `User)
   let dodgey_type_isomorphism = Settings.add_bool("dodgey_type_isomorphism", false, `User)
+
+  (* Shall we re-run the frontend type-checker after each TransformSugar transformation? *)
+  let check_frontend_transformations =
+    Settings.add_bool("recheck_frontend_transformations", false, `User)
 end
 
 (* Types stuff *)
 module Types = struct
   let show_mailbox_annotations = Settings.add_bool("show_mailbox_annotations", true, `User)
   let show_raw_type_vars = Settings.add_bool("show_raw_type_vars", false, `User)
+  let effect_sugar = Settings.add_bool ("effect_sugar", false, `User)
+  let infer_kinds = Settings.add_bool ("infer_kinds", false, `User)
   module Print = struct
     let show_quantifiers     = Settings.add_bool   ("show_quantifiers"    , false    , `User)
     let show_flavours        = Settings.add_bool   ("show_flavours"       , false    , `User)

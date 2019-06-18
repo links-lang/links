@@ -2,7 +2,6 @@ open CommonTypes
 open List
 
 (*open Value*)
-open SourceCode
 open Types
 open Utility
 open Proc
@@ -198,9 +197,6 @@ let add_attribute : Value.t * Value.t -> Value.t -> Value.t =
 
 let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
   List.fold_right add_attribute
-
-let prelude_tyenv = ref None (* :-( *)
-let prelude_nenv = ref None (* :-( *)
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", int_op (+) PURE;
@@ -427,7 +423,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawnWait",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~> a) ~> a",
+   datatype "(() { |_}~> a) ~> a",
    IMPURE);
 
   "spawnWait'",
@@ -927,7 +923,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
   (`PFun (fun _ -> assert false),
-  datatype "([(String, (Event) ~> ())]) ~> String",
+  datatype "([(String, (Event) { |_}~> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)
@@ -1321,7 +1317,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      in the prelude and is just a wrapper for this function.
    *)
    (`Server (p1 (Value.marshal_value ->- Value.box_string)),
-    datatype "(() -> a) ~> String",
+    datatype "(() { |_}-> a) ~> String",
     IMPURE));
 
   (* REDUNDANT *)
@@ -1495,35 +1491,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          `PFun (fun _ _ -> let i = !idx in idx := i+1; (Value.box_int i)),
          datatype "() -> Int",
          IMPURE);
-
-    "dumpTypes",
-  (`Server (p1 (fun code ->
-                  try
-                    let ts = DumpTypes.program (val_of (!prelude_tyenv)) (Value.unbox_string code) in
-
-                    let line {Lexing.pos_lnum=l; _} = l in
-                    let start {Lexing.pos_bol=b; Lexing.pos_cnum=c; _ } = c-b in
-                    let finish {Lexing.pos_bol=b; Lexing.pos_cnum=c; _} = c-b in
-
-                    let resolve (name, t, pos) =
-                      (* HACK: we need to be more principled about foralls  *)
-                      let t =
-                        match Types.concrete_type t with
-                          | `ForAll (_, t) -> t
-                          | _ -> t
-                      in
-                        `Record [("name", Value.box_string name);
-                                 ("t", Value.box_string (Types.string_of_datatype t));
-                                 ("pos", `Record [("line", Value.box_int (Position.start pos |> line));
-                                                  ("start", Value.box_int (Position.start pos |> start));
-                                                  ("finish", Value.box_int (Position.finish pos |> finish))])]
-                    in
-                      `Variant ("Success", Value.box_list (List.map resolve ts))
-                  with e ->
-                    `Variant ("Failure", Value.box_string(Errors.format_exception e ^ "\n"))
-               )),
-            datatype "(String) ~> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
-            IMPURE);
 
     "connectSocket",
     (`Server (p2 (fun serverv portv ->
@@ -1755,6 +1722,7 @@ let prim_appln name args = Ir.Apply( Ir.Variable(Env.String.lookup nenv name),
                                   args)
 
 let cohttp_server_response headers body req_data =
+  let open Lwt in
   (* Debug.print (Printf.sprintf "Attempting to return:\n%s\n" body); *)
   let resp_headers = RequestData.get_http_response_headers req_data in
   let resp_code = RequestData.get_http_response_code req_data in
@@ -1763,7 +1731,7 @@ let cohttp_server_response headers body req_data =
     ?headers:(Some h)
     ~status:(Cohttp.Code.status_of_code resp_code)
     ~body:body
-    ()
+    () >>= fun resp -> Lwt.return (`Response resp)
 
 (** Output the headers and content to stdout *)
 let print_http_response headers body req_data =
