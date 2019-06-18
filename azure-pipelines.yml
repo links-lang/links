@@ -21,20 +21,12 @@ steps:
     displayName: Environment
 
   - script: |
-      sudo mkdir ~/_bin
-      sudo chown `whoami`:`whoami` ~/_bin
-      OLD_PATH="$PATH"
-      PATH="~/_bin:$PATH"
-      cat >~/_bin/opam <<-EOF
+      sudo cat >/usr/local/bin/opam <<-EOF
         #!/bin/bash
-
-        PATH="$OLD_PATH"
-        sudo -u opam opam @$
+        
+        sudo -u opam /usr/bin/opam @$
       EOF
-      chmod +x ~/_bin/opam
-      cat ~/_bin/opam
-      echo $PATH
-      eval $(opam env)
+      sudo chmod +x /usr/bin/opam
     displayName: 'Setup environment'
 
   - script: |
@@ -42,10 +34,11 @@ steps:
     displayName: 'System dependencies'
 
   - bash: |
-      sudo -u opam opam install ocamlformat -y
+      opam install ocamlformat -y
     displayName: 'Ocamlformat'
 
   - bash: |
+      eval $(opam env)
       make rule-check
     displayName: 'Rule check'
 
@@ -65,21 +58,24 @@ steps:
     displayName: 'Databases'
 
   - bash: |
+      eval $(opam env)
       opam pin add links . -y
       opam pin add links-postgresql . -y
       opam pin add links-sqlite3 . -y
     displayName: 'Links dependencies'
 
   - script: |
+      eval $(opam env)
       make all-release
     displayName: 'Build Links (release)'
 
   - script: |
-      sudo -u opam make tests
+      eval $(opam env)
+      make tests
     displayName: 'Server-side tests'
 
   - script: |
-      eval `opam env`
+      eval $(opam env)
       ./run-tests db-only shredding
     displayName: 'Database shredding tests'
 
