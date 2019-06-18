@@ -1782,7 +1782,7 @@ let type_unsafe context unify inner = function
      let _, inneri = Instantiate.typ inner in
      unify ~handle:Gripers.bind_unsafe_fun_annotation (inneri, fti);
      ft
-  | Some (_, None) -> failwith "Sugartypes.datatype' without a Types.typ instance"
+  | Some (_, None) -> raise (internal_error "Sugartypes.datatype' without a Types.typ instance")
 
 let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
   let make_singleton_row =
@@ -3832,7 +3832,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          let _, fti = Instantiate.typ ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos fti) in
                            ft
-                     | Some _ -> failwith "Sugartypes.datatype without Types.typ"
+                     | Some _ -> raise (internal_error "Sugartypes.datatype without Types.typ")
                  in
                    Env.bind inner_env (name, inner), pats::patss)
               (Env.empty, []) defs in
