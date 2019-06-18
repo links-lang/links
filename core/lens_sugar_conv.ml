@@ -43,7 +43,8 @@ let cols_of_phrase key : string list =
 
 let is_dynamic p =
   match WithPos.node p with
-  | S.FunLit _ -> true
+  | S.FunLit _
+  | S.Block _
   | S.Var _ -> true
   | _ -> false
 
@@ -63,5 +64,5 @@ let rec lens_sugar_phrase_of_sugar p =
   | S.Constant c ->
       LPS.Constant (Lens_value_conv.lens_phrase_value_of_constant c)
   | S.Var v -> LPS.Var v
-  | _ -> failwith "Unsupported sugar phrase." )
+  | _ -> Format.asprintf "Unsupported sugar phrase: %a" S.pp_phrase p |> failwith )
   |> fun v -> (pos, v)
