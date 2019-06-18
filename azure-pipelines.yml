@@ -29,7 +29,7 @@ steps:
       cat /etc/group
       ls -lah ~/.opam/4.07/.opam-switch/lock
       # sudo chown `whoami`:`whoami` ~/.opam/4.07/.opam-switch/lock
-      newgrp `id -g opam`
+      newgrp opam
       groups
     displayName: 'Setup environment'
 
