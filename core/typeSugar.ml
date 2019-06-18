@@ -2542,7 +2542,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | LensSelectLit (lens, predicate, _) ->
            relational_lenses_guard pos;
            let lens = tc lens in
-           let typ =
+           let predicate, typ =
              let tlens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
              if Lens_sugar_conv.is_dynamic predicate
              then
@@ -2550,12 +2550,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                let trow = Lens.Type.sort tlens |> Lens.Sort.record_type |> Lens_type_conv.type_of_lens_phrase_type in
                let tmatch = Types.make_pure_function_type [trow] Types.bool_type in
                unify (pos_and_typ predicate, (exp_pos lens, tmatch)) ~handle:Gripers.lens_predicate;
-               Lens.Type.type_select_lens_dynamic tlens
-               |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos)
+               let typ = Lens.Type.type_select_lens_dynamic tlens
+               |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
+               erase predicate, typ
              else
+               let predicate' = predicate in
                let predicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
-               Lens.Type.type_select_lens tlens ~predicate
-               |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos)
+               let typ = Lens.Type.type_select_lens tlens ~predicate
+               |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
+               predicate', typ
            in
            LensSelectLit(erase lens, predicate, Some typ), `Lens typ, merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->

@@ -318,6 +318,12 @@ struct
               LensDrop (lens, drop, key, default, rtype), `Lens rtype, o
         | LensSelect (lens, pred, sort) ->
             let lens, _, o = o#value lens in
+            let pred, o =
+              (match pred with
+               | `Dynamic pred ->
+                 let pred, _, o = o#value pred in
+                 `Dynamic pred, o
+              | `Static pred -> `Static pred, o) in
               LensSelect (lens, pred, sort), `Lens sort, o
         | LensJoin (lens1, lens2, on, left, right, sort) ->
             let lens1, _, o = o#value lens1 in

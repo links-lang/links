@@ -545,7 +545,7 @@ class transform (env : Types.typing_environment) =
             (o, LensDropLit (lens, drop, key, default, Some t), `Lens t)
       | LensSelectLit (lens, predicate, Some t) ->
           let (o, lens, _) = o#phrase lens in
-          (* let (o, predicate, _) = o#phrase predicate in *)
+          let (o, predicate, _) = o#phrase predicate in
           let (o, t) = o#lens_type t in
             (o, LensSelectLit (lens, predicate, Some t), `Lens t)
       | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
