@@ -24,7 +24,11 @@ steps:
       cat >/tmp/opam  <<-EOF
         #!/bin/bash
         
-        sudo -u opam /usr/bin/opam $@
+        if [ "$1" -eq "env ]; then
+          /usr/bin/opam env
+        else
+          sudo -u opam /usr/bin/opam $@
+        fi
       EOF
       sudo chmod +x /tmp/opam
       sudo mv /tmp/opam /usr/local/bin/
@@ -39,7 +43,7 @@ steps:
     displayName: 'Ocamlformat'
 
   - bash: |
-      /usr/bin/opam env
+      opam env
       eval $(opam env)
       make rule-check
     displayName: 'Rule check'
