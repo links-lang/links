@@ -26,7 +26,7 @@ steps:
       sudo usermod -a -G opam `whoami`
       ls -lah ~/.opam/4.07/.opam-switch/lock
       # sudo chown `whoami`:`whoami` ~/.opam/4.07/.opam-switch/lock
-      newgrp -
+      newgrp `id -g opam`
       groups
     displayName: 'Setup environment'
 
