@@ -27,7 +27,7 @@ let rec type_of_lens_phrase_type t =
       T.make_record_type (to_links_map ts)
 
 let rec lens_phrase_type_of_type t =
-  match t with
+  match TypeUtils.concrete_type t with
   | `Primitive p -> (
     match p with
     | PT.Bool -> LPT.Bool
@@ -59,7 +59,7 @@ let rec lens_phrase_type_of_type t =
            Types.pp_typ t
 
 let lens_type_of_type ~die t =
-  match t with
+  match TypeUtils.concrete_type t with
   | `Lens l -> l
   | _ -> die "Expected a lens type."
 
@@ -82,7 +82,7 @@ let sort_cols_of_table t ~table =
   in
   (* get the underlying record type of either a table, a record or an application *)
   let extract_record_type t =
-    match t with
+    match TypeUtils.concrete_type t with
     | `Record _ as r -> r
     | `Application (_, [`Type (`Record _ as r)]) -> r
     | `Table (r, _, _) -> r
