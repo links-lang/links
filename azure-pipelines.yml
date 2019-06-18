@@ -25,11 +25,6 @@ steps:
       echo ~
       cat /etc/group
       sudo usermod -a -G opam `whoami`
-      echo new groups
-      cat /etc/group
-      ls -lah ~/.opam/4.07/.opam-switch/lock
-      sudo chown `whoami`:`whoami` ~/.opam/4.07/ -R
-      sudo chown `whoami`:`whoami` ~/.opam/4.07/.opam-switch/lock
     displayName: 'Setup environment'
 
   - script: |
@@ -37,7 +32,7 @@ steps:
     displayName: 'System dependencies'
 
   - bash: |
-      opam install ocamlformat -y
+      sudo -u opam opam install ocamlformat -y
     displayName: 'Ocamlformat'
 
   - bash: |
