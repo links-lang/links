@@ -39,7 +39,7 @@ steps:
     displayName: 'Ocamlformat'
 
   - bash: |
-      opam env
+      /usr/bin/opam env
       eval $(opam env)
       make rule-check
     displayName: 'Rule check'
