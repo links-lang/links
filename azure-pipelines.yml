@@ -21,10 +21,18 @@ steps:
     displayName: Environment
 
   - script: |
-      whoami
-      echo ~
-      cat /etc/group
-      sudo usermod -a -G opam `whoami`
+      mkdir ~/_bin
+      OLD_PATH="$PATH"
+      PATH="~/_bin:$PATH"
+      cat >~/_bin/opam <<-EOF
+        #!/bin/bash
+
+        PATH="$OLD_PATH"
+        sudo -u opam opam @$
+      EOF
+      chmod +x ~/_bin/opam
+      cat ~/_bin/opam
+      echo $PATH
     displayName: 'Setup environment'
 
   - script: |
