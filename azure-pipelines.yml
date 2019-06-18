@@ -24,15 +24,13 @@ steps:
       cat >/tmp/opam  <<-EOF
         #!/bin/bash
         
-        if [ "$1" == "env" ]; then
-          echo env
-          /usr/bin/opam env
-        else
-          sudo -u opam /usr/bin/opam $@
-        fi
+        echo "opam args $@"
+        sudo -u opam /usr/bin/opam $@
       EOF
       sudo chmod +x /tmp/opam
       sudo mv /tmp/opam /usr/local/bin/
+      ls -lah /usr/bin/opam
+      whereis opam
     displayName: 'Setup environment'
 
   - script: |
