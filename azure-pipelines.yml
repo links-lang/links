@@ -28,10 +28,7 @@ steps:
       echo new groups
       cat /etc/group
       ls -lah ~/.opam/4.07/.opam-switch/lock
-      # sudo chown `whoami`:`whoami` ~/.opam/4.07/.opam-switch/lock
-      newgrp opam
-      newgrp `whoami`
-      groups
+      sudo chown `whoami`:`whoami` ~/.opam/4.07/.opam-switch/lock
     displayName: 'Setup environment'
 
   - script: |
