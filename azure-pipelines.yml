@@ -30,6 +30,9 @@ steps:
       sudo chmod +x /tmp/opam
       sudo mv /tmp/opam /usr/local/bin/
       ls -lah /usr/bin/opam
+      ls -lah /usr/local/bin/
+      cat /usr/local/bin/opam
+      /usr/local/bin/opam env
       whereis opam
     displayName: 'Setup environment'
 
