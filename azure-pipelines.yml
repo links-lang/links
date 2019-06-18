@@ -21,7 +21,8 @@ steps:
     displayName: Environment
 
   - script: |
-      mkdir ~/_bin
+      sudo mkdir ~/_bin
+      sudo chown `whoami`:`whoami` ~/_bin
       OLD_PATH="$PATH"
       PATH="~/_bin:$PATH"
       cat >~/_bin/opam <<-EOF
@@ -33,6 +34,7 @@ steps:
       chmod +x ~/_bin/opam
       cat ~/_bin/opam
       echo $PATH
+      eval $(opam env)
     displayName: 'Setup environment'
 
   - script: |
