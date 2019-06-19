@@ -2108,6 +2108,19 @@ let usage_compat =
 let usages_cases bs =
   usage_compat (List.map (fun (_, (_, _, m)) -> m) bs)
 
+(* if we've already inferred a type from a previous type inference
+   pass then use that in place of any other annotation *)
+let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> Types.datatype option =
+  fun bndr t_ann' ->
+  match Binder.to_type bndr with
+  | `Not_typed ->
+    begin
+      match t_ann' with
+      | None -> None
+      | Some (_, t) -> t
+    end
+  | t -> Some t
+
 let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
   fun context {node=expr; pos} ->
     let _UNKNOWN_POS_ = "<unknown>" in
@@ -3700,7 +3713,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             {empty_context with
               var_env = penv},
             usage
-      | Fun (bndr, lin, (_, (pats, body)), location, t) ->
+      | Fun (bndr, lin, (_, (pats, body)), location, t_ann') ->
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let pats = List.map (List.map tpc) pats in
@@ -3708,12 +3721,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let effects = Types.make_empty_open_row (lin_any, res_any) in
           let return_type = Types.fresh_type_variable (lin_any, res_any) in
 
+          let t_ann = resolve_type_annotation bndr t_ann' in
+
           (* Check that any annotation matches the shape of the function *)
           let context_body, ft =
-            match t with
+            match t_ann with
               | None ->
                   context, make_ft lin pats effects return_type
-              | Some (_, Some t) ->
+              | Some t ->
                   (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
@@ -3730,8 +3745,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                      the original name as the function is not
                      recursive) *)
                   let v = Utils.dummy_source_name () in
-                  bind_var context (v, ft_mono), ft
-              | Some _ -> assert false in
+                  bind_var context (v, ft_mono), ft in
 
           (* type check the body *)
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
@@ -3780,9 +3794,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
             (* generalise *)
             (* check that tyvars matches up those from any type
                annotation *)
-            match t with
+            match t_ann with
             | None -> tyvars, ft
-            | Some (_, Some t) ->
+            | Some t ->
                begin
                  match TypeUtils.quantifiers t with
                  | [] -> tyvars, ft
@@ -3797,14 +3811,13 @@ and type_binding : context -> binding -> binding * context * usagemap =
                      (* TODO: add tests that expose this mode of failure *)
                      Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
                    t_tyvars, t
-               end
-            | Some (_, None) -> assert false in
+               end in
 
           (* let ft = Instantiate.freshen_quantifiers ft in *)
             (Fun (Binder.set_type bndr ft,
                    lin,
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
-                   location, t),
+                   location, t_ann'),
              {empty_context with
                 var_env = Env.bind Env.empty (name, ft)},
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
@@ -3831,12 +3844,13 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
           let inner_rec_vars, inner_env, patss =
             List.fold_left
-              (fun (inner_rec_vars, inner_env, patss) (bndr, lin, (_, (pats, _body)), _, t, pos) ->
+              (fun (inner_rec_vars, inner_env, patss) (bndr, lin, (_, (pats, _body)), _, t_ann', pos) ->
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
+                 let t_ann = resolve_type_annotation bndr t_ann' in
                  let inner =
-                   match t with
+                   match t_ann with
                      | None ->
                          (* make_ft lin pats (fresh_wild ()) (Types.fresh_type_variable (lin_any, res_any)) *)
                          (* Here we're taking advantage of the
@@ -3851,7 +3865,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                             }
                          *)
                          make_ft_poly_curry lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any))
-                     | Some (_, Some t) ->
+                     | Some t ->
                          (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                          let shape = make_ft lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any)) in
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
@@ -3859,8 +3873,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          (* make sure the annotation has the right shape *)
                          let _, ft_mono = TypeUtils.split_quantified_type ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft_mono) in
-                           ft
-                     | Some _ -> assert false in
+                           ft in
                  StringSet.add name inner_rec_vars, Env.bind inner_env (name, inner), pats::patss)
               (StringSet.empty, Env.empty, []) defs in
           let patss = List.rev patss in
@@ -3877,7 +3890,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             List.split
               (List.rev
                 (List.fold_left2
-                   (fun defs_and_uses (bndr, lin, (_, (_, body)), location, t, pos) pats ->
+                   (fun defs_and_uses (bndr, lin, (_, (_, body)), location, t_ann, pos) pats ->
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let body_context = {context with var_env = Env.extend body_env pat_env} in
@@ -3916,27 +3929,27 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let _, ft_mono = TypeUtils.split_quantified_type ft in
                       let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft_mono) in
 
-                      ((Binder.erase_type bndr, lin, (([], None), (pats, body)), location, t, pos), used) :: defs_and_uses) [] defs patss)) in
+                      ((Binder.erase_type bndr, lin, (([], None), (pats, body)), location, t_ann, pos), used) :: defs_and_uses) [] defs patss)) in
 
           (* Generalise to obtain the outer types *)
           let defs, outer_env =
             let defs, outer_env =
               List.fold_left2
-                (fun (defs, outer_env) (bndr, lin, (_, (_, body)), location, t, pos) pats ->
+                (fun (defs, outer_env) (bndr, lin, (_, (_, body)), location, t_ann', pos) pats ->
                    let name = Binder.to_name bndr in
                    let inner = Env.lookup inner_env name in
+                   let t_ann = resolve_type_annotation bndr t_ann' in
                    let inner, outer, tyvars =
                      match inner with
                        | `ForAll (inner_tyvars, inner_body) ->
                            let (body_tyvars, _body_tyargs), gen = Utils.generalise context.var_env inner_body in
 
                            let outer_tyvars, outer =
-                             match t with
-                             | Some (_, Some (`ForAll (outer_tyvars, _) as outer)) ->
+                             match t_ann with
+                             | Some (`ForAll (outer_tyvars, _) as outer) ->
                                 Types.unbox_quantifiers outer_tyvars, outer
                              | None -> body_tyvars, gen
-                             | Some (_, Some t) -> body_tyvars, Types.for_all (body_tyvars, t)
-                             | Some (_, None) -> assert false (* should never happen *) in
+                             | Some t -> body_tyvars, Types.for_all (body_tyvars, t) in
 
                            let inner_tyvars = Types.unbox_quantifiers inner_tyvars in
 
@@ -3976,11 +3989,12 @@ and type_binding : context -> binding -> binding * context * usagemap =
                              (inner, extras), outer, outer_tyvars
                        | _ ->
                            let (body_tyvars, _tyargs), gen = Utils.generalise context.var_env inner in
+
+
                            let outer_tyvars, outer =
-                             match t with
+                             match t_ann with
                              | None -> body_tyvars, gen
-                             | Some (_, Some t) -> body_tyvars, Types.for_all (body_tyvars, t)
-                             | Some (_, None) -> assert false (* should never happen *) in
+                             | Some t -> body_tyvars, Types.for_all (body_tyvars, t) in
 
                            let extras = List.map (fun _q -> None) outer_tyvars in
 
@@ -3990,7 +4004,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
-                     ((Binder.set_type bndr outer, lin, ((tyvars, Some inner), (pats, body)), location, t, pos)::defs,
+                     ((Binder.set_type bndr outer, lin, ((tyvars, Some inner), (pats, body)), location, t_ann', pos)::defs,
                       Env.bind outer_env (name, outer)))
                 ([], Env.empty) defs patss
             in
