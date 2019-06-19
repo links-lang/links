@@ -29,72 +29,85 @@ module IrValue = struct
   let of_constant c = Phrase (Lens.Phrase.Constant c)
 end
 
-let env_of_value_env value_env = (value_env, Env.Int.empty)
-let (++) (venv, eenv) (venv', eenv') =
-  Value.Env.shadow venv ~by:venv', Env.Int.extend eenv eenv'
+module LEnv = Env
 
-let lookup_fun (f, fvs) =
-  match Tables.lookup Tables.fun_defs f with
-  | Some (finfo, (xs, body), z, location) ->
-    let fn = match location with
-    | Location.Server | Location.Unknown ->
-      let env =
-        match z, fvs with
-        | None, None -> Value.Env.empty
-        | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) Value.Env.empty
-        | _, _ ->
-          Format.asprintf "Variable %d could not be found." f
-          |> raise_internal in
-      IrValue.Closure ((xs, body), env_of_value_env env)
-    | Location.Client ->
-      raise (
-        Errors.runtime_error (Js.var_name_binder (f, finfo)
-        |> Format.asprintf "Attempt to use client function: %s in query"))
-    | Location.Native ->
-      raise (
-        Errors.runtime_error (Var.show_binder (f, finfo)
-        |> Format.asprintf "Attempt to use native function: %s in query")) in
-    Some fn
-  | None -> None
+module Env = struct
+  type t = IrValue.env
 
-let find_fun (f, fvs) =
-  match lookup_fun (f, fvs) with
-  | Some v -> v
-  | None ->
-    raise (internal_error ("Attempt to find undefined function: " ^
-                           string_of_int f))
+  let create env = env, Env.Int.empty
 
-let expression_of_value value =
-  match value with
-  | `PrimitiveFunction (f, _) -> IrValue.Primitive f
-  | `FunctionPtr (f, fvs) ->
-     find_fun (f, fvs)
-  | _ ->
-    let pv = Lens_value_conv.lens_phrase_value_of_value value in
-    let p = Lens.Phrase.Constant.of_value pv in
-    IrValue.Phrase p
+  let of_value_env value_env = (value_env, Env.Int.empty)
 
-let peek_fun_bind f =
-  match Tables.lookup Tables.fun_defs f with
-  | Some (_, _, z, _) -> z
-  | None -> None
+  let append (venv, eenv) (venv', eenv') =
+    Value.Env.shadow venv ~by:venv', Env.Int.extend eenv eenv'
 
-let lookup (val_env, exp_env) var =
-  match lookup_fun (var, None) with
-  | Some v -> v
-  | None ->
-    begin
-      match Value.Env.lookup var val_env, Env.Int.find exp_env var with
-      | None, Some v -> v
-      | Some v, None -> expression_of_value v
-      | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
-      | None, None ->
-        begin
-          try expression_of_value (Lib.primitive_stub (Lib.primitive_name var)) with
-          | NotFound _ ->
-            raise (internal_error (Format.sprintf "Variable %d not found" var));
-        end
-    end
+  let lookup_fun (f, fvs) =
+    match Tables.lookup Tables.fun_defs f with
+    | Some (finfo, (xs, body), z, location) ->
+      let fn = match location with
+        | Location.Server | Location.Unknown ->
+          let env =
+            match z, fvs with
+            | None, None -> Value.Env.empty
+            | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) Value.Env.empty
+            | _, _ ->
+              Format.asprintf "Variable %d could not be found." f
+              |> raise_internal in
+          IrValue.Closure ((xs, body), of_value_env env)
+        | Location.Client ->
+          raise (
+            Errors.runtime_error (Js.var_name_binder (f, finfo)
+                                  |> Format.asprintf "Attempt to use client function: %s in query"))
+        | Location.Native ->
+          raise (
+            Errors.runtime_error (Var.show_binder (f, finfo)
+                                  |> Format.asprintf "Attempt to use native function: %s in query")) in
+      Some fn
+    | None -> None
+
+  let find_fun (f, fvs) =
+    match lookup_fun (f, fvs) with
+    | Some v -> v
+    | None ->
+      raise (internal_error ("Attempt to find undefined function: " ^
+                             string_of_int f))
+
+  let expression_of_value value =
+    match value with
+    | `PrimitiveFunction (f, _) -> IrValue.Primitive f
+    | `FunctionPtr (f, fvs) ->
+      find_fun (f, fvs)
+    | _ ->
+      let pv = Lens_value_conv.lens_phrase_value_of_value value in
+      let p = Lens.Phrase.Constant.of_value pv in
+      IrValue.Phrase p
+
+  let peek_fun_bind f =
+    match Tables.lookup Tables.fun_defs f with
+    | Some (_, _, z, _) -> z
+    | None -> None
+
+  let lookup (val_env, exp_env) var =
+    match lookup_fun (var, None) with
+    | Some v -> v
+    | None ->
+      begin
+        match Value.Env.lookup var val_env, LEnv.Int.find exp_env var with
+        | None, Some v -> v
+        | Some v, None -> expression_of_value v
+        | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
+        | None, None ->
+          begin
+            try expression_of_value (Lib.primitive_stub (Lib.primitive_name var)) with
+            | NotFound _ ->
+              raise (internal_error (Format.sprintf "Variable %d not found" var));
+          end
+      end
+
+  let bind (val_env, exp_env) (x, v) =
+    (val_env, Env.Int.bind exp_env (x, v))
+end
+
 module Of_ir_error = struct
   type t =
     | Operator_not_supported_binary of string
@@ -226,9 +239,6 @@ let unpack_constant_of_ir_value v =
   | _ -> unexpected_ir_error v
 
 let lens_sugar_phrase_of_ir p env =
-  let bind (val_env, exp_env) (x, v) =
-    (val_env, Env.Int.bind exp_env (x, v))
-  in
   let rec computation env (binders, tailcomp) =
     match binders with
     | [] -> tail_computation env tailcomp
@@ -237,7 +247,7 @@ let lens_sugar_phrase_of_ir p env =
       | I.Let (xb, (_, tc)) ->
         let x = Var.var_of_binder xb in
         let v = tail_computation env tc in
-        Result.bind ~f:(fun v -> computation (bind env (x, v)) (bs, tailcomp)) v
+        Result.bind ~f:(fun v -> computation (Env.bind env (x, v)) (bs, tailcomp)) v
       | I.Fun (_, _, _, (Location.Client | Location.Native)) -> Result.error Of_ir_error.Client_function
       | I.Fun _ -> Result.error @@ Of_ir_error.Internal_error "Unexpected function."
       | I.Rec _ -> Result.error Of_ir_error.Recursive_function
@@ -251,9 +261,9 @@ let lens_sugar_phrase_of_ir p env =
     let open Result.O in
     match v, args with
     | IrValue.Closure ((xs, body), closure_env), _ ->
-      let env = env ++ closure_env in
+      let env = Env.append env closure_env in
       let env = List.fold_right2 (fun x arg env ->
-           bind env (x, arg)) xs args env in
+           Env.bind env (x, arg)) xs args env in
       computation env body
     | IrValue.Primitive f, [v1; v2] ->
         Primitives.binary_of_string f
@@ -311,7 +321,7 @@ let lens_sugar_phrase_of_ir p env =
       let c = Lens_value_conv.lens_phrase_value_of_constant c in
       let p = Lens.Phrase.Constant.of_value c in
       IrValue.Phrase p |> Result.return
-    | I.Variable var -> lookup env var |> Result.return
+    | I.Variable var -> Env.lookup env var |> Result.return
     | I.TAbs (_, v) -> value env v
     | I.TApp (v, _) -> value env v
     | I.Project (n, r) ->
@@ -357,8 +367,8 @@ let lens_sugar_phrase_of_ir p env =
     let initial_val env v =
       match v with
       | IrValue.Closure (([v], comp), closure_env) ->
-        let env = env ++ closure_env in
-        let env = bind env (v, IrValue.Record) in
+        let env = Env.append env closure_env in
+        let env = Env.bind env (v, IrValue.Record) in
         computation env comp
       | _ as v -> Format.asprintf "unsupported value %a." IrValue.pp v |> failwith
     in
@@ -368,9 +378,9 @@ let lens_sugar_phrase_of_ir p env =
     | I.Closure (var, _, args) ->
       links_value env args
       >>= fun args ->
-      initial_val env (find_fun (var, Some args))
-    | I.Variable var -> initial_val env (lookup env var)
+      initial_val env (Env.find_fun (var, Some args))
+    | I.Variable var -> initial_val env (Env.lookup env var)
     | _ -> Format.asprintf "unsupported initial %a" I.pp_value  p |> failwith in
   let open Result.O in
-  let env = env, Env.Int.empty in
+  let env = Env.create env in
   initial env p >>= unpack_phrase
