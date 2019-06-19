@@ -45,6 +45,9 @@ let is_dynamic p =
   match WithPos.node p with
   | S.FunLit _
   | S.Block _
+  | S.TAppl _
+  | S.TAbstr _
+  | S.FnAppl _
   | S.Var _ -> true
   | _ -> false
 

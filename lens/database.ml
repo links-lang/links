@@ -59,7 +59,8 @@ let fmt_phrase_value ~db f v =
     | LPV.Float v ->
         let s = string_of_float v in
         if s.[String.length s - 1] = '.' then s ^ "0" else s
-    | _ -> failwith "Unexpected phrase value." )
+    | _ -> Format.asprintf "%a" LPV.pp v
+    | _ -> Format.asprintf "Unexpected phrase value %a." LPV.pp v |> failwith )
 
 module Precedence = struct
   type t = Or | And | Not | Add | Sub | Mult | Divide | Cmp

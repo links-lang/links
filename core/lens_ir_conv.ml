@@ -11,6 +11,9 @@ module I = Ir
 let internal_error message =
   Errors.internal_error ~filename:"lens_ir_conv.ml" ~message
 
+let raise_internal message =
+  internal_error message |> raise
+
 (** This code is mostly taken and adapted from query/query.ml *)
 
 module IrValue = struct
@@ -22,6 +25,8 @@ module IrValue = struct
   and closure = (Ir.var list * Ir.computation) * env
   and env = Value.env * t Env.Int.t
   [@@deriving show]
+
+  let of_constant c = Phrase (Lens.Phrase.Constant c)
 end
 
 let env_of_value_env value_env = (value_env, Env.Int.empty)
@@ -37,22 +42,42 @@ let lookup_fun (f, fvs) =
         match z, fvs with
         | None, None -> Value.Env.empty
         | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) Value.Env.empty
-        | _, _ -> assert false in
+        | _, _ ->
+          Format.asprintf "Variable %d could not be found." f
+          |> raise_internal in
       IrValue.Closure ((xs, body), env_of_value_env env)
     | Location.Client ->
-      raise (Errors.runtime_error (Js.var_name_binder (f, finfo) |> Format.asprintf "Attempt to use client function: %s in query"))
+      raise (
+        Errors.runtime_error (Js.var_name_binder (f, finfo)
+        |> Format.asprintf "Attempt to use client function: %s in query"))
     | Location.Native ->
-      raise (Errors.runtime_error (Var.show_binder (f, finfo) |> Format.asprintf "Attempt to use native function: %s in query")) in
+      raise (
+        Errors.runtime_error (Var.show_binder (f, finfo)
+        |> Format.asprintf "Attempt to use native function: %s in query")) in
     Some fn
   | None -> None
+
+let find_fun (f, fvs) =
+  match lookup_fun (f, fvs) with
+  | Some v -> v
+  | None ->
+    raise (internal_error ("Attempt to find undefined function: " ^
+                           string_of_int f))
 
 let expression_of_value value =
   match value with
   | `PrimitiveFunction (f, _) -> IrValue.Primitive f
+  | `FunctionPtr (f, fvs) ->
+     find_fun (f, fvs)
   | _ ->
     let pv = Lens_value_conv.lens_phrase_value_of_value value in
     let p = Lens.Phrase.Constant.of_value pv in
     IrValue.Phrase p
+
+let peek_fun_bind f =
+  match Tables.lookup Tables.fun_defs f with
+  | Some (_, _, z, _) -> z
+  | None -> None
 
 let lookup (val_env, exp_env) var =
   match lookup_fun (var, None) with
@@ -70,14 +95,13 @@ let lookup (val_env, exp_env) var =
             raise (internal_error (Format.sprintf "Variable %d not found" var));
         end
     end
-
 module Of_ir_error = struct
   type t =
     | Operator_not_supported_binary of string
     | Operator_not_supported_unary of string
     | Unsupported_function_value of Value.t
     | Client_function
-    | Internal_error
+    | Internal_error of string
     | Recursive_function
     | Modules_unsupported
     | Application_of_nonfunction
@@ -87,6 +111,8 @@ module Of_ir_error = struct
     | Unexpected_record
     | Unexpected_phrase of Lens.Phrase.t
     | Unsupported_arbitrary_if of Ir.tail_computation
+    | Expected_record_value of Lens.Phrase.Value.t
+    | Unbound_record_column of string * Lens.Phrase.Value.t
 
   exception E of t
 
@@ -100,16 +126,31 @@ module Of_ir_error = struct
       Format.asprintf "Relational lenses does not support function value %a."
         Value.pp v
     | Client_function -> "Relational lenses do not support client functions."
-    | Internal_error -> "Internal error."
+    | Internal_error s ->
+      Format.asprintf "Internal error: %s." s
     | Recursive_function -> "Relational lenses do not support recursive functions."
     | Modules_unsupported -> "Relational lenses do not support modules yet."
     | Application_of_nonfunction -> "Application of non-function."
-    | Unexpected_phrase p -> Format.asprintf "Unexpected phrase %a." Lens.Phrase.pp p
-    | Unexpected_closure c -> Format.asprintf "Unexpected closure %a. This should not happen." IrValue.pp_closure c
-    | Unexpected_primitive f -> Format.asprintf "Unexpected primitive %s. This should not happen." f
-    | Unexpected_record -> Format.asprintf "Unexpected record. Primary operations can only be applied to primitives."
-    | Unsupported_tail_computation c -> Format.asprintf "Unsupported tail computation %a." Ir.pp_tail_computation c
-    | Unsupported_arbitrary_if c -> Format.asprintf "Arbitrary if expressions are not support. %a" Ir.pp_tail_computation c
+    | Unexpected_phrase p ->
+      Format.asprintf "Unexpected phrase %a." Lens.Phrase.pp p
+    | Unexpected_closure c ->
+      Format.asprintf "Unexpected closure %a. This should not happen." IrValue.pp_closure c
+    | Unexpected_primitive f ->
+      Format.asprintf "Unexpected primitive %s. This should not happen." f
+    | Unexpected_record ->
+      Format.asprintf "Unexpected record. Primary operations can only be applied to primitives."
+    | Expected_record_value v ->
+      Format.asprintf "Expected a record value but received %a."
+        Lens.Phrase.Value.pp v
+    | Unsupported_tail_computation c ->
+      Format.asprintf "Unsupported tail computation %a."
+        Ir.pp_tail_computation c
+    | Unsupported_arbitrary_if c ->
+      Format.asprintf "Arbitrary if expressions are not support. %a"
+        Ir.pp_tail_computation c
+    | Unbound_record_column (c, v) ->
+      Format.asprintf "The column %s was not bound in the record %a."
+        c Lens.Phrase.Value.pp v
 
   let unpack_exn ~die v =
     match v with
@@ -120,6 +161,15 @@ module Of_ir_error = struct
   let raise v =
     raise (E v)
 end
+
+
+let lookup_val (val_env, _) var =
+  match Value.Env.lookup var val_env with
+  | Some v -> Result.return v
+  | None ->
+    let msg = Format.asprintf "Unfound variable %d." var in
+    Of_ir_error.Internal_error msg
+    |> Result.error
 
 module Primitives = struct
   let binary_of_string f =
@@ -143,6 +193,38 @@ module Primitives = struct
     | _ -> Result.error (Of_ir_error.Operator_not_supported_unary f)
 end
 
+let project_record r n =
+  let pair = List.find_opt (fst ->- ((=) n)) r in
+  match pair with
+  | None ->
+    Of_ir_error.Unbound_record_column (n, Lens.Phrase.Value.Record r)
+    |> Result.error
+  | Some r ->
+    snd r |> Result.return
+
+let project_value r n =
+  match r with
+  | Lens.Phrase.Value.Record r ->
+    project_record r n
+  | _ -> Result.error (Of_ir_error.Expected_record_value r)
+
+let unexpected_ir_error v =
+  match v with
+  | IrValue.Closure c -> Result.error (Of_ir_error.Unexpected_closure c)
+  | IrValue.Primitive f -> Result.error (Of_ir_error.Unexpected_primitive f)
+  | IrValue.Record -> Result.error Of_ir_error.Unexpected_record
+  | IrValue.Phrase p -> Result.error (Of_ir_error.Unexpected_phrase p)
+
+let unpack_constant_phrase v =
+  match v with
+  | Lens.Phrase.Constant v -> v |> Result.return
+  | _ -> unexpected_ir_error (IrValue.Phrase v)
+
+let unpack_constant_of_ir_value v =
+  match v with
+  | IrValue.Phrase p -> unpack_constant_phrase p
+  | _ -> unexpected_ir_error v
+
 let lens_sugar_phrase_of_ir p env =
   let bind (val_env, exp_env) (x, v) =
     (val_env, Env.Int.bind exp_env (x, v))
@@ -157,22 +239,14 @@ let lens_sugar_phrase_of_ir p env =
         let v = tail_computation env tc in
         Result.bind ~f:(fun v -> computation (bind env (x, v)) (bs, tailcomp)) v
       | I.Fun (_, _, _, (Location.Client | Location.Native)) -> Result.error Of_ir_error.Client_function
-      | I.Fun _ -> Result.error Of_ir_error.Internal_error
+      | I.Fun _ -> Result.error @@ Of_ir_error.Internal_error "Unexpected function."
       | I.Rec _ -> Result.error Of_ir_error.Recursive_function
       | I.Alien _ -> computation env (bs, tailcomp)
       | I.Module _ -> Result.error Of_ir_error.Modules_unsupported
   and unpack_phrase v =
     match v with
     | IrValue.Phrase p -> Result.return p
-    | IrValue.Closure c -> Result.error (Of_ir_error.Unexpected_closure c)
-    | IrValue.Primitive f -> Result.error (Of_ir_error.Unexpected_primitive f)
-    | IrValue.Record -> Result.error Of_ir_error.Unexpected_record
-  and unpack_record v =
-    match v with
-    | IrValue.Phrase p -> Result.error (Of_ir_error.Unexpected_phrase p)
-    | IrValue.Closure c -> Result.error (Of_ir_error.Unexpected_closure c)
-    | IrValue.Primitive f -> Result.error (Of_ir_error.Unexpected_primitive f)
-    | IrValue.Record -> Result.return ()
+    | _ -> unexpected_ir_error v
   and apply env (v, args) =
     let open Result.O in
     match v, args with
@@ -243,27 +317,59 @@ let lens_sugar_phrase_of_ir p env =
     | I.Project (n, r) ->
       value env r
       >>= fun r ->
-      unpack_record r
-      >>| fun () ->
-      let p = Lens.Phrase.var n in
+      (match r with
+      | IrValue.Record -> Lens.Phrase.var n |> Result.return
+      | IrValue.Phrase (Lens.Phrase.Constant c) ->
+        project_value c n
+        >>| fun v ->
+        Lens.Phrase.Constant v
+      | _ -> unexpected_ir_error r)
+      >>| fun p ->
       IrValue.Phrase p
     | I.ApplyPure (f, args) ->
       let f = value env f in
       let args = List.map_result ~f:(value env) args in
       Result.bind ~f:(fun f ->
-          Result.bind ~f:(fun args -> apply env (f, args)) args) f
-    | _ -> Format.asprintf "Could not convert value %a to lens sugar phrase." I.pp_value p |> failwith
-  in
-  let initial env p =
+          Result.bind ~f:(fun args -> apply env (f, args)) args) f    | _ -> Format.asprintf "Could not convert value %a to lens sugar phrase." I.pp_value p |> failwith
+  and links_value env p =
+    let open Result.O in
     match p with
-    | I.Variable var -> (
-        match lookup env var with
-        | IrValue.Closure (([v], comp), closure_env) ->
-          let env = env ++ closure_env in
-          let env = bind env (v, IrValue.Record) in
-          computation env comp
-        | _ as v -> Format.asprintf "unsupported value %a." IrValue.pp v |> failwith
-      )
+    | I.Variable v -> lookup_val env v
+    | I.Extend (ext_fields, r) ->
+      let r = Option.map ~f:(
+          links_value env) r in
+      Option.value r ~default:(`Record [] |> Result.return)
+      >>= fun r ->
+      let fields = StringMap.to_alist ext_fields in
+      List.map_result ~f:(fun (k,v) ->
+          links_value env v
+          >>| fun v -> k,v) fields
+      >>= fun fields ->
+      (match r with
+      | `Record v -> `Record (List.append fields v) |> Result.return
+      | _ -> Of_ir_error.Internal_error "Expected a record value." |> Result.error)
+      >>| fun r ->
+      r
+    | _ -> Of_ir_error.Internal_error "Expected a record extension." |> Result.error
+  in
+  let rec initial env p =
+    let open Result.O in
+    let initial_val env v =
+      match v with
+      | IrValue.Closure (([v], comp), closure_env) ->
+        let env = env ++ closure_env in
+        let env = bind env (v, IrValue.Record) in
+        computation env comp
+      | _ as v -> Format.asprintf "unsupported value %a." IrValue.pp v |> failwith
+    in
+    match p with
+    | I.TAbs (_, v) -> initial env v
+    | I.TApp (v, _) -> initial env v
+    | I.Closure (var, _, args) ->
+      links_value env args
+      >>= fun args ->
+      initial_val env (find_fun (var, Some args))
+    | I.Variable var -> initial_val env (lookup env var)
     | _ -> Format.asprintf "unsupported initial %a" I.pp_value  p |> failwith in
   let open Result.O in
   let env = env, Env.Int.empty in
