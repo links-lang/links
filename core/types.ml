@@ -1700,6 +1700,9 @@ let int_type      = `Primitive Primitive.Int
 let float_type    = `Primitive Primitive.Float
 let xml_type      = `Alias (("Xml", []), `Application (list, [`Type (`Primitive Primitive.XmlItem)]))
 let database_type = `Primitive Primitive.DB
+(* Empty type, used for exceptions *)
+let empty_type = `Variant (make_empty_closed_row ())
+
 
 (* precondition: the row is unwrapped *)
 let is_tuple ?(allow_onetuples=false) (field_env, rowvar, _) =

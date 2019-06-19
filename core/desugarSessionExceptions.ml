@@ -68,13 +68,19 @@ class desugar_session_exceptions env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
-  method! phrasenode = function
-    | Raise ->
+  method! phrase = function
+    | { node = Raise; pos } ->
+        (* Compile `raise` as the following:
+         * switch (do SessionFail) { }
+         *
+         * (where (do SessionFail) has the empty type) *)
         let ty =
           Types.fresh_type_variable (CommonTypes.lin_any, CommonTypes.res_any) in
-        (o, DoOperation (failure_op_name, [], Some ty), ty)
-    | TryInOtherwise (_, _, _, _, None) -> assert false
-    | TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)) ->
+        let doOp = DoOperation (failure_op_name, [], Some (Types.empty_type)) in
+        let with_pos x = SourceCode.WithPos.make ~pos x in
+        (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
+    | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false
+    | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos } ->
         let (o, try_phr, try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
@@ -91,14 +97,14 @@ object (o : 'self_type)
         let outer_effects = o#lookup_effects in
 
         let fail_cont_ty =
-          Types.make_pure_function_type [] (Types.unit_type) in
+          Types.make_pure_function_type [] (Types.empty_type) in
 
         let inner_effects =
           effect_row
             |> Types.row_with (failure_op_name, `Present fail_cont_ty)
             |> Types.flatten_row in
 
-        let cont_pat = variable_pat ~ty:(Types.make_function_type [] inner_effects (Types.unit_type))
+        let cont_pat = variable_pat ~ty:(Types.make_function_type [] inner_effects (Types.empty_type))
           (Utility.gensym ~prefix:"dsh" ()) in
 
         let otherwise_pat : Sugartypes.Pattern.with_pos =
@@ -127,8 +133,8 @@ object (o : 'self_type)
           sh_effect_cases = effect_cases;
           sh_value_cases = value_cases;
           sh_descr = hndl_desc
-        } in (o, Handle hndlr, dt)
-    | e -> super#phrasenode e
+        } in (o, SourceCode.WithPos.make ~pos (Handle hndlr), dt)
+    | e -> super#phrase e
 end
 
 
