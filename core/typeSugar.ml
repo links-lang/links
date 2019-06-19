@@ -197,10 +197,10 @@ module Gripers :
 sig
   type griper =
       pos:Position.t ->
-  t1:(string * Types.datatype) ->
-  t2:(string * Types.datatype) ->
-  error:Unify.error ->
-  unit
+      t1:(string * Types.datatype) ->
+      t2:(string * Types.datatype) ->
+      error:Unify.error ->
+      unit
 
   val die : Position.t -> string -> 'a
 
@@ -354,6 +354,9 @@ sig
   val try_in_unless_pat : griper
   val try_in_unless_branches : griper
   val try_in_unless_linearity : Position.t -> string -> unit
+
+  val inconsistent_quantifiers :
+    pos:Position.t -> t1:Types.datatype -> t2:Types.datatype -> unit
 
 end
   = struct
@@ -1363,6 +1366,16 @@ end
       die pos ("All variables in the as- and unless- branches of an " ^
                "exception handler must be unrestricted, but " ^ nl () ^
                "variable " ^ v ^ " is linear.")
+
+   (* quantifier checks *)
+   let inconsistent_quantifiers ~pos ~t1:l ~t2:r =
+     let policy () = {(Types.Print.default_policy ()) with Types.Print.quantifiers = true} in
+     let typ = Types.string_of_datatype ~policy in
+       die pos ("Inconsistent quantifiers, expected: " ^ nli () ^
+                typ l                                  ^ nl ()  ^
+                "actual: "                             ^ nli () ^
+                typ r                                  ^ nl ())
+
 end
 
 type context = Types.typing_environment = {
@@ -3758,40 +3771,34 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
 
-          (* FIXME: We should do the following check, but currently it
-             breaks some of our examples.  *)
-
           (* It could be handy to support a (different) syntax for
              specifying quantifiers sloppily without fixing an order
              or promising that they're complete - in order to denote
              their kinds if nothing else *)
 
-          (* let tyvars, ft =
-           *   (\* generalise *\)
-           *   let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
-           *   (\* check that tyvars matches up those from any type
-           *      annotation *\)
-           *   match t with
-           *   | None -> tyvars, ft
-           *   | Some (_, Some t) ->
-           *      begin
-           *        match TypeUtils.quantifiers t with
-           *        | [] -> tyvars, ft
-           *        | t_tyvars ->
-           *           if not
-           *                (List.for_all
-           *                   (fun q ->
-           *                     let n = Types.type_var_number q in
-           *                     List.exists (fun q -> Types.type_var_number q = n) t_tyvars) tyvars)
-           *           then
-           *             begin
-           *               Debug.print ("t: "^Types.string_of_datatype t);
-           *               Debug.print ("ft: "^Types.string_of_datatype ft);
-           *               failwith "inconsistent quantifiers (fun)"
-           *             end;
-           *           t_tyvars, t
-           *      end
-           *   | Some (_, None) -> assert false in *)
+          let tyvars, ft =
+            (* generalise *)
+            (* check that tyvars matches up those from any type
+               annotation *)
+            match t with
+            | None -> tyvars, ft
+            | Some (_, Some t) ->
+               begin
+                 match TypeUtils.quantifiers t with
+                 | [] -> tyvars, ft
+                 | t_tyvars ->
+                   (* FIXME: use a suitable eq_quantifier function *)
+                   if not
+                       (List.for_all
+                          (fun q ->
+                             let n = Types.type_var_number q in
+                             List.exists (fun q -> Types.type_var_number q = n) t_tyvars) tyvars)
+                   then
+                     (* TODO: add tests that expose this mode of failure *)
+                     Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
+                   t_tyvars, t
+               end
+            | Some (_, None) -> assert false in
 
           (* let ft = Instantiate.freshen_quantifiers ft in *)
             (Fun (Binder.set_type bndr ft,
@@ -3926,8 +3933,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
                            let outer_tyvars, outer =
                              match t with
                              | Some (_, Some (`ForAll (outer_tyvars, _) as outer)) ->
-                                (* TODO: check that tyvars and body_tyvars agree *)
-                                (* TODO: check that outer and gen agree *)
                                 Types.unbox_quantifiers outer_tyvars, outer
                              | None -> body_tyvars, gen
                              | Some (_, Some t) -> body_tyvars, Types.for_all (body_tyvars, t)
@@ -3935,14 +3940,22 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                            let inner_tyvars = Types.unbox_quantifiers inner_tyvars in
 
-                           (* check that every member of inner_tyvars is also in outer_tyvars *)
-                           (* TODO: proper error message *)
+                           (* TODO: add tests that expose this mode of failure *)
+                           (* check that every member of body_tyvars is also in outer_tyvars *)
                            if not
                                 (List.for_all
                                    (fun q ->
                                      let n = Types.type_var_number q in
-                                     List.exists (fun q -> Types.type_var_number q = n) outer_tyvars) inner_tyvars) then
-                            failwith "inconsistent quantifiers (funs)";
+                                     List.exists (fun q -> Types.type_var_number q = n) outer_tyvars) body_tyvars) then
+                             Gripers.inconsistent_quantifiers ~pos ~t1:outer ~t2:gen;
+
+                           (* We could check that inner_tyvars is
+                              consistent with body_tyvars, but that
+                              should always be the case as either
+                              body_tyvars is outer_tyvars (if there's
+                              an explicit type annotation) or it
+                              contains all of the type variables in
+                              inner_typvars *)
 
                            (* compute mapping from outer_tyvars to inner_tyvars
 

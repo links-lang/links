@@ -1,6 +1,6 @@
 typename State(a) = AP (!a.End);
 
-sig newCell : forall a::Any.(a) ~> State(a)
+sig newCell : forall a::Any, e::Eff.(a) ~e~> State(a)
 fun newCell(v) {
   var x = new();
   var _ = spawn {close(send(v, accept(x)))};
@@ -24,7 +24,7 @@ fun get(x) {
 }
 
 # an atomic swap operation
-sig swap : forall a::Any.(State(a), a) ~> a
+sig swap : forall a::Any, e::Eff.(State(a), a) ~e~> a
 fun swap(x, w) {
   var (v, s) = receive(request(x));
   close(s);

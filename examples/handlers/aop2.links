@@ -84,7 +84,6 @@ typename SComp(e::Eff, a) =
   Comp ({Suspend:(Expr, SComp({ |e}, a)) {}-> a|e}, a);
 
 sig suspend :
-  forall e::Row, a.
     (Expr) ->
       (SComp({ |e}, a))
         {Suspend:(Expr, SComp({ |e}, a)) {}-> a|e}~> a
