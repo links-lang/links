@@ -132,13 +132,27 @@ stdout : fun : (a) {}~> a
 
 Missing quantifier with mixed kinds (1)
 sig f : forall a.(a) ~e~> a fun f(x) {f(x)} f
-stdout : fun : (a) ~> a
-ignore : We no longer allow missing quantifiers
+stderr : @..*
+exit : 1
 
 Missing quantifier with mixed kinds (2)
-sig f : forall e::Row.(a) ~e~> a fun f(x) {f(x)} f
-stdout : fun : (a) ~> a
-ignore : We no longer allow missing quantifiers
+sig f : forall e::Eff.(a) ~e~> a fun f(x) {f(x)} f
+stderr : @..*
+exit : 1
+
+Missing quantifier with mixed kinds (3)
+sig f : forall a.(a) ~e~> a fun f(x) {x} f
+stderr : @..*
+exit : 1
+
+Missing quantifier with mixed kinds (4)
+sig f : forall e::Eff.(a) ~e~> a fun f(x) {x} f
+stderr : @..*
+exit : 1
+
+Inner quantifier with free variable
+sig f : (a) -e-> (a, a) fun f(x) {sig g : forall b.(a, b) -e-> (a, b) fun g(x, y) {(x, y)} g(x, x)} f
+stdout : fun : (a) -> (a, a)
 
 Flexible quantifier elimination (fix introduced in 514187b)
 sig a : (() {A:() |e}~> a) -> () {A{_} |e}~> a fun a(m)() { error("a") } sig b : (() {B:() |e}~> a) -> () {B{_} |e}~> a fun b(m)() { error("b") } sig c : (() {A:(),B:() |e}~> a) {A{_}, B{_} |e}~> a fun c(m) { a(b(m))() }

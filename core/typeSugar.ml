@@ -3802,13 +3802,11 @@ and type_binding : context -> binding -> binding * context * usagemap =
                  | [] -> tyvars, ft
                  | t_tyvars ->
                    (* FIXME: use a suitable eq_quantifier function *)
-                   if not
-                       (List.for_all
-                          (fun q ->
-                             let n = Types.type_var_number q in
-                             List.exists (fun q -> Types.type_var_number q = n) t_tyvars) tyvars)
+                   if not (List.for_all
+                             (fun q ->
+                               let n = Types.type_var_number q in
+                               List.exists (fun q -> Types.type_var_number q = n) t_tyvars) tyvars)
                    then
-                     (* TODO: add tests that expose this mode of failure *)
                      Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
                    t_tyvars, t
                end in
@@ -3953,7 +3951,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                            let inner_tyvars = Types.unbox_quantifiers inner_tyvars in
 
-                           (* TODO: add tests that expose this mode of failure *)
                            (* check that every member of body_tyvars is also in outer_tyvars *)
                            if not
                                 (List.for_all
@@ -3968,7 +3965,13 @@ and type_binding : context -> binding -> binding * context * usagemap =
                               body_tyvars is outer_tyvars (if there's
                               an explicit type annotation) or it
                               contains all of the type variables in
-                              inner_typvars *)
+                              inner_typvars. *)
+
+                           (* We may be able to avoid the above check
+                              altogether by doing a global check on
+                              the input program to ensure that no free
+                              type variables occur in quantified type
+                              annotations. *)
 
                            (* compute mapping from outer_tyvars to inner_tyvars
 
