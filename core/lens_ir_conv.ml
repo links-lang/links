@@ -324,6 +324,7 @@ let lens_sugar_phrase_of_ir p env =
     | I.Variable var -> Env.lookup env var |> Result.return
     | I.TAbs (_, v) -> value env v
     | I.TApp (v, _) -> value env v
+    | I.Coerce (v, _) -> value env v
     | I.Project (n, r) ->
       value env r
       >>= fun r ->
@@ -340,7 +341,8 @@ let lens_sugar_phrase_of_ir p env =
       let f = value env f in
       let args = List.map_result ~f:(value env) args in
       Result.bind ~f:(fun f ->
-          Result.bind ~f:(fun args -> apply env (f, args)) args) f    | _ -> Format.asprintf "Could not convert value %a to lens sugar phrase." I.pp_value p |> failwith
+          Result.bind ~f:(fun args -> apply env (f, args)) args) f
+    | _ -> Format.asprintf "Could not convert value %a to lens sugar phrase." I.pp_value p |> failwith
   and links_value env p =
     let open Result.O in
     match p with
@@ -375,6 +377,7 @@ let lens_sugar_phrase_of_ir p env =
     match p with
     | I.TAbs (_, v) -> initial env v
     | I.TApp (v, _) -> initial env v
+    | I.Coerce (v, _) -> initial env v
     | I.Closure (var, _, args) ->
       links_value env args
       >>= fun args ->
