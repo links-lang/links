@@ -3,4 +3,4 @@
   (public_name linx)
   (package links)
   (modes native)
-  (libraries threads dynlink links.core))
+  (libraries threads dynlink ANSITerminal linenoise links.core))
