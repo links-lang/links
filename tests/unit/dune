@@ -2,4 +2,5 @@
   (name unitTests)
   (modes native)
   (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
-  (libraries oUnit dynlink links.core links.lens links-postgresql))
+  (libraries oUnit dynlink links.core links.lens links-postgresql)
+  (preprocess (pps ppx_deriving.std)))
