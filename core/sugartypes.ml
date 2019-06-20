@@ -323,7 +323,7 @@ and function_definition = {
     fun_definition: tyvar list * funlit;
     fun_location: Location.t;
     fun_signature: datatype' option;
-    fun_unsafe_signature: datatype' option;
+    fun_unsafe_signature: bool;
   }
 and recursive_function = {
     rec_binder: Binder.with_pos;
@@ -331,7 +331,7 @@ and recursive_function = {
     rec_definition: (tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit;
     rec_location: Location.t;
     rec_signature: datatype' option;
-    rec_unsafe_signature: datatype' option;
+    rec_unsafe_signature: bool;
     rec_pos: Position.t
   }
   [@@deriving show]

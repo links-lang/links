@@ -413,8 +413,8 @@ fun_declarations:
 | fun_declaration+                                             { $1 }
 
 fun_declaration:
-| tlfunbinding                                                 { fun_binding ~ppos:$loc($1) (None, None) $1 }
-| signatures tlfunbinding                                      { fun_binding ~ppos:$loc($2) $1 $2 }
+| tlfunbinding                                                 { fun_binding ~ppos:$loc($1) None $1 }
+| signatures tlfunbinding                                      { fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
 
 perhaps_uinteger:
 | UINTEGER?                                                    { $1 }
@@ -433,15 +433,12 @@ tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
 
 signatures:
-| signature unsafe_signature?                                  { (Some $1, $2) }
-| unsafe_signature signature?                                  { ($2, Some $1) }
+| signature                                                    { (Some $1, false) }
+| UNSAFE signature                                             { (Some $2, true) }
 
 signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
 | SIG op COLON datatype                                        { with_pos $loc ($2, datatype $4) }
-
-unsafe_signature:
-| UNSAFE signature                                             { $2 }
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5, (pos $loc))]) }
@@ -904,8 +901,8 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signatures linearity VARIABLE arg_lists block                { fun_binding ~ppos:$loc $1 ($2, $3, $4, loc_unknown, $5) }
-| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc (None, None) ($1, $2, $3, loc_unknown, $4) }
+| signatures linearity VARIABLE arg_lists block                { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
+| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 

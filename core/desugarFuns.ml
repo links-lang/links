@@ -54,7 +54,7 @@ open SugarConstructors.DummyPositions
 (* unwrap a curried function definition as
    a collection of nested functions
 *)
-let unwrap_def (bndr, linearity, (tyvars, lam), location, t, ut) =
+let unwrap_def (bndr, linearity, (tyvars, lam), location) =
   let f = Binder.to_name bndr in
   let ft = Binder.to_type bndr in
   let rt = TypeUtils.return_type ft in
@@ -71,7 +71,7 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location, t, ut) =
                    var g))
         | _, _ -> assert false
     in make_lam rt lam
-  in (binder ~ty:ft f, linearity, (tyvars, lam), location, t, ut)
+  in (binder ~ty:ft f, linearity, (tyvars, lam), location)
 
 (*
   unwrap a curried function definition
@@ -81,7 +81,7 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location, t, ut) =
 let unwrap_def_dp { rec_binder = fb; rec_linearity = lin; rec_definition = tlam;
                     rec_location = location; rec_signature = t; rec_unsafe_signature = ut;
                     rec_pos } =
-  let (fb, lin, tlam, location, t, ut) = unwrap_def (fb, lin, tlam, location, t, ut) in
+  let (fb, lin, tlam, location) = unwrap_def (fb, lin, tlam, location) in
   { rec_binder = fb; rec_linearity = lin; rec_definition = tlam;
     rec_location = location; rec_signature = t; rec_unsafe_signature = ut; rec_pos }
 
@@ -106,12 +106,12 @@ object (o : 'self_type)
          let (tvs, tyargs), ft = Generalise.generalise env.Types.var_env ft in
          let ft = Instantiate.freshen_quantifiers ft in
          tappl (Var f, tyargs), tvs, ft in
-    let (bndr, lin, tvs, loc, ty, uty) =
-      unwrap_def (binder ~ty:ft f, lin, (tvs, lam), location, None, None) in
+    let (bndr, lin, tvs, loc) =
+      unwrap_def (binder ~ty:ft f, lin, (tvs, lam), location) in
     let e = block_node ([with_dummy_pos (Fun { fun_binder = bndr; fun_linearity = lin;
                                                fun_definition = tvs; fun_location = loc;
-                                               fun_signature = ty;
-                                               fun_unsafe_signature = uty; })],
+                                               fun_signature = None;
+                                               fun_unsafe_signature = false; })],
                          with_dummy_pos body)
     in (o, e, ft)
 
@@ -153,12 +153,12 @@ object (o : 'self_type)
               | Fun { fun_binder = bndr; fun_linearity = lin;
                       fun_definition = tvs; fun_location = loc;
                       fun_signature = ty;
-                      fun_unsafe_signature = uty; } ->
-                 let (bndr', lin', tvs', loc', ty', uty') =
-                   unwrap_def (bndr, lin, tvs, loc, ty, uty) in
+                      fun_unsafe_signature = uns; } ->
+                 let (bndr', lin', tvs', loc') =
+                   unwrap_def (bndr, lin, tvs, loc) in
                  (o, Fun { fun_binder = bndr'; fun_linearity = lin';
                            fun_definition = tvs'; fun_location = loc';
-                           fun_signature = ty'; fun_unsafe_signature = uty' })
+                           fun_signature = ty; fun_unsafe_signature = uns })
               | _ -> assert false
           end
     | Funs _ as b ->

@@ -732,12 +732,11 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> o, []
-          | { rec_binder; rec_signature; rec_unsafe_signature; _ } as fn :: defs ->
+          | { rec_binder; rec_signature;  _ } as fn :: defs ->
               let (o, rec_binder) = o#binder rec_binder in
               let (o, defs) = list o defs in
               let (o, rec_signature) = optionu o (fun o -> o#datatype') rec_signature in
-              let (o, rec_unsafe_signature) = optionu o (fun o -> o#datatype') rec_unsafe_signature in
-              (o, { fn with rec_binder; rec_signature; rec_unsafe_signature } :: defs)
+              (o, { fn with rec_binder; rec_signature } :: defs)
       in
         list o
 
@@ -771,7 +770,6 @@ class transform (env : Types.typing_environment) =
          let o = o#restore_quantifiers outer_tyvars in
          let (o, fun_binder) = o#binder fun_binder in
          let (o, fun_signature) = optionu o (fun o -> o#datatype') fun_signature in
-         let (o, fun_unsafe_signature) = optionu o (fun o -> o#datatype') fun_unsafe_signature in
          (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature })
       | Fun _ -> raise (internal_error "Unannotated non-recursive function binding")
       | Funs defs ->

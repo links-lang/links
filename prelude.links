@@ -53,7 +53,6 @@ fun sortBy (f, l) {
 
 # need to be careful to make sure this doesn't get
 # optimised away - it does if we eta reduce it
-sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
 unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
 fun sortByBase(f, l) {sortBy(f, l)}
 
