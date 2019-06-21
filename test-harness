@@ -64,13 +64,16 @@ def check_expected(name, item, got, expected, errors):
 
 def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = None, filemode='', args='', ignore = None):
     arg_array = str.split(args)
+    global failures
+
     if config_file != None:
         for arg in arg_array:
             if arg.startswith("--config"):
                 print(
-                    "Test \"%s\" comes with an args entry to specify the config file," % name +
+                    "FAILURE: Test \"%s\" comes with an args entry to specify the config file," % name +
                     " but a config file was also passed as a command-line argument to the test harness" )
-                exit(1)
+                failures += 1
+                return
 
         arg_array += ["--config=" + config_file]
 
@@ -97,7 +100,6 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
                         ignored += 1
                         print('?IGNORED: %s (%s)' % (name, ignore))
                 else:
-                    global failures
                     with the_lock:
                         failures += 1
                         print('!FAILURE: %s' % name)

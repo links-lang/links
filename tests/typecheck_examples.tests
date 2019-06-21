@@ -717,25 +717,22 @@ args : --path=examples/sessions/mind
 
 Typecheck example file examples/mvu/mousetest.links
 examples/mvu/mousetest.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
 
 Typecheck example file examples/mvu/time.links
 examples/mvu/time.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
 
 Typecheck example file examples/mvu/pong.links
 examples/mvu/pong.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
+args : --config=foo
 
 Typecheck example file examples/mvu/todomvc/todoMVC.links
 examples/mvu/todomvc/todoMVC.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
+args : --path=examples/mvu/todomvc
 
 Typecheck example file examples/mvu/keypress.links
 examples/mvu/keypress.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
