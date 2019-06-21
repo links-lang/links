@@ -427,17 +427,18 @@ filemode : true
 
 Typecheck example file examples/sessions/chatserver/chatClient.links
 examples/sessions/chatserver/chatClient.links
-filemode : true
-args :  --path=examples/sessions/chatserver
+filemode : args
+args :  --path=examples/sessions/chatserver --config=tests/typecheck_examples_session_exceptions.tests.config
 
 Typecheck example file examples/sessions/chatserver/chatServer.links
 examples/sessions/chatserver/chatServer.links
-filemode : true
-args :  --path=examples/sessions/chatserver
+filemode : args
+args : --path=examples/sessions/chatserver --config=tests/typecheck_examples_session_exceptions.tests.config
 
 Typecheck example file examples/sessions/chatserver/chatSessions.links
 examples/sessions/chatserver/chatSessions.links
-filemode : true
+filemode : args
+args : --config=tests/typecheck_examples_session_exceptions.tests.config
 
 Typecheck example file examples/sessions/chatserver/linearList.links
 examples/sessions/chatserver/linearList.links
@@ -595,7 +596,8 @@ filemode : true
 
 Typecheck example file examples/sessions/two-factor-cp.links
 examples/sessions/two-factor-cp.links
-filemode : true
+filemode : args
+args : --config=tests/typecheck_examples_session_exceptions.tests.config
 
 Typecheck example file examples/sessions/two-factor.links
 examples/sessions/two-factor.links
@@ -690,7 +692,8 @@ filemode : true
 
 Typecheck example file examples/webserver/wsocket_conn.links
 examples/webserver/wsocket_conn.links
-filemode : true
+filemode : args
+args : --config=tests/typecheck_examples_session_exceptions.tests.config
 
 Typecheck example file examples/wine.links
 examples/wine.links
@@ -698,8 +701,8 @@ filemode : true
 
 Typecheck example file examples/sessions/mind/mindServer.links
 examples/sessions/mind/mindServer.links
-filemode : true
-args :  --path=examples/sessions/mind
+filemode : args
+args :  --path=examples/sessions/mind --config=tests/typecheck_examples_session_exceptions.tests.config
 
 Typecheck example file examples/sessions/mind/linearList.links
 examples/sessions/mind/linearList.links

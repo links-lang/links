@@ -56,7 +56,7 @@ struct
         (DesugarSessionExceptions.settings_check);
       DesugarModules.desugar_program;
       only_if session_exceptions
-        DesugarSessionExceptions.wrap_linear_handlers;
+        DesugarSessionExceptions.wrap_linear_handlers#program;
       DesugarLAttributes.desugar_lattributes#program;
       LiftRecursive.lift_funs#program;
       DesugarDatatypes.program prev_tyenv;
@@ -136,11 +136,15 @@ let program prev_tyenv pos_context program =
     (pos_context : SourceCode.source_code)
     (prev_tyenv : Types.typing_environment) (* type env before checking current program *)
       : pre_typing_sentence_transformer list =
+    let only_if enabled f x =
+      if enabled then f x else x in
     [
       (ResolvePositions.resolve_positions pos_context)#sentence;
       for_side_effects
         CheckXmlQuasiquotes.checker#sentence;
       DesugarModules.desugar_sentence;
+      only_if session_exceptions
+        DesugarSessionExceptions.wrap_linear_handlers#sentence;
       DesugarLAttributes.desugar_lattributes#sentence;
       LiftRecursive.lift_funs#sentence;
       DesugarDatatypes.sentence prev_tyenv;
