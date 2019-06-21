@@ -726,7 +726,7 @@ filemode : true
 Typecheck example file examples/mvu/pong.links
 examples/mvu/pong.links
 filemode : true
-args : --config=foo
+args : --path=examples/mvu/todomvc
 
 Typecheck example file examples/mvu/todomvc/todoMVC.links
 examples/mvu/todomvc/todoMVC.links
