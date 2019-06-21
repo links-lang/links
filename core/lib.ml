@@ -375,7 +375,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(() { SessionFail:(() {}-> [||]) |e}~@ _) ~> Process ({ SessionFail{_} |e })"
+      datatype "(() { SessionFail:(() {}-> [||]) |e}~@ _) ~> Process ({ SessionFail- |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -385,7 +385,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "((() { SessionFail:(() {}-> [||]) |e}~@ _), Location) ~> Process ({ SessionFail{_} |e })"
+      datatype "((() { SessionFail:(() {}-> [||]) |e}~@ _), Location) ~> Process ({ SessionFail- |e })"
     else
       datatype "((() ~e~@ _), Location) ~> Process ({ |e })"
     end,
@@ -395,7 +395,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(() { SessionFail:(() {}-> [||]) |e}~@ _) ~> Process ({ SessionFail{_} |e })"
+      datatype "(() { SessionFail:(() {}-> [||]) |e}~@ _) ~> Process ({ SessionFail- |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -405,7 +405,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(() { SessionFail:(() {}-> [||]) |e}~@ _) ~> Process ({ SessionFail{_} |e })"
+      datatype "(() { SessionFail:(() {}-> [||]) |e}~@ _) ~> Process ({ SessionFail- |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -415,7 +415,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`PFun (fun _ -> assert false),
     begin
     if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-      datatype "(() { SessionFail:(() {}-> [||]) |e}~@ _) ~> Process ({ SessionFail{_} |e })"
+      datatype "(() { SessionFail:(() {}-> [||]) |e}~@ _) ~> Process ({ SessionFail- |e })"
     else
       datatype "((() ~e~@ _), Location) ~> Process ({ |e })"
     end,

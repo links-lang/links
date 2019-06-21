@@ -2700,9 +2700,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             (* (() -e-> _) -> Process (e) *)
             let inner_effects =
               if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
-                let ty = Types.make_pure_function_type [] (Types.empty_type) in
+                (* let ty = Types.make_pure_function_type [] (Types.empty_type) in *)
                 Types.make_singleton_open_row
-                  (Value.session_exception_operation, `Present ty)
+                  (Value.session_exception_operation, `Absent)
                   (lin_any, res_any)
               else
                 Types.make_empty_open_row (lin_any, res_any) in
