@@ -335,3 +335,8 @@ end
 module Sessions = struct
   let exceptions_enabled = Settings.add_bool ("session_exceptions", false, `System)
 end
+
+module Database = struct
+  let coerce_null_integers = Settings.add_bool("coerce_null_integers", false, `User)
+  let null_integer = Settings.add_int ("null_integer", (-1), `User)
+end

@@ -77,7 +77,7 @@ fun subscriptions(model) {
 
 fun mainPage(_) {
   var evtHandler =
-    run("placeholder", Nothing, view, updt(msg, model), subscriptions);
+    run("placeholder", Nothing, view, updt, subscriptions);
   page
   <html>
     <head>
