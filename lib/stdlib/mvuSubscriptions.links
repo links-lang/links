@@ -22,8 +22,8 @@ fun concat(nodes) {
   fold_right(fun(x, acc) { append(x, acc) }, SubEmpty, nodes)
 }
 
-sig onKeyboardEvent : forall a :: Type(Any, Any) .
-  (String, (KeyboardEvent) {}~> Maybe(a)) -> Sub(a)
+sig onKeyboardEvent : forall a :: Type(Any, Any), e :: Row .
+  (String, (KeyboardEvent) {}~> Maybe(a)) -e-> Sub(a)
 fun onKeyboardEvent(evtName, f) {
   var hdler =
     KeyboardEventHandler(evtName, fun(evt) { f(evt) });
@@ -42,8 +42,8 @@ fun onKeyPress(f) {
   onKeyboardEvent("keypress", fun(x) { Just(f(x)) } )
 }
 
-sig onMouseEvent : forall a :: Type(Any, Any) .
-  (String, (MouseEvent) {}~> Maybe(a)) -> Sub(a)
+sig onMouseEvent : forall a :: Type(Any, Any), e :: Row .
+  (String, (MouseEvent) {}~> Maybe(a)) -e-> Sub(a)
 fun onMouseEvent(evtName, f) {
   var hdler =
     MouseEventHandler(evtName, fun(evt) { f(evt) });
