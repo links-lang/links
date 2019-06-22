@@ -183,24 +183,34 @@ and eq_type_args =
 *)
 type unify_type_env = (datatype list) RecIdMap.t
 type unify_row_env = (row list) IntMap.t
-type quantifier_stack = int * int IntMap.t * int IntMap.t
 
-let compatible_quantifiers (lvar, rvar) (_, lenv, renv) =
-  match IntMap.lookup lvar lenv, IntMap.lookup rvar renv with
-    | Some ldepth, Some rdepth when ldepth=rdepth -> true
-    | _ -> false
+(* map left-hand quantifiers to their renamings
+and keep track of right-hand quantifiers
+ *)
+type quantifier_env = int IntMap.t * IntSet.t
+
+let compatible_quantifiers (lvar, rvar) (lenv, _) =
+  match IntMap.lookup lvar lenv with
+  | Some rvar' -> rvar' = rvar
+  | None -> false
+
+let left_quantifier var (lenv, _) =
+  IntMap.mem var lenv
+
+let right_quantifier var (_, rs) =
+  IntSet.mem var rs
 
 type unify_env =
   { tenv: unify_type_env
   ; renv: unify_row_env
-  ; qstack: quantifier_stack
+  ; qenv: quantifier_env
   }
 
 let rec unify' : unify_env -> (datatype * datatype) -> unit =
   let counter = ref 0 in
   fun rec_env ->
   let rec_types = rec_env.tenv in
-  let qstack = rec_env.qstack in
+  let qenv = rec_env.qenv in
 
   let key_and_body unifier =
       match unifier with
@@ -333,8 +343,13 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
            concrete_point rpoint;
 
            match (Unionfind.find lpoint, Unionfind.find rpoint) with
-           | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when lkind=rkind && compatible_quantifiers (lvar, rvar) qstack ->
+           | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when
+                  lkind=rkind && compatible_quantifiers (lvar, rvar) qenv ->
               Unionfind.union lpoint rpoint
+           | `Var (lvar, _, `Rigid), `Var (_, _, `Flexible) when left_quantifier lvar qenv ->
+              raise (Failure (`Msg ("Escaping quantifier " ^ string_of_int lvar)))
+           | `Var (_, _, `Flexible), `Var (rvar, _, `Rigid) when right_quantifier rvar qenv ->
+              raise (Failure (`Msg ("Escaping quantifier " ^ string_of_int rvar)))
            | `Var (l, _, `Rigid), `Var (r, _, `Rigid) ->
               if l <> r then
                 raise (Failure (`Msg ("Rigid type variables "^ string_of_int l ^" and "^ string_of_int r ^" do not match")))
@@ -635,173 +650,29 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     |  t1, `RecursiveApplication appl->
        unify_rec (RecAppl appl) t1
     | `ForAll (lsref, lbody), `ForAll (rsref, rbody) ->
-       (* Check that all quantifiers that were originally rigid are still
-          distinct *)
-       let distinct_rigid_check =
-         let rec drc rigids (qs, ss) =
-           match qs, ss with
-           | [], [] -> ()
-           | q::qs, s::ss ->
-              begin
-                match s with
-                | `Flexible ->
-                   drc rigids (qs, ss)
-                | `Rigid ->
-                   let x = Types.var_of_quantifier q in
-                   if IntSet.mem x rigids then
-                     raise (Failure (`Msg ("incompatible quantifiers (duplicate rigid quantifiers)")))
-                   else
-                     drc (IntSet.add x rigids) (qs, ss)
-              end
-           | _, _ -> assert false
-         in
-         drc (IntSet.empty) in
+       let check_quantifier_kinds l r =
+         if Types.kind_of_quantifier l <> Types.kind_of_quantifier r then
+           raise (Failure (`Msg ("incompatible quantifier kinds")))
+         else
+           () in
 
        let ls = !lsref in
        let rs = !rsref in
 
-       (* collect the variables from a quantifier list into a set *)
-       let collect =
-         List.fold_right
-           (fun q bound_vars ->
-             IntSet.add (Types.var_of_quantifier q) bound_vars) in
+       if List.length ls <> List.length rs then
+         raise (Failure (`Msg ("quantifier length mismatch")));
 
-       (* the original variables before unification *)
-       let original_vars = collect ls (collect rs IntSet.empty) in
+       let qenv =
+         List.fold_left2
+           (fun (lenv, rs) l r ->
+             check_quantifier_kinds l r;
+             (IntMap.add (Types.var_of_quantifier l) (Types.var_of_quantifier r) lenv,
+              IntSet.add (Types.var_of_quantifier r) rs))
+           qenv
+           ls
+           rs in
 
-       (* identify which quantifiers start off rigid *)
-       let status q =
-         if Types.is_rigid_quantifier q then `Rigid
-         else `Flexible in
-
-       (* We're assuming that all of the quantifiers start off atomic (either
-          rigid or flexible type variables, rather than instantiated as some
-          other type). Does this assumption always hold?
-
-          Perhaps we should extract the quantifiers initially just in case.
-          This might allow us to think about other simplifications as well, such
-          as getting rid of the annoying reference type constructor.
-
-          We could add quantifier extraction to the FixTypeAbstractions sugar
-          transformer pass.
-
-          Doing this kind of thing may be too difficult, because we might not
-          have enough information available (e.g. how do we know which
-          quantifiers need to be thrown away). Storing the information might
-          take more effort than the current implementation which just requires
-          the quantifier list to be mutable. *)
-       let lstatus = List.map status ls in
-       let rstatus = List.map status rs in
-
-       let depth, lenv, renv = qstack in
-       let depth = depth+1 in
-       let lenv = List.fold_right (fun q lenv -> IntMap.add (var_of_quantifier q) depth lenv) ls lenv in
-       let renv = List.fold_right (fun q renv -> IntMap.add (var_of_quantifier q) depth renv) rs renv in
-
-       let () = unify' {rec_env with qstack=(depth, lenv, renv)} (lbody, rbody) in
-
-       (* Here we need to extract instantiated quantifiers e.g.:
-
-          if we unify
-
-            forall %a.(%a) -> %a
-
-          with
-
-            forall a,b.((a) -> b) -> (a) -> b
-
-          Then we get:
-
-            forall ((a) -> b).((a) -> b) -> ((a) -> b)
-
-          which we can then convert to:
-
-            forall a,b.((a) -> b) -> ((a) -> b)
-
-          by pulling out a and b from the %a quantifier (which was instantiated
-          to (a) -> b).
-
-          Generalise.extract_quantifiers does this.
-
-          We then propagate any changes due to unification of the bodies back
-          into the quantifiers.  *)
-
-       distinct_rigid_check (ls, lstatus);
-       distinct_rigid_check (rs, rstatus);
-
-       let ls = Generalise.extract_quantifiers ls in
-       let rs = Generalise.extract_quantifiers rs in
-
-       let lvars = collect ls IntSet.empty in
-       let rvars = collect rs IntSet.empty in
-
-       (* throw away any rigid quantifiers that weren't in the original set of
-          quantifiers, as they must be unbound or bound at an outer scope *)
-       let ls, rs =
-         let filter =
-           List.filter
-             (fun q -> not (is_rigid_quantifier q)
-                       || IntSet.mem (Types.var_of_quantifier q) original_vars)
-         in
-         filter ls, filter rs in
-
-       (* throw away any unpartnered flexible quantifiers.  Raise an error for
-          unpartnered rigid quantifiers *)
-       let ls, rs =
-         let cull vars qs =
-           List.fold_right
-             (fun q qs ->
-               if IntSet.mem (Types.var_of_quantifier q) vars then
-                 q::qs
-               else if is_rigid_quantifier q then
-                 raise (Failure (`Msg "Incompatible quantifiers"))
-               else
-                 qs)
-             qs
-             []
-         in
-         cull rvars ls, cull lvars rs in
-
-       (* Now we know that ls and rs contain the same quantifiers *)
-
-       (* unify_quantifiers just checks that the kinds of the quantifiers match
-          up
-
-          This seems unnecessary as we already know that the names of the
-          quantifiers match up and it should not be possible to have distinct
-          type variables with the same name.
-
-        *)
-       (* let rec unify_quantifiers (ls, rs) = *)
-       (*   let compare q q' = *)
-       (*     Int.compare (Types.var_of_quantifier q) (Types.var_of_quantifier q') *)
-       (*   in *)
-       (*     match List.sort compare ls, List.sort compare rs with *)
-       (*       | [], [] -> () *)
-       (*       | l::ls, r::rs when are_compatible (l, r) -> unify_quantifiers (ls, rs) *)
-       (*       | _ -> raise (Failure (`Msg ("Incompatible quantifiers"))) *)
-       (* in *)
-       (*   unify_quantifiers (ls, rs); *)
-       lsref := ls;
-       rsref := rs
-    | `ForAll (qs, body), t ->
-       if List.for_all (fun q -> not (Types.is_rigid_quantifier q)) (Types.unbox_quantifiers qs) then
-         begin
-           qs := [];
-           ut (body, t)
-         end
-       else
-         raise (Failure (`Msg ("Can't unify quantified type " ^ string_of_datatype t1 ^
-                                 " with unquantified type " ^ string_of_datatype t2)))
-    | t, `ForAll (qs, body) ->
-       if List.for_all (fun q -> not (Types.is_rigid_quantifier q)) (Types.unbox_quantifiers qs) then
-         begin
-           qs := [];
-           ut (t, body)
-         end
-       else
-         raise (Failure (`Msg ("Can't unify unquantified type " ^ string_of_datatype t1 ^
-                                 " with quantified type " ^ string_of_datatype t2)))
+       unify' {rec_env with qenv=qenv} (lbody, rbody)
     | `Input (t, s), `Input (t', s')
       | `Output (t, s), `Output (t', s')
       -> unify' rec_env (t, t'); ut (s, s')
@@ -845,13 +716,13 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
        match Unionfind.find lpoint, Unionfind.find rpoint with
        | `Body l, _ -> unify_presence' rec_env (l, `Var rpoint)
        | _, `Body r -> unify_presence' rec_env (`Var lpoint, r)
-       | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qstack ->
+       | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qenv ->
           Unionfind.union lpoint rpoint
        | `Var (flexible_var, _, `Flexible), `Var (rigid_var, _, `Rigid)
-            when compatible_quantifiers (rigid_var, flexible_var) rec_env.qstack ->
+            when compatible_quantifiers (rigid_var, flexible_var) rec_env.qenv ->
           Unionfind.union lpoint rpoint
        | `Var (rigid_var, _, `Rigid), `Var (flexible_var, _, `Flexible)
-            when compatible_quantifiers (rigid_var, flexible_var) rec_env.qstack ->
+            when compatible_quantifiers (rigid_var, flexible_var) rec_env.qenv ->
           Unionfind.union rpoint lpoint
        | `Var (l, _, `Rigid), `Var (r, _, `Rigid) ->
           if l <> r then
@@ -1024,7 +895,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
            raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
          Unionfind.change point' (`Var (var, (lin, rest), `Rigid))
       | `Var (var', _, `Rigid) when var=var' -> ()
-      | `Var (var', (_, rest'), `Rigid) when rest=rest' && compatible_quantifiers (var, var') rec_env.qstack ->
+      | `Var (var', (_, rest'), `Rigid) when rest=rest' && compatible_quantifiers (var, var') rec_env.qenv ->
          Unionfind.union point point'
       | `Var (_, _, `Rigid) ->
          raise (Failure (`Msg ("Incompatible rigid row variables cannot be unified\n")))
@@ -1170,7 +1041,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                  ^"\nand\n "^ string_of_row rrow
                                  ^"\n could not be unified because they have different kinds")))
         | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid)
-             when (lvar=rvar || compatible_quantifiers (lvar, rvar) rec_env.qstack) ->
+             when (lvar=rvar || compatible_quantifiers (lvar, rvar) rec_env.qenv) ->
            Unionfind.union lrow_var' rrow_var'; false
         | `Var (_, _, `Rigid), `Var (_, _, `Rigid) ->
            raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
@@ -1299,17 +1170,17 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
 
 let unify (t1, t2) =
   unify'
-    { tenv=RecIdMap.empty
-    ; renv=IntMap.empty
-    ; qstack=(0, IntMap.empty, IntMap.empty)
+    { tenv = RecIdMap.empty
+    ; renv = IntMap.empty
+    ; qenv = (IntMap.empty, IntSet.empty)
     } (t1, t2)
 
 (* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
 and unify_rows (row1, row2) =
   unify_rows'
-    { tenv=RecIdMap.empty
-    ; renv=IntMap.empty
-    ; qstack=(0, IntMap.empty, IntMap.empty)
+    { tenv = RecIdMap.empty
+    ; renv = IntMap.empty
+    ; qenv = (IntMap.empty, IntSet.empty)
     } (row1, row2)
 
 (* external interface *)

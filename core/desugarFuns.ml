@@ -1,7 +1,7 @@
 open CommonTypes
 open Operators
 open Utility
-open SourceCode.WithPos
+(* open SourceCode.WithPos *)
 open Sugartypes
 open SugarConstructors.DummyPositions
 
@@ -110,12 +110,13 @@ object (o : 'self_type)
     in (o, e, ft)
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | TAbstr (tvs', {node = TAppl ({node = TAbstr (tvs, {node =
-         FunLit (Some argss, lin, lam, location); _ } ); _}, tyargs); _})
-      when Settings.get_value Instantiate.quantified_instantiation ->
-       let (o, e, ft) = o#desugarFunLit argss lin lam location tvs in
-       (o, TAbstr (tvs', with_dummy_pos (TAppl (with_dummy_pos (
-            TAbstr (tvs, with_dummy_pos e)), tyargs))), ft)
+    (* FIXME: was this code ever necessary? *)
+    (* | TAbstr (tvs', {node = TAppl ({node = TAbstr (tvs, {node =
+     *      FunLit (Some argss, lin, lam, location); _ } ); _}, tyargs); _})
+     *   when Settings.get_value Instantiate.quantified_instantiation ->
+     *    let (o, e, ft) = o#desugarFunLit argss lin lam location tvs in
+     *    (o, TAbstr (tvs', with_dummy_pos (TAppl (with_dummy_pos (
+     *         TAbstr (tvs, with_dummy_pos e)), tyargs))), ft) *)
     | FunLit (Some argss, lin, lam, location) ->
        o#desugarFunLit argss lin lam location []
     | Section (Section.Project name) ->

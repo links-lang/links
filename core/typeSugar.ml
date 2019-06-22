@@ -1420,13 +1420,8 @@ let type_section context = function
           let effects = Types.make_empty_open_row (lin_any, res_any) in (* projection is pure! *)
           let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho, false) in
             ([`Type a; `Row (StringMap.empty, rho, false); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), StringMap.empty
-       | Name var      -> Utils.instantiate env var, StringMap.singleton var 1
-     in
-     if Settings.get_value Instantiate.quantified_instantiation then
-       let tyvars = Types.quantifiers_of_type_args tyargs in
-       tabstr(tyvars, tappl (s', tyargs)), t, usages
-     else
-       tappl (s', tyargs), t, usages
+       | Name var      -> Utils.instantiate env var, StringMap.singleton var 1 in
+     tappl (s', tyargs), t, usages
   | _ -> assert false
 
 let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
@@ -2203,11 +2198,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                  Unify.rows (wild_open, context.effect_row)
                end;
              let (tyargs, t) = Utils.instantiate context.var_env v in
-             if Settings.get_value Instantiate.quantified_instantiation then
-               let tyvars = Types.quantifiers_of_type_args tyargs in
-               tabstr(tyvars, tappl (Var v, tyargs)), t, StringMap.singleton v 1
-             else
-               tappl (Var v, tyargs), t, StringMap.singleton v 1
+             tappl (Var v, tyargs), t, StringMap.singleton v 1
            with
              Errors.UndefinedVariable _msg ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")
@@ -2370,22 +2361,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             *)
 
             let e = FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body), location) in
-              if Settings.get_value Instantiate.quantified_instantiation then
-                let (qs, _tyargs), ftype = Utils.generalise context.var_env ftype in
-                let tyargs, ftype = Instantiate.typ ftype in
-                let ebody = tappl (tabstr (qs, e), tyargs) in
-                (* this code takes care to ensure that the quantifier
-                   reference in the type matches that of the outer
-                   type abstraction - unfortunately this connection
-                   may be broken by later invocation of concrete_type
-                   *)
-                let e' =
-                  match ftype with
-                  | `ForAll (qs', _) when !qs' <> [] -> TAbstr (Types.unbox_quantifiers qs',  WithPos.make ebody)
-                  | _ -> ebody in
-                e', ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
-              else
-                e, ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
+            e, ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
 
         | ConstructorLit (c, None, _) ->
             let type' = `Variant (Types.make_singleton_open_row
