@@ -201,14 +201,15 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
           let t = `Var point in
             tenv, renv, IntMap.add var t penv, `Presence t :: tys, (var, subkind, `Presence point) :: qs in
 
+        let open PrimaryKind in
         let tenv, renv, penv, tys, _qs =
           List.fold_left
             (fun env ->
                function
-                 | (var, subkind, `Type _)     -> typ (var, subkind) env
-                 | (var, subkind, `Row _)      -> row (var, subkind) env
-                 | (var, subkind, `Presence _) -> presence (var, subkind) env)
-            (IntMap.empty, IntMap.empty, IntMap.empty, [], []) (unbox_quantifiers quantifiers) in
+                 | (var, (Type, subkind))     -> typ (var, subkind) env
+                 | (var, (Row, subkind))      -> row (var, subkind) env
+                 | (var, (Presence, subkind)) -> presence (var, subkind) env)
+            (IntMap.empty, IntMap.empty, IntMap.empty, [], []) quantifiers in
 
         let tys = List.rev tys in
         (* let qs = List.rev qs in *)
@@ -294,14 +295,15 @@ let datatype = instantiate_datatype
 module SEnv = Env.String
 
 let populate_instantiation_maps dt_str qs tyargs =
+  let open PrimaryKind in
   List.fold_right2
     (fun var tyarg (tenv, renv, penv) ->
        match (var, tyarg) with
-         | (var, _subkind, `Type _), `Type t ->
+         | (var, (Type, _subkind)), `Type t ->
              (IntMap.add var t tenv, renv, penv)
-         | (var, _subkind, `Row _), `Row row ->
+         | (var, (Row, _subkind)), `Row row ->
              (tenv, IntMap.add var row renv, penv)
-         | (var, _, `Presence _), `Presence f ->
+         | (var, (Presence, _subkind)), `Presence f ->
              (tenv, renv, IntMap.add var f penv)
          | _ ->
              raise (internal_error
@@ -342,7 +344,7 @@ let instantiation_maps_of_type_arguments :
     let tenv, renv, penv = populate_instantiation_maps (Types.string_of_datatype pt) vars tyargs in
     match remaining_quantifiers with
       | [] -> t, (tenv, renv, penv)
-      | _ -> `ForAll (Types.box_quantifiers remaining_quantifiers, t),  (tenv, renv, penv)
+      | _ -> `ForAll (remaining_quantifiers, t),  (tenv, renv, penv)
 
 
 
@@ -357,25 +359,26 @@ let freshen_quantifiers t =
   match concrete_type t with
     | `ForAll (qs, body) ->
         begin
-          match Types.unbox_quantifiers qs with
+          match qs with
             | [] -> body
             | qs ->
-                let qs, tyargs =
-                  List.split
-                    (List.map
-                       (function
-                          | (_, subkind, `Type _) ->
-                              let q, t = Types.fresh_type_quantifier subkind in
-                                q, `Type t
-                          | (_, subkind, `Row _) ->
-                              let q, r = Types.fresh_row_quantifier subkind in
-                                q, `Row r
-                          | (_, subkind, `Presence _) ->
-                              let q, f = Types.fresh_presence_quantifier subkind in
-                                q, `Presence f)
-                       qs)
+               let open PrimaryKind in
+               let qs, tyargs =
+                 List.split
+                   (List.map
+                      (function
+                       | (_, (Type, subkind)) ->
+                          let q, t = Types.fresh_type_quantifier subkind in
+                          q, `Type t
+                       | (_, (Row, subkind)) ->
+                          let q, r = Types.fresh_row_quantifier subkind in
+                          q, `Row r
+                       | (_, (Presence, subkind)) ->
+                          let q, f = Types.fresh_presence_quantifier subkind in
+                          q, `Presence f)
+                      qs)
                 in
-                  `ForAll (Types.box_quantifiers qs, apply_type t tyargs)
+                  `ForAll (qs, apply_type t tyargs)
         end
     | t -> t
 
@@ -390,10 +393,10 @@ let replace_quantifiers t qs' =
             (fun q q' ->
               assert (primary_kind_of_quantifier q = primary_kind_of_quantifier q');
               type_arg_of_quantifier q')
-            (Types.unbox_quantifiers qs)
+            qs
             qs'
         in
-          `ForAll (Types.box_quantifiers qs', apply_type t tyargs)
+          `ForAll (qs', apply_type t tyargs)
     | t -> t
 
 let recursive_application name qs tyargs body =

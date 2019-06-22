@@ -56,35 +56,8 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         | `Lens _ -> []
         | `Alias ((_, ts), t) ->
             concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
-        | `ForAll (qsref, t) ->
-            (*
-               filter out flexible quantifiers
-
-               WARNING: this behaviour might not always be what we want
-
-                 1) Its imperative nature seems a bit dodgey.  Note
-                    that this function is called by the
-                    get_quantifiers function as well as by generalise.
-
-                 2) We might alternatively rigidify the quantifiers
-                    during generalisation.
-
-                 3) In any case, we might implement
-                    instantiation as part of destructing a type. For
-                    instance, this would allow function application
-                    in the case where the function has a rigid polymorphic
-                    type such as:
-
-                      forall a.(a) {}-> a
-
-                 4) Furthermore, we can keep as much polymorphism as possible
-                    by only instantiating those type variables that appear
-                    free in the function argument.
-
-            *)
-            let qs = List.filter Types.is_rigid_quantifier (Types.unbox_quantifiers qsref) in
-              qsref := qs;
-              get_type_args kind (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t
+        | `ForAll (qs, t) ->
+           get_type_args kind (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t
         | `Application (_, args) ->
             Utility.concat_map (get_type_arg_type_args kind bound_vars) args
         | `RecursiveApplication appl ->
@@ -145,22 +118,22 @@ and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg li
       | `Row r -> get_row_type_args kind bound_vars r
       | `Presence f -> get_presence_type_args kind bound_vars f
 
-let remove_duplicates =
-  unduplicate (fun l r ->
-                 match l, r with
-                   | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> Unionfind.equivalent l r
-                   | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && Unionfind.equivalent l r
-                   | `Presence (`Var l), `Presence (`Var r) -> Unionfind.equivalent l r
-                   | _ -> false)
+(* let remove_duplicates =
+ *   unduplicate (fun l r ->
+ *                  match l, r with
+ *                    | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> Unionfind.equivalent l r
+ *                    | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && Unionfind.equivalent l r
+ *                    | `Presence (`Var l), `Presence (`Var r) -> Unionfind.equivalent l r
+ *                    | _ -> false) *)
 
-let get_type_args kind bound_vars t =
-  remove_duplicates (get_type_args kind bound_vars t)
-
-let get_row_var_type_args kind bound_vars row_var =
-  remove_duplicates (get_row_var_type_args kind bound_vars row_var)
-
-let get_presence_type_args kind bound_vars f =
-  remove_duplicates (get_presence_type_args kind bound_vars f)
+(* let get_type_args kind bound_vars t =
+ *   remove_duplicates (get_type_args kind bound_vars t)
+ *
+ * let get_row_var_type_args kind bound_vars row_var =
+ *   remove_duplicates (get_row_var_type_args kind bound_vars row_var)
+ *
+ * let get_presence_type_args kind bound_vars f =
+ *   remove_duplicates (get_presence_type_args kind bound_vars f) *)
 
 (* let type_variables_of_type_args = *)
 (*   List.map *)
@@ -191,37 +164,37 @@ let get_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_type_ar
 (* let get_row_var_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_row_var_type_args `All bound_vars) *)
 (* let get_presence_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_presence_type_args `All bound_vars) *)
 
-(* pull out all the type variables in the quantifiers, as quantifiers,
-   e.g. if a quantifier gets instantiated as (a) -> b, then that
-   results in two quantifiers: a and b.
-*)
-let extract_quantifiers quantifiers =
-  let quantifier_type_args =
-    function
-      | (_, _, `Type point) ->
-          get_type_args `All TypeVarSet.empty (`MetaTypeVar point)
-      | (_, _, `Row row_var) ->
-          get_row_var_type_args `All TypeVarSet.empty row_var
-      | (_, _, `Presence point) ->
-          get_presence_type_args `All TypeVarSet.empty (`Var point)
-  in
-    Types.quantifiers_of_type_args
-      (remove_duplicates (concat_map quantifier_type_args quantifiers))
+(* (\* pull out all the type variables in the quantifiers, as quantifiers,
+ *    e.g. if a quantifier gets instantiated as (a) -> b, then that
+ *    results in two quantifiers: a and b.
+ * *\)
+ * let extract_quantifiers quantifiers =
+ *   let quantifier_type_args =
+ *     function
+ *       | (_, _, `Type point) ->
+ *           get_type_args `All TypeVarSet.empty (`MetaTypeVar point)
+ *       | (_, _, `Row row_var) ->
+ *           get_row_var_type_args `All TypeVarSet.empty row_var
+ *       | (_, _, `Presence point) ->
+ *           get_presence_type_args `All TypeVarSet.empty (`Var point)
+ *   in
+ *     Types.quantifiers_of_type_args
+ *       (remove_duplicates (concat_map quantifier_type_args quantifiers)) *)
 
 let env_type_vars (env : Types.environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
-let rigidify_quantifier : quantifier -> unit =
-  let rigidify_point point =
-    match Unionfind.find point with
-    | `Var (var, subkind, `Flexible) -> Unionfind.change point (`Var (var, subkind, `Rigid))
-    | `Var _ -> ()
-    | _ -> assert false
-  in
-    function
-    | (_, _, `Type point)     -> rigidify_point point
-    | (_, _, `Row point)      -> rigidify_point point
-    | (_, _, `Presence point) -> rigidify_point point
+(* let rigidify_quantifier : quantifier -> unit =
+ *   let rigidify_point point =
+ *     match Unionfind.find point with
+ *     | `Var (var, subkind, `Flexible) -> Unionfind.change point (`Var (var, subkind, `Rigid))
+ *     | `Var _ -> ()
+ *     | _ -> assert false
+ *   in
+ *     function
+ *     | (_, _, `Type point)     -> rigidify_point point
+ *     | (_, _, `Row point)      -> rigidify_point point
+ *     | (_, _, `Presence point) -> rigidify_point point *)
 
 (** generalise:
     Universally quantify any free type variables in the expression.
@@ -236,7 +209,7 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quanti
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
     let quantifiers = Types.quantifiers_of_type_args type_args in
-    let () = List.iter rigidify_quantifier quantifiers in
+    (* let () = List.iter rigidify_quantifier quantifiers in *)
     let quantified = Types.for_all (quantifiers, t) in
 
     (* The following code suffers from the problem that it may reorder

@@ -116,8 +116,8 @@ let rec eq_types : (datatype * datatype) -> bool =
           begin match unalias t2 with
             | `ForAll (qs', t') ->
                 List.for_all2 (fun q q' -> eq_quantifier (q, q'))
-                  (Types.unbox_quantifiers qs)
-                  (Types.unbox_quantifiers qs') &&
+                  qs
+                  qs' &&
                   eq_types (t, t')
             | _ -> false
           end
@@ -148,7 +148,7 @@ and eq_sessions : (datatype * datatype) -> bool =
   | _, _ -> false
 and eq_quantifier : (quantifier * quantifier) -> bool =
   function
-    | (lvar, _, _), (rvar, _, _) -> lvar = rvar
+    | (lvar, _), (rvar, _) -> lvar = rvar
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual
@@ -293,7 +293,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
 
   let ignore_empty_quantifiers =
     function
-    | `ForAll (qs, t) when Types.unbox_quantifiers qs = [] -> t
+    | `ForAll ([], t) -> t
     | t -> t in
 
   (* make sure the contents of a point is concrete *)
@@ -310,19 +310,13 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     | _ -> () in
 
   fun (t1, t2) ->
-  let () = hoist_quantifiers t1 in
-  let () = hoist_quantifiers t2 in
+
+  (* FIXME: do we need to do the hoisting manually now? *)
+  (* let () = hoist_quantifiers t1 in
+   * let () = hoist_quantifiers t2 in *)
 
   let t1 = ignore_empty_quantifiers t1 in
   let t2 = ignore_empty_quantifiers t2 in
-
-  let mono_of_type =
-    function
-    | `ForAll (qs, t) when List.for_all (fun q -> not (is_rigid_quantifier q)) (unbox_quantifiers qs) ->
-       (* WARNING: side-effect! *)
-       qs := [];
-       Some t
-    | _ -> None in
 
   let ut = unify' rec_env in
   let ur = unify_rows' rec_env in
@@ -378,43 +372,16 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                   | _ -> lrest in
                 Unionfind.change lpoint (`Var (lvar, (lin, rest), `Flexible))
               end
-           | `Var (l, _, `Rigid), `Body (`ForAll _ as t2) ->
-              begin
-                match mono_of_type t2 with
-                | Some t2 -> unify' rec_env (t1, t2)
-                | None ->
-                   raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
-                                           string_of_int l ^" with the type "^ string_of_datatype (`MetaTypeVar rpoint))))
-              end
-           | `Body (`ForAll _ as t1), `Var (r, _, `Rigid) ->
-              begin
-                match mono_of_type t1 with
-                | Some t1 -> unify' rec_env (t1, t2)
-                | None ->
-                   raise (Failure (`Msg ("Couldn't unify the rigid type variable "^
-                                           string_of_int r ^" with the type "^ string_of_datatype (`MetaTypeVar lpoint))))
-              end
            | `Var (var, (lin, rest), `Flexible), _ ->
               let tidy =
                 if var_is_free_in_type var t2 then
                   begin
-                    (* Don't infer recursion through a polymorphic type.
-                       This catches the case of unifying
-
-                          forall %a.%b  with  %b
-
-                       where we probably want to throw away the quantifier.
-                       It isn't clear that this is always the best choice though...
-                     *)
-                    match mono_of_type (Types.concrete_type t2) with
-                    | Some t2 -> unify' rec_env (t1, t2); false
-                    | None ->
-                       Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
-                       if Restriction.is_base rest then
-                         raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
-                                                 " with the body "^ string_of_datatype t2)));
-                       rec_intro rpoint (var, Types.concrete_type t2);
-                       true
+                    Debug.if_set (show_recursion) (fun () -> "rec intro1 (" ^ (string_of_int var) ^ ")");
+                    if Restriction.is_base rest then
+                      raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
+                                              " with the body "^ string_of_datatype t2)));
+                    rec_intro rpoint (var, Types.concrete_type t2);
+                    true
                   end
                 else
                   true in
@@ -445,16 +412,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               let tidy =
                 if var_is_free_in_type var t1 then
                   begin
-                    (* Don't infer recursion through a polymorphic type. *)
-                    match mono_of_type (Types.concrete_type t1) with
-                    | Some t1 -> unify' rec_env (t1, t2); false
-                    | None ->
-                       Debug.if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
-                       if Restriction.is_base rest then
-                         raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
-                                                 " with the body "^ string_of_datatype t1)));
-                       rec_intro lpoint (var, Types.concrete_type t1);
-                       true
+                    Debug.if_set (show_recursion) (fun () -> "rec intro2 (" ^ (string_of_int var) ^ ")");
+                    if Restriction.is_base rest then
+                      raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
+                                              " with the body "^ string_of_datatype t1)));
+                    rec_intro lpoint (var, Types.concrete_type t1);
+                    true
                   end
                 else
                   true in
@@ -546,30 +509,21 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          match Unionfind.find point with
          | `Var (l, _, `Rigid) ->
             begin
-              (* if t is polymorphic then we might make
-                 progress by stripping the flexible quantifiers *)
-              match mono_of_type t with
-              | Some t -> unify' rec_env (t, `MetaTypeVar point)
-              | None ->
-                 raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
-                                         " with the type "^ string_of_datatype t)))
+              raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
+                                      " with the type "^ string_of_datatype t)))
             end
          | `Var (var, (lin, rest), `Flexible) ->
             if var_is_free_in_type var t then
               begin
-                (* Don't infer recursion through a polymorphic type. *)
-                match mono_of_type (Types.concrete_type t) with
-                | Some t -> unify' rec_env (t, `MetaTypeVar point)
-                | None ->
-                   Debug.if_set
-                     (show_recursion)
-                     (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")");
-                   if Restriction.is_base rest then
-                     raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
-                                             " with the body "^ string_of_datatype t)));
-                   let point' = Unionfind.fresh (`Body t) in
-                   rec_intro point' (var, t);
-                   Unionfind.union point point'
+                Debug.if_set
+                  (show_recursion)
+                  (fun () -> "rec intro3 ("^string_of_int var^","^string_of_datatype t^")");
+                if Restriction.is_base rest then
+                  raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
+                                          " with the body "^ string_of_datatype t)));
+                let point' = Unionfind.fresh (`Body t) in
+                rec_intro point' (var, t);
+                Unionfind.union point point'
               end
             else
               (Debug.if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
@@ -649,15 +603,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        unify_rec (RecAppl appl) t2
     |  t1, `RecursiveApplication appl->
        unify_rec (RecAppl appl) t1
-    | `ForAll (lsref, lbody), `ForAll (rsref, rbody) ->
+    | `ForAll (ls, lbody), `ForAll (rs, rbody) ->
        let check_quantifier_kinds l r =
          if Types.kind_of_quantifier l <> Types.kind_of_quantifier r then
            raise (Failure (`Msg ("incompatible quantifier kinds")))
          else
            () in
-
-       let ls = !lsref in
-       let rs = !rsref in
 
        if List.length ls <> List.length rs then
          raise (Failure (`Msg ("quantifier length mismatch")));

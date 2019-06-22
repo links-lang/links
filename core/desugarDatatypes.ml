@@ -272,17 +272,18 @@ module Desugar = struct
               (args, { tyvars }) ->
             let var = Types.fresh_raw_variable () in
             let subkind = concrete_subkind subkind in
+            let open PrimaryKind in
             let quant, def =
               match primarykind with
-              | Some PrimaryKind.Type ->
+              | Some Type ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
-                  ((var, subkind, `Type point), `Type point)
-              | Some PrimaryKind.Row ->
+                  ((var, (Type, subkind)), `Type point)
+              | Some Row ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
-                  ((var, subkind, `Row point), `Row point)
-              | Some PrimaryKind.Presence ->
+                  ((var, (Row, subkind)), `Row point)
+              | Some Presence ->
                   let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
-                  ((var, subkind, `Presence point), `Presence point)
+                  ((var, (Presence, subkind)), `Presence point)
               | None -> raise (internal_error "Undesugared kind")
             in
             (quant :: args,
@@ -314,7 +315,7 @@ module Desugar = struct
         | Forall (qs, t) ->
             let (qs: Types.quantifier list), var_env = desugar_quantifiers var_env qs t pos in
             let t = datatype var_env t in
-              `ForAll (Types.box_quantifiers qs, t)
+              `ForAll (qs, t)
         | Unit -> Types.unit_type
         | Tuple ks ->
             let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) in
@@ -491,16 +492,17 @@ module Desugar = struct
         (fun (vars, envs) ->
            let var = Types.fresh_raw_variable () in
              fun (x, kind, freedom) ->
+             let open PrimaryKind in
              match (kind, freedom) with
-             | (Some PrimaryKind.Type, Some subkind), freedom ->
+             | (Some Type, Some subkind), freedom ->
                let t = Unionfind.fresh (`Var (var, subkind, freedom)) in
-                 (var, subkind, `Type t)::vars, addt x t envs
-             | (Some PrimaryKind.Row, Some subkind), freedom ->
+                 (var, (Type, subkind))::vars, addt x t envs
+             | (Some Row, Some subkind), freedom ->
                let r = Unionfind.fresh (`Var (var, subkind, freedom)) in
-                 (var, subkind, `Row r)::vars, addr x r envs
-             | (Some PrimaryKind.Presence, Some subkind), freedom ->
+                 (var, (Row, subkind))::vars, addr x r envs
+             | (Some Presence, Some subkind), freedom ->
                let f = Unionfind.fresh (`Var (var, subkind, freedom)) in
-                 (var, subkind, `Presence f)::vars, addf x f envs
+                 (var, (Presence, subkind))::vars, addf x f envs
              | (_, None), _ | (None, _), _ ->
                (* Shouldn't occur; we are assuming that all subkinds have been
                 * filled in*)
@@ -765,5 +767,5 @@ let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let dt = freshen_vars#datatype dt in
   let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
-  let () = List.iter Generalise.rigidify_quantifier vars in
+  (* let () = List.iter Generalise.rigidify_quantifier vars in *)
     (Types.for_all (vars, Desugar.datatype var_env aliases dt))
