@@ -93,6 +93,10 @@ Quantifiers in different orders
 fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x,y]}
 stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> [(_, _)]
 
+Polymorphic function arguments and freeze
+fun poly(f : (forall a::Any,e::Row(Any, Any).(a) -e-> a)) {(f(42), f(true))} poly(~id)
+stdout : (42, true) : (Int, Bool)
+
 Unwrap polymorphism
 sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; hd(ids)(3)
 stdout : 3 : Int

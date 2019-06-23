@@ -780,6 +780,7 @@ struct
         match e with
           | Constant c -> cofv (I.constant c)
           | Var x -> cofv (I.var (lookup_name_and_type x env))
+          | FreezeVar x -> cofv (I.var (lookup_name_and_type x env))
           | RangeLit (low, high) ->
               I.apply (instantiate_mb "intRange", [ev low; ev high])
           | ListLit ([], Some t) ->

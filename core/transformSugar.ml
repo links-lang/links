@@ -245,6 +245,7 @@ class transform (env : Types.typing_environment) =
       function
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
       | Var var -> (o, Var var, o#lookup_type var)
+      | FreezeVar var -> (o, FreezeVar var, o#lookup_type var)
       | FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (last argss) in
           let (o, lam, rt) = o#funlit inner_e lam in

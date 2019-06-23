@@ -52,6 +52,7 @@ struct
     | QualifiedVar _
     | Constant _
     | Var _
+    | FreezeVar _
     | FunLit _
     | DatabaseLit _
     | TableLit _
@@ -2187,7 +2188,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
     let e, t, usages =
       match (expr : phrasenode) with
-        | Var v            ->
+        | Var v ->
            begin
            try
              (* register wildness if this is a recursive variable instance *)
@@ -2199,6 +2200,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                end;
              let (tyargs, t) = Utils.instantiate context.var_env v in
              tappl (Var v, tyargs), t, StringMap.singleton v 1
+           with
+             Errors.UndefinedVariable _msg ->
+             Gripers.die pos ("Unknown variable " ^ v ^ ".")
+           end
+        | FreezeVar v ->
+           begin
+           try
+             (* register wildness if this is a recursive variable instance *)
+             if StringSet.mem v context.rec_vars then
+               begin
+                 let wild_open = Types.make_singleton_open_row ("wild", `Present Types.unit_type) (lin_any, res_any) in
+                 (* FIXME: griper *)
+                 Unify.rows (wild_open, context.effect_row)
+               end;
+             let t = Env.lookup context.var_env v in
+             FreezeVar v, t, StringMap.singleton v 1
            with
              Errors.UndefinedVariable _msg ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")

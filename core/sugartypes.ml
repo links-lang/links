@@ -213,6 +213,7 @@ and iterpatt =
 and phrasenode =
   | Constant         of Constant.t
   | Var              of name
+  | FreezeVar        of name
   | QualifiedVar     of name list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
@@ -390,6 +391,7 @@ struct
     let p = WithPos.node p in
     match p with
     | Var v -> singleton v
+    | FreezeVar v -> singleton v
     | Section (Section.Name n) -> singleton n
 
     | Constant _
