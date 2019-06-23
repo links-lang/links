@@ -1,5 +1,5 @@
-# Checkout files in repository using UNIX line endings
-* text eol=lf
+# Checkout files in repository using native line endings by default
+* text=auto
 
 # Some file extensions are binary and should not be modified in any way
 *.pdf binary
@@ -7,4 +7,4 @@
 
 # An important exception is a file for testing Links' support for DOS line
 # endings
-tests/dos-newlines.links text=auto eol=crlf
+tests/dos-newlines.links text=crlf
