@@ -92,8 +92,11 @@ object (o : 'self_type)
   method private desugarFunLit argss lin lam location tvs =
     let inner_mb     = snd (last argss) in
     let (o, lam, rt) = o#funlit inner_mb lam in
-    let ft = List.fold_right (fun (args, mb) rt -> `Function (args, mb, rt))
-                             argss rt in
+    let ft = List.fold_right (fun (args, mb) rt ->
+                 if DeclaredLinearity.is_linear lin
+                 then `Lolli (args, mb, rt)
+                 else `Function (args, mb, rt))
+               argss rt in
     let f = gensym ~prefix:"_fun_" () in
     let body, tvs, ft = match tvs with
       | [] -> Var f, [], ft
@@ -126,9 +129,9 @@ object (o : 'self_type)
     | FunLit (Some argss, lin, lam, location) ->
        o#desugarFunLit argss lin lam location []
     | Section (Section.Project name) ->
-        let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
-        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
-        let effb, eff = Types.fresh_row_quantifier (lin_any, res_any) in
+        let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
+        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_unl, res_any) in
+        let effb, eff = Types.fresh_row_quantifier default_effect_subkind in
 
         let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
 

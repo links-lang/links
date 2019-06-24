@@ -3,16 +3,16 @@
 
 typename Cmd = [|Add : String | Done : Int|];
 
-sig addNewItem : (String, Process( {hear : Cmd, wild:() |%} )) ~> ()
+sig addNewItem : (String, Process( {hear : Cmd |_} )) ~> ()
 fun addNewItem(item, pId) client {
     pId ! Add(item)
 }
 
-sig deleteItem : (Int, Process( {hear : Cmd, wild:() |%} )) ~> ()
+sig deleteItem : (Int, Process( {hear : Cmd |_} )) ~> ()
 fun deleteItem(id, pId) client {
     pId ! Done(id)
 }
-sig itemsToXml : ([(Int, String)]) {hear:Cmd | %}~> Xml
+sig itemsToXml : ([(Int, String)]) {hear:Cmd | _}~> Xml
 fun itemsToXml(items) client {
     var pid = self();
     <#>

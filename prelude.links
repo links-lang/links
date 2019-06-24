@@ -175,6 +175,7 @@ fun flip(f) {
   fun(x,y) { f(y,x) }
 }
 
+sig curry : ((a, b) -d-> c) -> (a) -> (b) -d-> c
 fun curry(f) {
   fun (x)(y) { f(x,y) }
 }

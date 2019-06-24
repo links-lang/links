@@ -128,9 +128,8 @@ object (o : 'self_type)
                    let r = `Type (TypeUtils.table_read_type t) in
                    let w = `Type (TypeUtils.table_write_type t) in
                    let n = `Type (TypeUtils.table_needed_type t) in
-                   let eff = `Row (o#lookup_effects) in
 
-                   let e = fn_appl "AsList" [r; w; n; eff] [e] in
+                   let e = fn_appl "AsList" [r; w; n] [e] in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let xb = binder ~ty:t var in
                      o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,

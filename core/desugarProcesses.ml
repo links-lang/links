@@ -38,6 +38,7 @@ object (o : 'self_type)
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
         let process_type = `Application (Types.process, [`Row inner_eff]) in
+        let inner_wild = Types.row_with ("wild", `Present Types.unit_type) inner_eff in
 
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
@@ -64,7 +65,7 @@ object (o : 'self_type)
         let e : phrasenode =
           fn_appl_node spawn_fun [`Row inner_eff; `Type body_type; `Row outer_eff]
              [spawn_loc_phr;
-              fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_lin [[]] body]
+              fun_lit ~args:[(Types.make_tuple_type [], inner_wild)] dl_lin [[]] body]
         in
           (o, e, process_type)
     | Receive (cases, Some t) ->

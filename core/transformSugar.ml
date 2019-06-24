@@ -20,7 +20,7 @@ let type_section env =
   | Project label ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
       let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
-      let eb, e = Types.fresh_row_quantifier (lin_any, res_any) in
+      let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
       let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
         `ForAll (Types.box_quantifiers [ab; rhob; eb],
@@ -121,6 +121,12 @@ let rec listu :
       | x :: xs ->
           let (o, x) = f o x in
           let (o, xs) = listu o f xs in (o, x::xs)
+
+let on_effects o (eff : Types.row) fn x =
+  let effect_row = o#lookup_effects in
+  let o = o#with_effects eff in
+  let (o, x, y) = fn o x in
+  (o#with_effects effect_row, x, y)
 
 let check_type_application (e, t) k =
   begin
@@ -304,6 +310,7 @@ class transform (env : Types.typing_environment) =
                  let (o, offset, _) = o#phrase offset in
                    (o, (limit, offset)))
               range in
+          let (o, body, _) = on_effects o (Types.make_empty_closed_row ()) (fun o -> o#phrase) body in
           let (o, body, _) = o#phrase body in
           let (o, t) = o#datatype t in
             (o, Query (range, body, Some t), t)

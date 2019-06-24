@@ -3,7 +3,7 @@ open Utility
 open SourceCode
 open SourceCode.WithPos
 open Sugartypes
-open SugarConstructors.DummyPositions
+open SugarConstructors.SugartypesPositions
 
 let rec is_raw phrase =
   match WithPos.node phrase with
@@ -25,7 +25,6 @@ let tt =
     | ts -> Types.make_tuple_type ts
 
 let xml_str           = "xml"
-let string_to_xml_str = "stringToXml"
 let pure_str          = "pure"
 let plug_str          = "plug"
 let atatat_str        = "@@@"
@@ -74,23 +73,15 @@ object (o : 'self_type)
             assert false
 
   (* desugar a formlet body (the ^o transformation) *)
-  method private formlet_body_node : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) =
+  method formlet_body : Sugartypes.phrase -> ('self_type * Sugartypes.phrase * Types.datatype) =
     fun e ->
-        match e with
-          | TextNode s ->
-              let e =
-                fn_appl_node xml_str [`Row (o#lookup_effects)]
-                  [fn_appl string_to_xml_str [`Row (o#lookup_effects)]
-                     [constant_str s]]
-              in (o, e, Types.xml_type)
-          | Block (bs, e) ->
-              let (o, e, _) =
-                o#phrasenode
-                  (block_node
-                     (bs, (fn_appl xml_str [`Row (o#lookup_effects)] [e])))
-              in (o, e, Types.xml_type)
+        let ppos = WithPos.pos e in
+        match WithPos.node e with
+          | _ when is_raw e ->
+             let e = fn_appl ~ppos xml_str [`Row (o#lookup_effects)] [e]
+             in (o, e, Types.xml_type)
           | FormBinding (f, _) ->
-              let (o, {node=f; _}, ft) = o#phrase f
+              let (o, f, ft) = o#phrase f
               in (o, f, ft)
           | Xml ("#", [], None, contents) ->
               (* pure (fun ps -> vs) <*> e1 <*> ... <*> ek *)
@@ -120,28 +111,30 @@ object (o : 'self_type)
                     | [] ->
                         let (o, e, _) =
                           super#phrasenode (Xml ("#", [], None, contents))
-                        in (o, fn_appl_node xml_str [`Row (o#lookup_effects)]
+                        in (o, fn_appl ~ppos xml_str [`Row (o#lookup_effects)]
                                             [with_dummy_pos e],
                             Types.unit_type)
                     | _ ->
                         let (o, es, _) = TransformSugar.list o (fun o -> o#formlet_body) contents in
                         let eff = `Row (o#lookup_effects) in
                         let base : phrase =
-                          fn_appl pure_str [`Type ft; eff]
-                            [fun_lit ~args:(List.rev args) dl_unl (List.rev pss)
-                                     (tuple vs)] in
+                          fn_appl pure_str
+                            [`Type ft; eff]
+                            [fun_lit ~ppos ~args:(List.rev args) dl_unl (List.rev pss) (tuple vs)]
+                        in
                         let p, et =
                           List.fold_right
                             (fun arg (base, ft) ->
                                let arg_type = List.hd (TypeUtils.arg_types ft) in
                                let ft = TypeUtils.return_type ft in
                                let base : phrase =
-                                 fn_appl atatat_str [`Type arg_type; `Type ft; `Row closed_wild]
-                                         [arg; base]
+                                 fn_appl ~ppos atatat_str
+                                   [`Type arg_type; `Type ft; `Row closed_wild]
+                                   [arg; base]
                                in base, ft)
                             es (base, ft)
                         in
-                          (o, p.node, et)
+                          (o, p, et)
                 end
           | Xml(tag, attrs, attrexp, contents) ->
               (* plug (fun x -> (<tag attrs>{x}</tag>)) (<#>contents</#>)^o*)
@@ -149,18 +142,14 @@ object (o : 'self_type)
               let eff = o#lookup_effects in
               let context : phrase =
                 let name = Utility.gensym ~prefix:"_formlet_" () in
-                fun_lit ~args:[Types.make_tuple_type [Types.xml_type], closed_wild]
+                fun_lit ~ppos
+                        ~args:[Types.make_tuple_type [Types.xml_type], closed_wild]
                         dl_unl
                         [[variable_pat ~ty:(Types.xml_type) name]]
                         (xml tag attrs attrexp [block ([], var name)]) in
               let (o, e, t) = o#formlet_body (xml "#" [] None contents) in
-                (o, fn_appl_node plug_str [`Type t; `Row eff]
-                      [context; e], t)
+              (o, fn_appl ~ppos plug_str [`Type t; `Row eff] [context; e], t)
           | _ -> assert false
-
-  method formlet_body : Sugartypes.phrase -> ('self_type * Sugartypes.phrase * Types.datatype) =
-    fun {node; pos} ->
-      let (o, node, t) = o#formlet_body_node node in (o, WithPos.make ~pos node, t)
 
   method! phrasenode  : phrasenode -> ('self_type * phrasenode * Types.datatype) = function
     | Formlet (body, yields) ->
@@ -168,10 +157,10 @@ object (o : 'self_type)
         (* let e_in = `Formlet (body, yields) in *)
 
         let eff = o#lookup_effects in
-        let o = o#with_effects closed_wild in
         let (ps, _, ts) = o#formlet_patterns body in
         let (o, body, _body_type) = o#formlet_body body in
         let (o, ps) = TransformSugar.listu o (fun o -> o#pattern) ps in
+        let o = o#with_effects closed_wild in
         let (o, yields, yields_type) = o#phrase yields in
         let o = o#with_effects eff in
 
@@ -180,7 +169,7 @@ object (o : 'self_type)
             | [p] -> [[p]]
             | _ -> [[tuple_pat ps]] in
 
-        let arg_type = Types.make_tuple_type ts in
+        let arg_type = tt ts in
 
         let e =
           fn_appl_node atatat_str

@@ -128,7 +128,7 @@ object (o : 'self_type)
         (* put the extras in the environment *)
         let o =
           List.fold_left
-            (fun o { rec_binder = bndr; rec_definition =((tyvars, dt_opt), _); _ } ->
+            (fun o { rec_binder = bndr; rec_definition = ((tyvars, dt_opt), _); _ } ->
                match dt_opt with
                  | Some (_, extras) -> o#bind (Binder.to_name bndr) tyvars extras
                  | None -> assert false

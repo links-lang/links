@@ -1124,7 +1124,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Database functions *)
   "AsList",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(r, w, n)) -> [r]",
+   datatype "(TableHandle(r, w, n)) {}-> [r]",
   IMPURE);
 
   "getDatabaseConfig",
@@ -1621,7 +1621,8 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
-                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}
+                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type);
+                  Types.desugared = false }
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 

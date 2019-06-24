@@ -2580,13 +2580,15 @@ type tycon_environment  = tycon_spec Env.t
 type typing_environment = { var_env    : environment ;
                             rec_vars   : StringSet.t ;
                             tycon_env  : tycon_environment ;
-                            effect_row : row }
+                            effect_row : row;
+                            desugared  : bool }
                             [@@deriving show]
 
 let empty_typing_environment = { var_env = Env.empty;
                                  rec_vars = StringSet.empty;
                                  tycon_env =  Env.empty;
-                                 effect_row = make_empty_closed_row ()  }
+                                 effect_row = make_empty_closed_row ();
+                                 desugared = false }
 
 let normalise_typing_environment env =
   { env with
@@ -2596,12 +2598,13 @@ let normalise_typing_environment env =
 
 (* Functions on environments *)
 let extend_typing_environment
-    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _  }
-    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er } : typing_environment =
+    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _; desugared = _;  }
+    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er; desugared = dr } : typing_environment =
   { var_env    = Env.extend l r
   ; rec_vars   = StringSet.union lvars rvars
   ; tycon_env  = Env.extend al ar
-  ; effect_row = er }
+  ; effect_row = er
+  ; desugared  = dr }
 
 let string_of_environment = show_environment
 

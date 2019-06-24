@@ -70,6 +70,7 @@ type tyarg = Types.type_arg
 *)
 
 let default_subkind : subkind = (lin_unl, res_any)
+let default_effect_subkind : subkind = (lin_unl, res_any)
 
 type kind = PrimaryKind.t option * subkind option
     [@@deriving show]

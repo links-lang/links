@@ -106,7 +106,7 @@ let program prev_tyenv pos_context program =
   let apply_post_tc_transformer program transformer =
     let post = transformer prev_tyenv program in
     if repeat_type_check then
-      let _ = fst3 (TypeSugar.Check.program prev_tyenv post) in
+      let _ = fst3 (TypeSugar.Check.program { prev_tyenv with Types.desugared = true } post) in
       post
     else
       post
@@ -186,7 +186,7 @@ let interactive prev_tyenv pos_context sentence =
   let apply_post_tc_transformer sentence transformer =
     let post = transformer prev_tyenv sentence in
     if repeat_type_check then
-      let _ = fst3 (TypeSugar.Check.sentence prev_tyenv post) in
+      let _ = fst3 (TypeSugar.Check.sentence { prev_tyenv with Types.desugared = true } post) in
       post
     else
       post
