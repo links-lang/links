@@ -3635,7 +3635,25 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.switch_pattern (pos_and_typ e, no_pos pattern_type) in
               Switch (erase e, erase_cases binders, Some body_type), body_type, merge_usages [usages e; usages_cases binders]
         | TryInOtherwise (try_phrase, pat, in_phrase, unless_phrase, _) ->
-            let try_phrase = tc try_phrase in
+           (* Ensure that the body of the try has the SessionFail
+              effect and that the remaining effects agree with the
+              outer effects *)
+            let rho = Types.fresh_row_variable default_effect_subkind in
+            let outer_effects =
+              Types.row_with
+                (Value.session_exception_operation, Types.fresh_presence_variable default_subkind)
+                (StringMap.empty, rho, false) in
+            let try_effects =
+              Types.row_with
+                (Value.session_exception_operation, `Present Types.empty_type)
+                (StringMap.empty, rho, false) in
+
+            (* FIXME: define a proper griper for this rather than
+               stealing the one from above! *)
+            let () = unify ~handle:Gripers.do_operation
+                       (no_pos (`Effect context.effect_row), (Position.resolve_expression pos, `Effect outer_effects)) in
+
+            let try_phrase = type_check {context with effect_row = try_effects} try_phrase in
 
             (* Pattern.with_posype variable *)
             let pat = tpc pat in
