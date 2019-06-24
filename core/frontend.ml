@@ -25,10 +25,29 @@ struct
 
   let session_exceptions = Settings.get_value Basicsettings.Sessions.exceptions_enabled
 
-  let repeat_type_check =
-    Settings.get_value
-      Basicsettings.TypeSugar.check_frontend_transformations
+  let type_check_transformer transformer =
+    Settings.get_value Basicsettings.TypeSugar.check_frontend_transformations &&
+    match Settings.get_value Basicsettings.TypeSugar.check_frontend_transformations_filter with
+    | "all" -> true
+    | "" | "none" -> false
+    | filter -> String.split_on_char '\n' filter |> List.mem transformer
 
+  let trace_type_check_error name print pre post e =
+    let trace = Printexc.get_raw_backtrace () in
+    Debug.f "Error during desugaring pass '%s'\n%!" name;
+    let print x =
+      let buffer = Buffer.create 1024 in
+      let formatter = Format.formatter_of_buffer buffer in
+      Format.pp_set_margin formatter 120;
+      print formatter x;
+      Format.pp_print_flush formatter ();
+      Buffer.contents buffer
+    in
+    Debug.if_set Basicsettings.TypeSugar.check_frontend_transformations_dump
+      (fun () -> Printf.sprintf "Before %s:\n%s\n\n" name (print pre));
+    Debug.if_set Basicsettings.TypeSugar.check_frontend_transformations_dump
+      (fun () -> Printf.sprintf "After %s:\n%s\n\n" name (print post));
+    Printexc.raise_with_backtrace e trace
 
   let for_side_effects ignored_transformer program  =
     let _ = ignored_transformer program in
@@ -38,7 +57,7 @@ struct
     Sugartypes.program -> Sugartypes.program
 
   type post_typing_program_transformer =
-    Types.typing_environment -> Sugartypes.program -> Sugartypes.program
+    string * (Types.typing_environment -> Sugartypes.program -> Sugartypes.program)
 
 
   (* Program transformations before type-checking on programs (i.e., non-REPL mode *)
@@ -69,18 +88,19 @@ struct
     let only_if enabled f x y =
       if enabled then f x y else y in
     [
-      DesugarCP.desugar_program;
-      DesugarInners.desugar_program;
+      "cp", DesugarCP.desugar_program;
+      "inners", DesugarInners.desugar_program;
       (*only_if session_exceptions
         DesugarSessionExceptions.insert_toplevel_handlers; TODO*)
+      "session_exceptions",
       only_if session_exceptions
         DesugarSessionExceptions.desugar_program;
-      DesugarProcesses.desugar_program;
-      DesugarFors.desugar_program;
-      DesugarRegexes.desugar_program;
-      DesugarFormlets.desugar_program;
-      DesugarPages.desugar_program;
-      DesugarFuns.desugar_program;
+      "processes", DesugarProcesses.desugar_program;
+      "fors", DesugarFors.desugar_program;
+      "regexes", DesugarRegexes.desugar_program;
+      "formlets", DesugarFormlets.desugar_program;
+      "pages", DesugarPages.desugar_program;
+      "funs", DesugarFuns.desugar_program;
     ]
 
 
@@ -103,11 +123,13 @@ let program prev_tyenv pos_context program =
     TypeSugar.Check.program prev_tyenv pre_tc_program in
 
 
-  let apply_post_tc_transformer program transformer =
+  let apply_post_tc_transformer program (name, transformer) =
     let post = transformer prev_tyenv program in
-    if repeat_type_check then
-      let _ = fst3 (TypeSugar.Check.program { prev_tyenv with Types.desugared = true } post) in
-      post
+    if type_check_transformer name then
+      let _ =
+        try TypeSugar.Check.program { prev_tyenv with Types.desugared = true } post
+        with e -> trace_type_check_error name Sugartypes.pp_program program post e
+      in post
     else
       post
   in
@@ -129,7 +151,7 @@ let program prev_tyenv pos_context program =
     Sugartypes.sentence -> Sugartypes.sentence
 
   type post_typing_sentence_transformer =
-    Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence
+    string * (Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence)
 
   (* Program transformations before type-checking on sentences (i.e., REPL mode *)
   let interactive_pre_typing_transformers
@@ -155,14 +177,14 @@ let program prev_tyenv pos_context program =
   let interactive_post_typing_transformers
       : post_typing_sentence_transformer list =
     [
-      DesugarCP.desugar_sentence;
-      DesugarInners.desugar_sentence;
-      DesugarProcesses.desugar_sentence;
-      DesugarFors.desugar_sentence;
-      DesugarRegexes.desugar_sentence;
-      DesugarFormlets.desugar_sentence;
-      DesugarPages.desugar_sentence;
-      DesugarFuns.desugar_sentence;
+      "cp", DesugarCP.desugar_sentence;
+      "inners", DesugarInners.desugar_sentence;
+      "session_exceptions", DesugarProcesses.desugar_sentence;
+      "processes", DesugarFors.desugar_sentence;
+      "fors", DesugarRegexes.desugar_sentence;
+      "formlets", DesugarFormlets.desugar_sentence;
+      "pages", DesugarPages.desugar_sentence;
+      "funs", DesugarFuns.desugar_sentence;
     ]
 
 
@@ -183,11 +205,13 @@ let interactive prev_tyenv pos_context sentence =
   let (post_tc_sentence, t, post_tyenv) =
     TypeSugar.Check.sentence prev_tyenv pre_tc_sentence in
 
-  let apply_post_tc_transformer sentence transformer =
+  let apply_post_tc_transformer sentence (name, transformer) =
     let post = transformer prev_tyenv sentence in
-    if repeat_type_check then
-      let _ = fst3 (TypeSugar.Check.sentence { prev_tyenv with Types.desugared = true } post) in
-      post
+    if type_check_transformer name then
+      let _ =
+        try TypeSugar.Check.sentence { prev_tyenv with Types.desugared = true } post
+        with e -> trace_type_check_error name Sugartypes.pp_sentence sentence post e
+      in post
     else
       post
   in
