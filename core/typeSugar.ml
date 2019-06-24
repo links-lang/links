@@ -2413,7 +2413,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let ftype = make_ft lin pats effects (typ body) in
             (* To correctly determine the arity of nested anonymous functions we
-               need to make sure we only inlcude arguments of the current FunLit
+               need to make sure we only include arguments of the current FunLit
                and not the nested ones. *)
             let curried_argument_count = List.length pats in
             let argss =
@@ -2427,22 +2427,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   | _, _ -> failwith "Error reconstructing FunLit Type"
               in
                 arg_types (ftype, curried_argument_count) in
-
-            (*
-              FIXME:
-
-              fun (x:a) {x:a} : (b) -> b
-
-              should probably give an error, but doesn't if quantified
-              instantiation is switched on.
-
-              Perhaps what we should be doing is filtering out all type
-              variables that appear in patterns and type annotations
-              from the quantifiers. We could do this by adding them
-              to the environment passed to Utils.generalise.
-
-              Needs more thought...
-            *)
 
             let e = FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body), location) in
             e, ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)

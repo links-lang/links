@@ -89,7 +89,7 @@ class desugar_funs env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
-  method private desugarFunLit argss lin lam location tvs =
+  method private desugarFunLit argss lin lam location =
     let inner_mb     = snd (last argss) in
     let (o, lam, rt) = o#funlit inner_mb lam in
     let ft = List.fold_right (fun (args, mb) rt ->
@@ -98,25 +98,24 @@ object (o : 'self_type)
                  else `Function (args, mb, rt))
                argss rt in
     let f = gensym ~prefix:"_fun_" () in
-    let body, tvs, ft = match tvs with
-      | [] -> Var f, [], ft
-      | _  ->
-         (* If a FunLit is surrounded by a type abstraction we need to generate
-            a corresponding type application.  Type abstractions are inserted
-            during type checking.  This really shouldn't happen since it couples
-            typechecking with this desugaring stage.  If we didn't insert type
-            application here the resulting AST would be ill-typed. *)
-         let (tvs, tyargs), ft = Generalise.generalise env.Types.var_env ft in
-         let ft = Instantiate.freshen_quantifiers ft in
-         tappl (Var f, tyargs), tvs, ft in
-    let (bndr, lin, tvs, loc) =
-      unwrap_def (binder ~ty:ft f, lin, (tvs, lam), location) in
+    let body, tyvars, ft, fti =
+      (* FIXME: do the generalisation and instantiation steps as part
+         of type inference and store the results in the FunLit for use
+         here. (The current implementation is broken because
+         generalisation turns previously flexible type variables into
+         rigid ones, which persist from the first round of type
+         checking.) *)
+      let (tyvars, _tyargs), ft = Generalise.generalise env.Types.var_env ft in
+      let (tyargs, fti) = Instantiate.typ ft in
+      tappl (Var f, tyargs), tyvars, ft, fti in
+    let (bndr, lin, def, loc) =
+      unwrap_def (binder ~ty:ft f, lin, (tyvars, lam), location) in
     let e = block_node ([with_dummy_pos (Fun { fun_binder = bndr; fun_linearity = lin;
-                                               fun_definition = tvs; fun_location = loc;
+                                               fun_definition = def; fun_location = loc;
                                                fun_signature = None;
                                                fun_unsafe_signature = false; })],
                          with_dummy_pos body)
-    in (o, e, ft)
+    in (o, e, fti)
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     (* FIXME: was this code ever necessary? *)
@@ -127,7 +126,7 @@ object (o : 'self_type)
      *    (o, TAbstr (tvs', with_dummy_pos (TAppl (with_dummy_pos (
      *         TAbstr (tvs, with_dummy_pos e)), tyargs))), ft) *)
     | FunLit (Some argss, lin, lam, location) ->
-       o#desugarFunLit argss lin lam location []
+       o#desugarFunLit argss lin lam location
     | Section (Section.Project name) ->
         let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
         let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_unl, res_any) in
