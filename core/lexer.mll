@@ -227,6 +227,7 @@ let keywords = [
  "try"     , TRY;
  "typename" , TYPENAME;
  "update"   , UPDATE;
+ "unsafe"   , UNSAFE;
  "values"   , VALUES;
  "var"      , VAR;
  "where"    , WHERE;

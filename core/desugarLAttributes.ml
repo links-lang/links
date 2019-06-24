@@ -122,7 +122,7 @@ let desugar_lnames (p : phrase) : phrase * (string * string) StringMap.t =
     p', !lnames
 
 let let_in name rhs body : phrase =
-  block ([val_binding' NoSig (PatName name, rhs, loc_unknown)], body)
+  block ([val_binding' None (PatName name, rhs, loc_unknown)], body)
 
 let bind_lname_vars lnames = function
   | "l:action" as attr, es ->

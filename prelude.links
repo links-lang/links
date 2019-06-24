@@ -11,6 +11,7 @@ fun println(msg) {
 
 # Don't use a for comprehension to define concatMap, as
 # for comprehensions are desugared into concatMap!
+unsafe sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
 fun concatMap(f, l) {
   switch (l) {
     case [] -> []
@@ -18,6 +19,7 @@ fun concatMap(f, l) {
   }
 }
 
+unsafe sig map : ((a) -b-> c, [a]) -b-> [c]
 fun map(f, l) {
   switch (l) {
     case []     -> []
@@ -51,7 +53,7 @@ fun sortBy (f, l) {
 
 # need to be careful to make sure this doesn't get
 # optimised away - it does if we eta reduce it
-sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
+unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
 fun sortByBase(f, l) {sortBy(f, l)}
 
 fun all(p, l) {

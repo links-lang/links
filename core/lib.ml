@@ -1571,26 +1571,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     PURE)
 ]
 
-(* HACK
-
-   these functions are recursive, so type inference has no way of
-   knowing that they are in fact tame
-*)
-let patch_prelude_funs tyenv =
-  {tyenv with
-     var_env =
-      List.fold_right
-        (fun (name, t) env ->
-          if Env.String.has env name then
-            Env.String.bind env (name, t)
-          else
-            env)
-        [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
-         ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
-         ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
-         ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")]
-        tyenv.Types.var_env}
-
 let impl : located_primitive -> primitive option = function
   | `Client -> None
   | `Server p

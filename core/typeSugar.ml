@@ -323,6 +323,8 @@ sig
   val bind_rec_annotation : griper
   val bind_rec_rec : griper
 
+  val bind_unsafe_fun_annotation : griper
+
   val bind_exp : griper
 
   val list_pattern : griper
@@ -1135,6 +1137,15 @@ end
                "but its previously inferred type is"        ^ nli () ^
                 code ppr_rt)
 
+    let bind_unsafe_fun_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The function definition has an unsafe type of "   ^ nli () ^
+                code ppr_rt                                       ^ nl  () ^
+               "but this is incompatible with the actual type of" ^ nli () ^
+                code ppr_lt)
+
     let bind_exp ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
       fixed_type pos "Side-effect expressions" t l
@@ -1775,6 +1786,47 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
       Gripers.duplicate_names_in_pattern pos
     else
       List.map fst (StringMap.bindings binderss)
+
+let map_effects fn =
+  let transform = object(o)
+    inherit Types.Transform.visitor as super
+
+    method! typ = function
+      | `Function (at, e, rt) -> super#typ (`Function (at, o#eff_row e, rt))
+      | `Lolli (at, e, rt) -> super#typ (`Lolli (at, o#eff_row e, rt))
+      | dt -> super#typ dt
+
+    method eff_row (fsp, rv, d) = (fn fsp, rv, d)
+  end
+  in
+  transform#typ ->- fst
+
+(** Adds the wild effect to the right-most arrow on a type. *)
+let make_unsafe_signature =
+  let make_wild fsp =
+    if StringMap.mem "wild" fsp then
+      fsp
+    else
+      StringMap.add "wild" (`Present Types.unit_type) fsp
+  in
+  map_effects make_wild
+
+(* Strips the wild effect from an inferred type, and ensures the given "unsafe"
+ *    type is equivalent. *)
+let check_unsafe_signature context unify inner = function
+  | None -> raise (internal_error "Unsafe flag without signature")
+  | Some (_, Some unsafe) ->
+     let remove_wild = StringMap.filter (fun k v ->
+       match k, v with
+       | "wild", `Present v when v = Types.unit_type -> false
+       | _ -> true)
+     in
+     let _, inner = Generalise.generalise context.var_env inner in
+     let _, unsafe = Generalise.generalise context.var_env unsafe in
+     let inner = map_effects remove_wild inner in
+     unify ~handle:Gripers.bind_unsafe_fun_annotation (inner, unsafe);
+     unsafe
+  | Some (_, None) -> raise (internal_error "Sugartypes.datatype' without a Types.typ instance")
 
 let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
   let make_singleton_row =
@@ -3664,8 +3716,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
  *)
 and type_binding : context -> binding -> binding * context * usagemap =
   fun context {node = def; pos} ->
+    let _UNKNOWN_POS_ = "<unknown>" in
+    let no_pos t = (_UNKNOWN_POS_, t) in
     let type_check = type_check in
-    let unify pos (l, r) = unify_or_raise ~pos:pos (l, r)
+    let unify pos (l, r) = unify_or_raise ~pos (l, r) in
+    let unify_nopos ~handle (l, r) = unify_or_raise ~pos ~handle (no_pos l, no_pos r)
     and typ (_,t,_) = t
     and erase (e, _, _) = e
     and usages (_,_,u) = u
@@ -3675,8 +3730,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
     and tpc = type_pattern `Closed
     and pattern_env (_, e, _) = e
     and (++) ctxt env' = {ctxt with var_env = Env.extend ctxt.var_env env'} in
-    let _UNKNOWN_POS_ = "<unknown>" in
-    let no_pos t = (_UNKNOWN_POS_, t) in
     let pattern_pos ({pos=p;_},_,_) = Position.resolve_expression p in
     let ppos_and_typ p = (pattern_pos p, pattern_typ p) in
     let uexp_pos p = WithPos.pos p |> Position.resolve_expression in
@@ -3719,7 +3772,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
             {empty_context with
               var_env = penv},
             usage
-      | Fun (bndr, lin, (_, (pats, body)), location, t_ann') ->
+      | Fun { fun_binder = bndr; fun_linearity = lin;
+              fun_definition = (_, (pats, body));
+              fun_location; fun_signature = t_ann';
+              fun_unsafe_signature = unsafe } ->
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let pats = List.map (List.map tpc) pats in
@@ -3738,7 +3794,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
-
+                  let t = if unsafe then make_unsafe_signature t else t in
                   let (_, ft) = Generalise.generalise_rigid context.var_env t in
                   let _, ft_mono = TypeUtils.split_quantified_type ft in
 
@@ -3789,6 +3845,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                              (usages body)
             else () in
 
+          let ft = if unsafe then check_unsafe_signature context unify_nopos ft t_ann' else ft in
           let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
 
           (* It could be handy to support a (different) syntax for
@@ -3818,10 +3875,11 @@ and type_binding : context -> binding -> binding * context * usagemap =
                end in
 
           (* let ft = Instantiate.freshen_quantifiers ft in *)
-            (Fun (Binder.set_type bndr ft,
-                   lin,
-                   (tyvars, (List.map (List.map erase_pat) pats, erase body)),
-                   location, t_ann'),
+          let ft = Instantiate.freshen_quantifiers ft in
+            (Fun { fun_binder = Binder.set_type bndr ft;
+                   fun_linearity = lin;
+                   fun_definition = (tyvars, (List.map (List.map erase_pat) pats, erase body));
+                   fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe },
              {empty_context with
                 var_env = Env.bind Env.empty (name, ft)},
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
@@ -3848,7 +3906,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
           let inner_rec_vars, inner_env, patss =
             List.fold_left
-              (fun (inner_rec_vars, inner_env, patss) (bndr, lin, (_, (pats, _body)), _, t_ann', pos) ->
+              (fun (inner_rec_vars, inner_env, patss)
+                   { rec_binder = bndr; rec_linearity = lin;
+                     rec_definition = (_, (pats, _));
+                     rec_signature = t_ann'; rec_unsafe_signature = unsafe; rec_pos = pos; _ } ->
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
@@ -3871,6 +3932,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          make_ft_poly_curry lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any))
                      | Some t ->
                          (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
+                         let t = if unsafe then make_unsafe_signature t else t in
                          let shape = make_ft lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any)) in
                          let (_, ft) = Generalise.generalise_rigid context.var_env t in
                          (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
@@ -3894,7 +3956,11 @@ and type_binding : context -> binding -> binding * context * usagemap =
             List.split
               (List.rev
                 (List.fold_left2
-                   (fun defs_and_uses (bndr, lin, (_, (_, body)), location, t_ann, pos) pats ->
+                   (fun defs_and_uses
+                        ({ rec_binder = bndr; rec_linearity = lin;
+                           rec_definition = (_, (_, body));
+                           rec_pos = pos; _ } as fn)
+                        pats ->
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let body_context = {context with var_env = Env.extend body_env pat_env} in
@@ -3933,16 +3999,20 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let _, ft_mono = TypeUtils.split_quantified_type ft in
                       let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft_mono) in
 
-                      ((Binder.erase_type bndr, lin, (([], None), (pats, body)), location, t_ann, pos), used) :: defs_and_uses) [] defs patss)) in
+                      ((fn, Binder.erase_type bndr, (([], None), (pats, body))), used) :: defs_and_uses) [] defs patss)) in
 
           (* Generalise to obtain the outer types *)
           let defs, outer_env =
             let defs, outer_env =
               List.fold_left2
-                (fun (defs, outer_env) (bndr, lin, (_, (_, body)), location, t_ann', pos) pats ->
+                (fun (defs, outer_env) (fn, bndr, (_, (_, body))) pats ->
                    let name = Binder.to_name bndr in
                    let inner = Env.lookup inner_env name in
-                   let t_ann = resolve_type_annotation bndr t_ann' in
+
+                   let t_ann = resolve_type_annotation bndr fn.rec_signature in
+                   let inner = if fn.rec_unsafe_signature
+                               then check_unsafe_signature context unify_nopos inner fn.rec_signature
+                               else inner in
                    let inner, outer, tyvars =
                      match inner with
                        | `ForAll (inner_tyvars, inner_body) ->
@@ -4013,13 +4083,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
-                     ((Binder.set_type bndr outer, lin, ((tyvars, Some inner), (pats, body)), location, t_ann', pos)::defs,
+                   ({ fn with rec_binder = Binder.set_type bndr outer;
+                              rec_definition = ((tyvars, Some inner), (pats, body)); }::defs,
                       Env.bind outer_env (name, outer)))
                 ([], Env.empty) defs patss
             in
               List.rev defs, outer_env in
 
-          let defined = List.map (fun (bndr, _, _, _, _, _) -> Binder.to_name bndr) defs
+          let defined = List.map (fun x -> Binder.to_name x.rec_binder) defs
 
           in
             Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))

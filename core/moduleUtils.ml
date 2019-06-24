@@ -173,10 +173,10 @@ let create_module_info_map program =
       | [] -> []
       | { node = Val (pat, _, _, _); _ } :: bs ->
          (get_pattern_variables pat) @ get_binding_names bs
-      | { node = Fun (bndr, _, _, _, _); _ } :: bs ->
-         Binder.to_name bndr :: (get_binding_names bs)
+      | { node = Fun fn; _ } :: bs ->
+         Binder.to_name fn.fun_binder :: (get_binding_names bs)
       | { node = Funs fs ; _ } :: bs ->
-          (List.map (fun (bnd, _, _, _, _, _) -> Binder.to_name bnd) fs)
+          (List.map (fun fn -> Binder.to_name fn.rec_binder) fs)
           @ get_binding_names bs
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 

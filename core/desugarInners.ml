@@ -128,7 +128,7 @@ object (o : 'self_type)
         (* put the extras in the environment *)
         let o =
           List.fold_left
-            (fun o (bndr, _, ((tyvars, dt_opt), _), _, _, _) ->
+            (fun o { rec_binder = bndr; rec_definition =((tyvars, dt_opt), _); _ } ->
                match dt_opt with
                  | Some (_, extras) -> o#bind (Binder.to_name bndr) tyvars extras
                  | None -> assert false
@@ -140,11 +140,13 @@ object (o : 'self_type)
           let rec list o =
             function
               | [] -> (o, [])
-              | (bndr, lin, ((tyvars, Some (_inner, extras)), lam), location, t, pos)::defs ->
+              | ({ rec_binder = bndr;
+                   rec_definition = ((tyvars, Some (_inner, extras)), lam);
+                   _ } as fn) :: defs ->
                  let outer = Binder.to_type bndr in
                  let (o, defs) = list o defs in
                  let extras = List.map (fun _ -> None) extras in
-                 (o, (bndr, lin, ((tyvars, Some (outer, extras)), lam), location, t, pos)::defs)
+                 (o, { fn with rec_definition = ((tyvars, Some (outer, extras)), lam) } :: defs)
               | _ -> assert false
           in
             list o defs in
@@ -162,8 +164,7 @@ object (o : 'self_type)
         (* remove the extras from the environment *)
         let o =
           List.fold_left
-            (fun o (bndr, _, ((_tyvars, _), _), _, _, _) ->
-               o#unbind (Binder.to_name bndr))
+            (fun o fn -> o#unbind (Binder.to_name fn.rec_binder))
             o defs
         in
           (o, (Funs defs))
@@ -202,7 +203,7 @@ object
     | Funs defs ->
         {< has_no_inners =
             List.for_all
-              (fun (_f, _, ((_tyvars, dt_opt), _), _, _, _) ->
+              (fun { rec_definition = ((_, dt_opt), _); _ } ->
                  match dt_opt with
                     | None -> assert false
                     | Some (_inner, extras) ->

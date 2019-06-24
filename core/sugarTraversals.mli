@@ -65,6 +65,8 @@ class map :
     method tybinop         : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
+    method function_definition : function_definition -> function_definition
+    method recursive_function  : recursive_function -> recursive_function
     method program         : program -> program
     method unknown         : 'a. 'a -> 'a
   end
@@ -135,6 +137,8 @@ class fold :
     method tybinop         : tyarg list * BinaryOp.t -> 'self
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
+    method function_definition : function_definition -> 'self
+    method recursive_function  : recursive_function -> 'self
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
   end
@@ -201,5 +205,7 @@ object ('self)
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
   method tyunary_op      : tyarg list * UnaryOp.t -> 'self * (tyarg list * UnaryOp.t)
   method unary_op        : UnaryOp.t -> 'self * UnaryOp.t
+  method function_definition : function_definition -> 'self * function_definition
+  method recursive_function  : recursive_function -> 'self * recursive_function
   method unknown         : 'a . 'a -> 'self * 'a
 end
