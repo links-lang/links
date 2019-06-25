@@ -68,6 +68,11 @@ class map :
     method function_definition : function_definition -> function_definition
     method recursive_function  : recursive_function -> recursive_function
     method program         : program -> program
+    method typ             : Types.datatype -> Types.datatype
+    method type_row        : Types.row -> Types.row
+    method tyarg           : tyarg -> tyarg
+    method tyvar           : tyvar -> tyvar
+    method type_field_spec : Types.field_spec -> Types.field_spec
     method unknown         : 'a. 'a -> 'a
   end
 

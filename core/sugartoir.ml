@@ -792,9 +792,9 @@ struct
              let k  = Binder.to_name bndr in
              let kt = Binder.to_type bndr in
              I.escape ((kt, k, Scope.Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
-          | Section (Section.Minus) -> cofv (lookup_var "-")
-          | Section (Section.FloatMinus) -> cofv (lookup_var "-.")
-          | Section (Section.Name name) -> cofv (lookup_var name)
+          | Section Section.Minus | FreezeSection Section.Minus -> cofv (lookup_var "-")
+          | Section Section.FloatMinus | FreezeSection Section.FloatMinus -> cofv (lookup_var "-.")
+          | Section (Section.Name name) | FreezeSection (Section.Name name) -> cofv (lookup_var name)
           | Conditional (p, e1, e2) ->
               I.condition (ev p, ec e1, ec e2)
           | InfixAppl ((tyargs, BinaryOp.Name ((">" | ">=" | "==" | "<" | "<=" | "<>") as op)), e1, e2) ->
@@ -1040,6 +1040,7 @@ struct
           | Spawn _
           | Receive _
           | Section (Section.Project _)
+          | FreezeSection (Section.Project _)
           | FunLit _
           | Iteration _
           | InfixAppl ((_, BinaryOp.RegexMatch _), _, _)

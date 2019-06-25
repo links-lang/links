@@ -68,10 +68,18 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
               ([ps], block
                   ([fun_binding' ~linearity ~location (binder ~ty:t g)
                                  (make_lam rt (pss, body))],
-                   var g))
+                   freeze_var g))
         | _, _ -> assert false
     in make_lam rt lam
   in (binder ~ty:ft f, linearity, (tyvars, lam), location)
+
+let instantiate_node subst =
+  object
+    inherit SugarTraversals.map
+    method! typ = Instantiate.datatype subst
+    method! type_row = Instantiate.row subst
+    method! type_field_spec = Instantiate.presence subst
+  end
 
 (*
   unwrap a curried function definition
@@ -92,22 +100,26 @@ object (o : 'self_type)
   method private desugarFunLit argss lin lam location =
     let inner_mb     = snd (last argss) in
     let (o, lam, rt) = o#funlit inner_mb lam in
-    let ft = List.fold_right (fun (args, mb) rt ->
+    let fti = List.fold_right (fun (args, mb) rt ->
                  if DeclaredLinearity.is_linear lin
                  then `Lolli (args, mb, rt)
                  else `Function (args, mb, rt))
                argss rt in
     let f = gensym ~prefix:"_fun_" () in
-    let body, tyvars, ft, fti =
-      (* FIXME: do the generalisation and instantiation steps as part
-         of type inference and store the results in the FunLit for use
-         here. (The current implementation is broken because
-         generalisation turns previously flexible type variables into
-         rigid ones, which persist from the first round of type
-         checking.) *)
-      let (tyvars, _tyargs), ft = Generalise.generalise env.Types.var_env ft in
-      let (tyargs, fti) = Instantiate.typ ft in
-      tappl (Var f, tyargs), tyvars, ft, fti in
+    (* FIXME: do the generalisation and instantiation steps as part of type
+       inference and store the results in the FunLit for use here.
+
+       The current implementation is a little ugly - we instantiate, and then
+       substitute any flexible variables with their rigid counterpoints. This
+       prevents rigid variables leaking outside the quantifier. *)
+    let (tyvars, tyargs), map, ft = Generalise.generalise_with_subst var_env fti in
+    let body = tappl (FreezeVar f, tyargs) in
+    let lam =
+      let e, r, p = map in
+      if IntMap.is_empty e && IntMap.is_empty r && IntMap.is_empty p
+      then lam
+      else (instantiate_node map)#funlit lam
+    in
     let (bndr, lin, def, loc) =
       unwrap_def (binder ~ty:ft f, lin, (tyvars, lam), location) in
     let e = block_node ([with_dummy_pos (Fun { fun_binder = bndr; fun_linearity = lin;
@@ -120,7 +132,7 @@ object (o : 'self_type)
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | FunLit (Some argss, lin, lam, location) ->
        o#desugarFunLit argss lin lam location
-    | Section (Section.Project name) ->
+    | Section (Section.Project name) | FreezeSection (Section.Project name) ->
         let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
         let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_unl, res_any) in
         let effb, eff = Types.fresh_row_quantifier default_effect_subkind in
@@ -137,7 +149,7 @@ object (o : 'self_type)
         let e : phrasenode =
           block_node
             ([fun_binding' ~tyvars:[ab; rhob; effb] (binder ~ty:ft f) (pss, body)],
-             var f)
+             freeze_var f)
         in (o, e, ft)
     | e -> super#phrasenode e
 

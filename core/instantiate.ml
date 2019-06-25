@@ -27,7 +27,7 @@ type instantiation_maps = (datatype IntMap.t * row IntMap.t * field_spec IntMap.
      - is instantiation for first-class polymorphism correct?
 *)
 
-let instantiate_datatype : instantiation_maps -> datatype -> datatype =
+let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) * (field_spec -> field_spec) =
   fun (tenv, renv, penv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
@@ -167,7 +167,10 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
         | `Row r -> `Row (inst_row rec_env r)
         | `Presence f -> `Presence (inst_presence rec_env f)
     in
-      inst (IntMap.empty, IntMap.empty)
+    let env = (IntMap.empty, IntMap.empty) in
+    inst env, inst_row env, inst_presence env
+
+let instantiate_datatype = instantiates ->- fst3
 
 (** instantiate_typ t
 
@@ -290,10 +293,12 @@ let var = instantiate
 let typ = instantiate_typ
 let typ_rigid = instantiate_rigid
 let datatype = instantiate_datatype
+let row = instantiates ->- snd3
+let presence = instantiates ->- thd3
 
 module SEnv = Env.String
 
-let populate_instantiation_maps dt_str qs tyargs =
+let populate_instantiation_maps ~name qs tyargs =
   List.fold_right2
     (fun var tyarg (tenv, renv, penv) ->
        match (var, tyarg) with
@@ -306,7 +311,7 @@ let populate_instantiation_maps dt_str qs tyargs =
          | _ ->
              raise (internal_error
                ("Kind mismatch in type application: " ^
-                dt_str ^ " applied to type arguments: " ^
+                name ^ " applied to type arguments: " ^
                 mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs)))
     qs tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
 
@@ -339,7 +344,7 @@ let instantiation_maps_of_type_arguments :
         vars, []
       else
         (take tyargs_length vars, drop tyargs_length vars) in
-    let tenv, renv, penv = populate_instantiation_maps (Types.string_of_datatype pt) vars tyargs in
+    let tenv, renv, penv = populate_instantiation_maps ~name:(Types.string_of_datatype pt) vars tyargs in
     match remaining_quantifiers with
       | [] -> t, (tenv, renv, penv)
       | _ -> `ForAll (Types.box_quantifiers remaining_quantifiers, t),  (tenv, renv, penv)
@@ -397,7 +402,7 @@ let replace_quantifiers t qs' =
     | t -> t
 
 let recursive_application name qs tyargs body =
-  let tenv, renv, penv = populate_instantiation_maps name qs tyargs in
+  let tenv, renv, penv = populate_instantiation_maps ~name qs tyargs in
   let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
   body
 
@@ -418,7 +423,7 @@ let alias name tyargs env =
           "Type alias %s applied with incorrect arity (%d instead of %d). This should have been checked prior to instantiation."
           name (List.length tyargs) (List.length vars)))
     | Some (`Alias (vars, body)) ->
-        let tenv, renv, penv = populate_instantiation_maps name vars tyargs in
+        let tenv, renv, penv = populate_instantiation_maps ~name vars tyargs in
         (* instantiate the type variables bound by the alias
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)

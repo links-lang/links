@@ -56,6 +56,7 @@ module SugarConstructors (Position : Pos)
   (** Common stuff *)
 
   let var ?(ppos=dp) name = with_pos ppos (Var name)
+  let freeze_var ?(ppos=dp) name = with_pos ppos (FreezeVar name)
 
   (* Create a Block from block_body. *)
   let block_node       block_contents = Block block_contents
@@ -142,7 +143,7 @@ module SugarConstructors (Position : Pos)
     with_pos ppos (Spawn (spawn_kind, location, blk, row))
 
   let fn_appl_node ?(ppos=dp) name tyvars vars =
-    FnAppl (with_pos ppos (tappl (Var name, tyvars)), vars)
+    FnAppl (with_pos ppos (tappl (FreezeVar name, tyvars)), vars)
 
   let fn_appl ?(ppos=dp) name tyvars vars =
     with_pos ppos (fn_appl_node ~ppos name tyvars vars)

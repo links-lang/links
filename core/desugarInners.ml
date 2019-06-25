@@ -13,21 +13,41 @@ open Sugartypes
 
 let internal_error message = Errors.InternalError { filename = "desugarInners"; message }
 
-let rec add_extras qs (extras, tyargs) =
+let rec add_extras in_fun qs (extras, tyargs) =
   match qs, extras with
   | [], [] -> []
-  | q::qs, None::extras -> Types.type_arg_of_quantifier q :: add_extras qs (extras, tyargs)
-  | _::qs, Some i::extras -> List.nth tyargs i :: add_extras qs (extras, tyargs)
+  | q::qs, None::extras ->
+     let q = if in_fun then
+               Types.type_arg_of_quantifier q
+             else
+               snd (Types.freshen_quantifier_flexible q)
+     in q :: add_extras in_fun qs (extras, tyargs)
+  | _::qs, Some i::extras -> List.nth tyargs i :: add_extras in_fun qs (extras, tyargs)
   | _, _ -> raise (internal_error "Mismatch in number of quantifiers and type arguments")
+
+let freeze = function
+  | Var v -> FreezeVar v
+  | Section s -> FreezeSection s
+  | FreezeVar _ | FreezeSection _ as e -> e
+  | _ -> failwith "Unfreezable node"
 
 class desugar_inners env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   val extra_env = StringMap.empty
+  val visiting_funs = StringSet.empty
 
   method with_extra_env env =
     {< extra_env = env >}
+
+  method with_visiting funs = {< visiting_funs = funs>}
+
+  method add_extras name tyargs =
+    let tyvars, extras = StringMap.find name extra_env in
+    let in_fun = StringSet.mem name visiting_funs in
+    let tyargs = add_extras in_fun tyvars (extras, tyargs) in
+    tyargs
 
   method bind f tyvars extras =
     {< extra_env = StringMap.add f (tyvars, extras) extra_env >}
@@ -37,26 +57,28 @@ object (o : 'self_type)
 
   method! phrasenode = function
     | (Var name as e)
-    | (Section (Section.Name name) as e) when StringMap.mem name extra_env ->
-       let tyvars, extras = StringMap.find name extra_env in
-       let tyargs = add_extras tyvars (extras, []) in
+    | (FreezeVar name as e)
+    | (Section (Section.Name name) as e)
+    | (FreezeSection (Section.Name name) as e)
+         when StringMap.mem name extra_env ->
+       let tyargs = o#add_extras name [] in
        let o = o#unbind name in
-       let (o, e, t) = o#phrasenode (TAppl (SourceCode.WithPos.make e, tyargs)) in
+       let (o, e, t) = o#phrasenode (tappl (freeze e, tyargs)) in
        (o#with_extra_env extra_env, e, t)
     | TAppl ({node=Var name;_} as p, tyargs)
-    | TAppl ({node=Section (Section.Name name);_} as p, tyargs) when StringMap.mem name extra_env ->
-        let tyvars, extras = StringMap.find name extra_env in
-        let tyargs = add_extras tyvars (extras, tyargs) in
+    | TAppl ({node=FreezeVar name;_} as p, tyargs)
+    | TAppl ({node=Section (Section.Name name);_} as p, tyargs)
+    | TAppl ({node=FreezeSection (Section.Name name);_} as p, tyargs)
+         when StringMap.mem name extra_env ->
+        let tyargs = o#add_extras name tyargs in
         let o = o#unbind name in
-        let (o, e, t) = o#phrasenode (TAppl (p, tyargs)) in
+        let (o, e, t) = o#phrasenode (TAppl (SourceCode.WithPos.map ~f:freeze p, tyargs)) in
         (o#with_extra_env extra_env, e, t)
     | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
-        let tyvars, extras = StringMap.find name extra_env in
-        let tyargs = add_extras tyvars (extras, tyargs) in
+        let tyargs = o#add_extras name tyargs in
           super#phrasenode (InfixAppl ((tyargs, BinaryOp.Name name), e1, e2))
     | UnaryAppl ((tyargs, UnaryOp.Name name), e) when StringMap.mem name extra_env ->
-        let tyvars, extras = StringMap.find name extra_env in
-        let tyargs = add_extras tyvars (extras, tyargs) in
+        let tyargs = o#add_extras name tyargs in
           super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
     (* HACK: manage the lexical scope of extras *)
     | Spawn _ as e ->
@@ -108,7 +130,25 @@ object (o : 'self_type)
             list o defs in
 
         (* transform the function bodies *)
-        let (o, defs) = o#rec_bodies defs in
+        let (o, defs) =
+          let outer_tyvars = o#backup_quantifiers in
+          let rec list o =
+            function
+            | [] -> (o, [])
+            | { rec_binder; rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn :: defs ->
+               let o = o#with_visiting (StringSet.add (Binder.to_name rec_binder) visiting_funs) in
+               let (o, tyvars) = o#quantifiers tyvars in
+               let (o, inner) = o#datatype inner in
+               let inner_effects = TransformSugar.fun_effects inner (fst lam) in
+               let (o, lam, _) = o#funlit inner_effects lam in
+               let o = o#restore_quantifiers outer_tyvars in
+               let o = o#with_visiting visiting_funs in
+
+               let (o, defs) = list o defs in
+               (o, { fn with rec_definition = ((tyvars, Some (inner, extras)), lam) } :: defs)
+            | _ :: _ -> assert false
+          in list o defs
+        in
 
         (*
            It is important to explicitly remove the extras from the

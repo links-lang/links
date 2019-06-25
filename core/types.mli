@@ -222,6 +222,7 @@ val free_row_type_vars : row -> TypeVarSet.t
 val free_tyarg_vars : type_arg -> TypeVarSet.t
 val free_bound_type_vars     : ?include_aliases:bool -> typ -> Vars.vars_list
 val free_bound_row_type_vars : ?include_aliases:bool -> row -> Vars.vars_list
+val free_bound_type_arg_type_vars : ?include_aliases:bool -> type_arg -> Vars.vars_list
 
 val var_of_quantifier : quantifier -> int
 val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
