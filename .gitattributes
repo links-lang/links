@@ -7,4 +7,4 @@
 
 # An important exception is a file for testing Links' support for DOS line
 # endings
-tests/dos-newlines.links text=crlf
+tests/dos-newlines.links text eol=crlf
