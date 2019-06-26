@@ -9,3 +9,7 @@ type 'a t =
   | InfixAppl of Binary.t * 'a phrase * 'a phrase
 
 and 'a phrase = 'a * 'a t
+
+let node (_, v) = v
+
+let pos (pos, _) = pos

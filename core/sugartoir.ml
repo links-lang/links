@@ -962,12 +962,13 @@ struct
                 I.lens_drop_handle (lens, drop, key, default, t)
           | LensSelectLit (lens, pred, Some t) ->
               let lens = ev lens in
-              if Lens_sugar_conv.is_dynamic pred then
-                let pred = ev pred in
-                I.lens_select_handle (lens, `Dynamic pred, t)
-              else
+              let trow = Lens.Type.sort t |> Lens.Sort.record_type in
+              if Lens_sugar_conv.is_static trow pred then
                 let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
                 I.lens_select_handle (lens, `Static pred, t)
+              else
+                let pred = ev pred in
+                I.lens_select_handle (lens, `Dynamic pred, t)
           | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in

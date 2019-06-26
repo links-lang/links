@@ -17,8 +17,8 @@ val binary_of_sugartype_op :
 val cols_of_phrase : Sugartypes.phrase -> string list
 
 (** Determine if the predicate should dynamically be checked or not. *)
-val is_dynamic :
-  Sugartypes.phrase -> bool
+val is_static :
+  Lens.Phrase.Type.t -> Sugartypes.phrase -> bool
 
 val lens_sugar_phrase_of_sugar :
   Sugartypes.phrase -> Position.t Lens.Phrase.Sugar.phrase
