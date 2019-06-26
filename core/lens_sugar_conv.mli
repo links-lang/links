@@ -3,6 +3,10 @@
 
 open SourceCode
 
+module Error : sig
+  type t = Internal_error of string [@@deriving show]
+end
+
 (** Convert a Links unary operator to a Relational Lenses unary operator. *)
 val unary_of_sugartype_op :
   Operators.UnaryOp.t -> Lens.Operators.Unary.t option
