@@ -236,6 +236,7 @@ sig
   val record_with : griper
 
   val lens_predicate : griper
+  val lens_put_input : griper
 
   val list_lit : griper
 
@@ -686,6 +687,24 @@ end
         (fst t2 |> code)
         (snd t2 |> show_type)
       |> die pos
+
+    let lens_put_input ~pos ~t1 ~t2 ~error:_ =
+      build_tyvar_names [snd t1; snd t2];
+      Format.asprintf
+        "The put value \n\
+        \  %s\n
+         has type\n\
+        \  %s\n
+         but the lens\n\
+        \  %s\n
+         expected an input type\n\
+        \  %s"
+        (fst t1 |> code)
+        (snd t1 |> show_type)
+        (fst t2 |> code)
+        (snd t2 |> show_type)
+      |> die pos
+
 
     let list_lit ~pos ~t1:l ~t2:r ~error:_ =
       build_tyvar_names [snd l; snd r];
@@ -2594,6 +2613,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
            Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
            let data = tc data in
+           let trow = Lens.Type.sort typ |> Lens.Sort.record_type in
+           let ltrow = Lens_type_conv.type_of_lens_phrase_type trow in
+           unify (pos_and_typ data, (exp_pos lens, Types.make_list_type ltrow)) ~handle:Gripers.lens_put_input;
            LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], merge_usages [usages lens; usages data]
         | DBDelete (pat, from, where) ->
             let pat  = tpc pat in
