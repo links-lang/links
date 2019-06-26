@@ -12,8 +12,8 @@ typename Attr(a :: Type(Any, Any)) =
    | AttrAttribute: (AttrKey, AttrValue)
    | AttrEventHandler: EventHandler(a) |];
 
-sig attr : forall a :: Type(Any, Any) .
-  (AttrKey, AttrValue) -> Attr(a)
+sig attr : forall a :: Type(Any, Any), e :: Row .
+  (AttrKey, AttrValue) -e-> Attr(a)
 fun attr(k, v) {
   AttrAttribute(k, v)
 }
@@ -24,8 +24,8 @@ fun eventHandler(hndlr) {
   AttrEventHandler(hndlr)
 }
 
-sig append : forall a :: Type(Any, Any) .
-  (Attr(a), Attr(a)) -> Attr(a)
+sig append : forall a :: Type(Any, Any), e :: Row .
+  (Attr(a), Attr(a)) -e-> Attr(a)
 fun append(a1, a2) {
   switch ((a1, a2)) {
     case (AttrEmpty, a2) -> a2
@@ -34,7 +34,7 @@ fun append(a1, a2) {
   }
 }
 
-sig +@ : forall a :: Type(Any, Any) . (Attr(a), Attr(a)) -> Attr(a)
+sig +@ : forall a :: Type(Any, Any), e :: Row . (Attr(a), Attr(a)) -e-> Attr(a)
 op a1 +@ a2 { append(a1, a2) }
 
 fun concat(attrs) {

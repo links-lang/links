@@ -130,7 +130,7 @@ fun main() {
      <div>
        <div id="picture-frame">
 
-         <img src="http://groups.inf.ed.ac.uk/links/data/17-Heriot-Row.jpeg" />
+         <img src="17-Heriot-Row.jpg" />
          { makeCroppingFrame(16, 112, 32, 32) }
        </div>
      </div>
@@ -142,7 +142,7 @@ fun main() {
           style="border: 1px solid black; overflow: hidden;
                  width: 32; height: 32">
        <img id="crop-preview" style="display: block;"
-            src="http://groups.inf.ed.ac.uk/links/data/17-Heriot-Row.jpeg" />
+            src="17-Heriot-Row.jpg" />
      </div>
 
    </body>

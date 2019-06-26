@@ -1,741 +1,906 @@
 Typecheck example file examples/AIPL14/LectureExamples/calc.links
 examples/AIPL14/LectureExamples/calc.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/LectureExamples/reccalc.links
 examples/AIPL14/LectureExamples/reccalc.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/LectureExamples/two-factor.links
 examples/AIPL14/LectureExamples/two-factor.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/SMTP/Problem1.links
 examples/AIPL14/SMTP/Problem1.links
 filemode : true
 ignore : purposely incomplete
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/SMTP/Problem2.links
 examples/AIPL14/SMTP/Problem2.links
 filemode : true
 ignore : purposely incomplete
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/SMTP/Problem3.links
 examples/AIPL14/SMTP/Problem3.links
 filemode : true
 ignore : purposely incomplete
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/SMTP/Problem4.links
 examples/AIPL14/SMTP/Problem4.links
 filemode : true
 ignore : purposely incomplete
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/Solutions/Problem1.links
 examples/AIPL14/Solutions/Problem1.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/Solutions/Problem2.links
 examples/AIPL14/Solutions/Problem2.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/Solutions/Problem3.links
 examples/AIPL14/Solutions/Problem3.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/AIPL14/Solutions/Problem4.links
 examples/AIPL14/Solutions/Problem4.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/buttons.links
 examples/buttons.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/channels.links
 examples/channels.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/church.links
 examples/church.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/citations.links
 examples/citations.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/client-server-prims.links
 examples/client-server-prims.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/crop.links
 examples/crop.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/date.links
 examples/date.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/dictionary/dictSuggest.links
 examples/dictionary/dictSuggest.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/dictionary/dictSuggestLite.links
 examples/dictionary/dictSuggestLite.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/dictionary/dictSuggestUpdate.links
 examples/dictionary/dictSuggestUpdate.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/clientProcessOnServer.links
 examples/distribution/clientProcessOnServer.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/clientProcessOnServer2.links
 examples/distribution/clientProcessOnServer2.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/clientToClient.links
 examples/distribution/clientToClient.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/clientToClientDeleg.links
 examples/distribution/clientToClientDeleg.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/clientToClientViaServerAP.links
 examples/distribution/clientToClientViaServerAP.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/clientToServerDeleg.links
 examples/distribution/clientToServerDeleg.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/serverToClient.links
 examples/distribution/serverToClient.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/serverToClient2.links
 examples/distribution/serverToClient2.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/distribution/simpleServerAP.links
 examples/distribution/simpleServerAP.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/document-replace.links
 examples/document-replace.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/draggable.links
 examples/draggable.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/draggableDb.links
 examples/draggableDb.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/draw.links
 examples/draw.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/extensible-case.links
 examples/extensible-case.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/factorial.links
 examples/factorial.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/ffi.links
 examples/ffi.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/filter.links
 examples/filter.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/formsTest.links
 examples/formsTest.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/games/breakout.links
 examples/games/breakout.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/games/pacman.links
 examples/games/pacman.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/games/tetris.links
 examples/games/tetris.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/games/twentyfortyeight.links
 examples/games/twentyfortyeight.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/alert.links
 examples/handlers/alert.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/aop.links
 examples/handlers/aop.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/aop2.links
 examples/handlers/aop2.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/coins_web.links
 examples/handlers/coins_web.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/choose.links
 examples/handlers/choose.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/coins.links
 examples/handlers/coins.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/concurrency.links
 examples/handlers/concurrency.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/count_web.links
 examples/handlers/count_web.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/deep_pipes.links
 examples/handlers/deep_pipes.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/deep_state.links
 examples/handlers/deep_state.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/exceptions.links
 examples/handlers/exceptions.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/fringe.links
 examples/handlers/fringe.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/identity.links
 examples/handlers/identity.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/lambda.links
 examples/handlers/lambda.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/light_switch.links
 examples/handlers/light_switch.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/monadic_reflection.links
 examples/handlers/monadic_reflection.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/nim.links
 examples/handlers/nim.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/nim-webversion.links
 examples/handlers/nim-webversion.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/number_games.links
 examples/handlers/number_games.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/pi.links
 examples/handlers/pi.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/pipes.links
 examples/handlers/pipes.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/racing-lines.links
 examples/handlers/racing-lines.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/sat.links
 examples/handlers/sat.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/shiftreset.links
 examples/handlers/shiftreset.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/shallow_pipes.links
 examples/handlers/shallow_pipes.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/shallow_state.links
 examples/handlers/shallow_state.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/sierpinski-triangle.links
 examples/handlers/sierpinski-triangle.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/sudoku.links
 examples/handlers/sudoku.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/tests.links
 examples/handlers/tests.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/toggle.links
 examples/handlers/toggle.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/toggle_web.links
 examples/handlers/toggle_web.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/transaction.links
 examples/handlers/transaction.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/unhandled.links
 examples/handlers/unhandled.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/u2_puzzle.links
 examples/handlers/u2_puzzle.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/href-test.links
 examples/href-test.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/initialise-list.links
 examples/initialise-list.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/insert-factorials.links
 examples/insert-factorials.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/loginFlow.links
 examples/loginFlow.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/mandelbrot.links
 examples/mandelbrot.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/mandelcolor.links
 examples/mandelcolor.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/mandelopt.links
 examples/mandelopt.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/multiple.links
 examples/multiple.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/page-test.links
 examples/page-test.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/paginate.links
 examples/paginate.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/progress.links
 examples/progress.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/progressiveQuery.links
 examples/progressiveQuery.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/relational_lenses/cds.links
 examples/relational_lenses/cds.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/serverClientProcess.links
 examples/serverClientProcess.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/serverHandler.links
 examples/serverHandler.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/ap-multi-client.links
 examples/sessions/ap-multi-client.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/atm.links
 examples/sessions/atm.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/bookshop-cp.links
 examples/sessions/bookshop-cp.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/bookshop.links
 examples/sessions/bookshop.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/bookshopAppServer.links
 examples/sessions/bookshopAppServer.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/calc-client-server.links
 examples/sessions/calc-client-server.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/calc-client.links
 examples/sessions/calc-client.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/calc-cp-endbang.links
 examples/sessions/calc-cp-endbang.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/calc-cp.links
 examples/sessions/calc-cp.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/calc-endbang.links
 examples/sessions/calc-endbang.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/calc.links
 examples/sessions/calc.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/chatserver/chatClient.links
 examples/sessions/chatserver/chatClient.links
 filemode : true
-args :  --path=examples/sessions/chatserver
+args : --config=tests/examples_default.config --path=examples/sessions/chatserver
 
 Typecheck example file examples/sessions/chatserver/chatServer.links
 examples/sessions/chatserver/chatServer.links
 filemode : true
-args :  --path=examples/sessions/chatserver
+args : --config=tests/examples_default.config --path=examples/sessions/chatserver
 
 Typecheck example file examples/sessions/chatserver/chatSessions.links
 examples/sessions/chatserver/chatSessions.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/chatserver/linearList.links
 examples/sessions/chatserver/linearList.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/choice.links
 examples/sessions/choice.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/counter.links
 examples/sessions/counter.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/draggable-boring.links
 examples/sessions/draggable-boring.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/draggable.links
 examples/sessions/draggable.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/Bookshop_1.links
 examples/sessions/Elvina/Bookshop_1.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/Bookshop_2.links
 examples/sessions/Elvina/Bookshop_2.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/Bookshop_3.links
 examples/sessions/Elvina/Bookshop_3.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/Bookshop_CP.links
 examples/sessions/Elvina/Bookshop_CP.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/Draggable_Lists_1.links
 examples/sessions/Elvina/Draggable_Lists_1.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/Draggable_Lists_2.links
 examples/sessions/Elvina/Draggable_Lists_2.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/Extended_Calculator.links
 examples/sessions/Elvina/Extended_Calculator.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/IRC.links
 examples/sessions/Elvina/IRC.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/IRC_Test.links
 examples/sessions/Elvina/IRC_Test.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/SMTP_Real_CP.links
 examples/sessions/Elvina/SMTP_Real_CP.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/SMTP_Real_GV.links
 examples/sessions/Elvina/SMTP_Real_GV.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/SMTP_Web_Model_CP.links
 examples/sessions/Elvina/SMTP_Web_Model_CP.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/SMTP_Web_Model_GV.links
 examples/sessions/Elvina/SMTP_Web_Model_GV.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/end.links
 examples/sessions/end.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/forkbomb.links
 examples/sessions/forkbomb.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/fuse-cp.links
 examples/sessions/fuse-cp.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/fuse.links
 examples/sessions/fuse.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/fusegg.links
 examples/sessions/fusegg.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/givengrab.links
 examples/sessions/givengrab.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/gng-client.links
 examples/sessions/gng-client.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/gng-cp.links
 examples/sessions/gng-cp.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/linear_if.links
 examples/sessions/linear_if.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/pi.links
 examples/sessions/pi.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/reccalc-client.links
 examples/sessions/reccalc-client.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/reccalc.links
 examples/sessions/reccalc.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/sim-calc.links
 examples/sessions/sim-calc.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/smtp-dummy.links
 examples/sessions/smtp-dummy.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/smtp-end.links
 examples/sessions/smtp-end.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/smtp-factored-more.links
 examples/sessions/smtp-factored-more.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/smtp-factored.links
 examples/sessions/smtp-factored.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/smtp-formlet.links
 examples/sessions/smtp-formlet.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/smtp.links
 examples/sessions/smtp.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/state.links
 examples/sessions/state.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/two-factor-cp.links
 examples/sessions/two-factor-cp.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/two-factor.links
 examples/sessions/two-factor.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file  examples/Shopping-Cart.links
 examples/Shopping-Cart.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/shredding.links
 examples/shredding.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/shredding2.links
 examples/shredding2.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/shredding3.links
 examples/shredding3.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/shredding4.links
 examples/shredding4.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/silly-progress.links
 examples/silly-progress.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/test-prims.links
 examples/test-prims.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/todo.links
 examples/todo.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/todoDb.links
 examples/todoDb.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/TicTacToe-Console.links
 examples/TicTacToe-Console.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/ToDo-List-Styles.links
 examples/ToDo-List-Styles.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/toggle.links
 examples/toggle.links
 filemode : true
 ignore : broken example
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/validate.links
 examples/validate.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/webserver/buttons.links
 examples/webserver/buttons.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/webserver/counter.links
 examples/webserver/counter.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/webserver/draggable-sessions.links
 examples/webserver/draggable-sessions.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/webserver/draggable.links
 examples/webserver/draggable.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/webserver/examples-nodb.links
 examples/webserver/examples-nodb.links
 filemode : true
-args :  --path=examples:examples/games:examples/dictionary
+args : --config=tests/examples_default.config --path=examples:examples/games:examples/dictionary
 
 Typecheck example file examples/webserver/examples.links
 examples/webserver/examples.links
 filemode : true
-args :  --path=examples:examples/games:examples/dictionary
+args : --config=tests/examples_default.config --path=examples:examples/games:examples/dictionary
 
 Typecheck example file examples/webserver/progress.links
 examples/webserver/progress.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/webserver/wsocket_conn.links
 examples/webserver/wsocket_conn.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/wine.links
 examples/wine.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/mind/mindServer.links
 examples/sessions/mind/mindServer.links
 filemode : true
-args :  --path=examples/sessions/mind
+args : --config=tests/examples_default.config --path=examples/sessions/mind
 
 Typecheck example file examples/sessions/mind/linearList.links
 examples/sessions/mind/linearList.links
 filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/mind/mindClient.links
 examples/sessions/mind/mindClient.links
 filemode : true
-args :  --path=examples/sessions/mind
+args : --config=tests/examples_default.config --path=examples/sessions/mind
 
 Typecheck example file examples/sessions/mind/mindSessions.links
 examples/sessions/mind/mindSessions.links
 filemode : true
-args : --path=examples/sessions/mind
+args : --config=tests/examples_default.config --path=examples/sessions/mind
 
 Typecheck example file examples/mvu/mousetest.links
 examples/mvu/mousetest.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/mvu/time.links
 examples/mvu/time.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
+args : --config=tests/examples_default.config
 
 Typecheck example file examples/mvu/pong.links
 examples/mvu/pong.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
+args : --config=tests/examples_default.config --path=examples/mvu/todomvc
 
 Typecheck example file examples/mvu/todomvc/todoMVC.links
 examples/mvu/todomvc/todoMVC.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
+args : --config=tests/examples_default.config --path=examples/mvu/todomvc
 
 Typecheck example file examples/mvu/keypress.links
 examples/mvu/keypress.links
-filemode : args
-args : --config=tests/typecheck_examples.tests.config
+filemode : true
+args : --config=tests/examples_default.config

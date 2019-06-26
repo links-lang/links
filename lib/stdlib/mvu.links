@@ -14,9 +14,9 @@ module VirtualDom {
 # Loads the "vdom.js" file, exposes runDom and updateDom.
 module VDom {
   alien javascript "/lib/vdom.js" {
-    runDom : forall a :: Type(Any, Any) .
-      (String, HTML(a), AP(?a.End), Sub(a)) ~> ();
-    updateDom : forall a :: Type(Any, Any) . (HTML(a), Sub(a)) ~> ();
+    runDom : forall a :: Type(Any, Any), e :: Row .
+      (String, HTML(a), AP(?a.End), Sub(a)) ~e~> ();
+    updateDom : forall a :: Type(Any, Any), e :: Row . (HTML(a), Sub(a)) ~e~> ();
   }
 }
 
@@ -24,7 +24,7 @@ module VDom {
 
 # Main event loop
 sig evtLoop :
- forall msg, model.
+ forall msg, model, e :: Row.
   (AP(?msg.End),
    model,
    (model) ~e~> HTML(msg),
@@ -45,7 +45,7 @@ fun evtLoop(ap, model, view, updt, subscriptionsFn, prevSubscriptions) {
 
 # User-facing function (assuming an unrestricted model)
 sig run:
-  forall msg, model.
+  forall msg, model, e :: Row, f :: Row.
   (String,
     model,
     (model) ~e~> HTML(msg),
@@ -60,7 +60,7 @@ fun run(placeholder, model, view, updt, subscriptions) {
   ()
 }
 
-sig runSimple : forall msg, model .
+sig runSimple : forall msg, model, e :: Row, f :: Row.
   (String,
     model,
     (model) ~e~> HTML(msg),
@@ -70,7 +70,7 @@ fun runSimple(placeholder, model, view, updt) {
 }
 
 sig runStatic :
-  forall model .
+  forall model, e :: Row, f :: Row .
   (String, model, (model) ~e~> HTML(())) ~f~> ()
 fun runStatic(placeholder, model, view) {
   runSimple(placeholder, model, view, fun(_, model) { model })
