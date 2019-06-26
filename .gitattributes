@@ -1,2 +1,2 @@
-# Ensure the local copy of the DOS line endings test uses CRLF
-tests/dos-newlines.links text eol=crlf
+# Ensure the DOS line endings test is preserved exactly
+tests/dos-newlines.links binary
