@@ -1920,8 +1920,8 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * Types.environment * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
-             let domain   = Types.fresh_type_variable (lin_unl, res_any) in
-             let codomain = Types.fresh_type_variable (lin_unl, res_any) in
+             let domain   = Types.fresh_type_variable (lin_any, res_any) in
+             let codomain = Types.fresh_type_variable (lin_any, res_any) in
              let effrow   = Types.make_empty_open_row default_effect_subkind in
              Types.make_function_type [domain] effrow codomain
            in
@@ -3373,8 +3373,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                let fresh_row = Types.make_empty_open_row default_effect_subkind in
                allow_wild fresh_row
              in
-             let rt = Types.fresh_type_variable (lin_unl, res_any) in
-             let bt = Types.fresh_type_variable (lin_unl, res_any) in
+             let rt = Types.fresh_type_variable (lin_any, res_any) in
+             let bt = Types.fresh_type_variable (lin_any, res_any) in
              let inner_eff = wild_row () in
              let outer_eff = wild_row () in
              (* Type value patterns *)
@@ -3621,7 +3621,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let inp_t  = List.map typ ps in
              let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
              let optype = Types.make_pure_function_type inp_t out_t in
-                 let effrow = Types.make_singleton_open_row (opname, `Present optype) (lin_unl, res_effect) in
+             let effrow = Types.make_singleton_open_row (opname, `Present optype) (lin_unl, res_effect) in
              (effrow, out_t, ps)
            in
            let p = Position.resolve_expression pos in
