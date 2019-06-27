@@ -41,7 +41,7 @@ let construct_join_lens fd_set name data =
   let cols =
     Fun_dep.Set.fold
       (fun fd fld ->
-        Lens.Alias.Set.union_all [Fun_dep.left fd; Fun_dep.right fd; fld] )
+        Lens.Alias.Set.union_all [Fun_dep.left fd; Fun_dep.right fd; fld])
       fd_set Lens.Alias.Set.empty
   in
   let cols = Lens.Alias.Set.elements cols in
@@ -77,10 +77,11 @@ let cat_tex cols name delta =
           ~f:(fun (row, m) ->
             Debug.print
               ( List.fold_left
-                  (fun a (_, b) -> a ^ "& " ^ string_of_int (unbox_int b) ^ " ")
+                  (fun a (_, b) ->
+                    a ^ "& " ^ string_of_int (unbox_int b) ^ " ")
                   ("\t" ^ string_of_int m)
                   (unbox_record row)
-              ^ "\\\\" ) )
+              ^ "\\\\" ))
           delta
       in
       ()
@@ -114,11 +115,10 @@ let test_calculate_fd_changelist test_ctx =
         let _ =
           List.map
             ~f:(fun (chl, chr) ->
-              H.print_verbose test_ctx ("  " ^ strfn chl ^ " -> " ^ strfn chr)
-              )
+              H.print_verbose test_ctx ("  " ^ strfn chl ^ " -> " ^ strfn chr))
             changes
         in
-        () )
+        ())
       changeset
   in
   (* let phrase = Lens.Helpers.Incremental.matches_change changeset in

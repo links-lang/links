@@ -82,16 +82,12 @@ let test_data_9 =
       ; [box_int 3; box_string "that"]
       ; [box_int 99; box_string "luftballons"] ]
     ~neg:[]
-
 ;;
 Sorted.sort test_data_1
-
 ;;
 Sorted.sort test_data_2
-
 ;;
 Sorted.sort test_data_3
-
 ;;
 Sorted.sort test_data_4
 

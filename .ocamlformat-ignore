@@ -1,9 +1,0 @@
-tests/unit/lens.ml
-tests/unit/unitTestsLensCommon.ml
-tests/unit/unitTestsLensDatabase.ml
-tests/unit/unitTestsLensFDHelpers.ml
-tests/unit/unitTestsLensLang.ml
-tests/unit/unitTestsLensPerformance.ml
-tests/unit/unitTestsLensPrimitives.ml
-tests/unit/unitTestsLensSetOperations.ml
-tests/unit/unitTests.ml

@@ -88,14 +88,14 @@ let create_join_n_lens test_ctx db n rows =
         in
         let colsA = [`Seq; `RandTo (rows / 15); `Rand] in
         LensTestHelpers.drop_create_populate_table test_ctx db name fds cols
-          colsA rows )
+          colsA rows)
       r
   in
   let _, l =
     List.fold_left
       (fun (i, l) r ->
         let col = "p_" ^ string_of_int i in
-        (i + 1, LensTestHelpers.join_lens_dl l r [(col, col, col)]) )
+        (i + 1, LensTestHelpers.join_lens_dl l r [(col, col, col)]))
       (2, List.hd ls)
       (List.tl ls)
   in
@@ -111,7 +111,7 @@ let cleanup_join_n_lens test_ctx db n _rows =
     List.map
       (fun i ->
         let name = "t_" ^ string_of_int i in
-        LensTestHelpers.drop_if_cleanup test_ctx db name )
+        LensTestHelpers.drop_if_cleanup test_ctx db name)
       r
   in
   ()
@@ -129,7 +129,7 @@ let benchmark_nr_of_lenses_remove test_ctx =
         let _put = List.tl res in
         (* let r = LensTestHelpers.time_query false (fun () -> lens_put l put None) in
          let _ = LensTestHelpers.print_verbose test_ctx (string_of_value r) in *)
-        cleanup_join_n_lens test_ctx db i )
+        cleanup_join_n_lens test_ctx db i)
       r
   in
   ()
@@ -149,7 +149,7 @@ let benchmark_nr_of_lenses_add test_ctx =
         let _put = r :: List.tl res in
         (* let r = LensTestHelpers.time_query false (fun () -> lens_put l put None) in
          let _ = LensTestHelpers.print_verbose test_ctx (string_of_value r) in *)
-        cleanup_join_n_lens test_ctx db i )
+        cleanup_join_n_lens test_ctx db i)
       r
   in
   ()
@@ -205,7 +205,7 @@ let test_join_five_remove test_ctx n =
       (fun r ->
         1
         = List.length
-            (List.filter (fun r' -> Record.match_on r r' ~on:["c"]) res) )
+            (List.filter (fun r' -> Record.match_on r r' ~on:["c"]) res))
       res
   in
   (* let _ = print_endline (string_of_value (box_list rm)) in *)

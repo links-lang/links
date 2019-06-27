@@ -100,8 +100,7 @@ let test_put test_ctx lens res =
     step (fun _ res ->
         H.print_verbose test_ctx
           ("Delta Size (output): " ^ string_of_int (Sorted.total_size res)) ;
-        H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)
-    )
+        H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res))
   in
   if benchmark_opt then (
     let runs = initlist 20 (fun _i -> H.time_op run) in
@@ -333,7 +332,7 @@ let test_put_delta test_ctx =
   let runs =
     initlist 20 (fun _i ->
         let r = H.time_op run in
-        revert () ; r )
+        revert () ; r)
   in
   let qts, tts = List.split runs in
   print_endline "query times" ;
@@ -396,7 +395,7 @@ let test_join_lens_2 n test_ctx =
   H.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3)) ;
   H.print_verbose test_ctx (Phrase.Value.show_values res) ;
   Lens.Eval.Incremental.lens_put_step l3 res (fun _ res ->
-      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res) ) ;
+      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)) ;
   Lens.Eval.Incremental.lens_put l3 res ;
   let upd = Lens.Value.lens_get l3 in
   H.print_verbose test_ctx (Phrase.Value.show_values upd) ;
@@ -424,7 +423,7 @@ let test_join_lens_dr_2 n test_ctx =
   H.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3)) ;
   H.print_verbose test_ctx (Phrase.Value.show_values res) ;
   Lens.Eval.Incremental.lens_put_step l3 res (fun _ res ->
-      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res) ) ;
+      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)) ;
   Lens.Eval.Incremental.lens_put l3 res ;
   let upd = Lens.Value.lens_get l3 in
   H.print_verbose test_ctx (Phrase.Value.show_values upd) ;

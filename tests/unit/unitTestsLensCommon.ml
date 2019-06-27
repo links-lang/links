@@ -90,7 +90,7 @@ module LensTestHelpers = struct
       Lens.Fun_dep.Set.fold
         (fun fd fld ->
           Lens.Alias.Set.union_all
-            [Lens.Fun_dep.left fd; Lens.Fun_dep.right fd; fld] )
+            [Lens.Fun_dep.left fd; Lens.Fun_dep.right fd; fld])
         fds Lens.Alias.Set.empty
     in
     let cols = Lens.Alias.Set.elements cols in
@@ -222,8 +222,8 @@ module LensTestHelpers = struct
               | `Seq -> i
               | `Constant n -> n
               | `RandTo n -> 1 + Random.int (if n < 5 then 5 else n)
-              | `Rand -> Random.bits () )
-            cols )
+              | `Rand -> Random.bits ())
+            cols)
         (range 1 cnt)
     in
     data
@@ -276,7 +276,7 @@ module LensTestHelpers = struct
     Lens.Statistics.reset () ;
     let res =
       Lens.Statistics.debug_time_out fn (fun time ->
-          print_endline ("Total Time: " ^ string_of_int time) )
+          print_endline ("Total Time: " ^ string_of_int time))
     in
     print_query_time () ; res
 
