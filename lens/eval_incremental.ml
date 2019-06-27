@@ -162,7 +162,7 @@ let apply_delta ~table ~database:db data =
   let prepare_where row =
     List.zip_nofail key row
     |> List.map ~f:(fun (k, v) ->
-           Phrase.equal (Phrase.var k) (Phrase.Constant.of_value v) )
+           Phrase.equal (Phrase.var k) (Phrase.Constant.of_value v))
     |> Phrase.List.fold_and
   in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
@@ -199,7 +199,7 @@ let get_fds (fds : (string list * string list) list) (cols : Column.t list) :
     List.iter
       ~f:(fun alias ->
         if not (Column.List.mem_alias cols ~alias) then
-          failwith ("The column " ^ alias ^ " does not exist.") )
+          failwith ("The column " ^ alias ^ " does not exist."))
       xs
   in
   List.iter ~f:(fun (left, right) -> check_col left ; check_col right) fds ;
