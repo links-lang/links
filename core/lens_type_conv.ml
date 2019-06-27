@@ -50,7 +50,7 @@ let rec lens_phrase_type_of_type t =
                | _ ->
                    failwith
                      "lens_phrase_type_of_type only works on records with \
-                      present types." )
+                      present types.")
       in
       LPT.Record fields
   | _ ->
@@ -75,7 +75,7 @@ let sort_cols_of_table t ~table =
       String.Map.to_list
         (fun name typ ->
           let alias = name in
-          Lens.Column.make ~table ~name ~alias ~typ ~present:true )
+          Lens.Column.make ~table ~name ~alias ~typ ~present:true)
         fields
     in
     cols

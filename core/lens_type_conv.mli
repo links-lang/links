@@ -1,4 +1,3 @@
-
 type 'a die = string -> 'a
 
 val lens_type_of_type : die:Lens.Type.t die -> Types.typ -> Lens.Type.t
