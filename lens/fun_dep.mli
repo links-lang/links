@@ -95,7 +95,8 @@ module Tree : sig
   type elt = Alias.Set.t [@@deriving show]
 
   type node = FDNode of elt * t
- and t = node list [@@deriving show]
+
+  and t = node list [@@deriving show]
 
   module Tree_form_error : sig
     type t = ContainsCycle of Alias.Set.t list | NotDisjoint of Alias.Set.t

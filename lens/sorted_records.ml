@@ -87,7 +87,7 @@ module Inconsistent_columns_error = struct
             (Format.pp_comma_list Format.pp_print_string)
             l2
           |> Option.return
-      | _ -> None )
+      | _ -> None)
 end
 
 let construct_cols ~columns ~records =
@@ -324,7 +324,7 @@ let join left right ~on =
               ~f:(fun r2 -> List.flatten [r1; rjoinmap_right r2])
               (Array.to_list matching)
           in
-          joined )
+          joined)
         (Array.to_list l1)
     in
     List.flatten joined
@@ -399,14 +399,14 @@ let relational_update t ~fun_deps ~update_with =
                ~f:(fun mp ->
                  match mp with
                  | None -> []
-                 | Some a -> [a] )
+                 | Some a -> [a])
                col_maps)
         in
         (* get a function which compares column with change *)
         let comp record change_key =
           List.for_all2 (fun mp1 key -> mp1 record = key) col_maps change_key
         in
-        comp )
+        comp)
       changelist
   in
   (* each entry in changelist is a functional dependency, and then the corresponding records *)
@@ -433,7 +433,7 @@ let relational_update t ~fun_deps ~update_with =
                   (* the column has been found, replace *)
                   fun yl target -> mp target :: fn (List.tl yl) target )
         in
-        columns t |> upd )
+        columns t |> upd)
       changelist
   in
   let update arr =
@@ -447,11 +447,11 @@ let relational_update t ~fun_deps ~update_with =
               in
               match upd with
               | None -> r
-              | Some (_left, right) -> update r right )
+              | Some (_left, right) -> update r right)
             r
             (List.zip_exn (List.zip_exn changes apply_changes) changelist)
         in
-        r' )
+        r')
       arr
   in
   let plus_rows = update t.plus_rows in
@@ -501,7 +501,7 @@ let to_diff t ~key =
       (fun row ->
         let key_vals = List.take row ~n:key_len in
         let row = Simple_record.find_index t.neg_rows ~record:key_vals in
-        Option.is_none row )
+        Option.is_none row)
       (Array.to_list t.plus_rows)
   in
   let delete_vals =
@@ -509,7 +509,7 @@ let to_diff t ~key =
     |> List.filter (fun row ->
            let key_vals = List.take row ~n:key_len in
            let row = Simple_record.find_index t.plus_rows ~record:key_vals in
-           Option.is_none row )
+           Option.is_none row)
   in
   (columns t, (insert_vals, update_vals, delete_vals))
 

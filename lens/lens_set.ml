@@ -25,7 +25,7 @@ module Make (Ord : OrderedShow) = struct
         Format.pp_open_box formatter 0 ;
         Ord.pp formatter elt ;
         Format.fprintf formatter ";@;" ;
-        Format.pp_close_box formatter () )
+        Format.pp_close_box formatter ())
       set ;
     Format.pp_print_string formatter "}" ;
     Format.pp_close_box formatter ()

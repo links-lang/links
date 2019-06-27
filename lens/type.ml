@@ -58,7 +58,7 @@ let type_select_lens t ~predicate =
   |> Result.map_error ~f:(fun v -> Select_lens_error.PredicateTypeError v)
   >>= (function
         | Phrase_type.Bool -> Phrase.of_sugar predicate |> Result.return
-        | _ as t -> Select_lens_error.PredicateNotBoolean t |> Result.error )
+        | _ as t -> Select_lens_error.PredicateNotBoolean t |> Result.error)
   >>= fun predicate ->
   update t
     (fun sort -> Sort.select_lens_sort sort ~predicate)
@@ -94,13 +94,13 @@ let type_join_lens s t ~on ~del_left ~del_right =
   |> Result.map_error ~f:(fun v -> PredicateTypeError (Left, v))
   >>= (function
         | Phrase_type.Bool -> Phrase.of_sugar del_left |> Result.return
-        | _ as t -> PredicateNotBoolean (Left, t) |> Result.error )
+        | _ as t -> PredicateNotBoolean (Left, t) |> Result.error)
   >>= fun _del_left ->
   Phrase_typesugar.tc_columns ~columns:cols2 del_right
   |> Result.map_error ~f:(fun v -> PredicateTypeError (Right, v))
   >>= (function
         | Phrase_type.Bool -> Phrase.of_sugar del_right |> Result.return
-        | _ as t -> PredicateNotBoolean (Right, t) |> Result.error )
+        | _ as t -> PredicateNotBoolean (Right, t) |> Result.error)
   >>= fun _del_right ->
   let f sort1 sort2 =
     Sort.join_lens_sort sort1 sort2 ~on

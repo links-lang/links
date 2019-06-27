@@ -145,7 +145,7 @@ let rec generate_query lens =
           ~f:(fun (n2, al2) ->
             match List.find ~f:(fun (n1, _al1) -> n1 = n2) q1.tables with
             | Some _ -> failwith "Cannot reuse a table twice in a join query!"
-            | None -> (n2, al2) )
+            | None -> (n2, al2))
           q2.tables
       in
       let tables = List.append q1.tables q2.tables in
@@ -168,7 +168,7 @@ let get_query lens =
   let _ = Debug.print sql in
   let res =
     Statistics.time_query (fun () ->
-        Database.Select.execute query ~field_types ~database )
+        Database.Select.execute query ~field_types ~database)
   in
   res
 
@@ -209,6 +209,6 @@ let query_exists lens predicate =
     let query = Database.Select.of_sort database ~sort in
     let res =
       Statistics.time_query (fun () ->
-          Database.Select.query_exists query ~database )
+          Database.Select.query_exists query ~database)
     in
     res

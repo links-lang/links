@@ -74,7 +74,7 @@ module Set = struct
       find_first_opt (right >> fun r -> Alias.Set.subset cols r) t
     in
     Result.of_option def_fd ~error:(fun _ ->
-        Remove_defines_error.DefiningFDNotFound cols |> Result.error )
+        Remove_defines_error.DefiningFDNotFound cols |> Result.error)
     >>| fun def_fd ->
     let new_def = left def_fd in
     (* replace all FDs which assume Y -> Z (where Y is a subset of cols) and replace them with X -> Z *)
@@ -82,7 +82,7 @@ module Set = struct
       map
         (fun fd ->
           if Alias.Set.subset (left fd) cols then make new_def (right fd)
-          else fd )
+          else fd)
         t
     in
     (* remove X -> Y *)
@@ -98,8 +98,7 @@ module Set = struct
     let res =
       filter
         (fun fd ->
-          not (exists (fun fd2 -> Alias.Set.subset (right fd2) (left fd)) fds)
-          )
+          not (exists (fun fd2 -> Alias.Set.subset (right fd2) (left fd)) fds))
         fds
     in
     elements res
@@ -140,7 +139,7 @@ module Set = struct
     List.for_all_or_error ~f:check_input
       ~error:(fun (l, r) ->
         let fdcols = Alias.Set.union l r in
-        Check_error.UnboundColumns (Alias.Set.diff fdcols columns) )
+        Check_error.UnboundColumns (Alias.Set.diff fdcols columns))
       fds
     >>| fun () ->
     let fd_of (left, right) = make left right in

@@ -68,7 +68,9 @@ let rec unzip3 l =
 
 let rec take l ~n =
   match (l, n) with
-  | [], _ | _, 0 -> []
+  | [], _
+   |_, 0 ->
+      []
   | x :: xs, n -> x :: take xs ~n:(n - 1)
 
 let rec drop l ~n =

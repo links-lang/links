@@ -26,7 +26,7 @@ module Unbox_error = struct
   let () =
     Printexc.register_printer (function
       | E _ as e -> Some (Format.asprintf "%a" pp e)
-      | _ -> None )
+      | _ -> None)
 end
 
 let unbox_error value expected = raise (Unbox_error.E {value; expected})

@@ -31,7 +31,7 @@ module Set = struct
           (fun e acc ->
             let int = Base.inter e acc in
             if Base.is_empty int |> not then raise (Not_disjoint int) ;
-            Base.union e acc )
+            Base.union e acc)
           s Base.empty
         |> ignore ;
         Result.return ()

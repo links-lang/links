@@ -71,7 +71,7 @@ let get_vars expr =
         | Var n ->
             cols := Alias.Set.add n !cols ;
             expr
-        | _ -> expr )
+        | _ -> expr)
   in
   !cols
 
@@ -82,7 +82,7 @@ let rename_var expr ~replace =
           Alias.Map.find ~key replace
           |> Option.map ~f:var
           |> Option.value ~default:expr
-      | _ -> expr )
+      | _ -> expr)
 
 module Constant = struct
   let bool v = Constant (Value.Bool v)
@@ -103,7 +103,7 @@ let replace_var expr ~replace =
           Alias.Map.find ~key replace
           |> Option.map ~f:Constant.of_value
           |> Option.value ~default:expr
-      | _ -> expr )
+      | _ -> expr)
 
 let[@inline always] val_typ_cmp cmp_b cmp_i cmp_f cmp_c cmp_s v1 v2 =
   let v =
@@ -260,7 +260,7 @@ module Record = struct
       List.fold_left
         (fun phrase (on, v) ->
           let term = Some (equal (var on) (Constant.of_value v)) in
-          Option.combine_and phrase term )
+          Option.combine_and phrase term)
         None (List.zip_exn on row)
     in
     phrase
@@ -273,7 +273,7 @@ module Record = struct
             Some
               (equal (var on) (Record.get_exn row ~key:on |> Constant.of_value))
           in
-          Option.combine_and phrase term )
+          Option.combine_and phrase term)
         None (Alias.Set.elements on)
     in
     phrase
@@ -362,7 +362,7 @@ module Grouped_variables = struct
         let diff_not_empty =
           Alias.Set.diff gr cols |> Alias.Set.is_empty |> not
         in
-        int_not_empty && diff_not_empty )
+        int_not_empty && diff_not_empty)
       t
 
   module Error = struct
@@ -378,7 +378,7 @@ module Grouped_variables = struct
         let diff_not_empty =
           Alias.Set.diff gr cols |> Alias.Set.is_empty |> not
         in
-        int_not_empty && diff_not_empty )
+        int_not_empty && diff_not_empty)
       t
     |> OptionU.map ~f:(fun v -> Error.Overlaps v |> Result.error)
     |> OptionU.value ~default:(Result.return ())

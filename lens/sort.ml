@@ -167,14 +167,13 @@ let drop_lens_sort sort ~drop ~default ~key =
   |> List.for_all_or_error ~f:tc_column ~error:(fun (key, default) ->
          let column_type = Alias.Map.find_exn ~key cols_map |> Column.typ in
          let default_type = Phrase_value.type_of default in
-         Drop_sort_error.DropTypeError {column= key; column_type; default_type}
-     )
+         Drop_sort_error.DropTypeError {column= key; column_type; default_type})
   >>= fun () ->
   (* remove the functional dependency which defines the drop column *)
   Fun_dep.Set.remove_defines (fds sort) ~cols:drop_set
   |> Result.map_error ~f:(function
          | Fun_dep.Remove_defines_error.DefiningFDNotFound c ->
-         Drop_sort_error.DefiningFDNotFound c )
+         Drop_sort_error.DefiningFDNotFound c)
   >>= fun fds ->
   (* hide all columns that are dropped. *)
   let cols =
@@ -196,14 +195,14 @@ let drop_lens_sort sort ~drop ~default ~key =
   in
   Phrase.Grouped_variables.no_partial_overlaps gtv ~cols:drop_set
   |> Result.map_error ~f:(fun (Phrase.Grouped_variables.Error.Overlaps cols) ->
-         Drop_sort_error.NotIndependent cols )
+         Drop_sort_error.NotIndependent cols)
   >>= fun () ->
   (* calculate P[U-A]*)
   let predicate' = predicate in
   let predicate =
     predicate
     |> Phrase.Option.partial_eval ~lookup:(fun key ->
-           Alias.Map.find replace ~key )
+           Alias.Map.find replace ~key)
   in
   (* Ensure that (A=a) satisfies P[A]. *)
   ( match (predicate', predicate) with
@@ -311,7 +310,7 @@ let join_lens_sort sort1 sort2 ~on =
             , (Column.alias c, new_alias) :: jrs )
           else
             (* otherwise just rename the column *)
-            ((c |> Column.rename ~alias:new_alias) :: output, jrs) )
+            ((c |> Column.rename ~alias:new_alias) :: output, jrs))
       (cols_l, []) cols_r
   in
   (* combine the predicates *)
@@ -328,7 +327,7 @@ let join_lens_sort sort1 sort2 ~on =
     List.fold_left
       (fun pred (alias, newalias) ->
         let jn = Phrase.equal (Phrase.var alias) (Phrase.var newalias) in
-        Phrase.Option.combine_and (Some jn) pred )
+        Phrase.Option.combine_and (Some jn) pred)
       pred join_renames
   in
   let fds = Fun_dep.Set.union fds_left fds_right in
@@ -343,6 +342,6 @@ let join_lens_sort sort1 sort2 ~on =
            let _, right =
              List.find_exn ~f:(fun (a, _) -> a = on) join_renames
            in
-           (on, left, right) )
+           (on, left, right))
   in
   (make ~fds ~query ~predicate:pred union, jrs)
