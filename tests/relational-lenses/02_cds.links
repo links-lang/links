@@ -22,7 +22,6 @@ var quantityLimit = 2;
 fun filter(x) { x.quantity > quantityLimit }
 var filteredLens = lenscheck (lensselect from droppedLens by filter);
 
-
 fun test() {
   var filtered = lensget filteredLens;
 
