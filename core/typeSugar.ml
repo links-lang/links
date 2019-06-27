@@ -2602,6 +2602,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
         | LensCheckLit (lens, _) ->
+          relational_lenses_guard pos;
            let lens = tc lens in
            let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
            let typ = Lens.Type.make_checked typ in
