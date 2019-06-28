@@ -131,6 +131,7 @@ let result_signature field_types result =
 
 let execute_select_result
     (field_types:(string * Types.datatype) list) (query:string) (db: database)  =
+  let _ = Debug.print ("Running query: \n" ^ query) in 
   let result = (db#exec query) in
     (match result#status with
        | `QueryOk ->
