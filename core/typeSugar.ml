@@ -67,6 +67,8 @@ struct
     | Projection (p, _)
     | TypeAnnotation (p, _)
     | Upcast (p, _, _)
+    | Instantiate p
+    | Generalise p
     | Escape (_, p) -> is_pure p
     | ConstructorLit (_, p, _) -> opt_generalisable p
     | RecordLit (fields, p) ->
@@ -2966,6 +2968,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               tabstr (qs, e.node), t, u
         | TAppl (e, _qs) ->
             let e, t, u = tc e in e.node, t, u
+        | Instantiate e ->
+           let e, t, u = tc e in
+           let (tyargs, t) = Instantiate.typ t in
+           (* TODO: Error when not a forall. *)
+           TAppl (e, tyargs), t, u
+        | Generalise e ->
+           let e, t, u = tc e in
+             (* TODO: Error when not generalisable or when not a forall. *)
+           if Utils.is_generalisable e then
+             let ((tyvars, _), t) = Utils.generalise context.var_env t in
+             TAbstr (tyvars, e), t, u
+           else
+             WithPos.node e, t, u
 
         (* xml *)
         | Xml (tag, attrs, attrexp, children) ->

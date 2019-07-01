@@ -245,6 +245,8 @@ and phrasenode =
   | With             of phrase * (name * phrase) list
   | TypeAnnotation   of phrase * datatype'
   | Upcast           of phrase * datatype' * datatype'
+  | Instantiate      of phrase
+  | Generalise       of phrase
   | ConstructorLit   of name * phrase option * Types.datatype option
   | DoOperation      of name * phrase list * Types.datatype option
   | Handle           of handler
@@ -415,6 +417,8 @@ struct
     | Page p
     | PagePlacement p
     | Upcast (p, _, _)
+    | Instantiate p
+    | Generalise p
     | Select (_, p)
     | TypeAnnotation (p, _) -> phrase p
 

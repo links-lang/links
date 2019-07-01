@@ -246,6 +246,12 @@ class map =
           let _x = o#phrase _x in
           let _x_i1 = o#datatype' _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in Upcast ((_x, _x_i1, _x_i2))
+      | Instantiate _x ->
+          let _x = o#phrase _x in
+          Instantiate _x
+      | Generalise _x ->
+          let _x = o#phrase _x in
+          Generalise _x
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1
@@ -928,6 +934,8 @@ class fold =
           in o
       | TypeAnnotation ((_x, _x_i1)) ->
           let o = o#phrase _x in let o = o#datatype' _x_i1 in o
+      | Instantiate _x -> o#phrase _x
+      | Generalise _x -> o#phrase _x
       | Upcast ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#datatype' _x_i1 in let o = o#datatype' _x_i2 in o
@@ -1625,6 +1633,12 @@ class fold_map =
           let (o, _x_i1) = o#datatype' _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (Upcast ((_x, _x_i1, _x_i2))))
+      | Instantiate _x ->
+          let (o, _x) = o#phrase _x in
+          (o, Instantiate _x)
+      | Generalise _x ->
+          let (o, _x) = o#phrase _x in
+          (o, Generalise _x)
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1

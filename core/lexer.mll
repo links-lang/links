@@ -318,6 +318,8 @@ rule lex ctxt nl = parse
   | ':'                                 { COLON }
   | '!'                                 { BANG }
   | '?'                                 { QUESTION }
+  | '$'                                 { DOLLAR }
+  | '@'                                 { AT }
   | "%" def_id as var                   { PERCENTVAR var }
   | '%'                                 { PERCENT }
   | initopchar opchar * as op           { ctxt#precedence op }

@@ -345,7 +345,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
            match (Unionfind.find lpoint, Unionfind.find rpoint) with
            | `Var (lvar, lkind, `Rigid), `Var (rvar, rkind, `Rigid) when
                   lkind=rkind && compatible_quantifiers (lvar, rvar) qenv ->
-              Unionfind.union lpoint rpoint
+              ()
            | `Var (lvar, _, `Rigid), `Var (_, _, `Flexible) when left_quantifier lvar qenv ->
               raise (Failure (`Msg ("Escaping quantifier " ^ string_of_int lvar)))
            | `Var (_, _, `Flexible), `Var (rvar, _, `Rigid) when right_quantifier rvar qenv ->
@@ -717,7 +717,7 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
        | `Body l, _ -> unify_presence' rec_env (l, `Var rpoint)
        | _, `Body r -> unify_presence' rec_env (`Var lpoint, r)
        | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qenv ->
-          Unionfind.union lpoint rpoint
+          ()
        | `Var (flexible_var, _, `Flexible), `Var (rigid_var, _, `Rigid)
             when compatible_quantifiers (rigid_var, flexible_var) rec_env.qenv ->
           Unionfind.union lpoint rpoint
@@ -1042,7 +1042,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
                                  ^"\n could not be unified because they have different kinds")))
         | `Var (lvar, _, `Rigid), `Var (rvar, _, `Rigid)
              when (lvar=rvar || compatible_quantifiers (lvar, rvar) rec_env.qenv) ->
-           Unionfind.union lrow_var' rrow_var'; false
+           false
         | `Var (_, _, `Rigid), `Var (_, _, `Rigid) ->
            raise (Failure (`Msg ("Rigid rows\n "^ string_of_row lrow
                                  ^"\nand\n "^ string_of_row rrow

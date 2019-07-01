@@ -286,7 +286,7 @@ end
 %token MU FORALL ALIEN SIG UNSAFE
 %token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
-%token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR
+%token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR AT
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
@@ -425,7 +425,7 @@ linearity:
 
 tlfunbinding:
 | linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                }
-| OP pattern op pattern perhaps_location block                 { (dl_unl, WithPos.node $3, [[$2; $4]], $5, $6) }
+| OP pattern sigop pattern perhaps_location block              { (dl_unl, WithPos.node $3, [[$2; $4]], $5, $6) }
 | OP PREFIXOP pattern perhaps_location block                   { (dl_unl, $2, [[$3]], $4, $5)          }
 | OP pattern POSTFIXOP perhaps_location block                  { (dl_unl, $3, [[$2]], $4, $5)          }
 
@@ -438,7 +438,7 @@ signatures:
 
 signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
-| SIG op COLON datatype                                        { with_pos $loc ($2, datatype $4) }
+| SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5, (pos $loc))]) }
@@ -542,6 +542,7 @@ primary_expression:
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
+| DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
 constructor_expression:
 | CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
@@ -557,7 +558,11 @@ parenthesized_thing:
 binop:
 | MINUS                                                        { Section.Minus          }
 | MINUSDOT                                                     { Section.FloatMinus     }
-| op                                                           { Section.Name (WithPos.node $1) }
+| sigop                                                        { Section.Name (WithPos.node $1) }
+
+sigop:
+| DOLLAR                                                       { with_pos $loc "$" }
+| op                                                           { $1 }
 
 op:
 | INFIX0 | INFIXL0 | INFIXR0
@@ -588,6 +593,7 @@ postfix_expression:
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
+| postfix_expression AT                                        { with_pos $loc (Instantiate $1) }
 
 
 arg_spec:
@@ -699,6 +705,7 @@ infixr_0:
 | infixl_1                                                     { $1 }
 | infixl_1 INFIX0    infixl_1
 | infixl_1 INFIXR0   infixr_0                                  { infix_appl ~ppos:$loc $1 $2 $3 }
+| infixl_1 DOLLAR    infixr_0                                  { infix_appl ~ppos:$loc $1 "$" $3 }
 
 infixl_0:
 | infixr_0                                                     { $1 }

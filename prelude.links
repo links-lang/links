@@ -592,7 +592,6 @@ typename Attributes = [(String, String)];
 # attributes for a multipart form
 var multipart = [("enctype", "multipart/form-data")];
 
-infixr 0 $;
 sig $ : ((a) -b-> c, a) -b-> c
 op f $ x { f(x) }
 
@@ -1292,13 +1291,6 @@ op f -<- g {
 infixr 9 ->-;
 op f ->- g {
   g -<- f
-}
-
-# Explicit application
-infixr 1 @;
-sig @ : ((a) -e-> b, a) -e-> b
-op f @ m {
-  f(m)
 }
 
 # Effect row generalisation
