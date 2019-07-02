@@ -11,7 +11,6 @@ module Links_value = Links_core.Value
 open Lens
 open Lens.Utility
 open Lens.Utility.O
-open Links_core.CommonTypes
 
 (* ensure links configuration is loaded *)
 let _ = Option.iter ~f:(Links_core.Settings.load_file false) Links_core.Basicsettings.config_file_path

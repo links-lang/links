@@ -2,4 +2,5 @@
 (library
   (name links_lens)
   (public_name links.lens)
+  (libraries result)
   (preprocess (pps ppx_deriving.std)))
