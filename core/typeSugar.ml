@@ -30,7 +30,7 @@ module Utils : sig
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string ->
                     (Types.type_arg list * Types.datatype)
-  val generalise : Types.environment -> Types.datatype ->
+  val generalise : ?unwrap:bool -> Types.environment -> Types.datatype ->
                    ((Types.quantifier list*Types.type_arg list) * Types.datatype)
 
   (* val is_pure : phrase -> bool *)
@@ -274,6 +274,8 @@ sig
   val unary_apply : griper
   val infix_apply : griper
   val fun_apply : griper
+
+  val generalise_value_restriction : Position.t -> string -> 'a
 
   val xml_attribute : griper
   val xml_attributes : griper
@@ -924,6 +926,11 @@ end
                 String.concat (nl() ^ "and" ^ nl()) ppr_types ^ nl  () ^
                "and the currently allowed effects are"        ^ nli () ^
                 code ppr_eff)
+
+    let generalise_value_restriction pos exp =
+      die pos ("Because of the value restriction, the expression " ^ nli () ^
+                code exp ^ nl () ^
+               "cannot be generalised.")
 
     let xml_attribute ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
@@ -2971,16 +2978,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | Instantiate e ->
            let e, t, u = tc e in
            let (tyargs, t) = Instantiate.typ t in
-           (* TODO: Error when not a forall. *)
-           TAppl (e, tyargs), t, u
+           begin
+             match tyargs with
+             | [] -> WithPos.node e, t, u
+             | _ -> TAppl (e, tyargs), t, u
+           end
         | Generalise e ->
            let e, t, u = tc e in
-             (* TODO: Error when not generalisable or when not a forall. *)
            if Utils.is_generalisable e then
-             let ((tyvars, _), t) = Utils.generalise context.var_env t in
-             TAbstr (tyvars, e), t, u
+             let ((tyvars, _), t) = Utils.generalise ~unwrap:false context.var_env t in
+             match tyvars with
+             | [] -> WithPos.node e, t, u
+             | _ -> TAbstr (tyvars, e), t, u
            else
-             WithPos.node e, t, u
+             Gripers.generalise_value_restriction pos (uexp_pos e)
 
         (* xml *)
         | Xml (tag, attrs, attrexp, children) ->

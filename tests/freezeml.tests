@@ -186,3 +186,19 @@ fun : ((a) -b-> a) -c-> (a) -b-> a
 FreezeML programs (9)
 var f = revapp(~id); f(poly)
 stdout : (0, true) : (Int, Bool)
+
+Do not generalise non-values
+$(id(2))
+exit : 1
+stderr : @.*Because of the value restriction.*
+
+Do not infer polymorphic arguments (1)
+fun(f) { (poly(~f), f(42) + 1) }
+exit : 1
+stderr : @.*
+ignore : Not currently implemented
+
+Do not infer polymorphic arguments (2)
+fun(f) { (f(42) + 1, poly(~f)) }
+exit : 1
+stderr : @.*
