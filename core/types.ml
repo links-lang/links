@@ -1837,6 +1837,10 @@ struct
       | `Bound -> (name, (flavour, kind, 0))
 
   let combine (name, (flavour, kind, count)) (flavour', kind', scope) =
+    if flavour <> flavour' then begin
+        let show_flavour = function | `Flexible -> "%" | `Rigid -> "_" | `Recursive -> "m" in
+        Printf.printf "%s : %s /= %s\n%!" name (show_flavour flavour) (show_flavour flavour')
+      end;
     assert (flavour = flavour');
     assert (kind    = kind'   );
     match scope with

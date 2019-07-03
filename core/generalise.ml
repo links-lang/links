@@ -184,17 +184,20 @@ let get_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_type_ar
 let env_type_vars (env : Types.environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
-(* let rigidify_quantifier : quantifier -> unit =
- *   let rigidify_point point =
- *     match Unionfind.find point with
- *     | `Var (var, subkind, `Flexible) -> Unionfind.change point (`Var (var, subkind, `Rigid))
- *     | `Var _ -> ()
- *     | _ -> assert false
- *   in
- *     function
- *     | (_, _, `Type point)     -> rigidify_point point
- *     | (_, _, `Row point)      -> rigidify_point point
- *     | (_, _, `Presence point) -> rigidify_point point *)
+let rigidify_quantifier : type_arg -> unit =
+  let rigidify_point point =
+    match Unionfind.find point with
+    | `Var (var, subkind, `Flexible) -> Unionfind.change point (`Var (var, subkind, `Rigid))
+    | `Var _ -> ()
+    | _ -> assert false
+  in
+    function
+    | `Type (`MetaTypeVar point) -> rigidify_point point
+    | `Row (_, point, _)         -> rigidify_point point
+    | `Presence (`Var point)    -> rigidify_point point
+    | _ -> raise (Errors.InternalError {
+                      filename = "generalise";
+                      message = "Not a type-variable argument." })
 
 (** generalise:
     Universally quantify any free type variables in the expression.
@@ -209,7 +212,7 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quanti
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
     let quantifiers = Types.quantifiers_of_type_args type_args in
-    (* let () = List.iter rigidify_quantifier quantifiers in *)
+    List.iter rigidify_quantifier type_args;
     let quantified = Types.for_all (quantifiers, t) in
 
     (* The following code suffers from the problem that it may reorder
