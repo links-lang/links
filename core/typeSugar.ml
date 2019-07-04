@@ -267,6 +267,7 @@ sig
   val spawn_outer : griper
   val spawn_wait_outer : griper
   val spawn_location : griper
+  val spawn_inconsistent : griper
 
   val query_outer : griper
   val query_base_row : griper
@@ -351,6 +352,7 @@ sig
 
   val selection : griper
 
+  val cp_wild : griper
   val cp_unquote : griper
   val cp_grab : string -> griper
   val cp_give : string -> griper
@@ -857,6 +859,15 @@ end
                "but the currently allowed effects are" ^ nli () ^
                 code ppr_lt)
 
+    let spawn_inconsistent  ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_pr = show_type rt in
+      let ppr_ir = show_type lt in
+      die pos ("Spawn blocks has inconsistent effects. Previously" ^ nli () ^
+                code ppr_ir                             ^ nl  () ^
+               "but the currently inferred effects are" ^ nli () ^
+                code ppr_pr)
+
     let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt; rt];
       let ppr_rt = show_type rt in
@@ -1315,6 +1326,15 @@ end
                 code ppr_lt                                           ^ nl  () ^
                "while the subsequent patterns have type"              ^ nli () ^
                 code ppr_rt)
+
+    let cp_wild ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("CP clauses are wild"             ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let cp_unquote ~pos ~t1:(_, lt) ~t2:(_, _) ~error:_ =
       build_tyvar_names [lt];
@@ -2838,7 +2858,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
             Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | Spawn (Wait, l, p, _) ->
+        | Spawn (Wait, l, p, old_inner) ->
             assert (l = NoSpawnLocation);
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row default_effect_subkind in
@@ -2851,9 +2871,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 unify ~handle:Gripers.spawn_wait_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
+
+            begin
+              match old_inner with
+              | None -> ()
+              | Some old_inner ->
+                 unify ~handle:Gripers.spawn_inconsistent (no_pos (`Effect inner_effects), no_pos (`Effect old_inner))
+            end;
+
             let return_type = typ p in
               Spawn (Wait, l, erase p, Some inner_effects), return_type, usages p
-        | Spawn (k, given_loc, p, _) ->
+        | Spawn (k, given_loc, p, old_inner) ->
             (* Location -> (() ~e~@ _) -> Process (e) *)
             (match given_loc with
               | ExplicitSpawnLocation loc_phr ->
@@ -2884,6 +2912,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let p = type_check (bind_effects context inner_effects) p in
             if not (Types.type_can_be_unl (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
+
+            begin
+              match old_inner with
+              | None -> ()
+              | Some old_inner ->
+                 unify ~handle:Gripers.spawn_inconsistent (no_pos (`Effect pid_effects), no_pos (`Effect old_inner))
+            end;
+
             Spawn (k, given_loc, erase p, Some pid_effects), pid_type, usages p
         | Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (lin_any, res_any) in
@@ -4335,6 +4371,9 @@ and type_cp (context : context) = fun {node = p; pos} ->
   let use s u = StringMap.add s 1 u in
 
   let unify ~pos ~handle (t, u) = unify_or_raise ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
+
+  let wild_open = Types.make_singleton_open_row ("wild", `Present Types.unit_type) default_effect_subkind in
+  unify ~pos ~handle:Gripers.cp_wild (`Effect wild_open, `Effect context.effect_row);
 
   let (p, t, u) = match p with
     | CPUnquote (bindings, e) ->

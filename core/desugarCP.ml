@@ -108,13 +108,21 @@ object (o : 'self_type)
             let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in
             let o = o#restore_envs envs in
+
+            let eff_fields, eff_row, eff_closed = Types.flatten_row o#lookup_effects in
+            let eff_fields =
+              eff_fields
+              |> StringMap.remove wild_str
+              |> StringMap.remove Value.session_exception_operation
+            in
+
             let left_block =
                 spawn Angel NoSpawnLocation (block (
                     [ val_binding (variable_pat ~ty:s c) (fn_appl_var accept_str c);
                       val_binding (variable_pat ~ty:Types.make_endbang_type c)
                                   (with_dummy_pos left)],
                     fn_appl_var close_str c))
-                      ~row:(Types.make_singleton_closed_row (wild_str, `Present Types.unit_type)) in
+                      ~row:(eff_fields, eff_row, eff_closed) in
             let o = o#restore_envs envs in
             o, block_node
                   ([val_binding (variable_pat ~ty:(`Application (Types.access_point, [`Type s])) c)
