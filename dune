@@ -1,5 +1,5 @@
 (env
- (development
+ (dev
   (flags (:standard
           -strict-formats  ;; Disallows legacy formats.
           -strict-sequence ;; Enforces the lhs of a sequence to have type `unit'.
