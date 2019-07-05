@@ -1,4 +1,4 @@
-Polymorphic Intantiation (1)
+Polymorphic Instantiation (1)
 fun(x)(y) { y }
 stdout : fun : (a) -b-> (c::Any) -d-> c::Any
 
