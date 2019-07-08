@@ -44,9 +44,7 @@ object (o : 'self_type)
   method formlet_patterns : Sugartypes.phrase -> (Sugartypes.Pattern.with_pos list * Sugartypes.phrase list * Types.datatype list) =
     fun ph ->
       match WithPos.node ph with
-        | _ when is_raw ph ->
-            (* [tuple_pat []], [tuple []], [Types.unit_type] *)
-           [], [], []
+        | _ when is_raw ph -> [], [], []
         | FormBinding (f, p) ->
             let (_o, _f, ft) = o#phrase f in
             let t = Types.fresh_type_variable (lin_any, res_any) in

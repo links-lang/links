@@ -229,6 +229,8 @@ sig
 
   val do_operation : griper
 
+  val try_effect : griper
+
   val extend_record : griper
   val record_with : griper
 
@@ -631,6 +633,13 @@ end
           tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
           "but, the currently allowed effects are" ^ nl()
                ^ tab() ^ code ( show_effectrow (TypeUtils.extract_row lt)))
+
+    let try_effect ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("Catching a session exception requires an effect context " ^ nli() ^
+                code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
+               "but, the currently allowed effects are" ^ nli() ^
+                code ( show_effectrow (TypeUtils.extract_row lt)))
 
     (* BUG: This griper is a bit rubbish because it doesn't distinguish
     between two different errors. *)
@@ -3674,10 +3683,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 (Value.session_exception_operation, `Present Types.empty_type)
                 (StringMap.empty, rho, false) in
 
-            (* FIXME: define a proper griper for this rather than
-               stealing the one from above! *)
-            let () = unify ~handle:Gripers.do_operation
-                       (no_pos (`Effect context.effect_row), (Position.resolve_expression pos, `Effect outer_effects)) in
+            unify ~handle:Gripers.try_effect
+              (no_pos (`Effect context.effect_row), no_pos (`Effect outer_effects));
 
             let try_phrase = type_check {context with effect_row = try_effects} try_phrase in
 
