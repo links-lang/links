@@ -94,9 +94,10 @@ let lookup_name name (nenv, _tenv, _eff, _penv) =
 
 let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 
-let rec desugar_pattern : Sugartypes.Pattern.with_pos -> Pattern.t * raw_env =
-  fun {WithPos.node=p; pos} ->
-    let empty = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
+let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t * raw_env =
+  fun eff {WithPos.node=p; pos} ->
+    let desugar_pattern = desugar_pattern eff in
+    let empty = (NEnv.empty, TEnv.empty, eff) in
     let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff') in
     let fresh_binder (nenv, tenv, eff) bndr =
       assert (Sugartypes.Binder.has_type bndr);

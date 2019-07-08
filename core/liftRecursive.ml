@@ -20,13 +20,20 @@ object ((self : 'self_type))
     method! binding = fun b ->
       let pos = WithPos.pos b in
       match WithPos.node b with
-      |  Fun (bndr, lin, (tvs, fnlit), location, dt) ->
+      |  Fun ({ fun_definition = (tvs, fnlit); _ } as fn) ->
           let fnlit = self#funlit fnlit in
           let node =
-            if is_recursive bndr fnlit then
-              Funs [(bndr, lin, ((tvs, None), fnlit), location, dt, pos)]
+            if is_recursive fn.fun_binder fnlit then
+              Funs [{ rec_binder = fn.fun_binder;
+                      rec_linearity = fn.fun_linearity;
+                      rec_definition = ((tvs, None), fnlit);
+                      rec_location = fn.fun_location;
+                      rec_signature = fn.fun_signature;
+                      rec_unsafe_signature = fn.fun_unsafe_signature;
+                      rec_pos = pos;
+                    }]
             else
-              Fun (bndr, lin, (tvs, fnlit), location, dt) in
+              Fun { fn with fun_definition = (tvs, fnlit) } in
           WithPos.make ~pos node
       | _ -> super#binding b
 end

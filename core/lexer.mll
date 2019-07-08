@@ -227,6 +227,7 @@ let keywords = [
  "try"     , TRY;
  "typename" , TYPENAME;
  "update"   , UPDATE;
+ "unsafe"   , UNSAFE;
  "values"   , VALUES;
  "var"      , VAR;
  "where"    , WHERE;
@@ -317,6 +318,8 @@ rule lex ctxt nl = parse
   | ':'                                 { COLON }
   | '!'                                 { BANG }
   | '?'                                 { QUESTION }
+  | '$'                                 { DOLLAR }
+  | '@'                                 { AT }
   | "%" def_id as var                   { PERCENTVAR var }
   | '%'                                 { PERCENT }
   | initopchar opchar * as op           { ctxt#precedence op }

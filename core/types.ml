@@ -1700,6 +1700,9 @@ let int_type      = `Primitive Primitive.Int
 let float_type    = `Primitive Primitive.Float
 let xml_type      = `Alias (("Xml", []), `Application (list, [`Type (`Primitive Primitive.XmlItem)]))
 let database_type = `Primitive Primitive.DB
+(* Empty type, used for exceptions *)
+let empty_type = `Variant (make_empty_closed_row ())
+
 
 (* precondition: the row is unwrapped *)
 let is_tuple ?(allow_onetuples=false) (field_env, rowvar, _) =
@@ -2570,13 +2573,22 @@ let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
 
-type environment       = datatype Env.t
-and tycon_environment  = tycon_spec Env.t
-and typing_environment = { var_env    : environment
-                         ; tycon_env  : tycon_environment
-                         ; effect_row : row} [@@deriving show]
+type environment        = datatype Env.t
+                            [@@deriving show]
+type tycon_environment  = tycon_spec Env.t
+                            [@@deriving show]
+type typing_environment = { var_env    : environment ;
+                            rec_vars   : StringSet.t ;
+                            tycon_env  : tycon_environment ;
+                            effect_row : row;
+                            desugared  : bool }
+                            [@@deriving show]
 
-let empty_typing_environment = { var_env = Env.empty; tycon_env =  Env.empty; effect_row = make_empty_closed_row ()  }
+let empty_typing_environment = { var_env = Env.empty;
+                                 rec_vars = StringSet.empty;
+                                 tycon_env =  Env.empty;
+                                 effect_row = make_empty_closed_row ();
+                                 desugared = false }
 
 let normalise_typing_environment env =
   { env with
@@ -2586,11 +2598,13 @@ let normalise_typing_environment env =
 
 (* Functions on environments *)
 let extend_typing_environment
-    {var_env = l ; tycon_env = al ; effect_row = _  }
-    {var_env = r ; tycon_env = ar ; effect_row = er } : typing_environment =
+    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _; desugared = _;  }
+    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er; desugared = dr } : typing_environment =
   { var_env    = Env.extend l r
+  ; rec_vars   = StringSet.union lvars rvars
   ; tycon_env  = Env.extend al ar
-  ; effect_row = er }
+  ; effect_row = er
+  ; desugared  = dr }
 
 let string_of_environment = show_environment
 

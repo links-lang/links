@@ -10,8 +10,6 @@ let internal_error message =
 let show_recursion = Basicsettings.Instantiate.show_recursion
 let show_instantiation = Basicsettings.Instantiate.show_instantiation
 
-let quantified_instantiation = Basicsettings.Instantiate.quantified_instantiation
-
 (*
   instantiation environment:
     for stopping cycles during instantiation
@@ -203,7 +201,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
           let t = `Var point in
             tenv, renv, IntMap.add var t penv, `Presence t :: tys, (var, subkind, `Presence point) :: qs in
 
-        let tenv, renv, penv, tys, qs =
+        let tenv, renv, penv, tys, _qs =
           List.fold_left
             (fun env ->
                function
@@ -213,22 +211,10 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
             (IntMap.empty, IntMap.empty, IntMap.empty, [], []) (unbox_quantifiers quantifiers) in
 
         let tys = List.rev tys in
-        let qs = List.rev qs in
+        (* let qs = List.rev qs in *)
         let body = instantiate_datatype (tenv, renv, penv) t in
-          Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> Types.string_of_type_arg t) tys);
-            (* EXPERIMENTAL *)
-
-            (* HACK: currently we appear to need to strip the quantifiers
-               in the one case where this function is called with
-               rigid set to true
-            *)
-(*             if rigid then *)
-(*               tys, body *)
-(*             else *)
-          if Settings.get_value quantified_instantiation && not(rigid) then
-              tys, `ForAll (box_quantifiers qs, body)
-          else
-            tys, body
+        Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> Types.string_of_type_arg t) tys);
+        tys, body
     | t -> [], t
 
 (** instantiate_rigid t

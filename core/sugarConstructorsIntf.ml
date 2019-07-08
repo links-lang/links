@@ -47,10 +47,7 @@ module type SugarConstructorsSig = sig
   type name_or_pat = PatName of name
                    | Pat     of Pattern.with_pos
 
-  type signature   = Sig of (name WithPos.t * datatype') WithPos.t
-                   | NoSig
-
-  val sig_of_opt : (name WithPos.t * datatype') WithPos.t option -> signature
+  type signature = (name WithPos.t * datatype') WithPos.t option
 
   (* Common stuff *)
   val var         : ?ppos:t -> name -> phrase
@@ -59,7 +56,8 @@ module type SugarConstructorsSig = sig
   val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
   val cp_unit     : t -> cp_phrase
   val record      : ?ppos:t -> ?exp:phrase -> (name * phrase) list -> phrase
-  val tuple       : ?one_tuple_hack:bool -> ?ppos:t -> phrase list -> phrase
+  val tuple       : ?ppos:t -> phrase list -> phrase
+  val orderby_tuple : ?ppos:t -> phrase list -> phrase
   val list        :
     ?ppos:t -> ?ty:Types.datatype -> phrase list -> phrase
   val constructor :
@@ -107,7 +105,7 @@ module type SugarConstructorsSig = sig
 
   (* Bindings *)
   val fun_binding
-      : ?ppos:t -> signature
+      : ?ppos:t -> signature -> ?unsafe_sig:bool
      -> (DeclaredLinearity.t * name * Pattern.with_pos list list * Location.t *
            phrase)
      -> binding

@@ -57,7 +57,7 @@ fun printResult(m) {
 
 # Example 1
 fun example1() {
-  printResult -<- catchFail -<- prompt @ sumUp
+  printResult -<- catchFail -<- prompt $ sumUp
 }
 
 # Resumable exceptions
@@ -71,7 +71,7 @@ fun catchResume(m)() {
 
 # Example 2
 fun example2() {
-  printResult -<- catchResume -<- prompt @ sumUp
+  printResult -<- catchResume -<- prompt $ sumUp
 }
 
 # Unit test

@@ -113,7 +113,7 @@ let freshen_vars =
       | ty -> super#datatypenode ty
   end in
 
-  object(self)
+  object
     inherit basic_freshener as super
     method! datatypenode = let open Datatype in
       function
@@ -129,14 +129,6 @@ let freshen_vars =
          else
            basic_refresh#datatypenode dt
       | dt -> super#datatypenode dt
-
-    method recursive_function (bind, lin, (tyvars, fl), loc, dt, pos) =
-      let bind = self#binder bind in
-      let fl = self#funlit fl in
-      let loc = self#location loc in
-      let dt = self#option (fun x -> x#datatype') dt in
-      let pos = self#position pos in
-      (bind, lin, (tyvars, fl), loc, dt, pos)
   end
 
 (** Ensure this variable has some kind, if {!Basicsettings.Types.infer_kinds} is disabled. *)
@@ -702,14 +694,6 @@ object (self)
         let dt' = Desugar.foreign alias_env dt in
         self, Foreign (bind, raw_name, lang, file, dt')
     | b -> super#bindingnode b
-
-   method recursive_function ((bind, lin, (tyvars, fl), loc, dt, pos) : recursive_function) =
-     let o, bind = self#binder bind in
-     let o, fl = o#funlit fl in
-     let o, loc = o#location loc in
-     let    dt = opt_map (Desugar.datatype' map alias_env) dt in
-     let o, pos = o#position pos in
-     (o, (bind, lin, (tyvars, fl), loc, dt, pos))
 
   method! sentence =
     (* return any aliases bound to the interactive loop so that they

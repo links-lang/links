@@ -10,7 +10,7 @@ let internal_error message =
   Errors.internal_error ~filename:"value.ml" ~message
 
 let serialiser = Basicsettings.Serialisation.serialiser
-let session_exception_operation = "_SessionFail"
+let session_exception_operation = "SessionFail"
 
 class type otherfield =
 object

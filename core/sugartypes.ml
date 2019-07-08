@@ -70,6 +70,7 @@ type tyarg = Types.type_arg
 *)
 
 let default_subkind : subkind = (lin_unl, res_any)
+let default_effect_subkind : subkind = (lin_unl, res_any)
 
 type kind = PrimaryKind.t option * subkind option
     [@@deriving show]
@@ -213,6 +214,7 @@ and iterpatt =
 and phrasenode =
   | Constant         of Constant.t
   | Var              of name
+  | FreezeVar        of name
   | QualifiedVar     of name list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
@@ -243,6 +245,8 @@ and phrasenode =
   | With             of phrase * (name * phrase) list
   | TypeAnnotation   of phrase * datatype'
   | Upcast           of phrase * datatype' * datatype'
+  | Instantiate      of phrase
+  | Generalise       of phrase
   | ConstructorLit   of name * phrase option * Types.datatype option
   | DoOperation      of name * phrase list * Types.datatype option
   | Handle           of handler
@@ -317,15 +321,23 @@ and cp_phrasenode =
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
 and typename = (name * (quantifier * tyvar option) list * datatype' * Position.t)
-(* SJF: It would be nice to make these records at some point. *)
-and function_definition =
-  Binder.with_pos * DeclaredLinearity.t * (tyvar list * funlit) *
-                   Location.t * datatype' option
-and recursive_function =
-  (Binder.with_pos * DeclaredLinearity.t *
-    ((tyvar list *
-      (Types.datatype * Types.quantifier option list) option)
-      * funlit) * Location.t * datatype' option * Position.t)
+and function_definition = {
+    fun_binder: Binder.with_pos;
+    fun_linearity: DeclaredLinearity.t;
+    fun_definition: tyvar list * funlit;
+    fun_location: Location.t;
+    fun_signature: datatype' option;
+    fun_unsafe_signature: bool;
+  }
+and recursive_function = {
+    rec_binder: Binder.with_pos;
+    rec_linearity: DeclaredLinearity.t;
+    rec_definition: (tyvar list * (Types.datatype * int option list) option) * funlit;
+    rec_location: Location.t;
+    rec_signature: datatype' option;
+    rec_unsafe_signature: bool;
+    rec_pos: Position.t
+  }
   [@@deriving show]
 
 type directive = string * string list
@@ -390,6 +402,7 @@ struct
     let p = WithPos.node p in
     match p with
     | Var v -> singleton v
+    | FreezeVar v -> singleton v
     | Section (Section.Name n) -> singleton n
 
     | Constant _
@@ -404,6 +417,8 @@ struct
     | Page p
     | PagePlacement p
     | Upcast (p, _, _)
+    | Instantiate p
+    | Generalise p
     | Select (_, p)
     | TypeAnnotation (p, _) -> phrase p
 
@@ -503,13 +518,13 @@ struct
       * StringSet.t (* free vars in the rhs *) =
     match WithPos.node binding' with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
-    | Fun (bndr, _, (_, fn), _, _) ->
+    | Fun { fun_binder = bndr; fun_definition = (_, fn); _} ->
        let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
     | Funs funs ->
         let names, rhss =
           List.fold_right
-            (fun (bndr, _, (_, rhs), _, _, _) (names, rhss) ->
+            (fun { rec_binder = bndr; rec_definition = (_, rhs); _ } (names, rhss) ->
                (add (Binder.to_name bndr) names, rhs::rhss))
             funs
             (empty, []) in

@@ -531,17 +531,17 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/sessions/chatserver/chatClient.links
 examples/sessions/chatserver/chatClient.links
 filemode : true
-args : --config=tests/examples_default.config --path=examples/sessions/chatserver
+args : --config=tests/examples_session_exceptions.config --path=examples/sessions/chatserver
 
 Typecheck example file examples/sessions/chatserver/chatServer.links
 examples/sessions/chatserver/chatServer.links
 filemode : true
-args : --config=tests/examples_default.config --path=examples/sessions/chatserver
+args : --config=tests/examples_session_exceptions.config --path=examples/sessions/chatserver
 
 Typecheck example file examples/sessions/chatserver/chatSessions.links
 examples/sessions/chatserver/chatSessions.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_session_exceptions.config
 
 Typecheck example file examples/sessions/chatserver/linearList.links
 examples/sessions/chatserver/linearList.links
@@ -738,7 +738,8 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/sessions/two-factor-cp.links
 examples/sessions/two-factor-cp.links
 filemode : true
-args : --config=tests/examples_default.config
+ignore : need to cleanup CP code
+args : --config=tests/examples_session_exceptions.config
 
 Typecheck example file examples/sessions/two-factor.links
 examples/sessions/two-factor.links
@@ -853,7 +854,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/webserver/wsocket_conn.links
 examples/webserver/wsocket_conn.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_session_exceptions.config
 
 Typecheck example file examples/wine.links
 examples/wine.links
@@ -863,7 +864,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/sessions/mind/mindServer.links
 examples/sessions/mind/mindServer.links
 filemode : true
-args : --config=tests/examples_default.config --path=examples/sessions/mind
+args : --config=tests/examples_session_exceptions.config --path=examples/sessions/mind
 
 Typecheck example file examples/sessions/mind/linearList.links
 examples/sessions/mind/linearList.links

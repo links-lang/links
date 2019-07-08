@@ -243,7 +243,7 @@ args : --enable-handlers
 
 Operation parameter pattern-matching (7)
 fun(m) { handle(m()) { case Move(Alice, _) -> 'A' case Move(Bob, _) -> 'B' case Move(_,_) -> 'U' case Return(x) -> x } }
-stdout : fun : (() {Move:([|Alice|Bob|_|]) {}-> _|c}~> Char) {Move{_}|c}~> Char
+stdout : fun : (() {Move:([|Alice|Bob|_|]) {}-> _::Any|c}~> Char) {Move{_}|c}~> Char
 args : --enable-handlers
 
 Operation parameter pattern-matching (8)
@@ -461,7 +461,7 @@ args : --enable-handlers
 
 Omission of resumption for nullary operations (3)
 fun(m) { handle(m()) { case Foo -> 5 } }
-stdout : fun : (() {Foo:() {}-> _|b}~> Int) {Foo{_}|b}~> Int
+stdout : fun : (() {Foo:() {}-> _::Any|b}~> Int) {Foo{_}|b}~> Int
 args : --enable-handlers
 
 Examples

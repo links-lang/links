@@ -406,13 +406,15 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       | dt -> super#datatypenode dt
 
     method! bindingnode = function
-      | Fun (bndr, lin, (tvs, funlit), loc, dt) ->
+      | Fun ({ fun_binder = bndr; fun_definition = (tvs, funlit); fun_signature = dt; _ } as fn)->
        (* It is important to process [bndr] before processing
           [funlit] as functions are allowed to call themselves. *)
         let bndr' = self#binder bndr in
         let dt' = self#option (fun o -> o#datatype') dt in
         let funlit' = self#funlit funlit in
-        Fun (bndr', lin, (tvs, funlit'), loc, dt')
+        Fun { fn with fun_binder = bndr';
+                      fun_definition = (tvs, funlit');
+                      fun_signature = dt' }
       | Funs fs ->
         (* Assumes mutual typenames have been processed already,
            which appears to be guaranteed by the parser. *)
@@ -422,16 +424,15 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
            2) Process the function bodies. *)
         let (fs' : recursive_function list) =
           List.fold_right
-            (fun (bndr, lin, lit, loc, dt, pos) fs ->
-              (self#binder bndr, lin, lit, loc, dt, pos) :: fs)
+            (fun fn fs -> { fn with rec_binder = self#binder fn.rec_binder } :: fs)
             fs []
         in
         let fs'' =
           List.fold_right
-            (fun (bndr, lin, (tvs, funlit), loc, dt, pos) fs ->
+            (fun ({ rec_definition = (tvs, funlit); rec_signature = dt; _ } as fn) fs ->
               let dt' = self#option (fun o -> o#datatype') dt in
               let funlit' = self#funlit funlit in
-              (bndr, lin, (tvs, funlit'), loc, dt', pos) :: fs)
+              { fn with rec_definition = (tvs, funlit'); rec_signature = dt' } :: fs)
             fs' []
         in
         Funs fs''

@@ -226,11 +226,12 @@ let rigidify_quantifier : quantifier -> unit =
 (** generalise:
     Universally quantify any free type variables in the expression.
 *)
-let generalise : gen_kind -> environment -> datatype -> ((quantifier list * type_arg list) * datatype) =
-  fun kind env t ->
+let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quantifier list * type_arg list) * datatype) =
+  fun kind ?(unwrap=true) env t ->
     (* throw away any existing top-level quantifiers *)
+    Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
     let t = match Types.concrete_type t with
-      | `ForAll (_, t) -> t
+      | `ForAll (_, t) when unwrap -> t
       | _ -> t in
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in

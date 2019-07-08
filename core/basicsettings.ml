@@ -224,6 +224,12 @@ module TypeSugar = struct
   (* Shall we re-run the frontend type-checker after each TransformSugar transformation? *)
   let check_frontend_transformations =
     Settings.add_bool("recheck_frontend_transformations", false, `User)
+
+  let check_frontend_transformations_dump =
+    Settings.add_bool("recheck_frontend_transformations_dump", false, `User)
+
+  let check_frontend_transformations_filter =
+    Settings.add_string("recheck_frontend_transformations_filter", "all", `User)
 end
 
 (* Types stuff *)
@@ -282,7 +288,6 @@ end
 module Instantiate = struct
   let show_recursion = Settings.add_bool("show_recursion", false, `User)
   let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
-  let quantified_instantiation = Settings.add_bool("quantified_instantiation", false, `User)
 end
 
 (* Evaluation stuff *)
@@ -333,7 +338,7 @@ module Readline = struct
 end
 
 module Sessions = struct
-  let exceptions_enabled = Settings.add_bool ("session_exceptions", false, `User)
+  let exceptions_enabled = Settings.add_bool ("session_exceptions", false, `System)
 end
 
 module Database = struct

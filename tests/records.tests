@@ -69,7 +69,7 @@ stderr : @.
 exit : 1
 
 Tables must have table type.
-fun (t) { for (x <-- t) [x.y] }
+fun (t) { for (x <-- t) [(a=x.y)] }
 stdout : @fun : \(TableHandle\(.*\)\) -> .*
 
 Duplicate fields

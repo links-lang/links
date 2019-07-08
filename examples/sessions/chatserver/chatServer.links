@@ -62,7 +62,7 @@ fun acceptor() {
 # reads incoming requests from the client, dispatches each command
 # to the supervisor loop which will broadcast to other session
 # clients
-sig worker : (Nickname, WorkerReceive) ~> ()
+sig worker : (Nickname, WorkerReceive) {SessionFail{_}|_}~> ()
 fun worker(nick, c) {
   try {
     offer(c) {

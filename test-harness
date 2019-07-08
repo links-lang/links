@@ -57,7 +57,7 @@ def check_expected(name, item, got, expected, errors):
         else:
             return True
     elif expected != got:
-        errors.append(FAIL(name, "Unexpected %s: expected `%s'; got `%s'" % (item, expected, got)))
+        errors.append(FAIL(name, "Unexpected %s:\nexpected `%s';\n     got `%s'" % (item, expected, got)))
         return False
     else:
         return True

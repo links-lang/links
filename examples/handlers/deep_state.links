@@ -76,15 +76,15 @@ fun count() {
 
 # Example 1
 fun example1() {
-  run -<- evalState(5) @ count
+  run -<- evalState(5) $ count
 }
 
 # Example 2
 fun example2() {
-  (run -<- logPrinter -<- evalState(5) -<- logState) @ count
+  (run -<- logPrinter -<- evalState(5) -<- logState) $ count
 }
 
 # Unit test
 fun unitTest(n) {
-  (run -<- logAccumulator([]) -<- evalState(n) -<- logState) @ count
+  (run -<- logAccumulator([]) -<- evalState(n) -<- logState) $ count
 }

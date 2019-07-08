@@ -373,27 +373,52 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawn",
   (`PFun (fun _ -> assert false),
-  datatype "(() ~e~@ _) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(() ~e~@ _) ~> Process ({ |e })"
+    end,
   IMPURE);
 
   "spawnAt",
   (`PFun (fun _ -> assert false),
-   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(Location, () {SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
+    end,
    IMPURE);
 
   "spawnClient",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(() ~e~@ _) ~> Process ({ |e })"
+    end,
    IMPURE);
 
   "spawnAngel",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(() ~e~@ _) ~> Process ({ |e })"
+    end,
    IMPURE);
 
   "spawnAngelAt",
   (`PFun (fun _ -> assert false),
-   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(Location, () { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
+    end,
    IMPURE);
 
   "spawnWait",
@@ -1099,7 +1124,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Database functions *)
   "AsList",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(r, w, n)) -> [r]",
+   datatype "(TableHandle(r, w, n)) {}-> [r]",
   IMPURE);
 
   "getDatabaseConfig",
@@ -1546,26 +1571,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     PURE)
 ]
 
-(* HACK
-
-   these functions are recursive, so type inference has no way of
-   knowing that they are in fact tame
-*)
-let patch_prelude_funs tyenv =
-  {tyenv with
-     var_env =
-      List.fold_right
-        (fun (name, t) env ->
-          if Env.String.has env name then
-            Env.String.bind env (name, t)
-          else
-            env)
-        [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
-         ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
-         ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
-         ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")]
-        tyenv.Types.var_env}
-
 let impl : located_primitive -> primitive option = function
   | `Client -> None
   | `Server p
@@ -1614,8 +1619,10 @@ let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
 
 let typing_env = {Types.var_env = type_env;
+                  Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
-                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}
+                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type);
+                  Types.desugared = false }
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 

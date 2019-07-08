@@ -93,25 +93,9 @@ Quantifiers in different orders
 fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x,y]}
 stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> [(_, _)]
 
-Unwrap polymorphism
-sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; hd(ids)(3)
-stdout : 3 : Int
-args : --config=tests/enable_quantified_instantiation.config
-
-Bad polymorphism behaviour (1)
-sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> ([a]) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
-stdout : [fun] : [forall a,b::Row.(a) -b-> a]
-args : --config=tests/enable_quantified_instantiation.config
-
-Bad polymorphism behaviour (2)
-sig ids : [forall a,b::Row.(a) -b-> a] var ids = [fun (x) {x}]; sig f : forall a.(a) -> (b) -> [a] fun f(x)(y) {[x]} f(fun (x) {x})(ids)
-stdout : [fun] : [(a::Any) -> a::Any]
-args : --config=tests/enable_quantified_instantiation.config
-
-Nested polymorphism
-sig foo : (forall a.((a) {}~> a)) {}~> (Int) {}~> Int fun foo(f){f} foo(id)(42)
-stdout : 42 : Int
-args : --config=tests/enable_quantified_instantiation.config
+Polymorphic function arguments and freeze
+fun poly(f : (forall a::Any,e::Row.(a) -e-> a)) {(f(42), f(true))} poly(~id)
+stdout : (42, true) : (Int, Bool)
 
 Top-level ill-typed polymorphism
 sig foo : forall a.((a) {}~> a) {}~> (Int) {}~> Int fun foo(f){f}
@@ -132,11 +116,27 @@ stdout : fun : (a) {}~> a
 
 Missing quantifier with mixed kinds (1)
 sig f : forall a.(a) ~e~> a fun f(x) {f(x)} f
-stdout : fun : (a) ~> a
+stderr : @..*
+exit : 1
 
 Missing quantifier with mixed kinds (2)
-sig f : forall e::Row.(a) ~e~> a fun f(x) {f(x)} f
-stdout : fun : (a) ~> a
+sig f : forall e::Eff.(a) ~e~> a fun f(x) {f(x)} f
+stderr : @..*
+exit : 1
+
+Missing quantifier with mixed kinds (3)
+sig f : forall a.(a) ~e~> a fun f(x) {x} f
+stderr : @..*
+exit : 1
+
+Missing quantifier with mixed kinds (4)
+sig f : forall e::Eff.(a) ~e~> a fun f(x) {x} f
+stderr : @..*
+exit : 1
+
+Inner quantifier with free variable
+sig f : (a) -e-> (a, a) fun f(x) {sig g : forall b.(a, b) -e-> (a, b) fun g(x, y) {(x, y)} g(x, x)} f
+stdout : fun : (a) -> (a, a)
 
 Flexible quantifier elimination (fix introduced in 514187b)
 sig a : (() {A:() |e}~> a) -> () {A{_} |e}~> a fun a(m)() { error("a") } sig b : (() {B:() |e}~> a) -> () {B{_} |e}~> a fun b(m)() { error("b") } sig c : (() {A:(),B:() |e}~> a) {A{_}, B{_} |e}~> a fun c(m) { a(b(m))() }

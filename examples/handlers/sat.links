@@ -41,7 +41,7 @@ sig run : (Comp({ |e}, a)) ~e~> a
 fun run(m) {m()}
 
 # failure
-sig fail : forall a . () {Fail:Zero|_}-> a
+sig fail : forall a, e::Eff . () {Fail:Zero|e}-> a
 fun fail() {switch(do Fail) { }}
 
 sig maybe : (Comp({Fail:Zero|e}, a)) -> Comp({ Fail{_} |e}, Maybe(a))
@@ -58,10 +58,10 @@ fun leftBiased(m)() {
     case Return(x) -> x
     case Choose(k) ->
       fun its(c)() {k(c)}
-      switch (run @ maybe(its(true))) {
+      switch (run $ maybe(its(true))) {
         case Just(x) -> x
         case Nothing ->
-          switch (run @ maybe(its(false))) {
+          switch (run $ maybe(its(false))) {
             case Just(x) -> x
             case Nothing -> fail()
           }
@@ -232,7 +232,7 @@ sig ex1 : Expr
 var ex1 = Or(Var("a"),Not(And(Var("b"),Or(Var("a"),Var("c")))));
 
 fun check(e) {
- var res = run -<- maybe -<- leftBiased @ satisfiable(cnf(simplify(e)));
+ var res = run -<- maybe -<- leftBiased $ satisfiable(cnf(simplify(e)));
  switch (res) {
    case Just(r) -> r
    case Nothing -> error("Unhandled error.")
@@ -453,10 +453,10 @@ mutual {
            case _ -> fail()
          }
       case Choose(resume) ->
-        switch(run @ maybe(fun() { resume(true, tokens) })) {
+        switch(run $ maybe(fun() { resume(true, tokens) })) {
           case Just(x) -> x
           case Nothing ->
-             switch(run @ maybe(fun() { resume(false, tokens) })) {
+             switch(run $ maybe(fun() { resume(false, tokens) })) {
                case Just(x) -> x
                case Nothing -> println("Parsing failed, left: " ^^ implode(tokens)); fail()
              }

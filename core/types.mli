@@ -176,10 +176,12 @@ type tycon_spec = [
 ]
 
 type environment        = datatype Env.String.t
- and tycon_environment  = tycon_spec Env.String.t
- and typing_environment = { var_env   : environment ;
-                            tycon_env : tycon_environment ;
-                            effect_row : row }
+type tycon_environment  = tycon_spec Env.String.t
+type typing_environment = { var_env    : environment ;
+                            rec_vars   : Utility.StringSet.t ;
+                            tycon_env  : tycon_environment ;
+                            effect_row : row ;
+                            desugared : bool }
 
 val empty_typing_environment : typing_environment
 
@@ -212,6 +214,7 @@ val int_type : datatype
 val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
+val empty_type : datatype
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t

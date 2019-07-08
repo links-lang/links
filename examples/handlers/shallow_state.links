@@ -36,8 +36,8 @@ sig evalState : (s) ->
 fun evalState(st)(m)() {
   (shallowhandle(m()) {
     case Return(x) -> fun(_)  { x }
-    case Get(k)    -> fun(st) { var k = compify(k); run -<- evalState(st) @ k(st) }
-    case Put(p,k)  -> fun(_)  { var k = compify(k); run -<- evalState(p)  @ k(()) }
+    case Get(k)    -> fun(st) { var k = compify(k); run -<- evalState(st) $ k(st) }
+    case Put(p,k)  -> fun(_)  { var k = compify(k); run -<- evalState(p)  $ k(()) }
   })(st)
 }
 
@@ -74,7 +74,7 @@ fun logAccumulator(ps)(m)() {
   shallowhandle(m()) {
     case Return(x) -> (x,ps)
     case Log(p,k) -> var k = compify(k);
-                     run -<- logAccumulator(p :: ps) @ k(())
+                     run -<- logAccumulator(p :: ps) $ k(())
   }
 }
 
@@ -87,15 +87,15 @@ fun count() {
 
 # Example 1
 fun example1() {
-  run -<- evalState(5) @ count
+  run -<- evalState(5) $ count
 }
 
 # Example 2
 fun example2() {
-  (run -<- logPrinter -<- evalState(5) -<- logState) @ count
+  (run -<- logPrinter -<- evalState(5) -<- logState) $ count
 }
 
 # Unit test
 fun unitTest(n) {
-  (run -<- logAccumulator([]) -<- evalState(n) -<- logState) @ count
+  (run -<- logAccumulator([]) -<- evalState(n) -<- logState) $ count
 }

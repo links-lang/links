@@ -20,7 +20,7 @@ let type_section env =
   | Project label ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
       let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
-      let eb, e = Types.fresh_row_quantifier (lin_any, res_any) in
+      let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
       let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
         `ForAll (Types.box_quantifiers [ab; rhob; eb],
@@ -121,6 +121,12 @@ let rec listu :
       | x :: xs ->
           let (o, x) = f o x in
           let (o, xs) = listu o f xs in (o, x::xs)
+
+let on_effects o (eff : Types.row) fn x =
+  let effect_row = o#lookup_effects in
+  let o = o#with_effects eff in
+  let (o, x, y) = fn o x in
+  (o#with_effects effect_row, x, y)
 
 let check_type_application (e, t) k =
   begin
@@ -245,6 +251,7 @@ class transform (env : Types.typing_environment) =
       function
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
       | Var var -> (o, Var var, o#lookup_type var)
+      | FreezeVar var -> (o, FreezeVar var, o#lookup_type var)
       | FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (last argss) in
           let (o, lam, rt) = o#funlit inner_e lam in
@@ -303,6 +310,7 @@ class transform (env : Types.typing_environment) =
                  let (o, offset, _) = o#phrase offset in
                    (o, (limit, offset)))
               range in
+          let (o, body, _) = on_effects o (Types.make_empty_closed_row ()) (fun o -> o#phrase) body in
           let (o, body, _) = o#phrase body in
           let (o, t) = o#datatype t in
             (o, Query (range, body, Some t), t)
@@ -501,7 +509,7 @@ class transform (env : Types.typing_environment) =
           let (o, otherwise_phr, _) = o#phrase otherwise_phr in
           let (o, dt) = o#datatype dt in
           (o, TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)), dt)
-      | Raise -> (o, Raise, `Not_typed) (* TEMP *)
+      | Raise -> (o, Raise, Types.fresh_type_variable (lin_any, res_any))
       | Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
@@ -711,55 +719,42 @@ class transform (env : Types.typing_environment) =
     method backup_quantifiers : IntSet.t = IntSet.empty
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
 
-    method rec_bodies :
-    (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-     Location.t * datatype' option * Position.t) list ->
-    ('self * (Binder.with_pos * DeclaredLinearity.t *
-              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-              Location.t * datatype' option * Position.t) list) =
+    method rec_bodies : recursive_function list -> ('self * recursive_function list) =
       let outer_tyvars = o#backup_quantifiers in
       let rec list o =
         function
           | [] -> (o, [])
-          | (f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs ->
+          | { rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn :: defs ->
               let (o, tyvars) = o#quantifiers tyvars in
               let (o, inner) = o#datatype inner in
               let inner_effects = fun_effects inner (fst lam) in
               let (o, lam, _) = o#funlit inner_effects lam in
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
-                (o, (f, lin, ((tyvars, Some (inner, extras)), lam), location, t, pos)::defs)
+              (o, { fn with rec_definition = ((tyvars, Some (inner, extras)), lam) } :: defs)
           | _ :: _ -> assert false
       in
         list o
 
-    method rec_activate_outer_bindings : (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-     Location.t * datatype' option * Position.t) list ->
-     ('self * (Binder.with_pos * DeclaredLinearity.t *
-              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-              Location.t * datatype' option * Position.t) list) =
+    method rec_activate_outer_bindings : recursive_function list -> ('self * recursive_function list) =
       let rec list o =
         function
           | [] -> o, []
-          | (f, lin, body, location, t, pos)::defs ->
-              let (o, f) = o#binder f in
+          | { rec_binder; rec_signature;  _ } as fn :: defs ->
+              let (o, rec_binder) = o#binder rec_binder in
               let (o, defs) = list o defs in
-              let (o, t) = optionu o (fun o -> o#datatype') t in
-                o, (f, lin, body, location, t, pos)::defs
+              let (o, rec_signature) = optionu o (fun o -> o#datatype') rec_signature in
+              (o, { fn with rec_binder; rec_signature } :: defs)
       in
         list o
 
-    method rec_activate_inner_bindings : (Binder.with_pos * DeclaredLinearity.t *
-        ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-        Location.t * datatype' option * Position.t) list -> 'self_type =
+    method rec_activate_inner_bindings : recursive_function list -> 'self_type =
       let rec list o =
         function
           | [] -> o
-          | (f, _, ((_tyvars, Some (inner, _extras)), _lam), _location, _t, _pos)::defs ->
+          | { rec_binder = f; rec_definition = ((_tyvars, Some (inner, _extras)), _lam); _ } :: defs ->
               let (o, _) = o#binder (Binder.set_type f inner) in
-                list o defs
+              list o defs
           | _ :: _ -> assert false
       in
         list o
@@ -774,15 +769,16 @@ class transform (env : Types.typing_environment) =
          let (o, p) = o#pattern p in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Val (p, (tyvars, e), location, t))
-      | Fun (bndr, lin, (tyvars, lam), location, t) when Binder.has_type bndr ->
+      | Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature }
+           when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let inner_effects = fun_effects (Binder.to_type bndr) (fst lam) in
+         let inner_effects = fun_effects (Binder.to_type fun_binder) (fst lam) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in
-         let (o, bndr) = o#binder bndr in
-         let (o, t) = optionu o (fun o -> o#datatype') t in
-         (o, Fun (bndr, lin, (tyvars, lam), location, t))
+         let (o, fun_binder) = o#binder fun_binder in
+         let (o, fun_signature) = optionu o (fun o -> o#datatype') fun_signature in
+         (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature })
       | Fun _ -> raise (internal_error "Unannotated non-recursive function binding")
       | Funs defs ->
          (* put the inner bindings in the environment *)

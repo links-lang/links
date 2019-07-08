@@ -1,7 +1,7 @@
 open CommonTypes
 open Operators
 open Utility
-open SourceCode.WithPos
+(* open SourceCode.WithPos *)
 open Sugartypes
 open SugarConstructors.DummyPositions
 
@@ -54,7 +54,7 @@ open SugarConstructors.DummyPositions
 (* unwrap a curried function definition as
    a collection of nested functions
 *)
-let unwrap_def (bndr, linearity, (tyvars, lam), location, t) =
+let unwrap_def (bndr, linearity, (tyvars, lam), location) =
   let f = Binder.to_name bndr in
   let ft = Binder.to_type bndr in
   let rt = TypeUtils.return_type ft in
@@ -71,57 +71,59 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location, t) =
                    var g))
         | _, _ -> assert false
     in make_lam rt lam
-  in (binder ~ty:ft f, linearity, (tyvars, lam), location, t)
+  in (binder ~ty:ft f, linearity, (tyvars, lam), location)
 
 (*
   unwrap a curried function definition
   with a position attached
   (for recursive functions)
 *)
-let unwrap_def_dp (fb, lin, tlam, location, t, pos) =
-  let (fb, lin, tlam, location, t) = unwrap_def (fb, lin, tlam, location, t) in
-    (fb, lin, tlam, location, t, pos)
+let unwrap_def_dp { rec_binder = fb; rec_linearity = lin; rec_definition = tlam;
+                    rec_location = location; rec_signature = t; rec_unsafe_signature = ut;
+                    rec_pos } =
+  let (fb, lin, tlam, location) = unwrap_def (fb, lin, tlam, location) in
+  { rec_binder = fb; rec_linearity = lin; rec_definition = tlam;
+    rec_location = location; rec_signature = t; rec_unsafe_signature = ut; rec_pos }
 
 class desugar_funs env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
-  method private desugarFunLit argss lin lam location tvs =
+  method private desugarFunLit argss lin lam location =
     let inner_mb     = snd (last argss) in
     let (o, lam, rt) = o#funlit inner_mb lam in
-    let ft = List.fold_right (fun (args, mb) rt -> `Function (args, mb, rt))
-                             argss rt in
+    let ft = List.fold_right (fun (args, mb) rt ->
+                 if DeclaredLinearity.is_linear lin
+                 then `Lolli (args, mb, rt)
+                 else `Function (args, mb, rt))
+               argss rt in
     let f = gensym ~prefix:"_fun_" () in
-    let body, tvs, ft = match tvs with
-      | [] -> Var f, [], ft
-      | _  ->
-         (* If a FunLit is surrounded by a type abstraction we need to generate
-            a corresponding type application.  Type abstractions are inserted
-            during type checking.  This really shouldn't happen since it couples
-            typechecking with this desugaring stage.  If we didn't insert type
-            application here the resulting AST would be ill-typed. *)
-         let (tvs, tyargs), ft = Generalise.generalise env.Types.var_env ft in
-         let ft = Instantiate.freshen_quantifiers ft in
-         tappl (Var f, tyargs), tvs, ft in
-    let (bndr, lin, tvs, loc, ty) =
-      unwrap_def (binder ~ty:ft f, lin, (tvs, lam), location, None) in
-    let e = block_node ([with_dummy_pos (Fun (bndr, lin, tvs, loc, ty))],
+    let body, tyvars, ft, fti =
+      (* FIXME: do the generalisation and instantiation steps as part
+         of type inference and store the results in the FunLit for use
+         here. (The current implementation is broken because
+         generalisation turns previously flexible type variables into
+         rigid ones, which persist from the first round of type
+         checking.) *)
+      let (tyvars, _tyargs), ft = Generalise.generalise env.Types.var_env ft in
+      let (tyargs, fti) = Instantiate.typ ft in
+      tappl (Var f, tyargs), tyvars, ft, fti in
+    let (bndr, lin, def, loc) =
+      unwrap_def (binder ~ty:ft f, lin, (tyvars, lam), location) in
+    let e = block_node ([with_dummy_pos (Fun { fun_binder = bndr; fun_linearity = lin;
+                                               fun_definition = def; fun_location = loc;
+                                               fun_signature = None;
+                                               fun_unsafe_signature = false; })],
                          with_dummy_pos body)
-    in (o, e, ft)
+    in (o, e, fti)
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
-    | TAbstr (tvs', {node = TAppl ({node = TAbstr (tvs, {node =
-         FunLit (Some argss, lin, lam, location); _ } ); _}, tyargs); _})
-      when Settings.get_value Instantiate.quantified_instantiation ->
-       let (o, e, ft) = o#desugarFunLit argss lin lam location tvs in
-       (o, TAbstr (tvs', with_dummy_pos (TAppl (with_dummy_pos (
-            TAbstr (tvs, with_dummy_pos e)), tyargs))), ft)
     | FunLit (Some argss, lin, lam, location) ->
-       o#desugarFunLit argss lin lam location []
+       o#desugarFunLit argss lin lam location
     | Section (Section.Project name) ->
-        let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
-        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
-        let effb, eff = Types.fresh_row_quantifier (lin_any, res_any) in
+        let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
+        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_unl, res_any) in
+        let effb, eff = Types.fresh_row_quantifier default_effect_subkind in
 
         let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
 
@@ -144,10 +146,15 @@ object (o : 'self_type)
         let (o, b) = super#bindingnode b in
           begin
             match b with
-              | Fun (bndr, lin, tvs, loc, ty) ->
-                 let (bndr', lin', tvs', loc', ty') =
-                   unwrap_def (bndr, lin, tvs, loc, ty) in
-                 (o, Fun (bndr', lin', tvs', loc', ty'))
+              | Fun { fun_binder = bndr; fun_linearity = lin;
+                      fun_definition = tvs; fun_location = loc;
+                      fun_signature = ty;
+                      fun_unsafe_signature = uns; } ->
+                 let (bndr', lin', tvs', loc') =
+                   unwrap_def (bndr, lin, tvs, loc) in
+                 (o, Fun { fun_binder = bndr'; fun_linearity = lin';
+                           fun_definition = tvs'; fun_location = loc';
+                           fun_signature = ty; fun_unsafe_signature = uns })
               | _ -> assert false
           end
     | Funs _ as b ->
@@ -180,14 +187,13 @@ object
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | Fun (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t) as b ->
-        super#bindingnode b
+    | Fun { fun_definition = (_, ([_], _)); _ } as b -> super#bindingnode b
     | Fun _ -> {< has_no_funs = false >}
     | Funs defs as b ->
         if
           List.exists
             (function
-               | (_f, _lin, (_tyvars, ([_ps], _body)), _location, _t, _pos) -> false
+               | { rec_definition = (_, ([_], _)); _ } -> false
                | _ -> true) defs
         then
           {< has_no_funs = false >}
