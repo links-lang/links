@@ -1003,45 +1003,6 @@ module Env = Env.String
     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
       (var, (PrimaryKind.Presence, subkind)), `Var point
 
-  (* let fresh_flexible_type_quantifier subkind : quantifier * datatype =
-   *   let var = fresh_raw_variable () in
-   *   let point = Unionfind.fresh (`Var (var, subkind, `Flexible)) in
-   *     (var, (PrimaryKind.Type, subkind)), `MetaTypeVar point
-   *
-   * let fresh_flexible_row_quantifier subkind : quantifier * row =
-   *   let var = fresh_raw_variable () in
-   *   let point = make_row_variable var subkind in
-   *     (var, (PrimaryKind.Row, subkind)), (FieldEnv.empty, point, false)
-   *
-   * let fresh_flexible_presence_quantifier subkind : quantifier * field_spec =
-   *   let var = fresh_raw_variable () in
-   *   let point = Unionfind.fresh (`Var (var, subkind, `Flexible)) in
-   *     (var, (PrimaryKind.Presence, subkind)), `Var point *)
-
-(* let freshen_quantifier =
- *   function
- *     | (_, subkind, `Type _) ->
- *         let q, t = fresh_type_quantifier subkind in
- *           q, `Type t
- *     | (_, subkind, `Row _) ->
- *         let q, row = fresh_row_quantifier subkind in
- *           q, `Row row
- *     | (_, subkind, `Presence _) ->
- *         let q, f = fresh_presence_quantifier subkind in
- *           q, `Presence f
- *
- * let freshen_quantifier_flexible =
- *   function
- *     | (_, subkind, `Type _) ->
- *         let q, t = fresh_flexible_type_quantifier subkind in
- *           q, `Type t
- *     | (_, subkind, `Row _) ->
- *         let q, row = fresh_flexible_row_quantifier subkind in
- *           q, `Row row
- *     | (_, subkind, `Presence _) ->
- *         let q, f = fresh_flexible_presence_quantifier subkind in
- *           q, `Presence f *)
-
 let make_empty_closed_row () = empty_field_env, closed_row_var, false
 let make_empty_open_row subkind = empty_field_env, fresh_row_variable subkind, false
 
@@ -1601,48 +1562,6 @@ let quantifiers_of_type_args =
            end
        | `Presence _ -> assert false)
 
-(* (\* update a quantifier with any changes to its point *\)
- * let normalise_quantifier = fun q ->
- *   match q with
- *     | _, _, `Type point ->
- *         begin
- *           match Unionfind.find point with
- *             | `Var (var, subkind, _) -> (var, subkind, `Type point)
- *             | _ -> (\* TODO: shouldn't this be an error? *\) q
- *         end
- *     | _, _, `Row point ->
- *         begin
- *           match Unionfind.find point with
- *             | `Var (var, subkind, _) -> (var, subkind, `Row point)
- *             | _ -> (\* TODO: shouldn't this be an error? *\) q
- *         end
- *     | _, _, `Presence point ->
- *         begin
- *           match Unionfind.find point with
- *             | `Var (var, subkind, _) -> (var, subkind, `Presence point)
- *             | _ -> (\* TODO: shouldn't this be an error? *\) q
- *         end *)
-
-(* let rec flexible_of_type t = *)
-(*   match concrete_type t with *)
-(*     | `MetaTypeVar point as t -> *)
-(*         begin *)
-(*           match Unionfind.find point with *)
-(*             | `Var (_, _, `Flexible) -> Some t *)
-(*             | _ -> None *)
-(*         end *)
-(*     | `ForAll (qs, t) when *)
-(*         List.for_all (fun q -> not (is_rigid_quantifier q)) (unbox_quantifiers qs) -> *)
-(*           begin *)
-(*             match flexible_of_type t with *)
-(*               | Some t -> *)
-(*                   (\* WARNING: side-effect! *\) *)
-(*                   qs := []; *)
-(*                   Some t *)
-(*               | None -> None *)
-(*           end *)
-(*     | _ -> None *)
-
 let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
   concrete_type (`ForAll (qs, t))
 
@@ -1837,10 +1756,6 @@ struct
       | `Bound -> (name, (flavour, kind, 0))
 
   let combine (name, (flavour, kind, count)) (flavour', kind', scope) =
-    if flavour <> flavour' then begin
-        let show_flavour = function | `Flexible -> "%" | `Rigid -> "_" | `Recursive -> "m" in
-        Printf.printf "%s : %s /= %s\n%!" name (show_flavour flavour) (show_flavour flavour')
-      end;
     assert (flavour = flavour');
     assert (kind    = kind'   );
     match scope with
@@ -2332,99 +2247,6 @@ struct
       | t -> t
 end
 
-(*
-  find all the flexible type variables in a type
- *)
-(* let rec flexible_type_vars : TypeVarSet.t -> datatype -> quantifier TypeVarMap.t = fun bound_vars t ->
- *   let ftv = flexible_type_vars bound_vars in
- *     match t with
- *       | `Not_typed
- *       | `Primitive _ -> TypeVarMap.empty
- *       | `MetaTypeVar point ->
- *           begin
- *             match Unionfind.find point with
- *               | `Var (var, _, `Flexible) when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
- *               | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (var, subkind, `Type point)
- *               | `Var (_, _, `Rigid) -> TypeVarMap.empty
- *               | `Recursive (var, body) ->
- *                   if TypeVarSet.mem var bound_vars then
- *                     TypeVarMap.empty
- *                   else
- *                     flexible_type_vars (TypeVarSet.add var bound_vars) body
- *               | `Body t -> ftv t
- *           end
- *       | `Function (f, m, t) ->
- *           TypeVarMap.union_all [ftv f; row_flexible_type_vars bound_vars m; ftv t]
- *       | `Lolli (f, m, t) ->
- *           TypeVarMap.union_all [ftv f; row_flexible_type_vars bound_vars m; ftv t]
- *       | `Record row -> row_flexible_type_vars bound_vars row
- *       | `ForAll (tyvars, body) ->
- *           let bound_vars =
- *             List.fold_left
- *               (fun bound_vars tyvar ->
- *                  let var = var_of_quantifier tyvar in
- *                    TypeVarSet.add var bound_vars)
- *                 bound_vars
- *                 (unbox_quantifiers tyvars)
- *           in
- *             flexible_type_vars bound_vars body
- *       | `Variant row -> row_flexible_type_vars bound_vars row
- *       | `Effect row -> row_flexible_type_vars bound_vars row
- *       | `Table (r, w, n) -> TypeVarMap.union_all [ftv r; ftv w; ftv n]
- *       | `Lens _sort -> TypeVarMap.empty
- *       | `Alias ((_name, ts), d) ->
- *           TypeVarMap.union_all
- *             ((ftv d)::(List.map (tyarg_flexible_type_vars bound_vars) ts))
- *       | `Application (_name, tyargs) ->
- *           TypeVarMap.union_all (List.map (tyarg_flexible_type_vars bound_vars) tyargs)
- *       | `RecursiveApplication { r_args; _ } ->
- *           TypeVarMap.union_all (List.map (tyarg_flexible_type_vars bound_vars) r_args)
- *       | `Input (t, s)
- *       | `Output (t, s) -> TypeVarMap.union_all [flexible_type_vars bound_vars t; flexible_type_vars bound_vars s]
- *       | `Select row
- *       | `Choice row -> row_flexible_type_vars bound_vars row
- *       | `Dual s -> flexible_type_vars bound_vars s
- *       | `End -> TypeVarMap.empty
- * and presence_flexible_type_vars bound_vars =
- *   function
- *     | `Present t -> flexible_type_vars bound_vars t
- *     | `Absent -> TypeVarMap.empty
- *     | `Var point ->
- *         begin
- *           match Unionfind.find point with
- *             | `Var (var, _, `Flexible) when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
- *             | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (var, subkind, `Presence point)
- *             | `Var (_  , _, `Rigid) -> TypeVarMap.empty
- *             | `Body f -> presence_flexible_type_vars bound_vars f
- *         end
- *
- * and row_flexible_type_vars bound_vars (field_env, row_var, _) =
- *   TypeVarMap.superimpose
- *     (FieldEnv.fold
- *        (fun _ f ftvs ->
- *           TypeVarMap.union_all
- *             [presence_flexible_type_vars bound_vars f;
- *              ftvs])
- *        field_env TypeVarMap.empty)
- *     (row_var_flexible_type_vars bound_vars row_var)
- * and row_var_flexible_type_vars bound_vars row_var =
- *   match Unionfind.find row_var with
- *     | `Closed -> TypeVarMap.empty
- *     | `Var (var, _, `Flexible) when TypeVarSet.mem var bound_vars -> TypeVarMap.empty
- *     | `Var (var, subkind, `Flexible) -> TypeVarMap.singleton var (var, subkind, `Row row_var)
- *     | `Var (_, _, `Rigid) -> TypeVarMap.empty
- *     | `Recursive (var, row) ->
- *         if TypeVarSet.mem var bound_vars then
- *           TypeVarMap.empty
- *         else
- *           row_flexible_type_vars (TypeVarSet.add var bound_vars) row
- *     | `Body row ->
- *         row_flexible_type_vars bound_vars row
- * and tyarg_flexible_type_vars bound_vars =
- *   function
- *     | `Type t -> flexible_type_vars bound_vars t
- *     | `Row row -> row_flexible_type_vars bound_vars row
- *     | `Presence f -> presence_flexible_type_vars bound_vars f *)
 
 let free_bound_type_vars ?(include_aliases=true) = Vars.free_bound_type_vars ~include_aliases TypeVarSet.empty
 let free_bound_row_type_vars ?(include_aliases=true) = Vars.free_bound_row_type_vars ~include_aliases TypeVarSet.empty

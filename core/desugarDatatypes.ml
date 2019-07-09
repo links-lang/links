@@ -767,5 +767,4 @@ let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let dt = freshen_vars#datatype dt in
   let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
-  (* let () = List.iter Generalise.rigidify_quantifier vars in *)
     (Types.for_all (vars, Desugar.datatype var_env aliases dt))

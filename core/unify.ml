@@ -311,10 +311,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
 
   fun (t1, t2) ->
 
-  (* FIXME: do we need to do the hoisting manually now? *)
-  (* let () = hoist_quantifiers t1 in
-   * let () = hoist_quantifiers t2 in *)
-
   let t1 = ignore_empty_quantifiers t1 in
   let t2 = ignore_empty_quantifiers t2 in
 

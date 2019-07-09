@@ -5,6 +5,8 @@ open Types
 let show_generalisation = Basicsettings.Generalise.show_generalisation
 let show_recursion = Instantiate.show_recursion
 
+let internal_error message = Errors.internal_error ~filename:"generalise" ~message
+
 type gen_kind = [`Rigid|`All]
 
 (** [get_type_args kind bound_vars t] gets the free type variables of
@@ -19,10 +21,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
   fun kind bound_vars t ->
     let gt = get_type_args kind bound_vars in
       match t with
-        | `Not_typed ->
-            raise (Errors.internal_error
-              ~filename:"generalise.ml"
-              ~message:"Internal error: Not_typed encountered in get_type_args")
+        | `Not_typed -> raise (internal_error "Not_typed encountered in get_type_args")
         | `Primitive _ -> []
         | `MetaTypeVar point ->
             begin
@@ -118,68 +117,17 @@ and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg li
       | `Row r -> get_row_type_args kind bound_vars r
       | `Presence f -> get_presence_type_args kind bound_vars f
 
-(* let remove_duplicates =
- *   unduplicate (fun l r ->
- *                  match l, r with
- *                    | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> Unionfind.equivalent l r
- *                    | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && Unionfind.equivalent l r
- *                    | `Presence (`Var l), `Presence (`Var r) -> Unionfind.equivalent l r
- *                    | _ -> false) *)
 
-(* let get_type_args kind bound_vars t =
- *   remove_duplicates (get_type_args kind bound_vars t)
- *
- * let get_row_var_type_args kind bound_vars row_var =
- *   remove_duplicates (get_row_var_type_args kind bound_vars row_var)
- *
- * let get_presence_type_args kind bound_vars f =
- *   remove_duplicates (get_presence_type_args kind bound_vars f) *)
+let remove_duplicates =
+  unduplicate (fun l r ->
+                 match l, r with
+                   | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> Unionfind.equivalent l r
+                   | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && Unionfind.equivalent l r
+                   | `Presence (`Var l), `Presence (`Var r) -> Unionfind.equivalent l r
+                   | _ -> false)
 
-(* let type_variables_of_type_args = *)
-(*   List.map *)
-(*     (function *)
-(*        | `Type (`MetaTypeVar point) -> *)
-(*            begin *)
-(*              match Unionfind.find point with *)
-(*                | `Var (var, _, freedom) -> (var, freedom, `Type point) *)
-(*                | _ -> assert false *)
-(*            end *)
-(*        | `Type _ -> assert false *)
-(*        | `Row (fields, row_var, false) -> *)
-(*            assert (StringMap.is_empty fields); *)
-(*            begin *)
-(*              match Unionfind.find row_var with *)
-(*                | `Var (var, _, freedom) -> (var, freedom, `Row row_var) *)
-(*                | _ -> assert false *)
-(*            end *)
-(*        | `Presence (`Var point) -> *)
-(*            begin *)
-(*              match Unionfind.find point with *)
-(*                | `Var (var, _, freedom) -> (var, freedom, `Presence point) *)
-(*                | _ -> assert false *)
-(*            end *)
-(*        | `Presence _ | `Row _ -> assert false) *)
-
-let get_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_type_args `All bound_vars)
-(* let get_row_var_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_row_var_type_args `All bound_vars) *)
-(* let get_presence_quantifiers bound_vars = Types.quantifiers_of_type_args -<- (get_presence_type_args `All bound_vars) *)
-
-(* (\* pull out all the type variables in the quantifiers, as quantifiers,
- *    e.g. if a quantifier gets instantiated as (a) -> b, then that
- *    results in two quantifiers: a and b.
- * *\)
- * let extract_quantifiers quantifiers =
- *   let quantifier_type_args =
- *     function
- *       | (_, _, `Type point) ->
- *           get_type_args `All TypeVarSet.empty (`MetaTypeVar point)
- *       | (_, _, `Row row_var) ->
- *           get_row_var_type_args `All TypeVarSet.empty row_var
- *       | (_, _, `Presence point) ->
- *           get_presence_type_args `All TypeVarSet.empty (`Var point)
- *   in
- *     Types.quantifiers_of_type_args
- *       (remove_duplicates (concat_map quantifier_type_args quantifiers)) *)
+let get_type_args kind bound_vars t =
+  remove_duplicates (get_type_args kind bound_vars t)
 
 let env_type_vars (env : Types.environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
@@ -195,9 +143,7 @@ let rigidify_quantifier : type_arg -> unit =
     | `Type (`MetaTypeVar point) -> rigidify_point point
     | `Row (_, point, _)         -> rigidify_point point
     | `Presence (`Var point)    -> rigidify_point point
-    | _ -> raise (Errors.InternalError {
-                      filename = "generalise";
-                      message = "Not a type-variable argument." })
+    | _ -> raise (internal_error "Not a type-variable argument.")
 
 (** generalise:
     Universally quantify any free type variables in the expression.
@@ -257,6 +203,5 @@ let generalise_rigid = generalise `Rigid
 (** generalise both rigid and flexible type variables *)
 let generalise = generalise `All
 
-let get_quantifiers : environment -> datatype -> quantifier list =
-  fun env t ->
-    get_quantifiers (env_type_vars env) t
+let get_quantifiers_rigid (env : environment) (t : datatype) : quantifier list =
+  get_type_args `Rigid (env_type_vars env) t |> Types.quantifiers_of_type_args

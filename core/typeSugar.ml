@@ -3815,11 +3815,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
             else
               (* All rigid type variables in bt should appear in the
                  environment *)
-              let tyvars = Generalise.get_quantifiers context.var_env bt in
+              let tyvars = Generalise.get_quantifiers_rigid context.var_env bt in
               match tyvars with
               | [] -> [], erase_pat pat, penv
-              | _ ->
-                 Gripers.value_restriction pos bt
+              | _ -> Gripers.value_restriction pos bt
           in
             Val (pat, (tyvars, body), location, datatype),
             {empty_context with
