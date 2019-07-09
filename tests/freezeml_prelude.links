@@ -60,3 +60,14 @@ fun revapp(x)(f) { f(x) }
 
 sig app: forall a,b,e::Row,f::Row. ((a) -e-> b) -f-> (a) -e-> b
 fun app(f)(x) { f(x) }
+
+# Functions required for the session case
+
+sig make_session_fn : ((a::Session) -e-> b) -> (a) -e-> b
+fun make_session_fn (id) { id }
+
+sig make_session : (a::Session) -> a
+fun make_session (id) { id }
+
+sig poly_session : ((?(forall a. a).End) -e-> Int) -> (?(forall a. a).End) -e-> Int
+fun poly_session (f) { f }
