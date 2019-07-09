@@ -642,7 +642,7 @@ object (self)
         let (linearity_env, dep_graph) =
           List.fold_left (fun (lin_map, dep_graph) (name, _, (_, dt), _) ->
             let dt = OptionUtils.val_of dt in
-            let lin_map = StringMap.add name (not @@ is_unl_type dt) lin_map in
+            let lin_map = StringMap.add name (not @@ Unl.is_type dt) lin_map in
             let deps = recursive_applications dt in
             let dep_graph = (name, deps) :: dep_graph in
             (lin_map, dep_graph)

@@ -759,7 +759,7 @@ struct
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in
               let row = TypeUtils.extract_row list_content_type in
-              ensure (Types.is_base_row row) "Only base types allowed in query result record" (SSpec special));
+              ensure (Types.Base.is_row row) "Only base types allowed in query result record" (SSpec special));
 
               Query (range, e, t), t, o
 
@@ -1088,7 +1088,7 @@ struct
         let o, _ = o#set_allowed_effects previously_allowed_effects in
 
 
-        let is_linear = not (Types.is_unl_type exp_unquant_t) in
+        let is_linear = not (Types.Unl.is_type exp_unquant_t) in
         let actual_ft_unquant =
           Types.make_function_type
             ~linear:is_linear

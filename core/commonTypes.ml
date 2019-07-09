@@ -18,6 +18,11 @@ module Linearity = struct
   let to_string = function
     | Any -> "Any"
     | Unl -> "Unl"
+
+  let min l r =
+    match l, r with
+    | Unl, _ | _, Unl -> Unl
+    | Any, Any -> Any
 end
 
 (* Convenient aliases for constructing values *)
@@ -70,6 +75,15 @@ module Restriction = struct
     | Base    -> "Base"
     | Session -> "Session"
     | Effect  -> "Eff"
+
+  let min l r =
+    match l, r with
+    | Any, Any         -> Some Any
+    | Session, Session -> Some Session
+    | Effect, Effect   -> Some Effect
+    | Base, Base       -> Some Base
+    | x, Any | Any, x  -> Some x (* Any will narrow to anything. *)
+    | _ -> None
 end
 
 (* Convenient aliases for constructing values *)
@@ -80,6 +94,11 @@ let res_effect  = Restriction.Effect
 
 type subkind = Linearity.t * Restriction.t
     [@@deriving eq,show]
+
+let min_subkind (ll, lr) (rl, rr) =
+  match Restriction.min lr rr with
+  | Some r -> Some (Linearity.min ll rl, r)
+  | None -> None
 
 let string_of_subkind (lin, res) =
   Printf.sprintf "(%s,%s)" (Linearity.to_string lin) (Restriction.to_string res)

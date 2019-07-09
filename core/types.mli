@@ -130,39 +130,33 @@ type session_type = (typ, row) session_type_basis
 
 type datatype = typ
 
-(* base kind stuff *)
-val is_base_type : datatype -> bool
-val is_base_row : row -> bool
+(** A constraint that a subkind imposes on types. *)
+module type Constraint = sig
+  val is_type : datatype -> bool
+  val is_row : row -> bool
 
-val is_baseable_type : datatype -> bool
-val is_baseable_row : row -> bool
+  (** Can this type be modified using {!make_type} to satisfy this constraint?
+     *)
+  val can_type_be : datatype -> bool
+  val can_row_be : row -> bool
 
-val basify_type : datatype -> unit
-val basify_row : row -> unit
+  (** Attempt to modify this type to satisfy this constraint. One should call
+     {!can_type_be} before calling this.
 
-(* unl stuff *)
-val is_unl_type : datatype -> bool
-val is_unl_row : row -> bool
+     This will attempt to convert any flexible type variables with compatible
+     subkinds to one with a more restrictive one, so that {!is_type} now returns
+     true. *)
+  val make_type : datatype -> unit
+  val make_row : row -> unit
+end
 
-val type_can_be_unl : datatype -> bool
-val row_can_be_unl : row -> bool
-(* val session_can_be_unl : datatype -> bool *)
+module Base : Constraint
+module Unl : Constraint
+module Session : Constraint
 
-val make_type_unl : datatype -> unit
-val make_row_unl : row -> unit
-(* val make_session_unl : datatype -> unit *)
+(** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
+val get_restriction_constraint : Restriction.t -> (module Constraint) option
 
-(* session kind stuff *)
-val is_session_type : datatype -> bool
-val is_session_row : row -> bool
-
-val is_sessionable_type : datatype -> bool
-val is_sessionable_row : row -> bool
-
-val sessionify_type : datatype -> unit
-val sessionify_row : row -> unit
-
-(* val dual_session : datatype -> datatype *)
 val dual_row : row -> row
 val dual_type : datatype -> datatype
 
