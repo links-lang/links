@@ -799,12 +799,45 @@ module Session : Constraint = struct
      end)#visitors
 end
 
+module Mono : Constraint = struct
+  open Restriction
+
+     module MonoPredicate = struct
+       class klass = object
+         inherit type_predicate as super
+
+         method! is_type vars = function
+           | `ForAll _ -> false
+           | t -> super#is_type vars t
+       end
+     end
+
+  let is_type, is_row = make_restriction_predicate (module MonoPredicate) Session false
+
+  let can_type_be, can_row_be =
+    (object
+       inherit MonoPredicate.klass
+
+       method! is_var = function
+         | (_, (_, Mono), _) -> true
+         | (_, _, `Rigid) -> true
+         | (_, (_, sk), `Flexible) ->
+              (* Mono is substantially more lax - we just require that we can unify with any subkind *)
+              match Restriction.min sk Mono with
+              | Some _ -> true
+              | None -> false
+     end)#predicates
+
+  let make_type, make_row = make_restriction_transform ~ok:true Mono
+end
+
 let get_restriction_constraint : Restriction.t -> (module Constraint) option =
   let open Restriction in
   function
   | Any | Effect -> None
   | Base -> Some (module Base)
   | Session -> Some (module Session)
+  | Mono -> Some (module Mono)
 
 type datatype = typ [@@deriving show]
 

@@ -153,6 +153,7 @@ end
 module Base : Constraint
 module Unl : Constraint
 module Session : Constraint
+module Mono : Constraint
 
 (** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
 val get_restriction_constraint : Restriction.t -> (module Constraint) option

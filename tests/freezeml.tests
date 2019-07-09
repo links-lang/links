@@ -195,10 +195,26 @@ stderr : @.*Because of the value restriction.*
 Do not infer polymorphic arguments (1)
 fun(f) { (poly(~f), f(42) + 1) }
 exit : 1
-stderr : @.*
-ignore : Not currently implemented
+stderr : @.*Type error:.*
 
 Do not infer polymorphic arguments (2)
 fun(f) { (f(42) + 1, poly(~f)) }
 exit : 1
-stderr : @.*
+stderr : @.*Type error:.*
+
+Do not infer polymorphic arguments (3)
+tests/freezeml/session.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+ignore : Failing test case, as Mono kinds get converted to Session.
+
+Do not infer polymorphic values (1)
+fun(bot: (forall a. a)) { var f = bot(bot); (poly(~f), f(42) + 1) }
+exit : 1
+stderr : @.*Type error:.*
+
+Do not infer polymorphic values (2)
+fun(bot: (forall a. a)) { var f = bot(bot); (f(42) + 1, poly(~f)) }
+exit : 1
+stderr : @.*Type error:.*

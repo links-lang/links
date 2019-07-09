@@ -1,0 +1,7 @@
+sig make_session : (a::(Any, Session)) -> a
+fun make_session (id) { id }
+
+sig poly : (?(forall a::Session. a).End) -> (?(forall a::Session. a).End)
+fun poly (id) { id }
+
+fun(f) { poly(make_session(~f)) }

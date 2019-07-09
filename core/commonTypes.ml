@@ -50,6 +50,7 @@ module Restriction = struct
   type t =
     | Any
     | Base
+    | Mono
     | Session
     | Effect
     [@@deriving eq,show]
@@ -60,6 +61,10 @@ module Restriction = struct
 
   let is_base = function
     | Base -> true
+    | _    -> false
+
+  let is_mono = function
+    | Mono -> true
     | _    -> false
 
   let is_session = function
@@ -73,22 +78,27 @@ module Restriction = struct
   let to_string = function
     | Any     -> "Any"
     | Base    -> "Base"
+    | Mono    -> "Mono"
     | Session -> "Session"
     | Effect  -> "Eff"
 
   let min l r =
     match l, r with
     | Any, Any         -> Some Any
+    | Mono, Mono       -> Some Mono
     | Session, Session -> Some Session
     | Effect, Effect   -> Some Effect
     | Base, Base       -> Some Base
     | x, Any | Any, x  -> Some x (* Any will narrow to anything. *)
+    | Base, Mono | Mono, Base -> Some Base (* Mono can narrow to Base. *)
+    | Session, Mono | Mono, Session -> Some Session (* Super dubious, but we don't have another way*)
     | _ -> None
 end
 
 (* Convenient aliases for constructing values *)
 let res_any     = Restriction.Any
 let res_base    = Restriction.Base
+let res_mono    = Restriction.Mono
 let res_session = Restriction.Session
 let res_effect  = Restriction.Effect
 

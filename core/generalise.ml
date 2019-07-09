@@ -223,6 +223,19 @@ let rigidify_quantifier : quantifier -> unit =
     | (_, _, `Row point)      -> rigidify_point point
     | (_, _, `Presence point) -> rigidify_point point
 
+let mono_type_args : type_arg -> unit =
+  let check_sk point =
+    match Unionfind.find point with
+    | `Var (var, (lin, CommonTypes.Restriction.Mono), `Flexible) ->
+       Unionfind.change point (`Var (var, (lin, CommonTypes.Restriction.Any), `Flexible))
+    | _ -> ()
+  in
+  function
+  | `Type (`MetaTypeVar point) -> check_sk point
+  | `Row (_, point, _) -> check_sk point
+  | `Presence (`Var point) -> check_sk point
+  | _ -> ()
+
 (** generalise:
     Universally quantify any free type variables in the expression.
 *)
@@ -235,6 +248,7 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quanti
       | _ -> t in
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
+    List.iter mono_type_args type_args;
     let quantifiers = Types.quantifiers_of_type_args type_args in
     let () = List.iter rigidify_quantifier quantifiers in
     let quantified = Types.for_all (quantifiers, t) in

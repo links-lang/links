@@ -2140,6 +2140,9 @@ let make_ft_poly_curry declared_linearity ps effects return_type =
       | [] -> assert false in
   Types.for_all (ft ps)
 
+(** Make any unannotated parameters monomorphic. *)
+let make_mono pats = List.iter (List.iter (fun (_, _, t) -> Types.Mono.make_type t)) pats;
+
 type usagemap = int stringmap
 let merge_usages (ms:usagemap list) : usagemap =
       match ms with
@@ -2400,6 +2403,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let pats = List.map (List.map tpc) pats in
             let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
             let env' = Env.extend context.var_env pat_env in
+
+            make_mono pats;
 
             (* type of the effects in the body of the lambda *)
             let effects = Types.make_empty_open_row default_effect_subkind in
@@ -3803,6 +3808,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   t
               | _ -> typ body in
           let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
+          Types.Mono.make_type (pattern_typ pat);
           let usage = usages body in
           let body = erase body in
           let tyvars, pat, penv =
@@ -3862,6 +3868,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
                      recursive) *)
                   let v = Utils.dummy_source_name () in
                   bind_var context (v, ft_mono), ft in
+
+          (* We make the patterns monomorphic after unifying with the signature. *)
+          make_mono pats;
 
           (* type check the body *)
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
@@ -3993,6 +4002,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          let _, ft_mono = TypeUtils.split_quantified_type ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft_mono) in
                            ft in
+
+                 (* We make the patterns monomorphic after unifying with the signature. *)
+                 make_mono pats;
+
                  StringSet.add name inner_rec_vars, Env.bind inner_env (name, inner), pats::patss)
               (StringSet.empty, Env.empty, []) defs in
           let patss = List.rev patss in
