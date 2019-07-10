@@ -1536,31 +1536,31 @@ let normalise_row = normalise_row IntSet.empty
 
 (** building quantified types *)
 
-let quantifiers_of_type_args =
+let quantifier_of_type_arg =
   let open PrimaryKind in
-  List.map
-    (function
-       | `Type (`MetaTypeVar point) ->
-           begin
-             match Unionfind.find point with
-               | `Var (var, subkind, _) -> (var, (Type, subkind))
-               | _ -> assert false
-           end
-       | `Type _ -> assert false
-       | `Row (fields, row_var, _dual) ->
-           assert (StringMap.is_empty fields);
-           begin
-             match Unionfind.find row_var with
-               | `Var (var, subkind, _) -> (var, (Row, subkind))
-               | _ -> assert false
-           end
-       | `Presence (`Var point) ->
-           begin
-             match Unionfind.find point with
-               | `Var (var, subkind, _) -> (var, (Presence, subkind))
-               | _ -> assert false
-           end
-       | `Presence _ -> assert false)
+  function
+  | `Type (`MetaTypeVar point) ->
+     begin
+       match Unionfind.find point with
+       | `Var (var, subkind, _) -> (var, (Type, subkind))
+       | _ -> assert false
+     end
+  | `Row (fields, row_var, _dual) ->
+     assert (StringMap.is_empty fields);
+     begin
+       match Unionfind.find row_var with
+       | `Var (var, subkind, _) -> (var, (Row, subkind))
+       | _ -> assert false
+     end
+  | `Presence (`Var point) ->
+     begin
+       match Unionfind.find point with
+       | `Var (var, subkind, _) -> (var, (Presence, subkind))
+       | _ -> assert false
+     end
+  | _ -> assert false
+
+let quantifiers_of_type_args = List.map quantifier_of_type_arg
 
 let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
   concrete_type (`ForAll (qs, t))

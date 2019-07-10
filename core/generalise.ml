@@ -132,7 +132,7 @@ let get_type_args kind bound_vars t =
 let env_type_vars (env : Types.environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
-let rigidify_quantifier : type_arg -> unit =
+let rigidify_type_arg : type_arg -> unit =
   let rigidify_point point =
     match Unionfind.find point with
     | `Var (var, subkind, `Flexible) -> Unionfind.change point (`Var (var, subkind, `Rigid))
@@ -158,7 +158,7 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quanti
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
     let quantifiers = Types.quantifiers_of_type_args type_args in
-    List.iter rigidify_quantifier type_args;
+    List.iter rigidify_type_arg type_args;
     let quantified = Types.for_all (quantifiers, t) in
 
     (* The following code suffers from the problem that it may reorder

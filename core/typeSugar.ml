@@ -21,7 +21,7 @@ let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
 
 let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
 
-(* let dodgey_type_isomorphism = Basicsettings.TypeSugar.dodgey_type_isomorphism *)
+let dodgey_type_isomorphism = Basicsettings.TypeSugar.dodgey_type_isomorphism
 
 module Env = Env.String
 
@@ -2905,70 +2905,46 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 For f a we generate /\ZS.f XS a.
               *)
               begin
-                let ft = Types.concrete_type (typ f) in
-                (* match Types.concrete_type (typ f) with *)
-                  (* | `ForAll (qs, `Function (fps, fe, _)) as t ->
-                   *
-                   *     (\* the free type variables in the arguments (and effects) *\)
-                   *     let arg_vars =
-                   *       Types.TypeVarSet.union (Types.free_type_vars fps) (Types.free_row_type_vars fe) in
-                   *
-                   *     (\* return true if this quantifier appears free in the arguments (or effects) *\)
-                   *     let free_in_arg q = Types.TypeVarSet.mem (Types.var_of_quantifier q) arg_vars in
-                   *
-                   *     (\*
-                   *       since we've smashed through the quantifiers, we should
-                   *       make any remaining quantifiers flexible
-                   *     *\)
-                   *
-                   *     (\* xs is a list of tuples of the shape:
-                   *        (original quantifier, (fresh quantifier, fresh type argument))
-                   *     *\)
-                   *     let xs =
-                   *       List.map
-                   *         (fun q ->
-                   *            q, Types.freshen_quantifier_flexible q)
-                   *         (Types.unbox_quantifiers qs) in
-                   *
-                   *     (\* quantifiers for the return type *\)
-                   *     let rqs =
-                   *       if Settings.get_value dodgey_type_isomorphism then
-                   *         (fst -<- List.split -<- snd -<- List.split)
-                   *           (List.filter
-                   *              (fun (q, _) -> not (free_in_arg q))
-                   *              xs)
-                   *       else
-                   *         [] in
-                   *
-                   *     (\* type arguments to apply f to *\)
-                   *     let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
-                   *       begin
-                   *         match Instantiate.apply_type t tyargs with
-                   *           | `Function (fps, fe, rettyp) ->
-                   *               let rettyp = Types.for_all (rqs, rettyp) in
-                   *               let ft = `Function (fps, fe, rettyp) in
-                   *               let f' = erase f in
-                   *               let e = tabstr (rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
-                   *                 unify ~handle:Gripers.fun_apply
-                   *                   ((exp_pos f, ft), no_pos (`Function (Types.make_tuple_type (List.map typ ps),
-                   *                                                        context.effect_row,
-                   *                                                        rettyp)));
-                   *                 e, rettyp, merge_usages (usages f :: List.map usages ps)
-                   *           | `Lolli (fps, fe, rettyp) ->
-                   *               let rettyp = Types.for_all (rqs, rettyp) in
-                   *               let ft = `Function (fps, fe, rettyp) in
-                   *               let f' = erase f in
-                   *               let e = tabstr (rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
-                   *                 unify ~handle:Gripers.fun_apply
-                   *                   ((exp_pos f, ft), no_pos (`Lolli (Types.make_tuple_type (List.map typ ps),
-                   *                                                     context.effect_row,
-                   *                                                     rettyp)));
-                   *                 e, rettyp, merge_usages (usages f :: List.map usages ps)
-                   *           | _ ->
-                   *               assert false
-                   *       end
-                   *
-                   * | ft -> *)
+                match Types.concrete_type (typ f) with
+                  | `ForAll (_, (`Function _ | `Lolli _)) as t ->
+                     begin
+                       match Instantiate.typ t with
+                       | tyargs, (`Function (fps, fe, rettyp) | `Lolli (fps, fe, rettyp) as t) ->
+                          let mkft (a, e, r) = match t with
+                            | `Function _ -> `Function (a, e, r)
+                            | `Lolli _ -> `Lolli (a, e, r)
+                          in
+                          (* the free type variables in the arguments (and effects) *)
+                          let arg_vars = Types.TypeVarSet.union (Types.free_type_vars fps) (Types.free_row_type_vars fe) in
+                          (* return true if this quantifier appears free in the arguments (or effects) *)
+                          let free_in_arg q = Types.TypeVarSet.mem (Types.var_of_quantifier q) arg_vars in
+
+                          (* quantifiers for the return type *)
+                          let rqs =
+                            if Settings.get_value dodgey_type_isomorphism then
+                              let rta, rqs =
+                                List.map (fun q -> (q, Types.quantifier_of_type_arg q)) tyargs
+                                |> List.filter (fun (_, q) -> free_in_arg q)
+                                |> List.split
+                              in
+                              List.iter Generalise.rigidify_type_arg rta;
+                              rqs
+                            else
+                              []
+                          in
+
+                          let rettyp = Types.for_all (rqs, rettyp) in
+                          let ft = `Function (fps, fe, rettyp) in
+                          let f' = erase f in
+                          let e = tabstr (rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
+                          unify ~handle:Gripers.fun_apply
+                            ((exp_pos f, ft), no_pos (mkft (Types.make_tuple_type (List.map typ ps),
+                                                            context.effect_row,
+                                                            rettyp)));
+                          e, rettyp, merge_usages (usages f :: List.map usages ps)
+                       | _ -> assert false
+                     end
+                  | ft ->
                       let rettyp = Types.fresh_type_variable (lin_any, res_any) in
                       begin
                         unify_or ~handle:Gripers.fun_apply ~pos
@@ -3226,68 +3202,61 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             *)
             let r = tc r in
               begin
-                (* match TypeUtils.concrete_type (typ r) with
-                 *   | `ForAll (qs, `Record _row) as t ->
-                 *       let xs =
-                 *         List.map
-                 *           (fun q ->
-                 *              q, Types.freshen_quantifier_flexible q)
-                 *           (Types.unbox_quantifiers qs) in
-                 *
-                 *       (\* type arguments to apply r to *\)
-                 *       let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
-                 *
-                 *       let rt = Instantiate.apply_type t tyargs in
-                 *
-                 *       let field_env, _row_var, lr =
-                 *         match rt with
-                 *         | `Record row -> fst (Types.unwrap_row row)
-                 *         | _ -> assert false in
-                 *       assert (not lr);
-                 *       begin
-                 *         match StringMap.lookup l field_env with
-                 *         | Some (`Present t) ->
-                 *           (\* the free type variables in the projected type *\)
-                 *           let vars = Types.free_type_vars t in
-                 *
-                 *           (\* return true if this quantifier appears
-                 *              free in the projected type *\)
-                 *           let free_in_body q = Types.TypeVarSet.mem (Types.var_of_quantifier q) vars in
-                 *
-                 *           (\* quantifiers for the projected type *\)
-                 *           let pqs =
-                 *             (fst -<- List.split -<- snd -<- List.split)
-                 *               (List.filter
-                 *                  (fun (q, _) -> free_in_body q)
-                 *                  xs) in
-                 *
-                 *           let fieldtype = Types.for_all (pqs, t) in
-                 *
-                 *           (\* really we just need to unify the presence
-                 *              variable with `Presence, but our griper
-                 *              interface doesn't currently support
-                 *              that *\)
-                 *           let rt = `Record (StringMap.singleton l (`Present fieldtype), Types.closed_row_var, false) in
-                 *           unify ~handle:Gripers.projection
-                 *             ((exp_pos r, rt),
-                 *              no_pos (`Record (Types.make_singleton_closed_row
-                 *                                 (l, `Present (Types.fresh_type_variable (lin_any, res_any))))));
-                 *           let r' = erase r in
-                 *           let e = tabstr (pqs, Projection (with_dummy_pos (tappl (r'.node, tyargs)), l)) in
-                 *           e, fieldtype, usages r
-                 *         | Some (`Absent | `Var _)
-                 *         | None ->
-                 *           let fieldtype = Types.fresh_type_variable (lin_any, res_any) in
-                 *           unify ~handle:Gripers.projection
-                 *             ((exp_pos r, rt),
-                 *              no_pos (`Record (Types.make_singleton_open_row
-                 *                                 (l, `Present fieldtype)
-                 *                                 (lin_unl, res_any))));
-                 *           let r' = erase r in
-                 *           let e = Projection (with_dummy_pos (tappl (r'.node, tyargs)), l) in
-                 *           e, fieldtype, usages r
-                 *       end
-                 *   | _ -> *)
+                match TypeUtils.concrete_type (typ r) with
+                  | `ForAll (_, `Record _) as t ->
+                      let tyargs, rt = Instantiate.typ t in
+
+                      let field_env, _row_var, lr =
+                        match rt with
+                        | `Record row -> fst (Types.unwrap_row row)
+                        | _ -> assert false
+                      in
+                      assert (not lr);
+                      begin
+                        match StringMap.lookup l field_env with
+                        | Some (`Present t) ->
+                          (* the free type variables in the projected type *)
+                          let vars = Types.free_type_vars t in
+
+                          (* return true if this quantifier appears
+                             free in the projected type *)
+                          let free_in_body q = Types.TypeVarSet.mem (Types.var_of_quantifier q) vars in
+
+                          (* quantifiers for the projected type *)
+                          let pta, pqs =
+                            List.map (fun q -> (q, Types.quantifier_of_type_arg q)) tyargs
+                            |> List.filter (fun (_, q) -> free_in_body q)
+                            |> List.split
+                          in
+                          List.iter Generalise.rigidify_type_arg pta;
+
+                          let fieldtype = Types.for_all (pqs, t) in
+
+                          (* really we just need to unify the presence
+                             variable with `Presence, but our griper
+                             interface doesn't currently support
+                             that *)
+                          let rt = `Record (StringMap.singleton l (`Present fieldtype), Types.closed_row_var, false) in
+                          unify ~handle:Gripers.projection
+                            ((exp_pos r, rt),
+                             no_pos (`Record (Types.make_singleton_closed_row
+                                                (l, `Present (Types.fresh_type_variable (lin_any, res_any))))));
+                          let r' = erase r in
+                          let e = tabstr (pqs, Projection (with_dummy_pos (tappl (r'.node, tyargs)), l)) in
+                          e, fieldtype, usages r
+                        | Some (`Absent | `Var _)
+                        | None ->
+                          let fieldtype = Types.fresh_type_variable (lin_any, res_any) in
+                          unify ~handle:Gripers.projection
+                            ((exp_pos r, rt),
+                             no_pos (`Record (Types.make_singleton_open_row
+                                                (l, `Present fieldtype)
+                                                (lin_unl, res_any))));
+                          let r' = erase r in
+                          let e = Projection (with_dummy_pos (tappl (r'.node, tyargs)), l) in
+                          e, fieldtype, usages r
+                      end
+                  | _ ->
                       let fieldtype = Types.fresh_type_variable (lin_any, res_any) in
                         unify ~handle:Gripers.projection
                           (pos_and_typ r, no_pos (`Record (Types.make_singleton_open_row

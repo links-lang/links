@@ -221,9 +221,8 @@ val type_arg_of_quantifier : quantifier -> type_arg
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
+val quantifier_of_type_arg : type_arg -> quantifier
 val quantifiers_of_type_args : type_arg list -> quantifier list
-
-(* val flexible_type_vars : TypeVarSet.t -> datatype -> quantifier Utility.IntMap.t *)
 
 (** Fresh type variables *)
 val type_variable_counter : int ref
