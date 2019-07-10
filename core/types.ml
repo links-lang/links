@@ -194,9 +194,9 @@ type tycon_spec = [
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
-let fresh_raw_variable : unit -> int =
-  function () ->
-    incr type_variable_counter; !type_variable_counter
+let fresh_raw_variable () : int =
+  incr type_variable_counter;
+  !type_variable_counter
 
 module type TYPE_VISITOR =
 sig

@@ -4263,13 +4263,10 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let grab_ty = (Env.lookup context.var_env "receive") in
        let tyargs =
          match Types.concrete_type grab_ty with
-         | `ForAll (qs, _t) ->
- (*            let xs = List.map (fun q -> q, Types.freshen_quantifier_flexible q) (Types.unbox_quantifiers qs) in
- *             let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in *)
-            let tyargs = List.map Types.type_arg_of_quantifier qs in
+         | `ForAll _ ->
             begin
-              match Instantiate.apply_type grab_ty tyargs with
-              | `Function (fps, _fe, _rettype) ->
+              match Instantiate.typ grab_ty with
+              | tyargs, `Function (fps, _fe, _rettype) ->
                  unify ~pos:pos ~handle:(Gripers.cp_grab "") (Types.make_tuple_type [ctype], fps);
                  tyargs
               | _ -> assert false
@@ -4294,13 +4291,10 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let give_ty = (Env.lookup context.var_env "send") in
        let tyargs =
          match Types.concrete_type give_ty with
-         | `ForAll (qs, _t) ->
-            (* let xs = List.map (fun q -> q, Types.freshen_quantifier_flexible q) (Types.unbox_quantifiers qs) in
-             * let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in *)
-            let tyargs = List.map Types.type_arg_of_quantifier qs in
+         | `ForAll _ ->
             begin
-              match Instantiate.apply_type give_ty tyargs with
-              | `Function (fps, _fe, _rettpe) ->
+              match Instantiate.typ give_ty with
+              | tyargs, `Function (fps, _fe, _rettpe) ->
                  unify ~pos:pos ~handle:(Gripers.cp_give "") (Types.make_tuple_type [t'; ctype], fps);
                  tyargs
               | _ -> assert false
