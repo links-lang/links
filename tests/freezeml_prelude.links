@@ -55,19 +55,11 @@ fun map(f)(xs) {
   }
 }
 
-sig revapp: forall a,b,e::Row,f::Row. (a) -e-> ((a) -f-> b) -f-> b
+sig revapp : forall a,b,e::Row,f::Row. (a) -e-> ((a) -f-> b) -f-> b
 fun revapp(x)(f) { f(x) }
 
-sig app: forall a,b,e::Row,f::Row. ((a) -e-> b) -f-> (a) -e-> b
+sig app : forall a,b,e::Row,f::Row. ((a) -e-> b) -f-> (a) -e-> b
 fun app(f)(x) { f(x) }
 
-# Functions required for the session case
-
-sig make_session_fn : ((a::Session) -e-> b) -> (a) -e-> b
-fun make_session_fn (id) { id }
-
-sig make_session : (a::Session) -> a
-fun make_session (id) { id }
-
-sig poly_session : ((?(forall a. a).End) -e-> Int) -> (?(forall a. a).End) -e-> Int
-fun poly_session (f) { f }
+sig first : forall a::Any,b::Any,c::Any,e::Row. ((a) -e-> b, (a, c)) -e-> (b, c)
+fun first(f, (x, y)) { (f(x), y) }
