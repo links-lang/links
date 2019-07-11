@@ -75,7 +75,6 @@ struct
   let make_name_with_id id = NameInfo.prefix ^ (string_of_int id)
 
   let create () =
-    let open Pervasives in
     fresh_name ()
     |> make_name_with_id
 
