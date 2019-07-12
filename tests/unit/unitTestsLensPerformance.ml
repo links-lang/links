@@ -59,7 +59,9 @@ let test_join_five test_ctx n =
   (* run tests *)
   let res = Lens.Value.lens_get l8 in
   (* let r = LensTestHelpers.time_query_both (fun () -> lens_put l8 res None) in *)
-  let _ = LensTestHelpers.print_verbose test_ctx (Lens.Phrase.Value.show_values res) in
+  let _ =
+    LensTestHelpers.print_verbose test_ctx (Lens.Phrase.Value.show_values res)
+  in
   (* modify res *)
   let row = List.hd res in
   let row = Record.set row ~key:"a" ~value:(box_int (n + 1)) in
