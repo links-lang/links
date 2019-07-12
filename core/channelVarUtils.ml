@@ -94,11 +94,11 @@ let variables_in_computation comp =
         traverse_stringmap (fun (_, c) ->
           traverse_computation c) clauses
     | Lens (value, _)
-    | LensSelect (value, _, _)
+    | LensSelect { lens = value; _ }
     | LensCheck (value, _)
     | LensGet (value, _) -> traverse_value value
-    | LensDrop (v1, _, _, v2, _)
-    | LensJoin (v1, v2, _, _, _, _)
+    | LensDrop { lens = v1; default = v2; _ }
+    | LensJoin { left = v1; right = v2; _ }
     | LensPut (v1, v2, _) -> List.iter (traverse_value) [v1; v2]
   and traverse_computation (bnds, tc) =
     List.iter traverse_binding bnds; traverse_tail_computation tc

@@ -485,30 +485,32 @@ struct
         (fun table ->
             lift (Special (Lens (table, t)), `Lens t))
 
-  let lens_drop_handle (lens, drop, key, default, t) =
+  let lens_drop_handle (lens, drop, key, default, typ) =
       bind lens
         (fun lens ->
             bind default
             (fun default ->
-               lift (Special (LensDrop (lens, drop, key, default, t)), `Lens t)))
+               lift (Special (LensDrop {lens; drop; key; default; typ}), `Lens typ)))
 
-  let lens_select_handle (lens, pred, t) =
+  let lens_select_handle (lens, pred, typ) =
       bind lens
         (fun lens ->
            match pred with
            | `Dynamic pred ->
              bind pred
-               (fun pred ->
-                  lift (Special (LensSelect (lens, `Dynamic pred, t)), `Lens t))
-           | `Static pred ->
-             lift (Special (LensSelect (lens, `Static pred, t)), `Lens t))
+               (fun predicate ->
+                  let predicate = Dynamic predicate in
+                  lift (Special (LensSelect {lens; predicate; typ}), `Lens typ))
+           | `Static predicate ->
+             let predicate = Static predicate in
+             lift (Special (LensSelect {lens; predicate; typ}), `Lens typ))
 
-  let lens_join_handle (lens1, lens2, on, left, right, t) =
-      bind lens1
-        (fun lens1 ->
-          bind lens2
-          (fun lens2 ->
-            lift (Special (LensJoin (lens1, lens2, on, left, right, t)), `Lens t)))
+  let lens_join_handle (left, right, on, del_left, del_right, typ) =
+      bind left
+        (fun left ->
+          bind right
+          (fun right ->
+            lift (Special (LensJoin {left; right; on; del_left; del_right; typ}), `Lens typ)))
 
   let lens_check (lens, t) =
       bind lens

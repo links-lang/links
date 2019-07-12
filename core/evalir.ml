@@ -623,10 +623,10 @@ struct
               apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))
       end
-    | LensDrop (lens, drop, key, def, _sort) ->
+    | LensDrop {lens; drop; key; default; _} ->
         let open Lens in
         let lens = value env lens |> get_lens in
-        let default = value env def |> Lens_value_conv.lens_phrase_value_of_value in
+        let default = value env default |> Lens_value_conv.lens_phrase_value_of_value in
         let sort =
           Lens.Sort.drop_lens_sort
             (Lens.Value.sort lens)
@@ -637,12 +637,13 @@ struct
         in
 
         apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
-    | LensSelect (lens, predicate, _sort) ->
+    | LensSelect { lens; predicate; _ } ->
         let open Lens in
-        let lens = value env lens |> get_lens in        let predicate =
+        let lens = value env lens |> get_lens in
+        let predicate =
           match predicate with
-          | `Static predicate -> predicate
-          | `Dynamic predicate ->
+          | Static predicate -> predicate
+          | Dynamic predicate ->
             let p = Lens_ir_conv.lens_sugar_phrase_of_ir predicate env
                     |> Lens_ir_conv.Of_ir_error.unpack_exn ~die:(eval_error "%s") in
             p in
@@ -653,10 +654,10 @@ struct
           |> Lens_errors.unpack_sort_select_result ~die:(eval_error "%s")
         in
         apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
-    | LensJoin (lens1, lens2, on, del_left, del_right, _sort) ->
+    | LensJoin { left; right; on; del_left; del_right; _ } ->
         let open Lens in
-        let lens1 = value env lens1 |> get_lens in
-        let lens2 = value env lens2 |> get_lens in
+        let lens1 = value env left |> get_lens in
+        let lens2 = value env right |> get_lens in
         let left, right=
           if Lens.Sort.join_lens_should_swap
                (Lens.Value.sort lens1)
@@ -685,9 +686,9 @@ struct
         let data = value env data |> Value.unbox_list in
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let behaviour =
-          match Settings.get_value Basicsettings.RelationalLenses.classic_lenses with
-          | true -> Lens.Eval.Classic
-          | false -> Lens.Eval.Incremental in
+          if Settings.get_value Basicsettings.RelationalLenses.classic_lenses
+          then Lens.Eval.Classic
+          else Lens.Eval.Incremental in
         Lens.Eval.put ~behaviour lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
         Value.box_unit () |> apply_cont cont env
     | Table (db, name, keys, (readtype, _, _)) ->

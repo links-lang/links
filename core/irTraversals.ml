@@ -312,23 +312,23 @@ struct
         | Lens (table, rtype) ->
             let table, _, o = o#value table in
               Lens (table, rtype), `Lens rtype, o
-        | LensDrop (lens, drop, key, default, rtype) ->
+        | LensDrop {lens; drop; key; default; typ} ->
             let lens, _, o = o#value lens in
             let default, _, o = o#value default in
-              LensDrop (lens, drop, key, default, rtype), `Lens rtype, o
-        | LensSelect (lens, pred, sort) ->
+              LensDrop {lens; drop; key; default; typ}, `Lens typ, o
+        | LensSelect {lens; predicate; typ} ->
             let lens, _, o = o#value lens in
-            let pred, o =
-              (match pred with
-               | `Dynamic pred ->
-                 let pred, _, o = o#value pred in
-                 `Dynamic pred, o
-              | `Static pred -> `Static pred, o) in
-              LensSelect (lens, pred, sort), `Lens sort, o
-        | LensJoin (lens1, lens2, on, left, right, sort) ->
-            let lens1, _, o = o#value lens1 in
-            let lens2, _, o = o#value lens2 in
-              LensJoin (lens1, lens2, on, left, right, sort), `Lens sort, o
+            let predicate, o =
+              (match predicate with
+               | Dynamic predicate ->
+                 let predicate, _, o = o#value predicate in
+                 Dynamic predicate, o
+              | Static predicate -> Static predicate, o) in
+              LensSelect {lens; predicate; typ}, `Lens typ, o
+        | LensJoin {left; right; on; del_left; del_right; typ} ->
+            let left, _, o = o#value left in
+            let right, _, o = o#value right in
+              LensJoin {left; right; on; del_left; del_right; typ}, `Lens typ, o
         | LensCheck (lens, t) ->
             let lens, _, o = o#value lens in
               LensCheck (lens, t), `Lens t, o
