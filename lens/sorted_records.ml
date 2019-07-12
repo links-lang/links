@@ -228,7 +228,6 @@ let zip_delta_merge left right =
     match (left, right) with
     | x :: xs, y :: ys -> (
       match compare x y with
-      | 0 -> (* x = y, so skip both *) do_next xs ys
       | a when a < 0 ->
           (* x < y, so take x and see if can find y *)
           let left, right = do_next xs right in
@@ -237,7 +236,7 @@ let zip_delta_merge left right =
           (* x > y, so take y and try find x *)
           let left, right = do_next left ys in
           (left, y :: right)
-      | _ -> failwith "impossible" )
+      | _ -> (* x = y, so skip both *) do_next xs ys )
     | _ -> (left, right)
     (* one of them is empty so return rest *)
   in
