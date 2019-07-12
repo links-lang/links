@@ -34,10 +34,9 @@ module Simple_record = struct
         let m = (s + e) / 2 in
         let r = compare rs.(m) record in
         match r with
-        | 0 -> Some r
         | a when a > 0 -> pivot s (m - 1)
         | a when a < 0 -> pivot (m + 1) e
-        | _ -> failwith "impossible"
+        | _ -> Some r
     in
     let r = pivot 0 (Array.length rs - 1) in
     r
@@ -52,10 +51,9 @@ module Simple_record = struct
         let m = (s + e) / 2 in
         let res = compare rs.(m) record in
         match res with
-        | 0 -> if b then pivot (m + 1) e b else pivot s (m - 1) b
         | a when a > 0 -> pivot s (m - 1) b
         | a when a < 0 -> pivot (m + 1) e b
-        | _ -> failwith "impossible"
+        | _ -> if b then pivot (m + 1) e b else pivot s (m - 1) b
     in
     let b = pivot 0 (Array.length rs - 1) false in
     let e = pivot 0 (Array.length rs - 1) true in
