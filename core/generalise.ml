@@ -223,6 +223,9 @@ let rigidify_quantifier : quantifier -> unit =
     | (_, _, `Row point)      -> rigidify_point point
     | (_, _, `Presence point) -> rigidify_point point
 
+(** Only flexible type variables should have the mono restriction. When we
+   quantify over such variables (and so rigidify them), we need to convert any
+   latent Mono variables into the more general Any one. *)
 let mono_type_args : type_arg -> unit =
   let check_sk point =
     match Unionfind.find point with
