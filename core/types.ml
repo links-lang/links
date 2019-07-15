@@ -540,23 +540,47 @@ let add_quantified_vars qs vars =
   List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
 
 
+(** A constraint provides a way of ensuring a type (or row) satisfies the
+   requirements of some subkind. *)
 module type Constraint = sig
+  (** Does this type satisfy the requirements of this subkind? *)
   val is_type : typ -> bool
   val is_row : row -> bool
 
+  (** Can this type be modified to satisfy the requirements of the subkind?
+
+      This effectively asks if there are flexible type variables whose subkinds
+     can be modified so that {!is_type} returns true. *)
   val can_type_be : typ -> bool
   val can_row_be : row -> bool
 
+  (** Attempt to convert any flexible variables within this type so the
+     appropriate subkind, so that {!is_type} will return true. *)
   val make_type : typ -> unit
   val make_row : row -> unit
 end
 
-type predicate_context = StringSet.t * var_set * var_set
+(** A context for the various type visitors ({!type_predicate} and {!type_iter})
 
+  This contains:
+
+   - The set of applications to [typename]s currently being visited.
+   - The set of in-scope recursive type variables.
+   - The set of in-scope forall quantified variables.
+
+  We do not impose the same restrictions on forall quantified variables as we do
+  on free ones, hence the need to track quantified variables. *)
+type visit_context = StringSet.t * var_set * var_set
+
+(** A predicate on types, which can be used to limit the range of types a
+    {!Constraint} allows.
+
+   By default, this visits the entire type, and returns true iff all child nodes
+   of the type satisfy the predicate. *)
 class virtual type_predicate = object(self)
   method is_var : (int * subkind * freedom) -> bool = fun _ -> true
 
-  method is_point : 'a 'c . (predicate_context -> 'a -> bool) -> predicate_context -> ([< 'a meta_max_basis] as 'c) point -> bool
+  method is_point : 'a 'c . (visit_context -> 'a -> bool) -> visit_context -> ([< 'a meta_max_basis] as 'c) point -> bool
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
     match Unionfind.find point with
     | `Closed -> true
@@ -574,7 +598,15 @@ class virtual type_predicate = object(self)
     | `Alias (_, t) -> self#is_type vars t
     | `MetaTypeVar point -> self#is_point self#is_type vars point
     | `ForAll (qs, t) -> self#is_type (rec_appl, rec_vars, add_quantified_vars !qs quant_vars) t
-    | `Application _ | `RecursiveApplication _ -> true (* For now, we assume these are acceptable! *)
+    | `Application (_, ts) ->
+       (* This does assume that all abstract types satisfy the predicate. *)
+       List.for_all (self#is_type_arg vars) ts
+    | `RecursiveApplication { r_unique_name; r_args; r_dual; r_unwind; _ } ->
+       if StringSet.mem r_unique_name rec_appl then
+         List.for_all (self#is_type_arg vars) r_args
+       else
+         let body = r_unwind r_args r_dual in
+         self#is_type (StringSet.add r_unique_name rec_appl, rec_vars, quant_vars) body
     | `Select r | `Choice r -> self#is_row vars r
     | `Input (a, b) | `Output (a, b) -> self#is_type vars a && self#is_type vars b
     | `Dual s -> self#is_type vars s
@@ -590,15 +622,25 @@ class virtual type_predicate = object(self)
     let fields = FieldEnv.for_all (fun _ f -> self#is_field vars f) fields in
     row_var && fields
 
+  method is_type_arg vars (arg : type_arg) =
+    match arg with
+    | `Type t -> self#is_type vars t
+    | `Row r -> self#is_row vars r
+    | `Presence f -> self#is_field vars f
+
   method predicates =
     (self#is_type (StringSet.empty, IntSet.empty, IntSet.empty),
      self#is_row (StringSet.empty, IntSet.empty, IntSet.empty))
 end
 
+(** Iterate over every node in a type.
+
+    By default this does nothing. However, it can be extended by {!Constraint}s
+    to mutate various flexible type variables. *)
 class virtual type_iter = object(self)
   method visit_var : 'a 'c. ([< 'a meta_max_basis > `Var] as 'c) point -> (int * subkind * freedom) -> unit = fun _ _ -> ()
 
-  method visit_point : 'a 'c . (predicate_context -> 'a -> unit) -> predicate_context -> ([< 'a meta_max_basis > `Var] as 'c) point -> unit
+  method visit_point : 'a 'c . (visit_context -> 'a -> unit) -> visit_context -> ([< 'a meta_max_basis > `Var] as 'c) point -> unit
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
     match Unionfind.find point with
     | `Closed -> ()
@@ -616,7 +658,8 @@ class virtual type_iter = object(self)
     | `Alias (_, t) -> self#visit_type vars t
     | `MetaTypeVar point -> self#visit_point self#visit_type vars point
     | `ForAll (qs, t) -> self#visit_type (rec_appl, rec_vars, add_quantified_vars !qs quant_vars) t
-    | `Application _ | `RecursiveApplication _ -> () (* For now, we assume these are acceptable! *)
+    | `Application (_, ts) -> List.iter (self#visit_type_arg vars) ts
+    | `RecursiveApplication { r_args; _ } -> List.iter (self#visit_type_arg vars) r_args
     | `Select r | `Choice r -> self#visit_row vars r
     | `Input (a, b) | `Output (a, b) -> self#visit_type vars a; self#visit_type vars b
     | `Dual s -> self#visit_type vars s
@@ -631,6 +674,12 @@ class virtual type_iter = object(self)
     self#visit_point self#visit_row vars row_var;
     FieldEnv.iter (fun _ f -> self#visit_field vars f) fields
 
+  method visit_type_arg vars (arg : type_arg) =
+    match arg with
+    | `Type t -> self#visit_type vars t
+    | `Row r -> self#visit_row vars r
+    | `Presence f -> self#visit_field vars f
+
   method visitors =
     (self#visit_type (StringSet.empty, IntSet.empty, IntSet.empty),
      self#visit_row (StringSet.empty, IntSet.empty, IntSet.empty))
@@ -638,22 +687,32 @@ end
 
 module type TypePredicate = sig class klass : type_predicate end
 
-let make_restriction_predicate (klass : (module TypePredicate)) subkind flexibles =
+(** Make a basic restriction predicate from a more general type predicate.
+
+   This simply requires that all visited type variables has the correct subkind.
+   If [flexibles] is true, then flexible type variables which can be converted
+   to have the correct subkind are permitted. *)
+let make_restriction_predicate (klass : (module TypePredicate)) restr flexibles =
   let module M = (val klass) in
   (object
      inherit M.klass
 
      method! is_var = function
-       | (_, (_, sk), _) when sk = subkind -> true
+       | (_, (_, sk), _) when sk = restr -> true
        | (_, _, `Rigid) -> false
        | (_, (_, sk), `Flexible) ->
           flexibles &&
-            match Restriction.min sk subkind with
-            | Some sk -> sk = subkind
+            match Restriction.min sk restr with
+            | Some sk -> sk = restr
             | _ -> false
    end)#predicates
 
-let make_restriction_transform ?(ok=false) subkind =
+(** Make a basic restriction transformation. This attempts to transform any
+   flexible type variable to one with a compatible subkind.
+
+   If a type variable cannot be made compatible, and [ensure] is true, then an
+   error is thrown. *)
+let make_restriction_transform ?(ensure=false) subkind =
   (object
      inherit type_iter
 
@@ -663,9 +722,9 @@ let make_restriction_transform ?(ok=false) subkind =
           begin
             match Restriction.min sk subkind with
             | Some sk when sk = subkind -> Unionfind.change point (`Var (v, (l, sk), `Flexible))
-            | _ -> assert ok
+            | _ -> assert ensure
           end
-       | (_, _, `Rigid) -> assert ok
+       | (_, _, `Rigid) -> assert ensure
    end)#visitors
 
 module Base : Constraint = struct
@@ -744,10 +803,10 @@ module Unl : Constraint = struct
 
      method! visit_type vars = function
        | `Not_typed -> assert false
-       | `Effect _ | `Primitive _ | `Function _ | `Table _ | `Lens _ -> ()
+       | `Effect _ | `Primitive _ | `Function _ | `Table _ | `Lens _ | `Application _ -> ()
        | (`Record _ | `Variant _ | `Alias _ | `MetaTypeVar _ | `ForAll _ | `Dual _) as t
          -> super#visit_type vars t
-       | `Application _ | `RecursiveApplication _ -> ()
+       | `RecursiveApplication _ -> ()
        | _ -> assert false
 
      method! visit_var point = function
@@ -761,18 +820,17 @@ module Session : Constraint = struct
   open Restriction
 
   module SessionPredicate = struct
-    class klass = object(self)
+    class klass = object
       inherit type_predicate as super
 
-      method! is_type ((rec_appls, rec_vars, quant_vars) as vars) = function
+      method! is_type ((rec_appls, _, _) as vars) = function
         | #session_type -> true
         | (`Alias _ | `MetaTypeVar _) as t -> super#is_type vars t
-        | `RecursiveApplication { r_unique_name; r_args; r_dual; r_unwind; _ } ->
+        | (`RecursiveApplication { r_unique_name; _ }) as t ->
            if StringSet.mem r_unique_name rec_appls then
              false
            else
-             let body = r_unwind r_args r_dual in
-             self#is_type (StringSet.add r_unique_name rec_appls, rec_vars, quant_vars) body
+             super#is_type vars t
         | _ -> false
     end
   end
@@ -828,7 +886,7 @@ module Mono : Constraint = struct
               | None -> false
      end)#predicates
 
-  let make_type, make_row = make_restriction_transform ~ok:true Mono
+  let make_type, make_row = make_restriction_transform ~ensure:true Mono
 end
 
 let get_restriction_constraint : Restriction.t -> (module Constraint) option =
