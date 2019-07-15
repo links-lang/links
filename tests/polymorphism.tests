@@ -149,3 +149,12 @@ stdout : 2 : Int
 Projecting non-instantiated records
 var x = (id=id); (~x).id(2)
 stdout : 2 : Int
+
+Varying arities of foralls (1)
+(~id) : forall a::Any. forall e::Row. (a) -e-> a
+stdout : fun : (a::Any) -b-> a::Any
+
+Varying arities of foralls (2)
+(~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a
+exit : 1
+stderr : @.*Type error:.*

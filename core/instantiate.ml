@@ -349,7 +349,7 @@ let instantiation_maps_of_type_arguments :
 
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun pt tyargs ->
-  let (t, instantiation_maps) = instantiation_maps_of_type_arguments true pt tyargs in
+  let (t, instantiation_maps) = instantiation_maps_of_type_arguments false pt tyargs in
   instantiate_datatype instantiation_maps t
 
 (*

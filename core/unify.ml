@@ -597,15 +597,34 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        unify_rec (RecAppl appl) t2
     |  t1, `RecursiveApplication appl->
        unify_rec (RecAppl appl) t1
-    | `ForAll (ls, lbody), `ForAll (rs, rbody) ->
+    | `ForAll l, `ForAll r ->
        let check_quantifier_kinds l r =
          if Types.kind_of_quantifier l <> Types.kind_of_quantifier r then
            raise (Failure (`Msg ("incompatible quantifier kinds")))
          else
            () in
+       let rec flatten_to_matching (ls, lbody) (rs, rbody) =
+         let ln = List.length ls and rn = List.length rs in
+         if ln = rn then (ls, lbody), (rs, rbody)
+         else if ln > rn then
+           (* We have more left hand quantifiers than right - try to drop off
+              another forall from the right. *)
+           match TypeUtils.split_quantified_type rbody with
+           | ([], _) -> raise (Failure (`Msg ("quantifier length mismatch")))
+           | (qs, t) ->
+              let (qs, rest) = ListUtils.split (ln - rn) qs in
+              flatten_to_matching (ls, lbody) (rs @ qs, Types.for_all (rest, t))
+         else
+           (* We have more right hand quantifiers than right - try to drop off
+              another forall from the left. *)
+           match TypeUtils.split_quantified_type lbody with
+           | ([], _) -> raise (Failure (`Msg ("quantifier length mismatch")))
+           | (qs, t) ->
+              let (qs, rest) = ListUtils.split (rn - ln) qs in
+              flatten_to_matching (ls @ qs, Types.for_all (rest, t)) (rs, rbody)
+       in
 
-       if List.length ls <> List.length rs then
-         raise (Failure (`Msg ("quantifier length mismatch")));
+       let (ls, lbody), (rs, rbody) = flatten_to_matching l r in
 
        let qenv =
          List.fold_left2
