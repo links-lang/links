@@ -1016,6 +1016,7 @@ struct
         | LensDrop _
         | LensSelect _
         | LensGet _
+        | LensCheck _
         | LensJoin _
         | LensPut _ -> (* just do type reconstruction *) super#special special
       in

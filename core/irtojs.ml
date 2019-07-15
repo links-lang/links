@@ -902,7 +902,7 @@ end = functor (K : CONTINUATION) -> struct
                          ("keys", gv keys);
                          ("row",
                           strlit (Types.string_of_datatype (readtype)))])])
-      | LensSelect _ | LensJoin _ | LensDrop _ | Lens _ ->
+      | LensSelect _ | LensJoin _ | LensDrop _ | Lens _ | LensCheck _ ->
               (* Is there a reason to not use js_hide_database_info ? *)
               K.apply kappa (Dict [])
       | LensGet _ | LensPut _ -> Die "Attempt to run a relational lens operation on client"
