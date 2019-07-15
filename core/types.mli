@@ -132,8 +132,8 @@ type datatype = typ
 
 (** A constraint that a subkind imposes on types. *)
 module type Constraint = sig
-  val is_type : datatype -> bool
-  val is_row : row -> bool
+  val type_satisfies : datatype -> bool
+  val row_satisfies : row -> bool
 
   (** Can this type be modified using {!make_type} to satisfy this constraint?
      *)

@@ -544,8 +544,8 @@ let add_quantified_vars qs vars =
    requirements of some subkind. *)
 module type Constraint = sig
   (** Does this type satisfy the requirements of this subkind? *)
-  val is_type : typ -> bool
-  val is_row : row -> bool
+  val type_satisfies : typ -> bool
+  val row_satisfies : row -> bool
 
   (** Can this type be modified to satisfy the requirements of the subkind?
 
@@ -578,59 +578,59 @@ type visit_context = StringSet.t * var_set * var_set
    By default, this visits the entire type, and returns true iff all child nodes
    of the type satisfy the predicate. *)
 class virtual type_predicate = object(self)
-  method is_var : (int * subkind * freedom) -> bool = fun _ -> true
+  method var_satisfies : (int * subkind * freedom) -> bool = fun _ -> true
 
-  method is_point : 'a 'c . (visit_context -> 'a -> bool) -> visit_context -> ([< 'a meta_max_basis] as 'c) point -> bool
+  method point_satisfies : 'a 'c . (visit_context -> 'a -> bool) -> visit_context -> ([< 'a meta_max_basis] as 'c) point -> bool
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
     match Unionfind.find point with
     | `Closed -> true
-    | `Var ((id, _, _) as var) -> IntSet.mem id quant_vars || self#is_var var
+    | `Var ((id, _, _) as var) -> IntSet.mem id quant_vars || self#var_satisfies var
     | `Body t -> f vars t
     | `Recursive (var, t) -> check_rec var rec_vars true (fun rec_vars' -> f (rec_appl, rec_vars', quant_vars) t)
 
-  method is_type ((rec_appl, rec_vars, quant_vars) as vars) : typ -> bool = function
+  method type_satisfies ((rec_appl, rec_vars, quant_vars) as vars) : typ -> bool = function
     | `Not_typed -> assert false
     | `Primitive _ -> true
-    | `Function (a, e, r) | `Lolli (a, e, r) -> self#is_type vars a && self#is_row vars e && self#is_type vars r
-    | `Record r | `Effect r | `Variant r -> self#is_row vars r
+    | `Function (a, e, r) | `Lolli (a, e, r) -> self#type_satisfies vars a && self#row_satisfies vars e && self#type_satisfies vars r
+    | `Record r | `Effect r | `Variant r -> self#row_satisfies vars r
     | `Table _ -> true
     | `Lens _ -> true
-    | `Alias (_, t) -> self#is_type vars t
-    | `MetaTypeVar point -> self#is_point self#is_type vars point
-    | `ForAll (qs, t) -> self#is_type (rec_appl, rec_vars, add_quantified_vars !qs quant_vars) t
+    | `Alias (_, t) -> self#type_satisfies vars t
+    | `MetaTypeVar point -> self#point_satisfies self#type_satisfies vars point
+    | `ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, add_quantified_vars !qs quant_vars) t
     | `Application (_, ts) ->
        (* This does assume that all abstract types satisfy the predicate. *)
-       List.for_all (self#is_type_arg vars) ts
+       List.for_all (self#type_satisfies_arg vars) ts
     | `RecursiveApplication { r_unique_name; r_args; r_dual; r_unwind; _ } ->
        if StringSet.mem r_unique_name rec_appl then
-         List.for_all (self#is_type_arg vars) r_args
+         List.for_all (self#type_satisfies_arg vars) r_args
        else
          let body = r_unwind r_args r_dual in
-         self#is_type (StringSet.add r_unique_name rec_appl, rec_vars, quant_vars) body
-    | `Select r | `Choice r -> self#is_row vars r
-    | `Input (a, b) | `Output (a, b) -> self#is_type vars a && self#is_type vars b
-    | `Dual s -> self#is_type vars s
+         self#type_satisfies (StringSet.add r_unique_name rec_appl, rec_vars, quant_vars) body
+    | `Select r | `Choice r -> self#row_satisfies vars r
+    | `Input (a, b) | `Output (a, b) -> self#type_satisfies vars a && self#type_satisfies vars b
+    | `Dual s -> self#type_satisfies vars s
     | `End -> true
 
-  method is_field vars = function
+  method field_satisfies vars = function
     | `Absent -> true
-    | `Present t -> self#is_type vars t
-    | `Var point -> self#is_point self#is_field vars point
+    | `Present t -> self#type_satisfies vars t
+    | `Var point -> self#point_satisfies self#field_satisfies vars point
 
-  method is_row vars (fields, row_var, _) =
-    let row_var = self#is_point self#is_row vars row_var in
-    let fields = FieldEnv.for_all (fun _ f -> self#is_field vars f) fields in
+  method row_satisfies vars (fields, row_var, _) =
+    let row_var = self#point_satisfies self#row_satisfies vars row_var in
+    let fields = FieldEnv.for_all (fun _ f -> self#field_satisfies vars f) fields in
     row_var && fields
 
-  method is_type_arg vars (arg : type_arg) =
+  method type_satisfies_arg vars (arg : type_arg) =
     match arg with
-    | `Type t -> self#is_type vars t
-    | `Row r -> self#is_row vars r
-    | `Presence f -> self#is_field vars f
+    | `Type t -> self#type_satisfies vars t
+    | `Row r -> self#row_satisfies vars r
+    | `Presence f -> self#field_satisfies vars f
 
   method predicates =
-    (self#is_type (StringSet.empty, IntSet.empty, IntSet.empty),
-     self#is_row (StringSet.empty, IntSet.empty, IntSet.empty))
+    (self#type_satisfies (StringSet.empty, IntSet.empty, IntSet.empty),
+     self#row_satisfies (StringSet.empty, IntSet.empty, IntSet.empty))
 end
 
 (** Iterate over every node in a type.
@@ -697,7 +697,7 @@ let make_restriction_predicate (klass : (module TypePredicate)) restr flexibles 
   (object
      inherit M.klass
 
-     method! is_var = function
+     method! var_satisfies = function
        | (_, (_, sk), _) when sk = restr -> true
        | (_, _, `Rigid) -> false
        | (_, (_, sk), `Flexible) ->
@@ -735,19 +735,19 @@ module Base : Constraint = struct
     class klass = object
       inherit type_predicate as super
 
-      method! is_point f vars point =
+      method! point_satisfies f vars point =
         match Unionfind.find point with
         | `Recursive _ -> false
-        | _ -> super#is_point f vars point
+        | _ -> super#point_satisfies f vars point
 
-      method! is_type vars = function
+      method! type_satisfies vars = function
         | `Primitive (Bool | Int | Char | Float | String) -> true
-        | (`Alias _ | `MetaTypeVar _) as t  -> super#is_type vars t
+        | (`Alias _ | `MetaTypeVar _) as t  -> super#type_satisfies vars t
         | _ -> false
     end
   end
 
-  let is_type, is_row = make_restriction_predicate (module BasePredicate) Base false
+  let type_satisfies, row_satisfies = make_restriction_predicate (module BasePredicate) Base false
   let can_type_be, can_row_be = make_restriction_predicate (module BasePredicate) Base true
   let make_type, make_row = make_restriction_transform Base
 end
@@ -757,17 +757,17 @@ module Unl : Constraint = struct
   class unl_predicate = object
     inherit type_predicate as super
 
-    method! is_type vars = function
+    method! type_satisfies vars = function
       | `Not_typed -> assert false
       | `Effect _ | `Primitive _ | `Function _ -> true
       | `Lolli _ -> false
       | (`Record _ | `Variant _ | `Alias _ | `MetaTypeVar _ | `ForAll _ | `Dual _) as t
-        -> super#is_type vars t
+        -> super#type_satisfies vars t
       | `Table _ -> true
       | `Lens _sort -> true
         (* We might support linear lists like this...
            but we'd need to replace hd and tl with a split operation. *)
-        (* | `Application ({Abstype.id="List"}, [`Type t]) -> is_unl_type (rec_vars, quant_vars) t  *)
+        (* | `Application ({Abstype.id="List"}, [`Type t]) -> Unl.satisfies_type (rec_vars, quant_vars) t  *)
       | `Application _ -> true (* TODO: change this if we add linear abstract types *)
       | `RecursiveApplication { r_linear ; _ } ->
             (* An application is linear if the type it refers to is
@@ -781,10 +781,10 @@ module Unl : Constraint = struct
       | #session_type -> false
   end
 
-  let is_type, is_row =
+  let type_satisfies, row_satisfies =
     (object
       inherit unl_predicate
-      method! is_var = function
+      method! var_satisfies = function
         | (_, (Linearity.Unl, _), _) -> true
         | _ -> false
     end)#predicates
@@ -792,7 +792,7 @@ module Unl : Constraint = struct
   let can_type_be, can_row_be =
     (object
       inherit unl_predicate
-      method! is_var = function
+      method! var_satisfies = function
         | (_, (Linearity.Unl, _), _) -> true
         | (_, _, `Flexible) -> true
         | (_, _, `Rigid) -> false
@@ -823,19 +823,19 @@ module Session : Constraint = struct
     class klass = object
       inherit type_predicate as super
 
-      method! is_type ((rec_appls, _, _) as vars) = function
+      method! type_satisfies ((rec_appls, _, _) as vars) = function
         | #session_type -> true
-        | (`Alias _ | `MetaTypeVar _) as t -> super#is_type vars t
+        | (`Alias _ | `MetaTypeVar _) as t -> super#type_satisfies vars t
         | (`RecursiveApplication { r_unique_name; _ }) as t ->
            if StringSet.mem r_unique_name rec_appls then
              false
            else
-             super#is_type vars t
+             super#type_satisfies vars t
         | _ -> false
     end
   end
 
-  let is_type, is_row = make_restriction_predicate (module SessionPredicate) Session false
+  let type_satisfies, row_satisfies = make_restriction_predicate (module SessionPredicate) Session false
   let can_type_be, can_row_be = make_restriction_predicate (module SessionPredicate) Session true
   let make_type, make_row =
     (object
@@ -864,19 +864,19 @@ module Mono : Constraint = struct
        class klass = object
          inherit type_predicate as super
 
-         method! is_type vars = function
+         method! type_satisfies vars = function
            | `ForAll _ -> false
-           | t -> super#is_type vars t
+           | t -> super#type_satisfies vars t
        end
      end
 
-  let is_type, is_row = make_restriction_predicate (module MonoPredicate) Session false
+  let type_satisfies, row_satisfies = make_restriction_predicate (module MonoPredicate) Session false
 
   let can_type_be, can_row_be =
     (object
        inherit MonoPredicate.klass
 
-       method! is_var = function
+       method! var_satisfies = function
          | (_, (_, Mono), _) -> true
          | (_, _, `Rigid) -> true
          | (_, (_, sk), `Flexible) ->
