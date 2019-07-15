@@ -23,17 +23,24 @@ let rec tc_infix ~env ~data ~op p q =
   tc ~env q
   >>= fun q ->
   match op with
-  | Binary.LogicalAnd | Binary.LogicalOr -> (
+  | Binary.LogicalAnd
+   |Binary.LogicalOr -> (
     match (p, q) with
     | Types.Bool, Types.Bool -> Result.return Types.Bool
     | _ ->
         Result.error {data; msg= "Logical operator requires boolean operands."}
     )
-  | Binary.Greater | Binary.GreaterEqual | Binary.Less | Binary.LessEqual
+  | Binary.Greater
+   |Binary.GreaterEqual
+   |Binary.Less
+   |Binary.LessEqual
    |Binary.Equal ->
       if Types.equal p q then Result.return Types.Bool
       else Result.error {data; msg= "Types do not match."}
-  | Binary.Minus | Binary.Plus | Binary.Multiply | Binary.Divide -> (
+  | Binary.Minus
+   |Binary.Plus
+   |Binary.Multiply
+   |Binary.Divide -> (
     match (p, q) with
     | Types.Int, Types.Int -> Types.Int |> Result.return
     | Types.Float, Types.Float -> Types.Float |> Result.return
@@ -60,13 +67,13 @@ and tc ~env (data, phrase) =
       let res = Alias.Map.find ~key:v env in
       Result.of_option res ~error:(fun _ ->
           let msg = Format.asprintf "Column '%s' is not bound." v in
-          Result.error {data; msg} )
+          Result.error {data; msg})
   | Sugar.InfixAppl (op, p, q) -> tc_infix ~env ~data ~op p q
   | Sugar.UnaryAppl (op, p) -> tc_unary ~env ~data ~op p
 
-let tc_sort ~sort phrase =
+let tc_columns ~columns phrase =
   let env =
-    Sort.cols sort
+    columns
     |> List.map ~f:(fun c -> (Column.alias c, Column.typ c))
     |> Alias.Map.from_alist
   in

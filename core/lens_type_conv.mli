@@ -1,4 +1,6 @@
-val lens_type_of_type : Types.typ -> Lens.Type.t
+type 'a die = string -> 'a
+
+val lens_type_of_type : die:Lens.Type.t die -> Types.typ -> Lens.Type.t
 
 (** Convert a native Links language type to a lens phrase type. *)
 val type_of_lens_phrase_type : Lens.Phrase.Type.t -> Types.typ
