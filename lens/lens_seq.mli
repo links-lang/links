@@ -1,9 +1,8 @@
 (** This is the lazy evaluated sequence module for OCaml 4.06 compatability. The signatures and comments are based on the standard OCaml library. *)
 
 type 'a t = unit -> 'a node
-and 'a node =
-  | Nil
-  | Cons of 'a * 'a t
+
+and 'a node = Nil | Cons of 'a * 'a t
 
 (** The empty sequence, containing no elements. *)
 val empty : 'a t

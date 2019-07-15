@@ -188,6 +188,7 @@ let keywords = [
  "lensput"  , LENSPUT;
  "lensselect", LENSSELECT;
  "lensjoin" , LENSJOIN;
+ "lenscheck", LENSCHECK;
  "yields"   , YIELDS;
  "import"   , IMPORT;
  "insert"   , INSERT;
