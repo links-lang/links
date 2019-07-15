@@ -129,7 +129,7 @@
    ;; XML tags
    '("</?[a-z][^>]*>" 0 font-lock-function-name-face t)
    ;; XML escapes (attributes)
-   '("\"{[^}]*}\"" 0 font-lock-constant-face t)
+   '("\"{[^}]*}\"" 0 'default t)
    ;; special operations
    `(,(regexp-opt links-keywords 'words) . font-lock-keyword-face)
    ;; types & variant tags
