@@ -1458,8 +1458,7 @@ and normalise_datatype rec_names t =
       | `ForAll (qs, body)    ->
          begin
            match nt body with
-           | `ForAll (qs', body) ->
-              `ForAll (qs @ qs', body)
+           | `ForAll (qs', body) -> `ForAll (qs @ qs', body)
            | body -> `ForAll (qs, body)
          end
       | `MetaTypeVar point       ->

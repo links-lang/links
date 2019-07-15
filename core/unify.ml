@@ -115,9 +115,7 @@ let rec eq_types : (datatype * datatype) -> bool =
       | `ForAll (qs, t) ->
           begin match unalias t2 with
             | `ForAll (qs', t') ->
-                List.for_all2 (fun q q' -> eq_quantifier (q, q'))
-                  qs
-                  qs' &&
+                List.for_all2 (fun q q' -> eq_quantifier (q, q')) qs qs' &&
                   eq_types (t, t')
             | _ -> false
           end

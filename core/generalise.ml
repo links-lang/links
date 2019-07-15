@@ -117,7 +117,6 @@ and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg li
       | `Row r -> get_row_type_args kind bound_vars r
       | `Presence f -> get_presence_type_args kind bound_vars f
 
-
 let remove_duplicates =
   unduplicate (fun l r ->
                  match l, r with
