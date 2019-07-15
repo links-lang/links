@@ -152,7 +152,7 @@ stdout : 2 : Int
 
 Varying arities of foralls (1)
 (~id) : forall a::Any. forall e::Row. (a) -e-> a
-stdout : fun : (a::Any) -b-> a::Any
+stdout : fun : (a::Any) -> a::Any
 
 Varying arities of foralls (2)
 (~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a
