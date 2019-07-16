@@ -30,10 +30,10 @@ let concrete_type t =
           begin
             match ct rec_names t with
               | `ForAll (qs', t') ->
-                  `ForAll (box_quantifiers (unbox_quantifiers qs @ unbox_quantifiers qs'), t')
+                  `ForAll (qs @ qs', t')
               | t ->
                   begin
-                    match unbox_quantifiers qs with
+                    match qs with
                       | [] -> t
                       | _ -> `ForAll (qs, t)
                   end
@@ -227,14 +227,14 @@ let abs_type _ = assert false
 let app_type _ _ = assert false
 
 let quantifiers t = match concrete_type t with
-  | `ForAll (qs, _) -> Types.unbox_quantifiers qs
+  | `ForAll (qs, _) -> qs
   | _ -> []
 
 
 (* Given a type, return its list of toplevel quantifiers and the remaining non-quantified type.
    This merges adjacent ForAlls *)
 let split_quantified_type qt = match concrete_type qt with
-  | `ForAll (qtref, t) -> (Types.unbox_quantifiers qtref, t)
+  | `ForAll (qs, t) -> (qs, t)
   | t -> ([], t)
 
 let record_without t names =

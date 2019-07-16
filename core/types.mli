@@ -111,7 +111,7 @@ and typ =
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
-    | `ForAll of (quantifier list ref * typ)
+    | `ForAll of (quantifier list * typ)
     | (typ, row) session_type_basis ]
 and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
@@ -121,7 +121,7 @@ and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
-and quantifier = int * subkind * meta_var
+and quantifier = int * kind
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
     [@@deriving show]
@@ -187,16 +187,6 @@ val normalise_datatype : datatype -> datatype
 val normalise_row : row -> row
 val normalise_typing_environment : typing_environment -> typing_environment
 
-val hoist_quantifiers : datatype -> unit
-
-val is_rigid_quantifier : quantifier -> bool
-
-val box_quantifiers : quantifier list -> quantifier list ref
-val unbox_quantifiers : quantifier list ref -> quantifier list
-
-(* val flexible_of_type : datatype -> datatype option *)
-
-val normalise_quantifier : quantifier -> quantifier
 val for_all : quantifier list * datatype -> datatype
 
 (** useful types *)
@@ -223,14 +213,11 @@ val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
 val kind_of_quantifier : quantifier -> kind
 val subkind_of_quantifier : quantifier -> subkind
 val type_arg_of_quantifier : quantifier -> type_arg
-val freshen_quantifier : quantifier -> quantifier * type_arg
-val freshen_quantifier_flexible : quantifier -> quantifier * type_arg
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
+val quantifier_of_type_arg : type_arg -> quantifier
 val quantifiers_of_type_args : type_arg list -> quantifier list
-
-val flexible_type_vars : TypeVarSet.t -> datatype -> quantifier Utility.IntMap.t
 
 (** Fresh type variables *)
 val type_variable_counter : int ref
@@ -256,13 +243,8 @@ val fresh_rigid_presence_variable : subkind -> field_spec
 
 (** fresh quantifiers *)
 val fresh_type_quantifier : subkind -> quantifier * datatype
-val fresh_flexible_type_quantifier : subkind -> quantifier * datatype
-
 val fresh_row_quantifier : subkind -> quantifier * row
-val fresh_flexible_row_quantifier : subkind -> quantifier * row
-
 val fresh_presence_quantifier : subkind -> quantifier * field_spec
-val fresh_flexible_presence_quantifier : subkind -> quantifier * field_spec
 
 (** {0 rows} *)
 (** empty row constructors *)

@@ -118,7 +118,7 @@ struct
         | TAbs (quantifiers, v) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
           let (_, ti, o) = o#value v in
-          let t = `ForAll (Types.box_quantifiers quantifiers, ti) in
+          let t = `ForAll (quantifiers, ti) in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (v, t, o)
         | _ -> o#super_value v
@@ -590,20 +590,20 @@ struct
           let subkind = Types.subkind_of_quantifier oldq in
           let newvar = Types.fresh_raw_variable () in
           let make_new_type_variable () = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
-          let new_meta_var, updated_maps = match primary_kind with
+          let updated_maps = match primary_kind with
             | PrimaryKind.Type ->
               let new_type_variable = make_new_type_variable () in
               let t = `MetaTypeVar new_type_variable in
-              (`Type new_type_variable, (IntMap.add typevar t type_map, row_map, presence_map))
+              (IntMap.add typevar t type_map, row_map, presence_map)
             | PrimaryKind.Row ->
               let new_type_variable = make_new_type_variable () in
               let r = (Types.empty_field_env, new_type_variable, false) in
-              (`Row new_type_variable, (type_map, IntMap.add typevar r row_map, presence_map))
+              (type_map, IntMap.add typevar r row_map, presence_map)
             | PrimaryKind.Presence ->
               let new_type_variable = make_new_type_variable () in
               let p = `Var new_type_variable in
-              (`Presence new_type_variable, (type_map, row_map, IntMap.add typevar p presence_map)) in
-          let new_quantifier = (newvar, subkind, new_meta_var) in
+              (type_map, row_map, IntMap.add typevar p presence_map) in
+          let new_quantifier = (newvar, (primary_kind, subkind)) in
           (new_quantifier :: qs, updated_maps)
         ) free_type_vars ([], (IntMap.empty, IntMap.empty, IntMap.empty))
 
@@ -623,10 +623,10 @@ struct
               match TypeUtils.split_quantified_type f_type with
                 | [], t  ->
                   let t' = Instantiate.datatype outer_maps t in
-                  `ForAll (Types.box_quantifiers outer_quantifiers, t')
+                  `ForAll (outer_quantifiers, t')
                 | (f_quantifiers, t) ->
                   let t' = Instantiate.datatype outer_maps t in
-                  `ForAll (Types.box_quantifiers (outer_quantifiers @ f_quantifiers), t') in
+                  `ForAll ((outer_quantifiers @ f_quantifiers), t') in
               Var.update_type f_type_generalized f_binder
             end
 

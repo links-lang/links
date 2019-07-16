@@ -141,3 +141,20 @@ stdout : fun : (a) -> (a, a)
 Flexible quantifier elimination (fix introduced in 514187b)
 sig a : (() {A:() |e}~> a) -> () {A{_} |e}~> a fun a(m)() { error("a") } sig b : (() {B:() |e}~> a) -> () {B{_} |e}~> a fun b(m)() { error("b") } sig c : (() {A:(),B:() |e}~> a) {A{_}, B{_} |e}~> a fun c(m) { a(b(m))() }
 stdout : () : ()
+
+Calling non-instantiated functions
+(~id)(2)
+stdout : 2 : Int
+
+Projecting non-instantiated records
+var x = (id=id); (~x).id(2)
+stdout : 2 : Int
+
+Varying arities of foralls (1)
+(~id) : forall a::Any. forall e::Row. (a) -e-> a
+stdout : fun : (a::Any) -> a::Any
+
+Varying arities of foralls (2)
+(~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a
+exit : 1
+stderr : @.*Type error:.*
