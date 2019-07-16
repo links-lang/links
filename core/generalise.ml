@@ -118,12 +118,21 @@ and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg li
       | `Row r -> get_row_type_args kind bound_vars r
       | `Presence f -> get_presence_type_args kind bound_vars f
 
+(** Determine if two points have the same quantifier.
+
+   Whenever we use {!Types.type_arg_of_quantifier}, we get a fresh point, and so
+   it is not safe to use {!Unionfind.equivalent}. *)
+let equivalent_tyarg l r =
+  match Unionfind.find l, Unionfind.find r with
+  | `Var (v, _, _), `Var (v', _, _) -> v = v'
+  | _ -> assert false
+
 let remove_duplicates =
   unduplicate (fun l r ->
                  match l, r with
-                   | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> Unionfind.equivalent l r
-                   | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && Unionfind.equivalent l r
-                   | `Presence (`Var l), `Presence (`Var r) -> Unionfind.equivalent l r
+                   | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> equivalent_tyarg l r
+                   | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && equivalent_tyarg l r
+                   | `Presence (`Var l), `Presence (`Var r) -> equivalent_tyarg l r
                    | _ -> false)
 
 let get_type_args kind bound_vars t =
