@@ -73,10 +73,10 @@ class basic_freshener = object
   method! known_type_variable =
     let module SC = SugarConstructors.SugartypesPositions in
     function
-    | (("$" | "$anon"), None, freedom) ->
-       SC.fresh_known_type_variable freedom
-       |> super#known_type_variable
-    | v ->  super#known_type_variable v
+    | (("$" | "$anon"), sk, freedom) ->
+       let (var, _, _) = SC.fresh_known_type_variable freedom in
+       super#known_type_variable (var, sk, freedom)
+    | v -> super#known_type_variable v
 end
 
 let freshen_vars =
@@ -644,7 +644,7 @@ object (self)
         let (linearity_env, dep_graph) =
           List.fold_left (fun (lin_map, dep_graph) (name, _, (_, dt), _) ->
             let dt = OptionUtils.val_of dt in
-            let lin_map = StringMap.add name (not @@ is_unl_type dt) lin_map in
+            let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
             let deps = recursive_applications dt in
             let dep_graph = (name, deps) :: dep_graph in
             (lin_map, dep_graph)

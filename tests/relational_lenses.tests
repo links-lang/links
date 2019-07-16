@@ -1,0 +1,5 @@
+Relational lenses bad put
+./tests/relational-lenses/bad-put.links
+filemode : true
+stderr : @.*
+exit : 1

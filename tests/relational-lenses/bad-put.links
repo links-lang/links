@@ -1,0 +1,11 @@
+var db = database "links";
+
+var tracksTable =
+    table "tracks"
+    with (track: String, date: Int, rating: Int, album: String)
+    tablekeys [["track", "album"]]
+    from db;
+
+var tracksLens = lens tracksTable with { track -> date rating };
+
+lensput tracksLens with (track = "Trust", date = 1992, rating = 4, album = "Wish")

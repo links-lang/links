@@ -204,6 +204,25 @@ type unify_env =
   ; qenv: quantifier_env
   }
 
+let check_subkind var (lin, res) typ =
+  if Linearity.is_nonlinear lin then
+    if Types.Unl.can_type_be typ then
+      Types.Unl.make_type typ
+    else
+      raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
+                              " with the linear type " ^ string_of_datatype typ)));
+
+  match Types.get_restriction_constraint res with
+  | None -> ()
+  | Some const ->
+     let module M = (val const) in
+     if M.can_type_be typ then
+       M.make_type typ
+     else
+       let message = Printf.sprintf "Cannot unify the %s type variable %d with the non-%s type %s."
+                       (Restriction.to_string res) var (Restriction.to_string res) (string_of_datatype typ)
+       in raise (Failure (`Msg message))
+
 let rec unify' : unify_env -> (datatype * datatype) -> unit =
   let counter = ref 0 in
   fun rec_env ->
@@ -352,18 +371,14 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                   | Linearity.Unl, _ | _, Linearity.Unl -> Linearity.Unl
                   | _       -> llin in
                 let rest =
-                  let open Restriction in
-                  match lrest, rrest with
-                  | Base, Any | Any, Base       -> Base
-                  | Any, Session | Session, Any -> Session
-                  | Base, Session ->
-                     raise (Failure (`Msg ("Cannot unify base type variable " ^ string_of_int lvar ^
-                                             " with session type variable " ^ string_of_int rvar)))
-                  | Session, Base ->
-                     raise (Failure (`Msg ("Cannot unify session type variable " ^ string_of_int lvar ^
-                                             " with base type variable " ^ string_of_int rvar)))
-                  (* in the default case lrest and rrest must be identical *)
-                  | _ -> lrest in
+                  match Restriction.min lrest rrest with
+                  | Some rest -> rest
+                  | None ->
+                     let message =
+                       Printf.sprintf "Cannot unify %s type variable %d with %s type variable %d"
+                         (Restriction.to_string lrest) lvar (Restriction.to_string rrest) rvar
+                     in raise (Failure (`Msg message))
+                in
                 Unionfind.change lpoint (`Var (lvar, (lin, rest), `Flexible))
               end
            | `Var (var, (lin, rest), `Flexible), _ ->
@@ -382,24 +397,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               (* FIXME: does this really still need to happen if we've just introduced a recursive type? *)
               if tidy then
                 begin
-                  if Restriction.is_base rest then
-                    if Types.is_baseable_type t2 then
-                      Types.basify_type t2
-                    else
-                      raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
-                                              " with the non-base type "^ string_of_datatype t2)));
-                  if Linearity.is_nonlinear lin then
-                    if Types.type_can_be_unl t2 then
-                      Types.make_type_unl t2
-                    else
-                      raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
-                                              " with the linear type " ^ string_of_datatype t2)));
-                  if Restriction.is_session rest then
-                    if Types.is_sessionable_type t2 then
-                      Types.sessionify_type t2
-                    else
-                      raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
-                                              " with the non-session type "^ string_of_datatype t2)));
+                  check_subkind var (lin, rest) t2;
                   Unionfind.union lpoint rpoint
                 end
            | _, `Var (var, (lin, rest), `Flexible) ->
@@ -418,24 +416,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               (* FIXME: does this really still need to happen if we've just introduced a recursive type? *)
               if tidy then
                 begin
-                  if Restriction.is_base rest then
-                    if Types.is_baseable_type t1 then
-                      Types.basify_type t1
-                    else
-                      raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
-                                              " with the non-base type "^ string_of_datatype t1)));
-                  if Linearity.is_nonlinear lin then
-                    if Types.type_can_be_unl t1 then
-                      Types.make_type_unl t1
-                    else
-                      raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
-                                              " with the linear type " ^ string_of_datatype t1)));
-                  if Restriction.is_session rest then
-                    if Types.is_sessionable_type t1 then
-                      Types.sessionify_type t1
-                    else
-                      raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
-                                              " with the non-session type "^ string_of_datatype t1)));
+                  check_subkind var (lin, rest) t1;
                   Unionfind.union rpoint lpoint
                 end
            | `Var (l, _, `Rigid), _ ->
@@ -521,24 +502,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               end
             else
               (Debug.if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
-               if Restriction.is_base rest then
-                 if Types.is_baseable_type t then
-                   Types.basify_type t
-                 else
-                   raise (Failure (`Msg ("Cannot unify the base type variable "^ string_of_int var ^
-                                           " with the non-base type "^ string_of_datatype t)));
-               if Linearity.is_nonlinear lin then
-                 if Types.type_can_be_unl t then
-                   Types.make_type_unl t
-                 else
-                   raise (Failure (`Msg ("Cannot unify the unlimited type variable " ^ string_of_int var ^
-                                           " with the linear type "^ string_of_datatype t)));
-               if Restriction.is_session rest then
-                 if Types.is_sessionable_type t then
-                   Types.sessionify_type t
-                 else
-                   raise (Failure (`Msg ("Cannot unify the session type variable "^ string_of_int var ^
-                                           " with the non-session type "^ string_of_datatype t)));
+               check_subkind var (lin, rest) t;
                Unionfind.change point (`Body t))
          | `Recursive (var, t') ->
             Debug.if_set (show_recursion) (fun () -> "rec single (" ^ (string_of_int var) ^ ")");
@@ -891,24 +855,24 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
            end
          else
            begin
-             if Restriction.is_base rest then
-               if Types.is_baseable_row extension_row then
-                 Types.basify_row extension_row
-               else
-                 raise (Failure (`Msg ("Cannot unify the base row variable "^ string_of_int var ^
-                                         " with the non-base row "^ string_of_row extension_row)));
-             if Restriction.is_session rest then
-               if Types.is_sessionable_row extension_row then
-                 Types.sessionify_row extension_row
-               else
-                 raise (Failure (`Msg ("Cannot unify the session row variable "^ string_of_int var ^
-                                         " with the non-session row "^ string_of_row extension_row)));
-
              if Linearity.is_nonlinear lin then
-               if Types.row_can_be_unl extension_row then
-                 Types.make_row_unl extension_row
+               if Types.Unl.can_row_be extension_row then
+                 Types.Unl.make_row extension_row
                else
                  raise (Failure (`Msg ("Cannot force row " ^ string_of_row extension_row ^ " to be unlimited")));
+
+             begin
+               match Types.get_restriction_constraint rest with
+               | None -> ()
+               | Some const ->
+                  let module M = (val const) in
+                  if M.can_row_be extension_row then
+                    M.make_row extension_row
+                  else
+                    let message = Printf.sprintf "Cannot unify the %s row viariable %d with the non-%s row %s."
+                                    (Restriction.to_string rest) var (Restriction.to_string rest) (string_of_row extension_row)
+                    in raise (Failure (`Msg message))
+             end;
 
              if StringMap.is_empty extension_field_env then
                if dual then

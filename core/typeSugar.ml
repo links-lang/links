@@ -110,6 +110,7 @@ struct
     | LensDropLit _
     | LensSelectLit _
     | LensJoinLit _
+    | LensCheckLit _
     | LensGetLit _
     | LensPutLit _
     | DoOperation _
@@ -233,6 +234,9 @@ sig
 
   val extend_record : griper
   val record_with : griper
+
+  val lens_predicate : griper
+  val lens_put_input : griper
 
   val list_lit : griper
 
@@ -666,6 +670,41 @@ end
                 code ppr_lt                        ^ nl  () ^
                "while the update fields have type" ^ nli () ^
                 code ppr_t)
+
+    let lens_predicate ~pos ~t1 ~t2 ~error:_ =
+      build_tyvar_names [snd t1; snd t2];
+      Format.asprintf
+        "The predicate\n\
+        \  %s\n
+         has type\n\
+        \  %s\n
+         but the lens\n\
+        \  %s\n
+         expected a predicate of type\n\
+        \  %s"
+        (fst t1 |> code)
+        (snd t1 |> show_type)
+        (fst t2 |> code)
+        (snd t2 |> show_type)
+      |> die pos
+
+    let lens_put_input ~pos ~t1 ~t2 ~error:_ =
+      build_tyvar_names [snd t1; snd t2];
+      Format.asprintf
+        "The put value \n\
+        \  %s\n
+         has type\n\
+        \  %s\n
+         but the lens\n\
+        \  %s\n
+         expected an input type\n\
+        \  %s"
+        (fst t1 |> code)
+        (snd t1 |> show_type)
+        (fst t2 |> code)
+        (snd t2 |> show_type)
+      |> die pos
+
 
     let list_lit ~pos ~t1:l ~t2:r ~error:_ =
       build_tyvar_names [snd l; snd r];
@@ -1514,7 +1553,7 @@ let type_binary_op ctxt =
   | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
   | Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (StringMap.singleton n 1)
 
-(** close a pattern type relative to a list of patterns
+(* close a pattern type relative to a list of patterns
 
    If there are no _ or variable patterns at a variant type, then that
    variant will be closed.
@@ -1773,7 +1812,7 @@ let unify_or ~(handle:Gripers.griper) ~pos ((_, ltype1), (_, rtype1))
   end
 
 
-(** check for duplicate names in a list of pattern *)
+(* check for duplicate names in a list of pattern *)
 let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string list = fun pos ps ->
   let add name binder binderss =
     if StringMap.mem name binderss then
@@ -2120,7 +2159,7 @@ let make_ft declared_linearity ps effects return_type =
   let rec ft =
     function
       | [p] -> ftcon (args p, effects, return_type)
-      | p::ps -> ftcon (args p, Types.make_empty_open_row default_subkind, ft ps)
+      | p::ps -> ftcon (args p, Types.make_empty_open_row default_effect_subkind, ft ps)
       | [] -> assert false
   in
     ft ps
@@ -2139,6 +2178,9 @@ let make_ft_poly_curry declared_linearity ps effects return_type =
             q::qs, ftcon (args p, eff, t)
       | [] -> assert false in
   Types.for_all (ft ps)
+
+(** Make any unannotated parameters monomorphic. *)
+let make_mono pats = List.iter (List.iter (fun (_, _, t) -> Types.Mono.make_type t)) pats;
 
 type usagemap = int stringmap
 let merge_usages (ms:usagemap list) : usagemap =
@@ -2259,8 +2301,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                (pos_and_typ body, no_pos bt) in
              let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
                                            if uses <> 1 then
-                                             if Types.type_can_be_unl t then
-                                               Types.make_type_unl t
+                                             if Types.Unl.can_type_be t then
+                                               Types.Unl.make_type t
                                              else
                                                Gripers.non_linearity pos uses v t)
                                (pattern_env pat) in
@@ -2401,6 +2443,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
             let env' = Env.extend context.var_env pat_env in
 
+            make_mono pats;
+
             (* type of the effects in the body of the lambda *)
             let effects = Types.make_empty_open_row default_effect_subkind in
             let body = type_check ({context with
@@ -2411,8 +2455,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               Env.iter (fun v t ->
                 let uses = uses_of v (usages body) in
                   if uses <> 1 then
-                    if Types.type_can_be_unl t then
-                      Types.make_type_unl t
+                    if Types.Unl.can_type_be t then
+                      Types.Unl.make_type t
                     else
                       Gripers.non_linearity pos uses v t)
                 pat_env in
@@ -2422,8 +2466,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 StringMap.iter (fun v _ ->
                                 if not (List.mem v vs) then
                                   let t = Env.lookup env' v in
-                                  if Types.type_can_be_unl t then
-                                    Types.make_type_unl t
+                                  if Types.Unl.can_type_be t then
+                                    Types.Unl.make_type t
                                   else
                                     Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a non-linear function literal."))
                                (usages body)
@@ -2486,89 +2530,98 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let table = tc table in
            let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
            let lens_sort = Sort.make cols in
-           let typ = Lens.Type.Lens lens_sort in
-           LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
+           let typ = Lens.Type.ConcreteLens lens_sort in
+           LensLit (erase table, Some typ), `Lens typ, merge_usages [usages table]
         | LensKeysLit (table, keys, _) ->
            relational_lenses_guard pos;
            let open Lens in
            let table = tc table in
-           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
+           let columns = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
            let keys = Lens_sugar_conv.cols_of_phrase keys in
-           let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases cols) in
-           let lens_sort = Sort.make ~fds cols in
-           let typ = Lens.Type.Lens lens_sort in
-           LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
+           let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases columns) in
+           let lens_sort = Sort.make ~fds columns in
+           let typ = Lens.Type.ConcreteLens lens_sort in
+           LensLit (erase table, Some typ), `Lens typ, merge_usages [usages table]
         | LensFunDepsLit (table, fds, _) ->
            relational_lenses_guard pos;
-           let open Lens in
            let table = tc table in
-           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
-           let fds = Helpers.Incremental.get_fds fds cols in
-           let lens_sort = Sort.make ~fds cols in
-           let typ = Lens.Type.Lens lens_sort in
-           LensLit (erase table, Some (lens_sort)), `Lens typ, merge_usages [usages table]
+           let columns = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
+           let typ =
+             Lens.Type.type_lens_fun_dep ~fds ~columns
+             |> Lens_errors.unpack_type_lens_result ~die:(Gripers.die pos) in
+           LensLit (erase table, Some typ), `Lens typ, merge_usages [usages table]
         | LensDropLit (lens, drop, key, default, _) ->
            relational_lenses_guard pos;
            let open Lens in
-           let lens = tc lens
-           and default = tc default in
-           let sort =
-             Lens.Sort.drop_lens_sort
-               (Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type))
-               ~drop:(Alias.Set.singleton drop)
-               ~key:(Alias.Set.singleton key)
-           in
-           let typ = Lens.Type.Lens sort in
-           LensDropLit (erase lens, drop, key, erase default, Some (sort)), `Lens typ, merge_usages [usages lens; usages default]
+           let lens = tc lens in
+           let default = tc default in
+           let typ =
+             let lens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
+             let default = typ default |> Lens_type_conv.lens_phrase_type_of_type |> fun a -> [a] in
+             let drop = [drop] in
+             let key = Alias.Set.singleton key in
+             Type.type_drop_lens lens ~default ~drop ~key
+             |> Lens_errors.unpack_type_drop_lens_result ~die:(Gripers.die pos) in
+           LensDropLit (erase lens, drop, key, erase default, Some typ), `Lens typ, merge_usages [usages lens; usages default]
         | LensSelectLit (lens, predicate, _) ->
            relational_lenses_guard pos;
            let lens = tc lens in
-           let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
-           let lpredicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
-           (match Lens.Phrase.Typesugar.tc_sort ~sort lpredicate with
-           | Result.Ok Lens.Phrase.Type.Bool -> ()
-           | Result.Ok _ ->
-             Gripers.die pos "Lens select predicate does not evaluate to a boolean value."
-           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
-           let typ = Lens.Type.Lens sort in
-               LensSelectLit(erase lens, predicate, Some (sort)), `Lens typ, merge_usages [usages lens]
+           let tpredicate = tc predicate in
+           let typ =
+             let tlens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
+             let trow = Lens.Type.sort tlens |> Lens.Sort.record_type in
+             let ltrow = Lens_type_conv.type_of_lens_phrase_type trow in
+             let tmatch = Types.make_pure_function_type [ltrow] Types.bool_type in
+             unify (pos_and_typ tpredicate, (exp_pos lens, tmatch)) ~handle:Gripers.lens_predicate;
+             if Lens_sugar_conv.is_static trow predicate
+             then
+               let predicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
+               let typ = Lens.Type.type_select_lens tlens ~predicate
+                         |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
+               typ
+             else
+               let typ = Lens.Type.type_select_lens_dynamic tlens
+                         |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
+               typ
+           in
+           LensSelectLit(erase lens, erase tpredicate, Some typ), `Lens typ, merge_usages [usages lens]
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
            relational_lenses_guard pos;
            let lens1 = tc lens1
            and lens2 = tc lens2 in
-           let sort1 = Lens.Type.sort (typ lens1 |> Lens_type_conv.lens_type_of_type) in
-           let sort2 = Lens.Type.sort (typ lens2 |> Lens_type_conv.lens_type_of_type) in
-           let lleft = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
-           let lright = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
-           (match Lens.Phrase.Typesugar.tc_sort ~sort:sort1 lleft with
-           | Result.Ok Lens.Phrase.Type.Bool -> ()
-           | Result.Ok _ ->
-             Gripers.die pos "Lens join left predicate does not evaluate to a boolean value."
-           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
-           (match Lens.Phrase.Typesugar.tc_sort ~sort:sort2 lright with
-           | Result.Ok Lens.Phrase.Type.Bool -> ()
-           | Result.Ok _ ->
-             Gripers.die pos "Lens join right predicate does not evaluate to a boolean value."
-           | Result.Error { Lens.Phrase.Typesugar. msg; data } -> Gripers.die data msg);
-           let sort, _ =
-             Lens.Sort.join_lens_sort
-               sort1
-               sort2
-               ~on:(Lens_sugar_conv.cols_of_phrase on)
-           in
-           let typ = Lens.Type.Lens sort in
-           LensJoinLit (erase lens1, erase lens2, on, left, right, Some sort), `Lens typ, merge_usages [usages lens1; usages lens2]
+           let typ =
+             let lens1 = typ lens1 |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
+             let lens2 = typ lens2 |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
+             let on = Lens_sugar_conv.cols_of_phrase on |> List.map (fun a -> a, a, a) in
+             let del_left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
+             let del_right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
+             Lens.Type.type_join_lens lens1 lens2 ~on ~del_left ~del_right
+           |> Lens_errors.unpack_type_join_lens_result ~die:(Gripers.die pos) in
+           LensJoinLit (erase lens1, erase lens2, on, left, right, Some typ), `Lens typ, merge_usages [usages lens1; usages lens2]
         | LensGetLit (lens, _) ->
            relational_lenses_guard pos;
            let lens = tc lens in
-           let sort = Lens.Type.sort (typ lens |> Lens_type_conv.lens_type_of_type) in
+           let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
+           Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
+           let sort = Lens.Type.sort typ in
            let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
+        | LensCheckLit (lens, _) ->
+          relational_lenses_guard pos;
+           let lens = tc lens in
+           let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
+           let typ = Lens.Type.make_checked typ in
+           LensCheckLit (erase lens, Some typ), `Lens typ, usages lens
         | LensPutLit (lens, data, _) ->
            relational_lenses_guard pos;
            let make_tuple_type = Types.make_tuple_type in
            let lens = tc lens in
+           let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
+           Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
            let data = tc data in
+           let trow = Lens.Type.sort typ |> Lens.Sort.record_type in
+           let ltrow = Lens_type_conv.type_of_lens_phrase_type trow in
+           unify (pos_and_typ data, (exp_pos lens, Types.make_list_type ltrow)) ~handle:Gripers.lens_put_input;
            LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], merge_usages [usages lens; usages data]
         | DBDelete (pat, from, where) ->
             let pat  = tpc pat in
@@ -2805,7 +2858,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 unify ~handle:Gripers.spawn_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_with_wild) p in
-            if not (Types.type_can_be_unl (typ p)) then
+            if not (Types.Unl.can_type_be (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
             Spawn (k, given_loc, erase p, Some inner_effects), pid_type, usages p
         | Receive (binders, _) ->
@@ -3314,13 +3367,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 let (x, xs') = pop_last xs in
                 x, x' :: xs'
            in
-           (** allow_wild adds wild : () to the given effect row *)
+           (* allow_wild adds wild : () to the given effect row *)
            let allow_wild : Types.row -> Types.row
          = fun row ->
            let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
            Types.extend_row fields row
            in
-           (** returns a pair of lists whose first component is the
+           (* returns a pair of lists whose first component is the
                value clauses, while the second component is the
                operation clauses *)
            let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
@@ -3553,7 +3606,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
              (val_cases, rt), eff_cases, bt, inner_eff, outer_eff
            in
-           (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
+           (* make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
          = fun row ->
              let (operations, rho, dual) = row in
@@ -3571,9 +3624,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let m_context = { context with effect_row = Types.make_empty_open_row default_effect_subkind } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = `Effect m_context.effect_row in
-           (** Most of the work is done by `type_cases'. *)
+           (* Most of the work is done by `type_cases'. *)
            let (val_cases, eff_cases) =
-             (** The following is a slight hack until I get rid of the
+             (* The following is a slight hack until I get rid of the
                  `handler' sugar. It is necessary because of "old
                  fashioned" parameterised handlers. *)
              match val_cases with
@@ -3582,11 +3635,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases val_cases eff_cases in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
-           (** Patch the result type of `m' *)
+           (* Patch the result type of `m' *)
            let () =
               unify ~handle:Gripers.handle_return (pos_and_typ m, no_pos rt)
            in
-           (** Finalise construction of the effect row of the input computation *)
+           (* Finalise construction of the effect row of the input computation *)
            let inner_eff, outer_eff =
              let m_pos = exp_pos m in
              let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
@@ -3600,7 +3653,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              List.map (fun (p, _, body) -> (p, body)) eff_cases
            in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
-           (***)
            let descr = { descr with
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
@@ -3675,8 +3727,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               Env.iter (fun v t ->
                 let uses = uses_of v (usages in_phrase) in
                 if uses <> 1 then
-                  if Types.type_can_be_unl t then
-                    Types.make_type_unl t
+                  if Types.Unl.can_type_be t then
+                    Types.Unl.make_type t
                   else
                     Gripers.non_linearity pos uses v t) (pattern_env pat) in
 
@@ -3697,8 +3749,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 if n == 0 then () else
                 if Env.has (pattern_env pat) v then () else
                   let ty = Env.lookup context.var_env v in
-                  if Types.type_can_be_unl ty then
-                    Types.make_type_unl ty
+                  if Types.Unl.can_type_be ty then
+                    Types.Unl.make_type ty
                   else
                     Gripers.try_in_unless_linearity pos v
               ) (usages in_phrase) in
@@ -3707,8 +3759,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               StringMap.iter (fun v n ->
                 if n == 0 then () else
                 let ty = Env.lookup context.var_env v in
-                  if Types.type_can_be_unl ty then
-                    Types.make_type_unl ty
+                  if Types.Unl.can_type_be ty then
+                    Types.Unl.make_type ty
                   else
                     Gripers.try_in_unless_linearity pos v
               ) (usages unless_phrase) in
@@ -3728,7 +3780,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | Raise -> (Raise, Types.fresh_type_variable (lin_any, res_any), StringMap.empty)
     in with_pos pos e, t, usages
 
-(** [type_binding] takes XXX YYY (FIXME)
+(* [type_binding] takes XXX YYY (FIXME)
     The input context is the environment in which to type the bindings.
 
     The output context is the environment resulting from typing the
@@ -3773,6 +3825,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   t
               | _ -> typ body in
           let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
+          Types.Mono.make_type (pattern_typ pat);
           let usage = usages body in
           let body = erase body in
           let tyvars, pat, penv =
@@ -3831,6 +3884,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   let v = Utils.dummy_source_name () in
                   bind_var context (v, ft_mono), ft in
 
+          (* We make the patterns monomorphic after unifying with the signature. *)
+          make_mono pats;
+
           (* type check the body *)
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
           let context_body = List.fold_left fold_in_envs context_body pats in
@@ -3847,8 +3903,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       Env.iter (fun v t ->
                         let uses = uses_of v (usages body) in
                         if uses <> 1 then
-                          if Types.type_can_be_unl t then
-                            Types.make_type_unl t
+                          if Types.Unl.can_type_be t then
+                            Types.Unl.make_type t
                           else
                             Gripers.non_linearity pos uses v t)
                                (pattern_env pat))
@@ -3859,8 +3915,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
               StringMap.iter (fun v _ ->
                               if not (List.mem v vs) then
                                 let t = Env.lookup context_body.var_env v in
-                                if Types.type_can_be_unl t then
-                                  Types.make_type_unl t
+                                if Types.Unl.can_type_be t then
+                                  Types.Unl.make_type t
                                 else
                                   Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^
                                                      " was used in a non-linear function definition"))
@@ -3961,6 +4017,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          let _, ft_mono = TypeUtils.split_quantified_type ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft_mono) in
                            ft in
+
+                 (* We make the patterns monomorphic after unifying with the signature. *)
+                 make_mono pats;
+
                  StringSet.add name inner_rec_vars, Env.bind inner_env (name, inner), pats::patss)
               (StringSet.empty, Env.empty, []) defs in
           let patss = List.rev patss in
@@ -3993,8 +4053,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                             let uses = uses_of v (usages body) in
                               if uses <> 1 then
                                 begin
-                                  if Types.type_can_be_unl t then
-                                    Types.make_type_unl t
+                                  if Types.Unl.can_type_be t then
+                                    Types.Unl.make_type t
                                   else
                                     Gripers.non_linearity pos uses v t
                                 end)
@@ -4005,8 +4065,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                           StringMap.iter (fun v _ ->
                                           if not (StringSet.mem v vs) then
                                             let t = Env.lookup body_context.var_env v in
-                                            if Types.type_can_be_unl t then
-                                              Types.make_type_unl t
+                                            if Types.Unl.can_type_be t then
+                                              Types.Unl.make_type t
                                             else
                                               Gripers.die pos ("Use of variable " ^ v ^ " of linear type " ^
                                                                  Types.string_of_datatype t ^ " in unlimited function binding.")
@@ -4179,8 +4239,8 @@ and type_bindings (globals : context)  bindings =
                       (fun v t ->
                         let uses = uses_of v usages in
                           if uses <> 1 then
-                            if Types.type_can_be_unl t then
-                              Types.make_type_unl t
+                            if Types.Unl.can_type_be t then
+                              Types.Unl.make_type t
                             else
                               Gripers.non_linearity pos uses v t)
                       env;
@@ -4191,8 +4251,8 @@ and type_bindings (globals : context)  bindings =
 and type_cp (context : context) = fun {node = p; pos} ->
   let with_channel = fun c s (p, t, u) ->
     if uses_of c u <> 1 then
-      if Types.type_can_be_unl s then
-        Types.make_type_unl s
+      if Types.Unl.can_type_be s then
+        Types.Unl.make_type s
       else
         Gripers.non_linearity pos (uses_of c u) c s;
     (p, t, StringMap.remove c u) in
@@ -4225,8 +4285,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let (p, pt, u) = with_channel c s (type_cp (bind_var (bind_var context (c, s)) (x, a)) p) in
        let uses = uses_of x u in
        if uses <> 1 then
-         if Types.type_can_be_unl a then
-           Types.make_type_unl a
+         if Types.Unl.can_type_be a then
+           Types.Unl.make_type a
          else
            Gripers.non_linearity pos uses x a;
        let grab_ty = (Env.lookup context.var_env "receive") in

@@ -159,13 +159,15 @@ sig
 
   val table_handle : value sem * value sem * value sem * (datatype * datatype * datatype) -> tail_computation sem
 
-  val lens_handle : value sem * Lens.Sort.t -> tail_computation sem
+  val lens_handle : value sem * Lens.Type.t -> tail_computation sem
 
-  val lens_drop_handle : value sem * string * string * value sem * Lens.Sort.t -> tail_computation sem
+  val lens_drop_handle : value sem * string * string * value sem * Lens.Type.t -> tail_computation sem
 
-  val lens_select_handle : value sem * Lens.Phrase.t * Lens.Sort.t -> tail_computation sem
+  val lens_select_handle : value sem * [`Static of Lens.Phrase.t | `Dynamic of value sem] * Lens.Type.t -> tail_computation sem
 
-  val lens_join_handle : value sem * value sem * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Sort.t -> tail_computation sem
+  val lens_join_handle : value sem * value sem * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Type.t -> tail_computation sem
+
+  val lens_check : value sem * Lens.Type.t -> tail_computation sem
 
   val lens_get : value sem * datatype -> tail_computation sem
 
@@ -478,29 +480,42 @@ struct
         (fun keys ->  lift (Special (Table (database, table, keys, (r, w, n))),
                                `Table (r, w, n)))))
 
-  let lens_handle (table, sort) =
+  let lens_handle (table, t) =
       bind table
         (fun table ->
-            lift (Special (Lens (table, sort)), `Lens (Lens.Type.Lens sort)))
+            lift (Special (Lens (table, t)), `Lens t))
 
-  let lens_drop_handle (lens, drop, key, default, sort) =
+  let lens_drop_handle (lens, drop, key, default, typ) =
       bind lens
         (fun lens ->
             bind default
             (fun default ->
-               lift (Special (LensDrop (lens, drop, key, default, sort)), `Lens (Lens.Type.Lens sort))))
+               lift (Special (LensDrop {lens; drop; key; default; typ}), `Lens typ)))
 
-  let lens_select_handle (lens, pred, sort) =
+  let lens_select_handle (lens, pred, typ) =
       bind lens
         (fun lens ->
-           lift (Special (LensSelect (lens, pred, sort)), `Lens (Lens.Type.Lens sort)))
+           match pred with
+           | `Dynamic pred ->
+             bind pred
+               (fun predicate ->
+                  let predicate = Dynamic predicate in
+                  lift (Special (LensSelect {lens; predicate; typ}), `Lens typ))
+           | `Static predicate ->
+             let predicate = Static predicate in
+             lift (Special (LensSelect {lens; predicate; typ}), `Lens typ))
 
-  let lens_join_handle (lens1, lens2, on, left, right, sort) =
-      bind lens1
-        (fun lens1 ->
-          bind lens2
-          (fun lens2 ->
-            lift (Special (LensJoin (lens1, lens2, on, left, right, sort)), `Lens (Lens.Type.Lens sort))))
+  let lens_join_handle (left, right, on, del_left, del_right, typ) =
+      bind left
+        (fun left ->
+          bind right
+          (fun right ->
+            lift (Special (LensJoin {left; right; on; del_left; del_right; typ}), `Lens typ)))
+
+  let lens_check (lens, t) =
+      bind lens
+         (fun lens ->
+            lift (Special (LensCheck (lens, t)), `Lens t))
 
   let lens_get (lens, rtype) =
       bind lens
@@ -949,8 +964,13 @@ struct
                 I.lens_drop_handle (lens, drop, key, default, t)
           | LensSelectLit (lens, pred, Some t) ->
               let lens = ev lens in
-              let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
-                I.lens_select_handle (lens, pred, t)
+              let trow = Lens.Type.sort t |> Lens.Sort.record_type in
+              if Lens_sugar_conv.is_static trow pred then
+                let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
+                I.lens_select_handle (lens, `Static pred, t)
+              else
+                let pred = ev pred in
+                I.lens_select_handle (lens, `Dynamic pred, t)
           | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
@@ -958,6 +978,9 @@ struct
               let left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left |> Lens.Phrase.of_sugar in
               let right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right |> Lens.Phrase.of_sugar in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
+          | LensCheckLit (lens, Some t) ->
+              let lens = ev lens in
+                I.lens_check (lens, t)
           | LensGetLit (lens, Some t) ->
               let lens = ev lens in
                 I.lens_get (lens, t)
@@ -1059,6 +1082,7 @@ struct
           | LensDropLit _
           | LensSelectLit _
           | LensJoinLit _
+          | LensCheckLit _
           | LensGetLit _
           | LensPutLit _
           | LensFunDepsLit _

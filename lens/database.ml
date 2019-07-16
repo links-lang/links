@@ -14,6 +14,8 @@ type t =
 
 module Table = struct
   type t = {name: string; keys: string list list}
+
+  let name t = t.name
 end
 
 let dummy_database =
@@ -57,21 +59,69 @@ let fmt_phrase_value ~db f v =
     | LPV.Float v ->
         let s = string_of_float v in
         if s.[String.length s - 1] = '.' then s ^ "0" else s
-    | _ -> failwith "Unexpected phrase value." )
+    | _ -> Format.asprintf "Unexpected phrase value %a." LPV.pp v |> failwith
+    )
 
-let rec fmt_phrase ~db ~map f expr =
+module Precedence = struct
+  type t = Or | And | Not | Add | Sub | Mult | Divide | Cmp
+
+  let ordering = [Or; And; Cmp; Not; Add; Sub; Mult; Divide]
+
+  let first = List.hd ordering
+
+  let order t =
+    List.findi ordering ~f:(fun v -> v = t)
+    |> Option.map ~f:fst
+    |> fun v -> Option.value_exn v
+
+  let pp_eq pr npr fmt f v =
+    if order npr < order pr then Format.fprintf f "(%a)" fmt v
+    else Format.fprintf f "%a" fmt v
+
+  let pp_gr pr npr fmt f v =
+    if order npr <= order pr then Format.fprintf f "(%a)" fmt v
+    else Format.fprintf f "%a" fmt v
+end
+
+let rec fmt_phrase_ex ?(precedence = Precedence.And) ~db ~map f expr =
+  let module Pr = Precedence in
   let pp_sep f () = Format.fprintf f ", " in
-  let fmt = fmt_phrase ~db ~map in
+  let fmt i = fmt_phrase_ex ~precedence:i ~db ~map in
+  let pp_eq = Pr.pp_eq precedence in
+  let pp_gr = Pr.pp_gr precedence in
   match expr with
   | Phrase.Constant c -> fmt_phrase_value ~db f c
   | Phrase.Var v -> Format.fprintf f "%s" (map v)
   | Phrase.InfixAppl (op, a1, a2) ->
-      Format.fprintf f "%a %a %a" fmt a1 Binary.fmt op fmt a2
+      let pr =
+        match op with
+        | Binary.LogicalAnd -> Pr.And
+        | Binary.LogicalOr -> Pr.Or
+        | Binary.Plus -> Pr.Add
+        | Binary.Minus -> Pr.Sub
+        | Binary.Equal
+         |Binary.Greater
+         |Binary.GreaterEqual
+         |Binary.Less
+         |Binary.LessEqual ->
+            Pr.Cmp
+        | Binary.Multiply -> Pr.Mult
+        | Binary.Divide -> Pr.Divide
+      in
+      let pp f () =
+        Format.fprintf f "%a %a %a" (fmt pr) a1 Binary.fmt op (fmt pr) a2
+      in
+      Format.fprintf f "%a" (pp |> pp_eq pr) ()
   | Phrase.TupleLit l ->
-      Format.fprintf f "(%a)" (Format.pp_print_list ~pp_sep fmt) l
+      Format.fprintf f "(%a)" (Format.pp_print_list ~pp_sep (fmt Pr.first)) l
   | Phrase.UnaryAppl (op, a) ->
-      let op = match op with Unary.Not -> "NOT" | _ -> Unary.to_string op in
-      Format.fprintf f "%s (%a)" op fmt a
+      let op =
+        match op with
+        | Unary.Not -> "NOT"
+        | _ -> Unary.to_string op
+      in
+      let pp f () = Format.fprintf f "%s %a" op (fmt Pr.Not) a in
+      Format.fprintf f "%a" (pp |> pp_gr Pr.Not) ()
   | Phrase.In (names, vals) -> (
       let fmt_name f v = Format.fprintf f "%s" (map v) in
       let fmt_val f v =
@@ -88,18 +138,23 @@ let rec fmt_phrase ~db ~map f expr =
             (Format.pp_print_list ~pp_sep fmt_val)
             vals )
   | Phrase.Case (inp, cases, otherwise) ->
-      if cases = [] then Format.fprintf f "%a" fmt otherwise
+      if cases = [] then Format.fprintf f "%a" (fmt precedence) otherwise
       else
         let f =
           match inp with
           | None -> Format.fprintf f "CASE %a ELSE %a END"
-          | Some inp -> Format.fprintf f "CASE (%a) %a ELSE %a END" fmt inp
+          | Some inp ->
+              Format.fprintf f "CASE (%a) %a ELSE %a END" (fmt Pr.first) inp
         in
         let pp_sep f () = Format.fprintf f " " in
         let fmt_case f (k, v) =
-          Format.fprintf f "WHEN %a THEN %a" fmt k fmt v
+          Format.fprintf f "WHEN %a THEN %a" (fmt Pr.first) k (fmt Pr.first) v
         in
-        f (Format.pp_print_list ~pp_sep fmt_case) cases fmt otherwise
+        f
+          (Format.pp_print_list ~pp_sep fmt_case)
+          cases (fmt Pr.first) otherwise
+
+let fmt_phrase ~db ~map f expr = fmt_phrase_ex ~db ~map f expr
 
 let fmt_phrase_dummy f expr =
   let db = dummy_database in
@@ -117,8 +172,12 @@ module Select = struct
     ; predicate: Phrase.t option
     ; db: db }
 
+  let select t ~predicate =
+    let predicate = Phrase.Option.combine_and t.predicate predicate in
+    {t with predicate}
+
   let of_sort t ~sort =
-    let predicate = Sort.predicate sort in
+    let predicate = Sort.query sort in
     let cols = Sort.cols sort in
     let tables =
       List.map ~f:Column.table cols
@@ -218,9 +277,9 @@ module Insert = struct
 
   let fmt f v =
     let db = v.db in
-    let fmt_vals f v = Format.fprintf f "(%a)"
-      (fmt_phrase_value ~db |> Format.pp_comma_list)
-      v in
+    let fmt_vals f v =
+      Format.fprintf f "(%a)" (fmt_phrase_value ~db |> Format.pp_comma_list) v
+    in
     Format.fprintf f "INSERT INTO %a (%a) VALUES %a" (fmt_table ~db) v.table
       (fmt_col ~db |> Format.pp_comma_list)
       v.columns

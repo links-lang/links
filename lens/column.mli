@@ -1,8 +1,12 @@
-[@@@ocamlformat "doc-comments=before"]
-
 type t [@@deriving show]
 
-val make : table:string -> name:string -> alias:string -> typ:Phrase_type.t -> present:bool -> t
+val make :
+     table:string
+  -> name:string
+  -> alias:string
+  -> typ:Phrase_type.t
+  -> present:bool
+  -> t
 
 (** Return the name of the column as the column would be bound in the user program. *)
 val alias : t -> string
@@ -47,9 +51,9 @@ module Set : sig
 end
 
 module List : sig
-  type elt = t
+  type elt = t [@@deriving eq]
 
-  type t = elt list
+  type t = elt list [@@deriving eq]
 
   (** Filter out all non present columns. *)
   val present : t -> t
@@ -59,6 +63,9 @@ module List : sig
 
   (** Get the aliases of all present columns. *)
   val present_aliases : t -> string list
+
+  (** Return the set of all present aliases. *)
+  val present_aliases_set : t -> Alias.Set.t
 
   (** determine if the calumn [alias] is present. *)
   val mem_alias : t -> alias:string -> bool

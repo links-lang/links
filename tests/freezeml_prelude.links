@@ -55,8 +55,11 @@ fun map(f)(xs) {
   }
 }
 
-sig revapp: forall a,b,e::Row,f::Row. (a) -e-> ((a) -f-> b) -f-> b
+sig revapp : forall a,b,e::Row,f::Row. (a) -e-> ((a) -f-> b) -f-> b
 fun revapp(x)(f) { f(x) }
 
-sig app: forall a,b,e::Row,f::Row. ((a) -e-> b) -f-> (a) -e-> b
+sig app : forall a,b,e::Row,f::Row. ((a) -e-> b) -f-> (a) -e-> b
 fun app(f)(x) { f(x) }
+
+sig first : forall a::Any,b::Any,c::Any,e::Row. ((a) -e-> b, (a, c)) -e-> (b, c)
+fun first(f, (x, y)) { (f(x), y) }
