@@ -1260,9 +1260,12 @@ primary_pattern:
 patterns:
 | separated_nonempty_list(COMMA, pattern)                      { $1 }
 
+labeled_pattern:
+| preceded(COLON, VARIABLE)                                    { ($1, variable_pat ~ppos:$loc $1) }
+| separated_pair(record_label, EQ,  pattern)                   { $1 }
+
 labeled_patterns:
-| separated_nonempty_list(COMMA,
-   separated_pair(record_label, EQ,  pattern))                 { $1 }
+| separated_nonempty_list(COMMA, labeled_pattern)              { $1 }
 
 multi_args:
 | LPAREN separated_list(COMMA, pattern) RPAREN                 { $2 }

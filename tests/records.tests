@@ -103,3 +103,7 @@ stdout : (hello = "hellooo") : (hello:String)
 Record field punning (2)
 var hello = "hellooo"; (:hello, world = 5)
 stdout : (hello = "hellooo", world = 5) : (hello:String,world:Int)
+
+Record field punning (3)
+switch((hello=5, world=10)) { case (:hello, world=y) -> hello + y }
+stdout : 15 : Int
