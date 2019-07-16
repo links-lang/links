@@ -2237,7 +2237,7 @@ let make_ft declared_linearity ps effects return_type =
   let rec ft =
     function
       | [p] -> ftcon (args p, effects, return_type)
-      | p::ps -> ftcon (args p, Types.make_empty_open_row default_subkind, ft ps)
+      | p::ps -> ftcon (args p, Types.make_empty_open_row default_effect_subkind, ft ps)
       | [] -> assert false
   in
     ft ps
@@ -2256,6 +2256,9 @@ let make_ft_poly_curry declared_linearity ps effects return_type =
             q::qs, ftcon (args p, eff, t)
       | [] -> assert false in
   Types.for_all (ft ps)
+
+(** Make any unannotated parameters monomorphic. *)
+let make_mono pats = List.iter (List.iter (fun (_, _, t) -> Types.Mono.make_type t)) pats;
 
 type usagemap = int stringmap
 let merge_usages (ms:usagemap list) : usagemap =
@@ -2376,8 +2379,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                (pos_and_typ body, no_pos bt) in
              let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
                                            if uses <> 1 then
-                                             if Types.type_can_be_unl t then
-                                               Types.make_type_unl t
+                                             if Types.Unl.can_type_be t then
+                                               Types.Unl.make_type t
                                              else
                                                Gripers.non_linearity pos uses v t)
                                (pattern_env pat) in
@@ -2520,6 +2523,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
             let env' = Env.extend context.var_env pat_env in
 
+            make_mono pats;
+
             (* type of the effects in the body of the lambda *)
             let effects = Types.make_empty_open_row default_effect_subkind in
             let body = type_check ({context with
@@ -2530,8 +2535,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               Env.iter (fun v t ->
                 let uses = uses_of v (usages body) in
                   if uses <> 1 then
-                    if Types.type_can_be_unl t then
-                      Types.make_type_unl t
+                    if Types.Unl.can_type_be t then
+                      Types.Unl.make_type t
                     else
                       Gripers.non_linearity pos uses v t)
                 pat_env in
@@ -2541,8 +2546,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 StringMap.iter (fun v _ ->
                                 if not (List.mem v vs) then
                                   let t = Env.lookup env' v in
-                                  if Types.type_can_be_unl t then
-                                    Types.make_type_unl t
+                                  if Types.Unl.can_type_be t then
+                                    Types.Unl.make_type t
                                   else
                                     Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a non-linear function literal."))
                                (usages body)
@@ -2958,7 +2963,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 unify ~handle:Gripers.spawn_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            if not (Types.type_can_be_unl (typ p)) then
+            if not (Types.Unl.can_type_be (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
 
             begin
@@ -3876,8 +3881,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               Env.iter (fun v t ->
                 let uses = uses_of v (usages in_phrase) in
                 if uses <> 1 then
-                  if Types.type_can_be_unl t then
-                    Types.make_type_unl t
+                  if Types.Unl.can_type_be t then
+                    Types.Unl.make_type t
                   else
                     Gripers.non_linearity pos uses v t) (pattern_env pat) in
 
@@ -3898,8 +3903,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 if n == 0 then () else
                 if Env.has (pattern_env pat) v then () else
                   let ty = Env.lookup context.var_env v in
-                  if Types.type_can_be_unl ty then
-                    Types.make_type_unl ty
+                  if Types.Unl.can_type_be ty then
+                    Types.Unl.make_type ty
                   else
                     Gripers.try_in_unless_linearity pos v
               ) (usages in_phrase) in
@@ -3908,8 +3913,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               StringMap.iter (fun v n ->
                 if n == 0 then () else
                 let ty = Env.lookup context.var_env v in
-                  if Types.type_can_be_unl ty then
-                    Types.make_type_unl ty
+                  if Types.Unl.can_type_be ty then
+                    Types.Unl.make_type ty
                   else
                     Gripers.try_in_unless_linearity pos v
               ) (usages unless_phrase) in
@@ -3981,6 +3986,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   t
               | _ -> typ body in
           let () = unify pos ~handle:Gripers.bind_val (ppos_and_typ pat, (exp_pos body, bt)) in
+          Types.Mono.make_type (pattern_typ pat);
           let usage = usages body in
           let body = erase body in
           let tyvars, pat, penv =
@@ -4040,6 +4046,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   let v = Utils.dummy_source_name () in
                   bind_var context (v, ft_mono), ft in
 
+          (* We make the patterns monomorphic after unifying with the signature. *)
+          make_mono pats;
+
           (* type check the body *)
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
           let context_body = List.fold_left fold_in_envs context_body pats in
@@ -4056,8 +4065,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       Env.iter (fun v t ->
                         let uses = uses_of v (usages body) in
                         if uses <> 1 then
-                          if Types.type_can_be_unl t then
-                            Types.make_type_unl t
+                          if Types.Unl.can_type_be t then
+                            Types.Unl.make_type t
                           else
                             Gripers.non_linearity pos uses v t)
                                (pattern_env pat))
@@ -4068,8 +4077,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
               StringMap.iter (fun v _ ->
                               if not (List.mem v vs) then
                                 let t = Env.lookup context_body.var_env v in
-                                if Types.type_can_be_unl t then
-                                  Types.make_type_unl t
+                                if Types.Unl.can_type_be t then
+                                  Types.Unl.make_type t
                                 else
                                   Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^
                                                      " was used in a non-linear function definition"))
@@ -4176,6 +4185,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          let _, ft_mono = TypeUtils.split_quantified_type ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft_mono) in
                            ft in
+
+                 (* We make the patterns monomorphic after unifying with the signature. *)
+                 make_mono pats;
+
                  StringSet.add name inner_rec_vars, Env.bind inner_env (name, inner), pats::patss)
               (StringSet.empty, Env.empty, []) defs in
           let patss = List.rev patss in
@@ -4209,8 +4222,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                             let uses = uses_of v (usages body) in
                               if uses <> 1 then
                                 begin
-                                  if Types.type_can_be_unl t then
-                                    Types.make_type_unl t
+                                  if Types.Unl.can_type_be t then
+                                    Types.Unl.make_type t
                                   else
                                     Gripers.non_linearity pos uses v t
                                 end)
@@ -4221,8 +4234,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                           StringMap.iter (fun v _ ->
                                           if not (StringSet.mem v vs) then
                                             let t = Env.lookup body_context.var_env v in
-                                            if Types.type_can_be_unl t then
-                                              Types.make_type_unl t
+                                            if Types.Unl.can_type_be t then
+                                              Types.Unl.make_type t
                                             else
                                               Gripers.die pos ("Use of variable " ^ v ^ " of linear type " ^
                                                                  Types.string_of_datatype t ^ " in unlimited function binding.")
@@ -4397,8 +4410,8 @@ and type_bindings (globals : context)  bindings =
                       (fun v t ->
                         let uses = uses_of v usages in
                           if uses <> 1 then
-                            if Types.type_can_be_unl t then
-                              Types.make_type_unl t
+                            if Types.Unl.can_type_be t then
+                              Types.Unl.make_type t
                             else
                               Gripers.non_linearity pos uses v t)
                       env;
@@ -4409,8 +4422,8 @@ and type_bindings (globals : context)  bindings =
 and type_cp (context : context) = fun {node = p; pos} ->
   let with_channel = fun c s (p, t, u) ->
     if uses_of c u <> 1 then
-      if Types.type_can_be_unl s then
-        Types.make_type_unl s
+      if Types.Unl.can_type_be s then
+        Types.Unl.make_type s
       else
         Gripers.non_linearity pos (uses_of c u) c s;
     (p, t, StringMap.remove c u) in
@@ -4446,8 +4459,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let (p, pt, u) = with_channel c s (type_cp (bind_var (bind_var context (c, s)) (x, a)) p) in
        let uses = uses_of x u in
        if uses <> 1 then
-         if Types.type_can_be_unl a then
-           Types.make_type_unl a
+         if Types.Unl.can_type_be a then
+           Types.Unl.make_type a
          else
            Gripers.non_linearity pos uses x a;
        let grab_ty = (Env.lookup context.var_env "receive") in
