@@ -490,116 +490,6 @@ struct
 
 end
 
-
-
-(* TODO: consider abstracting some of this subkind manipulation code *)
-
-(* base type stuff *)
-let rec is_base_type : typ -> bool =
-  function
-    | `Primitive (Primitive.Bool | Primitive.Int | Primitive.Char |
-                  Primitive.Float | Primitive.String) -> true
-    | `Alias (_, t) -> is_base_type t
-    | `MetaTypeVar point ->
-        begin
-          match Unionfind.find point with
-            | `Var (_, (_, Restriction.Base), _) -> true
-            | `Var _ -> false
-            | `Body t -> is_base_type t
-            | `Recursive _ -> false
-        end
-    | _ -> false
-
-let rec is_base_row (fields, row_var, _) =
-  let base_row_var =
-    match Unionfind.find row_var with
-      | `Closed
-      | `Var (_, (_, Restriction.Base), _) -> true
-      | `Var _ -> false
-      | `Body row -> is_base_row row
-      | `Recursive _ -> false in
-  let base_fields =
-    FieldEnv.fold
-      (fun _ f b ->
-        match f with
-        | `Present t -> b && is_base_type t
-        | (`Absent | `Var _) -> b)
-      fields
-      true
-  in
-    base_row_var && base_fields
-
-let rec is_baseable_type : typ -> bool =
-  function
-    | `Primitive (Primitive.Bool | Primitive.Int | Primitive.Char |
-                  Primitive.Float | Primitive.String) -> true
-    | `Alias (_, t) -> is_baseable_type t
-    | `MetaTypeVar point ->
-        begin
-          match Unionfind.find point with
-            | `Var (_, (_, Restriction.Base), `Rigid)
-            | `Var (_, _, `Flexible) -> true
-            | `Var (_, _, `Rigid) -> false
-            | `Body t -> is_baseable_type t
-            | `Recursive _ -> false
-        end
-    | _ -> false
-
-let rec is_baseable_row (fields, row_var, _) =
-  let base_row_var =
-    match Unionfind.find row_var with
-      | `Closed
-      | `Var (_, (_, Restriction.Base), `Rigid)
-      | `Var (_, _, `Flexible) -> true
-      | `Var (_, _, `Rigid) -> false
-      | `Body row -> is_baseable_row row
-      | `Recursive _ -> false in
-  let base_fields =
-    FieldEnv.fold
-      (fun _ f b ->
-        match f with
-        | `Present t -> b && is_baseable_type t
-        | (`Absent | `Var _) -> b)
-      fields
-      true
-  in
-    base_row_var && base_fields
-
-let rec basify_type : typ -> unit =
-  function
-    | `Primitive (Primitive.Bool | Primitive.Int | Primitive.Char |
-                  Primitive.Float | Primitive.String) -> ()
-    | `Alias (_, t) -> basify_type t
-    | `MetaTypeVar point ->
-        begin
-          match Unionfind.find point with
-            | `Var (_, (_, Restriction.Base), _) -> ()
-            | `Var (_, _, `Rigid) -> assert false
-            | `Var (var, (lin, Restriction.Any), `Flexible) -> Unionfind.change point (`Var (var, (lin, res_base), `Flexible))
-            | `Var (_, _, `Flexible) -> assert false
-            | `Body t -> basify_type t
-            | `Recursive _ -> assert false
-        end
-    | _ -> assert false
-
-let rec basify_row (fields, row_var, _) =
-  begin
-    match Unionfind.find row_var with
-      | `Closed
-      | `Var (_, (_, Restriction.Base), _) -> ()
-      | `Var (var, (lin, Restriction.Any), `Flexible) -> Unionfind.change row_var (`Var (var, (lin, res_base), `Flexible))
-      | `Var _ -> assert false
-      | `Body row -> basify_row row
-      | `Recursive _ -> assert false
-  end;
-  FieldEnv.fold
-    (fun _ f () ->
-      match f with
-      | `Present t         -> basify_type t
-      | (`Absent | `Var _) -> ())
-    fields
-    ()
-
 (* Var depends on Types so we use int instead of Var.var here... *)
 
 (* set of recursive variables seen so far *)
@@ -649,282 +539,363 @@ let primary_kind_of_type_arg : type_arg -> PrimaryKind.t =
 let add_quantified_vars qs vars =
   List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
 
-(* unl type stuff *)
 
-let is_unl_point =
-  fun f (rec_vars, quant_vars) point ->
-    begin
-      match Unionfind.find point with
-      | `Closed -> true
-      | `Var (var, (lin, _), _) -> IntSet.mem var quant_vars || Linearity.is_nonlinear lin
-      | `Body t -> f (rec_vars, quant_vars) t
-      | `Recursive (var, t) ->
-        check_rec var rec_vars true (fun rec_vars' -> f (rec_vars', quant_vars) t)
-    end
+(** A constraint provides a way of ensuring a type (or row) satisfies the
+   requirements of some subkind. *)
+module type Constraint = sig
+  (** Does this type satisfy the requirements of this subkind? *)
+  val type_satisfies : typ -> bool
+  val row_satisfies : row -> bool
 
-let rec is_unl_type : (var_set * var_set) -> typ -> bool =
-  fun (rec_vars, quant_vars) ->
-    let iut t = is_unl_type (rec_vars, quant_vars) t in
-      function
-      | `Not_typed -> assert false
-      | `Effect _
-      | `Primitive _
-      | `Function _ -> true
-      | `Lolli _ -> false
-      | `Record r
-      | `Variant r -> is_unl_row (rec_vars, quant_vars) r
-      | `Table _ -> true
-      | `Lens _sort -> true
-      | `Alias (_, t) -> iut t
-      (* We might support linear lists like this...
-         but we'd need to replace hd and tl with a split operation. *)
-      (* | `Application ({Abstype.id="List"}, [`Type t]) -> is_unl_type (rec_vars, quant_vars) t  *)
-      | `Application _ -> true (* TODO: change this if we add linear abstract types *)
-      | `RecursiveApplication { r_linear ; _ } ->
-          (* An application is linear if the type it refers to is
-           * also linear. We calculate this information in two stages.
-           * The first pass (if r_linear () returns None) calculates linearity
-           * *up to recursive applications*, under the assumption that every type in the
-           * block is unrestricted. With this in hand, we can calculate
-           * linearity information, meaning that (r_linear ()) will return (Some lin). *)
-          OptionUtils.opt_app (not) true (r_linear ())
-      | `MetaTypeVar point -> is_unl_point is_unl_type (rec_vars, quant_vars) point
-      | `ForAll (qs, t) -> is_unl_type (rec_vars, add_quantified_vars !qs quant_vars) t
-      | `Dual s -> is_unl_type (rec_vars, quant_vars) s
-      | `End -> false
-      | #session_type -> false
-and is_unl_field vars =
-  function
-  | `Absent -> true
-  | `Present t ->
-    is_unl_type vars t
-  | `Var point -> is_unl_point is_unl_field vars point
-and is_unl_row vars (fields, row_var, _) =
-  let unl_row_var = is_unl_point is_unl_row vars row_var in
-  let unl_fields =
-    FieldEnv.fold
-      (fun _ f b -> b && is_unl_field vars f)
-      fields
-      true in
-  unl_row_var && unl_fields
+  (** Can this type be modified to satisfy the requirements of the subkind?
 
-let point_can_be_unl =
-  fun f ((rec_vars, quant_vars) as vars) point ->
-    begin
-        match Unionfind.find point with
-        | `Closed -> true
-        | `Var (v, (lin, _), `Rigid) -> IntSet.mem v quant_vars || Linearity.is_nonlinear lin
-        | `Var (_, _, `Flexible)     -> true
-        | `Body t -> f vars t
-        | `Recursive (var, t) ->
-          check_rec var rec_vars true (fun rec_vars' -> f (rec_vars', quant_vars) t)
-      end
+      This effectively asks if there are flexible type variables whose subkinds
+     can be modified so that {!is_type} returns true. *)
+  val can_type_be : typ -> bool
+  val can_row_be : row -> bool
 
-let rec type_can_be_unl : var_set * var_set -> typ -> bool =
-  fun ((rec_vars, quant_vars) as vars) ->
-    let tcu t = type_can_be_unl vars t in
-    function
+  (** Attempt to convert any flexible variables within this type so the
+     appropriate subkind, so that {!is_type} will return true. *)
+  val make_type : typ -> unit
+  val make_row : row -> unit
+end
+
+(** A context for the various type visitors ({!type_predicate} and {!type_iter})
+
+  This contains:
+
+   - The set of applications to [typename]s currently being visited.
+   - The set of in-scope recursive type variables.
+   - The set of in-scope forall quantified variables.
+
+  We do not impose the same restrictions on forall quantified variables as we do
+  on free ones, hence the need to track quantified variables. *)
+type visit_context = StringSet.t * var_set * var_set
+
+(** A predicate on types, which can be used to limit the range of types a
+    {!Constraint} allows.
+
+   By default, this visits the entire type, and returns true iff all child nodes
+   of the type satisfy the predicate. *)
+class virtual type_predicate = object(self)
+  method var_satisfies : (int * subkind * freedom) -> bool = fun _ -> true
+
+  method point_satisfies : 'a 'c . (visit_context -> 'a -> bool) -> visit_context -> ([< 'a meta_max_basis] as 'c) point -> bool
+    = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
+    match Unionfind.find point with
+    | `Closed -> true
+    | `Var ((id, _, _) as var) -> IntSet.mem id quant_vars || self#var_satisfies var
+    | `Body t -> f vars t
+    | `Recursive (var, t) -> check_rec var rec_vars true (fun rec_vars' -> f (rec_appl, rec_vars', quant_vars) t)
+
+  method type_satisfies ((rec_appl, rec_vars, quant_vars) as vars) : typ -> bool = function
     | `Not_typed -> assert false
-    | `Effect _
-    | `Primitive _
-    | `Function _ -> true
-    | `Lolli _ -> false
-    | `Record r
-    | `Variant r -> row_can_be_unl vars r
+    | `Primitive _ -> true
+    | `Function (a, e, r) | `Lolli (a, e, r) -> self#type_satisfies vars a && self#row_satisfies vars e && self#type_satisfies vars r
+    | `Record r | `Effect r | `Variant r -> self#row_satisfies vars r
     | `Table _ -> true
     | `Lens _ -> true
-    | `Alias (_, t) -> tcu t
-    (* We might support linear lists like this...
-         but we'd need to replace hd and tl with a split operation. *)
-    (* | `Application ({Abstype.id="List"}, [`Type t]) -> tcu t *)
-    | `Application _ -> true (* TODO: change this if we add linear abstract types *)
-    | `RecursiveApplication { r_linear; _ } ->
-        (* This will have been set during desugaring, far
-         * before `type_can_be_unl` is called *)
-        not (OptionUtils.val_of (r_linear ()))
-    | `MetaTypeVar point -> point_can_be_unl type_can_be_unl vars point
-    | `ForAll (qs, t) -> type_can_be_unl (rec_vars, add_quantified_vars !qs quant_vars) t
-    | `Dual s -> type_can_be_unl vars s
-    | `End -> false
-    | #session_type -> false
-and field_can_be_unl vars =
-  function
-  | `Absent    -> true
-  | `Present t -> type_can_be_unl vars t
-  | `Var point -> point_can_be_unl field_can_be_unl vars point
-and row_can_be_unl vars (fields, row_var, _) =
-  let unl_row_var = point_can_be_unl row_can_be_unl vars row_var in
-  let unl_fields =
-    FieldEnv.fold
-      (fun _ f b -> b && field_can_be_unl vars f)
-      fields
-      true in
-  unl_row_var && unl_fields
+    | `Alias (_, t) -> self#type_satisfies vars t
+    | `MetaTypeVar point -> self#point_satisfies self#type_satisfies vars point
+    | `ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, add_quantified_vars !qs quant_vars) t
+    | `Application (_, ts) ->
+       (* This does assume that all abstract types satisfy the predicate. *)
+       List.for_all (self#type_satisfies_arg vars) ts
+    | `RecursiveApplication { r_unique_name; r_args; r_dual; r_unwind; _ } ->
+       if StringSet.mem r_unique_name rec_appl then
+         List.for_all (self#type_satisfies_arg vars) r_args
+       else
+         let body = r_unwind r_args r_dual in
+         self#type_satisfies (StringSet.add r_unique_name rec_appl, rec_vars, quant_vars) body
+    | `Select r | `Choice r -> self#row_satisfies vars r
+    | `Input (a, b) | `Output (a, b) -> self#type_satisfies vars a && self#type_satisfies vars b
+    | `Dual s -> self#type_satisfies vars s
+    | `End -> true
 
-let is_unl_type = is_unl_type (IntSet.empty, IntSet.empty)
-let is_unl_row = is_unl_row (IntSet.empty, IntSet.empty)
+  method field_satisfies vars = function
+    | `Absent -> true
+    | `Present t -> self#type_satisfies vars t
+    | `Var point -> self#point_satisfies self#field_satisfies vars point
 
-let type_can_be_unl = type_can_be_unl (IntSet.empty, IntSet.empty)
-let row_can_be_unl = row_can_be_unl (IntSet.empty, IntSet.empty)
+  method row_satisfies vars (fields, row_var, _) =
+    let row_var = self#point_satisfies self#row_satisfies vars row_var in
+    let fields = FieldEnv.for_all (fun _ f -> self#field_satisfies vars f) fields in
+    row_var && fields
 
-let make_point_unl : ((var_set * var_set) -> 'a -> unit) -> (var_set * var_set) -> [< 'a meta_max_basis] point -> unit =
-  fun f ((rec_vars, quant_vars) as vars) point ->
+  method type_satisfies_arg vars (arg : type_arg) =
+    match arg with
+    | `Type t -> self#type_satisfies vars t
+    | `Row r -> self#row_satisfies vars r
+    | `Presence f -> self#field_satisfies vars f
+
+  method predicates =
+    (self#type_satisfies (StringSet.empty, IntSet.empty, IntSet.empty),
+     self#row_satisfies (StringSet.empty, IntSet.empty, IntSet.empty))
+end
+
+(** Iterate over every node in a type.
+
+    By default this does nothing. However, it can be extended by {!Constraint}s
+    to mutate various flexible type variables. *)
+class virtual type_iter = object(self)
+  method visit_var : 'a 'c. ([< 'a meta_max_basis > `Var] as 'c) point -> (int * subkind * freedom) -> unit = fun _ _ -> ()
+
+  method visit_point : 'a 'c . (visit_context -> 'a -> unit) -> visit_context -> ([< 'a meta_max_basis > `Var] as 'c) point -> unit
+    = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
     match Unionfind.find point with
     | `Closed -> ()
-    | `Var (v, (lin, _), `Rigid)       -> if IntSet.mem v quant_vars || Linearity.is_nonlinear lin then () else assert false
-    | `Var (var, (_, rest), `Flexible) -> Unionfind.change point (`Var (var, (lin_unl, rest), `Flexible))
+    | `Var ((id, _, _) as var) -> if not (IntSet.mem id quant_vars) then self#visit_var point var
     | `Body t -> f vars t
-    | `Recursive (var, t) ->
-      check_rec var rec_vars () (fun rec_vars' -> f (rec_vars', quant_vars) t)
+    | `Recursive (var, t) -> check_rec var rec_vars () (fun rec_vars' -> f (rec_appl, rec_vars', quant_vars) t)
 
-let rec make_type_unl : var_set * var_set -> typ -> unit =
-  fun ((rec_vars, quant_vars) as vars) ->
-    function
+  method visit_type ((rec_appl, rec_vars, quant_vars) as vars) : typ -> unit = function
     | `Not_typed -> assert false
-    | `Primitive _ | `Function _ | `Table _ | `End | `Application _ | `Effect _ | `Lens _ -> ()
-    | `RecursiveApplication _ -> ()
-    | `Record r | `Variant r -> make_row_unl vars r
-    | `Alias (_, t) -> make_type_unl vars t
-    | `ForAll (qs, t) -> make_type_unl (rec_vars, add_quantified_vars !qs quant_vars) t
-    | `MetaTypeVar point -> make_point_unl make_type_unl vars point
-    | `Dual s -> make_type_unl vars s
-    | _ -> assert false
-and make_field_unl vars =
+    | `Primitive _ -> ()
+    | `Function (a, e, r) | `Lolli (a, e, r) -> self#visit_type vars a; self#visit_row vars e; self#visit_type vars r
+    | `Record r | `Effect r | `Variant r -> self#visit_row vars r
+    | `Table _ -> ()
+    | `Lens _ -> ()
+    | `Alias (_, t) -> self#visit_type vars t
+    | `MetaTypeVar point -> self#visit_point self#visit_type vars point
+    | `ForAll (qs, t) -> self#visit_type (rec_appl, rec_vars, add_quantified_vars !qs quant_vars) t
+    | `Application (_, ts) -> List.iter (self#visit_type_arg vars) ts
+    | `RecursiveApplication { r_args; _ } -> List.iter (self#visit_type_arg vars) r_args
+    | `Select r | `Choice r -> self#visit_row vars r
+    | `Input (a, b) | `Output (a, b) -> self#visit_type vars a; self#visit_type vars b
+    | `Dual s -> self#visit_type vars s
+    | `End -> ()
+
+  method visit_field vars = function
+    | `Absent -> ()
+    | `Present t -> self#visit_type vars t
+    | `Var point -> self#visit_point self#visit_field vars point
+
+  method visit_row vars (fields, row_var, _) =
+    self#visit_point self#visit_row vars row_var;
+    FieldEnv.iter (fun _ f -> self#visit_field vars f) fields
+
+  method visit_type_arg vars (arg : type_arg) =
+    match arg with
+    | `Type t -> self#visit_type vars t
+    | `Row r -> self#visit_row vars r
+    | `Presence f -> self#visit_field vars f
+
+  method visitors =
+    (self#visit_type (StringSet.empty, IntSet.empty, IntSet.empty),
+     self#visit_row (StringSet.empty, IntSet.empty, IntSet.empty))
+end
+
+module type TypePredicate = sig class klass : type_predicate end
+
+(** Make a basic restriction predicate from a more general type predicate.
+
+   This simply requires that all visited type variables has the correct subkind.
+   If [flexibles] is true, then flexible type variables which can be converted
+   to have the correct subkind are permitted. *)
+let make_restriction_predicate (klass : (module TypePredicate)) restr flexibles =
+  let module M = (val klass) in
+  (object
+     inherit M.klass
+
+     method! var_satisfies = function
+       | (_, (_, sk), _) when sk = restr -> true
+       | (_, _, `Rigid) -> false
+       | (_, (_, sk), `Flexible) ->
+          flexibles &&
+            match Restriction.min sk restr with
+            | Some sk -> sk = restr
+            | _ -> false
+   end)#predicates
+
+(** Make a basic restriction transformation. This attempts to transform any
+   flexible type variable to one with a compatible subkind.
+
+   If a type variable cannot be made compatible, and [ensure] is true, then an
+   error is thrown. *)
+let make_restriction_transform ?(ensure=false) subkind =
+  (object
+     inherit type_iter
+
+     method! visit_var point = function
+       | (_, (_, sk), _) when sk = subkind -> ()
+       | (v, (l, sk), `Flexible) ->
+          begin
+            match Restriction.min sk subkind with
+            | Some sk when sk = subkind -> Unionfind.change point (`Var (v, (l, sk), `Flexible))
+            | _ -> assert ensure
+          end
+       | (_, _, `Rigid) -> assert ensure
+   end)#visitors
+
+module Base : Constraint = struct
+  open Restriction
+  open Primitive
+
+  module BasePredicate = struct
+    class klass = object
+      inherit type_predicate as super
+
+      method! point_satisfies f vars point =
+        match Unionfind.find point with
+        | `Recursive _ -> false
+        | _ -> super#point_satisfies f vars point
+
+      method! type_satisfies vars = function
+        | `Primitive (Bool | Int | Char | Float | String) -> true
+        | (`Alias _ | `MetaTypeVar _) as t  -> super#type_satisfies vars t
+        | _ -> false
+    end
+  end
+
+  let type_satisfies, row_satisfies = make_restriction_predicate (module BasePredicate) Base false
+  let can_type_be, can_row_be = make_restriction_predicate (module BasePredicate) Base true
+  let make_type, make_row = make_restriction_transform Base
+end
+
+(* unl type stuff *)
+module Unl : Constraint = struct
+  class unl_predicate = object
+    inherit type_predicate as super
+
+    method! type_satisfies vars = function
+      | `Not_typed -> assert false
+      | `Effect _ | `Primitive _ | `Function _ -> true
+      | `Lolli _ -> false
+      | (`Record _ | `Variant _ | `Alias _ | `MetaTypeVar _ | `ForAll _ | `Dual _) as t
+        -> super#type_satisfies vars t
+      | `Table _ -> true
+      | `Lens _sort -> true
+        (* We might support linear lists like this...
+           but we'd need to replace hd and tl with a split operation. *)
+        (* | `Application ({Abstype.id="List"}, [`Type t]) -> Unl.satisfies_type (rec_vars, quant_vars) t  *)
+      | `Application _ -> true (* TODO: change this if we add linear abstract types *)
+      | `RecursiveApplication { r_linear ; _ } ->
+            (* An application is linear if the type it refers to is
+             * also linear. We calculate this information in two stages.
+             * The first pass (if r_linear () returns None) calculates linearity
+             * *up to recursive applications*, under the assumption that every type in the
+             * block is unrestricted. With this in hand, we can calculate
+             * linearity information, meaning that (r_linear ()) will return (Some lin). *)
+            OptionUtils.opt_app not true (r_linear ())
+      | `End -> false
+      | #session_type -> false
+  end
+
+  let type_satisfies, row_satisfies =
+    (object
+      inherit unl_predicate
+      method! var_satisfies = function
+        | (_, (Linearity.Unl, _), _) -> true
+        | _ -> false
+    end)#predicates
+
+  let can_type_be, can_row_be =
+    (object
+      inherit unl_predicate
+      method! var_satisfies = function
+        | (_, (Linearity.Unl, _), _) -> true
+        | (_, _, `Flexible) -> true
+        | (_, _, `Rigid) -> false
+    end)#predicates
+
+  let make_type, make_row = (object
+     inherit type_iter as super
+
+     method! visit_type vars = function
+       | `Not_typed -> assert false
+       | `Effect _ | `Primitive _ | `Function _ | `Table _ | `Lens _ | `Application _ -> ()
+       | (`Record _ | `Variant _ | `Alias _ | `MetaTypeVar _ | `ForAll _ | `Dual _) as t
+         -> super#visit_type vars t
+       | `RecursiveApplication _ -> ()
+       | _ -> assert false
+
+     method! visit_var point = function
+       | (_, (Linearity.Unl, _), _) -> ()
+       | (v, (_, sk), `Flexible) -> Unionfind.change point (`Var (v, (lin_unl, sk), `Flexible))
+       | (_, _, `Rigid) -> assert false
+   end)#visitors
+end
+
+module Session : Constraint = struct
+  open Restriction
+
+  module SessionPredicate = struct
+    class klass = object
+      inherit type_predicate as super
+
+      method! type_satisfies ((rec_appls, _, _) as vars) = function
+        | #session_type -> true
+        | (`Alias _ | `MetaTypeVar _) as t -> super#type_satisfies vars t
+        | (`RecursiveApplication { r_unique_name; _ }) as t ->
+           if StringSet.mem r_unique_name rec_appls then
+             false
+           else
+             super#type_satisfies vars t
+        | _ -> false
+    end
+  end
+
+  let type_satisfies, row_satisfies = make_restriction_predicate (module SessionPredicate) Session false
+  let can_type_be, can_row_be = make_restriction_predicate (module SessionPredicate) Session true
+  let make_type, make_row =
+    (object
+       inherit type_iter as super
+
+       method! visit_var point = function
+         | (_, (_, Session), _) -> ()
+         | (v, (l, sk), `Flexible) ->
+            begin
+              match Restriction.min sk Session with
+              | Some Session -> Unionfind.change point (`Var (v, (l, sk), `Flexible))
+              | _ -> assert false
+            end
+         | (_, _, `Rigid) -> assert false
+
+       method! visit_type vars = function
+         | #session_type -> ()
+         | ty -> super#visit_type vars ty
+     end)#visitors
+end
+
+module Mono : Constraint = struct
+  open Restriction
+
+     module MonoPredicate = struct
+       class klass = object
+         inherit type_predicate as super
+
+         method! type_satisfies vars = function
+           | `ForAll _ -> false
+           | t -> super#type_satisfies vars t
+       end
+     end
+
+  let type_satisfies, row_satisfies = make_restriction_predicate (module MonoPredicate) Session false
+
+  let can_type_be, can_row_be =
+    (object
+       inherit MonoPredicate.klass
+
+       method! var_satisfies = function
+         | (_, (_, Mono), _) -> true
+         | (_, _, `Rigid) -> true
+         | (_, (_, sk), `Flexible) ->
+              (* Mono is substantially more lax - we just require that we can unify with any subkind *)
+              match Restriction.min sk Mono with
+              | Some _ -> true
+              | None -> false
+     end)#predicates
+
+  let make_type, make_row = make_restriction_transform ~ensure:true Mono
+end
+
+let get_restriction_constraint : Restriction.t -> (module Constraint) option =
+  let open Restriction in
   function
-  | `Absent -> ()
-  | `Present t -> make_type_unl vars t
-  | `Var point -> make_point_unl make_field_unl vars point
-and make_row_unl vars (fields, row_var, _) =
-  make_point_unl make_row_unl vars row_var;
-  FieldEnv.iter (fun _name -> make_field_unl vars) fields
-
-let make_type_unl = make_type_unl (IntSet.empty, IntSet.empty)
-let make_row_unl = make_row_unl (IntSet.empty, IntSet.empty)
-
-(* session kind stuff *)
-
-let is_session_point : (var_set -> 'a -> bool) -> var_set -> [< 'a meta_max_basis] point -> bool =
-  fun f rec_vars point ->
-    match Unionfind.find point with
-    | `Closed
-    | `Var (_, (_, Restriction.Session), _) -> true
-    | `Var _ -> false
-    | `Body t -> f rec_vars t
-    | `Recursive (var, t) ->
-      check_rec var rec_vars true (flip f t)
-
-let rec is_session_type : var_set -> typ -> bool =
-  fun rec_vars ->
-    function
-    | #session_type -> true
-    | `Alias (_, t) -> is_session_type rec_vars t
-    | `MetaTypeVar point -> is_session_point is_session_type rec_vars point
-    | _ -> false
-
-let rec is_session_field rec_vars =
-  function
-  | `Absent -> true
-  | `Present t -> is_session_type rec_vars t
-  | `Var point -> is_session_point is_session_field rec_vars point
-
-let rec is_session_row rec_vars (fields, row_var, _) =
-  let session_row_var = is_session_point is_session_row rec_vars row_var in
-  let session_fields =
-    FieldEnv.fold
-      (fun _ f b -> b && is_session_field rec_vars f)
-      fields
-      true
-  in
-    session_row_var && session_fields
-
-
-let is_sessionable_point : (var_set -> 'a -> bool) -> var_set -> [< 'a meta_max_basis] point -> bool =
-  fun f rec_vars point ->
-    match Unionfind.find point with
-    | `Closed
-    | `Var (_, (_, Restriction.Session), _)
-    | `Var (_, (_, Restriction.Any),     `Flexible) -> true
-    | `Var (_, (_, Restriction.Base),    `Rigid)
-    | `Var (_, (_, Restriction.Any),     `Rigid)
-    | `Var (_, (_, Restriction.Effect),  `Rigid)
-    | `Var (_, (_, Restriction.Effect),  `Flexible)
-    | `Var (_, (_, Restriction.Base),    `Flexible) -> false
-    | `Body t -> f rec_vars t
-    | `Recursive (var, t) ->
-      check_rec var rec_vars true (flip f t)
-
-let rec is_sessionable_type : StringSet.t -> var_set -> typ -> bool =
-  fun rec_appls rec_vars ->
-    function
-    | #session_type -> true
-    | `Alias (_, t) -> is_sessionable_type rec_appls rec_vars t
-    | `RecursiveApplication { r_unique_name; r_args; r_dual; r_unwind; _ } ->
-        if StringSet.mem r_unique_name rec_appls  then
-          false
-        else
-          let body = r_unwind r_args r_dual in
-          is_sessionable_type (StringSet.add r_unique_name rec_appls) rec_vars body
-    | `MetaTypeVar point ->
-        is_sessionable_point (is_sessionable_type rec_appls) rec_vars point
-    | _ -> false
-
-let rec is_sessionable_field rec_vars =
-  function
-  | `Absent -> true
-  | `Present t -> is_sessionable_type StringSet.empty rec_vars t
-  | `Var point -> is_sessionable_point is_sessionable_field rec_vars point
-
-let rec is_sessionable_row rec_vars (fields, row_var, _) =
-  let session_row_var = is_sessionable_point is_sessionable_row rec_vars row_var in
-  let session_fields =
-    FieldEnv.fold
-      (fun _ f b -> b && is_sessionable_field rec_vars f)
-      fields
-      true
-  in
-    session_row_var && session_fields
-
-(* precondition: point is sessionable *)
-let sessionify_point : (var_set -> 'a -> unit) -> var_set -> [< 'a meta_max_basis] point -> unit =
-  fun f rec_vars point ->
-    match Unionfind.find point with
-    | `Closed
-    | `Var (_,   (_,   Restriction.Session), _)     -> ()
-    | `Var (var, (lin, Restriction.Any), `Flexible) ->
-       Unionfind.change point (`Var (var, (lin, Restriction.Session), `Flexible))
-    | `Var _                             -> assert false
-    | `Body t                            -> f rec_vars t
-    | `Recursive (var, t)                -> check_rec var rec_vars () (flip f t)
-
-let rec sessionify_type : var_set -> typ -> unit =
-  fun rec_vars ->
-    function
-    | #session_type -> ()
-    | `RecursiveApplication _ -> ()
-    | `Alias (_, t) -> sessionify_type rec_vars t
-    | `MetaTypeVar point -> sessionify_point sessionify_type rec_vars point
-    | _ -> assert false
-
-let rec sessionify_field rec_vars =
-  function
-  | `Absent -> ()
-  | `Present t -> sessionify_type rec_vars t
-  | `Var point -> sessionify_point sessionify_field rec_vars point
-
-let rec sessionify_row rec_vars (fields, row_var, _) =
-  sessionify_point sessionify_row rec_vars row_var;
-  FieldEnv.iter
-    (fun _ f -> sessionify_field rec_vars f)
-    fields
-
-let is_session_type = is_session_type IntSet.empty
-let is_session_row = is_session_row IntSet.empty
-
-let is_sessionable_type = is_sessionable_type StringSet.empty IntSet.empty
-let is_sessionable_row = is_sessionable_row IntSet.empty
-
-let sessionify_type = sessionify_type IntSet.empty
-let sessionify_row = sessionify_row IntSet.empty
+  | Any | Effect -> None
+  | Base -> Some (module Base)
+  | Session -> Some (module Session)
+  | Mono -> Some (module Mono)
 
 type datatype = typ [@@deriving show]
 
