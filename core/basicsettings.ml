@@ -223,7 +223,7 @@ module TypeSugar = struct
 
   (* Shall we re-run the frontend type-checker after each TransformSugar transformation? *)
   let check_frontend_transformations =
-    Settings.add_bool("recheck_frontend_transformations", false, `User)
+    Settings.add_bool("recheck_frontend_transformations", true, `User)
 
   let check_frontend_transformations_dump =
     Settings.add_bool("recheck_frontend_transformations_dump", false, `User)
