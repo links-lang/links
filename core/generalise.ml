@@ -1,5 +1,6 @@
 open Utility
 open Types
+open CommonTypes
 
 (* debug flags *)
 let show_generalisation = Basicsettings.Generalise.show_generalisation
@@ -144,23 +145,6 @@ let rigidify_type_arg : type_arg -> unit =
     | `Presence (`Var point)    -> rigidify_point point
     | _ -> raise (internal_error "Not a type-variable argument.")
 
-(** Only flexible type variables should have the mono restriction. When we
-   quantify over such variables (and so rigidify them), we need to convert any
-   latent Mono variables into the more general Any one. *)
-let mono_type_args : type_arg -> unit =
-  let check_sk point =
-    match Unionfind.find point with
-    | `Var (var, (lin, CommonTypes.Restriction.Mono), `Flexible) ->
-       Unionfind.change point (`Var (var, (lin, CommonTypes.Restriction.Any), `Flexible))
-    | _ -> ()
-  in
-  function
-  | `Type (`MetaTypeVar point) -> check_sk point
-  | `Row (_, point, _) -> check_sk point
-  | `Presence (`Var point) -> check_sk point
-  | _ -> ()
-
-
 
 (** An alternative to generalise, which replaces all variables with rigid
    alternatives.
@@ -183,13 +167,19 @@ let generalise_with_subst :
       | _ -> t in
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
-    List.iter mono_type_args type_args;
     let quantifiers = Types.quantifiers_of_type_args type_args in
     let quantifiers, map, quantified = match quantifiers with
       | [] -> [], (IntMap.empty, IntMap.empty, IntMap.empty), t
       | old_quantifiers ->
          let fresh_quantifiers, args =
            List.fold_right (fun (_, kind) (quantifiers, args) ->
+               (* Apply the same transformation as mono_type_args, but only on
+                  the inner quantifiers - we don't want to touch the external
+                  type arguments. *)
+               let kind = match kind with
+                 | pk, (lin, Restriction.Mono) -> pk, (lin, Restriction.Any)
+                 | k -> k
+               in
                let quant', arg = Types.fresh_quantifier kind in
                (quant' :: quantifiers, arg :: args))
              old_quantifiers ([], [])
@@ -199,6 +189,22 @@ let generalise_with_subst :
     in
     Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
     ((quantifiers, type_args), map, quantified)
+
+(** Only flexible type variables should have the mono restriction. When we
+   quantify over such variables (and so rigidify them), we need to convert any
+   latent Mono variables into the more general Any one. *)
+let mono_type_args : type_arg -> unit =
+  let check_sk point =
+    match Unionfind.find point with
+    | `Var (var, (lin, Restriction.Mono), `Flexible) ->
+       Unionfind.change point (`Var (var, (lin, Restriction.Any), `Flexible))
+    | _ -> ()
+  in
+  function
+  | `Type (`MetaTypeVar point) -> check_sk point
+  | `Row (_, point, _) -> check_sk point
+  | `Presence (`Var point) -> check_sk point
+  | _ -> ()
 
 (** generalise:
     Universally quantify any free type variables in the expression.

@@ -7,7 +7,7 @@ import concurrent.futures, threading, multiprocessing
 from subprocess import Popen, PIPE
 
 successes = failures = ignored = 0
-TIMEOUT = 15 # seconds before a test is timed out.
+TIMEOUT = 30 # seconds before a test is timed out.
 
 the_lock = threading.Lock()
 
