@@ -869,7 +869,7 @@ and unify_rows' : ?var_sk:subkind -> unify_env -> ((row * row) -> unit) =
                   if M.can_row_be extension_row then
                     M.make_row extension_row
                   else
-                    let message = Printf.sprintf "Cannot unify the %s row viariable %d with the non-%s row %s."
+                    let message = Printf.sprintf "Cannot unify the %s row variable %d with the non-%s row %s."
                                     (Restriction.to_string rest) var (Restriction.to_string rest) (string_of_row extension_row)
                     in raise (Failure (`Msg message))
              end;

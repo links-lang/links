@@ -830,7 +830,7 @@ module Session : Constraint = struct
          | (v, (l, sk), `Flexible) ->
             begin
               match Restriction.min sk Session with
-              | Some Session -> Unionfind.change point (`Var (v, (l, sk), `Flexible))
+              | Some Session -> Unionfind.change point (`Var (v, (l, Session), `Flexible))
               | _ -> assert false
             end
          | (_, _, `Rigid) -> assert false
