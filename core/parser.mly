@@ -943,9 +943,12 @@ block_contents:
 | exp                                                          { ([], $1) }
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
 
+labeled_exp:
+| preceded(COLON, VARIABLE)                                    { ($1, with_pos $loc (Var $1)) }
+| separated_pair(record_label, EQ, exp)                        { $1 }
+
 labeled_exps:
-| separated_nonempty_list(COMMA,
-    separated_pair(record_label, EQ, exp))                     { $1 }
+| separated_nonempty_list(COMMA, labeled_exp)                  { $1 }
 
 /*
  * Datatype grammar

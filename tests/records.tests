@@ -95,3 +95,11 @@ exit : 1
 Possibly absent label in a closed row
 fun (x : (a{%b}|%c)) {x : ()}
 stdout : fun : (()) -> ()
+
+Record field punning (1)
+var hello = "hellooo"; (:hello)
+stdout : (hello = "hellooo") : (hello:String)
+
+Record field punning (2)
+var hello = "hellooo"; (:hello, world = 5)
+stdout : (hello = "hellooo", world = 5) : (hello:String,world:Int)
