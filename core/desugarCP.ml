@@ -110,10 +110,12 @@ object (o : 'self_type)
             let o = o#restore_envs envs in
 
             let eff_fields, eff_row, eff_closed = Types.flatten_row o#lookup_effects in
+            let eff_fields = StringMap.remove wild_str eff_fields in
             let eff_fields =
-              eff_fields
-              |> StringMap.remove wild_str
-              |> StringMap.remove Value.session_exception_operation
+              if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+                StringMap.remove Value.session_exception_operation eff_fields
+              else
+                eff_fields
             in
 
             let left_block =
