@@ -23,7 +23,7 @@ let type_section env =
       let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
       let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
-        `ForAll (Types.box_quantifiers [ab; rhob; eb],
+        `ForAll ([ab; rhob; eb],
                  `Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.lookup env var
 
@@ -60,7 +60,7 @@ let type_binary_op env tycon_env =
   | Name "<>" ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
       let eb, e = Types.fresh_row_quantifier (lin_any, res_any) in
-        `ForAll (Types.box_quantifiers [ab; eb],
+        `ForAll ([ab; eb],
                  `Function (Types.make_tuple_type [a; a], e,
                             `Primitive Primitive.Bool))
   | Name "!"     -> TyEnv.lookup env "Send"

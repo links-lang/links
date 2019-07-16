@@ -20,7 +20,11 @@ let rec add_extras in_fun qs (extras, tyargs) =
      let q = if in_fun then
                Types.type_arg_of_quantifier q
              else
-               snd (Types.freshen_quantifier_flexible q)
+               let open CommonTypes.PrimaryKind in
+               match q with
+               | _, (Type, sk) -> `Type (Types.fresh_type_variable sk)
+               | _, (Row, sk) -> `Row (Types.make_empty_open_row sk)
+               | _, (Presence, sk) -> `Presence (Types.fresh_presence_variable sk)
      in q :: add_extras in_fun qs (extras, tyargs)
   | _::qs, Some i::extras -> List.nth tyargs i :: add_extras in_fun qs (extras, tyargs)
   | _, _ -> raise (internal_error "Mismatch in number of quantifiers and type arguments")

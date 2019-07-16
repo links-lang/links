@@ -141,7 +141,7 @@ object (o : 'self_type)
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in
-        let ft : Types.datatype = `ForAll (Types.box_quantifiers [ab; rhob;  effb],
+        let ft : Types.datatype = `ForAll ([ab; rhob;  effb],
                                            `Function (Types.make_tuple_type [r], eff, a)) in
 
         let pss = [[variable_pat ~ty:r x]] in

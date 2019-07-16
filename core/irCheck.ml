@@ -184,10 +184,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `ForAll (qs, t) ->
         begin match collapse_toplevel_forall t with
           | `ForAll (qs', t') ->
-              `ForAll (Types.box_quantifiers (Types.unbox_quantifiers qs @ Types.unbox_quantifiers qs'), t')
+              `ForAll (qs @ qs', t')
           | t ->
               begin
-                match Types.unbox_quantifiers qs with
+                match qs with
                   | [] -> t
                   | _ -> `ForAll (qs, t)
               end
@@ -303,15 +303,15 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | `ForAll (qs', t') ->
             let (context', quantifiers_match) =
               List.fold_left2 (fun (context, prev_eq) lqvar rqvar ->
-                  let lid, _ , _ = lqvar in
-                  let rid, _, _ = rqvar in
+                  let lid, _ = lqvar in
+                  let rid, _ = rqvar in
                   let l_kind = Types.kind_of_quantifier lqvar in
                   let r_kind = Types.kind_of_quantifier rqvar in
                   let ctx' = { typevar_subst = IntMap.add lid rid context.typevar_subst;
                                tyenv = Env.bind context.tyenv (rid, r_kind)
                              } in
                   (ctx', prev_eq && l_kind = r_kind)
-                ) (context,true) (Types.unbox_quantifiers qs) (Types.unbox_quantifiers qs') in
+                ) (context,true) qs qs' in
             if quantifiers_match then
               eqt (context', t, t')
             else false

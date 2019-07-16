@@ -452,6 +452,13 @@ struct
     | _, [] -> []
     | _, h :: t -> h :: take (n - 1) t
 
+  let rec split n list = match n, list with
+    | 0, xs -> ([], xs)
+    | _, [] -> ([], [])
+    | _, h :: t ->
+       let (x, y) = split (n - 1) t in
+       (h :: x, y)
+
   let remove x = List.filter ((<>)x)
 
   let concat_map f l =

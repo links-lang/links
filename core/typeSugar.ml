@@ -3072,67 +3072,44 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               *)
               begin
                 match Types.concrete_type (typ f) with
-                  | `ForAll (qs, `Function (fps, fe, _)) as t ->
+                  | `ForAll (_, (`Function _ | `Lolli _)) as t ->
+                     begin
+                       match Instantiate.typ t with
+                       | tyargs, (`Function (fps, fe, rettyp) | `Lolli (fps, fe, rettyp) as t) ->
+                          let mkft (a, e, r) = match t with
+                            | `Function _ -> `Function (a, e, r)
+                            | `Lolli _ -> `Lolli (a, e, r)
+                          in
+                          (* the free type variables in the arguments (and effects) *)
+                          let arg_vars = Types.TypeVarSet.union (Types.free_type_vars fps) (Types.free_row_type_vars fe) in
+                          (* return true if this quantifier appears free in the arguments (or effects) *)
+                          let free_in_arg q = Types.TypeVarSet.mem (Types.var_of_quantifier q) arg_vars in
 
-                      (* the free type variables in the arguments (and effects) *)
-                      let arg_vars =
-                        Types.TypeVarSet.union (Types.free_type_vars fps) (Types.free_row_type_vars fe) in
+                          (* quantifiers for the return type *)
+                          let rqs =
+                            if Settings.get_value dodgey_type_isomorphism then
+                              let rta, rqs =
+                                List.map (fun q -> (q, Types.quantifier_of_type_arg q)) tyargs
+                                |> List.filter (fun (_, q) -> free_in_arg q)
+                                |> List.split
+                              in
+                              List.iter Generalise.rigidify_type_arg rta;
+                              rqs
+                            else
+                              []
+                          in
 
-                      (* return true if this quantifier appears free in the arguments (or effects) *)
-                      let free_in_arg q = Types.TypeVarSet.mem (Types.var_of_quantifier q) arg_vars in
-
-                      (*
-                        since we've smashed through the quantifiers, we should
-                        make any remaining quantifiers flexible
-                      *)
-
-                      (* xs is a list of tuples of the shape:
-                         (original quantifier, (fresh quantifier, fresh type argument))
-                      *)
-                      let xs =
-                        List.map
-                          (fun q ->
-                             q, Types.freshen_quantifier_flexible q)
-                          (Types.unbox_quantifiers qs) in
-
-                      (* quantifiers for the return type *)
-                      let rqs =
-                        if Settings.get_value dodgey_type_isomorphism then
-                          (fst -<- List.split -<- snd -<- List.split)
-                            (List.filter
-                               (fun (q, _) -> not (free_in_arg q))
-                               xs)
-                        else
-                          [] in
-
-                      (* type arguments to apply f to *)
-                      let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
-                        begin
-                          match Instantiate.apply_type t tyargs with
-                            | `Function (fps, fe, rettyp) ->
-                                let rettyp = Types.for_all (rqs, rettyp) in
-                                let ft = `Function (fps, fe, rettyp) in
-                                let f' = erase f in
-                                let e = tabstr (rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
-                                  unify ~handle:Gripers.fun_apply
-                                    ((exp_pos f, ft), no_pos (`Function (Types.make_tuple_type (List.map typ ps),
-                                                                         context.effect_row,
-                                                                         rettyp)));
-                                  e, rettyp, merge_usages (usages f :: List.map usages ps)
-                            | `Lolli (fps, fe, rettyp) ->
-                                let rettyp = Types.for_all (rqs, rettyp) in
-                                let ft = `Function (fps, fe, rettyp) in
-                                let f' = erase f in
-                                let e = tabstr (rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
-                                  unify ~handle:Gripers.fun_apply
-                                    ((exp_pos f, ft), no_pos (`Lolli (Types.make_tuple_type (List.map typ ps),
-                                                                      context.effect_row,
-                                                                      rettyp)));
-                                  e, rettyp, merge_usages (usages f :: List.map usages ps)
-                            | _ ->
-                                assert false
-                        end
-
+                          let rettyp = Types.for_all (rqs, rettyp) in
+                          let ft = `Function (fps, fe, rettyp) in
+                          let f' = erase f in
+                          let e = tabstr (rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
+                          unify ~handle:Gripers.fun_apply
+                            ((exp_pos f, ft), no_pos (mkft (Types.make_tuple_type (List.map typ ps),
+                                                            context.effect_row,
+                                                            rettyp)));
+                          e, rettyp, merge_usages (usages f :: List.map usages ps)
+                       | _ -> assert false
+                     end
                   | ft ->
                       let rettyp = Types.fresh_type_variable (lin_any, res_any) in
                       begin
@@ -3403,22 +3380,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let r = tc r in
               begin
                 match TypeUtils.concrete_type (typ r) with
-                  | `ForAll (qs, `Record _row) as t ->
-                      let xs =
-                        List.map
-                          (fun q ->
-                             q, Types.freshen_quantifier_flexible q)
-                          (Types.unbox_quantifiers qs) in
-
-                      (* type arguments to apply r to *)
-                      let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
-
-                      let rt = Instantiate.apply_type t tyargs in
+                  | `ForAll (_, `Record _) as t ->
+                      let tyargs, rt = Instantiate.typ t in
 
                       let field_env, _row_var, lr =
                         match rt with
                         | `Record row -> fst (Types.unwrap_row row)
-                        | _ -> assert false in
+                        | _ -> assert false
+                      in
                       assert (not lr);
                       begin
                         match StringMap.lookup l field_env with
@@ -3431,11 +3400,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           let free_in_body q = Types.TypeVarSet.mem (Types.var_of_quantifier q) vars in
 
                           (* quantifiers for the projected type *)
-                          let pqs =
-                            (fst -<- List.split -<- snd -<- List.split)
-                              (List.filter
-                                 (fun (q, _) -> free_in_body q)
-                                 xs) in
+                          let pta, pqs =
+                            List.map (fun q -> (q, Types.quantifier_of_type_arg q)) tyargs
+                            |> List.filter (fun (_, q) -> free_in_body q)
+                            |> List.split
+                          in
+                          List.iter Generalise.rigidify_type_arg pta;
 
                           let fieldtype = Types.for_all (pqs, t) in
 
@@ -3998,11 +3968,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
             else
               (* All rigid type variables in bt should appear in the
                  environment *)
-              let tyvars = Generalise.get_quantifiers context.var_env bt in
-              if List.exists Types.is_rigid_quantifier tyvars then
-                Gripers.value_restriction pos bt
-              else
-                [], erase_pat pat, penv
+              let tyvars = Generalise.get_quantifiers_rigid context.var_env bt in
+              match tyvars with
+              | [] -> [], erase_pat pat, penv
+              | _ -> Gripers.value_restriction pos bt
           in
             Val (pat, (tyvars, body), location, datatype),
             {empty_context with
@@ -4271,11 +4240,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
                            let outer_tyvars, outer =
                              match t_ann with
                              | Some (`ForAll (outer_tyvars, _) as outer) ->
-                                Types.unbox_quantifiers outer_tyvars, outer
+                                outer_tyvars, outer
                              | None -> body_tyvars, gen
                              | Some t -> body_tyvars, Types.for_all (body_tyvars, t) in
-
-                           let inner_tyvars = Types.unbox_quantifiers inner_tyvars in
 
                            (* check that every member of body_tyvars is also in outer_tyvars *)
                            if not
@@ -4466,12 +4433,10 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let grab_ty = (Env.lookup context.var_env "receive") in
        let tyargs =
          match Types.concrete_type grab_ty with
-         | `ForAll (qs, _t) ->
-            let xs = List.map (fun q -> q, Types.freshen_quantifier_flexible q) (Types.unbox_quantifiers qs) in
-            let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
+         | `ForAll _ ->
             begin
-              match Instantiate.apply_type grab_ty tyargs with
-              | `Function (fps, _fe, _rettype) ->
+              match Instantiate.typ grab_ty with
+              | tyargs, `Function (fps, _fe, _rettype) ->
                  unify ~pos:pos ~handle:(Gripers.cp_grab "") (Types.make_tuple_type [ctype], fps);
                  tyargs
               | _ -> assert false
@@ -4496,12 +4461,10 @@ and type_cp (context : context) = fun {node = p; pos} ->
        let give_ty = (Env.lookup context.var_env "send") in
        let tyargs =
          match Types.concrete_type give_ty with
-         | `ForAll (qs, _t) ->
-            let xs = List.map (fun q -> q, Types.freshen_quantifier_flexible q) (Types.unbox_quantifiers qs) in
-            let tyargs = (snd -<- List.split -<- snd -<- List.split) xs in
+         | `ForAll _ ->
             begin
-              match Instantiate.apply_type give_ty tyargs with
-              | `Function (fps, _fe, _rettpe) ->
+              match Instantiate.typ give_ty with
+              | tyargs, `Function (fps, _fe, _rettpe) ->
                  unify ~pos:pos ~handle:(Gripers.cp_give "") (Types.make_tuple_type [t'; ctype], fps);
                  tyargs
               | _ -> assert false

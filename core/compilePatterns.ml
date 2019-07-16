@@ -868,8 +868,7 @@ and match_record
         let bindings =
           let qs =
             match restt with
-              | `ForAll (qs, _) ->
-                  Types.unbox_quantifiers qs
+              | `ForAll (qs, _) -> qs
               | _ -> [] in
           let tyargs = List.map Types.type_arg_of_quantifier qs in
             Let (restb, (qs, Return (tapp (Erase (names, Variable var), tyargs)))) :: bindings in
