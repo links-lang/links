@@ -211,6 +211,23 @@ let extract_quantifiers quantifiers =
 let env_type_vars (env : Types.environment) =
   TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
 
+(** Only flexible type variables should have the mono restriction. When we
+   quantify over such variables (and so rigidify them), we need to convert any
+   latent Mono variables into the more general Any one. *)
+let mono_type_args : type_arg -> unit =
+  let check_sk point =
+    match Unionfind.find point with
+    | `Var (var, (lin, CommonTypes.Restriction.Mono), `Flexible) ->
+       Unionfind.change point (`Var (var, (lin, CommonTypes.Restriction.Any), `Flexible))
+    | _ -> ()
+  in
+  function
+  | `Type (`MetaTypeVar point) -> check_sk point
+  | `Row (_, point, _) -> check_sk point
+  | `Presence (`Var point) -> check_sk point
+  | _ -> ()
+
+
 (** An alternative to generalise, which replaces all variables with rigid
    alternatives.
 
@@ -232,6 +249,7 @@ let generalise_with_subst :
       | _ -> t in
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
+    List.iter mono_type_args type_args;
     let quantifiers = Types.quantifiers_of_type_args type_args in
     let quantifiers, map, quantified = match quantifiers with
       | [] -> [], (IntMap.empty, IntMap.empty, IntMap.empty), t
@@ -259,22 +277,6 @@ let rigidify_quantifier : quantifier -> unit =
     | (_, _, `Type point)     -> rigidify_point point
     | (_, _, `Row point)      -> rigidify_point point
     | (_, _, `Presence point) -> rigidify_point point
-
-(** Only flexible type variables should have the mono restriction. When we
-   quantify over such variables (and so rigidify them), we need to convert any
-   latent Mono variables into the more general Any one. *)
-let mono_type_args : type_arg -> unit =
-  let check_sk point =
-    match Unionfind.find point with
-    | `Var (var, (lin, CommonTypes.Restriction.Mono), `Flexible) ->
-       Unionfind.change point (`Var (var, (lin, CommonTypes.Restriction.Any), `Flexible))
-    | _ -> ()
-  in
-  function
-  | `Type (`MetaTypeVar point) -> check_sk point
-  | `Row (_, point, _) -> check_sk point
-  | `Presence (`Var point) -> check_sk point
-  | _ -> ()
 
 (** generalise:
     Universally quantify any free type variables in the expression.
