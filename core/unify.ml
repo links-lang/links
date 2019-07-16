@@ -606,7 +606,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
       -> unify' rec_env (t, t'); ut (s, s')
     | `Select row, `Select row'
       | `Choice row, `Choice row' ->
-       unify_rows' rec_env (row, row')
+       unify_rows' ~var_sk:(lin_any, res_session) rec_env (row, row')
     | `Dual s, `Dual s' -> ut (s, s')
     (* DODGEYNESS: dual_type doesn't doesn't necessarily make the type smaller -
        the following could potentially lead to non-termination *)
@@ -692,13 +692,13 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
        | `Body f' -> unify_presence' rec_env (f, f')
      end
 
-and unify_rows' : unify_env -> ((row * row) -> unit) =
+and unify_rows' : ?var_sk:subkind -> unify_env -> ((row * row) -> unit) =
   let unwrap_row r =
     let r', rvar = unwrap_row r in
     (* Debug.print (Printf.sprintf "Unwrapped row %s giving %s\n" (string_of_row r) (string_of_row r')); *)
     r', rvar in
 
-  fun rec_env (lrow, rrow) ->
+  fun ?(var_sk=(lin_any, res_any)) rec_env (lrow, rrow) ->
   Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row lrow) ^ " with row: " ^ (string_of_row rrow));
 
   let is_unguarded_recursive row =
@@ -1049,7 +1049,7 @@ and unify_rows' : unify_env -> ((row * row) -> unit) =
            unify_field_envs ~closed:false ~rigid:false rec_env (lfield_env', rfield_env');
 
            (* a fresh row variable common to the left and the right *)
-           let fresh_row_var = fresh_row_variable (lin_any, res_any) in
+           let fresh_row_var = fresh_row_variable var_sk in
 
            (* each row can contain fields missing from the other *)
            let rextension = StringMap.filter (fun label _ -> not (StringMap.mem label rfield_env')) lfield_env' in
