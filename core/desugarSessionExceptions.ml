@@ -88,10 +88,9 @@ object (o : 'self_type)
         let o = o#restore_envs envs in
         let (o, otherwise_phr, otherwise_dt) = o#phrase otherwise_phr in
         (* Now, to create a handler... *)
-        (* Otherwise clause: Distinguished 'session failure' name. Since
-         * we'll never use the continuation (and this is invoked after pattern
-         * deanonymisation in desugarHandlers), generate a fresh name for the
-         * continuation argument. *)
+        (* Otherwise clause: Distinguished 'session failure'
+           name. Since * we'll never use the continuation, generate a
+           fresh name for the * continuation argument. *)
 
         let outer_effects = o#lookup_effects in
 
@@ -103,8 +102,11 @@ object (o : 'self_type)
             |> Types.row_with (failure_op_name, `Present fail_cont_ty)
             |> Types.flatten_row in
 
-        let cont_pat = variable_pat ~ty:(Types.make_function_type [] inner_effects (Types.empty_type))
-          (Utility.gensym ~prefix:"dsh" ()) in
+        let cont_pat =
+          let ty = Types.make_function_type [] inner_effects (Types.empty_type) in
+          (variable_pat ~ty
+             (Utility.gensym ~prefix:"dsh" ())), ty
+        in
 
         let otherwise_pat : Sugartypes.Pattern.with_pos =
           with_dummy_pos (Pattern.Operation { label = failure_op_name; parameters = []; resumption = Some cont_pat }) in

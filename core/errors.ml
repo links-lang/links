@@ -166,6 +166,7 @@ let format_exception =
      let message =
        Printf.sprintf "Syntax error: Foreign binders cannot contain single quotes `'`.\nIn expression: %s." expr
      in
+     pos_prefix ~pos message
   | EffectPatternBelowToplevel pos ->
      let message = "Effect patterns must be at the top level of a handler case." in
      let pos, _ = Position.resolve_start_expr pos in
