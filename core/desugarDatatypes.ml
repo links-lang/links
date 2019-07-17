@@ -33,9 +33,10 @@ let duplicate_var pos var =
   Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)
 
 (** Construct an error for when a type alias has free variables within it. *)
-let free_type_variable pos name =
-  if name.[0] = '_' || name.[0] = '$' then Type_error (pos, "Unbound anonymous type variable.")
-  else Type_error (pos, Printf.sprintf "Unbound type variable `%s'." name)
+let free_type_variable ?var pos =
+  match var with
+  | None -> Type_error (pos, "Unbound anonymous type variable.")
+  | Some name -> Type_error (pos, Printf.sprintf "Unbound type variable `%s'." name)
 
 let tygroup_counter = ref 0
 
@@ -66,70 +67,26 @@ let concrete_subkind =
   | Some subkind -> subkind
   | None         -> default_subkind
 
-(** Replaces all placeholder variables with a fresh one. *)
-class basic_freshener = object
-  inherit SugarTraversals.map as super
+let is_anon x = x.[0] = '$'
 
-  method! known_type_variable =
-    let module SC = SugarConstructors.SugartypesPositions in
-    function
-    | (("$" | "$anon"), sk, freedom) ->
-       let (var, _, _) = SC.fresh_known_type_variable freedom in
-       super#known_type_variable (var, sk, freedom)
-    | v -> super#known_type_variable v
-end
+(** If this function type is exclusively composed of anonymous effect type
+   variables. Or rather, there are no explicitly mentioned effect variables. *)
+let all_anon_effects = object
+  inherit SugarTraversals.predicate as super
 
-let freshen_vars =
-  let module SC = SugarConstructors.SugartypesPositions in
-  (* Determine if this is an "anonymous" effect type variable, and so introduced
-     within a simple arrow (->, ~>, -@, ~>) *)
-  let is_anon_effect = function
-    | Datatype.Open ("$anon", None, `Rigid) -> true
+  val all_anon = true
+  method satisfied = all_anon
+
+  method! datatypenode =
+    let open Datatype in
+    let is_anon_effect = function
+    | Datatype.Open ("$eff", None, `Rigid) -> true
     | _ -> false in
-  (* If this function type is exclusively composed of anonymous effect type
-     variables. Or rather, there are no explicitly mentioned effect variables. *)
-  let all_anon_effects = object
-    inherit SugarTraversals.predicate as super
-
-    val all_anon = true
-    method satisfied = all_anon
-
-    method! datatypenode = let open Datatype in
-      function
-      | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _)
-           when not (is_anon_effect eff_var) -> {<all_anon = false>}
-      | ty -> super#datatypenode ty
-  end in
-
-  let basic_refresh = new basic_freshener
-  and shared_refresh var = object
-    inherit basic_freshener as super
-    method! datatypenode = let open Datatype in
-      function
-      | Function (args, (effects, eff_var), ret) when is_anon_effect eff_var
-        -> super#datatypenode (Function (args, (effects, var), ret))
-      | Lolli (args, (effects, eff_var), ret) when is_anon_effect eff_var
-        -> super#datatypenode (Lolli (args, (effects, var), ret))
-      | ty -> super#datatypenode ty
-  end in
-
-  object
-    inherit basic_freshener as super
-    method! datatypenode = let open Datatype in
-      function
-      | (Function _ | Lolli _) as dt ->
-         (* If effect_sugar is enabled, and all variables are fresh (and so not
-            explicitly named), then we will substitute the same variable across
-            all arrows. Otherwise every arrow gets its own row variable, as
-            normal. *)
-         if Settings.get_value Basicsettings.Types.effect_sugar
-            && (all_anon_effects#datatypenode dt)#satisfied then
-           let var = Datatype.Open (SC.fresh_known_type_variable `Rigid) in
-           (shared_refresh var)#datatypenode dt
-         else
-           basic_refresh#datatypenode dt
-      | dt -> super#datatypenode dt
-  end
+    function
+    | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _)
+         when not (is_anon_effect eff_var) -> {<all_anon = false>}
+    | ty -> super#datatypenode ty
+end
 
 (** Ensure this variable has some kind, if {!Basicsettings.Types.infer_kinds} is disabled. *)
 let ensure_kinded = function
@@ -204,6 +161,7 @@ object (self)
 
   method! datatypenode = let open Datatype in
     function
+    | TypeVar (x, _, _) when is_anon x -> self
     | TypeVar (x, k, freedom) -> self#add (x, (Some pk_type, k), freedom)
     | Mu (v, t)       -> self#quantified (fun o -> o#datatype t) [(v, (Some pk_type, None), `Rigid)]
     | Forall (qs, t)  -> self#quantified (fun o -> o#datatype t) qs
@@ -211,18 +169,30 @@ object (self)
 
   method! row_var = let open Datatype in function
     | Closed               -> self
+    | Open (x, _, _) when is_anon x -> self
     | Open (x, k, freedom) -> self#add (x, (Some pk_row, k), freedom)
     | Recursive (s, r)     -> self#quantified (fun o -> o#row r) [(s, (Some pk_row, None), `Rigid)]
 
   method! fieldspec = let open Datatype in function
     | Absent -> self
     | Present t -> self#datatype t
+    | Var (x, _, _) when is_anon x -> self
     | Var (x, k, freedom) -> self#add (x, (Some pk_presence, k), freedom)
 end
 
-type var_env = { tyvars : meta_var StringMap.t } [@@unboxed]
+type var_env = {
+    tyvars : meta_var StringMap.t; (** The currently in-scope type variables. *)
+    effect_var : meta_row_var Lazy.t option; (** The active implicit effect variable, if set. *)
+    allow_fresh : bool; (** Whether to allow creating anonymous type variables. *)
+  }
 
-let empty_env = { tyvars = StringMap.empty }
+let empty_env allow_fresh = {
+    tyvars = StringMap.empty;
+    effect_var = None;
+    allow_fresh
+  }
+
+let closed_env = empty_env false
 
 let kind_error pos var expected = function
   | Some d ->
@@ -233,19 +203,19 @@ let kind_error pos var expected = function
         | `Presence _ -> PrimaryKind.Presence
       in
       typevar_primary_kind_mismatch pos var ~expected ~actual
-  | None -> free_type_variable pos var
+  | None -> free_type_variable ~var pos
 
-let lookup_tvar pos t { tyvars } =
+let lookup_tvar pos t { tyvars; _ } =
   match StringMap.find_opt t tyvars with
   | Some (`Type v) -> v
   | x -> raise (kind_error pos t PrimaryKind.Type x)
 
-let lookup_rvar pos t { tyvars } =
+let lookup_rvar pos t { tyvars; _ } =
   match StringMap.find_opt t tyvars with
   | Some (`Row v) -> v
   | x -> raise (kind_error pos t PrimaryKind.Row x)
 
-let lookup_pvar pos t { tyvars } =
+let lookup_pvar pos t { tyvars; _ } =
   match StringMap.find_opt t tyvars with
   | Some (`Presence v) -> v
   | x -> raise (kind_error pos t PrimaryKind.Presence x)
@@ -269,7 +239,7 @@ module Desugar = struct
 
     ListLabels.fold_right ~init:([], var_env) qs
       ~f:(fun (name, (primarykind, subkind), _freedom)
-              (args, { tyvars }) ->
+              (args, ({ tyvars; _ } as env)) ->
             let var = Types.fresh_raw_variable () in
             let subkind = concrete_subkind subkind in
             let open PrimaryKind in
@@ -287,7 +257,12 @@ module Desugar = struct
               | None -> raise (internal_error "Undesugared kind")
             in
             (quant :: args,
-             { tyvars = StringMap.add name def tyvars }) )
+             { env with tyvars = StringMap.add name def tyvars }) )
+
+   let make_anon_point var_env pos sk freedom =
+     if not var_env.allow_fresh then raise (free_type_variable pos);
+     let var = Types.fresh_raw_variable () in
+     Unionfind.fresh (`Var (var, concrete_subkind sk, freedom))
 
   let rec datatype var_env (alias_env : Types.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
@@ -295,6 +270,8 @@ module Desugar = struct
     | { node = t; pos } ->
       let open Datatype in
       match t with
+        | TypeVar (name, sk, freedom) when is_anon name ->
+             `MetaTypeVar (make_anon_point var_env pos sk freedom)
         | TypeVar (s, _, _) -> `MetaTypeVar (lookup_tvar pos s var_env)
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) ->
@@ -310,7 +287,7 @@ module Desugar = struct
             (* FIXME: shouldn't we support other subkinds for recursive types? *)
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tyvars = StringMap.add name (`Type point) var_env.tyvars in
-            let _ = Unionfind.change point (`Recursive (var, datatype { tyvars } t)) in
+            let _ = Unionfind.change point (`Recursive (var, datatype { var_env with tyvars } t)) in
               `MetaTypeVar point
         | Forall (qs, t) ->
             let (qs: Types.quantifier list), var_env = desugar_quantifiers var_env qs t pos in
@@ -414,6 +391,8 @@ module Desugar = struct
     match fs with
     | Absent -> `Absent
     | Present t -> `Present (datatype var_env alias_env t)
+    | Var (name, sk, freedom) when is_anon name ->
+       `Var (make_anon_point var_env pos sk freedom)
     | Var (name, _, _) -> `Var (lookup_pvar pos name var_env)
 
   and row var_env alias_env (fields, rv) (node : 'a WithPos.t) =
@@ -421,12 +400,21 @@ module Desugar = struct
       let open Datatype in
       match rv with
         | Closed -> Types.make_empty_closed_row ()
+        | Open ("$eff", sk, freedom) ->
+           let rv =
+             match var_env.effect_var with
+             | None -> make_anon_point var_env node.pos sk freedom
+             | Some (lazy p) -> p
+           in
+           (StringMap.empty, rv, false)
+        | Open (name, sk, freedom) when is_anon name ->
+           (StringMap.empty, make_anon_point var_env node.pos sk freedom, false)
         | Open (rv, _, _) -> (StringMap.empty, lookup_rvar node.pos rv var_env, false)
         | Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tyvars = StringMap.add name (`Row point) var_env.tyvars in
-            let _ = Unionfind.change point (`Recursive (var, row { tyvars } alias_env r node)) in
+            let _ = Unionfind.change point (`Recursive (var, row { var_env with tyvars } alias_env r node)) in
             (StringMap.empty, point, false)
     in
     let fields = List.map (fun (k, p) -> (k, fieldspec var_env alias_env p node)) fields in
@@ -484,9 +472,9 @@ module Desugar = struct
 
   (* pre condition: all subkinds have been filled in *)
   let generate_var_mapping (vars : type_variable list) : Types.quantifier list * var_env =
-    let addt x t envs = { tyvars = StringMap.add x (`Type t) envs.tyvars } in
-    let addr x r envs = { tyvars = StringMap.add x (`Row r) envs.tyvars } in
-    let addf x f envs = { tyvars = StringMap.add x (`Presence f) envs.tyvars } in
+    let addt x t envs = { envs with tyvars = StringMap.add x (`Type t) envs.tyvars } in
+    let addr x r envs = { envs with tyvars = StringMap.add x (`Row r) envs.tyvars } in
+    let addf x f envs = { envs with tyvars = StringMap.add x (`Presence f) envs.tyvars } in
     let vars, var_env =
       List.fold_left
         (fun (vars, envs) ->
@@ -507,12 +495,29 @@ module Desugar = struct
                (* Shouldn't occur; we are assuming that all subkinds have been
                 * filled in*)
                assert false)
-        ([], empty_env)
+        ([], empty_env true)
         vars
     in
       List.rev vars, var_env
 
-  let datatype' map alias_env ((dt, _) : datatype') = (dt, Some (datatype map alias_env dt))
+  let datatype' map alias_env ((dt, _) : datatype') =
+    (* If effect_sugar is enabled, and all variables are fresh (and so not
+       explicitly named), then we will use the same effect variable across the
+       whole type. *)
+    let map =
+      if map.allow_fresh &&
+        Settings.get_value Basicsettings.Types.effect_sugar
+         && (all_anon_effects#datatype dt)#satisfied then
+        let point =
+          lazy begin
+              let var = Types.fresh_raw_variable () in
+              Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid))
+            end
+        in { map with effect_var = Some point }
+      else
+        map
+    in
+    (dt, Some (datatype map alias_env dt))
 
   (* Desugar a foreign function declaration. Foreign declarations cannot use type variables from
      the context. Any type variables found are implicitly universally quantified at this point. *)
@@ -524,7 +529,7 @@ module Desugar = struct
      types by looking for readonly constraints *)
   let tableLit alias_env constraints dt =
     let read_type =
-      match datatype' empty_env alias_env (dt, None) with
+      match datatype' closed_env alias_env (dt, None) with
       | _, Some read_type -> read_type
       | _ -> assert false
     in
@@ -604,7 +609,7 @@ object (self)
         let (mutual_env, venvs_map) =
           List.fold_left (fun (alias_env, venvs_map) (t, args, (d, _), pos) ->
             let qs = List.map fst args in
-            let qs, var_env =  Desugar.desugar_quantifiers empty_env qs d pos in
+            let qs, var_env =  Desugar.desugar_quantifiers closed_env qs d pos in
             let venvs_map = StringMap.add t var_env venvs_map in
             (SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)), venvs_map) )
             (alias_env, venvs_map) ts in
@@ -714,7 +719,6 @@ object (self)
 end
 
 let phrase alias_env p =
-  let p = freshen_vars#phrase p in
   let tvars = (typevars#phrase p)#tyvar_list in
     (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#phrase p
 
@@ -724,7 +728,6 @@ let binding alias_env ({ node; pos } as b : binding) =
       let bnds =
         List.map
           (fun bnd ->
-            let bnd = freshen_vars#recursive_function bnd in
             let tvars = (typevars#bindingnode (Funs [ bnd ]))#tyvar_list in
             (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#recursive_function bnd
             |> snd )
@@ -732,7 +735,6 @@ let binding alias_env ({ node; pos } as b : binding) =
       in
       (alias_env, WithPos.make ~pos (Funs bnds))
   | _ ->
-      let b = freshen_vars#binding b in
       let tvars = (typevars#binding b)#tyvar_list in
       let o, b = (desugar alias_env (snd (Desugar.generate_var_mapping tvars)))#binding b in
       (o#aliases, b)
@@ -765,6 +767,6 @@ let sentence typing_env = function
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
-  let dt = freshen_vars#datatype dt in
-  let vars, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
-    (Types.for_all (vars, Desugar.datatype var_env aliases dt))
+  let _, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
+  let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype var_env aliases dt) in
+  ty
