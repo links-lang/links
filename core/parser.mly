@@ -944,7 +944,7 @@ block_contents:
 | SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exp:
-| preceded(COLON, VARIABLE)                                    { ($1, with_pos $loc (Var $1)) }
+| preceded(EQ, VARIABLE)                                       { ($1, with_pos $loc (Var $1)) }
 | separated_pair(record_label, EQ, exp)                        { $1 }
 
 labeled_exps:
@@ -1261,7 +1261,7 @@ patterns:
 | separated_nonempty_list(COMMA, pattern)                      { $1 }
 
 labeled_pattern:
-| preceded(COLON, VARIABLE)                                    { ($1, variable_pat ~ppos:$loc $1) }
+| preceded(EQ, VARIABLE)                                       { ($1, variable_pat ~ppos:$loc $1) }
 | separated_pair(record_label, EQ,  pattern)                   { $1 }
 
 labeled_patterns:
