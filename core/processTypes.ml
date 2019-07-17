@@ -78,7 +78,7 @@ struct
     fresh_name ()
     |> make_name_with_id
 
-  let compare n1 n2 = Pervasives.compare n1 n2
+  let compare n1 n2 = compare n1 n2
   let equal n1 n2 = (compare n1 n2) = 0
   let to_string n = n
   let of_string n = n

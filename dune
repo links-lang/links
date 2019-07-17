@@ -10,7 +10,7 @@
          )))
  (release
   (flags (:standard
-          ;; The following flags are the same as for the "development" profile.
+          ;; The following flags are the same as for the "dev" profile.
           -strict-formats -strict-sequence -safe-string -annot
           -w A-4-44-45-60 ;; Ignore warnings 4, 44, 45, and 60.
           ))
