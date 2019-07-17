@@ -16,6 +16,7 @@ let rec type_of_lens_phrase_type t =
   match t with
   | LPT.Bool -> PT.Bool |> primitive
   | LPT.Int -> PT.Int |> primitive
+  | LPT.Serial -> PT.Int |> primitive
   | LPT.Char -> PT.Char |> primitive
   | LPT.Float -> PT.Float |> primitive
   | LPT.String -> PT.String |> primitive

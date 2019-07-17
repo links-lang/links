@@ -47,3 +47,9 @@ let negate v ~value =
   match v with
   | None -> Some value
   | Some _ -> None
+
+let equal f v1 v2 =
+  match (v1, v2) with
+  | None, None -> true
+  | Some v1, Some v2 -> f v1 v2
+  | _ -> false
