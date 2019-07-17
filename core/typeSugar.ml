@@ -2186,8 +2186,38 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
        *      penv ++ kenv
        *    in
        *    Effect (name, List.map erase ps, erase k), env, (eff ot, eff it) *)
-      | Operation _ -> assert false
-      | MultiOperation _ -> assert false
+      | Operation { label; parameters; resumption } ->
+         let type_resumption_pattern resume =
+           let (resume, env, dt) = type_resumption_pattern ~arity:1 resume in
+           (resume, env, (dt, dt))
+         in
+         let parameters = List.map tp parameters in
+         let resumption = opt_map (fst ->- type_resumption_pattern) resumption in
+         let op typ =
+           let domain = List.map typ parameters in
+           let t =
+             let codomain = match opt_map (typ ->- TypeUtils.arg_types ~overstep_quantifiers:true) resumption with
+               | None -> Types.fresh_type_variable (lin_any, res_any)
+               | Some [t] -> t
+               | Some _ -> assert false (* The (shallow) resumption is always unary. *)
+             in
+             (* Construct an operation type, i.e. op : A -> B. *)
+             Types.make_operation_type domain codomain
+           in
+           `Effect (make_singleton_row (label, `Present t))
+         in
+         let env =
+           List.fold_right (env ->- (++))
+             parameters
+             (from_option Env.empty (opt_map env resumption))
+         in
+         let resumption = match resumption with
+           | Some resumption ->
+              Some (erase resumption, ot resumption)
+           | None -> None
+         in
+         Operation { label; parameters = List.map erase parameters; resumption }, env, (op ot, op it)
+      | MultiOperation _ -> assert false (* FIXME TODO. *)
       | Negative names ->
         let row_var = Types.fresh_row_variable (lin_any, res_any) in
 
@@ -3578,14 +3608,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else
                 Gripers.upcast_subtype pos t2 t1
         | Upcast _ -> assert false
-        | Handle { expressions; cases; _ } ->
+        | Handle { expressions; cases; descriptor } ->
            ignore
              (if not (Settings.get_value Basicsettings.Handlers.enabled)
               then raise (Errors.disabled_extension
                             ~pos ~setting:("enable_handlers", true)
                             ~flag:"--enable-handlers" "Handlers"));
           (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
-           let make_operations_presence_polymorphic : Types.row -> Types.row
+           let _make_operations_presence_polymorphic : Types.row -> Types.row
              = fun row ->
              let (operations, rho, dual) = row in
              let operations' =
@@ -3599,7 +3629,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
              (operations', rho, dual)
            in
-           let arity = List.length expressions in
            let type_expressions context exps =
              let type_expression context exp =
                (* Refresh the effect context. *)
@@ -3620,7 +3649,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
              (expressions, eff)
            in
-           let type_effect_cases context arity cases =
+           let type_cases context arity cases =
              let arity_check { patterns; _ } =
                if List.length patterns <> arity
                then raise (Errors.handle_arity_mismatch pos)
@@ -3633,6 +3662,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let allocate_type_vector arity =
                Array.init arity (fun _ -> Types.fresh_type_variable (lin_unl, res_any))
              in
+             let allocate_list_vector length =
+               Array.init length (fun _ -> [])
+             in
              let is_operation_pattern = function
                | { node = Pattern.Operation _ | Pattern.MultiOperation _; _ } -> true
                | _ -> false
@@ -3640,15 +3672,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let value_types = allocate_type_vector arity in
              let operation_types = allocate_type_vector arity in
              (* Type patterns. *)
-             let value_matrix = Hashtbl.create arity in
-             let effect_matrix = Hashtbl.create arity in
+             let value_patterns = allocate_list_vector arity in
+             let operation_patterns = allocate_list_vector arity in
              let classify i pat =
-               let matrix =
+               let vector =
                  if is_operation_pattern (fst3 pat)
-                 then (unify ~handle:Gripers.handle_operation_patterns (no_pos operation_types.(i), ppos_and_typ pat); effect_matrix)
-                 else (unify ~handle:Gripers.handle_value_patterns (no_pos value_types.(i), ppos_and_typ pat); value_matrix)
+                 then (unify ~handle:Gripers.handle_operation_patterns (no_pos operation_types.(i), ppos_and_typ pat); operation_patterns)
+                 else (unify ~handle:Gripers.handle_value_patterns (no_pos value_types.(i), ppos_and_typ pat); value_patterns)
                in
-               Hashtbl.add matrix i (fst3 pat)
+               vector.(i) <- (fst3 pat) :: vector.(i)
+             in
+             let resume_arity =
+               arity + from_option 0
+                         (opt_map ((fun { shp_bindings; _ } -> shp_bindings) ->- List.length) descriptor.shd_params)
              in
              let cases =
                List.fold_left
@@ -3656,21 +3692,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    (* Type each pattern. *)
                    let patterns' = List.map tpo patterns in
                    let () = List.iteri classify patterns' in
-                   let resumption' = opt_map (fun (p, _) -> type_resumption_pattern p) resumption in
+                   let resumption' = opt_map (fun (p, _) -> type_resumption_pattern ~arity:resume_arity p) resumption in
                    (patterns', resumption', body) :: cases)
                  [] cases
              in
              (* Close value and operation patterns. *)
-             let close_pattern_types arity matrix types =
+             let close_pattern_types arity patterns types =
                for i = 0 to arity - 1 do
-                 match Hashtbl.find_all matrix i with
+                 match patterns.(i) with
                  | [] -> ()
                  | patterns ->
                     types.(i) <- close_pattern_type patterns types.(i)
                done
              in
-             close_pattern_types arity value_matrix value_types;
-             close_pattern_types arity effect_matrix operation_types;
+             close_pattern_types arity value_patterns value_types;
+             close_pattern_types arity operation_patterns operation_types;
              (* Type check bodies. *)
              (* let extend context patterns =
               *   List.fold_left
@@ -3682,8 +3718,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                  (fun env pat -> Env.extend env (pattern_env pat))
                  Env.empty patterns
              in
-             let body_type =
-               let body_type = Types.fresh_type_variable (lin_unl, res_any) in
+             let body_type = Types.fresh_type_variable (lin_unl, res_any) in
+             let cases =
                List.fold_left
                  (fun cases (patterns, resumption, body) ->
                    let env =
@@ -3696,18 +3732,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      unify ~handle:Gripers.handle_branches (no_pos body_type, pos_and_typ body)
                    in
                    let () =
-                     match resumption with
-                     | None -> ()
-                     | Some resumption ->
-                        unify ~handle:Gripers.handle_deep_resumption_codomain (pos_and_typ body, ppos_and_typ resumption)
+                     opt_iter
+                       (fun resumption ->
+                         unify ~handle:Gripers.handle_deep_resumption_codomain (pos_and_typ body, ppos_and_typ resumption))
+                       resumption
                    in
                    let () =
                      Env.iter
                        (fun v t ->
                          let uses = uses_of v (usages body) in
                          if uses <> 1
-                         then if Types.type_can_be_unl t
-                              then Types.make_type_unl t
+                         then if Types.Unl.can_type_be t
+                              then Types.Unl.make_type t
                               else Gripers.non_linearity pos uses v t)
                        env
                    in
@@ -3716,16 +3752,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    (patterns, resumption, update_usages body us) :: cases)
                  [] cases
              in
-             (* Type check deep resumptions. *)
-             (* Type check shallow resumptions. *)
-             (* Type check the bodies. *)
-             (* let type_effect_case context arity return_types body_type { pattern; resumption; body } =
-              *   let body = type_check context body
-              *   assert false
-              * in *)
+             (cases, body_type, value_types)
+           in
+           (* Type check deep resumptions. *)
+           let type_deep_resumption _context _arity _body_type _i _case =
              assert false
            in
-           let (expressions, _inner_eff) = type_expressions context expressions in
+           (* Type check shallow resumptions. *)
+           let type_shallow_resumption _context _value_types _i _case =
+             assert false
+           in
+           (* Type check the bodies. *)
+           let arity = List.length expressions in
+           (* let type_effect_case context arity return_types body_type { pattern; resumption; body } =
+            *   let body = type_check context body
+            *   assert false
+            * in *)
+           let (_expressions, _inner_eff) = type_expressions context expressions in
+           let (cases, body_type, value_types) = type_cases context arity cases in
+           List.iteri (type_deep_resumption context arity body_type) cases;
+           List.iteri (type_shallow_resumption context value_types) cases;
            (* let return_types =
             *   List.map (fun (exp, _) -> typ exp) expressions
             * in *)
