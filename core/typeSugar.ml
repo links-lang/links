@@ -4527,6 +4527,16 @@ and type_cp (context : context) = fun {node = p; pos} ->
        CPComp (Binder.set_type bndr s, left, right), t', merge_usages [u; u'] in
   WithPos.make ~pos p, t, u
 
+let type_check_general context body =
+  let body, typ, _ = type_check context body in
+  let typ =
+    if Utils.is_generalisable body then
+      snd (Utils.generalise context.var_env typ)
+    else
+      typ
+  in
+  body, typ
+
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
 let show_post_sugar_typing = Basicsettings.TypeSugar.show_post_sugar_typing
 
@@ -4551,7 +4561,7 @@ struct
         match body with
         | None -> (bindings, None), Types.unit_type, tyenv'
         | Some body ->
-          let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
+          let body, typ = type_check_general (Types.extend_typing_environment tyenv tyenv') body in
           let typ = Types.normalise_datatype typ in
           (bindings, Some body), typ, tyenv' in
       Debug.if_set show_post_sugar_typing
@@ -4572,7 +4582,7 @@ struct
         let tyenv' = Types.normalise_typing_environment tyenv' in
         Definitions bindings, Types.unit_type, tyenv'
       | Expression body ->
-        let body, t, _ = (type_check tyenv body) in
+        let body, t = type_check_general tyenv body in
         let t = Types.normalise_datatype t in
         Expression body, t, tyenv
       | Directive d -> Directive d, Types.unit_type, tyenv in
