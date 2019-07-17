@@ -5,9 +5,6 @@
 #                 forms, so we simulate inputs in this example)
 #
 
-# Standard types
-typename Comp(e::Row, a) = () { |e}~> a;
-
 # Simulation of input via prompt
 sig input : (String) {Input:(String) {}-> a |_}~> a
 fun input(s) {println(s); do Input(s)}
@@ -48,7 +45,7 @@ fun catchFail(m)() {
   }
 }
 
-sig printResult : (Comp({ |e}, Int)) ~e~> ()
+sig printResult : (Comp(Int)) ~> ()
 fun printResult(m) {
   handle(m()) {
     case Return(x) -> println("Sum is " ^^ intToString(x))

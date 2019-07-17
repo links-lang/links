@@ -3,12 +3,12 @@
 typename Unit = [|Unit|];
 
 # State monad
-typename State (e::Row,a,s) = (s) { |e}~> (s,a);
+typename State (e::Eff,a,s) = (s) { |e}~> (s,a);
 
-sig return : (a) -e-> State({ |e}, a, s)
+sig return : (a) -> State(a, s)
 fun return(v)(st) {(st, v)}
 
-sig run : (State({ |e}, a, s), s) ~e~> (s, a)
+sig run : (State(a, s), s) ~> (s, a)
 fun run(m,st) {m(st)}
 
 sig bind : (State({ |e}, a, s), (a) ~e~> State({ |e}, b, s)) -> State({ |e}, b, s)
@@ -20,7 +20,7 @@ fun bind(m,k)(st) {
 infixl 1 >>=;
 op m >>= k {bind(m,k)}
 
-sig get : State({ |e}, s, s)
+sig get : State(s, s)
 fun get(s) {(s,s)}
 
 sig put : (s) -> State({ |e}, Unit, s)

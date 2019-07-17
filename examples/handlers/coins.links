@@ -25,7 +25,7 @@ fun allResults(m) {
 
 typename Toss = [|Heads|Tails|];
 
-sig drunkToss : CF({ |_}, Toss)
+sig drunkToss : CF(Toss)
 fun drunkToss() {
   if (choice()) {
     choose(Heads, Tails)

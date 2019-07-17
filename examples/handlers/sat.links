@@ -269,10 +269,10 @@ fun satisfies(pred)() {
 sig char : (Char) -> Parser({ |e}, Char)
 fun char(c) { satisfies(fun(k) { k == c }) }
 
-sig peek : Parser({ |e}, Maybe(Char))
+sig peek : Parser(Maybe(Char))
 fun peek() { do Peek }
 
-sig succeed : (a) -> Parser({ |e}, a)
+sig succeed : (a) -> Parser(a)
 fun succeed(x)() { x }
 
 sig many : (Parser({ |e}, a)) ~> Parser({ |e}, [a])
@@ -298,7 +298,7 @@ fun isLetter(c) {
   || (ord(c) >= 97 && ord(c) <= 122)
 }
 
-sig parseLetter : Parser({ |e}, Char)
+sig parseLetter : Parser(Char)
 fun parseLetter() {
   satisfies(isLetter)()
 }
@@ -310,7 +310,7 @@ fun parseString(str)() {
    str
 }
 
-sig parseName : Parser({ |e}, String)
+sig parseName : Parser(String)
 fun parseName() {
   var cs = many1(parseLetter)();
   implode(cs)
@@ -323,7 +323,7 @@ fun isWhitespace(c) {
   || ord(c) == ord('\n')
 }
 
-sig whitespace : Parser({ |e}, ())
+sig whitespace : Parser(())
 fun whitespace() { while(satisfies(isWhitespace))() }
 
 sig parens : (Parser({ |e}, a)) -> Parser({ |e}, a)
@@ -336,7 +336,7 @@ fun parens(p)() {
   result
 }
 
-sig parseEof : Parser({ |e}, ())
+sig parseEof : Parser(())
 fun parseEof() {
   switch (peek()) {
     case Nothing -> ()
