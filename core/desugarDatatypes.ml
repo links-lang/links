@@ -328,24 +328,29 @@ module Desugar = struct
                        })
                 else (q, t)
               in
-              let type_arg' var_env alias_env = function
-                | Row r -> `Row (effect_row var_env alias_env r t')
-                | t -> type_arg var_env alias_env t t'
+              let type_args ?(offset=0) qs ts =
+                List.combine qs ts
+                |> List.mapi
+                     (fun i (q,t) ->
+                       let (q, t) = match_kinds (i + offset) (q, t) in
+                       match t, subkind_of_quantifier q with
+                       | Row r, (_, Restriction.Effect) -> `Row (effect_row var_env alias_env r t')
+                       | _ -> type_arg var_env alias_env t t')
               in
-              begin
-                try
-                  let ts = ListUtils.zip' qs ts in
-                  List.mapi
-                    (fun i (q,t) ->
-                      let (q, t) = match_kinds i (q, t) in
-                      match subkind_of_quantifier q with
-                      | (_, Restriction.Effect) -> type_arg' var_env alias_env t
-                      | _ -> type_arg var_env alias_env t t') ts
-                with
-                  ListUtils.Lists_length_mismatch ->
-                    raise
-                    (TypeApplicationArityMismatch
-                       { pos; name = tycon; expected = List.length qs; provided = List.length ts }) end in
+
+              let qn = List.length qs and tn = List.length ts in
+              match qs, var_env.effect_var with
+              | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Some eff when qn = tn + 1 ->
+                 (* If we've got a typename with an effect variable as the first
+                    argument, and we're not applying it fully, then add the
+                    implicit effect var. *)
+                 let eff = (StringMap.empty, Lazy.force eff, false) in
+                 `Row eff  ::  type_args ~offset:(-1) qs ts
+              | _ when qn = tn -> type_args qs ts
+              | _ ->
+                 raise (TypeApplicationArityMismatch
+                         { pos; name = tycon; expected = List.length qs; provided = List.length ts })
+            in
             begin match SEnv.find alias_env tycon with
               | None -> raise (UnboundTyCon (pos, tycon))
               | Some (`Alias (qs, _dt)) ->

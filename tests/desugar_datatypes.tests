@@ -89,3 +89,13 @@ foralls cannot repeat variables
 () : forall a::Type, a::Type. a
 exit : 1
 stderr : @.*Multiple definitions of type variable `a'.\.*
+
+Sugar for shared effect variables in functions
+fun (f, x: Int) { f(x) + 0 }
+stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
+args : --config=tests/effect_sugar.config
+
+Sugar for shared effect variables in type applications
+sig forever : (Comp(a)) ~> b fun forever(f) { ignore(f()); forever(f) } forever
+stdout : fun : (Comp ({ |a::Eff },b)) ~a~> _
+args : --config=tests/effect_sugar.config
