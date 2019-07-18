@@ -5,6 +5,7 @@
           -strict-sequence ;; Enforces the lhs of a sequence to have type `unit'.
           -safe-string     ;; Immutable strings.
           -annot           ;; Dumps information per (file) module about types, bindings, tail-calls, etc. Used by some tools.
+          -warn-error -a+31 ;; Only error on warning 31.
           -w A-4-44-45-60  ;; Ignores warnings 4, 44, 45, and 60.
           -g               ;; Adds debugging information to the resulting executable / library.
          )))
