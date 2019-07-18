@@ -166,6 +166,11 @@ let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overs
   | (t, _) ->
      error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
 
+let arity ?(overstep_quantifiers=true) t =
+  try List.length (arg_types ~overstep_quantifiers t)
+  with _ ->
+     error ("Attempt to take arity of non-function: " ^ string_of_datatype t)
+
 let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers)  with
   | (`ForAll (_, t), true) -> effect_row t
   | (`Function (_, effects, _), _) -> effects

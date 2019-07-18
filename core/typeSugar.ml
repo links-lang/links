@@ -224,6 +224,8 @@ sig
   val handle_branches : griper
   val handle_combine_effect_rows : griper
   val handle_deep_resumption_codomain : griper
+  val handle_deep_resumption_nth : int -> griper
+  val handle_deep_resumption_nth_val : int -> griper
   val resumption_type_annotation : griper
   (* val type_resumption_with_annotation : griper
    * val deep_resumption : griper
@@ -662,14 +664,49 @@ end
                          "while the current context allows" ^ nl () ^
                            tab () ^ code (show_type expected))
 
+    let word_of_number num =
+      let words =
+        [|"zero"; "one"; "two"; "three"; "four";
+          "five"; "six"; "seven"; "eight"; "nine"|]
+      in
+      let suffixes = [|"st"; "nd"; "rd"|] in
+      let word = if num >= 0 && num <= 9 then words.(num)
+                 else string_of_int num
+      in
+      let rest = num mod 10 in
+      if rest >= 1 && rest <= 3 then Printf.sprintf "%s%s" word suffixes.(rest-1)
+      else Printf.sprintf "%s%s" word "th"
+
+    let handle_deep_resumption_nth n ~pos ~t1:(_pattern, expected) ~t2:(resumption, actual) ~error:_ =
+      build_tyvar_names [expected; actual];
+      let nth = word_of_number n in
+      die pos ("Type expectation mismatch between the operation and its resumption, " ^ nl() ^
+                 "the " ^ nth ^ " parameter of the resumption" ^
+                   tab () ^ code resumption ^ nl() ^
+                     "has type" ^ nl() ^
+                       tab() ^ code (show_type actual) ^ nl() ^
+                         "while it is expected to have type" ^ nl() ^
+                           tab () ^ code (show_type expected))
+
+    let handle_deep_resumption_nth_val n ~pos ~t1:(_pattern, expected) ~t2:(resumption, actual) ~error:_ =
+      build_tyvar_names [expected; actual];
+      let nth = word_of_number n in
+      die pos ("Type expectation mismatch for resumption, " ^ nl() ^
+                 "the " ^ nth ^ " parameter of the resumption" ^
+                   tab () ^ code resumption ^ nl() ^
+                     "has type" ^ nl() ^
+                       tab() ^ code (show_type actual) ^ nl() ^
+                         "while it is expected to have type" ^ nl() ^
+                           tab () ^ code (show_type expected))
+
     let handle_deep_resumption_codomain ~pos ~t1:(_body, expected) ~t2:(resumption, actual) ~error:_ =
       build_tyvar_names [expected; actual];
-      die pos ("The return type of a deep resumption must be the same as the body type of the handler, " ^ nl() ^
+      die pos ("The return type of a deep resumption must be the same as the body type of its handler, " ^ nl() ^
                  "but the resumption" ^ nl() ^
                    tab () ^ code resumption ^ nl() ^
                      "has return type" ^ nl() ^
                        tab () ^ code (show_type actual) ^ nl() ^
-                         "while the body type of the handler is" ^ nl () ^
+                         "while the body type of its handler is" ^ nl () ^
                            tab () ^ code (show_type expected))
 
     let do_operation ~pos ~t1:(_,lt) ~t2:(rexpr,rt) ~error:_ =
@@ -3614,6 +3651,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               then raise (Errors.disabled_extension
                             ~pos ~setting:("enable_handlers", true)
                             ~flag:"--enable-handlers" "Handlers"));
+           let number_of_parameters = match descriptor.shd_params with
+             | None -> 0
+             | Some params -> List.length params.shp_bindings
+           in
           (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let _make_operations_presence_polymorphic : Types.row -> Types.row
              = fun row ->
@@ -3628,6 +3669,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                  operations
              in
              (operations', rho, dual)
+           in
+           let is_operation_pattern = function
+             | { node = Pattern.Operation _ | Pattern.MultiOperation _; _ } -> true
+             | _ -> false
+           in
+           let operation_label = function
+             | { node = Pattern.Operation { label; _ }; _ } -> label
+             | _ -> assert false
            in
            let type_expressions context exps =
              let type_expression context exp =
@@ -3665,10 +3714,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let allocate_list_vector length =
                Array.init length (fun _ -> [])
              in
-             let is_operation_pattern = function
-               | { node = Pattern.Operation _ | Pattern.MultiOperation _; _ } -> true
-               | _ -> false
-             in
              let value_types = allocate_type_vector arity in
              let operation_types = allocate_type_vector arity in
              (* Type patterns. *)
@@ -3683,8 +3728,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                vector.(i) <- (fst3 pat) :: vector.(i)
              in
              let resume_arity =
-               arity + from_option 0
-                         (opt_map ((fun { shp_bindings; _ } -> shp_bindings) ->- List.length) descriptor.shd_params)
+               arity + number_of_parameters
              in
              let cases =
                List.fold_left
@@ -3708,11 +3752,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              close_pattern_types arity value_patterns value_types;
              close_pattern_types arity operation_patterns operation_types;
              (* Type check bodies. *)
-             (* let extend context patterns =
-              *   List.fold_left
-              *     (fun context pat -> context ++ pattern_env pat)
-              *     context patterns
-              * in *)
              let patterns_env patterns =
                List.fold_left
                  (fun env pat -> Env.extend env (pattern_env pat))
@@ -3732,12 +3771,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      unify ~handle:Gripers.handle_branches (no_pos body_type, pos_and_typ body)
                    in
                    let () =
-                     opt_iter
-                       (fun resumption ->
-                         unify ~handle:Gripers.handle_deep_resumption_codomain (pos_and_typ body, ppos_and_typ resumption))
-                       resumption
-                   in
-                   let () =
                      Env.iter
                        (fun v t ->
                          let uses = uses_of v (usages body) in
@@ -3752,11 +3785,34 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    (patterns, resumption, update_usages body us) :: cases)
                  [] cases
              in
-             (cases, body_type, value_types)
+             (cases, body_type, value_types, operation_types)
            in
            (* Type check deep resumptions. *)
-           let type_deep_resumption _context _arity _body_type _i _case =
-             assert false
+           let type_deep_resumption arity value_types operation_types ((patterns, resumption, body) as case) =
+             match resumption with
+             | None -> case
+             | Some resumption ->
+                (* Type the domain of the resumption. *)
+                let arg_types = TypeUtils.arg_types (pattern_typ resumption) in
+                let number_of_parameters = List.length arg_types - arity in
+                let type_nth domain value_types operation_types i pattern =
+                  if is_operation_pattern (fst3 pattern)
+                  then let label  = operation_label (fst3 pattern) in
+                       let expected_typ =
+                         TypeUtils.(extract_row ->- split_row label ->- fst ->- return_type ~overstep_quantifiers:true)
+                           operation_types.(i)
+                       in
+                       (* TODO: perhaps accumulate the errors... *)
+                       unify ~handle:(Gripers.handle_deep_resumption_nth i)
+                         (no_pos expected_typ, (pattern_pos resumption, List.nth domain i))
+                  else unify ~handle:(Gripers.handle_deep_resumption_nth_val i)
+                         (no_pos Types.empty_type, (pattern_pos resumption, List.nth domain i))
+                in
+                List.iteri (type_nth arg_types value_types operation_types) patterns;
+                (* Type the codomain of the resumption. *)
+                unify ~handle:Gripers.handle_deep_resumption_codomain (pos_and_typ body, ppos_and_typ resumption);
+                (* Type the effects of the resumption. *)
+                assert false
            in
            (* Type check shallow resumptions. *)
            let type_shallow_resumption _context _value_types _i _case =
@@ -3768,9 +3824,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             *   let body = type_check context body
             *   assert false
             * in *)
-           let (_expressions, _inner_eff) = type_expressions context expressions in
-           let (cases, body_type, value_types) = type_cases context arity cases in
-           List.iteri (type_deep_resumption context arity body_type) cases;
+           let (_expressions, _actual_eff) = type_expressions context expressions in
+           let (cases, body_type, value_types, operation_types) = type_cases context arity cases in
+           let cases = List.map (type_deep_resumption arity value_types operation_types) cases in
            List.iteri (type_shallow_resumption context value_types) cases;
            (* let return_types =
             *   List.map (fun (exp, _) -> typ exp) expressions
