@@ -330,7 +330,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/sat.links
 examples/handlers/sat.links
 filemode : true
-args : --config=tests/effect_sugar.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/shiftreset.links
 examples/handlers/shiftreset.links
