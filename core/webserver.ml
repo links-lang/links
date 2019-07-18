@@ -3,7 +3,6 @@ open Lwt
 open ProcessTypes
 open Utility
 open Webserver_types
-open Pervasives
 open Var
 
 let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir

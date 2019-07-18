@@ -4,9 +4,6 @@ open ProcessTypes
 open Utility
 open WebsocketMessages
 
-(* We want to shadow |>, so this needs to come after Utility. *)
-open Pervasives
-
 type abort_type = string * string
 exception Aborted of abort_type
 
