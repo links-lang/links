@@ -300,7 +300,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   "sysexit",
-  (p1 (fun ret -> Pervasives.exit (Value.unbox_int ret)),
+  (p1 (fun ret -> exit (Value.unbox_int ret)),
    datatype "(Int) ~> a",
    IMPURE);
 

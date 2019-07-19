@@ -1,4 +1,5 @@
 (lang dune 1.10)
 (using menhir 2.0)
+(using fmt 1.1 (enabled_for ocaml))
 (name links)
 (implicit_transitive_deps false)

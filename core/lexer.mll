@@ -146,7 +146,8 @@ object
     Stack.push lexer lexers
 
   method pop_lexer =
-    let _ = Stack.pop lexers in ()
+    (* We've a stack of functions, so we don't want to apply the result. *)
+    ignore (Stack.pop lexers) [@warning "-5"]
 
   method next_lexer =
     Stack.top lexers
