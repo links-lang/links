@@ -120,7 +120,7 @@ type rec_id =
 
 module RecId = struct
   type t = rec_id [@@deriving show]
-  let compare = Pervasives.compare
+  let compare = compare
 end
 module type RECIDMAP = Utility.Map with type key = rec_id
 module RecIdMap = Map.Make(RecId)

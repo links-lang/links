@@ -4,7 +4,6 @@ open Ir
 open Lwt
 open Utility
 open Proc
-open Pervasives
 open Var
 
 let internal_error message =

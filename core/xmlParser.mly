@@ -4,11 +4,6 @@
 open Utility
 open Value
 
-module Links_core = (* See Note [Dune "wrapped" workaround] in parser.mly *)
-struct
-  module Value = Value
-end
-
 let pos (start, finish) : SourceCode.Position.t =
   SourceCode.Position.make ~start ~finish ~code:None
 

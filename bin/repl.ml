@@ -27,7 +27,7 @@ let print_value rtype value =
     pp_set_margin std_formatter width;
     pp_set_tags std_formatter (Settings.get_value Basicsettings.print_colors);
     pp_set_mark_tags std_formatter (Settings.get_value Basicsettings.print_colors);
-    pp_set_formatter_tag_functions
+    begin [@alert "-deprecated"] pp_set_formatter_tag_functions
       std_formatter
       {mark_open_tag = (function
                         | "constructor" -> "\x1b[32m"
@@ -37,7 +37,8 @@ let print_value rtype value =
        mark_close_tag  = (fun _ -> "\x1b[39m");
        print_open_tag  = ignore;
        print_close_tag = ignore;
-      };
+      }
+    end;
     fprintf std_formatter "@[%a@;<1 4>: %s@]"
             Value.p_value value
             (if Settings.get_value(BS.printing_types) then
