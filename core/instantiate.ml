@@ -341,7 +341,7 @@ let instantiation_maps_of_type_arguments :
         vars, []
       else
         (take tyargs_length vars, drop tyargs_length vars) in
-    let tenv, renv, penv = populate_instantiation_maps (Types.string_of_datatype pt) vars tyargs in
+    let tenv, renv, penv = populate_instantiation_maps "<?>" vars tyargs in
     match remaining_quantifiers with
       | [] -> t, (tenv, renv, penv)
       | _ -> `ForAll (remaining_quantifiers, t),  (tenv, renv, penv)

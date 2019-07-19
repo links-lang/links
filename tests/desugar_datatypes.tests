@@ -95,7 +95,17 @@ fun (f, x: Int) { f(x) + 0 }
 stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
 args : --config=tests/effect_sugar.config
 
-Sugar for shared effect variables in type applications
+Sugar for shared effect variables in type applications (1)
 sig forever : (Comp(a)) ~> b fun forever(f) { ignore(f()); forever(f) } forever
 stdout : fun : (Comp ({ |a::Eff },b)) ~a~> _
+args : --config=tests/effect_sugar.config
+
+Sugar for shared effect variables in type applications (2)
+sig f : Comp(()) fun f() { } f
+stdout : fun : Comp ({ |a::Eff },())
+args : --config=tests/effect_sugar.config
+
+Implicit effect variables are not shared across different functions
+(map, id) : (((a) -> b, [a]) -> [b], (c) -> c)
+stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
 args : --config=tests/effect_sugar.config

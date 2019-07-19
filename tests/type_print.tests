@@ -1,0 +1,34 @@
+Effect sugar: Implicit effect variables (1)
+fun (f, x: Int) { f(x) + 0 } : ((Int) -e-> Int, Int) -e-> Int
+stdout : fun : ((Int) -> Int, Int) -> Int
+args : --config=tests/effect_sugar.config
+
+Effect sugar: Implicit effect variables (2)
+fun (f)(x: Int) { f(x) + 0 } : ((Int) -e-> Int) -f-> (Int) -e-> Int
+stdout : fun : ((Int) -> Int) -> (Int) -> Int
+args : --config=tests/effect_sugar.config
+
+Effect sugar: Single-use variables
+fun(_) { } : (() -_-> ()) -_-> ()
+stdout : fun : (() -_-> ()) -_-> ()
+args : --config=tests/effect_sugar.config
+
+Effect sugar: Shared non-sugared variables (1)
+fun()() { } : () -a-> () -a-> ()
+stdout : fun : () -a-> () -a-> ()
+args : --config=tests/effect_sugar.config
+
+Effect sugar: Shared non-sugared variables (2)
+(fun(){}, fun(){}) : (() -a-> (), () -b-> ())
+stdout : (fun, fun) : (() -> (), () -> ())
+args : --config=tests/effect_sugar.config
+
+Effect sugar: Shared effect variables used elsewhere
+typename Ty (a::Eff) = Int; (fun(){}, 0) : (() -e-> (), Ty({ |e}))
+stdout : (fun, 0) : (() -a-> (), Ty ({ |a }))
+args : --config=tests/effect_sugar.config
+
+Effect sugar: Distinct types
+(fun(){}, fun(){}) : (() -a-> (), () -b-> ())
+stdout : (fun, fun) : (() -> (), () -> ())
+args : --config=tests/effect_sugar.config

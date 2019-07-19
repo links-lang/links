@@ -266,7 +266,7 @@ fun satisfies(pred)() {
   do Satisfies(pred)
 }
 
-sig char : (Char) -> Parser({ |e}, Char)
+sig char : (Char) -> Parser(Char)
 fun char(c) { satisfies(fun(k) { k == c }) }
 
 sig peek : Parser(Maybe(Char))
@@ -275,18 +275,18 @@ fun peek() { do Peek }
 sig succeed : (a) -> Parser(a)
 fun succeed(x)() { x }
 
-sig many : (Parser({ |e}, a)) ~> Parser({ |e}, [a])
+sig many : (Parser(a)) ~> Parser([a])
 fun many(p)() {
   if (choose()) p() :: many(p)()
   else []
 }
 
-sig many1 : (Parser({ |e}, a)) -> Parser({ |e}, [a])
+sig many1 : (Parser(a)) -> Parser([a])
 fun many1(p)() {
   p() :: many(p)()
 }
 
-sig while : (Parser({ |e}, a)) ~> Parser({ |e}, ())
+sig while : (Parser(a)) ~> Parser(())
 fun while(p)() {
   if (choose()) { ignore(p()); while(p)() }
   else ()
@@ -303,7 +303,7 @@ fun parseLetter() {
   satisfies(isLetter)()
 }
 
-sig parseString : (String) -> Parser({ |e}, String)
+sig parseString : (String) -> Parser(String)
 fun parseString(str)() {
    var cs = explode(str);
    iter(fun(c) { ignore(run(char(c))) }, cs);

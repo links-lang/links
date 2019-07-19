@@ -180,15 +180,25 @@ object (self)
     | Var (x, k, freedom) -> self#add (x, (Some pk_presence, k), freedom)
 end
 
+(** The kind of shared effect variable currently in scope. *)
+type shared_effect =
+  | Undefined
+     (** This type does not define a shared effect variable (namely, it is
+         not within a function type. *)
+  | Invalid
+     (** This context mentions explicit effect variables, and so the syntactic
+         sugar cannot be used. *)
+  | Defined of meta_row_var Lazy.t
+
 type var_env = {
     tyvars : meta_var StringMap.t; (** The currently in-scope type variables. *)
-    effect_var : meta_row_var Lazy.t option; (** The active implicit effect variable, if set. *)
+    shared_effect : shared_effect; (** The active shared effect variable, if set. *)
     allow_fresh : bool; (** Whether to allow creating anonymous type variables. *)
   }
 
 let empty_env allow_fresh = {
     tyvars = StringMap.empty;
-    effect_var = None;
+    shared_effect = Undefined;
     allow_fresh
   }
 
@@ -264,6 +274,51 @@ module Desugar = struct
      let var = Types.fresh_raw_variable () in
      Unionfind.fresh (`Var (var, concrete_subkind sk, freedom))
 
+   (** Whether this type may have an shared effect appear within it.
+
+      We insert the shared effect variable at the right most candidate on any
+      function. This will either be the arrow itself, or a type application to a
+      type which accepts an implicit effect. *)
+   let may_have_shared_eff (alias_env : Types.tycon_environment) { node; _ } =
+     let open Datatype in
+     match node with
+     | Function _ | Lolli _ -> true
+     | TypeApplication (tycon, ts) ->
+        begin match SEnv.find alias_env tycon with
+        | Some (`Alias (q :: qs, _) | (`Mutual (q :: qs, _))) ->
+           begin match q with
+           | _, (PrimaryKind.Row, (_, Restriction.Effect)) -> List.length qs = List.length ts
+           | _ -> false
+           end
+        | _ -> false
+        end
+     | _ -> false
+
+   (** Attempt to augment this context with an {!shared_effect}, if possible.
+
+      If effect_sugar is enabled, and all variables are fresh (and so not
+      explicitly named), then we will use the same effect variable across the
+      whole type. *)
+   let wish_shared_effect var_env dt =
+     match var_env.shared_effect with
+     | Undefined ->
+        let var =
+          if var_env.allow_fresh &&
+               Settings.get_value Basicsettings.Types.effect_sugar
+               && (all_anon_effects#datatype dt)#satisfied then
+            let point =
+              lazy begin
+                  let var = Types.fresh_raw_variable () in
+                  Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid))
+                end
+            in
+            Defined point
+          else
+            Invalid
+        in
+        { var_env with shared_effect = var }
+     | _ -> var_env
+
   let rec datatype var_env (alias_env : Types.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
     match t' with
@@ -271,17 +326,21 @@ module Desugar = struct
       let open Datatype in
       match t with
         | TypeVar (name, sk, freedom) when is_anon name ->
-             `MetaTypeVar (make_anon_point var_env pos sk freedom)
+           `MetaTypeVar (make_anon_point var_env pos sk freedom)
         | TypeVar (s, _, _) -> `MetaTypeVar (lookup_tvar pos s var_env)
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) ->
+            let var_env = wish_shared_effect var_env t' in
+            let has_shared = may_have_shared_eff alias_env t in
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
-                      effect_row var_env alias_env e t,
+                      effect_row ~allow_shared:(not has_shared) var_env alias_env e t',
                       datatype var_env t)
         | Lolli (f, e, t) ->
+            let var_env = wish_shared_effect var_env t' in
+            let has_shared = may_have_shared_eff alias_env t in
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
-                       effect_row var_env alias_env e t,
-                       datatype var_env t)
+                    effect_row ~allow_shared:(not has_shared) var_env alias_env e t',
+                    datatype var_env t)
         | Mu (name, t) ->
             let var = Types.fresh_raw_variable () in
             (* FIXME: shouldn't we support other subkinds for recursive types? *)
@@ -328,7 +387,7 @@ module Desugar = struct
                        })
                 else (q, t)
               in
-              let type_args ?(offset=0) qs ts =
+              let type_args ?(offset=0) var_env qs ts =
                 List.combine qs ts
                 |> List.mapi
                      (fun i (q,t) ->
@@ -339,14 +398,15 @@ module Desugar = struct
               in
 
               let qn = List.length qs and tn = List.length ts in
-              match qs, var_env.effect_var with
-              | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Some eff when qn = tn + 1 ->
+              let var_env' = wish_shared_effect var_env t' in
+              match qs, var_env'.shared_effect with
+              | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Defined eff when qn = tn + 1 ->
                  (* If we've got a typename with an effect variable as the first
                     argument, and we're not applying it fully, then add the
                     implicit effect var. *)
                  let eff = (StringMap.empty, Lazy.force eff, false) in
-                 `Row eff  ::  type_args ~offset:(-1) qs ts
-              | _ when qn = tn -> type_args qs ts
+                 `Row eff :: type_args ~offset:(-1) var_env' qs ts
+              | _ when qn = tn -> type_args var_env qs ts
               | _ ->
                  raise (TypeApplicationArityMismatch
                          { pos; name = tycon; expected = List.length qs; provided = List.length ts })
@@ -400,16 +460,16 @@ module Desugar = struct
        `Var (make_anon_point var_env pos sk freedom)
     | Var (name, _, _) -> `Var (lookup_pvar pos name var_env)
 
-  and row var_env alias_env (fields, rv) (node : 'a WithPos.t) =
+  and row ?(allow_shared=false) var_env alias_env (fields, rv) (node : 'a WithPos.t) =
     let seed =
       let open Datatype in
       match rv with
         | Closed -> Types.make_empty_closed_row ()
-        | Open ("$eff", sk, freedom) ->
+        | Open ("$eff", sk, freedom) when allow_shared ->
            let rv =
-             match var_env.effect_var with
-             | None -> make_anon_point var_env node.pos sk freedom
-             | Some (lazy p) -> p
+             match var_env.shared_effect with
+             | Defined (lazy p) -> p
+             | _ -> make_anon_point var_env node.pos sk freedom
            in
            (StringMap.empty, rv, false)
         | Open (name, sk, freedom) when is_anon name ->
@@ -425,7 +485,7 @@ module Desugar = struct
     let fields = List.map (fun (k, p) -> (k, fieldspec var_env alias_env p node)) fields in
     fold_right Types.row_with fields seed
 
-  and effect_row var_env alias_env (fields, rv) node =
+  and effect_row ?allow_shared var_env alias_env (fields, rv) node =
     let fields =
       (* Closes any empty, open arrow rows on user-defined
          operations. Note any row which can be closed will have an
@@ -453,7 +513,7 @@ module Desugar = struct
         | x -> x)
         fields
     in
-    let (fields, rho, dual) = row var_env alias_env (fields, rv) node in
+    let (fields, rho, dual) = row ?allow_shared var_env alias_env (fields, rv) node in
     let fields =
       StringMap.mapi
         (fun name ->
@@ -506,22 +566,6 @@ module Desugar = struct
       List.rev vars, var_env
 
   let datatype' map alias_env ((dt, _) : datatype') =
-    (* If effect_sugar is enabled, and all variables are fresh (and so not
-       explicitly named), then we will use the same effect variable across the
-       whole type. *)
-    let map =
-      if map.allow_fresh &&
-        Settings.get_value Basicsettings.Types.effect_sugar
-         && (all_anon_effects#datatype dt)#satisfied then
-        let point =
-          lazy begin
-              let var = Types.fresh_raw_variable () in
-              Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid))
-            end
-        in { map with effect_var = Some point }
-      else
-        map
-    in
     (dt, Some (datatype map alias_env dt))
 
   (* Desugar a foreign function declaration. Foreign declarations cannot use type variables from

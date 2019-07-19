@@ -1797,7 +1797,7 @@ struct
      from rigid type variables. *)
   type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
   type names  = (int, string * Vars.spec) Hashtbl.t
-  type shared_effect = Unknown | Shared of int | Distinct
+  type shared_effect = Undefined | Shared of int | Distinct
   type context = { bound_vars: TypeVarSet.t; shared_effect: shared_effect }
 
   let default_policy () =
@@ -1807,7 +1807,7 @@ struct
      kinds=Settings.get_value show_kinds;
      effect_sugar=Settings.get_value effect_sugar}
 
-  let empty_context = { bound_vars = TypeVarSet.empty; shared_effect = Unknown }
+  let empty_context = { bound_vars = TypeVarSet.empty; shared_effect = Undefined }
 
   let has_kind =
     function
@@ -1822,27 +1822,43 @@ struct
                              && is_present (FieldEnv.find v fields))
         values
 
-  let find_shared_effect { bound_vars; shared_effect } vars args fields row_var ret =
-    let var_eq known resolve=
+  let find_shared_effect { bound_vars; shared_effect } (policy, vars) typ =
+    let is_hidden var =
+      match Unionfind.find var with
+      | `Var (var, _, _) ->
+         let _, (flavour, _, count) = Vars.find_spec var vars in
+         policy.hide_fresh && count = 1 &&
+           ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars))
+      | _ -> false
+    and var_eq known resolve =
       match Unionfind.find resolve with
       | `Var (var, _, _) when var = known -> true
       | _ -> false
+    and maybe_shared = function `Function _ | `Lolli _ -> true | _ -> false
+    in
+    let rec find_shared_var = function
+      | `Function (_, _, r) | `Lolli (_, _, r)
+           when maybe_shared r -> find_shared_var r
+      | `Function (_, e, _) | `Lolli (_, e, _) ->
+         let (_, r, _), _ = unwrap_row e in
+         begin match Unionfind.find r with
+         | `Var (var, _, _) when not (TypeVarSet.mem var bound_vars) -> Some var
+         | _ -> None
+         end
+      | _ -> None
     in
     match shared_effect with
-    | Distinct -> Distinct
-    | Shared var ->
-       (* If we encounter a row variable, it /must/ be equivalent to our shared one. *)
-       assert (var_eq var row_var);
-       Shared var
-    | Unknown -> (
-      match Unionfind.find row_var with
-      | `Var (var, _, _) when not (TypeVarSet.mem var bound_vars) ->
+    | Distinct | Shared _ -> shared_effect
+    | Undefined ->
+      match find_shared_var typ with
+      | None -> Distinct
+      | Some shared_var ->
           let obj =
             object (self)
               inherit Transform.visitor as super
 
               val all_same = true
-              val count = 1
+              val count = 0
               method all_same = all_same
               method count = count
 
@@ -1851,35 +1867,38 @@ struct
                 | typ when not all_same -> (typ, self)
                 | (`Function (args, effects, ret) | `Lolli (args, effects, ret)) as typ ->
                     let fields, row_var, _ = unwrap_row effects |> fst in
-                    if
-                      (fields_present_in fields [] || fields_present_in fields [ "wild" ])
-                      && var_eq var row_var
-                    then
+                    let ok, n =
+                      if has_impl ret then
+                        (* If we're an inner arrow, then just require that this effect variable can
+                           be invisible. *)
+                        is_hidden row_var, 0
+                      else
+                        (* Otherwise require that this effect can be represented
+                           as just an arrow, and has the correct variable. *)
+                        (fields_present_in fields [] || fields_present_in fields [ "wild" ])
+                          && var_eq shared_var row_var, 1
+                    in
+                    if ok then
                       let (_, self) = self#typ args in
                       let (_, self) = self#typ ret in
                       let (_, self) = self#field_spec_map fields in
-                      (typ, {<count = count + 1; all_same = self#all_same>})
-                    else (
+                      (typ, {<count = self#count + n; all_same = self#all_same>})
+                    else
                       (typ, {<all_same = false>})
-                    )
                 | `Alias ((_, args), _) as ty ->
                     let self = List.fold_left (fun o arg -> o#type_arg arg |> snd) self args in
                     (ty, self)
                 | typ -> super#typ typ
 
               method! row_var row_var =
-                if var_eq var row_var then
-                  (row_var, {<all_same = false>})
-                else
-                  super#row_var row_var
+                match Unionfind.find row_var with
+                | `Var _ -> (row_var, {<all_same = false>})
+                | _ -> super#row_var row_var
             end
           in
-          let (_, obj) = obj#typ args in
-          let (_, obj) = obj#typ ret in
-          let (_, obj) = obj#field_spec_map fields in
-          let _, (_, _, count) = Vars.find_spec var vars in
-          if obj#all_same && obj#count = count then Shared var else Distinct
-      | _ -> Distinct )
+          let (_, obj) = obj#typ typ in
+          let _, (_, _, count) = Vars.find_spec shared_var vars in
+          if obj#all_same && obj#count = count then Shared shared_var else Distinct
 
   let subkind : (policy * names) -> subkind -> string =
     let full (l, r) = "(" ^ Linearity.to_string l ^ "," ^
@@ -1984,7 +2003,7 @@ struct
 
        let context =
          if policy.effect_sugar then
-           let shared_effect = find_shared_effect context vars args fields row_var t in
+           let shared_effect = find_shared_effect context p (`Function (args, effects, t)) in
            { context with shared_effect }
          else context in
        let is_shared =
