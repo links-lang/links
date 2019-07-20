@@ -229,6 +229,7 @@ sig
   val handle_value : griper
   val handle_operation : griper
   val resumption_type_annotation : griper
+  val handle_inject_wild : griper
   (* val type_resumption_with_annotation : griper
    * val deep_resumption : griper
    * val deep_resumption_effects : griper
@@ -710,6 +711,13 @@ end
      *                    tab () ^ code (show_type actual) ^ nl() ^
      *                      "while the body type of its handler is" ^ nl () ^
      *                        tab () ^ code (show_type expected)) *)
+
+    let handle_inject_wild ~pos ~t1:(_,expected) ~t2:(_, actual) ~error:_ =
+      build_tyvar_names [expected; actual];
+      die pos ("Effect handlers are wild"             ^ nli () ^
+                code (show_type expected)                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code (show_type actual))
 
     let handle_deep_resumption ~pos ~t1:(_, expected) ~t2:(resumption, actual) ~error:_ =
       build_tyvar_names [expected; actual];
@@ -3701,6 +3709,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              | None -> 0
              | Some params -> List.length params.shp_bindings
            in
+           let empty_effects () = Types.make_empty_open_row (lin_unl, res_any) in
+           let inject_wild row =
+             let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
+             let wild = Types.extend_row fields (empty_effects ()) in
+             unify ~handle:Gripers.handle_inject_wild (no_pos (`Effect wild), no_pos (`Effect row)); row
+           in
           (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
              = fun row ->
@@ -3710,7 +3724,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
                    then p
-                   else Types.fresh_presence_variable (lin_unl, res_any)) (* It is questionable whether it is ever correct to
+                   else Types.fresh_presence_variable (lin_unl, res_effect)) (* It is questionable whether it is ever correct to
                                                                              make absent operations polymorphic in their presence. *)
                  operations
              in
@@ -3740,14 +3754,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 let mpair =
                   List.fold_right (type_parameter context) params.shp_bindings (MutablePair.make [] [])
                 in
-                { descriptor with shd_params = Some { shp_bindings = List.map erase mpair.MutablePair.fst;
+                let bindings = mpair.MutablePair.fst in
+                { descriptor with shd_params = Some { shp_bindings = List.map erase bindings;
                                                       shp_types = mpair.MutablePair.snd } },
-                mpair.MutablePair.fst
+                bindings
            in
            let type_expressions context exps =
              let type_expression context exp =
                (* Refresh the effect context. *)
-               let context = { context with effect_row = Types.make_empty_open_row (lin_unl, res_any) } in
+               let context = { context with effect_row = empty_effects () } in
                let exp = type_check context exp in (* Type-check the input computation m under current context *)
                (exp, context.effect_row)
              in
@@ -3762,7 +3777,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                       eff)
                     (snd exp) exps
              in
-             (List.map fst expressions, eff)
+             (List.map fst expressions, (Types.flatten_row (inject_wild eff)))
            in
            let type_cases context arity cases =
              let arity_check { patterns; _ } =
@@ -3777,11 +3792,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let allocate_type_vector arity =
                Array.init arity (fun _ -> Types.fresh_type_variable (lin_unl, res_any))
              in
+             let allocate_effect_vector arity =
+               Array.init arity (fun _ -> `Effect (Types.make_empty_open_row (lin_unl, res_effect)))
+             in
              let allocate_list_vector length =
                Array.init length (fun _ -> [])
              in
              let value_types = allocate_type_vector arity in
-             let operation_types = allocate_type_vector arity in
+             let operation_types = allocate_effect_vector arity in
              (* Type patterns. *)
              let value_patterns = allocate_list_vector arity in
              let operation_patterns = allocate_list_vector arity in
@@ -3839,7 +3857,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      | None -> patterns_env patterns
                      | Some pat -> patterns_env (pat :: patterns)
                    in
-                   let body = type_check (context ++ env) body in
+                   let context = context ++ env in
+                   let body = type_check context body in
                    let () =
                      unify ~handle:Gripers.handle_branches (no_pos body_type, pos_and_typ body)
                    in
@@ -3851,9 +3870,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                          then if Types.Unl.can_type_be t
                               then Types.Unl.make_type t
                               else Gripers.non_linearity pos uses v t)
-                       env
+                       context.var_env
                    in
-                   let vs = Env.domain env in
+                   let vs = Env.domain context.var_env in
                    let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
                    (patterns, resumption, update_usages body us) :: cases)
                  [] cases
@@ -3861,7 +3880,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (cases, body_type, value_types, operation_types)
            in
            (* Type check deep resumptions. *)
-           let type_deep_resumptions ambient _value_types operation_types descriptor (patterns, resumption, body) =
+           let type_deep_resumption ambient _value_types operation_types descriptor (patterns, resumption, body) =
              match resumption with
              | None -> (patterns, None, body)
              | Some resumption ->
@@ -3893,7 +3912,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 (patterns, Some (resumption, expected_type), body)
            in
            (* Type check shallow resumptions. *)
-           let type_shallow_resumptions effects value_types operation_types ((patterns, _, _) as case) =
+           let type_shallow_resumption effects value_types operation_types ((patterns, _, _) as case) =
              let type_resumption i pattern =
                match fst3 pattern with
                | { node = Pattern.Operation { label; resumption = Some (resumption, actual_type); _ }; _ } ->
@@ -3919,31 +3938,37 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              List.iteri check_expression expressions
            in
            (* Check the effects of the expressions against their expectations. *)
-           let check_effects expected_effects expressions =
+           let check_effects expected_effects expressions actual_eff =
              let check_expression i exp =
-               unify ~handle:Gripers.handle_operation (no_pos expected_effects.(i), pos_and_typ exp)
+               let pos' = Position.resolve_expression (fst3 exp).pos in
+               unify ~handle:Gripers.handle_operation (no_pos expected_effects.(i), (pos', `Effect actual_eff))
              in
              List.iteri check_expression expressions
            in
            (* Type check parameters. *)
+           let refresh context =
+             { context with effect_row = empty_effects () }
+           in
            let descriptor, parameter_bindings = type_parameters context descriptor in
-           let (expressions, actual_eff) = type_expressions context expressions in
+           let (expressions, actual_eff) = type_expressions (refresh context) expressions in
+           let context = List.fold_left (++) context (List.map (fst ->- pattern_env) parameter_bindings) in
            (* Type check the case patterns and their bodies. *)
            let arity = List.length expressions in
            let (cases, body_type, value_types, operation_types) = type_cases context arity cases in
+           let ambient_effects = Types.flatten_row context.effect_row in
            (* Check expressions against their type-and-effect expectations. *)
            check_expressions value_types expressions;
-           check_effects operation_types expressions;
+           check_effects operation_types expressions actual_eff;
            (* Build the ambient effects. *)
-           let ambient_effects =
-             let actual_eff' = make_operations_presence_polymorphic actual_eff in
+           let () =
+             let actual_eff' = make_operations_presence_polymorphic (Types.flatten_row actual_eff) in
              let pos' = Position.resolve_expression pos in
-             unify ~handle:Gripers.handle_operation ((pos', `Effect context.effect_row), no_pos (`Effect actual_eff'));
-             context.effect_row
+             unify ~handle:Gripers.handle_operation ((pos', `Effect ambient_effects), no_pos (`Effect actual_eff'));
+             (* Printf.printf "Ambient: %s\n%!" (Types.string_of_row actual_eff'); *)
            in
            (* Type check resumptions. *)
-           let cases = List.map (type_deep_resumptions ambient_effects value_types operation_types descriptor) cases in
-           let cases = List.map (type_shallow_resumptions actual_eff value_types operation_types) cases in
+           let cases = List.map (type_deep_resumption ambient_effects value_types operation_types descriptor) cases in
+           let cases = List.map (type_shallow_resumption actual_eff value_types operation_types) cases in
            (* Reconstruct cases. *)
            let erase_effect_cases cases =
              List.map
@@ -3957,6 +3982,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let usages_effect_cases cases =
              merge_usages (List.map (fun (_, _, body) -> usages body) cases)
            in
+           let descriptor = { descriptor with shd_types = (actual_eff, `Not_typed, ambient_effects, body_type) } in
            (Handle { expressions = List.map erase expressions;
                      cases = erase_effect_cases cases;
                      descriptor },

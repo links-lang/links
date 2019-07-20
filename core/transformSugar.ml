@@ -459,7 +459,7 @@ class transform (env : Types.typing_environment) =
       | DoOperation (name, ps, Some t) ->
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
          (o, DoOperation (name, ps, Some t), t)
-      | Handle _ -> assert false
+      | (Handle { descriptor = { shd_types = (_,_,_,t); _ }; _ }) as h -> (o, h, t)
          (* let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
           * let (o, expr, _) = o#phrase sh_expr in
           * let envs = o#backup_envs in
