@@ -223,9 +223,11 @@ sig
   val handle_operation_patterns : griper
   val handle_branches : griper
   val handle_combine_effect_rows : griper
-  val handle_deep_resumption_codomain : griper
-  val handle_deep_resumption_nth : int -> griper
-  val handle_deep_resumption_nth_val : int -> griper
+  val handle_deep_resumption : griper
+  val handle_shallow_resumption : griper
+  val handle_parameter : griper
+  val handle_value : griper
+  val handle_operation : griper
   val resumption_type_annotation : griper
   (* val type_resumption_with_annotation : griper
    * val deep_resumption : griper
@@ -664,50 +666,94 @@ end
                          "while the current context allows" ^ nl () ^
                            tab () ^ code (show_type expected))
 
-    let word_of_number num =
-      let words =
-        [|"zero"; "one"; "two"; "three"; "four";
-          "five"; "six"; "seven"; "eight"; "nine"|]
-      in
-      let suffixes = [|"st"; "nd"; "rd"|] in
-      let word = if num >= 0 && num <= 9 then words.(num)
-                 else string_of_int num
-      in
-      let rest = num mod 10 in
-      if rest >= 1 && rest <= 3 then Printf.sprintf "%s%s" word suffixes.(rest-1)
-      else Printf.sprintf "%s%s" word "th"
+    (* let word_of_number num =
+     *   let words =
+     *     [|"zero"; "one"; "two"; "three"; "four";
+     *       "five"; "six"; "seven"; "eight"; "nine"|]
+     *   in
+     *   let suffixes = [|"st"; "nd"; "rd"|] in
+     *   let word = if num >= 0 && num <= 9 then words.(num)
+     *              else string_of_int num
+     *   in
+     *   let rest = num mod 10 in
+     *   if rest >= 1 && rest <= 3 then Printf.sprintf "%s%s" word suffixes.(rest-1)
+     *   else Printf.sprintf "%s%s" word "th"
+     * 
+     * let handle_deep_resumption_nth n ~pos ~t1:(_pattern, expected) ~t2:(resumption, actual) ~error:_ =
+     *   build_tyvar_names [expected; actual];
+     *   let nth = word_of_number n in
+     *   die pos ("Type expectation mismatch between the operation and its resumption, " ^ nl() ^
+     *              "the " ^ nth ^ " parameter of the resumption" ^
+     *                tab () ^ code resumption ^ nl() ^
+     *                  "has type" ^ nl() ^
+     *                    tab() ^ code (show_type actual) ^ nl() ^
+     *                      "while it is expected to have type" ^ nl() ^
+     *                        tab () ^ code (show_type expected))
+     * 
+     * let handle_deep_resumption_nth_val n ~pos ~t1:(_pattern, expected) ~t2:(resumption, actual) ~error:_ =
+     *   build_tyvar_names [expected; actual];
+     *   let nth = word_of_number n in
+     *   die pos ("Type expectation mismatch for resumption, " ^ nl() ^
+     *              "the " ^ nth ^ " parameter of the resumption" ^
+     *                tab () ^ code resumption ^ nl() ^
+     *                  "has type" ^ nl() ^
+     *                    tab() ^ code (show_type actual) ^ nl() ^
+     *                      "while it is expected to have type" ^ nl() ^
+     *                        tab () ^ code (show_type expected))
+     * 
+     * let handle_deep_resumption_codomain ~pos ~t1:(_body, expected) ~t2:(resumption, actual) ~error:_ =
+     *   build_tyvar_names [expected; actual];
+     *   die pos ("The return type of a deep resumption must be the same as the body type of its handler, " ^ nl() ^
+     *              "but the resumption" ^ nl() ^
+     *                tab () ^ code resumption ^ nl() ^
+     *                  "has return type" ^ nl() ^
+     *                    tab () ^ code (show_type actual) ^ nl() ^
+     *                      "while the body type of its handler is" ^ nl () ^
+     *                        tab () ^ code (show_type expected)) *)
 
-    let handle_deep_resumption_nth n ~pos ~t1:(_pattern, expected) ~t2:(resumption, actual) ~error:_ =
+    let handle_deep_resumption ~pos ~t1:(_, expected) ~t2:(resumption, actual) ~error:_ =
       build_tyvar_names [expected; actual];
-      let nth = word_of_number n in
-      die pos ("Type expectation mismatch between the operation and its resumption, " ^ nl() ^
-                 "the " ^ nth ^ " parameter of the resumption" ^
-                   tab () ^ code resumption ^ nl() ^
-                     "has type" ^ nl() ^
-                       tab() ^ code (show_type actual) ^ nl() ^
-                         "while it is expected to have type" ^ nl() ^
-                           tab () ^ code (show_type expected))
+      die pos ("Type expectation mismatch for the (deep) resumption, " ^ nl() ^
+                 tab () ^ code resumption ^ nl() ^
+                   "has actual type" ^ nl() ^
+                     tab () ^ code (show_type actual) ^ nl() ^
+                       "while its expected type is" ^ nl () ^
+                         tab () ^ code (show_type expected))
 
-    let handle_deep_resumption_nth_val n ~pos ~t1:(_pattern, expected) ~t2:(resumption, actual) ~error:_ =
+    let handle_shallow_resumption ~pos ~t1:(_, expected) ~t2:(resumption, actual) ~error:_ =
       build_tyvar_names [expected; actual];
-      let nth = word_of_number n in
-      die pos ("Type expectation mismatch for resumption, " ^ nl() ^
-                 "the " ^ nth ^ " parameter of the resumption" ^
-                   tab () ^ code resumption ^ nl() ^
-                     "has type" ^ nl() ^
-                       tab() ^ code (show_type actual) ^ nl() ^
-                         "while it is expected to have type" ^ nl() ^
-                           tab () ^ code (show_type expected))
+      die pos ("Type expectation mismatch for the (shallow) resumption, " ^ nl() ^
+                 tab () ^ code resumption ^ nl() ^
+                   "has actual type" ^ nl() ^
+                     tab () ^ code (show_type actual) ^ nl() ^
+                       "while its expected type is" ^ nl () ^
+                         tab () ^ code (show_type expected))
 
-    let handle_deep_resumption_codomain ~pos ~t1:(_body, expected) ~t2:(resumption, actual) ~error:_ =
+    let handle_parameter ~pos ~t1:pat ~t2:exp ~error:_ =
+      build_tyvar_names [snd pat; snd exp];
+      with_but2things pos
+        ("The parameter binding must match its initialisation expression")
+        ("pattern", pat) ("expression", exp)
+
+    let handle_value ~pos ~t1:(_, expected) ~t2:(exp, actual) ~error:_ =
       build_tyvar_names [expected; actual];
-      die pos ("The return type of a deep resumption must be the same as the body type of its handler, " ^ nl() ^
-                 "but the resumption" ^ nl() ^
-                   tab () ^ code resumption ^ nl() ^
-                     "has return type" ^ nl() ^
-                       tab () ^ code (show_type actual) ^ nl() ^
-                         "while the body type of its handler is" ^ nl () ^
-                           tab () ^ code (show_type expected))
+      die pos ("The type of an input to a handle should match the type of " ^
+                 "its value patterns, but the expression" ^ nli () ^
+                   code exp                        ^ nl  () ^
+                     "has type"                         ^ nli () ^
+                       code (show_type actual)          ^ nl  () ^
+                         "while the patterns have type"     ^ nli () ^
+                           code (show_type expected))
+
+    let handle_operation ~pos ~t1:(_, expected) ~t2:(exp, actual) ~error:_ =
+      build_tyvar_names [expected; actual];
+      die pos ("The effect type of an input to a handle should match the type of " ^
+                 "its operation patterns, but the expression" ^ nli () ^
+                   code exp                        ^ nl  () ^
+                     "has effect type"              ^ nli () ^
+                       code (show_type actual)          ^ nl  () ^
+                         "while the patterns have effect type" ^ nli () ^
+                           code (show_type expected))
 
     let do_operation ~pos ~t1:(_,lt) ~t2:(rexpr,rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -3656,7 +3702,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              | Some params -> List.length params.shp_bindings
            in
           (** make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
-           let _make_operations_presence_polymorphic : Types.row -> Types.row
+           let make_operations_presence_polymorphic : Types.row -> Types.row
              = fun row ->
              let (operations, rho, dual) = row in
              let operations' =
@@ -3678,6 +3724,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              | { node = Pattern.Operation { label; _ }; _ } -> label
              | _ -> assert false
            in
+           let type_parameters context descriptor =
+             match descriptor.shd_params with
+             | None -> descriptor, []
+             | Some params ->
+                ignore (check_for_duplicate_names pos (List.map fst params.shp_bindings));
+                let type_parameter context (pat, exp) mpair =
+                  let exp = type_check context exp in
+                  let pat = tpc pat in
+                  unify ~handle:Gripers.handle_parameter (ppos_and_typ pat, pos_and_typ exp);
+                  mpair.MutablePair.fst <- (pat, exp) :: mpair.MutablePair.fst;
+                  mpair.MutablePair.snd <- pattern_typ pat :: mpair.MutablePair.snd; mpair
+                in
+                let erase (pat, exp) = erase pat, erase exp in
+                let mpair =
+                  List.fold_right (type_parameter context) params.shp_bindings (MutablePair.make [] [])
+                in
+                { descriptor with shd_params = Some { shp_bindings = List.map erase mpair.MutablePair.fst;
+                                                      shp_types = mpair.MutablePair.snd } },
+                mpair.MutablePair.fst
+           in
            let type_expressions context exps =
              let type_expression context exp =
                (* Refresh the effect context. *)
@@ -3696,7 +3762,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                       eff)
                     (snd exp) exps
              in
-             (expressions, eff)
+             (List.map fst expressions, eff)
            in
            let type_cases context arity cases =
              let arity_check { patterns; _ } =
@@ -3733,10 +3799,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let cases =
                List.fold_left
                  (fun cases { patterns; resumption; body } ->
+                   (* Check for duplicate names (including the deep resumption name). *)
+                   ignore (check_for_duplicate_names pos
+                             (match resumption with
+                              | Some (pat, _) -> pat :: patterns
+                              | _ -> patterns));
                    (* Type each pattern. *)
                    let patterns' = List.map tpo patterns in
                    let () = List.iteri classify patterns' in
-                   let resumption' = opt_map (fun (p, _) -> type_resumption_pattern ~arity:resume_arity p) resumption in
+                   let resumption' =
+                     opt_map (fun (p, _) -> type_resumption_pattern ~arity:resume_arity p) resumption
+                   in
                    (patterns', resumption', body) :: cases)
                  [] cases
              in
@@ -3788,51 +3861,109 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (cases, body_type, value_types, operation_types)
            in
            (* Type check deep resumptions. *)
-           let type_deep_resumption arity value_types operation_types ((patterns, resumption, body) as case) =
+           let type_deep_resumptions ambient _value_types operation_types descriptor (patterns, resumption, body) =
              match resumption with
-             | None -> case
+             | None -> (patterns, None, body)
              | Some resumption ->
-                (* Type the domain of the resumption. *)
-                let arg_types = TypeUtils.arg_types (pattern_typ resumption) in
-                let number_of_parameters = List.length arg_types - arity in
-                let type_nth domain value_types operation_types i pattern =
-                  if is_operation_pattern (fst3 pattern)
-                  then let label  = operation_label (fst3 pattern) in
-                       let expected_typ =
-                         TypeUtils.(extract_row ->- split_row label ->- fst ->- return_type ~overstep_quantifiers:true)
-                           operation_types.(i)
-                       in
-                       (* TODO: perhaps accumulate the errors... *)
-                       unify ~handle:(Gripers.handle_deep_resumption_nth i)
-                         (no_pos expected_typ, (pattern_pos resumption, List.nth domain i))
-                  else unify ~handle:(Gripers.handle_deep_resumption_nth_val i)
-                         (no_pos Types.empty_type, (pattern_pos resumption, List.nth domain i))
+                let build_domain pattern domain =
+                  let i = domain.MutablePair.fst in
+                  (if is_operation_pattern (fst3 pattern)
+                   then let label = operation_label (fst3 pattern) in
+                        let expected =
+                          TypeUtils.(extract_row ->- split_row label ->- fst ->- return_type ~overstep_quantifiers:true)
+                            operation_types.(i)
+                        in
+                        domain.MutablePair.snd <- expected :: domain.MutablePair.snd;
+                   else domain.MutablePair.snd <- Types.empty_type :: domain.MutablePair.snd);
+                  domain.MutablePair.fst <- 1 + i; domain
                 in
-                List.iteri (type_nth arg_types value_types operation_types) patterns;
-                (* Type the codomain of the resumption. *)
-                unify ~handle:Gripers.handle_deep_resumption_codomain (pos_and_typ body, ppos_and_typ resumption);
-                (* Type the effects of the resumption. *)
-                assert false
+                let parameter_types =
+                  match descriptor.shd_params with
+                  | Some params -> params.shp_types
+                  | _ -> []
+                in
+                let expected_domain =
+                  MutablePair.snd (List.fold_right build_domain patterns (MutablePair.make 0 parameter_types))
+                in
+                let expected_type =
+                  Types.make_function_type expected_domain ambient (typ body)
+                in
+                (* Unify the expected and actual resumption types. *)
+                unify ~handle:Gripers.handle_deep_resumption (no_pos expected_type, ppos_and_typ resumption);
+                (patterns, Some (resumption, expected_type), body)
            in
            (* Type check shallow resumptions. *)
-           let type_shallow_resumption _context _value_types _i _case =
-             assert false
+           let type_shallow_resumptions effects value_types operation_types ((patterns, _, _) as case) =
+             let type_resumption i pattern =
+               match fst3 pattern with
+               | { node = Pattern.Operation { label; resumption = Some (resumption, actual_type); _ }; _ } ->
+                  let expected_domain =
+                    TypeUtils.(extract_row ->- split_row label ->- fst ->- return_type ~overstep_quantifiers:true)
+                      operation_types.(i)
+                  in
+                  let expected_type =
+                    Types.make_function_type [expected_domain] effects value_types.(i)
+                  in
+                  (* Unify the expected and actual resumption types. *)
+                  let pos' = Position.resolve_expression resumption.pos in
+                  unify ~handle:Gripers.handle_shallow_resumption (no_pos expected_type, (pos', actual_type))
+               | _ -> ()
+             in
+             List.iteri type_resumption patterns; case
            in
-           (* Type check the bodies. *)
+           (* Check expressions against their expected value types. *)
+           let check_expressions expected_types expressions =
+             let check_expression i exp =
+               unify ~handle:Gripers.handle_value (no_pos expected_types.(i), pos_and_typ exp)
+             in
+             List.iteri check_expression expressions
+           in
+           (* Check the effects of the expressions against their expectations. *)
+           let check_effects expected_effects expressions =
+             let check_expression i exp =
+               unify ~handle:Gripers.handle_operation (no_pos expected_effects.(i), pos_and_typ exp)
+             in
+             List.iteri check_expression expressions
+           in
+           (* Type check parameters. *)
+           let descriptor, parameter_bindings = type_parameters context descriptor in
+           let (expressions, actual_eff) = type_expressions context expressions in
+           (* Type check the case patterns and their bodies. *)
            let arity = List.length expressions in
-           (* let type_effect_case context arity return_types body_type { pattern; resumption; body } =
-            *   let body = type_check context body
-            *   assert false
-            * in *)
-           let (_expressions, _actual_eff) = type_expressions context expressions in
            let (cases, body_type, value_types, operation_types) = type_cases context arity cases in
-           let cases = List.map (type_deep_resumption arity value_types operation_types) cases in
-           List.iteri (type_shallow_resumption context value_types) cases;
-           (* let return_types =
-            *   List.map (fun (exp, _) -> typ exp) expressions
-            * in *)
-           (* let _ = type_effect_cases context arity return_types cases in *)
-           assert false
+           (* Check expressions against their type-and-effect expectations. *)
+           check_expressions value_types expressions;
+           check_effects operation_types expressions;
+           (* Build the ambient effects. *)
+           let ambient_effects =
+             let actual_eff' = make_operations_presence_polymorphic actual_eff in
+             let pos' = Position.resolve_expression pos in
+             unify ~handle:Gripers.handle_operation ((pos', `Effect context.effect_row), no_pos (`Effect actual_eff'));
+             context.effect_row
+           in
+           (* Type check resumptions. *)
+           let cases = List.map (type_deep_resumptions ambient_effects value_types operation_types descriptor) cases in
+           let cases = List.map (type_shallow_resumptions actual_eff value_types operation_types) cases in
+           (* Reconstruct cases. *)
+           let erase_effect_cases cases =
+             List.map
+               (fun (patterns, resumption, body) ->
+                 let patterns = List.map erase_pat patterns in
+                 let resumption = opt_map (fun (pat, dt) -> erase_pat pat, dt) resumption in
+                 let body = erase body in
+                 { patterns; resumption; body })
+               cases
+           in
+           let usages_effect_cases cases =
+             merge_usages (List.map (fun (_, _, body) -> usages body) cases)
+           in
+           (Handle { expressions = List.map erase expressions;
+                     cases = erase_effect_cases cases;
+                     descriptor },
+            body_type,
+            merge_usages [usage_compat (List.map (snd ->- usages) parameter_bindings);
+                          merge_usages (List.map usages expressions);
+                          usages_effect_cases cases])
          (*   let rec pop_last = function
           *     | [] -> assert false
           *     | [x] -> x, []

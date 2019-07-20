@@ -1395,3 +1395,20 @@ end = struct
       files root (Str.regexp pattern)
   end
 end
+
+
+module MutablePair: sig
+  type ('a, 'b) t = { mutable fst: 'a;
+                      mutable snd: 'b }
+
+  val make : 'a -> 'b -> ('a, 'b) t
+  val fst : ('a, 'b) t -> 'a
+  val snd : ('a, 'b) t -> 'b
+end = struct
+  type ('a, 'b) t = { mutable fst: 'a;
+                      mutable snd: 'b }
+
+  let make fst snd = { fst; snd }
+  let fst { fst; _ } = fst
+  let snd { snd; _ } = snd
+end
