@@ -335,12 +335,12 @@ fun intercalate(bone, rushes) {
   }
 }
 
-sig unlines : ([String]) -> String
+sig unlines : ([String]) ~> String
 fun unlines(ws) {
   implode(intercalate(explode("\n"), map(explode, ws)))
 }
 
-sig unwords : ([String]) -> String
+sig unwords : ([String]) ~> String
 fun unwords(ws) {
   implode(intercalate(explode(" "), map(explode, ws)))
 }
