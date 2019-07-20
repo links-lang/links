@@ -1868,7 +1868,7 @@ struct
                 | (`Function (args, effects, ret) | `Lolli (args, effects, ret)) as typ ->
                     let fields, row_var, _ = unwrap_row effects |> fst in
                     let ok, n =
-                      if has_impl ret then
+                      if maybe_shared ret then
                         (* If we're an inner arrow, then just require that this effect variable can
                            be invisible. *)
                         is_hidden row_var, 0
