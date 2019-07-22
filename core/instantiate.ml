@@ -66,8 +66,8 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
           | `Table (f, d, r) -> `Table (inst rec_env f, inst rec_env d, inst rec_env r)
           | `ForAll (qs, t) ->
               `ForAll (qs, inst rec_env t)
-          | `Alias ((name, ts), d) ->
-              `Alias ((name, List.map (inst_type_arg rec_env) ts), inst rec_env d)
+          | `Alias ((name, qs, ts), d) ->
+              `Alias ((name, qs, List.map (inst_type_arg rec_env) ts), inst rec_env d)
           | `Application (n, elem_type) ->
               `Application (n, List.map (inst_type_arg rec_env) elem_type)
           | `RecursiveApplication app ->
@@ -404,7 +404,7 @@ let recursive_application name qs tyargs body =
   let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
   body
 
-let alias name tyargs env =
+let alias name tyargs env : Types.typ =
   (* This is just type application.
 
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
@@ -426,4 +426,4 @@ let alias name tyargs env =
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)
         let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
-          `Alias ((name, tyargs), body)
+          `Alias ((name, List.map snd vars, tyargs), body)

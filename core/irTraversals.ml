@@ -942,8 +942,7 @@ module ElimTypeAliases =
         inherit Types.Transform.visitor as super
 
         method! typ = function
-          | `Alias ((_, _), typ) ->
-             o#typ typ
+          | `Alias (_, typ) -> o#typ typ
           | other -> super#typ other
       end
 

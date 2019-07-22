@@ -431,7 +431,12 @@ module Desugar = struct
                   let r_unique_name = tycon ^ string_of_int !tygroup_ref.id in
                   let r_linear () = StringMap.lookup tycon !tygroup_ref.linearity_map in
                   `RecursiveApplication
-                    { r_name = tycon; r_dual = false; r_unique_name; r_args; r_unwind; r_linear }
+                    { r_name = tycon;
+                      r_dual = false;
+                      r_unique_name;
+                      r_quantifiers = List.map snd qs;
+                      r_args; r_unwind; r_linear
+                    }
             end
         | Primitive k -> `Primitive k
         | DB -> `Primitive Primitive.DB

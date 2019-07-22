@@ -140,6 +140,7 @@ and rec_appl = {
   r_name: string;
   r_dual: bool;
   r_unique_name: string;
+  r_quantifiers : kind list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
@@ -154,7 +155,7 @@ and typ =
     | `Effect of row
     | `Table of typ * typ * typ
     | `Lens of Lens.Type.t
-    | `Alias of ((string * type_arg list) * typ)
+    | `Alias of ((string * kind list * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
@@ -354,13 +355,13 @@ struct
           (`Table (t1', t2', t3'), o)
      | `Lens sort ->
           (`Lens sort, o)
-     | `Alias ((name, args), t) ->
+     | `Alias ((name, qs, args), t) ->
         let (args', o) = List.fold_right (fun arg (acc_args, o) ->
             let (arg', o) = o#type_arg arg in
             (arg' :: acc_args, o)
           ) args ([],o) in
         let (t',o) = o#typ t in
-          (`Alias ((name, args'), t'), o)
+          (`Alias ((name, qs, args'), t'), o)
      | `Application (abst, args) ->
         let (args', o) = List.fold_right (fun arg (acc_args, o) ->
             let (arg', o) = o#type_arg arg in
@@ -1060,7 +1061,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
           S.union_all
             [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
       | `Lens _          -> S.empty
-      | `Alias ((_, ts), datatype) ->
+      | `Alias ((_, _, ts), datatype) ->
           S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
       | `Application (_, tyargs) -> S.union_all (List.map (free_tyarg_vars' rec_vars) tyargs)
       | `RecursiveApplication { r_args; _ } ->
@@ -1417,8 +1418,8 @@ and normalise_datatype rec_names t =
           `Table (nt r, nt w, nt n)
       | `Lens sort                ->
           `Lens sort
-      | `Alias ((name, ts), datatype) ->
-          `Alias ((name, ts), nt datatype)
+      | `Alias ((name, qs, ts), datatype) ->
+          `Alias ((name, qs, ts), nt datatype)
       | `Application (abs, tyargs) ->
           `Application (abs, List.map (normalise_type_arg rec_names) tyargs)
       | `RecursiveApplication app ->
@@ -1543,7 +1544,7 @@ let char_type     = `Primitive Primitive.Char
 let bool_type     = `Primitive Primitive.Bool
 let int_type      = `Primitive Primitive.Int
 let float_type    = `Primitive Primitive.Float
-let xml_type      = `Alias (("Xml", []), `Application (list, [`Type (`Primitive Primitive.XmlItem)]))
+let xml_type      = `Alias (("Xml", [], []), `Application (list, [`Type (`Primitive Primitive.XmlItem)]))
 let database_type = `Primitive Primitive.DB
 (* Empty type, used for exceptions *)
 let empty_type = `Variant (make_empty_closed_row ())
@@ -1649,9 +1650,9 @@ struct
                 tyvars
             in
               (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
-        | `Alias ((_,ts), d) when include_aliases ->
+        | `Alias ((_, _, ts), _) when include_aliases ->
             List.concat
-              (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) ts) @ (fbtv d)
+              (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) ts)
         | `Alias (_, d) -> fbtv d
         | `Application (_, tyargs) ->
             List.concat (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) tyargs)
@@ -1822,6 +1823,13 @@ struct
                              && is_present (FieldEnv.find v fields))
         values
 
+  let rec is_basic_effect ((fields, r, _) : row) var =
+    FieldEnv.is_empty fields &&
+      match Unionfind.find r with
+      | `Body r -> is_basic_effect r var
+      | `Var (v, _, _) -> v == var
+      | _ -> false
+
   let find_shared_effect { bound_vars; shared_effect } (policy, vars) typ =
     let is_hidden var =
       match Unionfind.find var with
@@ -1834,17 +1842,28 @@ struct
       match Unionfind.find resolve with
       | `Var (var, _, _) when var = known -> true
       | _ -> false
-    and maybe_shared = function `Function _ | `Lolli _ -> true | _ -> false
-    in
-    let rec find_shared_var = function
-      | `Function (_, _, r) | `Lolli (_, _, r)
-           when maybe_shared r -> find_shared_var r
-      | `Function (_, e, _) | `Lolli (_, e, _) ->
-         let (_, r, _), _ = unwrap_row e in
-         begin match Unionfind.find r with
-         | `Var (var, _, _) when not (TypeVarSet.mem var bound_vars) -> Some var
-         | _ -> None
+    and maybe_shared = function
+      | `Function _ | `Lolli _ -> true
+      | `Alias ((_, qs, _), _) | `RecursiveApplication { r_quantifiers = qs; _ } ->
+         begin match qs with
+         | (PrimaryKind.Row, (_, Restriction.Effect)) :: _ -> true
+         | _ -> false
          end
+      | _ -> false
+    and find_row_var r =
+      let (_, r, _), _ = unwrap_row r in
+      begin match Unionfind.find r with
+      | `Var (var, _, _) when not (TypeVarSet.mem var bound_vars) -> Some var
+      | _ -> None
+      end
+    in
+    (* Find a shared effect variable from the right most arrow or type alias. *)
+    let rec find_shared_var t =
+      match t with
+      | `Function (_, _, r) | `Lolli (_, _, r) when maybe_shared r -> find_shared_var r
+      | `Function (_, e, _) | `Lolli (_, e, _) -> find_row_var e
+      | `Alias ((_, _, `Row e :: _), _) | `RecursiveApplication { r_args = `Row e :: _; _ }
+        when maybe_shared t -> find_row_var e
       | _ -> None
     in
     match shared_effect with
@@ -1862,10 +1881,10 @@ struct
               method all_same = all_same
               method count = count
 
-              method! typ =
-                function
+              method! typ typ =
+                match typ with
                 | typ when not all_same -> (typ, self)
-                | (`Function (args, effects, ret) | `Lolli (args, effects, ret)) as typ ->
+                | `Function (args, effects, ret) | `Lolli (args, effects, ret) ->
                     let fields, row_var, _ = unwrap_row effects |> fst in
                     let ok, n =
                       if maybe_shared ret then
@@ -1879,15 +1898,23 @@ struct
                           && var_eq shared_var row_var, 1
                     in
                     if ok then
+                      let self = {<count = count + n>} in
                       let (_, self) = self#typ args in
                       let (_, self) = self#typ ret in
                       let (_, self) = self#field_spec_map fields in
-                      (typ, {<count = self#count + n; all_same = self#all_same>})
+                      (typ, self)
                     else
                       (typ, {<all_same = false>})
-                | `Alias ((_, args), _) as ty ->
-                    let self = List.fold_left (fun o arg -> o#type_arg arg |> snd) self args in
-                    (ty, self)
+                | `Alias ((_, _, `Row e :: ts), _) | `RecursiveApplication { r_args = `Row e :: ts; _ }
+                  when maybe_shared typ ->
+                   (* If we're a type alias with an implicit effect variable, we
+                      must be an effect row with nothing but that variable. *)
+                   if is_basic_effect e shared_var then
+                     let self = {<count = count + 1>} in
+                     let self = List.fold_left (fun o arg -> o#type_arg arg |> snd) self ts in
+                     (typ, self)
+                   else
+                     (typ, {<all_same = false>})
                 | typ -> super#typ typ
 
               method! row_var row_var =
@@ -2143,21 +2170,29 @@ struct
                 (Lens.Utility.Format.pp_comma_list pp_col) cols
                 Lens.Database.fmt_phrase_dummy predicate
                 Lens.Fun_dep.Set.pp_pretty fds
-          | `Alias ((s,[]), _) ->  Module_hacks.Name.prettify s
-          | `Alias ((s,ts), _) ->
-             Printf.sprintf "%s (%s)"
-               (Module_hacks.Name.prettify s)
-               (String.concat "," (List.map (type_arg context p) ts))
+          | `Alias ((s, _, ts), _) | `RecursiveApplication { r_name = s; r_args = ts; _ } ->
+             let context =
+               if policy.effect_sugar then
+                 let shared_effect = find_shared_effect context p t in
+                 { context with shared_effect }
+               else context in
+             let ts =
+               match ts, context.shared_effect with
+               | `Row r :: ts, Shared v when is_basic_effect r v -> ts
+               | _ -> ts
+             in
+             begin match ts with
+             | [] -> Module_hacks.Name.prettify s
+             | _ ->
+                Printf.sprintf "%s (%s)"
+                  (Module_hacks.Name.prettify s)
+                  (String.concat "," (List.map (type_arg context p) ts))
+             end
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg context p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
           | `Application (s, ts) ->
               let vars = String.concat "," (List.map (type_arg context p) ts) in
               Printf.sprintf "%s (%s)" (Abstype.name s) vars
-          | `RecursiveApplication { r_name; r_args; _ } when r_args = [] -> Module_hacks.Name.prettify r_name
-          | `RecursiveApplication { r_name; r_args; _ } ->
-             Printf.sprintf "%s (%s)"
-               (Module_hacks.Name.prettify r_name)
-               (String.concat "," (List.map (type_arg context p) r_args))
   and presence ({ bound_vars; _ } as context) ((policy, vars) as p) =
     function
       | `Present t ->
@@ -2406,7 +2441,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Variant row             -> make_env_r boundvars row
       | `Table (r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
       | `Lens _                  -> empties
-      | `Alias ((_name, ts), d)  -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
+      | `Alias ((_, _, ts), d)   -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
       | `RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
       | `ForAll (qs, t)          ->
@@ -2540,7 +2575,7 @@ let is_sub_type, is_sub_row =
               | `Recursive _ -> false
               | `Body t' -> is_sub_type rec_vars (t, t')
           end
-      | `Alias ((name, []), _), `Alias ((name', []), _) when name=name' -> true
+      | `Alias ((name, [], []), _), `Alias ((name', [], []), _) when name=name' -> true
       | (`Alias (_, t)), t'
       | t, (`Alias (_, t')) -> is_sub_type rec_vars (t, t')
       | `ForAll _, `ForAll _ ->
@@ -2649,7 +2684,7 @@ let make_record_type ts = `Record (make_closed_row ts)
 let make_variant_type ts = `Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = `Table (r, w, n)
-let make_endbang_type : datatype = `Alias (("EndBang", []), `Output (unit_type, `End))
+let make_endbang_type : datatype = `Alias (("EndBang", [], []), `Output (unit_type, `End))
 
 let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> datatype
   = fun ?(linear=false) args effs range ->
