@@ -54,6 +54,12 @@ let freeze = function
   | FreezeVar _ | FreezeSection _ as e -> e
   | _ -> raise (internal_error "Unfreezable node")
 
+(** Attempt to patch up all references to recursive functions.
+
+   We take any reference to recursive functions (as a variable, section or
+   infix/unary operator), along with any type arguments which may be applied to
+   that function, and attempt to fix it up using {!add_extras} to be consistent
+   with the outer type. *)
 class desugar_inners env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
