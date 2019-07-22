@@ -896,7 +896,7 @@ struct
           | DoOperation (name, ps, Some t) ->
              let vs = evs ps in
              I.do_operation (name, vs, t)
-          | Handle { expressions; _ } -> ec (List.hd expressions)
+          | Handle { expressions; cases; descriptor } -> ec (List.hd expressions)
              (* let henv, params =
               *   let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
               *    match (sh_descr.shd_params) with

@@ -460,6 +460,9 @@ class transform (env : Types.typing_environment) =
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
          (o, DoOperation (name, ps, Some t), t)
       | Handle { expressions; cases; descriptor } ->
+         (* Avert leaking from expressions, parameters, or case
+            expressions. *)
+         let envs = o#backup_envs in
          (* Ensure the expressions are independent. *)
          let transform_expression exp (exps, o) =
            let envs = o#backup_envs in
@@ -471,7 +474,6 @@ class transform (env : Types.typing_environment) =
          in
          (* Ensure that the handler parameters are only in scope of
             the handler. *)
-         let envs = o#backup_envs in
          let transform_parameter (pat, exp) (params, o) =
            let envs = o#backup_envs in
            let (o, exp, t) = o#phrase exp in
@@ -513,6 +515,7 @@ class transform (env : Types.typing_environment) =
          let cases, branch_type, o =
            List.fold_right transform_case cases ([], `Not_typed, o)
          in
+         (* Restore the environments. *)
          let o = o#restore_envs envs in
          (o, Handle { expressions; cases; descriptor }, branch_type)
       | TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->

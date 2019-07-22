@@ -3937,6 +3937,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              in
              List.iteri check_expression expressions
            in
+           (* Inject a synthetic return case, if needed. *)
+           let arity = List.length expressions in
+           (* TODO FIXME: what about multi-handlers without a return clause? *)
+           let cases =
+             let has_return =
+               List.exists (fun { patterns; _ } -> List.for_all (not -<- is_operation_pattern) patterns) cases
+             in
+             if has_return then cases
+             else let return =
+                    let x = "x" in
+                    { patterns = [variable_pat x]; resumption = None; body = var x }
+                  in
+                  return :: cases
+           in
            (* Type check parameters. *)
            let refresh context =
              { context with effect_row = empty_effects () }
@@ -3945,7 +3959,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let (expressions, actual_eff) = type_expressions (refresh context) expressions in
            let context = List.fold_left (++) context (List.map (fst ->- pattern_env) parameter_bindings) in
            (* Type check the case patterns and their bodies. *)
-           let arity = List.length expressions in
            let (cases, body_type, value_types, operation_types) = type_cases context arity cases in
            let ambient_effects = Types.flatten_row context.effect_row in
            (* Check expressions against their type-and-effect expectations. *)
