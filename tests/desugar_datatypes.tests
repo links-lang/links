@@ -97,12 +97,12 @@ args : --config=tests/effect_sugar.config
 
 Sugar for shared effect variables in type applications (1)
 sig forever : (Comp(a)) ~> b fun forever(f) { ignore(f()); forever(f) } forever
-stdout : fun : (Comp ({ |a::Eff },b)) ~a~> _
+stdout : fun : (Comp (_)) ~> _
 args : --config=tests/effect_sugar.config
 
 Sugar for shared effect variables in type applications (2)
 sig f : Comp(()) fun f() { } f
-stdout : fun : Comp ({ |a::Eff },())
+stdout : fun : Comp (())
 args : --config=tests/effect_sugar.config
 
 Implicit effect variables are not shared across different functions
