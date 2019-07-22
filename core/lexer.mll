@@ -242,10 +242,12 @@ exception LexicalError of (string * Lexing.position)
 }
 
 let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9' '\'']*)
+let def_attr_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '-' '0'-'9']*)
 let module_name = (['A'-'Z'] (['A'-'Z' 'a'-'z'])*)
 let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
-let def_qname = ('#' | def_id (':' def_id)*)
+let def_qname = ('#' | def_attr_id (':' def_attr_id)*)
+let def_tagname = ('#' | def_id (':' def_attr_id)*)
 let def_integer = (['1'-'9'] ['0'-'9']* | '0')
 let def_float = (def_integer '.' ['0'-'9']+ ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\r' '\n']
@@ -297,7 +299,7 @@ rule lex ctxt nl = parse
   | "<-"                                { LARROW }
   | "<|"                                { LEFTTRIANGLE }
   | "|>"                                { RIGHTTRIANGLE }
-  | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
+  | '<' (def_tagname as id)             { (* come back here after scanning the start tag *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML id }
   | "<!--"                              { xmlcomment_lex ctxt nl lexbuf }
   | "[|"                                { LBRACKETBAR }
@@ -380,9 +382,9 @@ and xmllex ctxt nl = parse
                                           ctxt#push_lexer (lex ctxt nl); LBRACEBAR }
   | '{'                                 { (* scan the expression, then back here *)
                                           ctxt#push_lexer (lex ctxt nl); LBRACE }
-  | "</" (def_qname as var) '>'         { (* fall back *)
+  | "</" (def_tagname as var) '>'       { (* fall back *)
                                           ctxt#pop_lexer; ENDTAG var }
-  | '<' (def_qname as var)              { (* switch to `starttag' to handle the nested xml, then back here *)
+  | '<' (def_tagname as var)            { (* switch to `starttag' to handle the nested xml, then back here *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML var }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and attrlex ctxt nl = parse
