@@ -4,18 +4,19 @@ open import MvuAttrs;
 typename HTML(a :: Type(Any, Any)) =
   [| HTMLEmpty
    | HTMLAppend: (HTML(a), HTML(a))
-   | HTMLText: (String, Bool) # Bool: Whether or not text node is escaped
+   | HTMLText: (String)
+   | HTMLRaw: (String)
    | HTMLTag: (tagName: String, attrs: Attr(a), children: HTML(a))
    |];
 
 var empty = HTMLEmpty;
 
 fun textNode(str) {
-  HTMLText(str, true)
+  HTMLText(str)
 }
 
 fun unescapedTextNode(str) {
-  HTMLText(str, false)
+  HTMLRaw(str)
 }
 
 sig tag : forall a :: Type(Any, Any), e :: Row .
