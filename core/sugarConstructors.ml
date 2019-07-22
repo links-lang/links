@@ -295,16 +295,15 @@ module SugarConstructors (Position : Pos)
     node
 
   (** Handlers *)
-  let untyped_handler ?(ppos=dp) ?parameters expressions cases =
+  let untyped_handler ?(ppos=dp) ?(parameters=[]) expressions cases =
+    let empty_row = Types.make_empty_closed_row () in
     let node =
       Handle { expressions;
                cases;
                descriptor =
-                 { shd_depth = Deep;
-                   shd_types = ( Types.make_empty_closed_row (), `Not_typed
-                               , Types.make_empty_closed_row (), `Not_typed);
-                   shd_raw_row = Types.make_empty_closed_row ();
-                   shd_params = opt_map (fun pps -> {shp_bindings = pps; shp_types = []}) parameters }
+                 { shd_input_effects = empty_row;
+                   shd_output_effects = empty_row;
+                   shd_params   = {shp_bindings = parameters; shp_types = []} }
         }
     in
     with_pos ppos node

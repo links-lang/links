@@ -702,22 +702,23 @@ struct
     let vs = lift_list vs in
     M.bind vs (fun vs -> lift (Special (DoOperation (name, vs, t)), t))
 
-  let handle env (m, val_cases, eff_cases, params, desc) =
-    let params =
-      List.map
-        (fun (body, p, t) -> p, reify (body env), t) params
-    in
-    let val_cases, eff_cases =
-      let reify cases =
-        List.map
-          (fun (p, body) -> ([p], fun env -> reify (body env))) cases
-      in
-      reify val_cases, reify eff_cases
-    in
-    let comp = reify m in
-    let (bs, tc) = CompilePatterns.compile_handle_cases env (val_cases, eff_cases, params, desc) comp in
-    let (_,_,_,t) = desc.Sugartypes.shd_types in
-    reflect (bs, (tc, t))
+  let handle _env _ = assert false
+  (* let handle env (m, val_cases, eff_cases, params, desc) = *)
+    (* let params =
+     *   List.map
+     *     (fun (body, p, t) -> p, reify (body env), t) params
+     * in
+     * let val_cases, eff_cases =
+     *   let reify cases =
+     *     List.map
+     *       (fun (p, body) -> ([p], fun env -> reify (body env))) cases
+     *   in
+     *   reify val_cases, reify eff_cases
+     * in
+     * let comp = reify m in
+     * let (bs, tc) = CompilePatterns.compile_handle_cases env (val_cases, eff_cases, params, desc) comp in
+     * let (_,_,_,t) = desc.Sugartypes.shd_types in
+     * reflect (bs, (tc, t)) *)
 
   let switch env (v, cases, t) =
     let cases =

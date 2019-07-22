@@ -3705,9 +3705,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               then raise (Errors.disabled_extension
                             ~pos ~setting:("enable_handlers", true)
                             ~flag:"--enable-handlers" "Handlers"));
-           let number_of_parameters = match descriptor.shd_params with
-             | None -> 0
-             | Some params -> List.length params.shp_bindings
+           let number_of_parameters =
+             List.length descriptor.shd_params.shp_bindings
            in
            let empty_effects () = Types.make_empty_open_row (lin_unl, res_any) in
            let inject_wild row =
@@ -3739,25 +3738,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              | _ -> assert false
            in
            let type_parameters context descriptor =
-             match descriptor.shd_params with
-             | None -> descriptor, []
-             | Some params ->
-                ignore (check_for_duplicate_names pos (List.map fst params.shp_bindings));
-                let type_parameter context (pat, exp) mpair =
-                  let exp = type_check context exp in
-                  let pat = tpc pat in
-                  unify ~handle:Gripers.handle_parameter (ppos_and_typ pat, pos_and_typ exp);
-                  mpair.MutablePair.fst <- (pat, exp) :: mpair.MutablePair.fst;
-                  mpair.MutablePair.snd <- pattern_typ pat :: mpair.MutablePair.snd; mpair
-                in
-                let erase (pat, exp) = erase pat, erase exp in
-                let mpair =
-                  List.fold_right (type_parameter context) params.shp_bindings (MutablePair.make [] [])
-                in
-                let bindings = mpair.MutablePair.fst in
-                { descriptor with shd_params = Some { shp_bindings = List.map erase bindings;
-                                                      shp_types = mpair.MutablePair.snd } },
-                bindings
+             ignore (check_for_duplicate_names pos (List.map fst descriptor.shd_params.shp_bindings));
+             let type_parameter context (pat, exp) mpair =
+               let exp = type_check context exp in
+               let pat = tpc pat in
+               unify ~handle:Gripers.handle_parameter (ppos_and_typ pat, pos_and_typ exp);
+               mpair.MutablePair.fst <- (pat, exp) :: mpair.MutablePair.fst;
+               mpair.MutablePair.snd <- pattern_typ pat :: mpair.MutablePair.snd; mpair
+             in
+             let erase (pat, exp) = erase pat, erase exp in
+             let mpair =
+               List.fold_right (type_parameter context) descriptor.shd_params.shp_bindings (MutablePair.make [] [])
+             in
+             let bindings = mpair.MutablePair.fst in
+             { descriptor with shd_params = { shp_bindings = List.map erase bindings;
+                                              shp_types = mpair.MutablePair.snd } },
+             bindings
            in
            let type_expressions context exps =
              let type_expression context exp =
@@ -3896,11 +3892,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    else domain.MutablePair.snd <- Types.empty_type :: domain.MutablePair.snd);
                   domain.MutablePair.fst <- 1 + i; domain
                 in
-                let parameter_types =
-                  match descriptor.shd_params with
-                  | Some params -> params.shp_types
-                  | _ -> []
-                in
+                let parameter_types = descriptor.shd_params.shp_types in
                 let expected_domain =
                   MutablePair.snd (List.fold_right build_domain patterns (MutablePair.make 0 parameter_types))
                 in
@@ -3982,7 +3974,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let usages_effect_cases cases =
              merge_usages (List.map (fun (_, _, body) -> usages body) cases)
            in
-           let descriptor = { descriptor with shd_types = (actual_eff, `Not_typed, ambient_effects, body_type) } in
+           let descriptor = { descriptor with shd_input_effects = actual_eff;
+                                              shd_output_effects = ambient_effects }
+           in
            (Handle { expressions = List.map erase expressions;
                      cases = erase_effect_cases cases;
                      descriptor },

@@ -370,11 +370,9 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         Escape (bndr', body')
       | Handle { expressions; cases; descriptor } ->
          let expressions = self#list (fun o -> o#phrase) expressions in
-         let shd_params =
-           self#option (fun o -> o#handle_params) descriptor.shd_params
-         in
+         let descriptor = self#handle_descriptor descriptor in
          let cases = self#effect_cases cases in
-         Handle { expressions; cases; descriptor = { descriptor with shd_params } }
+         Handle { expressions; cases; descriptor }
       | Switch (expr, cases, dt) ->
         let expr' = self#phrase expr in
         let cases' = self#cases cases in

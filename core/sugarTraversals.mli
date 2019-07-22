@@ -52,6 +52,7 @@ class map :
     method location        : Location.t -> Location.t
     method iterpatt        : iterpatt -> iterpatt
     method funlit          : funlit -> funlit
+    method handle_descriptor : handler_descriptor -> handler_descriptor
     method handle_params   : handler_parameterisation -> handler_parameterisation
     method fieldspec       : Datatype.fieldspec -> Datatype.fieldspec
     method fieldconstraint : fieldconstraint -> fieldconstraint
@@ -128,6 +129,7 @@ class fold :
     method location        : Location.t -> 'self
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
+    method handle_descriptor : handler_descriptor -> 'self
     method handle_params   : handler_parameterisation -> 'self
     (* method quantifier      : quantifier -> 'self *)
     method fieldspec       : Datatype.fieldspec -> 'self
@@ -181,6 +183,7 @@ object ('self)
   method int             : int -> 'self * int
   method float           : float -> 'self * float
   method funlit          : funlit -> 'self * funlit
+  method handle_descriptor : handler_descriptor -> 'self * handler_descriptor
   method handle_params   : handler_parameterisation -> 'self * handler_parameterisation
   method iterpatt        : iterpatt -> 'self * iterpatt
   method list            : 'a . ('self -> 'a -> 'self * 'a) -> 'a list -> 'self * 'a list

@@ -274,9 +274,7 @@ class map =
           DoOperation (name, ps, t)
       | Handle { expressions; cases; descriptor } ->
          let expressions = o#list (fun o -> o#phrase) expressions in
-         let params =
-            o#option (fun o -> o#handle_params) descriptor.shd_params
-         in
+         let descriptor = o#handle_descriptor descriptor in
          let cases =
            o#list
              (fun o { patterns; resumption; body } ->
@@ -288,7 +286,7 @@ class map =
                { patterns; resumption; body })
              cases
          in
-         Handle { expressions; cases; descriptor = { descriptor with shd_params = params } }
+         Handle { expressions; cases; descriptor }
       | Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -541,6 +539,10 @@ class map =
       fun (_x, _x_i1) ->
         let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
+
+    method handle_descriptor : handler_descriptor -> handler_descriptor =
+      fun descriptor ->
+      { descriptor with shd_params = o#handle_params descriptor.shd_params }
 
     method handle_params : handler_parameterisation -> handler_parameterisation =
       fun { shp_bindings; shp_types }->
@@ -997,9 +999,7 @@ class fold =
      let o = o#list (fun o -> o#phrase) ps in o
       | Handle { expressions; cases; descriptor } ->
          let o = o#list (fun o -> o#phrase) expressions in
-         let o =
-           o#option (fun o -> o#handle_params) descriptor.shd_params
-         in
+         let o = o#handle_descriptor descriptor in
          let o =
            o#list
              (fun o { patterns; resumption; body } ->
@@ -1237,6 +1237,9 @@ class fold =
       fun (_x, _x_i1) ->
         let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let o = o#phrase _x_i1 in o
+
+    method handle_descriptor : handler_descriptor -> 'self_type =
+      fun descriptor -> o#handle_params descriptor.shd_params
 
     method handle_params : handler_parameterisation -> 'self_type =
       fun params ->
@@ -1707,9 +1710,7 @@ class fold_map =
      (o, DoOperation (name, ps, t))
       | Handle { expressions; cases; descriptor } ->
           let (o, expressions) = o#list (fun o -> o#phrase) expressions in
-          let (o, params) =
-            o#option (fun o -> o#handle_params) descriptor.shd_params
-          in
+          let (o, descriptor) = o#handle_descriptor descriptor in
           let (o, cases) =
             o#list
               (fun o { patterns; resumption; body } ->
@@ -1725,7 +1726,7 @@ class fold_map =
                 (o, { patterns; resumption; body }))
               cases
           in
-          (o, (Handle { expressions; cases; descriptor = { descriptor with shd_params = params } }))
+          (o, (Handle { expressions; cases; descriptor }))
       | Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -2015,6 +2016,11 @@ class fold_map =
       fun (_x, _x_i1) ->
         let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
+
+    method handle_descriptor : handler_descriptor -> ('self_type * handler_descriptor) =
+      fun descriptor ->
+      let (o, shd_params) = o#handle_params descriptor.shd_params in
+      o, { descriptor with shd_params }
 
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
       fun params ->

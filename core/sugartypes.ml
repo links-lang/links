@@ -204,10 +204,9 @@ and effect_clause =
     body: phrase }
 and funlit = Pattern.with_pos list list * phrase
 and handler_descriptor =
-  { shd_depth   : handler_depth
-  ; shd_types   : Types.row * Types.datatype * Types.row * Types.datatype
-  ; shd_raw_row : Types.row
-  ; shd_params  : handler_parameterisation option
+  { shd_input_effects: Types.row
+  ; shd_output_effects: Types.row
+  ; shd_params  : handler_parameterisation
   }
 and handler_parameterisation =
   { shp_bindings : (Pattern.with_pos * phrase) list
@@ -509,15 +508,13 @@ struct
                      diff (option_map phrase orderby) pat_bound]
     | Handle { expressions; cases; descriptor } ->
        let params_bound =
-         option_map
-           (fun params -> union_map (fst ->- pattern) params.shp_bindings)
-           descriptor.shd_params
+         union_map (fst ->- pattern) descriptor.shd_params.shp_bindings
        in
        union_all [union_map phrase expressions;
                   union_map effect_case cases;
-                  diff (option_map (fun params -> union_map (snd ->- phrase)
-                                                    params.shp_bindings)
-                          descriptor.shd_params) params_bound]
+                  diff
+                    (union_map (snd ->- phrase) descriptor.shd_params.shp_bindings)
+                    params_bound]
     | Switch (p, cases, _)
     | Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | CP cp -> cp_phrase cp

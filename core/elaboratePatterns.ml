@@ -50,9 +50,7 @@ let elaborate =
                expression)
              expressions
          in
-         let params =
-           self#option (fun o -> o#handle_params) descriptor.shd_params
-         in
+         let descriptor = self#handle_descriptor descriptor in
          self#restore st';
          self#enter_handler;
          self#at_toplevel;
@@ -78,7 +76,7 @@ let elaborate =
              cases
          in
          self#restore st';
-         Handle { expressions; cases; descriptor = { descriptor with shd_params = params } }
+         Handle { expressions; cases; descriptor }
       | p -> super#phrasenode p
 
     method! pattern pat =

@@ -81,12 +81,12 @@ object (o : 'self_type)
         (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
     | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false
     | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos } ->
-        let (o, try_phr, try_dt) = o#phrase try_phr in
+        let (o, try_phr, _try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
         let (o, as_phr, _as_dt) = o#phrase as_phr in
         let o = o#restore_envs envs in
-        let (o, otherwise_phr, otherwise_dt) = o#phrase otherwise_phr in
+        let (o, otherwise_phr, _otherwise_dt) = o#phrase otherwise_phr in
         (* Now, to create a handler... *)
         (* Otherwise clause: Distinguished 'session failure'
            name. Since * we'll never use the continuation, generate a
@@ -117,16 +117,15 @@ object (o : 'self_type)
         in
 
         (* Manually construct a row with the two hardwired handler cases. *)
-        let raw_row = Types.row_with ("Return", (`Present try_dt)) inner_effects in
+        (* let raw_row = Types.row_with ("Return", (`Present try_dt)) inner_effects in *)
         (* Dummy types *)
-        let types =
-          (inner_effects, try_dt, outer_effects, otherwise_dt) in
+        (* let types =
+         *   (inner_effects, try_dt, outer_effects, otherwise_dt) in *)
 
         let descriptor = {
-          shd_depth = Shallow;
-          shd_types = types;
-          shd_raw_row = raw_row;
-          shd_params = None;
+            shd_input_effects = inner_effects;
+            shd_output_effects = outer_effects;
+            shd_params = { shp_bindings = []; shp_types = [] };
         } in
 
         (o, SourceCode.WithPos.make ~pos (Handle { expressions = [try_phr]; cases; descriptor }), dt)
