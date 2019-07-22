@@ -2555,7 +2555,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let ftype = make_ft lin pats effects (typ body) in
 
-            (* Ensure the previously inferred arguments match up with the
+            (* Ensure the previously inferred arguments types match up with the
                current one. While we will detect this during {!DesugarFuns},
                it's good to catch this when it actually happens. *)
             (match argss_prev with
@@ -2945,9 +2945,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let pid_effects = Types.make_empty_open_row default_effect_subkind in
 
-            (* If session exceptions are enabled, then the spawned body may raise the
-             * SessionFail exception. *)
-            (* (() ~e~> _) -> Process (e) *)
+            (* The various spawn methods have the type [(() ~e~> _) -> Process (e)]
+               (unless session exceptions are enabled, then the spawned body may
+               raise the SessionFail exception.
+
+               We need to type the body of the spawn block with the effect type [{
+               wild | e }] (and maybe SessionFail) (call this "inner_effects"), and
+               then use e (pid_effects) as the type argument to the process.
+             *)
             let inner_effects = Types.row_with ("wild", `Present Types.unit_type) pid_effects in
             let inner_effects =
               if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
@@ -2966,11 +2971,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             if not (Types.Unl.can_type_be (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
 
-            begin
-              match old_inner with
-              | None -> ()
-              | Some old_inner ->
-                 unify ~handle:Gripers.spawn_inconsistent (no_pos (`Effect pid_effects), no_pos (`Effect old_inner))
+            (* If we've previously typed this spawn block, ensure we've inferred the
+               same types this time round.
+
+               This is mostly used to ensure desugaring passes generate the correct
+               type. *)
+            begin match old_inner with
+            | None -> ()
+            | Some old_inner ->
+               unify ~handle:Gripers.spawn_inconsistent (no_pos (`Effect pid_effects), no_pos (`Effect old_inner))
             end;
 
             Spawn (k, given_loc, erase p, Some pid_effects), pid_type, usages p
