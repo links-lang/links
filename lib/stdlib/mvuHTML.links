@@ -5,6 +5,7 @@ typename HTML(a :: Type(Any, Any)) =
   [| HTMLEmpty
    | HTMLAppend: (HTML(a), HTML(a))
    | HTMLText: (String)
+   | HTMLRaw: (String)
    | HTMLTag: (tagName: String, attrs: Attr(a), children: HTML(a))
    |];
 
@@ -12,6 +13,10 @@ var empty = HTMLEmpty;
 
 fun textNode(str) {
   HTMLText(str)
+}
+
+fun unescapedTextNode(str) {
+  HTMLRaw(str)
 }
 
 sig tag : forall a :: Type(Any, Any), e :: Row .

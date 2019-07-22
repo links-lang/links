@@ -102,7 +102,7 @@ fun value(val) {
 }
 
 fun for_(val) {
-    attr ("for", val)
+    attr ("htmlFor", val)
 }
 
 fun text(val) {
