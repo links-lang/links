@@ -3123,11 +3123,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                       let rettyp = Types.fresh_type_variable (lin_any, res_any) in
                       begin
                         let funt = no_pos (`Function (Types.make_tuple_type (List.map typ ps),
-                                                     context.effect_row, rettyp))
-                        and lolt = no_pos (`Lolli (Types.make_tuple_type (List.map typ ps),
-                                                  context.effect_row, rettyp))
-                        and term = (exp_pos f, ft)
-                        in
+                                                     context.effect_row, rettyp)) in
+                        let lolt = no_pos (`Lolli (Types.make_tuple_type (List.map typ ps),
+                                                  context.effect_row, rettyp)) in
+                        let term = (exp_pos f, ft) in
                         match Types.concrete_type ft with
                         | `Function _ -> unify ~handle:Gripers.fun_apply (term, funt)
                         | `Lolli _ -> unify ~handle:Gripers.fun_apply (term, lolt)
