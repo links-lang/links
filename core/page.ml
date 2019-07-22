@@ -9,7 +9,6 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exceptions_enabled)
 
   let get_js_lib_url () =
-    let open Pervasives in
     let base_url = Settings.get_value Basicsettings.Appserver.external_base_url |> strip_slashes in
     let base_url = Utility.strip_slashes base_url in
     let js_url = Settings.get_value js_lib_url |> strip_slashes in
@@ -138,7 +137,6 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       let _venv, code = C.generate_program venv ([], Ir.Return (Ir.Extend (StringMap.empty, None))) in
       let code = f code in
       let code =
-        let open Pervasives in
         code |> (C.generate_stubs valenv defs) |> C.wrap_with_server_lib_stubs
       in
       G.string_of_js code

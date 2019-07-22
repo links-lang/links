@@ -48,7 +48,7 @@ SOURCES=links
 DB_SOURCES=links-postgresql,links-sqlite3
 # Note: this relies on lazy expansion of `SOURCES'.
 COMMON_FLAGS=--only-packages $(SOURCES) --build-dir=$(BUILD_DIR)
-DEV_FLAGS=$(COMMON_FLAGS) --profile=development
+DEV_FLAGS=$(COMMON_FLAGS) --profile=dev
 REL_FLAGS=$(COMMON_FLAGS) --profile=release
 
 # Build rules.

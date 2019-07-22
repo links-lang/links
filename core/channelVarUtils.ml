@@ -1,6 +1,5 @@
 open Value
 open Utility
-open Pervasives (* PIPES *)
 
 (* We can't use the visitor in ir.ml, since we don't have access to the
  * typing environment at this point. It would be good to replace this with
@@ -137,7 +136,6 @@ let sessions_in_value v =
 
 
 let affected_in_context (raise_env: Value.env) comp =
-  let open Pervasives in
   let show_values xs =
     String.concat "," (List.map (string_of_value) xs) in
   let affected_values =

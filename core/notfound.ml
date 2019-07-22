@@ -261,7 +261,6 @@ struct
     let getenv v =
       try Sys.getenv v with Not_found -> raise (Unknown_environment_variable v)
     in
-    let open Pervasives in
     Str.full_split shell_var_regexp string
     |> List.map (function | Str.Delim v -> getenv (normalize_env_var v) | Str.Text v -> v)
     |> String.concat ""
