@@ -1,0 +1,43 @@
+# Implements a basic List monad as an effect handler
+
+sig list : ([a]) {List: forall a. ([a]) -> a|_} -> a
+fun list (xs) { do List(xs) }
+
+sig zero : () {List: forall a. ([a]) -> a|_} -> a
+fun zero() { list([]) }
+
+sig runList : (Comp({List:forall a. ([a]) -> a|e}, r)) {List{_}|e}~> [r]
+fun runList(f) {
+  handle(f()) {
+    case List(xs, k) -> concatMap(k, xs)
+    case Return(x) -> [x]
+  }
+}
+
+# Compute the cross product of two lists
+fun cross(xs, ys) {
+  runList(fun() {
+    var x = list(xs);
+    var y = list(ys);
+    (x, y)
+  })
+}
+
+# Filter a list using a predicate function.
+#
+# This ends up being pretty gross, as we need to execute the function /within/
+# the effect. We can make the function polymorphic on the effect (a pain at the
+# call site but feels more elegant), or specify a full type (leaks the effect
+# into the function).
+sig filter : (forall e::Row. (a) -e-> Bool, [a]) {List{_}|e}~> [a]
+# sig filter : ((a) {List:forall a. ([a]) -> a|e}~> Bool, [a]) {List{_}|e}~> [a]
+fun filter(f, xs) {
+  runList(fun() {
+    var x = list(xs);
+    if(f(x)) { x } else { zero() }
+  })
+}
+
+# Some 'fun' examples to try
+# filter($(fun(x) { mod(x, 2) == 0 }), [ 1, 2, 3, 4, 5, 6 ])
+# cross([1, 2, 3], ["a", "b", "c"])

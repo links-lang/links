@@ -328,28 +328,37 @@ module Desugar = struct
 
        method effect_row ~allow_shared (fields, var) =
          let open Datatype in
+         let rec transform_field name = function
+           | { node = Forall (qs, ({ node = Function _; _ } as t)); pos } ->
+              (* Elaborate inside the body of foralls if we're a polymorphic
+                 operation - not just polymorphic return. *)
+              WithPos.make ~pos (Forall (qs, transform_field name t))
+
+           | { node = Function (domain, (fields, rv), codomain); pos } as op
+                when not (TypeUtils.is_builtin_effect name) -> (
+             (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
+             match (rv, fields) with
+             | Closed, [] -> op
+             | Open _, [] | Recursive _, [] ->
+                (* might need an extra check on recursive rows *)
+                WithPos.make ~pos (Function (domain, ([], Closed), codomain))
+             | _, _ ->
+                raise
+                  (Type_error
+                     ( pos,
+                       "The abstract operation " ^ name ^ " has unexpected "
+                       ^ "effects in its signature. The effect signature on an "
+                       ^ "abstract operation arrow is always supposed to be empty, "
+                       ^ "since any effects it might have are ultimately conferred by its handler."
+           )) )
+           | node when not (TypeUtils.is_builtin_effect name) ->
+              (* Elaborates `Op : a' to `Op : () {}-> a' *)
+              WithPos.make ~pos:node.pos (Function ([], ([], Closed), node))
+           | x -> x
+         in
          let fields =
            List.map (function
-               | (name, Present { node = Function (domain, (fields, rv), codomain); pos }) as op
-                    when not (TypeUtils.is_builtin_effect name) -> (
-                 (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
-                 match (rv, fields) with
-                 | Closed, [] -> op
-                 | Open _, [] | Recursive _, [] ->
-                    (* might need an extra check on recursive rows *)
-                    (name, Present (WithPos.make ~pos (Function (domain, ([], Closed), codomain))))
-                 | _, _ ->
-                    raise
-                      (Type_error
-                         ( pos,
-                           "The abstract operation " ^ name ^ " has unexpected "
-                           ^ "effects in its signature. The effect signature on an "
-                           ^ "abstract operation arrow is always supposed to be empty, "
-                           ^ "since any effects it might have are ultimately conferred by its handler."
-               )) )
-               | name, Present node when not (TypeUtils.is_builtin_effect name) ->
-                  (* Elaborates `Op : a' to `Op : () {}-> a' *)
-                  name, Present (WithPos.make ~pos:node.pos (Function ([], ([], Closed), node)))
+               | name, Present t -> name, Present (transform_field name t)
                | x -> x)
              fields
          in
@@ -739,6 +748,7 @@ module Desugar = struct
          end
       | _ -> fields
     in
+    let (fields, rho, dual) = row var_env alias_env (fields, rv) node in
     (fields, rho, dual)
 
   and type_arg var_env alias_env ta node =

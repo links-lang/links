@@ -30,6 +30,7 @@ module Utils : sig
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string ->
                     (Types.type_arg list * Types.datatype)
+  val instantiate_fields : Types.row -> ((string * Types.type_arg list) list * Types.row)
   val generalise : ?unwrap:bool -> Types.environment -> Types.datatype ->
                    ((Types.quantifier list*Types.type_arg list) * Types.datatype)
 
@@ -46,6 +47,20 @@ struct
   let unify = Unify.datatypes
   let instantiate = Instantiate.var
   let generalise = Generalise.generalise
+
+  let instantiate_fields (row : Types.row) : ((string * Types.type_arg list) list * Types.row) =
+    let (fields, rv, dual), _ = Types.unwrap_row row in
+    let tyargs, fields =
+      StringMap.fold
+        (fun f spec (tss, fs) ->
+          match spec with
+          | `Present t ->
+             let tyargs, t = Instantiate.typ t in
+             ((f, tyargs) :: tss, StringMap.add f (`Present t) fs)
+          | _ -> (tss, StringMap.add f spec fs))
+        fields ([], StringMap.empty)
+    in
+    tyargs, (fields, rv, dual)
 
   let rec opt_generalisable o = opt_app is_pure true o
   and is_pure p = match p.node with
@@ -3500,10 +3515,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 x, x' :: xs'
            in
            (* allow_wild adds wild : () to the given effect row *)
-           let allow_wild : Types.row -> Types.row
-         = fun row ->
-           let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
-           Types.extend_row fields row
+           let allow_wild : Types.row -> Types.row = fun row ->
+             let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
+             Types.extend_row fields row
            in
            (* returns a pair of lists whose first component is the
                value clauses, while the second component is the
@@ -3740,9 +3754,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            in
            (* make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
-         = fun row ->
+             = fun row ->
              let (operations, rho, dual) = row in
-         let operations' =
+             let operations' =
                StringMap.mapi
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
@@ -3751,11 +3765,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                                        make absent operations polymorphic in their presence. *)
                  operations
              in
-         (operations', rho, dual)
+             (operations', rho, dual)
            in
            let m_context = { context with effect_row = Types.make_empty_open_row default_effect_subkind } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
-           let m_effects = `Effect m_context.effect_row in
            (* Most of the work is done by `type_cases'. *)
            let (val_cases, eff_cases) =
              (* The following is a slight hack until I get rid of the
@@ -3774,11 +3787,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            (* Finalise construction of the effect row of the input computation *)
            let inner_eff, outer_eff =
              let m_pos = exp_pos m in
-             let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
+             let tyargs, inst_row = Utils.instantiate_fields m_context.effect_row in
+             tyargs |> List.iter (fun (_, tyargs) -> List.iter Generalise.rigidify_type_arg tyargs);
+             let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, `Effect inst_row), no_pos (`Effect inner_eff)) in
+
              let inner_eff' = make_operations_presence_polymorphic inner_eff in
              (* Printf.printf "inner_eff': %s\n%!" (Types.string_of_row inner_eff'); *)
              let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect inner_eff'), no_pos (`Effect outer_eff)) in
-             let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect outer_eff), no_pos (`Effect context.effect_row)) in
+
+             unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect outer_eff), no_pos (`Effect context.effect_row));
              inner_eff, outer_eff
            in
            let eff_cases =
@@ -3814,10 +3831,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (effrow, out_t, ps)
            in
            let p = Position.resolve_expression pos in
-           let () = unify ~handle:Gripers.do_operation
-             (no_pos (`Effect context.effect_row), (p, `Effect row))
-           in
-             (DoOperation (opname, List.map erase args, Some return_type), return_type, StringMap.empty)
+           let _, inst_row = Utils.instantiate_fields context.effect_row in
+           unify ~handle:Gripers.do_operation (no_pos (`Effect inst_row), (p, `Effect row));
+           (DoOperation (opname, List.map erase args, Some return_type), return_type, StringMap.empty)
         | Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in

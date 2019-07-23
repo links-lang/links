@@ -31,7 +31,7 @@ if [[ $missing != "" ]]; then
         fi
         echo "Typecheck example file $m"
         echo "$m"
-        echo "filemode : args"
+        echo "filemode : true"
         echo "args : --config=tests/typecheck_examples.tests.config"
     done
     echo "-------------------------------------------------------"

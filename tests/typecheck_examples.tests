@@ -244,6 +244,11 @@ filemode : true
 ignore : broken example
 args : --config=tests/examples_default.config
 
+Typecheck example file examples/handlers/choose_poly.links
+examples/handlers/choose_poly.links
+filemode : true
+args : --config=tests/examples_default.config
+
 Typecheck example file examples/handlers/coins.links
 examples/handlers/coins.links
 filemode : true
@@ -288,6 +293,11 @@ args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/light_switch.links
 examples/handlers/light_switch.links
+filemode : true
+args : --config=tests/examples_default.config
+
+Typecheck example file examples/handlers/list.links
+examples/handlers/list.links
 filemode : true
 args : --config=tests/examples_default.config
 

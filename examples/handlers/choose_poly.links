@@ -1,0 +1,28 @@
+sig choose : (a, a) {Choose: forall a. (a, a) -> a|_} -> a
+fun choose (x, y) { do Choose(x, y) }
+
+fun choice() {
+  if (choose(true, false)) {
+    choose(1, 2)
+  } else {
+    choose(10, 20)
+  }
+}
+
+# The "positive" handler
+sig positive : (Comp({Choose:forall a. (a, a) -> a|e}, r)) {Choose{_}|e}~> r
+fun positive(f) {
+  handle(f()) {
+    case Choose(x, _, k) -> k(x)
+    case Return(x) -> x
+  }
+}
+
+# The "I'll-take-everything" handler
+sig enumerate : (Comp({Choose:forall a. (a, a) -> a|e}, r)) {Choose{_}|e}~> [r]
+fun enumerate(f) {
+  handle(f()) {
+    case Choose(x, y, k) -> k(x) ++ k(y)
+    case Return(x) -> [x]
+  }
+}
