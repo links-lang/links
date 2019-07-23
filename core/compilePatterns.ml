@@ -32,6 +32,7 @@ struct
     | Variable of binder
     | As       of binder * t
     | HasType  of t * Types.datatype
+    | Operation of string * t list * t
     [@@deriving show]
 
   type context =
@@ -49,6 +50,7 @@ struct
     | SRecord
     | SConstant
     | SVariable
+    | SOperation
 
   type annotation_element =
     | Binder of binder
@@ -154,7 +156,22 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
             let p, env = desugar_pattern p in
               Pattern.HasType (p, t), env
         | HasType (_, (_, None)) -> assert false
-        | Operation _ -> assert false
+        | Operation { label; parameters; resumption } ->
+           let parameters, env =
+             List.fold_right
+               (fun parameter (parameters, env) ->
+                 let parameter, env' = desugar_pattern parameter in
+                 (parameter :: parameters, env ++ env'))
+               parameters ([], empty)
+           in
+           let resumption, env =
+             match resumption with
+             | None -> Pattern.Any, env
+             | Some (pattern, _) ->
+                let pattern, env' = desugar_pattern pattern in
+                pattern, env ++ env'
+           in
+           Pattern.Operation (label, parameters, resumption), env
         | MultiOperation _ -> assert false
 
 type raw_bound_computation = raw_env -> computation
@@ -296,6 +313,7 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
               (lp t pattern value body)
         | Pattern.HasType (pat, t) ->
            lp t pat (Coerce (value, t)) body
+        | Pattern.Operation _ -> assert false (* Cannot occur in a let binding. *)
     in
       lp value_type pat value body
 
@@ -310,6 +328,7 @@ let rec get_pattern_sort : Pattern.t -> Pattern.sort =
     | Any | Variable _ -> SVariable
     | As (_, pattern) -> get_pattern_sort pattern
     | HasType (pattern, _) -> get_pattern_sort pattern
+    | Operation _ -> SOperation
 
 let get_clause_pattern_sort : clause -> Pattern.sort =
   function
@@ -492,6 +511,7 @@ let rec match_cases : var list -> clause list -> bound_computation -> bound_comp
                        match_record vars (arrange_record_clauses clauses) comp var
                    | SConstant ->
                       match_constant vars (arrange_constant_clauses clauses) comp var
+                   | SOperation -> assert false (* TODO FIXME. *)
               ) clausess def env
       | _, _ -> assert false
 
@@ -1114,5 +1134,8 @@ let compile_choices
 
 module Handlers = struct
   let compile : raw_env -> Ir.computation list -> (Pattern.t * Ir.computation * Types.datatype) list -> raw_effect_clause list -> Sugartypes.handler_descriptor -> Ir.computation
-    = fun _env _exps _params _cases _descriptor -> assert false
+    = fun _env computations _params _cases _descriptor ->
+    (* For now assume unary handlers. *)
+    assert (List.length computations = 1);
+    assert false
 end

@@ -86,7 +86,7 @@ object (o : 'self_type)
         let (o, pat) = o#pattern pat in
         let (o, as_phr, _as_dt) = o#phrase as_phr in
         let o = o#restore_envs envs in
-        let (o, otherwise_phr, _otherwise_dt) = o#phrase otherwise_phr in
+        let (o, otherwise_phr, otherwise_dt) = o#phrase otherwise_phr in
         (* Now, to create a handler... *)
         (* Otherwise clause: Distinguished 'session failure'
            name. Since * we'll never use the continuation, generate a
@@ -125,6 +125,7 @@ object (o : 'self_type)
         let descriptor = {
             shd_input_effects = inner_effects;
             shd_output_effects = outer_effects;
+            shd_branch_type = otherwise_dt;
             shd_params = { shp_bindings = []; shp_types = [] };
         } in
 

@@ -494,7 +494,6 @@ class transform (env : Types.typing_environment) =
            let o, output = o#row descriptor.shd_output_effects in
            input, output, o
          in
-         let descriptor = { shd_input_effects; shd_output_effects; shd_params } in
          (* Transform cases. *)
          let transform_case { patterns; resumption; body } (cases, _branch_type, o) =
            let envs = o#backup_envs in
@@ -512,12 +511,17 @@ class transform (env : Types.typing_environment) =
            let (o, body, t) = o#phrase body in
            { patterns; resumption; body } :: cases, t, o#restore_envs envs
          in
-         let cases, branch_type, o =
+         let cases, shd_branch_type, o =
            List.fold_right transform_case cases ([], `Not_typed, o)
+         in
+         let descriptor = { shd_input_effects;
+                            shd_output_effects;
+                            shd_branch_type;
+                            shd_params }
          in
          (* Restore the environments. *)
          let o = o#restore_envs envs in
-         (o, Handle { expressions; cases; descriptor }, branch_type)
+         (o, Handle { expressions; cases; descriptor }, shd_branch_type)
       | TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->
           let (o, try_phr, _) = o#phrase try_phr in
           let (o, as_pat) = o#pattern as_pat in

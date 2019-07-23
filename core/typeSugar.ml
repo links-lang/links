@@ -3998,7 +3998,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              merge_usages (List.map (fun (_, _, body) -> usages body) cases)
            in
            let descriptor = { descriptor with shd_input_effects = inner_eff;
-                                              shd_output_effects = outer_eff }
+                                              shd_output_effects = outer_eff;
+                                              shd_branch_type = body_type }
            in
            (Handle { expressions = List.map erase expressions;
                      cases = erase_effect_cases cases;

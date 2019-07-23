@@ -206,6 +206,7 @@ and funlit = Pattern.with_pos list list * phrase
 and handler_descriptor =
   { shd_input_effects: Types.row
   ; shd_output_effects: Types.row
+  ; shd_branch_type: Types.datatype
   ; shd_params  : handler_parameterisation
   }
 and handler_parameterisation =
