@@ -140,7 +140,7 @@ sig
 
   val handle : env ->
                tail_computation sem list ->
-               (CompilePatterns.Pattern.t list * CompilePatterns.Pattern.t * (env -> tail_computation sem)) list ->
+               (CompilePatterns.Pattern.t list * CompilePatterns.Pattern.t option * (env -> tail_computation sem)) list ->
                (CompilePatterns.Pattern.t * (env -> tail_computation sem) * Types.datatype) list ->
                Sugartypes.handler_descriptor ->
                tail_computation sem
@@ -702,10 +702,22 @@ struct
     let vs = lift_list vs in
     M.bind vs (fun vs -> lift (Special (DoOperation (name, vs, t)), t))
 
-  let handle _env expressions _raw_cases _raw_params _descriptor =
+  let handle env expressions raw_cases raw_params descriptor =
     (* For now assume unary handlers. *)
     assert (List.length expressions = 1);
-    assert false
+    let params =
+      List.map
+        (fun (pat, body, t) -> pat, reify (body env), t)
+        raw_params
+    in
+    let cases =
+      List.map
+        (fun (patterns, resumption, body) -> (patterns, resumption, fun env -> reify (body env)))
+        raw_cases
+    in
+    let computations = List.map reify expressions in
+    let (bs, tc) = CompilePatterns.Handlers.compile env computations params cases descriptor in
+    reflect (bs, (tc, `Not_typed))
   (* let handle env (m, val_cases, eff_cases, params, desc) = *)
     (* let params =
      *   List.map
@@ -922,10 +934,10 @@ struct
                    let penv, patterns = desugar_patterns patterns in
                    let penv, resumption =
                      match resumption with
-                     | None -> penv, CompilePatterns.Pattern.Any
+                     | None -> penv, None
                      | Some (resumption, _) ->
                         let pat, env = CompilePatterns.desugar_pattern eff resumption in
-                        env ++ penv, pat
+                        env ++ penv, Some pat
                    in
                    (patterns, resumption, fun env -> eval (env ++ parenv ++ penv) body))
                  cases

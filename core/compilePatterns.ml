@@ -229,6 +229,7 @@ type annotation = Pattern.annotation_element list
 type annotated_pattern = annotation * Pattern.t
 
 type raw_clause = Pattern.t list * raw_bound_computation
+type raw_effect_clause = Pattern.t list * Pattern.t option * raw_bound_computation
 type clause = annotated_pattern list * bound_computation
 type annotated_clause = annotation * clause
 
@@ -1111,3 +1112,7 @@ let compile_choices
         (fun () -> "Compiled choices: "^(string_of_computation result));
       result
 
+module Handlers = struct
+  let compile : raw_env -> Ir.computation list -> (Pattern.t * Ir.computation * Types.datatype) list -> raw_effect_clause list -> Sugartypes.handler_descriptor -> Ir.computation
+    = fun _env _exps _params _cases _descriptor -> assert false
+end
