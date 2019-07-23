@@ -4129,7 +4129,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
               (fun (inner_rec_vars, inner_env, patss)
                    { rec_binder = bndr; rec_linearity = lin;
                      rec_definition = ((_, def), (pats, _));
-                     rec_signature = t_ann'; rec_unsafe_signature = unsafe; rec_pos = pos; _ } ->
+                     rec_signature = t_ann';
+                     rec_unsafe_signature = unsafe;
+                     rec_frozen = frozen;
+                     rec_pos = pos; _ } ->
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
@@ -4159,6 +4162,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          let t = if unsafe then make_unsafe_signature t else t in
                          let ft = match t with
                            | `ForAll _ -> t
+                           | _ when frozen -> t
                            | _ -> Generalise.generalise_rigid context.var_env t |> snd
                          in
                          (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
@@ -4247,7 +4251,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
                    let inner, outer, tyvars =
                      match inner with
                        | `ForAll (inner_tyvars, inner_body) ->
-                           let (body_tyvars, _body_tyargs), gen = Utils.generalise context.var_env inner_body in
+                           let (body_tyvars, _), gen =
+                             if fn.rec_frozen then (inner_tyvars, []), inner
+                             else Utils.generalise context.var_env inner_body
+                           in
 
                            let outer_tyvars, outer =
                              match t_ann with
@@ -4290,14 +4297,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                | q :: _ when Types.type_var_number q = n -> Some i
                                | _ :: qs -> find n (i+1) qs in
                              let find q = find (Types.type_var_number q) 0 inner_tyvars in
-                             List.map find outer_tyvars in
-
-                           (* let outer = Instantiate.freshen_quantifiers outer in
-                            * let inner = Instantiate.freshen_quantifiers inner in *)
-                             (inner, extras), outer, outer_tyvars
+                             List.map find outer_tyvars
+                           in
+                           (inner, extras), outer, outer_tyvars
                        | _ ->
-                           let (body_tyvars, _tyargs), gen = Utils.generalise context.var_env inner in
-
+                           let (body_tyvars, _), gen =
+                             if fn.rec_frozen then ([], []), inner
+                             else Utils.generalise context.var_env inner
+                           in
 
                            let outer_tyvars, outer =
                              match t_ann with
@@ -4305,15 +4312,13 @@ and type_binding : context -> binding -> binding * context * usagemap =
                              | Some t -> body_tyvars, Types.for_all (body_tyvars, t) in
 
                            let extras = List.map (fun _q -> None) outer_tyvars in
-
-                           (* let extras = List.map (fun q -> Some q) outer_tyvars in *)
-                           (* let outer = Instantiate.freshen_quantifiers outer in *)
-                             (inner, extras), outer, outer_tyvars in
+                           (inner, extras), outer, outer_tyvars in
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
-                   ({ fn with rec_binder = Binder.set_type bndr outer;
-                              rec_definition = ((tyvars, Some inner), (pats, body)); }::defs,
+                   ({ fn with
+                      rec_binder = Binder.set_type bndr outer;
+                      rec_definition = ((tyvars, Some inner), (pats, body)) }::defs,
                       Env.bind outer_env (name, outer)))
                 ([], Env.empty) defs patss
             in

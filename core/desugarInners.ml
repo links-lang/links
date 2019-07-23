@@ -178,7 +178,9 @@ object (o : 'self_type)
                let o = o#with_visiting visiting_funs in
 
                let (o, defs) = list o defs in
-               (o, { fn with rec_definition = ((tyvars, Some (inner, extras)), lam) } :: defs)
+               (o, { fn with
+                     rec_definition = ((tyvars, Some (inner, extras)), lam);
+                     rec_frozen = true } :: defs)
             | _ :: _ -> assert false
           in list o defs
         in
