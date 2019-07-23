@@ -1,6 +1,6 @@
 typename Zero = [||];
 
-typename Comp(a, e::Eff) = (() ~e~> a);
+typename Comp(a) = (() ~> a);
 typename CF(a, e::Eff) = Comp(a, {Choice: (()) {}-> Bool,
                                   Failure:(()) {}-> Zero|e});
 

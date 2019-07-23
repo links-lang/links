@@ -259,7 +259,7 @@ fun literalPolarity(e,x) {
 
 # Parsing
 typename Parser(a, e::Eff) = () {Choose: Bool, Satisfies: ((Char) {}~> Bool) -> Char, Peek: Maybe(Char), Fail: Zero |e}~> a;
-typename ExprParser(e::Eff) = Parser(Expr, { | e});
+typename ExprParser = Parser(Expr);
 
 sig satisfies : ((Char) {}~> Bool) -> Parser(Char, { |e})
 fun satisfies(pred)() {

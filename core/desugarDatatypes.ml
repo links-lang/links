@@ -45,7 +45,7 @@ let fresh_tygroup_id () =
   tygroup_counter := ret + 1;
   ret
 
-(* Check that no datatype is left undesugared. *)
+(** Check that no datatype is left undesugared. *)
 let all_datatypes_desugared =
 object (self)
   inherit SugarTraversals.predicate as super
@@ -294,6 +294,62 @@ module Desugar = struct
         end
      | _ -> false
 
+   let allows_shared_effect dt =
+     Settings.get_value Basicsettings.Types.effect_sugar
+     && (all_anon_effects#datatype dt)#satisfied
+
+   (** Determine if this type has a definite implicit effect within it.
+
+      This should be called with [allowed_shared_effect] - it does not determine
+      whether the effect variable is applicable in this context, merely that it
+      exist.
+
+      This class also gathers recursive applications, similarly to
+      {!Types.recursive_applications}. This is used when determining implicit
+      effectiness of mutually recursive types. *)
+   let has_implicit_effect (alias_env : Types.tycon_environment) =
+     object
+         inherit SugarTraversals.predicate as super
+
+         val satisfied = false
+         val mutuals = StringSet.empty
+
+         method make_satisfied = {<satisfied = true>}
+         method with_mutual ty = {<mutuals = StringSet.add ty mutuals>}
+
+         method! datatypenode dt =
+           let open Datatype in
+           let self = super#datatypenode dt in
+           match dt with
+           | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _) ->
+              begin match eff_var with
+              | Datatype.Open ("$eff", None, `Rigid) -> self#make_satisfied
+              | _ -> self
+              end
+           | TypeApplication (name, ts) ->
+              let tycon = SEnv.find alias_env name in
+              let self =
+                match tycon with
+                | Some (`Alias (qs, _)) | Some (`Mutual (qs, _))
+                     when List.length qs = List.length ts + 1 ->
+                   begin match ListUtils.last qs with
+                   | _, (PrimaryKind.Row, (_, Restriction.Effect)) -> self#make_satisfied
+                   | _ -> self
+                   end
+                | _ -> self
+              in
+              let self = match tycon with
+                | Some (`Mutual _) -> self#with_mutual name
+                | _ -> self
+              in
+              self
+           | _ -> self
+
+         method satisfied = satisfied
+
+         method mutuals = mutuals
+     end
+
    (** Attempt to augment this context with an {!shared_effect}, if possible.
 
       If effect_sugar is enabled, and all variables are fresh (and so not
@@ -303,9 +359,7 @@ module Desugar = struct
      match var_env.shared_effect with
      | Undefined ->
         let var =
-          if var_env.allow_fresh &&
-               Settings.get_value Basicsettings.Types.effect_sugar
-               && (all_anon_effects#datatype dt)#satisfied then
+          if var_env.allow_fresh && allows_shared_effect dt then
             let point =
               lazy begin
                   let var = Types.fresh_raw_variable () in
@@ -665,58 +719,88 @@ object (self)
 
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
-        let (mutual_env, venvs_map) =
-          List.fold_left (fun (alias_env, venvs_map) (t, args, (d, _), pos) ->
-            let qs = List.map fst args in
-            let qs, var_env =  Desugar.desugar_quantifiers closed_env qs d pos in
+        let (mutual_env, venvs_map, ts) =
+          List.fold_left (fun (alias_env, venvs_map, ts) (t, args, (d, _), pos) ->
+            let args = List.map fst args in
+            let qs, var_env =  Desugar.desugar_quantifiers closed_env args d pos in
+            let alias_env = SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)) in
             let venvs_map = StringMap.add t var_env venvs_map in
-            (SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)), venvs_map) )
-            (alias_env, venvs_map) ts in
+            let args = List.map2 (fun x y -> (x, Some y)) args qs in
+            (alias_env, venvs_map, (t, args, (d, None), pos) :: ts))
+            (alias_env, venvs_map, []) ts in
+
+        (* First gather any types which require an implicit effect variable. *)
+        let (implicits, dep_graph) =
+          List.fold_left (fun (implicits, dep_graph) (t, _, (d, _), _) ->
+              let eff = (Desugar.has_implicit_effect mutual_env)#datatype d in
+              let has_imp = eff#satisfied && Desugar.allows_shared_effect d in
+              let implicits = StringMap.add t has_imp implicits in
+              let dep_graph = StringMap.add t (StringSet.elements eff#mutuals) dep_graph in
+              implicits, dep_graph)
+            (StringMap.empty, StringMap.empty) ts
+        in
+        (* We also gather a dependency graph of our mutually recursive types. Group this into SCCs
+           and toposort it. We can then trivially propagate the implicit effect requirement - if
+           anyone in our component has an implicit effect, or depends on a type which does, then we
+           must too! *)
+        let has_implicit implicits name =
+          StringMap.find name implicits
+          || List.exists (flip StringMap.find implicits) (StringMap.find name dep_graph)
+        in
+        let sorted_graph = Graph.topo_sort_sccs (StringMap.bindings dep_graph) in
+        let implicits =
+          List.fold_left (fun implicits scc ->
+              let scc_imp = List.exists (has_implicit implicits) scc in
+              List.fold_left (fun acc x -> StringMap.add x scc_imp acc) implicits scc)
+            implicits sorted_graph
+        in
+        (* Now patch up the types to include this effect variable. *)
+        let (mutual_env, venvs_map, ts) =
+          List.fold_left (fun (alias_env, venvs_map, ts) ((t, args, (d, _), pos)  as tn)->
+              if StringMap.find t implicits then
+                let var = Types.fresh_raw_variable () in
+                let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
+                (* Add the new quantifier to the argument list and rebind. *)
+                let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in
+                let args = args @ [("<implicit effect>", (None, None), `Rigid), Some q] in
+                let alias_env = SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)) in
+                (* Also augment the variable environment with this shared effect. *)
+                let var_env = StringMap.find t venvs_map in
+                let var_env = {
+                    var_env with
+                    shared_effect = Defined (lazy (Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid)))) }
+                in
+                let venvs_map = StringMap.add t var_env venvs_map in
+                (alias_env, venvs_map, (t, args, (d, None), pos) :: ts)
+              else
+                (alias_env, venvs_map, tn :: ts)) (mutual_env, venvs_map, []) ts
+        in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
         let desugared_mutuals =
           List.map (fun (name, args, dt, pos) ->
-            let sugar_qs = List.map (fst) args in
-
-            (* Semantic quantifiers have already been constructed,
-             * so retrieve them *)
-            let sem_qs =
-                begin
-                  match SEnv.find mutual_env name with
-                    | Some (`Mutual (qs, _)) -> qs
-                    | _ -> assert false
-                end in
-
-            let args =
-              ListUtils.zip' sugar_qs sem_qs
-                |> List.map (fun (sq, q) -> (sq, Some(q))) in
-
             (* Desugar the datatype *)
             let var_env = StringMap.find name venvs_map in
             let dt' = Desugar.datatype' var_env mutual_env dt in
             (* Check if the datatype has actually been desugared *)
             let (t, dt) =
-              (match dt' with
-                   | (t, Some dt) -> (t, dt)
-                   | _ -> assert false) in
+              match dt' with
+               | (t, Some dt) -> (t, dt)
+               | _ -> assert false in
             (name, args, (t, Some dt), pos)
           ) ts in
 
-        (* Given the desugared datatypes, we now need to handle linearity. *)
-        (* First, calculate linearity up to recursive application, and a
-         * dependency graph. *)
-        let (linearity_env, dep_graph) =
-          List.fold_left (fun (lin_map, dep_graph) (name, _, (_, dt), _) ->
+        (* Given the desugared datatypes, we now need to handle linearity.
+           First, calculate linearity up to recursive application *)
+        let linearity_env =
+          List.fold_left (fun lin_map (name, _, (_, dt), _) ->
             let dt = OptionUtils.val_of dt in
             let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
-            let deps = recursive_applications dt in
-            let dep_graph = (name, deps) :: dep_graph in
-            (lin_map, dep_graph)
-          ) (StringMap.empty, []) desugared_mutuals in
-        (* Next, topo-sort the dependency graph. We need to reverse since we
-         * propagate linearity information downwards from the SCCs which everything
-         * depends on, rather than upwards. *)
-        let sorted_graph = Graph.topo_sort_sccs dep_graph |> List.rev in
+            lin_map) StringMap.empty desugared_mutuals in
+        (* Next, use the toposorted dependency graph from above. We need to
+           reverse since we propagate linearity information downwards from the
+           SCCs which everything depends on, rather than upwards. *)
+        let sorted_graph = List.rev sorted_graph in
         (* Next, propagate the linearity information through the graph,
            in order to construct the final linearity map.
          * Given the topo-sorted dependency graph, we propagate linearity based

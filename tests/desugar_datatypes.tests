@@ -109,3 +109,13 @@ Implicit effect variables are not shared across different functions
 (map, id) : (((a) -> b, [a]) -> [b], (c) -> c)
 stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
 args : --config=tests/effect_sugar.config
+
+Sugar for implicit effect variables in typenames
+typename Comp(a) = () ~> a; fun() {} : Comp((), { | e})
+stdout : fun : Comp (())
+args : --config=tests/effect_sugar.config
+
+Sugar for implicit effect variables in typenames (propagates through types)
+mutual { typename Either(a) = [|A:() ~> a|B:Indirect(a)|]; typename Indirect(a) = Either(a); } A(fun() {}) : Either((), { | e})
+stdout : A(fun) : Either (())
+args : --config=tests/effect_sugar.config
