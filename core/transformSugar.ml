@@ -776,7 +776,8 @@ class transform (env : Types.typing_environment) =
          let (o, p) = o#pattern p in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Val (p, (tyvars, e), location, t))
-      | Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature }
+      | Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam);
+              fun_location; fun_signature; fun_frozen; fun_unsafe_signature }
            when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
@@ -785,7 +786,8 @@ class transform (env : Types.typing_environment) =
          let o = o#restore_quantifiers outer_tyvars in
          let (o, fun_binder) = o#binder fun_binder in
          let (o, fun_signature) = optionu o (fun o -> o#datatype') fun_signature in
-         (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature })
+         (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam);
+                   fun_location; fun_signature; fun_frozen; fun_unsafe_signature })
       | Fun _ -> raise (internal_error "Unannotated non-recursive function binding")
       | Funs defs ->
          (* put the inner bindings in the environment *)

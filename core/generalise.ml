@@ -154,51 +154,6 @@ let rigidify_type_arg : type_arg -> unit =
     | `Presence (`Var point)    -> rigidify_point point
     | _ -> raise (internal_error "Not a type-variable argument.")
 
-
-(** An alternative to generalise, which replaces all variables with rigid
-   alternatives.
-
-    Both the list of quantifiers for the new type, and the quantified type are
-   returned as normal. However, the list of type arguments are those {i which
-   should be used in the type application} (rather than the argument
-   alternatives of the quantifiers). We also return an
-   substitution/instantiation map of any previous type variables to their new
-   counterparts, suitable for updating types within the body of the function's
-   definition. *)
-let generalise_with_subst :
-    gen_kind -> ?unwrap:bool -> environment -> datatype
-    -> (quantifier list * type_arg list) * Instantiate.instantiation_maps * datatype =
-  fun kind ?(unwrap=true) env t ->
-    (* throw away any existing top-level quantifiers *)
-    Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
-    let t = match Types.concrete_type t with
-      | `ForAll (_, t) when unwrap -> t
-      | _ -> t in
-    let vars_in_env = env_type_vars env in
-    let type_args = get_type_args kind vars_in_env t in
-    let quantifiers = Types.quantifiers_of_type_args type_args in
-    let quantifiers, map, quantified = match quantifiers with
-      | [] -> [], (IntMap.empty, IntMap.empty, IntMap.empty), t
-      | old_quantifiers ->
-         let fresh_quantifiers, args =
-           List.fold_right (fun (_, kind) (quantifiers, args) ->
-               (* Apply the same transformation as mono_type_args, but only on
-                  the inner quantifiers - we don't want to touch the external
-                  type arguments. *)
-               let kind = match kind with
-                 | pk, (lin, Restriction.Mono) -> pk, (lin, Restriction.Any)
-                 | k -> k
-               in
-               let quant', arg = Types.fresh_quantifier kind in
-               (quant' :: quantifiers, arg :: args))
-             old_quantifiers ([], [])
-         in
-         let inner_map = Instantiate.populate_instantiation_maps ~name:"generalise" old_quantifiers args in
-         fresh_quantifiers, inner_map, Types.for_all (fresh_quantifiers, Instantiate.datatype inner_map t)
-    in
-    Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
-    ((quantifiers, type_args), map, quantified)
-
 (** Only flexible type variables should have the mono restriction. When we
    quantify over such variables (and so rigidify them), we need to convert any
    latent Mono variables into the more general Any one. *)
@@ -267,9 +222,6 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quanti
 *)
       Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
       ((quantifiers, type_args), quantified)
-
-(** Generalise and return the appropriate instantiation map. *)
-let generalise_with_subst = generalise_with_subst `All
 
 (** only generalise rigid type variables *)
 let generalise_rigid = generalise `Rigid

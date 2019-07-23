@@ -330,6 +330,7 @@ and function_definition = {
     fun_location: Location.t;
     fun_signature: datatype' option;
     fun_unsafe_signature: bool;
+    fun_frozen : bool;
   }
 and recursive_function = {
     rec_binder: Binder.with_pos;

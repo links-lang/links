@@ -714,23 +714,25 @@ class map =
         WithPos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
 
     method function_definition : function_definition -> function_definition
-      = fun { fun_binder = a;
-              fun_linearity = b;
-              fun_definition = (c, d);
-              fun_location = e;
-              fun_signature = f;
-              fun_unsafe_signature = g; } ->
-      let a = o#binder a in
-      let c = o#list (fun o -> o#tyvar) c in
-      let d = o#funlit d in
-      let e = o#location e in
-      let f = o#option (fun o -> o#datatype') f in
-      { fun_binder = a;
-        fun_linearity = b;
-        fun_definition = (c, d);
-        fun_location = e;
-        fun_signature = f;
-        fun_unsafe_signature = g; }
+      = fun { fun_binder;
+              fun_linearity;
+              fun_definition = (tyvar, lit);
+              fun_location;
+              fun_signature;
+              fun_frozen;
+              fun_unsafe_signature; } ->
+      let fun_binder = o#binder fun_binder in
+      let tyvar = o#list (fun o -> o#tyvar) tyvar in
+      let lit = o#funlit lit in
+      let fun_location = o#location fun_location in
+      let fun_signature = o#option (fun o -> o#datatype') fun_signature in
+      { fun_binder;
+        fun_linearity;
+        fun_definition = (tyvar, lit);
+        fun_location;
+        fun_signature;
+        fun_frozen;
+        fun_unsafe_signature; }
 
     method recursive_function  : recursive_function -> recursive_function
       = fun { rec_binder = a;
@@ -1392,17 +1394,18 @@ class fold =
         ~f_node:(fun o v -> o#bindingnode v)
 
     method function_definition : function_definition -> 'self
-      = fun { fun_binder = a;
+      = fun { fun_binder;
               fun_linearity = _;
-              fun_definition = (b, c);
-              fun_location = d;
-              fun_signature = e;
+              fun_definition = (tyvar, lit);
+              fun_location;
+              fun_signature;
+              fun_frozen = _;
               fun_unsafe_signature = _ } ->
-          let o = o#binder a in
-          let o = o#list (fun o -> o#tyvar) b in
-          let o = o#funlit c in
-          let o = o#location d in
-          let o = o#option (fun o -> o#datatype') e in
+          let o = o#binder fun_binder in
+          let o = o#list (fun o -> o#tyvar) tyvar in
+          let o = o#funlit lit in
+          let o = o#location fun_location in
+          let o = o#option (fun o -> o#datatype') fun_signature in
           o
 
     method recursive_function  : recursive_function -> 'self
@@ -2186,22 +2189,24 @@ class fold_map =
         ~f_node:(fun o v -> o#bindingnode v)
 
     method function_definition : function_definition -> 'self * function_definition
-      = fun { fun_binder = _x;
-              fun_linearity = _x1;
-              fun_definition = (_x_i1, _x_i2);
-              fun_location = _x_i3;
-              fun_signature = _x_i4;
-              fun_unsafe_signature = _x_i5; }->
-      let (o, _x) = o#binder _x in
-      let (o, _x_i2) = o#funlit _x_i2 in
-      let (o, _x_i3) = o#location _x_i3 in
-      let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4 in
-      (o, { fun_binder = _x;
-            fun_linearity = _x1;
-            fun_definition = (_x_i1, _x_i2);
-            fun_location = _x_i3;
-            fun_signature = _x_i4;
-            fun_unsafe_signature = _x_i5; })
+      = fun { fun_binder;
+              fun_linearity;
+              fun_definition = (tyvar, lit);
+              fun_location;
+              fun_signature;
+              fun_frozen;
+              fun_unsafe_signature; }->
+      let o, fun_binder = o#binder fun_binder in
+      let o, lit = o#funlit lit in
+      let o, fun_location = o#location fun_location in
+      let o, fun_signature = o#option (fun o -> o#datatype') fun_signature in
+      (o, { fun_binder;
+            fun_linearity;
+            fun_definition = (tyvar, lit);
+            fun_location;
+            fun_signature;
+            fun_frozen;
+            fun_unsafe_signature; })
 
     method recursive_function  : recursive_function -> 'self * recursive_function
       = fun { rec_binder = _x;

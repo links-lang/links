@@ -73,14 +73,6 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
     in make_lam rt lam
   in (binder ~ty:ft f, linearity, (tyvars, lam), location)
 
-let instantiate_node subst =
-  object
-    inherit SugarTraversals.map
-    method! typ = Instantiate.datatype subst
-    method! type_row = Instantiate.row subst
-    method! type_field_spec = Instantiate.presence subst
-  end
-
 (*
   unwrap a curried function definition
   with a position attached
@@ -100,34 +92,21 @@ object (o : 'self_type)
   method private desugarFunLit argss lin lam location =
     let inner_mb     = snd (last argss) in
     let (o, lam, rt) = o#funlit inner_mb lam in
-    let fti = List.fold_right (fun (args, mb) rt ->
+    let ft = List.fold_right (fun (args, mb) rt ->
                  if DeclaredLinearity.is_linear lin
                  then `Lolli (args, mb, rt)
                  else `Function (args, mb, rt))
                argss rt in
     let f = gensym ~prefix:"_fun_" () in
-    (* FIXME: do the generalisation and instantiation steps as part of type
-       inference and store the results in the FunLit for use here.
-
-       The current implementation is a little ugly - we instantiate, and then
-       substitute any flexible variables with their rigid counterpoints. This
-       prevents rigid variables leaking outside the quantifier. *)
-    let (tyvars, tyargs), map, ft = Generalise.generalise_with_subst var_env fti in
-    let body = tappl (FreezeVar f, tyargs) in
-    let lam =
-      let e, r, p = map in
-      if IntMap.is_empty e && IntMap.is_empty r && IntMap.is_empty p
-      then lam
-      else (instantiate_node map)#funlit lam
-    in
     let (bndr, lin, def, loc) =
-      unwrap_def (binder ~ty:ft f, lin, (tyvars, lam), location) in
+      unwrap_def (binder ~ty:ft f, lin, ([], lam), location) in
     let e = block_node ([with_dummy_pos (Fun { fun_binder = bndr; fun_linearity = lin;
                                                fun_definition = def; fun_location = loc;
                                                fun_signature = None;
+                                               fun_frozen = true;
                                                fun_unsafe_signature = false; })],
-                         with_dummy_pos body)
-    in (o, e, fti)
+                         with_dummy_pos (FreezeVar f))
+    in (o, e, ft)
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | FunLit (Some argss, lin, lam, location) ->
@@ -160,13 +139,13 @@ object (o : 'self_type)
             match b with
               | Fun { fun_binder = bndr; fun_linearity = lin;
                       fun_definition = tvs; fun_location = loc;
-                      fun_signature = ty;
-                      fun_unsafe_signature = uns; } ->
+                      fun_signature = ty; fun_frozen;
+                      fun_unsafe_signature; } ->
                  let (bndr', lin', tvs', loc') =
                    unwrap_def (bndr, lin, tvs, loc) in
                  (o, Fun { fun_binder = bndr'; fun_linearity = lin';
                            fun_definition = tvs'; fun_location = loc';
-                           fun_signature = ty; fun_unsafe_signature = uns })
+                           fun_signature = ty; fun_frozen; fun_unsafe_signature })
               | _ -> assert false
           end
     | Funs _ as b ->

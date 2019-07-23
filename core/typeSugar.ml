@@ -3989,6 +3989,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               fun_definition = (_, (pats, body));
               fun_location;
               fun_signature = t_ann';
+              fun_frozen;
               fun_unsafe_signature = unsafe } ->
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
@@ -4008,8 +4009,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
-                  let t = if unsafe then make_unsafe_signature t else t in
-                  let (_, ft) = Generalise.generalise_rigid context.var_env t in
+                  let ft = if unsafe then make_unsafe_signature t else t in
                   let _, ft_mono = TypeUtils.split_quantified_type ft in
 
                   (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
@@ -4063,7 +4063,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
             else () in
 
           let ft = if unsafe then check_unsafe_signature context unify_nopos ft t_ann' else ft in
-          let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
+          let (tyvars, _), ft =
+            if fun_frozen then (TypeUtils.quantifiers ft, []), ft
+            else Utils.generalise context.var_env ft
+          in
 
           (* It could be handy to support a (different) syntax for
              specifying quantifiers sloppily without fixing an order
@@ -4095,7 +4098,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
           (Fun { fun_binder = Binder.set_type bndr ft;
                  fun_linearity = lin;
                  fun_definition = (tyvars, (List.map (List.map erase_pat) pats, erase body));
-                 fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe; },
+                 fun_frozen = true;
+                 fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe },
              {empty_context with
                 var_env = Env.bind Env.empty (name, ft)},
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))

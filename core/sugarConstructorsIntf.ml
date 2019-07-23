@@ -106,7 +106,7 @@ module type SugarConstructorsSig = sig
 
   (* Bindings *)
   val fun_binding
-      : ?ppos:t -> signature -> ?unsafe_sig:bool
+      : ?ppos:t -> signature -> ?unsafe_sig:bool -> ?frozen:bool
      -> (DeclaredLinearity.t * name * Pattern.with_pos list list * Location.t *
            phrase)
      -> binding
