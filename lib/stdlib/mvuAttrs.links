@@ -157,11 +157,6 @@ fun classList(classes) {
 fun onClick(f) {
   eventHandler(UnitHandler("click", f))
 }
-
-fun onChange(f) {
-  eventHandler(UnitHandler("change", f))
-}
-
 fun onMouseMove(f) {
   eventHandler(UnitHandler("mousemove", f))
 }
@@ -213,6 +208,10 @@ fun onKeyPress(f) {
 
 fun onInput(f) {
   eventHandler(PropertyHandler("input", "value", fun(val) { Just(f(val)) }))
+}
+
+fun onChange(f) {
+  eventHandler(PropertyHandler("change", "value", fun(val) { Just(f(val)) } ))
 }
 
 fun getKey(event, f) {
