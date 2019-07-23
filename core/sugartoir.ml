@@ -138,12 +138,12 @@ sig
 
   val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
 
-  val handle : env -> (tail_computation sem *
-                         (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
-                         (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
-                         ((env -> tail_computation sem) * CompilePatterns.Pattern.t * Types.datatype) list *
-                          Sugartypes.handler_descriptor)
-               -> tail_computation sem
+  val handle : env ->
+               tail_computation sem list ->
+               (CompilePatterns.Pattern.t list * CompilePatterns.Pattern.t * (env -> tail_computation sem)) list ->
+               (CompilePatterns.Pattern.t * (env -> tail_computation sem) * Types.datatype) list ->
+               Sugartypes.handler_descriptor ->
+               tail_computation sem
 
   val switch : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
@@ -702,7 +702,10 @@ struct
     let vs = lift_list vs in
     M.bind vs (fun vs -> lift (Special (DoOperation (name, vs, t)), t))
 
-  let handle _env _ = assert false
+  let handle _env expressions _raw_cases _raw_params _descriptor =
+    (* For now assume unary handlers. *)
+    assert (List.length expressions = 1);
+    assert false
   (* let handle env (m, val_cases, eff_cases, params, desc) = *)
     (* let params =
      *   List.map
@@ -896,7 +899,38 @@ struct
           | DoOperation (name, ps, Some t) ->
              let vs = evs ps in
              I.do_operation (name, vs, t)
-          | Handle { expressions; cases; descriptor } -> ec (List.hd expressions)
+          | Handle { expressions; cases; descriptor } ->
+             let eff = lookup_effects env in
+             let empty_env = (NEnv.empty, TEnv.empty, eff) in
+             let parenv, raw_params =
+               List.fold_right2
+                 (fun t (pat, exp) (env, bindings) ->
+                   let pat, penv = CompilePatterns.desugar_pattern eff pat in
+                   (env ++ penv, (pat, (fun env -> eval env exp), t) :: bindings))
+                 descriptor.shd_params.shp_types descriptor.shd_params.shp_bindings (empty_env, [])
+             in
+             let raw_cases =
+               let desugar_patterns patterns =
+                 List.fold_right
+                   (fun pattern (env, patterns) ->
+                     let pattern, penv = CompilePatterns.desugar_pattern eff pattern in
+                     (penv ++ env, pattern :: patterns))
+                   patterns (empty_env, [])
+               in
+               List.map
+                 (fun { patterns; resumption; body } ->
+                   let penv, patterns = desugar_patterns patterns in
+                   let penv, resumption =
+                     match resumption with
+                     | None -> penv, CompilePatterns.Pattern.Any
+                     | Some (resumption, _) ->
+                        let pat, env = CompilePatterns.desugar_pattern eff resumption in
+                        env ++ penv, pat
+                   in
+                   (patterns, resumption, fun env -> eval (env ++ parenv ++ penv) body))
+                 cases
+             in
+             I.handle env (List.map ec expressions) raw_cases raw_params descriptor
              (* let henv, params =
               *   let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
               *    match (sh_descr.shd_params) with
