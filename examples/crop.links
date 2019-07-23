@@ -1,4 +1,4 @@
-fun setStyle(node, name, value) {ignore(domSetStyleAttrFromRef(node, name, value))}
+fun setStyle(node, name, value) {ignore(domSetStyleAttrFromRef(node, name, value ^^ "px"))}
 
 mutual{
   fun dragging(offsetLeft, offsetTop, left, top, width, height,
@@ -34,7 +34,6 @@ mutual{
   fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
     receive {
       case MouseMove(x, y) -> {
-
         var pictureFrame = getNodeById("picture-frame");
         var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
         var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
