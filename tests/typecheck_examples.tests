@@ -345,7 +345,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/sierpinski-triangle.links
 examples/handlers/sierpinski-triangle.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/sudoku.links
 examples/handlers/sudoku.links

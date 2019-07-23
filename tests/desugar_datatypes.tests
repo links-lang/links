@@ -119,3 +119,10 @@ Sugar for implicit effect variables in typenames (propagates through types)
 mutual { typename Either(a) = [|A:() ~> a|B:Indirect(a)|]; typename Indirect(a) = Either(a); } A(fun() {}) : Either((), { | e})
 stdout : A(fun) : Either (())
 args : --config=tests/effect_sugar.config
+
+Type names with effect arrows are not considered
+typename X = Comp((), {Var:() -> ()}); fun() { } : X({ |_})
+exit : 1
+stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided.*
+args : --config=tests/effect_sugar.config
+ignore : Not currently working
