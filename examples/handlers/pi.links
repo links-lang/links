@@ -33,7 +33,7 @@ fun randomPoints() {
 }
 
 # Synchronous take operation
-sig take : (Int, Comp({Yield: (a) -> () |e}, b)) {Yield{_} |e}~> [a]
+sig take : (Int, Comp(b, {Yield: (a) -> () |e})) {Yield{_} |e}~> [a]
 fun take(n, m) {
   handle(m())(n <- n, st <- []) {
     case Return(_) -> st
@@ -45,7 +45,7 @@ fun take(n, m) {
 
 # Compute pi
 
-sig computePi : (Int) -> Comp({Yield: (Float) -> () |_}, a)
+sig computePi : (Int) -> Comp(a, {Yield: (Float) -> () |_})
 fun computePi(n)() {
   fun loop(total, count) {
      # Synchronously take `n' random points
@@ -107,14 +107,14 @@ fun collectEstimations(n)() {
 }
 
 # Multi-handler
-typename Resumption(a,e::Eff,r) = (a) ~e~> r;
-typename Step(a,e::Eff, r) =
+typename Resumption(a, e::Eff, r) = (a) ~e~> r;
+typename Step(a, e::Eff, r) =
                 (mu b . [|Done:r
                          |Yielded:(a, Resumption((), { |e}, b))
                          |Awaits:Resumption(a, { |e}, b)
                          |]);
 
-sig step : (Comp({Await:a, Yield: (a) -> () |e}, b)) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
+sig step : (Comp(b, {Await:a, Yield: (a) -> () |e})) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
 fun step(f) {
   handle(f()) {
     case Return(x)        -> Done(x)
@@ -123,7 +123,7 @@ fun step(f) {
   }
 }
 
-sig exchange : (Comp({Await:a, Yield: (a) -> () |e}, b), Comp({Await:a, Yield: (a) -> () |e}, b)) { Await{_}, Yield{_} |e}~> b
+sig exchange : (Comp(b, {Await:a, Yield: (a) -> () |e}), Comp(b, {Await:a, Yield: (a) -> () |e})) { Await{_}, Yield{_} |e}~> b
 fun exchange(f, g) {
   fun exchange_aux(f, g) {
     switch( (f, g) ) {
@@ -149,7 +149,7 @@ mutual {
     }
   }
 
-  sig pipe : (Producer(a, { Await{p} |e}, _), Comp({Abort:Zero, Await:a, Yield{q} |e}, b)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+  sig pipe : (Producer(a, { Await{p} |e}, _), Comp(b, {Abort:Zero, Await:a, Yield{q} |e})) {Abort:Zero, Await{p}, Yield{q} |e}~> b
   fun pipe(sender, receiver) {
     shallowhandle(receiver()) {
       case Return(x) -> x

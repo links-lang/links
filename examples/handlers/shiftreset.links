@@ -1,6 +1,6 @@
 # Delimited continuations using handlers
 
-sig reset : (Comp({Shift: (( (a) {Shift{d} |c}~> b ) {Shift{d} |e}~> b) -> a |e}, b)) {Shift{d} |e}~> b
+sig reset : (Comp(b, {Shift: (( (a) {Shift{d} |c}~> b ) {Shift{d} |e}~> b) -> a |e})) {Shift{d} |e}~> b
 fun reset(m) {
   handle(m()) {
     case Return(x)        -> x

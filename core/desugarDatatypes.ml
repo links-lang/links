@@ -285,9 +285,9 @@ module Desugar = struct
      | Function _ | Lolli _ -> true
      | TypeApplication (tycon, ts) ->
         begin match SEnv.find alias_env tycon with
-        | Some (`Alias (q :: qs, _) | (`Mutual (q :: qs, _))) ->
-           begin match q with
-           | _, (PrimaryKind.Row, (_, Restriction.Effect)) -> List.length qs = List.length ts
+        | Some (`Alias (qs, _) | (`Mutual (qs, _))) when List.length qs = List.length ts + 1 ->
+           begin match ListUtils.last qs with
+           | _, (PrimaryKind.Row, (_, Restriction.Effect)) -> true
            | _ -> false
            end
         | _ -> false
@@ -299,7 +299,7 @@ module Desugar = struct
       If effect_sugar is enabled, and all variables are fresh (and so not
       explicitly named), then we will use the same effect variable across the
       whole type. *)
-   let wish_shared_effect var_env dt =
+   let with_shared_effect var_env dt =
      match var_env.shared_effect with
      | Undefined ->
         let var =
@@ -330,13 +330,13 @@ module Desugar = struct
         | TypeVar (s, _, _) -> `MetaTypeVar (lookup_tvar pos s var_env)
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) ->
-            let var_env = wish_shared_effect var_env t' in
+            let var_env = with_shared_effect var_env t' in
             let has_shared = may_have_shared_eff alias_env t in
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
                       effect_row ~allow_shared:(not has_shared) var_env alias_env e t',
                       datatype var_env t)
         | Lolli (f, e, t) ->
-            let var_env = wish_shared_effect var_env t' in
+            let var_env = with_shared_effect var_env t' in
             let has_shared = may_have_shared_eff alias_env t in
             `Lolli (Types.make_tuple_type (List.map (datatype var_env) f),
                     effect_row ~allow_shared:(not has_shared) var_env alias_env e t',
@@ -387,29 +387,34 @@ module Desugar = struct
                        })
                 else (q, t)
               in
-              let type_args ?(offset=0) var_env qs ts =
+              let type_args var_env qs ts =
                 List.combine qs ts
                 |> List.mapi
                      (fun i (q,t) ->
-                       let (q, t) = match_kinds (i + offset) (q, t) in
+                       let (q, t) = match_kinds i (q, t) in
                        match t, subkind_of_quantifier q with
                        | Row r, (_, Restriction.Effect) -> `Row (effect_row var_env alias_env r t')
                        | _ -> type_arg var_env alias_env t t')
               in
 
               let qn = List.length qs and tn = List.length ts in
-              let var_env' = wish_shared_effect var_env t' in
-              match qs, var_env'.shared_effect with
-              | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Defined eff when qn = tn + 1 ->
-                 (* If we've got a typename with an effect variable as the first
-                    argument, and we're not applying it fully, then add the
-                    implicit effect var. *)
-                 let eff = (StringMap.empty, Lazy.force eff, false) in
-                 `Row eff :: type_args ~offset:(-1) var_env' qs ts
-              | _ when qn = tn -> type_args var_env qs ts
-              | _ ->
-                 raise (TypeApplicationArityMismatch
-                         { pos; name = tycon; expected = List.length qs; provided = List.length ts })
+              let arity_err () =
+                raise (TypeApplicationArityMismatch { pos; name = tycon; expected = qn; provided = tn })
+              in
+              if qn = tn + 1 then
+                let var_env' = with_shared_effect var_env t' in
+                match ListUtils.unsnoc qs, var_env'.shared_effect with
+                | (qs, (_, (PrimaryKind.Row, (_, Restriction.Effect)))), Defined eff ->
+                   (* If we've got a typename with an effect variable as the
+                      last argument, and we're not applying it fully, then add
+                      the implicit effect var. *)
+                   let eff = (StringMap.empty, Lazy.force eff, false) in
+                   type_args var_env' qs ts @ [ `Row eff ]
+                | _ -> arity_err ()
+              else if qn = tn then
+                type_args var_env qs ts
+              else
+                arity_err ()
             in
             begin match SEnv.find alias_env tycon with
               | None -> raise (UnboundTyCon (pos, tycon))

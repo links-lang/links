@@ -284,7 +284,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/lambda.links
 examples/handlers/lambda.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/light_switch.links
 examples/handlers/light_switch.links

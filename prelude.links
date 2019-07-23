@@ -1276,7 +1276,7 @@ fun lf(f) {
 }
 
 ### Handler stuff
-typename Comp(e::Eff, a) = () ~e~> a;
+typename Comp(a, e::Eff) = () ~e~> a;
 typename Zero = [||];
 
 # Composition operators
@@ -1294,9 +1294,9 @@ op f ->- g {
 }
 
 # Effect row generalisation
-sig gen0 : (Comp({ }, a)) -> Comp({ |%}, a)
+sig gen0 : (Comp(a, { })) -> Comp(a, { |e})
 fun gen0(f) {
-  (f : (Comp({ |%}, a)) <- (Comp({ }, a)))
+  (f : (Comp(a, { |e})) <- (Comp(a, { })))
 }
 
 sig gen1 : ((a) {}~> b) -> ((a) { |%}~> b)

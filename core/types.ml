@@ -1845,8 +1845,8 @@ struct
     and maybe_shared = function
       | `Function _ | `Lolli _ -> true
       | `Alias ((_, qs, _), _) | `RecursiveApplication { r_quantifiers = qs; _ } ->
-         begin match qs with
-         | (PrimaryKind.Row, (_, Restriction.Effect)) :: _ -> true
+         begin match ListUtils.last_opt qs with
+         | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
          | _ -> false
          end
       | _ -> false
@@ -1862,8 +1862,11 @@ struct
       match t with
       | `Function (_, _, r) | `Lolli (_, _, r) when maybe_shared r -> find_shared_var r
       | `Function (_, e, _) | `Lolli (_, e, _) -> find_row_var e
-      | `Alias ((_, _, `Row e :: _), _) | `RecursiveApplication { r_args = `Row e :: _; _ }
-        when maybe_shared t -> find_row_var e
+      | `Alias ((_, _, ts), _) | `RecursiveApplication { r_args = ts; _ } when maybe_shared t ->
+         begin match ListUtils.last ts with
+         | `Row e -> find_row_var e
+         | _ -> None
+         end
       | _ -> None
     in
     match shared_effect with
@@ -1905,16 +1908,17 @@ struct
                       (typ, self)
                     else
                       (typ, {<all_same = false>})
-                | `Alias ((_, _, `Row e :: ts), _) | `RecursiveApplication { r_args = `Row e :: ts; _ }
+                | `Alias ((_, _, ts), _) | `RecursiveApplication { r_args = ts; _ }
                   when maybe_shared typ ->
                    (* If we're a type alias with an implicit effect variable, we
                       must be an effect row with nothing but that variable. *)
-                   if is_basic_effect e shared_var then
-                     let self = {<count = count + 1>} in
-                     let self = List.fold_left (fun o arg -> o#type_arg arg |> snd) self ts in
-                     (typ, self)
-                   else
-                     (typ, {<all_same = false>})
+                   begin match ListUtils.unsnoc ts with
+                   | ts, `Row e when is_basic_effect e shared_var ->
+                      let self = {<count = count + 1>} in
+                      let self = List.fold_left (fun o arg -> o#type_arg arg |> snd) self ts in
+                      (typ, self)
+                   | _ -> (typ, {<all_same = false>})
+                   end
                 | typ -> super#typ typ
 
               method! row_var row_var =
@@ -2177,8 +2181,8 @@ struct
                  { context with shared_effect }
                else context in
              let ts =
-               match ts, context.shared_effect with
-               | `Row r :: ts, Shared v when is_basic_effect r v -> ts
+               match ListUtils.unsnoc_opt ts, context.shared_effect with
+               | Some (ts, `Row r), Shared v when is_basic_effect r v -> ts
                | _ -> ts
              in
              begin match ts with

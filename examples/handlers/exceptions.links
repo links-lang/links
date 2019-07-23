@@ -10,7 +10,7 @@ sig input : (String) {Input:(String) {}-> a |_}~> a
 fun input(s) {println(s); do Input(s)}
 
 # Computation summing (simulated) user supplied integers
-sig sumUp : Comp({Input:(String) {}-> Int |_}, Int)
+sig sumUp : Comp(Int, {Input:(String) {}-> Int |_})
 fun sumUp() {
   sum([input("10"), input("20"), input("MMXVII"), input("30")])
 }
@@ -27,8 +27,8 @@ fun parseInt(s) {
 }
 
 # Input handling
-sig prompt : (Comp({Fail:(String) {}-> Int,Input:(String) {}-> Int |e}, a)) ->
-              Comp({Fail:(String) {}-> Int,Input{_}                |e}, a)
+sig prompt : (Comp(a, {Fail:(String) {}-> Int,Input:(String) {}-> Int |e})) ->
+              Comp(a, {Fail:(String) {}-> Int,Input{_}                |e})
 fun prompt(m)() {
   handle(m()) {
     case Return(x)   -> x
@@ -37,7 +37,7 @@ fun prompt(m)() {
 }
 
 # Standard exception handling
-sig catchFail : (Comp({Fail:(String) {}-> a |e}, a)) -> Comp({Fail{_} |e}, a)
+sig catchFail : (Comp(a, {Fail:(String) {}-> a |e})) -> Comp(a, {Fail{_} |e})
 fun catchFail(m)() {
   handle(m()) {
     case Return(x) -> x
@@ -58,7 +58,7 @@ fun example1() {
 }
 
 # Resumable exceptions
-sig catchResume : (Comp({Fail:(String) {}-> Int |e}, a)) -> Comp({Fail{_} |e}, a)
+sig catchResume : (Comp(a, {Fail:(String) {}-> Int |e})) -> Comp(a, {Fail{_} |e})
 fun catchResume(m)() {
   handle(m()) {
     case Return(x) -> x
@@ -72,7 +72,7 @@ fun example2() {
 }
 
 # Unit test
-sig sumUpSilently : Comp({Input:(String) {}-> Int |_}, Int)
+sig sumUpSilently : Comp(Int, {Input:(String) {}-> Int |_})
 fun sumUpSilently() {
   fun input(s) {do Input(s)}
   sum([input("10"), input("20"), input("MMXVII"), input("30")])

@@ -3,7 +3,7 @@
 typename Unit = [|Unit|];
 
 # State monad
-typename State (e::Eff,a,s) = (s) { |e}~> (s,a);
+typename State (a,s,e::Eff) = (s) { |e}~> (s,a);
 
 sig return : (a) -> State(a, s)
 fun return(v)(st) {(st, v)}
@@ -11,7 +11,7 @@ fun return(v)(st) {(st, v)}
 sig run : (State(a, s), s) ~> (s, a)
 fun run(m,st) {m(st)}
 
-sig bind : (State({ |e}, a, s), (a) ~e~> State({ |e}, b, s)) -> State({ |e}, b, s)
+sig bind : (State(a, s, { |e}), (a) ~e~> State(b, s, { |e})) -> State(b, s, { |e})
 fun bind(m,k)(st) {
   var (st1, x) = run(m, st);
   k(x)(st1)
@@ -23,11 +23,11 @@ op m >>= k {bind(m,k)}
 sig get : State(s, s)
 fun get(s) {(s,s)}
 
-sig put : (s) -> State({ |e}, Unit, s)
+sig put : (s) -> State(Unit, s)
 fun put(s)(_) {(s, Unit)}
 
 # Reify reflect
-sig reify : (Comp({ Reflect:(State({ Reflect{p} |e}, a, s)) {}-> a |e}, b)) { Reflect{p} |e}~> State({ Reflect{p} |e}, b, s)
+sig reify : (Comp(b, { Reflect:(State(a, s, { Reflect{p} |e})) {}-> a |e})) { Reflect{p} |e}~> State(b, s, { Reflect{p} |e})
 fun reify(m) {
   handle(m()) {
     case Return(x)     -> return(x)
@@ -35,7 +35,7 @@ fun reify(m) {
   }
 }
 
-sig reflect : (State({ |e}, a, s)) {Reflect:(State({ |e}, a, s)) {}-> a |_}-> a
+sig reflect : (State(a, s, { |e})) {Reflect:(State(a, s, { |e})) {}-> a |_}-> a
 fun reflect(m) {do Reflect(m)}
 
 # Example

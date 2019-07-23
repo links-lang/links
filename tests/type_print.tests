@@ -34,16 +34,16 @@ stdout : (fun, fun) : (() -> (), () -> ())
 args : --config=tests/effect_sugar.config
 
 Effect sugar: Type aliases (1)
-fun() {} : Comp({ |e}, ())
+fun() {} : Comp((), { | e })
 stdout : fun : Comp (())
 args : --config=tests/effect_sugar.config
 
 Effect sugar: Type aliases (2)
-fun()() {} : () -e-> Comp({ |f}, ())
+fun()() {} : () -e-> Comp((), { | f })
 stdout : fun : () -> Comp (())
 args : --config=tests/effect_sugar.config
 
 Effect sugar: Type aliases (3)
-fun(x) {x} : (Comp({ |e}, a)) -f-> Comp({ |e}, a)
-stdout : fun : (Comp (b)) -> Comp (b)
+fun(x) {x} : (Comp(a, { | e })) -f-> Comp(a, { | e })
+stdout : fun : (Comp (a)) -> Comp (a)
 args : --config=tests/effect_sugar.config
