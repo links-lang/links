@@ -337,7 +337,6 @@ module Desugar = struct
               self
            | _ -> self
 
-
          (** Determine if this type has a definite implicit effect within it.
 
             This should be called with [allowed_shared_effect] - it does not determine
