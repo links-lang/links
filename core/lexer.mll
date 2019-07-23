@@ -341,6 +341,8 @@ rule lex ctxt nl = parse
   | "infixr"                            { INFIXR ctxt#setprec }
   | "prefix"                            { PREFIX ctxt#setprec }
   | "postfix"                           { POSTFIX ctxt#setprec }
+  | "~fun"                              { FROZEN_FUN }
+  | "~linfun"                           { FROZEN_LINFUN }
   | def_id as var                       { try List.assoc var keywords
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
