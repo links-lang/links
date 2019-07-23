@@ -228,6 +228,7 @@ sig
   val handle_parameter : griper
   val handle_value : griper
   val handle_operation : griper
+  val handle_ambient : griper
   val resumption_type_annotation : griper
   val handle_inject_wild : griper
   (* val type_resumption_with_annotation : griper
@@ -736,6 +737,13 @@ end
                      tab () ^ code (show_type actual) ^ nl() ^
                        "while its expected type is" ^ nl () ^
                          tab () ^ code (show_type expected))
+
+    let handle_ambient ~pos ~t1:(_, expected) ~t2:(_, actual) ~error:_ =
+      build_tyvar_names [expected; actual];
+      die pos ("Effect expectation mismatch, the handle has effects" ^ nl () ^
+                 tab () ^ code (show_type actual) ^ nl () ^
+                   "while the currently allowed effects are" ^ nl() ^
+                     tab() ^ code (show_type expected))
 
     let handle_parameter ~pos ~t1:pat ~t2:exp ~error:_ =
       build_tyvar_names [snd pat; snd exp];
@@ -3876,7 +3884,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (cases, body_type, value_types, operation_types)
            in
            (* Type check deep resumptions. *)
-           let type_deep_resumption ambient _value_types operation_types descriptor (patterns, resumption, body) =
+           let type_deep_resumption outer_eff _value_types operation_types descriptor (patterns, resumption, body) =
              match resumption with
              | None -> (patterns, None, body)
              | Some resumption ->
@@ -3897,14 +3905,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   MutablePair.snd (List.fold_right build_domain patterns (MutablePair.make 0 parameter_types))
                 in
                 let expected_type =
-                  Types.make_function_type expected_domain ambient (typ body)
+                  Types.make_function_type expected_domain outer_eff (typ body)
                 in
                 (* Unify the expected and actual resumption types. *)
                 unify ~handle:Gripers.handle_deep_resumption (no_pos expected_type, ppos_and_typ resumption);
                 (patterns, Some (resumption, expected_type), body)
            in
            (* Type check shallow resumptions. *)
-           let type_shallow_resumption effects value_types operation_types ((patterns, _, _) as case) =
+           let type_shallow_resumption inner_eff value_types operation_types ((patterns, _, _) as case) =
              let type_resumption i pattern =
                match fst3 pattern with
                | { node = Pattern.Operation { label; resumption = Some (resumption, actual_type); _ }; _ } ->
@@ -3913,7 +3921,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                       operation_types.(i)
                   in
                   let expected_type =
-                    Types.make_function_type [expected_domain] effects value_types.(i)
+                    Types.make_function_type [expected_domain] inner_eff value_types.(i)
                   in
                   (* Unify the expected and actual resumption types. *)
                   let pos' = Position.resolve_expression resumption.pos in
@@ -3930,10 +3938,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              List.iteri check_expression expressions
            in
            (* Check the effects of the expressions against their expectations. *)
-           let check_effects expected_effects expressions actual_eff =
+           let check_effects expected_effects expressions inner_eff =
              let check_expression i exp =
                let pos' = Position.resolve_expression (fst3 exp).pos in
-               unify ~handle:Gripers.handle_operation (no_pos expected_effects.(i), (pos', `Effect actual_eff))
+               unify ~handle:Gripers.handle_operation (no_pos expected_effects.(i), (pos', `Effect inner_eff))
              in
              List.iteri check_expression expressions
            in
@@ -3955,25 +3963,27 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let refresh context =
              { context with effect_row = empty_effects () }
            in
+           let ambient_effects = context.effect_row in
            let descriptor, parameter_bindings = type_parameters context descriptor in
-           let (expressions, actual_eff) = type_expressions (refresh context) expressions in
+           let (expressions, inner_eff) = type_expressions (refresh context) expressions in
            let context = List.fold_left (++) context (List.map (fst ->- pattern_env) parameter_bindings) in
            (* Type check the case patterns and their bodies. *)
            let (cases, body_type, value_types, operation_types) = type_cases context arity cases in
-           let ambient_effects = Types.flatten_row context.effect_row in
+           let outer_eff = Types.flatten_row context.effect_row in
            (* Check expressions against their type-and-effect expectations. *)
            check_expressions value_types expressions;
-           check_effects operation_types expressions actual_eff;
-           (* Build the ambient effects. *)
+           check_effects operation_types expressions inner_eff;
+           (* Build the outer_eff effects. *)
            let () =
-             let actual_eff' = make_operations_presence_polymorphic (Types.flatten_row actual_eff) in
+             let inner_eff' = make_operations_presence_polymorphic (Types.flatten_row inner_eff) in
              let pos' = Position.resolve_expression pos in
-             unify ~handle:Gripers.handle_operation ((pos', `Effect ambient_effects), no_pos (`Effect actual_eff'));
-             (* Printf.printf "Ambient: %s\n%!" (Types.string_of_row actual_eff'); *)
+             unify ~handle:Gripers.handle_operation ((pos', `Effect outer_eff), no_pos (`Effect inner_eff'));
            in
            (* Type check resumptions. *)
-           let cases = List.map (type_deep_resumption ambient_effects value_types operation_types descriptor) cases in
-           let cases = List.map (type_shallow_resumption actual_eff value_types operation_types) cases in
+           let cases = List.map (type_deep_resumption outer_eff value_types operation_types descriptor) cases in
+           let cases = List.map (type_shallow_resumption inner_eff value_types operation_types) cases in
+           (* Unify outer_eff with the ambient effects. *)
+           unify ~handle:Gripers.handle_ambient (no_pos (`Effect ambient_effects), no_pos (`Effect outer_eff));
            (* Reconstruct cases. *)
            let erase_effect_cases cases =
              List.map
@@ -3987,8 +3997,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let usages_effect_cases cases =
              merge_usages (List.map (fun (_, _, body) -> usages body) cases)
            in
-           let descriptor = { descriptor with shd_input_effects = actual_eff;
-                                              shd_output_effects = ambient_effects }
+           let descriptor = { descriptor with shd_input_effects = inner_eff;
+                                              shd_output_effects = outer_eff }
            in
            (Handle { expressions = List.map erase expressions;
                      cases = erase_effect_cases cases;
