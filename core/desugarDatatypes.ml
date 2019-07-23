@@ -298,23 +298,15 @@ module Desugar = struct
      Settings.get_value Basicsettings.Types.effect_sugar
      && (all_anon_effects#datatype dt)#satisfied
 
-   (** Determine if this type has a definite implicit effect within it.
-
-      This should be called with [allowed_shared_effect] - it does not determine
-      whether the effect variable is applicable in this context, merely that it
-      exist.
-
-      This class also gathers recursive applications, similarly to
-      {!Types.recursive_applications}. This is used when determining implicit
-      effectiness of mutually recursive types. *)
-   let has_implicit_effect (alias_env : Types.tycon_environment) =
+   (** Gathers some information about type names which can be consumed prior to visiting. *)
+   let gather_mutual_info (alias_env : Types.tycon_environment) =
      object
-         inherit SugarTraversals.predicate as super
+         inherit SugarTraversals.fold as super
 
-         val satisfied = false
+         val has_implicit = false
          val mutuals = StringSet.empty
 
-         method make_satisfied = {<satisfied = true>}
+         method with_implicit = {<has_implicit = true>}
          method with_mutual ty = {<mutuals = StringSet.add ty mutuals>}
 
          method! datatypenode dt =
@@ -323,7 +315,7 @@ module Desugar = struct
            match dt with
            | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _) ->
               begin match eff_var with
-              | Datatype.Open ("$eff", None, `Rigid) -> self#make_satisfied
+              | Datatype.Open ("$eff", None, `Rigid) -> self#with_implicit
               | _ -> self
               end
            | TypeApplication (name, ts) ->
@@ -333,7 +325,7 @@ module Desugar = struct
                 | Some (`Alias (qs, _)) | Some (`Mutual (qs, _))
                      when List.length qs = List.length ts + 1 ->
                    begin match ListUtils.last qs with
-                   | _, (PrimaryKind.Row, (_, Restriction.Effect)) -> self#make_satisfied
+                   | _, (PrimaryKind.Row, (_, Restriction.Effect)) -> self#with_implicit
                    | _ -> self
                    end
                 | _ -> self
@@ -345,8 +337,17 @@ module Desugar = struct
               self
            | _ -> self
 
-         method satisfied = satisfied
 
+         (** Determine if this type has a definite implicit effect within it.
+
+            This should be called with [allowed_shared_effect] - it does not determine
+            whether the effect variable is applicable in this context, merely
+            that it exist. *)
+         method has_implicit = has_implicit
+
+         (** Any mutually-defined types that this typename consumes. This is
+            used to propagate implicit effectiness and linearity of
+            definitions. *)
          method mutuals = mutuals
      end
 
@@ -732,8 +733,8 @@ object (self)
         (* First gather any types which require an implicit effect variable. *)
         let (implicits, dep_graph) =
           List.fold_left (fun (implicits, dep_graph) (t, _, (d, _), _) ->
-              let eff = (Desugar.has_implicit_effect mutual_env)#datatype d in
-              let has_imp = eff#satisfied && Desugar.allows_shared_effect d in
+              let eff = (Desugar.gather_mutual_info mutual_env)#datatype d in
+              let has_imp = eff#has_implicit && Desugar.allows_shared_effect d in
               let implicits = StringMap.add t has_imp implicits in
               let dep_graph = StringMap.add t (StringSet.elements eff#mutuals) dep_graph in
               implicits, dep_graph)
