@@ -1,7 +1,6 @@
 # Delimited continuations using handlers
 
-# sig reset : (Comp(b, {Shift: (( (a) {Shift{d} |e}~> b ) {Shift{d} |e}~> b) -> a |e})) {Shift{d} |e}~> b
-sig reset : (Comp(b, {Shift: (((a) { |e}~> b) { |e}~> b) -> a |e})) { |e}~> b
+sig reset : (Comp(b, {Shift: (((a) ~> b) ~> b) -> a |_})) ~> b
 fun reset(m) {
   handle(m()) {
     case Return(x)        -> x
@@ -9,7 +8,7 @@ fun reset(m) {
   }
 }
 
-sig shift : (((a) { |e}~> b) { |e}~> b) {Shift:(((a) { |e}~> b) { |e}~> b) {}-> a|_}~> a
+sig shift : (((a) ~> b) ~> b) {Shift:(((a) ~> b) ~> b) -> a|_}~> a
 fun shift(f) { do Shift(f) }
 
 fun comp() {

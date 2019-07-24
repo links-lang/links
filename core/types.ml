@@ -61,7 +61,7 @@ end
 let process  = {
   Abstype.id = "Process" ;
   name       = "Process" ;
-  arity      = [pk_row, (lin_any, res_any)] ;
+  arity      = [pk_row, (lin_any, res_effect)] ;
 }
 
 (* Lists are currently unlimited because the only deconstructors are

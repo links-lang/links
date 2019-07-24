@@ -308,7 +308,7 @@ let populate_instantiation_maps dt_str qs tyargs =
          | _ ->
              raise (internal_error
                ("Kind mismatch in type application: " ^
-                dt_str ^ " applied to type arguments: " ^
+                Lazy.force dt_str ^ " applied to type arguments: " ^
                 mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs)))
     qs tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
 
@@ -341,7 +341,7 @@ let instantiation_maps_of_type_arguments :
         vars, []
       else
         (take tyargs_length vars, drop tyargs_length vars) in
-    let tenv, renv, penv = populate_instantiation_maps "<?>" vars tyargs in
+    let tenv, renv, penv = populate_instantiation_maps (lazy (Types.string_of_datatype pt)) vars tyargs in
     match remaining_quantifiers with
       | [] -> t, (tenv, renv, penv)
       | _ -> `ForAll (remaining_quantifiers, t),  (tenv, renv, penv)
@@ -400,7 +400,7 @@ let replace_quantifiers t qs' =
     | t -> t
 
 let recursive_application name qs tyargs body =
-  let tenv, renv, penv = populate_instantiation_maps name qs tyargs in
+  let tenv, renv, penv = populate_instantiation_maps (lazy name) qs tyargs in
   let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
   body
 
@@ -421,7 +421,7 @@ let alias name tyargs env : Types.typ =
           "Type alias %s applied with incorrect arity (%d instead of %d). This should have been checked prior to instantiation."
           name (List.length tyargs) (List.length vars)))
     | Some (`Alias (vars, body)) ->
-        let tenv, renv, penv = populate_instantiation_maps name vars tyargs in
+        let tenv, renv, penv = populate_instantiation_maps (lazy name) vars tyargs in
         (* instantiate the type variables bound by the alias
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)

@@ -7,7 +7,6 @@
 #
 
 # Some standard data types
-typename Comp(e::Eff, a) = () { |e}~> a;
 
 # Binary tree data type
 typename Tree(a) = [|Leaf:a
@@ -18,7 +17,7 @@ sig yield : (a) {Yield:(a) {}-> ()|_}-> ()
 fun yield(v) {do Yield(v)}
 
 # Post-order tree traversal
-sig walkTree : (Tree(a)) -> Comp({Yield:(a) {}-> ()|_}, ())
+sig walkTree : (Tree(a)) -> Comp((), {Yield:(a) {}-> ()|_})
 fun walkTree(tree)() {
   switch (tree) {
     case Leaf(v)   -> yield(v)
@@ -27,12 +26,12 @@ fun walkTree(tree)() {
 }
 
 # Convenient type synonyms
-typename Continuation(a, e::Row, r) = (a) { |e}~> r;
-typename Status(e::Row, a) = mu r . [|Done:()
-                                     |Yielded:(a, Continuation((), { |e}, r))|];
+typename Continuation(a, r) = (a) ~> r;
+typename Status(a) = mu r . [|Done:()
+                            |Yielded:(a, Continuation((), r))|];
 
 # Pauses evaluation of a computation whenever Yield occurs
-sig step : (Comp({ Yield:(a) {}-> () |e}, ())) -> (()) {Yield{p} |e}~> Status({ Yield{p} |e}, a)
+sig step : (Comp((), { Yield:(a) {}-> () |_})) -> (()) { |_}~> Status(a)
 fun step(f)(()) {
   handle (f()) {
     case Return(()) -> Done(())

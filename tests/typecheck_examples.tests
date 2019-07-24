@@ -274,7 +274,7 @@ args : --config=tests/examples_effect_sugar.config
 Typecheck example file examples/handlers/fringe.links
 examples/handlers/fringe.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/identity.links
 examples/handlers/identity.links
@@ -335,12 +335,12 @@ args : --config=tests/examples_effect_sugar.config
 Typecheck example file examples/handlers/shiftreset.links
 examples/handlers/shiftreset.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/shallow_state.links
 examples/handlers/shallow_state.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/sierpinski-triangle.links
 examples/handlers/sierpinski-triangle.links
