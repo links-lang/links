@@ -2,18 +2,6 @@ Empty page
 addRoute("/", fun(_) { page <#></#> })
 stdout : () : ()
 
-Raising request handler
-addRoute("/", fun(_) { receive { case _ -> raise } } )
-stdout : () : ()
-args : --enable-handlers --session-exceptions
-ignore : Not clear whether this should be allowed or not
-
-Raising request handler and error handler
-addLocatedRouteWithErrors("/", fun (_, _) { receive { case Foo -> raise } }, fun (_, _, _) { receive { case Bar -> raise } })
-stdout : () : ()
-args : --enable-handlers --session-exceptions
-ignore : Not clear whether this should be allowed or not
-
 Unhandled operation
 addRoute("/", fun(_) {do Fail})
 stderr : @..*
