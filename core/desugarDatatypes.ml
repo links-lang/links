@@ -235,9 +235,72 @@ let lookup_pvar pos t { tyvars; _ } =
   | x -> raise (kind_error pos t PrimaryKind.Presence x)
 
 module Desugar = struct
-  (* Desugars quantifiers into Types.quantifiers,
-   * returning updated variable environment.
-   * Lifted / deduplicated from `typename` and `Forall` desugaring. *)
+  (** Elaborate effects, converting from the sugared form to the canonical one. *)
+  let elaborate_effects (alias_env : Types.tycon_environment) =
+    let open Datatype in
+    (object(self)
+       inherit SugarTraversals.map as super
+
+       method! datatypenode =
+         function
+         | Function (a, e, r) ->
+            Function (self#list (fun o -> o#datatype) a, self#effect_row e, self#datatype r)
+         | Lolli (a, e, r) ->
+            Lolli (self#list (fun o -> o#datatype) a, self#effect_row e, self#datatype r)
+         | TypeApplication (name, ts) ->
+            let tycon = SEnv.find alias_env name in
+            begin match tycon with
+            | Some (`Alias (qs, _)) | Some (`Mutual (qs, _)) ->
+               (* We don't know if the arities match up yet (nor the final arities of the
+                  definitions), so we handle mismatches, assuming spare rows are effects. *)
+               let rec go =
+                 function
+                 | _, [] -> []
+                 | [], Row t :: ts -> Row (self#effect_row t) :: go ([], ts)
+                 | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Row t :: ts ->
+                    Row (self#effect_row t) :: go (qs, ts)
+                 | _ :: qs, Row t :: ts -> Row (self#row t) :: go (qs, ts)
+                 | ([] as qs | _ :: qs), Type t :: ts -> Type (self#datatype t) :: go (qs, ts)
+                 | ([] as qs | _ :: qs), Presence t :: ts -> Presence (self#fieldspec t) :: go (qs, ts)
+               in
+               TypeApplication (name, go (qs, ts))
+            | _ -> TypeApplication (name, self#list (fun o -> o#type_arg) ts)
+            end
+         | t -> super#datatypenode t
+
+       method effect_row (fields, var) =
+         let fields =
+           (* Closes any empty, open arrow rows on user-defined operations. *)
+           List.map (function
+               | (name, Present { node = Function (domain, (fields, rv), codomain); pos }) as op
+                    when not (TypeUtils.is_builtin_effect name) -> (
+                 (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
+                 match (rv, fields) with
+                 | Closed, [] -> op
+                 | Open _, [] | Recursive _, [] ->
+                    (* might need an extra check on recursive rows *)
+                    (name, Present (WithPos.make ~pos (Function (domain, ([], Closed), codomain))))
+                 | _, _ ->
+                    raise
+                      (Type_error
+                         ( pos,
+                           "The abstract operation " ^ name ^ " has unexpected "
+                           ^ "effects in its signature. The effect signature on an "
+                           ^ "abstract operation arrow is always supposed to be empty, "
+                           ^ "since any effects it might have are ultimately conferred by its handler."
+               )) )
+               | name, Present node when not (TypeUtils.is_builtin_effect name) ->
+                  (* Elaborates `Op : a' to `Op : () {}-> a' *)
+                  name, Present (WithPos.make ~pos:node.pos (Function ([], ([], Closed), node)))
+               | x -> x)
+             fields
+         in self#row (fields, var)
+     end)#datatype
+
+  (** Desugars quantifiers into Types.quantifiers, returning the updated
+     variable environment.
+
+     This is used within the `typename` and `Forall` desugaring. *)
   let desugar_quantifiers (var_env: var_env) (qs: Sugartypes.quantifier list) body pos :
       (Types.quantifier list * var_env) =
     (* Bind all quantified variables, and then do a naive {!typevars} pass over this set to infer
@@ -304,55 +367,55 @@ module Desugar = struct
 
    (** Gathers some information about type names which can be consumed prior to visiting. *)
    let gather_mutual_info (alias_env : Types.tycon_environment) =
-     object
-         inherit SugarTraversals.fold as super
+     (object
+        inherit SugarTraversals.fold as super
 
-         val has_implicit = false
-         val mutuals = StringSet.empty
+        val has_implicit = false
+        val mutuals = StringSet.empty
 
-         method with_implicit = {<has_implicit = true>}
-         method with_mutual ty = {<mutuals = StringSet.add ty mutuals>}
+        method with_implicit = {<has_implicit = true>}
+        method with_mutual ty = {<mutuals = StringSet.add ty mutuals>}
 
-         method! datatypenode dt =
-           let open Datatype in
-           let self = super#datatypenode dt in
-           match dt with
-           | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _) ->
-              begin match eff_var with
-              | Datatype.Open ("$eff", None, `Rigid) -> self#with_implicit
-              | _ -> self
-              end
-           | TypeApplication (name, ts) ->
-              let tycon = SEnv.find alias_env name in
-              let self =
-                match tycon with
-                | Some (`Alias (qs, _)) | Some (`Mutual (qs, _))
-                     when List.length qs = List.length ts + 1 ->
-                   begin match ListUtils.last qs with
-                   | _, (PrimaryKind.Row, (_, Restriction.Effect)) -> self#with_implicit
-                   | _ -> self
-                   end
-                | _ -> self
-              in
-              let self = match tycon with
-                | Some (`Mutual _) -> self#with_mutual name
-                | _ -> self
-              in
-              self
-           | _ -> self
+        method! datatypenode dt =
+          let open Datatype in
+          let self = super#datatypenode dt in
+          match dt with
+          | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _) ->
+             begin match eff_var with
+             | Datatype.Open ("$eff", None, `Rigid) -> self#with_implicit
+             | _ -> self
+             end
+          | TypeApplication (name, ts) ->
+             let tycon = SEnv.find alias_env name in
+             let self =
+               match tycon with
+               | Some (`Alias (qs, _)) | Some (`Mutual (qs, _))
+                    when List.length qs = List.length ts + 1 ->
+                  begin match ListUtils.last qs with
+                  | _, (PrimaryKind.Row, (_, Restriction.Effect)) -> self#with_implicit
+                  | _ -> self
+                  end
+               | _ -> self
+             in
+             let self = match tycon with
+               | Some (`Mutual _) -> self#with_mutual name
+               | _ -> self
+             in
+             self
+          | _ -> self
 
-         (** Determine if this type has a definite implicit effect within it.
+        (** Determine if this type has a definite implicit effect within it.
 
-            This should be called with [allowed_shared_effect] - it does not determine
-            whether the effect variable is applicable in this context, merely
-            that it exist. *)
-         method has_implicit = has_implicit
+           This should be called with [allowed_shared_effect] - it does not determine
+           whether the effect variable is applicable in this context, merely
+           that it exist. *)
+        method has_implicit = has_implicit
 
-         (** Any mutually-defined types that this typename consumes. This is
-            used to propagate implicit effectiness and linearity of
-            definitions. *)
-         method mutuals = mutuals
-     end
+        (** Any mutually-defined types that this typename consumes. This is
+           used to propagate implicit effectiness and linearity of
+           definitions. *)
+        method mutuals = mutuals
+     end)#datatype
 
    let gather_rows (_ : Types.tycon_environment) =
      object(self)
@@ -625,36 +688,6 @@ module Desugar = struct
     fold_right Types.row_with fields seed
 
   and effect_row ?allow_shared var_env alias_env (fields, rv) node =
-    let fields =
-      (* Closes any empty, open arrow rows on user-defined
-         operations. Note any row which can be closed will have an
-         unbound effect variable.  *)
-      List.map
-        (let open Datatype in
-        function
-        | (name, Present { node = Function (domain, (fields, rv), codomain); pos }) as op
-          when not (TypeUtils.is_builtin_effect name) -> (
-          (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
-          match (rv, fields) with
-          | Closed, [] -> op
-          | Open _, [] | Recursive _, [] ->
-              (* might need an extra check on recursive rows *)
-              (name, Present (WithPos.make ~pos (Function (domain, ([], Closed), codomain))))
-          | _, _ ->
-              raise
-                (Type_error
-                   ( pos,
-                     "The abstract operation " ^ name ^ " has unexpected "
-                     ^ "effects in its signature. The effect signature on an "
-                     ^ "abstract operation arrow is always supposed to be empty, "
-                     ^ "since any effects it might have are ultimately conferred by its handler."
-                   )) )
-        | name, Present node when not (TypeUtils.is_builtin_effect name) ->
-          (* Elaborates `Op : a' to `Op : () {}-> a' *)
-          name, Present (WithPos.make ~pos:node.pos (Function ([], ([], Closed), node)))
-        | x -> x)
-        fields
-    in
     let (fields, rho, dual) = row ?allow_shared var_env alias_env (fields, rv) node in
     let fields =
       match rv with
@@ -708,6 +741,7 @@ module Desugar = struct
       List.rev vars, var_env
 
   let datatype var_env alias_env dt =
+    let dt = elaborate_effects alias_env dt in
     let var_env = with_operations alias_env var_env dt in
     datatype var_env alias_env dt
 
@@ -722,7 +756,7 @@ module Desugar = struct
 
   (* Desugar a table literal. No free variables are allowed here. We generate both read and write
      types by looking for readonly constraints *)
-  let tableLit alias_env constraints dt =
+  let table_lit alias_env constraints dt =
     let read_type =
       match datatype' closed_env alias_env (dt, None) with
       | _, Some read_type -> read_type
@@ -773,7 +807,7 @@ object (self)
              unreachable from outside the block *)
           self, Block (bs, p)
     | TableLit (t, (dt, _), cs, keys, p) ->
-        let read, write, needed = Desugar.tableLit alias_env cs dt in
+        let read, write, needed = Desugar.table_lit alias_env cs dt in
         let o, t = self#phrase t in
         let o, keys = o#phrase keys in
         let o, p = o#phrase p in
@@ -814,7 +848,8 @@ object (self)
         (* First gather any types which require an implicit effect variable. *)
         let (implicits, dep_graph) =
           List.fold_left (fun (implicits, dep_graph) (t, _, (d, _), _) ->
-              let eff = (Desugar.gather_mutual_info mutual_env)#datatype d in
+              let d = Desugar.elaborate_effects mutual_env d in
+              let eff = Desugar.gather_mutual_info mutual_env d in
               let has_imp = eff#has_implicit && Desugar.allows_shared_effect d in
               let implicits = StringMap.add t has_imp implicits in
               let dep_graph = StringMap.add t (StringSet.elements eff#mutuals) dep_graph in

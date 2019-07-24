@@ -125,4 +125,3 @@ typename X = Comp((), {Var:() -> ()}); fun() { } : X({ |_})
 exit : 1
 stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided.*
 args : --config=tests/effect_sugar.config
-ignore : Not currently working

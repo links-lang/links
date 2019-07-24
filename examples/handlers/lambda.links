@@ -60,7 +60,7 @@ fun lit(x)() { x }
 
 # Due to the (current) lack of multi-handlers in Links, we are going
 # simulate them by reifying operations.
-typename Expr(a) = Comp(a, {Var:(Var) {}-> Expr(a), Lam:(Var) {}-> ()});
+typename Expr(a) = Comp(a, {Var:(Var) -> Expr(a), Lam:(Var) -> ()});
 typename Step(a) = [|Val:a
                     |Lam:(Var, Expr(a))|];
 
