@@ -4541,7 +4541,8 @@ and type_cp (context : context) = fun {node = p; pos} ->
 
 let type_check_general context body =
   let body, typ, _ = type_check context body in
-  if Utils.is_generalisable body then
+  if Utils.is_generalisable body
+     && Settings.get_value Basicsettings.TypeSugar.generalise_toplevel then
     match Utils.generalise ~unwrap:false context.var_env typ with
     | ([], _), typ -> body, typ
     | (qs, _), qtyp ->
