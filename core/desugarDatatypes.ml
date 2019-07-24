@@ -193,12 +193,16 @@ type shared_effect =
 type var_env = {
     tyvars : meta_var StringMap.t; (** The currently in-scope type variables. *)
     shared_effect : shared_effect; (** The active shared effect variable, if set. *)
+    row_operations : meta_presence_var Lazy.t StringMap.t StringMap.t;
+    (** Map of effect variables to all mentioned operations, and their
+       corresponding effect variables. *)
     allow_fresh : bool; (** Whether to allow creating anonymous type variables. *)
   }
 
 let empty_env allow_fresh = {
     tyvars = StringMap.empty;
     shared_effect = Undefined;
+    row_operations = StringMap.empty;
     allow_fresh
   }
 
@@ -350,6 +354,56 @@ module Desugar = struct
          method mutuals = mutuals
      end
 
+   let gather_rows (_ : Types.tycon_environment) =
+     object(self)
+         inherit SugarTraversals.fold as super
+
+         val operations = StringMap.empty
+         method operations = operations
+
+         method replace name map = {<operations = StringMap.update name (fun _ -> StringMap.find_opt name map) operations>}
+
+         method quantified action qs =
+           let mask_operations = List.fold_left (fun o (q, _, _) -> StringMap.remove q o) operations qs in
+           let o = action {<operations = mask_operations>} in
+           List.fold_left (fun o (q, _, _) -> o#replace q operations) o qs
+
+         method add var op =
+           let ops =
+             match StringMap.find_opt var operations with
+             | None -> StringSet.singleton op
+             | Some t -> StringSet.add op t
+           in
+           {<operations = StringMap.add var ops operations>}
+
+         method! datatypenode =
+           let open Datatype in
+           function
+           | Mu (v, t) -> self#quantified (fun o -> o#datatype t) [(v, (Some pk_type, None), `Rigid)]
+           | Forall (qs, t) -> self#quantified (fun o -> o#datatype t) qs
+           | Function (a, e, t) | Lolli (a, e, t) ->
+               let o = self#list (fun o -> o#datatype) a in
+               let o = o#effect_row e in
+               let o = o#datatype t in
+               o
+           | dt -> super#datatypenode dt
+
+         method! row_var =
+           let open Datatype in
+           function
+           | Closed | Open _ -> self
+           | Recursive (s, r) -> self#quantified (fun o -> o#row r) [(s, (Some pk_row, None), `Rigid)]
+
+         method effect_row ((fields, var) : Datatype.row) =
+           let self =
+             match var with
+             | Datatype.Open (var, _, _) when is_anon var -> self
+             | Datatype.Open (var, _, _) -> List.fold_left (fun o (op, _) -> o#add var op) self fields
+             | _ -> self
+           in
+           self#row (fields, var)
+     end
+
    (** Attempt to augment this context with an {!shared_effect}, if possible.
 
       If effect_sugar is enabled, and all variables are fresh (and so not
@@ -358,7 +412,7 @@ module Desugar = struct
    let with_shared_effect var_env dt =
      match var_env.shared_effect with
      | Undefined ->
-        let var =
+        let shared_effect =
           if var_env.allow_fresh && allows_shared_effect dt then
             let point =
               lazy begin
@@ -370,8 +424,29 @@ module Desugar = struct
           else
             Invalid
         in
-        { var_env with shared_effect = var }
+        { var_env with shared_effect }
      | _ -> var_env
+
+   let with_operations alias_env var_env dt =
+     let row_operations =
+       if var_env.allow_fresh
+          && Settings.get_value Basicsettings.Types.effect_sugar then
+         let operations = ((gather_rows alias_env)#datatype dt)#operations in
+         operations
+         |> StringMap.map (fun v ->
+                StringSet.fold
+                  (fun op m ->
+                    let point =
+                      lazy begin
+                          let var = Types.fresh_raw_variable () in
+                          Unionfind.fresh (`Var (var, default_subkind, `Rigid))
+                        end
+                    in
+                    StringMap.add op point m) v StringMap.empty)
+       else
+         StringMap.empty
+     in
+     { var_env with row_operations }
 
   let rec datatype var_env (alias_env : Types.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
@@ -574,21 +649,24 @@ module Desugar = struct
                      ^ "abstract operation arrow is always supposed to be empty, "
                      ^ "since any effects it might have are ultimately conferred by its handler."
                    )) )
+        | name, Present node when not (TypeUtils.is_builtin_effect name) ->
+          (* Elaborates `Op : a' to `Op : () {}-> a' *)
+          name, Present (WithPos.make ~pos:node.pos (Function ([], ([], Closed), node)))
         | x -> x)
         fields
     in
     let (fields, rho, dual) = row ?allow_shared var_env alias_env (fields, rv) node in
     let fields =
-      StringMap.mapi
-        (fun name ->
-          function
-          | `Present t
-              when not (TypeUtils.is_builtin_effect name || TypeUtils.is_function_type t) ->
-             (* Elaborates `Op : a' to `Op : () {}-> a' *)
-             let eff = Types.make_empty_closed_row () in
-             `Present (Types.make_function_type [] eff t)
-          | t -> t)
-        fields
+      match rv with
+      | Datatype.Open (v, _, _) ->
+         begin match StringMap.find_opt v var_env.row_operations with
+         | Some ops ->
+            let ops = StringMap.fold (fun k _ -> StringMap.remove k) fields ops in
+            let fields = StringMap.fold (fun op p -> StringMap.add op (`Var (Lazy.force p))) ops fields
+            in fields
+         | None -> fields
+         end
+      | _ -> fields
     in
     (fields, rho, dual)
 
@@ -628,6 +706,10 @@ module Desugar = struct
         vars
     in
       List.rev vars, var_env
+
+  let datatype var_env alias_env dt =
+    let var_env = with_operations alias_env var_env dt in
+    datatype var_env alias_env dt
 
   let datatype' map alias_env ((dt, _) : datatype') =
     (dt, Some (datatype map alias_env dt))
