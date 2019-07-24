@@ -4541,13 +4541,18 @@ and type_cp (context : context) = fun {node = p; pos} ->
 
 let type_check_general context body =
   let body, typ, _ = type_check context body in
-  let typ =
-    if Utils.is_generalisable body then
-      snd (Utils.generalise context.var_env typ)
-    else
-      typ
-  in
-  body, typ
+  if Utils.is_generalisable body then
+    match Utils.generalise ~unwrap:false context.var_env typ with
+    | ([], _), typ -> body, typ
+    | (qs, _), qtyp ->
+       let ppos = WithPos.pos body in
+       let open SugarConstructors.SugartypesPositions in
+       block ~ppos
+         ([with_pos ppos (Val (variable_pat ~ppos ~ty:qtyp "it", (qs, body), loc_unknown, None))],
+          freeze_var ~ppos "it"),
+       qtyp
+  else
+    body, typ
 
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
 let show_post_sugar_typing = Basicsettings.TypeSugar.show_post_sugar_typing
