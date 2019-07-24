@@ -259,9 +259,7 @@ module Desugar = struct
                  | [], Row t :: ts -> Row (self#effect_row t) :: go ([], ts)
                  | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Row t :: ts ->
                     Row (self#effect_row t) :: go (qs, ts)
-                 | _ :: qs, Row t :: ts -> Row (self#row t) :: go (qs, ts)
-                 | ([] as qs | _ :: qs), Type t :: ts -> Type (self#datatype t) :: go (qs, ts)
-                 | ([] as qs | _ :: qs), Presence t :: ts -> Presence (self#fieldspec t) :: go (qs, ts)
+                 | ([] as qs | _ :: qs), t :: ts -> self#type_arg t  :: go (qs, ts)
                in
                TypeApplication (name, go (qs, ts))
             | _ -> TypeApplication (name, self#list (fun o -> o#type_arg) ts)
@@ -316,7 +314,7 @@ module Desugar = struct
 
     ListLabels.fold_right ~init:([], var_env) qs
       ~f:(fun (name, (primarykind, subkind), _freedom)
-              (args, ({ tyvars; _ } as env)) ->
+              (args, env) ->
             let var = Types.fresh_raw_variable () in
             let subkind = concrete_subkind subkind in
             let open PrimaryKind in
@@ -334,7 +332,9 @@ module Desugar = struct
               | None -> raise (internal_error "Undesugared kind")
             in
             (quant :: args,
-             { env with tyvars = StringMap.add name def tyvars }) )
+             { env with
+               tyvars = StringMap.add name def env.tyvars;
+               row_operations = StringMap.remove name env.row_operations }) )
 
    let make_anon_point var_env pos sk freedom =
      if not var_env.allow_fresh then raise (free_type_variable pos);
@@ -417,8 +417,11 @@ module Desugar = struct
         method mutuals = mutuals
      end)#datatype
 
-   let gather_rows (_ : Types.tycon_environment) =
-     object(self)
+   (** Gather information about which operations are used with which row
+      variables. *)
+   let gather_operations (alias_env : Types.tycon_environment) dt =
+     let o =
+       object(self)
          inherit SugarTraversals.fold as super
 
          val operations = StringMap.empty
@@ -432,12 +435,15 @@ module Desugar = struct
            List.fold_left (fun o (q, _, _) -> o#replace q operations) o qs
 
          method add var op =
-           let ops =
-             match StringMap.find_opt var operations with
-             | None -> StringSet.singleton op
-             | Some t -> StringSet.add op t
-           in
-           {<operations = StringMap.add var ops operations>}
+           if TypeUtils.is_builtin_effect op then
+             self
+           else
+             let ops =
+               match StringMap.find_opt var operations with
+               | None -> StringSet.singleton op
+               | Some t -> StringSet.add op t
+             in
+             {<operations = StringMap.add var ops operations>}
 
          method! datatypenode =
            let open Datatype in
@@ -449,6 +455,22 @@ module Desugar = struct
                let o = o#effect_row e in
                let o = o#datatype t in
                o
+           | TypeApplication (name, ts) ->
+              let tycon = SEnv.find alias_env name in
+              begin match tycon with
+              | Some (`Alias (qs, _)) | Some (`Mutual (qs, _)) ->
+                 (* We don't know if the arities match up yet, so we handle
+                    mismatches, assuming spare rows are effects. *)
+                 let rec go o =
+                   function
+                   | _, [] -> o
+                   | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Row t :: ts ->
+                      go (o#effect_row t) (qs, ts)
+                   | ([] as qs | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
+                 in
+                 go self (qs, ts)
+              | _ -> self#list (fun o -> o#type_arg) ts
+              end
            | dt -> super#datatypenode dt
 
          method! row_var =
@@ -465,7 +487,9 @@ module Desugar = struct
              | _ -> self
            in
            self#row (fields, var)
-     end
+       end
+     in
+     (o#datatype dt)#operations
 
    (** Attempt to augment this context with an {!shared_effect}, if possible.
 
@@ -494,8 +518,7 @@ module Desugar = struct
      let row_operations =
        if var_env.allow_fresh
           && Settings.get_value Basicsettings.Types.effect_sugar then
-         let operations = ((gather_rows alias_env)#datatype dt)#operations in
-         operations
+         gather_operations alias_env dt
          |> StringMap.map (fun v ->
                 StringSet.fold
                   (fun op m ->
@@ -538,7 +561,8 @@ module Desugar = struct
             (* FIXME: shouldn't we support other subkinds for recursive types? *)
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tyvars = StringMap.add name (`Type point) var_env.tyvars in
-            let _ = Unionfind.change point (`Recursive (var, datatype { var_env with tyvars } t)) in
+            let row_operations = StringMap.remove name var_env.row_operations in
+            let _ = Unionfind.change point (`Recursive (var, datatype { var_env with tyvars; row_operations } t)) in
               `MetaTypeVar point
         | Forall (qs, t) ->
             let (qs: Types.quantifier list), var_env = desugar_quantifiers var_env qs t pos in
@@ -681,7 +705,8 @@ module Desugar = struct
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tyvars = StringMap.add name (`Row point) var_env.tyvars in
-            let _ = Unionfind.change point (`Recursive (var, row { var_env with tyvars } alias_env r node)) in
+            let row_operations = StringMap.remove name var_env.row_operations in
+            let _ = Unionfind.change point (`Recursive (var, row { var_env with tyvars; row_operations } alias_env r node)) in
             (StringMap.empty, point, false)
     in
     let fields = List.map (fun (k, p) -> (k, fieldspec var_env alias_env p node)) fields in
