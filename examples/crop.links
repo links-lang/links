@@ -125,7 +125,6 @@ fun main() {
    <body>
 
      <h1> Home of Robert Louis Stevenson </h1>
-
      <div>
        <div id="picture-frame">
 
@@ -139,7 +138,7 @@ fun main() {
 
      <div id="crop-preview-frame"
           style="border: 1px solid black; overflow: hidden;
-                 width: 32; height: 32">
+                 width: 32px; height: 32px">
        <img id="crop-preview" style="display: block;"
             src="17-Heriot-Row.jpg" />
      </div>
