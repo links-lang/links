@@ -695,7 +695,7 @@ typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
 typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
 typename Handler (a) = (a) {}~> Page;
 
-sig pickleCont : (() { |_}-> Page) ~> String
+sig pickleCont : (() { |e}-> Page) ~> String
 fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
 
 sig unitP : Page
@@ -729,7 +729,7 @@ fun plugP(context, (i, k, fs)) {
   (i, fun (xs) {context(k(xs))}, fs)
 }
 
-sig mkForm : ((Env) { |_}~> Page, Xml, Attributes) ~> Xml
+sig mkForm : ((Env) { |e}~> Page, Xml, Attributes) ~> Xml
 fun mkForm(cont, contents, attributes) {
   <form enctype="application/x-www-form-urlencoded"
         action="#" method="POST" {attributes}>
@@ -756,7 +756,7 @@ fun validate(c, h, k, zs, i, attributes) (env) {
   }
 }
 
-sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) { |_}-> (MultiXmlContext, RecForms, Int) ~> Xml
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) { |e}-> (MultiXmlContext, RecForms, Int) ~> Xml
 fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
   mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
 }
@@ -979,7 +979,7 @@ fun preludeOptionKeyed (key, (data,text), selected) {
   }
 }
 
-sig preludeOptionsKeyed : ([(String,(a,String))], a) { |_}~>
+sig preludeOptionsKeyed : ([(String,(a,String))], a) { |e}~>
                          (Xml, (String) -> [a])
 fun preludeOptionsKeyed(items, def) {
   switch (items) {
@@ -992,7 +992,7 @@ fun preludeOptionsKeyed(items, def) {
 }
 
 sig preludeMultiOptionsKeyed
-    : ([(String, (a,String,Bool))]) { |_}~> (Xml, (String) -> [a])
+    : ([(String, (a,String,Bool))]) { |e}~> (Xml, (String) -> [a])
 fun preludeMultiOptionsKeyed(items) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))
@@ -1149,7 +1149,7 @@ fun sendSuspend(pagef) {
 
 #### SESSION TYPING STUFF ####
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row.((s) {SessionFail:[||] | e}~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row.((s) {SessionFail:[||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1159,7 +1159,7 @@ fun fork(f) {
 }
 
 #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-sig linFork : forall s::Session,e::Row.((s) {SessionFail:[||] | e}~@ ()) ~e~> ~s
+sig linFork : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ ()) ~e~> ~s
 fun linFork(f) {
   var ap = new();
   var _ = spawnAngel {
@@ -1169,7 +1169,7 @@ fun linFork(f) {
 }
 
 #sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:[||] | e}~> ()) ~e~> ()
+sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:[||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
   var x = accept(ap);
   var _ = spawn {f(x)};
@@ -1186,7 +1186,7 @@ fun reproduce(ap, f) {
 # run even if the main process terminates.)
 
 #sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
-sig connect : forall s::Session,e::Row,a.((s) {SessionFail:[||] | e}~> (), (~s) ~e~> a) ~e~> a
+sig connect : forall s::Session,e::Row,a.((s) {SessionFail:[||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
   var ap = new();
   var done = new();
@@ -1227,7 +1227,7 @@ fun makeEndBang() {
 # with split ends we synchronise on the termination of each spawned
 # child process
 #sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
-sig forkSync : forall s::Session,e::Row.((s) {SessionFail:[||] | e}~> EndBang) ~e~> ~s
+sig forkSync : forall s::Session,e::Row.((s) {SessionFail:[||]}~> EndBang) ~e~> ~s
 fun forkSync(f) {
   var ap = new();
   var _ = spawn {
@@ -1239,7 +1239,7 @@ fun forkSync(f) {
 }
 
 #sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
-sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:[||] | e}~@ EndBang) ~e~> ~s
+sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
   var ap = new();
   var _ = spawn {
@@ -1258,7 +1258,7 @@ fun linkSync(s, c) {
 }
 
 #sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
-sig runSync : ((!a.EndBang) {SessionFail:[||] | e}~> EndBang) ~e~> a
+sig runSync : ((!a.EndBang) {SessionFail:[||]}~> EndBang) ~e~> a
 fun runSync(f) {
   var c = forkSync(f);
   var (v, c) = receive(c);
@@ -1404,4 +1404,3 @@ fun serveThese(routes) {
   var _ = map(fun ((s,p)) {addRoute(s,fun (_) {p()})}, routes);
   servePages()
 }
-
