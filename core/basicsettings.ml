@@ -220,6 +220,7 @@ module TypeSugar = struct
   let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
   let show_post_sugar_typing = Settings.add_bool("show_post_sugar_typing", false, `User)
   let dodgey_type_isomorphism = Settings.add_bool("dodgey_type_isomorphism", false, `User)
+  let generalise_toplevel = Settings.add_bool("generalise_toplevel", true, `User)
 
   (* Shall we re-run the frontend type-checker after each TransformSugar transformation? *)
   let check_frontend_transformations =

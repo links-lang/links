@@ -1,6 +1,6 @@
 Polymorphic Instantiation (1)
 fun(x)(y) { y }
-stdout : fun : (a) -b-> (c::Any) -d-> c::Any
+stdout : fun : forall a,b::Row,c::(Any,Any),d::Row.(a) -b-> (c::Any) -d-> c::Any
 
 Polymorphic Instantiation (1•)
 $(fun(x)(y) { y })
@@ -20,11 +20,11 @@ stdout : [] : [forall a,b::Row.(a) -b-> a]
 
 Polymorphic Instantiation (4)
 fun(x : (forall a,e::Row. (a) -e-> a)) { x(x) }
-stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> (d) -e-> d
+stdout : fun : forall a::Row,b,c::Row.(forall d,e::Row.(d) -e-> d) -a-> (b) -c-> b
 
 Polymorphic Instantiation (4•)
 fun(x : (forall a,e::Row. (a) -e-> a)) { x(~x) }
-stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
+stdout : fun : forall a::Row.(forall b,c::Row.(b) -c-> b) -a-> forall b,c::Row.(b) -c-> b
 
 Polymorphic Instantiation (5)
 id(auto)
@@ -66,11 +66,11 @@ stdout : (0, true) : (Int, Bool)
 
 Inference of Polymorphic Arguments (1)
 fun(f : (forall a,e::Row. (a) -e-> a)) { (f(1), f(true)) }
-stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> (Int, Bool)
+stdout : fun : forall a::Row.(forall b,c::Row.(b) -c-> b) -a-> (Int, Bool)
 
 Inference of Polymorphic Arguments (2)
 fun(xs : [forall a,e::Row. (a) -e-> a]) { poly(head(xs)) }
-stdout : fun : ([forall a,b::Row.(a) -b-> a]) -c-> (Int, Bool)
+stdout : fun : forall a::Row.([forall b,c::Row.(b) -c-> b]) -a-> (Int, Bool)
 
 Functions on Polymorphic Lists (1)
 length(ids)
@@ -180,8 +180,8 @@ choose (head(ids))
 stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
 
 FreezeML programs (8•)
-choose (head(ids)@);
-fun : ((a) -b-> a) -c-> (a) -b-> a
+choose (head(ids)@)
+stdout : fun : ((a) -b-> a) -c-> (a) -b-> a
 
 FreezeML programs (9)
 var f = revapp(~id); f(poly)

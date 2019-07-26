@@ -327,9 +327,25 @@ fun last(list) {
   }
 }
 
+fun intercalate(bone, rushes) {
+  switch (rushes) {
+    case [] -> []
+    case [x] -> x
+    case x::xs -> x ++ bone ++ intercalate(bone, xs)
+  }
+}
+
+sig unlines : ([String]) ~> String
+fun unlines(ws) {
+  implode(intercalate(explode("\n"), map(explode, ws)))
+}
+
+sig unwords : ([String]) ~> String
+fun unwords(ws) {
+  implode(intercalate(explode(" "), map(explode, ws)))
+}
+
 # lines :: String -> [String]
-# unlines :: [String] -> String
-# unwords :: [String] -> String
 # words :: String -> [String]
 
 ### Defined internally to Links:
