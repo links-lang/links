@@ -6,7 +6,7 @@ fun list (xs) { do List(xs) }
 sig zero : () {List: forall a. ([a]) -> a|_} -> a
 fun zero() { list([]) }
 
-sig runList : (Comp({List:forall a. ([a]) -> a|e}, r)) {List{_}|e}~> [r]
+sig runList : (Comp(r, {List:forall a. ([a]) -> a|e})) {List{_}|e}~> [r]
 fun runList(f) {
   handle(f()) {
     case List(xs, k) -> concatMap(k, xs)

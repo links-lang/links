@@ -10,7 +10,7 @@ fun choice() {
 }
 
 # The "positive" handler
-sig positive : (Comp({Choose:forall a. (a, a) -> a|e}, r)) {Choose{_}|e}~> r
+sig positive : (Comp(r, {Choose:forall a. (a, a) -> a|e})) {Choose{_}|e}~> r
 fun positive(f) {
   handle(f()) {
     case Choose(x, _, k) -> k(x)
@@ -19,7 +19,7 @@ fun positive(f) {
 }
 
 # The "I'll-take-everything" handler
-sig enumerate : (Comp({Choose:forall a. (a, a) -> a|e}, r)) {Choose{_}|e}~> [r]
+sig enumerate : (Comp(r, {Choose:forall a. (a, a) -> a|e})) {Choose{_}|e}~> [r]
 fun enumerate(f) {
   handle(f()) {
     case Choose(x, y, k) -> k(x) ++ k(y)

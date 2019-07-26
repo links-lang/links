@@ -748,7 +748,6 @@ module Desugar = struct
          end
       | _ -> fields
     in
-    let (fields, rho, dual) = row var_env alias_env (fields, rv) node in
     (fields, rho, dual)
 
   and type_arg var_env alias_env ta node =
