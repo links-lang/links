@@ -105,7 +105,7 @@ sig f : Comp(()) fun f() { } f
 stdout : fun : Comp (())
 args : --config=tests/effect_sugar.config
 
-Implicit effect variables are not shared across different functions
+Implicit effect variables are shared across different functions
 (map, id) : (((a) -> b, [a]) -> [b], (c) -> c)
 stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
 args : --config=tests/effect_sugar.config

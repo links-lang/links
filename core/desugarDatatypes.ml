@@ -775,7 +775,7 @@ module Desugar = struct
         let point =
           lazy begin
               let var = Types.fresh_raw_variable () in
-              Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid))
+              Unionfind.fresh (`Var (var, (lin_unl, res_any), `Rigid))
             end
         in { var_env with shared_effect = Some point }
       | _ -> var_env

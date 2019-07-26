@@ -1771,8 +1771,7 @@ struct
      from rigid type variables. *)
   type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
   type names  = (int, string * Vars.spec) Hashtbl.t
-  type shared_effect = Undefined | Shared of int | Distinct
-  type context = { bound_vars: TypeVarSet.t; shared_effect: shared_effect }
+  type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
   let default_policy () =
     {quantifiers=Settings.get_value show_quantifiers;
@@ -1781,7 +1780,7 @@ struct
      kinds=Settings.get_value show_kinds;
      effect_sugar=Settings.get_value effect_sugar}
 
-  let empty_context = { bound_vars = TypeVarSet.empty; shared_effect = Undefined }
+  let empty_context = { bound_vars = TypeVarSet.empty; shared_effect = None }
 
   let has_kind =
     function
@@ -1796,113 +1795,58 @@ struct
                              && is_present (FieldEnv.find v fields))
         values
 
-  let rec is_basic_effect ((fields, r, _) : row) var =
-    FieldEnv.is_empty fields &&
-      match Unionfind.find r with
-      | `Body r -> is_basic_effect r var
-      | `Var (v, _, _) -> v == var
-      | _ -> false
+  (** If this type may contain a shared effect. *)
+  let maybe_shared_effect = function
+    | `Function _ | `Lolli _ -> true
+    | `Alias ((_, qs, _), _) | `RecursiveApplication { r_quantifiers = qs; _ } ->
+       begin match ListUtils.last_opt qs with
+       | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
+       | _ -> false
+       end
+    | _ -> false
 
-  let find_shared_effect { bound_vars; shared_effect } (policy, vars) typ =
-    let is_hidden var =
-      match Unionfind.find var with
-      | `Var (var, _, _) ->
-         let _, (flavour, _, count) = Vars.find_spec var vars in
-         policy.hide_fresh && count = 1 &&
-           ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars))
-      | _ -> false
-    and var_eq known resolve =
-      match Unionfind.find resolve with
-      | `Var (var, _, _) when var = known -> true
-      | _ -> false
-    and maybe_shared = function
-      | `Function _ | `Lolli _ -> true
-      | `Alias ((_, qs, _), _) | `RecursiveApplication { r_quantifiers = qs; _ } ->
-         begin match ListUtils.last_opt qs with
-         | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
-         | _ -> false
-         end
-      | _ -> false
-    and find_row_var r =
+  let context_with_shared_effect policy visit =
+    let find_row_var r =
       let (_, r, _), _ = unwrap_row r in
       begin match Unionfind.find r with
-      | `Var (var, _, _) when not (TypeVarSet.mem var bound_vars) -> Some var
+      | `Var (var, _, _) -> Some var
       | _ -> None
       end
     in
     (* Find a shared effect variable from the right most arrow or type alias. *)
     let rec find_shared_var t =
       match t with
-      | `Function (_, _, r) | `Lolli (_, _, r) when maybe_shared r -> find_shared_var r
+      | `Function (_, _, r) | `Lolli (_, _, r) when maybe_shared_effect r -> find_shared_var r
       | `Function (_, e, _) | `Lolli (_, e, _) -> find_row_var e
-      | `Alias ((_, _, ts), _) | `RecursiveApplication { r_args = ts; _ } when maybe_shared t ->
+      | `Alias ((_, _, ts), _) | `RecursiveApplication { r_args = ts; _ } when maybe_shared_effect t ->
          begin match ListUtils.last ts with
          | `Row e -> find_row_var e
          | _ -> None
          end
       | _ -> None
     in
-    match shared_effect with
-    | Distinct | Shared _ -> shared_effect
-    | Undefined ->
-      match find_shared_var typ with
-      | None -> Distinct
-      | Some shared_var ->
-          let obj =
-            object (self)
-              inherit Transform.visitor as super
+    let obj =
+      object (self)
+        inherit Transform.visitor as super
 
-              val all_same = true
-              val count = 0
-              method all_same = all_same
-              method count = count
+        val var = None
+        method var = var
 
-              method! typ typ =
-                match typ with
-                | typ when not all_same -> (typ, self)
-                | `Function (args, effects, ret) | `Lolli (args, effects, ret) ->
-                    let fields, row_var, _ = unwrap_row effects |> fst in
-                    let ok, n =
-                      if maybe_shared ret then
-                        (* If we're an inner arrow, then just require that this effect variable can
-                           be invisible. *)
-                        is_hidden row_var, 0
-                      else
-                        (* Otherwise require that this effect can be represented
-                           as just an arrow, and has the correct variable. *)
-                        (fields_present_in fields [] || fields_present_in fields [ "wild" ])
-                          && var_eq shared_var row_var, 1
-                    in
-                    if ok then
-                      let self = {<count = count + n>} in
-                      let (_, self) = self#typ args in
-                      let (_, self) = self#typ ret in
-                      let (_, self) = self#field_spec_map fields in
-                      (typ, self)
-                    else
-                      (typ, {<all_same = false>})
-                | `Alias ((_, _, ts), _) | `RecursiveApplication { r_args = ts; _ }
-                  when maybe_shared typ ->
-                   (* If we're a type alias with an implicit effect variable, we
-                      must be an effect row with nothing but that variable. *)
-                   begin match ListUtils.unsnoc ts with
-                   | ts, `Row e when is_basic_effect e shared_var ->
-                      let self = {<count = count + 1>} in
-                      let self = List.fold_left (fun o arg -> o#type_arg arg |> snd) self ts in
-                      (typ, self)
-                   | _ -> (typ, {<all_same = false>})
-                   end
-                | typ -> super#typ typ
-
-              method! row_var row_var =
-                match Unionfind.find row_var with
-                | `Var _ -> (row_var, {<all_same = false>})
-                | _ -> super#row_var row_var
-            end
-          in
-          let (_, obj) = obj#typ typ in
-          let _, (_, _, count) = Vars.find_spec shared_var vars in
-          if obj#all_same && obj#count = count then Shared shared_var else Distinct
+        method! typ typ =
+          match self#var with
+          | None ->
+             begin match find_shared_var typ with
+             | Some v -> typ, {<var = Some v>}
+             | None -> super#typ typ
+             end
+          | Some _ -> typ, self
+      end
+    in
+    if policy.effect_sugar then
+      let (_, obj) = visit obj in
+      { empty_context with shared_effect = obj#var }
+    else
+      empty_context
 
   let subkind : (policy * names) -> subkind -> string =
     let full (l, r) = "(" ^ Linearity.to_string l ^ "," ^
@@ -1953,14 +1897,29 @@ struct
       let k = kind_of_quantifier q in
       Vars.find (var_of_quantifier q) vars ^ has_kind (kind (policy, vars) k)
 
+  (** If type variable names are hidden return a generic name n1. Otherwise
+     pass name of type variable to n2 so that it can construct a name. *)
+  let name_of_type_plain { bound_vars; _ } (policy, vars : policy * names) var n1 n2 =
+    let name, (flavour, _, count) = Vars.find_spec var vars in
+    if policy.hide_fresh && count = 1
+       && ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars))
+    then
+      n1
+    else
+      n2 name
+
+  let name_of_type context p var k n1 n2 =
+    name_of_type_plain context p var n1 n2 ^ has_kind (subkind p k)
+
+  let rec is_row_var known (_, rv, _) =
+    match Unionfind.find rv with
+    | `Var (var, _, _) when var = known -> true
+    | `Body b -> is_row_var known b
+    | _ -> false
+
   let rec datatype : context -> policy * names -> datatype -> string =
     fun ({ bound_vars; _ } as context) ((policy, vars) as p) t ->
       let sd = datatype context p in
-      let sk k = has_kind (subkind p k) in
-
-      let hide_fresh_check var (flavour, _, count) =
-        policy.hide_fresh && count = 1 &&
-        ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars)) in
 
       let unwrap = fst -<- unwrap_row in
         (* precondition: the row is unwrapped *)
@@ -1976,22 +1935,33 @@ struct
         let ss = List.rev (IntMap.fold (fun _ t ss -> (datatype context p t) :: ss) tuple_env []) in
           "(" ^ String.concat ", " ss ^  ")" in
 
-      (* If type variable names are hidden return a generic name n1.
-         Otherwise pass name of type variable to n2 so that it can construct a
-         name. *)
-      let name_of_type var n1 n2 =
-        let name, spec = Vars.find_spec var vars in
-        if hide_fresh_check var spec then n1 else (n2 name) in
+      let name_of_type = name_of_type context (policy, vars) in
 
-      (* Pretty-prints a row variable *)
-      let ppr_row_var context args to_match closed
+      let name_of_eff_var ~allows_shared var _ nh nv =
+        match context.shared_effect with
+        | None -> name_of_type_plain context (policy, vars) var nh nv
+        | Some v ->
+           if allows_shared then
+             (* If we're in a context with the shared variable, try to use it
+                otherwise explicitly name it. *)
+             if v = var then nh
+               else
+                 let name, _ = Vars.find_spec var vars in
+                 nv name
+           else
+             (* Otherwise the shared effect variable must be explicitly referred to as "_". *)
+             if v = var then nv "_" else name_of_type_plain context (policy, vars) var nh nv
+      in
+
+      (* Pretty-prints an arrow effect variable *)
+      let ppr_eff_var ~args ~allows_shared to_match closed
             (flex_name_hidden, flex_name)
             (name_hidden, name) =
         match Unionfind.find to_match with
-        | `Var (var, _, `Flexible) when policy.flavours ->
-           name_of_type var flex_name_hidden flex_name
-        | `Var (var, _, _) ->
-           name_of_type var name_hidden name
+        | `Var (var, k, `Flexible) when policy.flavours ->
+           name_of_eff_var ~allows_shared var k flex_name_hidden flex_name
+        | `Var (var, k, _) ->
+           name_of_eff_var ~allows_shared var k name_hidden name
         | `Closed      -> closed
         | `Body t'     -> datatype context p (`Function (args, t', t))
         | `Recursive _ -> assert false in
@@ -2004,42 +1974,31 @@ struct
        assert (not dual);
 
        let fields_present = fields_present_in fields in
+       let allows_shared = not (maybe_shared_effect t) in
 
-       let context =
-         if policy.effect_sugar then
-           let shared_effect = find_shared_effect context p (`Function (args, effects, t)) in
-           { context with shared_effect }
-         else context in
-       let is_shared =
-         match context.shared_effect with
-         | Shared _ -> true
-         | _ -> false in
-       let hidden line =
-         if policy.effect_sugar then line ^ "_" ^ line ^ ah else line ^ ah in
        let sd = datatype context p in
 
        let ppr_arrow () =
          if fields_present [] then
-           if policy.hide_fresh && is_shared then "-" ^ ah else
-           ppr_row_var context args row_var ("{}-" ^ ah)
+           ppr_eff_var ~args ~allows_shared row_var ("{}-" ^ ah)
                ("-%-" ^ ah, fun name -> "-%" ^ name ^ "-" ^ ah)
-               (hidden "-", fun name -> "-"  ^ name ^ "-" ^ ah)
+               ("-" ^ ah,   fun name -> "-"  ^ name ^ "-" ^ ah)
          else if fields_present ["wild"]
          then
-           if policy.hide_fresh && is_shared then "~" ^ ah else
-           ppr_row_var context args row_var ("{}~" ^ ah)
+           ppr_eff_var ~args ~allows_shared row_var ("{}~" ^ ah)
                ("~%~" ^ ah, fun name -> "~%" ^ name ^ "~" ^ ah)
-               (hidden "~", fun name -> "~"  ^ name ^ "~" ^ ah)
+               ("~" ^ ah,   fun name -> "~"  ^ name ^ "~" ^ ah)
          else if fields_present ["hear"; "wild"]
          then
            let ht' = ht fields in
-           ppr_row_var context args row_var ("{:" ^ ht' ^ "}~" ^ ah)
+           ppr_eff_var ~args ~allows_shared row_var ("{:" ^ ht' ^ "}~" ^ ah)
                ("{:" ^ ht' ^ "|%}~" ^ ah, fun name -> "{:" ^ ht' ^ "|%" ^ name ^ "}~" ^ ah)
                ("{:" ^ ht' ^ "|_}~" ^ ah, fun name -> "{:" ^ ht' ^ "|"  ^ name ^ "}~" ^ ah)
          else
              (* to guarantee termination it's crucial that we
                 invoke row on the original wrapped version of
                 the effect row *)
+           let row = row ~name:(fun _ _ -> name_of_eff_var ~allows_shared) in
            if FieldEnv.mem "wild" fields &&
              is_present (FieldEnv.find "wild" fields) then
              "{" ^ row ~strip_wild:true "," context p effects ^ "}~" ^ ah
@@ -2064,9 +2023,9 @@ struct
               begin
                 match Unionfind.find point with
                   | `Var (var, k, `Flexible) when policy.flavours ->
-                      (name_of_type var "%" (fun name -> "%" ^ name)) ^ sk k
+                      (name_of_type var k "%" (fun name -> "%" ^ name))
                   | `Var (var, k, _) ->
-                      (name_of_type var "_" (fun name -> name)) ^ sk k
+                      (name_of_type var k "_" (fun name -> name))
                   | `Recursive (var, body) ->
                       if TypeVarSet.mem var bound_vars then
                         Vars.find var vars
@@ -2148,22 +2107,24 @@ struct
                 Lens.Database.fmt_phrase_dummy predicate
                 Lens.Fun_dep.Set.pp_pretty fds
           | `Alias ((s, _, ts), _) | `RecursiveApplication { r_name = s; r_args = ts; _ } ->
-             let context =
-               if policy.effect_sugar then
-                 let shared_effect = find_shared_effect context p t in
-                 { context with shared_effect }
-               else context in
              let ts =
                match ListUtils.unsnoc_opt ts, context.shared_effect with
-               | Some (ts, `Row r), Shared v when is_basic_effect r v -> ts
-               | _ -> ts
+               | Some (ts, `Row r), Some v when maybe_shared_effect t && is_row_var v r ->
+                  let ts = List.map (type_arg context p) ts in
+                  let (fields, _, _), _ = unwrap_row r in
+                  if StringMap.is_empty fields then
+                    ts
+                  else
+                    let r = row ~name:(fun _ _ -> name_of_eff_var ~allows_shared:true) "," context p r in
+                    ts @ ["{" ^ r ^ "}"]
+               | _ -> List.map (type_arg context p) ts
              in
              begin match ts with
              | [] -> Module_hacks.Name.prettify s
              | _ ->
                 Printf.sprintf "%s (%s)"
                   (Module_hacks.Name.prettify s)
-                  (String.concat "," (List.map (type_arg context p) ts))
+                  (String.concat "," ts)
              end
           | `Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg context p) elems ^"]"
           | `Application (s, []) -> Abstype.name s
@@ -2194,7 +2155,7 @@ struct
                   presence context p f
           end
 
-  and row ?(strip_wild=false) sep context p (field_env, rv, dual) =
+  and row ?(name=name_of_type) ?(strip_wild=false) sep context p (field_env, rv, dual) =
     (* FIXME:
 
        should quote labels when necessary, i.e., when they
@@ -2209,26 +2170,20 @@ struct
             (label ^ presence context p f) :: field_strings)
         field_env [] in
 
-    let row_var_string = row_var sep context p rv in
+    let row_var_string = row_var name sep context p rv in
       String.concat sep (List.rev (field_strings)) ^
         begin
           match row_var_string with
             | None -> ""
             | Some s -> "|"^ (if dual then "~" else "") ^ s
         end
-  and row_var sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
-    let name_of_type var k n1 n2 =
-     let name, (_, _, count) = Vars.find_spec var vars in
-     Some ((if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars)
-            then n1
-            else (n2 name))
-          ^ has_kind (subkind p k)) in
+  and row_var name_of_type sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
     match Unionfind.find rv with
       | `Closed -> None
       | `Var (var, k, `Flexible) when policy.flavours ->
-         name_of_type var k "%" (fun name -> "%" ^ name)
+         Some (name_of_type context (policy, vars) var k "%" (fun name -> "%" ^ name))
       | `Var (var, k, _) ->
-         name_of_type var k "_" (fun name -> name)
+         Some (name_of_type context (policy, vars) var k "_" (fun name -> name))
       | `Recursive (var, r) ->
           if TypeVarSet.mem var bound_vars then
             Some (Vars.find var vars)
@@ -2319,16 +2274,17 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
     let t = if policy.Print.quantifiers then t
             else Print.strip_quantifiers t in
     if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
-    Print.datatype Print.empty_context (policy, Vars.tyvar_name_map) t
+    let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
+    Print.datatype context (policy, Vars.tyvar_name_map) t
   else
     show_datatype (DecycleTypes.datatype t)
 
 let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
   if Settings.get_value Basicsettings.print_types_pretty then
-    begin
+    let policy = policy () in
     if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
-    Print.row "," Print.empty_context (policy (), Vars.tyvar_name_map) row
-    end
+    let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
+    Print.row "," context (policy, Vars.tyvar_name_map) row
   else
     show_row (DecycleTypes.row row)
 
@@ -2340,14 +2296,16 @@ let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
 
 let string_of_type_arg ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
+  let policy = policy () in
   if refresh_tyvar_names then
     build_tyvar_names (fun x -> free_bound_type_arg_type_vars x) [arg];
-  Print.type_arg Print.empty_context (policy (), Vars.tyvar_name_map) arg
+  let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
+  Print.type_arg context (policy, Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row_var =
   if refresh_tyvar_names then
     build_tyvar_names (fun x -> free_bound_row_var_vars x) [row_var];
-  match Print.row_var "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
+  match Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
   with | None -> ""
        | Some s -> s
 
