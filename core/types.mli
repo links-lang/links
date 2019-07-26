@@ -207,6 +207,7 @@ val free_row_type_vars : row -> TypeVarSet.t
 val free_tyarg_vars : type_arg -> TypeVarSet.t
 val free_bound_type_vars     : ?include_aliases:bool -> typ -> Vars.vars_list
 val free_bound_row_type_vars : ?include_aliases:bool -> row -> Vars.vars_list
+val free_bound_type_arg_type_vars : ?include_aliases:bool -> type_arg -> Vars.vars_list
 
 val var_of_quantifier : quantifier -> int
 val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
@@ -245,6 +246,7 @@ val fresh_rigid_presence_variable : subkind -> field_spec
 val fresh_type_quantifier : subkind -> quantifier * datatype
 val fresh_row_quantifier : subkind -> quantifier * row
 val fresh_presence_quantifier : subkind -> quantifier * field_spec
+val fresh_quantifier : kind -> quantifier * type_arg
 
 (** {0 rows} *)
 (** empty row constructors *)

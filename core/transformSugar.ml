@@ -335,6 +335,7 @@ class transform (env : Types.typing_environment) =
           let o = o#restore_envs envs in
             (o, Escape (b, e), t)
       | Section sec -> (o, Section sec, type_section var_env sec)
+      | FreezeSection sec -> (o, FreezeSection sec, type_section var_env sec)
       | Conditional (p, e1, e2) ->
           let (o, p, _) = o#phrase p in
           let (o, e1, t) = o#phrase e1 in
@@ -427,18 +428,19 @@ class transform (env : Types.typing_environment) =
           (o, Projection (e, name), TypeUtils.project_type name t)
       | With (e, fields) ->
           let (o, e, t) = o#phrase e in
-          let (o, fields) =
-            let rec list o =
-              function
-                | [] -> (o, [])
-                | (name, e)::fields ->
-                    let (o, e, _) = o#phrase e in
-                    let (o, fields) = list o fields in
-                      (o, (name, e)::fields)
-            in
-              list o fields
+          let o, fields, ts =
+            list o
+              (fun o (name, e) -> let o, e, t = o#phrase e in (o, (name, e), t))
+              fields
           in
-            (o, With (e, fields), t)
+          let t = match Types.concrete_type t with
+            | `Record row ->
+               let fs, rv, closed = Types.flatten_row row in
+               let fs = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (`Present t) fs) fs fields ts in
+               `Record (fs, rv, closed)
+            | _ -> t
+          in
+          (o, With (e, fields), t)
       | TypeAnnotation (e, ann_type) ->
           let (o, e, _) = o#phrase e in
           let (o, ann_type) = o#datatype' ann_type in
@@ -774,7 +776,8 @@ class transform (env : Types.typing_environment) =
          let (o, p) = o#pattern p in
          let (o, t) = optionu o (fun o -> o#datatype') t in
          (o, Val (p, (tyvars, e), location, t))
-      | Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature }
+      | Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam);
+              fun_location; fun_signature; fun_frozen; fun_unsafe_signature }
            when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
@@ -783,7 +786,8 @@ class transform (env : Types.typing_environment) =
          let o = o#restore_quantifiers outer_tyvars in
          let (o, fun_binder) = o#binder fun_binder in
          let (o, fun_signature) = optionu o (fun o -> o#datatype') fun_signature in
-         (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam); fun_location; fun_signature; fun_unsafe_signature })
+         (o, Fun { fun_binder; fun_linearity; fun_definition = (tyvars, lam);
+                   fun_location; fun_signature; fun_frozen; fun_unsafe_signature })
       | Fun _ -> raise (internal_error "Unannotated non-recursive function binding")
       | Funs defs ->
          (* put the inner bindings in the environment *)

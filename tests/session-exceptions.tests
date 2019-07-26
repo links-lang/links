@@ -28,6 +28,12 @@ filemode : true
 args : --session-exceptions --enable-handlers
 stdout : "exception" : String
 
+Operation guarded by failing operation (cp style)
+./tests/session-exceptions/cancel6.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
 Cancellation in closure (1)
 ./tests/session-exceptions/cancel6.links
 filemode : true

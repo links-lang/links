@@ -10,9 +10,9 @@ val var : Types.environment -> string -> (Types.type_arg list * Types.datatype)
 val rigid : Types.environment -> string -> (Types.type_arg list * Types.datatype)
 val typ : Types.datatype -> (Types.type_arg list * Types.datatype)
 val typ_rigid : Types.datatype -> (Types.type_arg list * Types.datatype)
-val datatype :
-  Types.datatype Utility.IntMap.t * Types.row Utility.IntMap.t * Types.field_spec Utility.IntMap.t ->
-  Types.datatype -> Types.datatype
+val datatype : instantiation_maps -> Types.datatype -> Types.datatype
+val row : instantiation_maps -> Types.row -> Types.row
+val presence : instantiation_maps -> Types.field_spec -> Types.field_spec
 val alias : string -> Types.type_arg list -> Types.tycon_environment -> Types.datatype
 val recursive_application : string -> Types.quantifier list -> Types.type_arg list -> Types.datatype -> Types.datatype
 

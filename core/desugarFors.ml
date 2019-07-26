@@ -45,6 +45,10 @@ open SugarConstructors.DummyPositions
     (q; qs)_v = (q_v, qs_v)
 *)
 
+let tt = function
+  | [t] -> t
+  | ts -> Types.make_tuple_type ts
+
 (**
   This function generates the code to extract the results.
   It roughly corresponds to [[qs]].
@@ -60,7 +64,7 @@ let results :  Types.row ->
         | (e::es, x::xs, t::ts) ->
             let r = results (es, xs, ts) in
             let qt = t in
-            let qst = Types.make_tuple_type ts in
+            let qst = tt ts in
 
             let ((qsb, qs) : Sugartypes.Pattern.with_pos list * Sugartypes.phrase list) =
               List.split
@@ -72,11 +76,7 @@ let results :  Types.row ->
                 match qsb with
                   | [p] -> [p]
                   | _ -> [tuple_pat qsb] in
-              let a =
-                match ts with
-                  | [t] -> Types.make_tuple_type [t]
-                  | ts -> Types.make_tuple_type [Types.make_tuple_type ts]
-              in
+              let a = Types.make_tuple_type [tt ts] in
               fun_lit ~args:[a, eff] dl_unl [ps] (tuple (q::qs)) in
             let outer : Sugartypes.phrase =
               let a = `Type qst in
@@ -161,10 +161,7 @@ object (o : 'self_type)
             | [p] -> [p]
             | ps -> [tuple_pat ps] in
 
-        let arg_type =
-          match ts with
-            | [t] -> t
-            | ts -> Types.make_tuple_type ts in
+        let arg_type = tt ts in
 
         let f : phrase = fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
                                  dl_unl [arg] body in
