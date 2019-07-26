@@ -37,14 +37,14 @@ fun exprToString(expr) {
 }
 
 # run
-sig run : (Comp({ |e}, a)) ~e~> a
+sig run : (Comp(a)) ~> a
 fun run(m) {m()}
 
 # failure
 sig fail : forall a, e::Eff . () {Fail:Zero|e}-> a
 fun fail() {switch(do Fail) { }}
 
-sig maybe : (Comp({Fail:Zero|e}, a)) -> Comp({ Fail{_} |e}, Maybe(a))
+sig maybe : (Comp(a, {Fail:Zero|e})) -> Comp(Maybe(a), { Fail{_} |e})
 fun maybe(m)() {
   handle(m()) {
     case Return(x) -> Just(x)
@@ -80,7 +80,7 @@ op lhs <|> rhs {
 }
 
 # Returns a free variable, if any, in a given expression
-sig freeVariable : (Expr) -> Comp({Choose:Bool |_}, Maybe(String))
+sig freeVariable : (Expr) -> Comp(Maybe(String), {Choose:Bool |_})
 fun freeVariable(expr)() {
   switch (expr : Expr) {
      case Const(_)   -> Nothing
@@ -167,7 +167,7 @@ fun fromConst(expr) {
 }
 
 # Simple satisfiability checker
-sig satisfiable : (Expr) -> Comp({Choose:Bool |e}, Bool)
+sig satisfiable : (Expr) -> Comp(Bool, {Choose:Bool |e})
 fun satisfiable(expr)() {
    switch (freeVariable(expr)()) {
       case Nothing -> fromConst(expr)
@@ -258,35 +258,35 @@ fun literalPolarity(e,x) {
 ####
 
 # Parsing
-typename Parser(e::Eff, a) = () {Choose: Bool, Satisfies: ((Char) {}~> Bool) -> Char, Peek: Maybe(Char), Fail: Zero |e}~> a;
-typename ExprParser = Parser({ }, Expr);
+typename Parser(a) = () {Choose: Bool, Satisfies: ((Char) {}~> Bool) -> Char, Peek: Maybe(Char), Fail: Zero |_}~> a;
+typename ExprParser = Parser(Expr);
 
-sig satisfies : ((Char) {}~> Bool) -> Parser({ |e}, Char)
+sig satisfies : ((Char) {}~> Bool) -> Parser(Char)
 fun satisfies(pred)() {
   do Satisfies(pred)
 }
 
-sig char : (Char) -> Parser({ |e}, Char)
+sig char : (Char) -> Parser(Char)
 fun char(c) { satisfies(fun(k) { k == c }) }
 
-sig peek : Parser({ |e}, Maybe(Char))
+sig peek : Parser(Maybe(Char))
 fun peek() { do Peek }
 
-sig succeed : (a) -> Parser({ |e}, a)
+sig succeed : (a) -> Parser(a)
 fun succeed(x)() { x }
 
-sig many : (Parser({ |e}, a)) ~> Parser({ |e}, [a])
+sig many : (Parser(a)) ~> Parser([a])
 fun many(p)() {
   if (choose()) p() :: many(p)()
   else []
 }
 
-sig many1 : (Parser({ |e}, a)) -> Parser({ |e}, [a])
+sig many1 : (Parser(a)) -> Parser([a])
 fun many1(p)() {
   p() :: many(p)()
 }
 
-sig while : (Parser({ |e}, a)) ~> Parser({ |e}, ())
+sig while : (Parser(a)) ~> Parser(())
 fun while(p)() {
   if (choose()) { ignore(p()); while(p)() }
   else ()
@@ -298,19 +298,19 @@ fun isLetter(c) {
   || (ord(c) >= 97 && ord(c) <= 122)
 }
 
-sig parseLetter : Parser({ |e}, Char)
+sig parseLetter : Parser(Char)
 fun parseLetter() {
   satisfies(isLetter)()
 }
 
-sig parseString : (String) -> Parser({ |e}, String)
+sig parseString : (String) -> Parser(String)
 fun parseString(str)() {
    var cs = explode(str);
    iter(fun(c) { ignore(run(char(c))) }, cs);
    str
 }
 
-sig parseName : Parser({ |e}, String)
+sig parseName : Parser(String)
 fun parseName() {
   var cs = many1(parseLetter)();
   implode(cs)
@@ -323,10 +323,10 @@ fun isWhitespace(c) {
   || ord(c) == ord('\n')
 }
 
-sig whitespace : Parser({ |e}, ())
+sig whitespace : Parser(())
 fun whitespace() { while(satisfies(isWhitespace))() }
 
-sig parens : (Parser({ |e}, a)) -> Parser({ |e}, a)
+sig parens : (Parser(a)) -> Parser(a)
 fun parens(p)() {
   ignore(char('(')());
   ignore(whitespace());
@@ -336,7 +336,7 @@ fun parens(p)() {
   result
 }
 
-sig parseEof : Parser({ |e}, ())
+sig parseEof : Parser(())
 fun parseEof() {
   switch (peek()) {
     case Nothing -> ()
@@ -435,7 +435,7 @@ mutual {
     else parseAtomicExpr()
   }
 
-  sig parse : (Parser({ |e}, a), [Char]) -> Comp({Choose-,Satisfies-,Peek-,Fail: Zero |e}, a)
+  sig parse : (Parser(a, { |e}), [Char]) -> Comp(a, {Choose-,Satisfies-,Peek-,Fail: Zero |e})
   fun parse(m, input)() {
     handle(m())(tokens <- input) {
       case Return(x) -> x

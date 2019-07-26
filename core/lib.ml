@@ -331,12 +331,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "Send",
   (p2 (fun _pid _msg ->
          assert(false)), (* Now handled in evalir.ml *)
-   datatype "forall a::Type(Any, Any).(Process ({hear:a|_}), a) ~> ()",
+   datatype "forall a::Type(Any, Any).(Process ({hear:a|e}), a) ~> ()",
    IMPURE);
 
   "self",
   (`PFun (fun _ _ -> `Pid (`ServerPid (Proc.get_current_pid()))),
-   datatype "() ~e~> Process ({ |e })",
+   datatype "() {hear{a}|e}~> Process ({ hear{a} })",
    IMPURE);
 
   "here",
@@ -423,7 +423,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawnWait",
   (`PFun (fun _ -> assert false),
-   datatype "(() { |_}~> a) ~> a",
+   datatype "(() { |e}~> a) ~> a",
    IMPURE);
 
   "spawnWait'",
@@ -923,7 +923,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
   (`PFun (fun _ -> assert false),
-  datatype "([(String, (Event) { |_}~> ())]) ~> String",
+  datatype "([(String, (Event) { |e}~> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)
@@ -1317,7 +1317,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      in the prelude and is just a wrapper for this function.
    *)
    (`Server (p1 (Value.marshal_value ->- Value.box_string)),
-    datatype "(() { |_}-> a) ~> String",
+    datatype "(() { |e}-> a) ~> String",
     IMPURE));
 
   (* REDUNDANT *)

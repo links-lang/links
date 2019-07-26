@@ -93,6 +93,7 @@ and rec_appl = {
   r_name: string;
   r_dual: bool;
   r_unique_name: string;
+  r_quantifiers : kind list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
@@ -107,7 +108,7 @@ and typ =
     | `Effect of row
     | `Table of typ * typ * typ
     | `Lens of Lens.Type.t
-    | `Alias of ((string * type_arg list) * typ)
+    | `Alias of ((string * kind list * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
@@ -369,9 +370,6 @@ val make_thunk_type : row -> datatype -> datatype
 
 val pp_datatype : Format.formatter -> datatype -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
-
-(* Recursive type applications *)
-val recursive_applications : datatype -> string list
 
 module type TYPE_VISITOR =
 sig

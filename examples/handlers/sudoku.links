@@ -116,7 +116,7 @@ fun resetSudoku(sudoku) client {
   copySudoku(emptySudoku(), sudoku.name)
 }
 
-sig >>= : (Maybe(a), (a) ~e~> Maybe(b)) ~e~> Maybe(b)
+sig >>= : (Maybe(a), (a) ~> Maybe(b)) ~> Maybe(b)
 op m >>= f {
   switch (m) {
     case Nothing -> Nothing

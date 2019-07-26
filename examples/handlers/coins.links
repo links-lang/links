@@ -1,20 +1,19 @@
 typename Zero = [||];
 
-typename Comp(e::Eff,a) = (() ~e~> a);
-typename CF(e::Eff, a) = Comp({Choice: (()) {}-> Bool,
-                               Failure:(()) {}-> Zero|e},
-                              a);
+typename Comp(a) = (() ~> a);
+typename CF(a, e::Eff) = Comp(a, {Choice: (()) {}-> Bool,
+                                  Failure:(()) {}-> Zero|e});
 
-sig choice : Comp({Choice:(()) {}-> Bool|_}, Bool)
+sig choice : Comp(Bool, {Choice:(()) {}-> Bool|_})
 fun choice() {do Choice(())}
 
 sig choose : (a, a) {Choice:(()) {}-> Bool|_}~> a
 fun choose(x,y) {if (choice()) {x} else {y}}
 
-sig fail : Comp({Failure:(()) {}-> Zero|_}, a)
+sig fail : Comp(a, {Failure:(()) {}-> Zero|_})
 fun fail() {switch (do Failure(())) { }}
 
-sig allResults : (CF({}, a)) {}~> [a]
+sig allResults : (CF(a, {})) {}~> [a]
 fun allResults(m) {
   handle(m()) {
     case Return(x)     -> [x]
@@ -25,7 +24,7 @@ fun allResults(m) {
 
 typename Toss = [|Heads|Tails|];
 
-sig drunkToss : CF({ |_}, Toss)
+sig drunkToss : CF(Toss)
 fun drunkToss() {
   if (choice()) {
     choose(Heads, Tails)
@@ -34,17 +33,17 @@ fun drunkToss() {
   }
 }
 
-sig drunkTosses : (Int) -> CF({ |_}, [Toss])
+sig drunkTosses : (Int) -> CF([Toss])
 fun drunkTosses(n)() {
   for (_ <- [1..n]) [drunkToss()]
 }
 
-sig rand : Comp({Rand:(()) {}-> Float|_}, Float)
+sig rand : Comp(Float, {Rand:(()) {}-> Float|_})
 fun rand() {do Rand(())}
 
 sig randomResult :
-  (Comp({Choice:(()) {}-> Bool, Rand:(()) {}-> Float|e}, a)) ->
-   Comp({Choice{_},             Rand:(()) {}-> Float|e}, a)
+  (Comp(a, {Choice:(()) {}-> Bool, Rand:(()) {}-> Float|e})) ->
+   Comp(a, {Choice{_},             Rand:(()) {}-> Float|e})
 fun randomResult(m)() {
   handle(m()) {
     case Return(x)    -> x
@@ -52,8 +51,8 @@ fun randomResult(m)() {
   }
 }
 
-sig persevere : (Comp({Failure:(()) {}-> Zero|e}, a)) ->
-                 Comp({Failure{_}            |e}, a)
+sig persevere : (Comp(a, {Failure:(()) {}-> Zero|e})) ->
+                 Comp(a, {Failure{_}            |e})
 fun persevere(m)() {
   handle(m()) {
     case Return(x)     -> x
@@ -61,8 +60,8 @@ fun persevere(m)() {
   }
 }
 
-sig maybeResult : (Comp({Failure:(()) {}-> Zero|e}, a)) ->
-                   Comp({Failure{_}            |e}, Maybe(a))
+sig maybeResult : (Comp(a,        {Failure:(()) {}-> Zero|e})) ->
+                   Comp(Maybe(a), {Failure{_}            |e})
 fun maybeResult(m)() {
   handle(m()) {
     case Return(x)     -> Just(x)
@@ -70,7 +69,7 @@ fun maybeResult(m)() {
   }
 }
 
-sig handleRandom : (Comp({Rand:(()) {}-> Float}, a)) {}~> a
+sig handleRandom : (Comp(a, {Rand:(()) {}-> Float})) {}~> a
 fun handleRandom(m) {
   handle(m()) {
     case Return(x)  -> x

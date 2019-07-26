@@ -54,7 +54,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         | `Variant row -> get_row_type_args kind bound_vars row
         | `Table (r, w, n) -> gt r @ gt w @ gt n
         | `Lens _ -> []
-        | `Alias ((_, ts), t) ->
+        | `Alias ((_, _, ts), t) ->
             concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
         | `ForAll (qs, t) ->
            get_type_args kind (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t

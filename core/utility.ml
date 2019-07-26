@@ -397,11 +397,23 @@ struct
       | (x::xs) -> let ys, y = unsnoc xs in x :: ys, y
       | []   -> raise (Invalid_argument "unsnoc")
 
+  (** [unsnoc_opt list]: Partition [list] into its last element and all the
+     others. @return Some (others, lastElem) or None if the list is empty. *)
+  let unsnoc_opt = function
+    | [] -> None
+    | xs -> Some (unsnoc xs)
+
   (** [last list]: Return the last element of a list *)
-  let last l =
-    try
-      snd (unsnoc l)
-    with Invalid_argument _ -> invalid_arg "last"
+  let rec last = function
+    | [x] -> x
+    | _ :: xs -> last xs
+    | [] -> invalid_arg "last"
+
+  (** [last_opt list]: Return the last element of a list, or None if the list is
+     empty. *)
+  let last_opt = function
+    | [] -> None
+    | xs -> Some (last xs)
 
   (** [curtail list]: Return a copy of the list with the last element removed. *)
   let curtail l =

@@ -11,7 +11,7 @@ fun put(st) {do Put(st)}
 typename LState = [|On|Off|];
 
 # Toggle the light switch
-sig toggle : Comp({Get:LState,Put:(LState) {}-> ()|_}, ())
+sig toggle : Comp((), {Get:LState,Put:(LState) {}-> ()|_})
 fun toggle() {
   switch (get()) {
     case Off -> put(On)

@@ -247,7 +247,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/coins.links
 examples/handlers/coins.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/concurrency.links
 examples/handlers/concurrency.links
@@ -261,12 +261,6 @@ filemode : true
 ignore : broken example
 args : --config=tests/examples_default.config
 
-Typecheck example file examples/handlers/deep_pipes.links
-examples/handlers/deep_pipes.links
-filemode : true
-ignore : broken example
-args : --config=tests/examples_default.config
-
 Typecheck example file examples/handlers/deep_state.links
 examples/handlers/deep_state.links
 filemode : true
@@ -275,12 +269,12 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/exceptions.links
 examples/handlers/exceptions.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/fringe.links
 examples/handlers/fringe.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/identity.links
 examples/handlers/identity.links
@@ -290,7 +284,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/lambda.links
 examples/handlers/lambda.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/light_switch.links
 examples/handlers/light_switch.links
@@ -300,7 +294,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/monadic_reflection.links
 examples/handlers/monadic_reflection.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/nim.links
 examples/handlers/nim.links
@@ -326,7 +320,6 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/pipes.links
 examples/handlers/pipes.links
 filemode : true
-ignore : broken example
 args : --config=tests/examples_default.config
 
 Typecheck example file examples/handlers/racing-lines.links
@@ -337,33 +330,27 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/handlers/sat.links
 examples/handlers/sat.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/shiftreset.links
 examples/handlers/shiftreset.links
 filemode : true
-args : --config=tests/examples_default.config
-
-Typecheck example file examples/handlers/shallow_pipes.links
-examples/handlers/shallow_pipes.links
-filemode : true
-ignore : broken example
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/shallow_state.links
 examples/handlers/shallow_state.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/sierpinski-triangle.links
 examples/handlers/sierpinski-triangle.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/sudoku.links
 examples/handlers/sudoku.links
 filemode : true
-args : --config=tests/examples_default.config
+args : --config=tests/examples_effect_sugar.config
 
 Typecheck example file examples/handlers/tests.links
 examples/handlers/tests.links

@@ -131,32 +131,32 @@ exit : 0
 args : --enable-handlers
 
 Type-and-effect signature for deep handler (1)
-sig allChoices : (Comp({Choose:Bool|e},a)) {Choose{_}|e}~> [a] fun allChoices(m) {handle(m()) {case Return(x) -> [x] case Choose(k) -> k(true) ++ k(false) }}
+sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> [a] fun allChoices(m) {handle(m()) {case Return(x) -> [x] case Choose(k) -> k(true) ++ k(false) }}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for deep handler (2)
-sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose{_}|e},[a]) fun allChoices(m)() {handle(m()) {case Return(x) -> [x] case Choose(k) -> k(true) ++ k(false)}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose{_}|e}) fun allChoices(m)() {handle(m()) {case Return(x) -> [x] case Choose(k) -> k(true) ++ k(false)}}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for deep handler (3)
-sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose- |e},[a]) fun allChoices(m)() {handle(m()) {case Return(x) -> [x] case Choose(k) -> k(true) ++ k(false)}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose- |e}) fun allChoices(m)() {handle(m()) {case Return(x) -> [x] case Choose(k) -> k(true) ++ k(false)}}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for shallow handler (1)
-sig allChoices : (Comp({Choose:Bool|e},a)) {Choose{_}|e}~> [a] fun allChoices(m) {shallowhandle(m()) {case Return(x) -> [x] case Choose(k) -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
+sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> [a] fun allChoices(m) {shallowhandle(m()) {case Return(x) -> [x] case Choose(k) -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for shallow handler (2)
-sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose{_}|e},[a]) fun allChoices(m)() {shallowhandle(m()) {case Return(x) -> [x] case Choose(k) -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose{_}|e}) fun allChoices(m)() {shallowhandle(m()) {case Return(x) -> [x] case Choose(k) -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for shallow handler (3)
-sig allChoices : (Comp({Choose:Bool|e},a)) -> Comp({Choose- |e},[a]) fun allChoices(m)() {shallowhandle(m()) {case Return(x) -> [x] case Choose(k) -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose- |e}) fun allChoices(m)() {shallowhandle(m()) {case Return(x) -> [x] case Choose(k) -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
 stdout : () : ()
 args : --enable-handlers
 
@@ -401,12 +401,12 @@ args : --enable-handlers
 
 Generalise (1)
 gen0(fun(m)() { handle(m()) { case Foo(k) -> 42 case Return(x) -> x } }(fun(){42}))
-stdout : fun : Comp ({ |a },Int)
+stdout : fun : Comp (Int,{ |_ })
 args : --enable-handlers
 
 Generalise (2)
 gen0(fun(m)() { handle(m()) { case Foo(k : ((()) {Foo- |_}~> Int)) -> 42 case Return(x) -> x } }(fun(){42}))
-stdout : fun : Comp ({ |a },Int)
+stdout : fun : Comp (Int,{ |_ })
 args : --enable-handlers
 
 Recursive nesting of deep handlers
@@ -468,4 +468,4 @@ Examples
 ./examples/handlers/tests.links
 filemode : true
 stdout : () : ()
-args : --enable-handlers -m --path=examples/handlers
+args : --enable-handlers -m --path=examples/handlers --config=tests/effect_sugar.config
