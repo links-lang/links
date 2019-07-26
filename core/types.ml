@@ -830,7 +830,7 @@ module Session : Constraint = struct
          | (v, (l, sk), `Flexible) ->
             begin
               match Restriction.min sk Session with
-              | Some Session -> Unionfind.change point (`Var (v, (l, sk), `Flexible))
+              | Some Session -> Unionfind.change point (`Var (v, (l, Session), `Flexible))
               | _ -> assert false
             end
          | (_, _, `Rigid) -> assert false
@@ -973,6 +973,19 @@ module Env = Env.String
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
       (var, (PrimaryKind.Presence, subkind)), `Var point
+
+  let fresh_quantifier =
+    let open CommonTypes.PrimaryKind in
+    function
+    | (Type, sk) ->
+       let q, t = fresh_type_quantifier sk in
+       q, `Type t
+    | (Row , sk) ->
+       let q, r = fresh_row_quantifier sk in
+       q, `Row r
+    | (Presence, sk) ->
+       let q, p = fresh_presence_quantifier sk in
+       q, `Presence p
 
 let make_empty_closed_row () = empty_field_env, closed_row_var, false
 let make_empty_open_row subkind = empty_field_env, fresh_row_variable subkind, false

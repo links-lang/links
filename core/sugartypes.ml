@@ -231,6 +231,7 @@ and phrasenode =
                         * (*orderby:*) phrase option
   | Escape           of Binder.with_pos * phrase
   | Section          of Section.t
+  | FreezeSection    of Section.t
   | Conditional      of phrase * phrase * phrase
   | Block            of block_body
   | InfixAppl        of (tyarg list * BinaryOp.t) * phrase * phrase
@@ -329,6 +330,7 @@ and function_definition = {
     fun_location: Location.t;
     fun_signature: datatype' option;
     fun_unsafe_signature: bool;
+    fun_frozen : bool;
   }
 and recursive_function = {
     rec_binder: Binder.with_pos;
@@ -405,10 +407,12 @@ struct
     | Var v -> singleton v
     | FreezeVar v -> singleton v
     | Section (Section.Name n) -> singleton n
+    | FreezeSection (Section.Name n) -> singleton n
 
     | Constant _
     | TextNode _
     | Section (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
+    | FreezeSection (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
 
     | Spawn (_, _, p, _)
     | TAbstr (_, p)
