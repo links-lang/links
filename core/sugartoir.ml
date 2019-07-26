@@ -847,7 +847,7 @@ struct
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
           | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
                when Lib.is_pure_primitive f ->
-              cofv (I.apply_pure (instantiate f tyargs, evs es))
+              cofv (I.apply_pure (instantiate f (List.map (snd ->- val_of) tyargs), evs es))
           | FnAppl (e, es) when is_pure_primitive e ->
               cofv (I.apply_pure (ev e, evs es))
           | FnAppl (e, es) ->
@@ -860,7 +860,7 @@ struct
               let vt = I.sem_type v in
                 begin
                   try
-                    cofv (I.tappl (v, tyargs))
+                    cofv (I.tappl (v, List.map (snd ->- val_of) tyargs))
                   with
                       Instantiate.ArityMismatch (expected, provided) ->
                         raise (Errors.TypeApplicationArityMismatch { pos;

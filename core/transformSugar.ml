@@ -383,7 +383,7 @@ class transform (env : Types.typing_environment) =
             check_type_application
               (TAppl (e, tyargs), t)
               (fun () ->
-                 let t = Instantiate.apply_type t tyargs in
+                 let t = Instantiate.apply_type t (List.map (snd ->- val_of) tyargs) in
                    (o, TAppl (e, tyargs), t))
       | TupleLit [e] ->
           (* QUESTION:

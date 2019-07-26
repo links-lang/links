@@ -569,12 +569,16 @@ postfix_expression:
 | QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
+| postfix_expression targ_spec                                 { with_pos $loc (TAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
 | postfix_expression AT                                        { with_pos $loc (Instantiate $1) }
 
 
 arg_spec:
 | LPAREN perhaps_exps RPAREN                                   { $2 }
+
+targ_spec:
+| LBRACKET type_arg_list RBRACKET                              { List.map (fun x -> (x, None)) $2 }
 
 exps:
 | separated_nonempty_list(COMMA, exp)                          { $1 }

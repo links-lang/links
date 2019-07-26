@@ -103,6 +103,10 @@ object (self)
       (_, None) -> {< all_desugared = false >}
     | _ -> self
 
+  method! type_arg' = function
+      (_, None) -> {< all_desugared = false >}
+    | _ -> self
+
   method! phrasenode = function
     | TableLit (_, (_, None), _, _, _) -> {< all_desugared = false >}
     | p -> super#phrasenode p
@@ -796,6 +800,10 @@ module Desugar = struct
   let datatype' map alias_env ((dt, _) : datatype') =
     (dt, Some (datatype map alias_env dt))
 
+  let type_arg' map alias_env ((ta, _) : type_arg') : type_arg' =
+    let unlocated = WithPos.make Datatype.Unit in
+    (ta, Some (type_arg map alias_env ta unlocated))
+
   (* Desugar a foreign function declaration. Foreign declarations cannot use type variables from
      the context. Any type variables found are implicitly universally quantified at this point. *)
   let foreign alias_env dt =
@@ -841,6 +849,8 @@ object (self)
   val alias_env = initial_alias_env
 
   method! datatype' node = (self, Desugar.datatype' map alias_env node)
+
+  method! type_arg' node = (self, Desugar.type_arg' map alias_env node)
 
   method! phrasenode = function
     | Block (bs, p) ->
