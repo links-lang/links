@@ -56,6 +56,7 @@ module SugarConstructors (Position : Pos)
   (** Common stuff *)
 
   let var ?(ppos=dp) name = with_pos ppos (Var name)
+  let freeze_var ?(ppos=dp) name = with_pos ppos (FreezeVar name)
 
   (* Create a Block from block_body. *)
   let block_node       block_contents = Block block_contents
@@ -142,7 +143,7 @@ module SugarConstructors (Position : Pos)
     with_pos ppos (Spawn (spawn_kind, location, blk, row))
 
   let fn_appl_node ?(ppos=dp) name tyvars vars =
-    FnAppl (with_pos ppos (tappl (Var name, tyvars)), vars)
+    FnAppl (with_pos ppos (tappl (FreezeVar name, tyvars)), vars)
 
   let fn_appl ?(ppos=dp) name tyvars vars =
     with_pos ppos (fn_appl_node ~ppos name tyvars vars)
@@ -153,13 +154,14 @@ module SugarConstructors (Position : Pos)
 
   (** Bindings *)
   (* Create a function binding. *)
-  let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) (linearity, bndr, args, location, blk) =
+  let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ?(frozen=false) (linearity, bndr, args, location, blk) =
     let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
     with_pos ppos (Fun { fun_binder = binder bndr;
                          fun_linearity = linearity;
                          fun_definition = ([], (args, blk));
                          fun_location = location;
                          fun_signature;
+                         fun_frozen = frozen;
                          fun_unsafe_signature = unsafe_sig })
 
   let fun_binding' ?(ppos=dp) ?(linearity=dl_unl) ?(tyvars=[])
@@ -169,6 +171,7 @@ module SugarConstructors (Position : Pos)
                          fun_definition = (tyvars, fnlit);
                          fun_location = location;
                          fun_signature = annotation;
+                         fun_frozen = false;
                          fun_unsafe_signature = false })
 
 

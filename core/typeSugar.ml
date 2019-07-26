@@ -57,7 +57,8 @@ struct
     | DatabaseLit _
     | TableLit _
     | TextNode _
-    | Section _ -> true
+    | Section _
+    | FreezeSection _ -> true
 
     | ListLit (ps, _)
     | TupleLit ps -> List.for_all is_pure ps
@@ -270,6 +271,7 @@ sig
   val spawn_outer : griper
   val spawn_wait_outer : griper
   val spawn_location : griper
+  val spawn_inconsistent : griper
 
   val query_outer : griper
   val query_base_row : griper
@@ -280,6 +282,7 @@ sig
   val unary_apply : griper
   val infix_apply : griper
   val fun_apply : griper
+  val type_apply : Position.t -> string -> Types.datatype -> Types.type_arg list -> 'a
 
   val generalise_value_restriction : Position.t -> string -> 'a
 
@@ -353,6 +356,7 @@ sig
 
   val selection : griper
 
+  val cp_wild : griper
   val cp_unquote : griper
   val cp_grab : string -> griper
   val cp_give : string -> griper
@@ -368,6 +372,10 @@ sig
   val try_in_unless_pat : griper
   val try_in_unless_branches : griper
   val try_in_unless_linearity : Position.t -> string -> unit
+
+  val raise_effect : griper
+
+  val recursive_usage : griper
 
   val inconsistent_quantifiers :
     pos:Position.t -> t1:Types.datatype -> t2:Types.datatype -> unit
@@ -414,12 +422,15 @@ end
     let show_type   = Types.string_of_datatype ~policy:error_policy ~refresh_tyvar_names:false
     let show_row    = Types.string_of_row      ~policy:error_policy ~refresh_tyvar_names:false
     let show_effectrow row = "{" ^ (Types.string_of_row ~policy:error_policy ~refresh_tyvar_names:false row) ^ "}"
+    let show_type_arg = Types.string_of_type_arg ~policy:error_policy ~refresh_tyvar_names:false
 
     (* Wrappers for generating type variable names *)
     let build_tyvar_names =
       Types.build_tyvar_names (Types.free_bound_type_vars ~include_aliases:true)
     let add_rowvar_names =
       Types.add_tyvar_names (Types.free_bound_row_type_vars ~include_aliases:true)
+    let add_typearg_names =
+      Types.add_tyvar_names (Types.free_bound_type_arg_type_vars ~include_aliases:true)
 
     let die pos msg = raise (Errors.Type_error (pos, msg))
 
@@ -887,6 +898,15 @@ end
                "but the currently allowed effects are" ^ nli () ^
                 code ppr_lt)
 
+    let spawn_inconsistent  ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_pr = show_type rt in
+      let ppr_ir = show_type lt in
+      die pos ("Spawn blocks has inconsistent effects. Previously" ^ nli () ^
+                code ppr_ir                             ^ nl  () ^
+               "but the currently inferred effects are" ^ nli () ^
+                code ppr_pr)
+
     let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt; rt];
       let ppr_rt = show_type rt in
@@ -979,6 +999,19 @@ end
       die pos ("Because of the value restriction, the expression " ^ nli () ^
                 code exp ^ nl () ^
                "cannot be generalised.")
+
+    let type_apply pos lexpr ty tys =
+      build_tyvar_names [ty];
+      add_typearg_names tys;
+      let quant_policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
+      let ppr_type  = Types.string_of_datatype ~policy:quant_policy ~refresh_tyvar_names:false ty in
+      let ppr_types = List.map (fun t -> tab() ^ code (show_type_arg t)) tys in
+      die pos ("The term"                                     ^ nli () ^
+                code lexpr                                    ^ nl  () ^
+               "has type"                                     ^ nli () ^
+                code ppr_type                                 ^ nl  () ^
+               "while we're trying to instantiate it with"    ^ nl  () ^
+                String.concat (nl() ^ "and" ^ nl()) ppr_types ^ nl  ())
 
     let xml_attribute ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
@@ -1333,6 +1366,15 @@ end
                "while the subsequent patterns have type"              ^ nli () ^
                 code ppr_rt)
 
+    let cp_wild ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("CP clauses are wild"             ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
+
     let cp_unquote ~pos ~t1:(_, lt) ~t2:(_, _) ~error:_ =
       build_tyvar_names [lt];
       let ppr_lt = show_type lt in
@@ -1446,6 +1488,13 @@ end
                "exception handler must be unrestricted, but " ^ nl () ^
                "variable " ^ v ^ " is linear.")
 
+    let raise_effect ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt;rt];
+      die pos ("Raising a session exception requires an effect context " ^ nl() ^
+          tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
+          "but, the currently allowed effects are" ^ nl() ^
+          tab() ^ code ( show_effectrow (TypeUtils.extract_row lt)))
+
    (* quantifier checks *)
    let inconsistent_quantifiers ~pos ~t1:l ~t2:r =
      let policy () = {(Types.Print.default_policy ()) with Types.Print.quantifiers = true} in
@@ -1454,6 +1503,17 @@ end
                 typ l                                  ^ nl ()  ^
                 "actual: "                             ^ nli () ^
                 typ r                                  ^ nl ())
+
+    let recursive_usage ~pos ~t1:(_, lt) ~t2:(v, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Using the recursive variable"          ^ nli () ^
+                code v                                 ^ nl  () ^
+               "makes this term wild"                  ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
 end
 
@@ -1491,22 +1551,40 @@ let unbind_var context v = {context with var_env = Env.unbind context.var_env v}
 let bind_tycon context (v, t) = {context with tycon_env = Env.bind context.tycon_env (v,t)}
 let bind_effects context r = {context with effect_row = r}
 
-let type_section context = function
-  | Section s as s' ->
-     let env = context.var_env in
-     let ((tyargs, t), usages) =
-       let open Section in match s with
-       | Minus         -> Utils.instantiate env "-", StringMap.empty
-       | FloatMinus    -> Utils.instantiate env "-.", StringMap.empty
-       | Project label ->
-          let a = Types.fresh_type_variable (lin_unl, res_any) in
-          let rho = Types.fresh_row_variable (lin_unl, res_any) in
-          let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
-          let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho, false) in
-            ([`Type a; `Row (StringMap.empty, rho, false); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), StringMap.empty
-       | Name var      -> Utils.instantiate env var, StringMap.singleton var 1 in
-     tappl (s', tyargs), t, usages
-  | _ -> assert false
+let type_section context s =
+  let env = context.var_env in
+  let ((tyargs, t), usages) =
+    let open Section in match s with
+    | Minus         -> Utils.instantiate env "-", StringMap.empty
+    | FloatMinus    -> Utils.instantiate env "-.", StringMap.empty
+    | Project label ->
+       let a = Types.fresh_type_variable (lin_unl, res_any) in
+       let rho = Types.fresh_row_variable (lin_unl, res_any) in
+       let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
+       let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho, false) in
+         ([`Type a; `Row (StringMap.empty, rho, false); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), StringMap.empty
+    | Name var      -> Utils.instantiate env var, StringMap.singleton var 1 in
+  tappl (FreezeSection s, tyargs), t, usages
+
+let type_frozen_section context s =
+  let env = context.var_env in
+  let t, usages =
+    let open Section in
+    match s with
+    | Minus         -> Env.lookup env "-", StringMap.empty
+    | FloatMinus    -> Env.lookup env "-.", StringMap.empty
+    | Project label ->
+       let a = Types.fresh_rigid_type_variable (lin_unl, res_any) in
+       let rho = Types.fresh_rigid_row_variable (lin_unl, res_any) in
+       let effects = StringMap.empty, Types.fresh_rigid_row_variable default_effect_subkind, false in
+       let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho, false) in
+       Types.for_all
+         (Types.quantifiers_of_type_args [`Type a; `Row (StringMap.empty, rho, false); `Row effects],
+          `Function (Types.make_tuple_type [r], effects, a)),
+       StringMap.empty
+    | Name var      -> Env.lookup env var, StringMap.singleton var 1 in
+  FreezeSection s, t, usages
+
 
 let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
 let add_usages (p, t) m = (p, t, m)
@@ -2313,20 +2391,27 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
       in
         binders, pt, bt in
 
+    let check_recursive_usage e v context =
+      (* register wildness if this is a recursive variable instance *)
+      if StringSet.mem v context.rec_vars then
+        begin
+          let wild_open = Types.make_singleton_open_row ("wild", `Present Types.unit_type) default_effect_subkind in
+          unify ~handle:Gripers.recursive_usage (no_pos (`Effect wild_open), (uexp_pos e, `Effect context.effect_row));
+        end;
+    in
+
     let e, t, usages =
       match (expr : phrasenode) with
         | Var v ->
            begin
            try
-             (* register wildness if this is a recursive variable instance *)
-             if StringSet.mem v context.rec_vars then
-               begin
-                 let wild_open = Types.make_singleton_open_row ("wild", `Present Types.unit_type) default_effect_subkind in
-                 (* FIXME: griper *)
-                 Unify.rows (wild_open, context.effect_row)
-               end;
+             check_recursive_usage (WithPos.make ~pos expr) v context;
              let (tyargs, t) = Utils.instantiate context.var_env v in
-             tappl (Var v, tyargs), t, StringMap.singleton v 1
+             let e = match tyargs with
+               | [] -> Var v
+               | _ -> tappl (FreezeVar v, tyargs)
+             in
+             e, t, StringMap.singleton v 1
            with
              Errors.UndefinedVariable _msg ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")
@@ -2334,20 +2419,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | FreezeVar v ->
            begin
            try
-             (* register wildness if this is a recursive variable instance *)
-             if StringSet.mem v context.rec_vars then
-               begin
-                 let wild_open = Types.make_singleton_open_row ("wild", `Present Types.unit_type) (lin_any, res_any) in
-                 (* FIXME: griper *)
-                 Unify.rows (wild_open, context.effect_row)
-               end;
+             check_recursive_usage (WithPos.make ~pos expr) v context;
              let t = Env.lookup context.var_env v in
              FreezeVar v, t, StringMap.singleton v 1
            with
-             Errors.UndefinedVariable _msg ->
+             NotFound _ ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")
            end
-        | Section _ as s   -> type_section context s
+        | Section s -> type_section context s
+        | FreezeSection s -> type_frozen_section context s
         (* literals *)
         | Constant c as c' ->
            c', `Primitive (Constant.type_of c), StringMap.empty
@@ -2437,7 +2517,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
             end
-        | FunLit (_, lin, (pats, body), location) ->
+        | FunLit (argss_prev, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let pats = List.map (List.map tpc) pats in
             let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
@@ -2474,6 +2554,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               else () in
 
             let ftype = make_ft lin pats effects (typ body) in
+
+            (* Ensure the previously inferred arguments types match up with the
+               current one. While we will detect this during {!DesugarFuns},
+               it's good to catch this when it actually happens. *)
+            (match argss_prev with
+             | None -> ()
+             | Some argss_prev ->
+                let ftcon = fun p -> if DeclaredLinearity.is_linear lin then `Lolli p else `Function p in
+                let rec ft =
+                  function
+                  | [p, effects] -> ftcon (p, effects, typ body)
+                  | (p, e)::ps -> ftcon (p, e, ft ps)
+                  | [] -> raise (internal_error "Empty argument list")
+                in
+                let ftype_prev = ft argss_prev in
+                unify ~handle:Gripers.bind_fun_annotation (no_pos ftype, no_pos ftype_prev));
+
             (* To correctly determine the arity of nested anonymous functions we
                need to make sure we only include arguments of the current FunLit
                and not the nested ones. *)
@@ -2814,7 +2911,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
             Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
-        | Spawn (Wait, l, p, _) ->
+        | Spawn (Wait, l, p, old_inner) ->
             assert (l = NoSpawnLocation);
             (* (() -{b}-> d) -> d *)
             let inner_effects = Types.make_empty_open_row default_effect_subkind in
@@ -2827,9 +2924,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 unify ~handle:Gripers.spawn_wait_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
+
+            begin
+              match old_inner with
+              | None -> ()
+              | Some old_inner ->
+                 unify ~handle:Gripers.spawn_inconsistent (no_pos (`Effect inner_effects), no_pos (`Effect old_inner))
+            end;
+
             let return_type = typ p in
               Spawn (Wait, l, erase p, Some inner_effects), return_type, usages p
-        | Spawn (k, given_loc, p, _) ->
+        | Spawn (k, given_loc, p, old_inner) ->
             (* Location -> (() ~e~@ _) -> Process (e) *)
             (match given_loc with
               | ExplicitSpawnLocation loc_phr ->
@@ -2838,18 +2943,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   let _ = unify ~handle:Gripers.spawn_location (pos_and_typ t, no_pos target_ty) in ()
               | _ -> ());
 
-            let pid_effects = Types.make_empty_open_row (lin_any, res_any) in
+            let pid_effects = Types.make_empty_open_row default_effect_subkind in
 
-            (* If session exceptions are enabled, then the spawned body may raise the
-             * SessionFail exception. *)
-            (* (() ~e~> _) -> Process (e) *)
+            (* The various spawn methods have the type [(() ~e~> _) -> Process (e)]
+               (unless session exceptions are enabled, then the spawned body may
+               raise the SessionFail exception.
+
+               We need to type the body of the spawn block with the effect type [{
+               wild | e }] (and maybe SessionFail) (call this "inner_effects"), and
+               then use e (pid_effects) as the type argument to the process.
+             *)
+            let inner_effects = Types.row_with ("wild", `Present Types.unit_type) pid_effects in
             let inner_effects =
               if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
                 let ty = Types.make_pure_function_type [] (Types.empty_type) in
-                Types.row_with (Value.session_exception_operation, `Present ty) pid_effects
+                Types.row_with (Value.session_exception_operation, `Present ty) inner_effects
               else
-                pid_effects in
-            let inner_with_wild = Types.row_with ("wild", `Present Types.unit_type) inner_effects in
+                inner_effects in
             let pid_type = `Application (Types.process, [`Row pid_effects]) in
             let () =
               let outer_effects =
@@ -2857,10 +2967,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               in
                 unify ~handle:Gripers.spawn_outer
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
-            let p = type_check (bind_effects context inner_with_wild) p in
+            let p = type_check (bind_effects context inner_effects) p in
             if not (Types.Unl.can_type_be (typ p)) then
               Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-            Spawn (k, given_loc, erase p, Some inner_effects), pid_type, usages p
+
+            (* If we've previously typed this spawn block, ensure we've inferred the
+               same types this time round.
+
+               This is mostly used to ensure desugaring passes generate the correct
+               type. *)
+            begin match old_inner with
+            | None -> ()
+            | Some old_inner ->
+               unify ~handle:Gripers.spawn_inconsistent (no_pos (`Effect pid_effects), no_pos (`Effect old_inner))
+            end;
+
+            Spawn (k, given_loc, erase p, Some pid_effects), pid_type, usages p
         | Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (lin_any, res_any) in
             let effects =
@@ -3000,11 +3122,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   | ft ->
                       let rettyp = Types.fresh_type_variable (lin_any, res_any) in
                       begin
-                        unify_or ~handle:Gripers.fun_apply ~pos
-                                ((exp_pos f, ft), no_pos (`Function (Types.make_tuple_type (List.map typ ps),
-                                                                     context.effect_row, rettyp)))
-                                ((exp_pos f, ft), no_pos (`Lolli (Types.make_tuple_type (List.map typ ps),
-                                                                  context.effect_row, rettyp)))
+                        let funt = no_pos (`Function (Types.make_tuple_type (List.map typ ps),
+                                                     context.effect_row, rettyp)) in
+                        let lolt = no_pos (`Lolli (Types.make_tuple_type (List.map typ ps),
+                                                  context.effect_row, rettyp)) in
+                        let term = (exp_pos f, ft) in
+                        match Types.concrete_type ft with
+                        | `Function _ -> unify ~handle:Gripers.fun_apply (term, funt)
+                        | `Lolli _ -> unify ~handle:Gripers.fun_apply (term, lolt)
+                        | _ -> unify_or ~handle:Gripers.fun_apply ~pos (term, funt) (term, lolt)
                       end;
                       FnAppl (erase f, List.map erase ps), rettyp, merge_usages (usages f :: List.map usages ps)
               end
@@ -3012,8 +3138,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let e, t, u = tc e in
             let t = Types.for_all(qs, t) in
               tabstr (qs, e.node), t, u
-        | TAppl (e, _qs) ->
-            let e, t, u = tc e in e.node, t, u
+        | TAppl (e, tyargs) ->
+           let e, t, u = tc e in
+           let t' =
+             try Instantiate.apply_type t tyargs
+             with Instantiate.ArityMismatch _ ->
+               Gripers.type_apply pos (uexp_pos e) t tyargs
+           in
+           TAppl (e, tyargs), t', u
         | Instantiate e ->
            let e, t, u = tc e in
            let (tyargs, t) = Instantiate.typ t in
@@ -3702,7 +3834,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 (StringMap.empty, rho, false) in
             let try_effects =
               Types.row_with
-                (Value.session_exception_operation, `Present Types.empty_type)
+                (Value.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
                 (StringMap.empty, rho, false) in
 
             unify ~handle:Gripers.try_effect
@@ -3777,7 +3909,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               (erase try_phrase, erase_pat pat, erase in_phrase,
                 erase unless_phrase, Some return_type), return_type, usages_res
         | QualifiedVar _ -> assert false
-        | Raise -> (Raise, Types.fresh_type_variable (lin_any, res_any), StringMap.empty)
+        | Raise ->
+            let effects = Types.make_singleton_open_row
+                            (Value.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
+                            default_effect_subkind
+            in
+            unify ~handle:Gripers.raise_effect
+              (no_pos (`Effect context.effect_row), (Position.resolve_expression pos, `Effect effects));
+            (Raise, Types.fresh_type_variable (lin_any, res_any), StringMap.empty)
     in with_pos pos e, t, usages
 
 (* [type_binding] takes XXX YYY (FIXME)
@@ -3850,6 +3989,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               fun_definition = (_, (pats, body));
               fun_location;
               fun_signature = t_ann';
+              fun_frozen;
               fun_unsafe_signature = unsafe } ->
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
@@ -3869,8 +4009,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                   (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
-                  let t = if unsafe then make_unsafe_signature t else t in
-                  let (_, ft) = Generalise.generalise_rigid context.var_env t in
+                  let ft = if unsafe then make_unsafe_signature t else t in
                   let _, ft_mono = TypeUtils.split_quantified_type ft in
 
                   (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
@@ -3924,7 +4063,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
             else () in
 
           let ft = if unsafe then check_unsafe_signature context unify_nopos ft t_ann' else ft in
-          let (tyvars, _tyargs), ft = Utils.generalise context.var_env ft in
+          let (tyvars, _), ft =
+            if fun_frozen then (TypeUtils.quantifiers ft, []), ft
+            else Utils.generalise context.var_env ft
+          in
 
           (* It could be handy to support a (different) syntax for
              specifying quantifiers sloppily without fixing an order
@@ -3956,7 +4098,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
           (Fun { fun_binder = Binder.set_type bndr ft;
                  fun_linearity = lin;
                  fun_definition = (tyvars, (List.map (List.map erase_pat) pats, erase body));
-                 fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe; },
+                 fun_frozen = true;
+                 fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe },
              {empty_context with
                 var_env = Env.bind Env.empty (name, ft)},
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
@@ -3985,12 +4128,15 @@ and type_binding : context -> binding -> binding * context * usagemap =
             List.fold_left
               (fun (inner_rec_vars, inner_env, patss)
                    { rec_binder = bndr; rec_linearity = lin;
-                     rec_definition = (_, (pats, _));
+                     rec_definition = ((_, def), (pats, _));
                      rec_signature = t_ann'; rec_unsafe_signature = unsafe; rec_pos = pos; _ } ->
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
-                 let t_ann = resolve_type_annotation bndr t_ann' in
+                 let t_ann = match def with
+                   | Some (ty, _) -> Some ty
+                   | None -> resolve_type_annotation bndr t_ann'
+                 in
                  let inner =
                    match t_ann with
                      | None ->
@@ -4011,7 +4157,10 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                          let shape = make_ft lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any)) in
                          let t = if unsafe then make_unsafe_signature t else t in
-                         let (_, ft) = Generalise.generalise_rigid context.var_env t in
+                         let ft = match t with
+                           | `ForAll _ -> t
+                           | _ -> Generalise.generalise_rigid context.var_env t |> snd
+                         in
                          (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
                          (* make sure the annotation has the right shape *)
                          let _, ft_mono = TypeUtils.split_quantified_type ft in
@@ -4044,7 +4193,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                         pats ->
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
-                      let body_context = {context with var_env = Env.extend body_env pat_env} in
+                      let self_env = Env.bind pat_env (Utils.dummy_source_name(), Env.lookup body_env name |> TypeUtils.split_quantified_type |> snd) in
+                      let body_context = {context with var_env = Env.extend body_env self_env} in
                       let effects = fresh_tame () in
                       let body = type_check (bind_effects body_context effects) body in
                       let () =
@@ -4261,6 +4411,9 @@ and type_cp (context : context) = fun {node = p; pos} ->
 
   let unify ~pos ~handle (t, u) = unify_or_raise ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
 
+  let wild_open = Types.make_singleton_open_row ("wild", `Present Types.unit_type) default_effect_subkind in
+  unify ~pos ~handle:Gripers.cp_wild (`Effect wild_open, `Effect context.effect_row);
+
   let (p, t, u) = match p with
     | CPUnquote (bindings, e) ->
        let context', bindings, usage_builder = type_bindings context bindings in
@@ -4386,6 +4539,22 @@ and type_cp (context : context) = fun {node = p; pos} ->
        CPComp (Binder.set_type bndr s, left, right), t', merge_usages [u; u'] in
   WithPos.make ~pos p, t, u
 
+let type_check_general context body =
+  let body, typ, _ = type_check context body in
+  if Utils.is_generalisable body
+     && Settings.get_value Basicsettings.TypeSugar.generalise_toplevel then
+    match Utils.generalise ~unwrap:false context.var_env typ with
+    | ([], _), typ -> body, typ
+    | (qs, _), qtyp ->
+       let ppos = WithPos.pos body in
+       let open SugarConstructors.SugartypesPositions in
+       block ~ppos
+         ([with_pos ppos (Val (variable_pat ~ppos ~ty:qtyp "it", (qs, body), loc_unknown, None))],
+          freeze_var ~ppos "it"),
+       qtyp
+  else
+    body, typ
+
 let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
 let show_post_sugar_typing = Basicsettings.TypeSugar.show_post_sugar_typing
 
@@ -4410,7 +4579,7 @@ struct
         match body with
         | None -> (bindings, None), Types.unit_type, tyenv'
         | Some body ->
-          let body, typ, _ = type_check (Types.extend_typing_environment tyenv tyenv') body in
+          let body, typ = type_check_general (Types.extend_typing_environment tyenv tyenv') body in
           let typ = Types.normalise_datatype typ in
           (bindings, Some body), typ, tyenv' in
       Debug.if_set show_post_sugar_typing
@@ -4431,7 +4600,7 @@ struct
         let tyenv' = Types.normalise_typing_environment tyenv' in
         Definitions bindings, Types.unit_type, tyenv'
       | Expression body ->
-        let body, t, _ = (type_check tyenv body) in
+        let body, t = type_check_general tyenv body in
         let t = Types.normalise_datatype t in
         Expression body, t, tyenv
       | Directive d -> Directive d, Types.unit_type, tyenv in

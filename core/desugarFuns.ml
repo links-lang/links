@@ -68,7 +68,7 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
               ([ps], block
                   ([fun_binding' ~linearity ~location (binder ~ty:t g)
                                  (make_lam rt (pss, body))],
-                   var g))
+                   freeze_var g))
         | _, _ -> assert false
     in make_lam rt lam
   in (binder ~ty:ft f, linearity, (tyvars, lam), location)
@@ -98,29 +98,20 @@ object (o : 'self_type)
                  else `Function (args, mb, rt))
                argss rt in
     let f = gensym ~prefix:"_fun_" () in
-    let body, tyvars, ft, fti =
-      (* FIXME: do the generalisation and instantiation steps as part
-         of type inference and store the results in the FunLit for use
-         here. (The current implementation is broken because
-         generalisation turns previously flexible type variables into
-         rigid ones, which persist from the first round of type
-         checking.) *)
-      let (tyvars, _tyargs), ft = Generalise.generalise env.Types.var_env ft in
-      let (tyargs, fti) = Instantiate.typ ft in
-      tappl (Var f, tyargs), tyvars, ft, fti in
     let (bndr, lin, def, loc) =
-      unwrap_def (binder ~ty:ft f, lin, (tyvars, lam), location) in
+      unwrap_def (binder ~ty:ft f, lin, ([], lam), location) in
     let e = block_node ([with_dummy_pos (Fun { fun_binder = bndr; fun_linearity = lin;
                                                fun_definition = def; fun_location = loc;
                                                fun_signature = None;
+                                               fun_frozen = true;
                                                fun_unsafe_signature = false; })],
-                         with_dummy_pos body)
-    in (o, e, fti)
+                         with_dummy_pos (FreezeVar f))
+    in (o, e, ft)
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
     | FunLit (Some argss, lin, lam, location) ->
        o#desugarFunLit argss lin lam location
-    | Section (Section.Project name) ->
+    | Section (Section.Project name) | FreezeSection (Section.Project name) ->
         let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
         let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_unl, res_any) in
         let effb, eff = Types.fresh_row_quantifier default_effect_subkind in
@@ -137,7 +128,7 @@ object (o : 'self_type)
         let e : phrasenode =
           block_node
             ([fun_binding' ~tyvars:[ab; rhob; effb] (binder ~ty:ft f) (pss, body)],
-             var f)
+             freeze_var f)
         in (o, e, ft)
     | e -> super#phrasenode e
 
@@ -148,13 +139,13 @@ object (o : 'self_type)
             match b with
               | Fun { fun_binder = bndr; fun_linearity = lin;
                       fun_definition = tvs; fun_location = loc;
-                      fun_signature = ty;
-                      fun_unsafe_signature = uns; } ->
+                      fun_signature = ty; fun_frozen;
+                      fun_unsafe_signature; } ->
                  let (bndr', lin', tvs', loc') =
                    unwrap_def (bndr, lin, tvs, loc) in
                  (o, Fun { fun_binder = bndr'; fun_linearity = lin';
                            fun_definition = tvs'; fun_location = loc';
-                           fun_signature = ty; fun_unsafe_signature = uns })
+                           fun_signature = ty; fun_frozen; fun_unsafe_signature })
               | _ -> assert false
           end
     | Funs _ as b ->

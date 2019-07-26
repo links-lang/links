@@ -1,0 +1,18 @@
+fun go() {
+  var ap = new();
+  try {
+    var s = fork(fun(s) {
+      var t = request(ap);
+      <| s().t[5] |>;
+    });
+    cancel(s);
+    var t = accept(ap);
+    <| t(x).{x} |>
+  } as (x) in {
+    intToString(x)
+  } otherwise {
+   "exception"
+  }
+}
+
+go()

@@ -51,6 +51,7 @@ module type SugarConstructorsSig = sig
 
   (* Common stuff *)
   val var         : ?ppos:t -> name -> phrase
+  val freeze_var  : ?ppos:t -> name -> phrase
   val block       : ?ppos:t -> block_body -> phrase
   val block_node  :            block_body -> phrasenode
   val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
@@ -105,7 +106,7 @@ module type SugarConstructorsSig = sig
 
   (* Bindings *)
   val fun_binding
-      : ?ppos:t -> signature -> ?unsafe_sig:bool
+      : ?ppos:t -> signature -> ?unsafe_sig:bool -> ?frozen:bool
      -> (DeclaredLinearity.t * name * Pattern.with_pos list list * Location.t *
            phrase)
      -> binding
