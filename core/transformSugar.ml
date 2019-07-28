@@ -466,8 +466,8 @@ class transform (env : Types.typing_environment) =
          (* Ensure the expressions are independent. *)
          let transform_expression exp (exps, o) =
            let envs = o#backup_envs in
-           let (o, exp, _t) = o#phrase exp in
-           (exp :: exps, o#restore_envs envs)
+           let (o, exp, t) = o#phrase exp in
+           ((exp, t) :: exps, o#restore_envs envs)
          in
          let (expressions, o) =
            List.fold_right transform_expression expressions ([], o)
@@ -514,7 +514,10 @@ class transform (env : Types.typing_environment) =
          let cases, shd_branch_type, o =
            List.fold_right transform_case cases ([], `Not_typed, o)
          in
+         let shd_input_types = List.map snd expressions in
+         let expressions = List.map fst expressions in
          let descriptor = { shd_input_effects;
+                            shd_input_types;
                             shd_output_effects;
                             shd_branch_type;
                             shd_params }

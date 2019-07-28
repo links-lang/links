@@ -246,10 +246,8 @@ type annotation = Pattern.annotation_element list
 type annotated_pattern = annotation * Pattern.t
 
 type raw_clause = Pattern.t list * raw_bound_computation
-type raw_effect_clause = Pattern.t list * Pattern.t option * raw_bound_computation
 type clause = annotated_pattern list * bound_computation
 type annotated_clause = annotation * clause
-
 
 
 let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation * Types.datatype -> computation =
@@ -1133,9 +1131,107 @@ let compile_choices
       result
 
 module Handlers = struct
+
+  type raw_effect_clause = Pattern.t list * Pattern.t option * raw_bound_computation
+  type effect_clause = annotated_pattern list * annotated_pattern * bound_computation
+  type annotated_effect_clause = annotation * effect_clause
+
+  (* arrange operation clauses by label *)
+  let arrange_operation_clauses : effect_clause list -> annotated_effect_clause list StringMap.t
+    = fun clauses ->
+    List.fold_right
+      (fun (patterns, resumption, body) env ->
+        match patterns with
+        | [(annotation, Pattern.Operation (label, patterns', resumption'))] ->
+           let annotated_clauses =
+             if StringMap.mem label env
+             then StringMap.find label env
+             else []
+           in
+           let patterns' = List.map reduce_pattern (patterns' @ [resumption']) in
+           StringMap.add label ((annotation, (patterns', resumption, body)) :: annotated_clauses) env
+        | _ -> assert false)
+      clauses StringMap.empty
+
+  let shallow_resumption_type : string -> Types.row -> Types.datatype -> Types.datatype
+    = fun label eff codomain ->
+    let domain = (TypeUtils.split_row label ->- fst ->- TypeUtils.return_type ~overstep_quantifiers:true) eff in
+    Types.make_function_type [domain] eff codomain
+
+  let deep_resumption_type : string -> Types.row -> Types.row -> Types.datatype -> Types.datatype
+    = fun label inner_eff outer_eff codomain ->
+    let domain = (TypeUtils.split_row label ->- fst ->- TypeUtils.return_type ~overstep_quantifiers:true) inner_eff in
+    Types.make_function_type [domain] outer_eff codomain
+
+  let reduce_effect_clause : raw_effect_clause -> effect_clause =
+    fun (patterns, resumption, body) ->
+    let resumption =
+      match resumption with
+      | None -> [], Pattern.Any
+      | Some pattern -> reduce_pattern pattern
+    in
+    (List.map reduce_pattern patterns,
+     resumption,
+     fun (nenv, tenv, eff, _penv) -> body (nenv, tenv, eff))
+
+  let variant_type : Sugartypes.handler_descriptor -> Types.datatype
+    = fun descriptor ->
+    let _outer_eff, inner_eff, value_type, _branch_type =
+      Sugartypes.(descriptor.shd_output_effects,
+                  descriptor.shd_input_effects,
+                  List.hd descriptor.shd_input_types,
+                  descriptor.shd_branch_type)
+    in
+    let fields =
+      let (fields, _, _) = inner_eff in
+      let input =
+        StringMap.filter (fun _ t -> match t with `Present _ -> true | _ -> false) fields
+      in
+      let from_present = function
+        | `Present t -> t
+        | _ -> assert false
+      in
+      StringMap.mapi
+        (fun label t ->
+          let resume_type = shallow_resumption_type label inner_eff value_type in
+          let parameters = TypeUtils.arg_types (from_present t) @ [resume_type] in
+          `Present (Types.make_tuple_type parameters))
+        input
+    in
+    `Variant (fields, Types.fresh_row_variable CommonTypes.(lin_any, res_any), false)
+
+  let operation_cases : raw_env -> raw_effect_clause list -> Sugartypes.handler_descriptor -> effect_case Ir.name_map
+    = fun _env cases descriptor ->
+    let cases = List.map reduce_effect_clause cases in
+    let _vtype = variant_type descriptor in
+    assert false
+
   let compile : raw_env -> Ir.computation list -> (Pattern.t * Ir.computation * Types.datatype) list -> raw_effect_clause list -> Sugartypes.handler_descriptor -> Ir.computation
-    = fun _env computations _params _cases _descriptor ->
+    = fun ((nenv, tenv, eff) as env) computations _params cases descriptor ->
     (* For now assume unary handlers. *)
     assert (List.length computations = 1);
-    assert false
+    let ih_comp = List.hd computations in
+    let split_cases ((pattern, _, body) as case) (val_cases, eff_cases) =
+      match get_pattern_sort (List.hd pattern) with
+      | Pattern.SOperation -> (val_cases, case :: eff_cases)
+      | _ -> (pattern, body) :: val_cases, eff_cases
+    in
+    let val_cases, eff_cases =
+      List.fold_right split_cases cases ([], [])
+    in
+    let ih_return : binder * computation =
+      let comp_ty = List.hd Sugartypes.(descriptor.shd_input_types) in
+      let scrutinee = Var.(make_local_info ->- fresh_binder) (comp_ty, "_return_value") in
+      let tenv = TEnv.bind tenv (Var.var_of_binder scrutinee, comp_ty) in
+      let initial_env = (nenv, tenv, eff, PEnv.empty) in
+      let val_cases = List.map reduce_clause val_cases in
+      let body = match_cases [Var.var_of_binder scrutinee] val_cases (fun _ -> ([], Special (Wrong comp_ty))) initial_env in
+      scrutinee, body
+    in
+    let ih_cases = operation_cases env eff_cases descriptor in
+    (* TODO: Insert preamble for updating parameters? *)
+    ([], Special (Handle { ih_comp;
+                           ih_cases;
+                           ih_return;
+                           ih_depth = Shallow }))
 end

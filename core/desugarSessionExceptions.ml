@@ -81,7 +81,7 @@ object (o : 'self_type)
         (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
     | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false
     | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos } ->
-        let (o, try_phr, _try_dt) = o#phrase try_phr in
+        let (o, try_phr, try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
         let (o, as_phr, _as_dt) = o#phrase as_phr in
@@ -124,6 +124,7 @@ object (o : 'self_type)
 
         let descriptor = {
             shd_input_effects = inner_effects;
+            shd_input_types = [try_dt];
             shd_output_effects = outer_effects;
             shd_branch_type = otherwise_dt;
             shd_params = { shp_bindings = []; shp_types = [] };

@@ -302,6 +302,7 @@ module SugarConstructors (Position : Pos)
                cases;
                descriptor =
                  { shd_input_effects = empty_row;
+                   shd_input_types = [];
                    shd_output_effects = empty_row;
                    shd_branch_type = `Not_typed;
                    shd_params   = {shp_bindings = parameters; shp_types = []} }
