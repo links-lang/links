@@ -307,7 +307,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "show",
   (p1 (fun v -> Value.box_string (Value.string_of_value v)),
    datatype "(a) ~> String",
-   PURE);
+   IMPURE);
 
   "exit",
   (`Continuation Value.Continuation.empty,
