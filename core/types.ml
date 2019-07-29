@@ -2641,11 +2641,6 @@ let make_thunk_type : row -> datatype -> datatype
 let make_operation_type : datatype list -> datatype -> datatype
   = make_pure_function_type
 
-let recursive_applications t =
-  let o = new GetRecursiveApplications.visitor in
-  let (_, o) = o#typ t in
-  o#get_applications |> StringSet.elements
-
 (* We replace some of the generated printing functions here such that
    they may use our own printing functions instead. If the generated functions are
    to be used, we remove potential cycles arising from recursive types/rows first.
