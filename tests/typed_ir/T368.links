@@ -1,0 +1,6 @@
+fun concatMap(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
+}
