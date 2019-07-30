@@ -18,3 +18,8 @@ ConcatMap (#368)
 tests/typed_ir/T368.links
 filemode : true
 stdout : () : ()
+
+Quantifiers on let-bound values (#620)
+tests/typed_ir/T620.links
+filemode : true
+stdout : () : ()
