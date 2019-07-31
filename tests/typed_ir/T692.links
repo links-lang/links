@@ -1,0 +1,10 @@
+fun all(p, l) {
+   switch (l) {
+     case []    -> true
+     case x::xs -> p(x) && all(p, xs)
+   }
+}
+
+fun and(l) {
+  all(fun(x) { x }, l)
+}

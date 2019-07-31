@@ -795,8 +795,8 @@ struct
         let open Sugartypes in
         match e with
           | Constant c -> cofv (I.constant c)
-          | Var x -> cofv (I.var (lookup_name_and_type x env))
-          | FreezeVar x -> cofv (I.var (lookup_name_and_type x env))
+          | Var x -> cofv (lookup_var x)
+          | FreezeVar x -> cofv (lookup_var x)
           | RangeLit (low, high) ->
               I.apply (instantiate_mb "intRange", [ev low; ev high])
           | ListLit ([], Some t) ->

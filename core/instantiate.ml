@@ -391,6 +391,21 @@ let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun p
   let (t, instantiation_maps) = instantiation_maps_of_type_arguments false pt tyargs in
   instantiate_datatype instantiation_maps t
 
+let build_fresh_quantifiers :
+      Quantifier.t list -> Quantifier.t list * Types.type_arg list = fun qs ->
+  let open PrimaryKind in
+  List.split (List.map (function
+                  | (_, (Type, subkind)) ->
+                     let q, t = Types.fresh_type_quantifier subkind in
+                     q, `Type t
+                  | (_, (Row, subkind)) ->
+                     let q, r = Types.fresh_row_quantifier subkind in
+                     q, `Row r
+                  | (_, (Presence, subkind)) ->
+                     let q, f = Types.fresh_presence_quantifier subkind in
+                     q, `Presence f)
+                qs)
+
 (*
   ensure that t has fresh quantifiers
 *)
@@ -401,23 +416,8 @@ let freshen_quantifiers t =
           match qs with
             | [] -> body
             | qs ->
-               let open PrimaryKind in
-               let qs, tyargs =
-                 List.split
-                   (List.map
-                      (function
-                       | (_, (Type, subkind)) ->
-                          let q, t = Types.fresh_type_quantifier subkind in
-                          q, `Type t
-                       | (_, (Row, subkind)) ->
-                          let q, r = Types.fresh_row_quantifier subkind in
-                          q, `Row r
-                       | (_, (Presence, subkind)) ->
-                          let q, f = Types.fresh_presence_quantifier subkind in
-                          q, `Presence f)
-                      qs)
-                in
-                  `ForAll (qs, apply_type t tyargs)
+               let qs, tyargs = build_fresh_quantifiers qs in
+               `ForAll (qs, apply_type t tyargs)
         end
     | t -> t
 
