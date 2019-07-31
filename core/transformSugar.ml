@@ -164,6 +164,9 @@ class transform (env : Types.typing_environment) =
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind name tycon tycon_env >}
 
+    method bind_binder bndr =
+      {< var_env = TyEnv.bind (Binder.to_name bndr)  (Binder.to_type bndr) var_env >}
+
     method lookup_type : Name.t -> Types.datatype = fun var ->
       TyEnv.find var var_env
 

@@ -2349,7 +2349,7 @@ let extend_typing_environment
   ; effect_row = er
   ; desugared  = dr }
 
-let string_of_environment = show_environment
+let string_of_environment env = show_environment (Env.map DecycleTypes.datatype env)
 
 let string_of_typing_environment { var_env = env; _ }
   = string_of_environment env

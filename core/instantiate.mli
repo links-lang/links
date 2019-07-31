@@ -20,6 +20,7 @@ val recursive_application : string -> Quantifier.t list -> Types.type_arg list -
 (* Given a quantified type and a list of type arguments, create the corresponding instantiation maps *)
 val instantiation_maps_of_type_arguments : bool -> Types.datatype -> Types.type_arg list -> (Types.datatype * instantiation_maps)
 
+val build_fresh_quantifiers : Quantifier.t list -> Quantifier.t list * Types.type_arg list
 val apply_type : Types.datatype -> Types.type_arg list -> Types.datatype
 val freshen_quantifiers : Types.datatype -> Types.datatype
 val replace_quantifiers : Types.datatype -> Quantifier.t list -> Types.datatype

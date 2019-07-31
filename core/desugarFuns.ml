@@ -98,15 +98,23 @@ object (o : 'self_type)
                  then `Lolli (args, mb, rt)
                  else `Function (args, mb, rt))
                argss rt in
+
     let f = gensym ~prefix:"_fun_" () in
-    let (bndr, lin, def, loc) =
+    let (bndr, lin, (_, def), loc) =
       unwrap_def (binder ~ty:ft f, lin, ([], lam), location) in
-    let e = block_node ([with_dummy_pos (Fun { fun_binder = bndr; fun_linearity = lin;
-                                               fun_definition = def; fun_location = loc;
-                                               fun_signature = None;
-                                               fun_frozen = true;
-                                               fun_unsafe_signature = false; })],
-                         with_dummy_pos (FreezeVar f))
+    let (tvs, tyargs), ft =
+      Generalise.generalise (o#get_var_env ()) (Binder.to_type bndr) in
+    let bndr = Binder.set_type bndr ft in
+    let o = o#bind_binder bndr in
+    let e = block_node ([with_dummy_pos
+                           (Fun { fun_binder           = bndr
+                                ; fun_linearity        = lin
+                                ; fun_definition       = (tvs, def)
+                                ; fun_location         = loc
+                                ; fun_signature        = None
+                                ; fun_frozen           = true
+                                ; fun_unsafe_signature = false })],
+                         with_dummy_pos (tappl (FreezeVar f, tyargs)))
     in (o, e, ft)
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
