@@ -343,6 +343,7 @@ and recursive_function = {
     rec_location: Location.t;
     rec_signature: datatype' option;
     rec_unsafe_signature: bool;
+    rec_frozen : bool;
     rec_pos: Position.t
   }
   [@@deriving show]
