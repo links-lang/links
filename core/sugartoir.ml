@@ -117,7 +117,8 @@ sig
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 
   val comp : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem) -> tail_computation sem
-  val letvar : (var_info * tail_computation sem * (var -> tail_computation sem)) -> tail_computation sem
+  val letvar : (var_info * tail_computation sem * tyvar list *
+               (var -> tail_computation sem)) -> tail_computation sem
 
   val xml : value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
   val record : (name * value sem) list * (value sem) option -> value sem
@@ -267,7 +268,7 @@ struct
 
     val lift_alist : ('a*'b sem) list -> (('a*'b) list) M.sem
 
-    val comp_binding : var_info * tail_computation -> var M.sem
+    val comp_binding : ?tyvars:tyvar list -> var_info * tail_computation -> var M.sem
 
     val fun_binding :
       Var.var_info * (tyvar list * binder list * computation) * location ->
@@ -300,9 +301,9 @@ struct
                   (fun vs -> lift ((name, v) :: vs))))
         ss (lift [])
 
-    let comp_binding (x_info, e) =
+    let comp_binding ?(tyvars=[]) (x_info , e) =
       let xb, x = Var.fresh_var x_info in
-        lift_binding (letm (xb, e)) x
+        lift_binding (letm ~tyvars (xb, e)) x
 
     let fun_binding (f_info, (tyvars, xsb, body), location) =
       let fb, f = Var.fresh_var f_info in
@@ -612,10 +613,10 @@ struct
                    (fun offset ->
                       lift (Special (Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
 
-  let letvar (x_info, s, body) =
+  let letvar (x_info, s, tyvars, body) =
     bind s
       (fun e ->
-         M.bind (comp_binding (x_info, e))
+         M.bind (comp_binding ~tyvars (x_info, e))
            (fun x -> body x))
 
   let comp env (p, s, body) =
@@ -645,14 +646,9 @@ struct
         | `ForAll (_, t')
         | t' ->
             begin match TypeUtils.concrete_type t' with
-              | `Function _ as ft' ->
+              | `Function _ | `Lolli _ as ft' ->
                   let args = TypeUtils.arg_types ft' in
-                    List.map (fun arg ->
-                                Var.fresh_binder_of_type arg) args
-              | `Lolli _ as ft' ->
-                  let args = TypeUtils.arg_types ft' in
-                    List.map (fun arg ->
-                                Var.fresh_binder_of_type arg) args
+                    List.map (fun arg -> Var.fresh_binder_of_type arg) args
               | _ -> assert false
             end in
 
@@ -1107,7 +1103,7 @@ struct
             begin
               let open Sugartypes in
               match b with
-                | Val ({node=Pattern.Variable bndr; _}, (_, body), _, _)
+                | Val ({node=Pattern.Variable bndr; _}, (tyvars, body), _, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
                     let xt = Binder.to_type bndr in
@@ -1115,6 +1111,7 @@ struct
                       I.letvar
                         (x_info,
                          ec body,
+                         tyvars,
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Val (p, (_, body), _, _) ->

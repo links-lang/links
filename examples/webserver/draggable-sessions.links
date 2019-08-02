@@ -33,7 +33,7 @@ fun format(text) {
 sig draggableList : (String, [String]) ~> Xml
 fun draggableList(id, items)
 {
-  var ap = new();
+  var ap = newClientAP();
 
   var manager = spawnClient {
     mutual {
