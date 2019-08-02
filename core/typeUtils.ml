@@ -65,11 +65,11 @@ let split_row name row =
       match (StringMap.find name field_env) with
         | `Present t -> t
         | `Absent ->
-            error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
+            error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
         | `Var _ ->
-            error ("Attempt to split row "^string_of_row row ^" on var field" ^ name)
+            error ("Attempt to split row "^string_of_row row ^" on var field " ^ name)
     else
-      error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
+      error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
   in
     t, (StringMap.remove name field_env, row_var, dual)
 
