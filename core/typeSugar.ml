@@ -3140,20 +3140,28 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               tabstr (qs, e.node), t, u
         | TAppl (e, tyargs) ->
            let e, t, u = tc e in
-           let t' =
-             try Instantiate.apply_type t tyargs
-             with Instantiate.ArityMismatch _ ->
-               Gripers.type_apply pos (uexp_pos e) t tyargs
+
+           (* Explicitly check that the arity and kinds match up. *)
+           let args = List.map (snd ->- val_of) tyargs in
+           let vars, _ = TypeUtils.split_quantified_type t in
+           let rec quants_ok =
+             let open PrimaryKind in
+             function
+             | _, [] -> ()
+             | [], _ -> Gripers.type_apply pos (uexp_pos e) t args
+             | (_, (Type, _)) :: qs, `Type _ :: vs
+             | (_, (Row, _)) :: qs, `Row _ :: vs
+             | (_, (Presence, _)) :: qs, `Presence _ :: vs -> quants_ok (qs, vs)
+             | _ -> Gripers.type_apply pos (uexp_pos e) t args
            in
+           quants_ok (vars, args);
+
+           let t' = Instantiate.apply_type t args in
            TAppl (e, tyargs), t', u
         | Instantiate e ->
            let e, t, u = tc e in
            let (tyargs, t) = Instantiate.typ t in
-           begin
-             match tyargs with
-             | [] -> WithPos.node e, t, u
-             | _ -> TAppl (e, tyargs), t, u
-           end
+           tappl' (e, tyargs), t, u
         | Generalise e ->
            let e, t, u = tc e in
            if Utils.is_generalisable e then

@@ -225,7 +225,7 @@ class map =
           TAbstr ((_x, _x_i1))
       | TAppl ((_x, _x_i1)) ->
           let _x = o#phrase _x in
-          let _x_i1 = o#list (fun o -> o#tyarg) _x_i1 in
+          let _x_i1 = o#list (fun o -> o#type_arg') _x_i1 in
           TAppl ((_x, _x_i1))
       | TupleLit _x ->
           let _x = o#list (fun o -> o#phrase) _x in TupleLit _x
@@ -634,6 +634,12 @@ class map =
       | Row _x -> let _x = o#row _x in Row _x
       | Presence _x -> let _x = o#fieldspec _x in Presence _x
 
+    method type_arg' : type_arg' -> type_arg' =
+      fun (x, y) ->
+        let x = o#type_arg x in
+        let y = o#option (fun o -> o#tyarg) y in
+        (x, y)
+
     method constant : Constant.t -> Constant.t =
       function
       | Constant.Float _x  -> let _x = o#float _x  in Constant.Float _x
@@ -957,7 +963,9 @@ class fold =
           let o = o#list (fun o -> o#tyvar) (_x) in
           let o = o#phrase _x_i1 in o
       | TAppl ((_x, _x_i1)) ->
-          let o = o#phrase _x in o
+          let o = o#phrase _x in
+          let o = o#list (fun o -> o#type_arg') _x_i1 in
+          o
       | TupleLit _x -> let o = o#list (fun o -> o#phrase) _x in o
       | RecordLit ((_x, _x_i1)) ->
           let o =
@@ -1320,6 +1328,12 @@ class fold =
       | Row _x -> let o = o#row _x in o
       | Presence _x -> let o = o#fieldspec _x in o
 
+    method type_arg' : type_arg' -> 'self_type =
+      fun (x, y) ->
+        let o = o#type_arg x in
+        let o = o#unknown y in
+        o
+
     method constant : Constant.t -> 'self_type =
       function
       | Constant.Float  _x -> let o = o#float  _x in o
@@ -1651,7 +1665,9 @@ class fold_map =
       | TAbstr ((_x, _x_i1)) ->
           let (o, _x_i1) = o#phrase _x_i1 in (o, (TAbstr ((_x, _x_i1))))
       | TAppl ((_x, _x_i1)) ->
-          let (o, _x) = o#phrase _x in (o, (TAppl ((_x, _x_i1))))
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#list (fun o -> o#type_arg') _x_i1 in
+          (o, (TAppl ((_x, _x_i1))))
       | TupleLit _x ->
           let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (TupleLit _x))
       | RecordLit ((_x, _x_i1)) ->
@@ -2102,6 +2118,11 @@ class fold_map =
       | Type _x -> let (o, _x) = o#datatype _x in (o, Type _x)
       | Row _x -> let (o, _x) = o#row _x in (o, Row _x)
       | Presence _x -> let (o, _x) = o#fieldspec _x in (o, Presence _x)
+
+    method type_arg' : type_arg' -> ('self_type * type_arg') =
+      fun (x, y) ->
+        let o, x = o#type_arg x in
+        (o, (x, y))
 
     method constant : Constant.t -> ('self_type * Constant.t) =
       function

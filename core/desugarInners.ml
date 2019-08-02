@@ -103,9 +103,9 @@ object (o : 'self_type)
     | TAppl ({node=Section (Section.Name name);_} as p, tyargs)
     | TAppl ({node=FreezeSection (Section.Name name);_} as p, tyargs)
          when StringMap.mem name extra_env ->
-        let tyargs = o#add_extras name tyargs in
+        let tyargs = o#add_extras name (List.map (snd ->- val_of) tyargs) in
         let o = o#unbind name in
-        let (o, e, t) = o#phrasenode (TAppl (SourceCode.WithPos.map ~f:freeze p, tyargs)) in
+        let (o, e, t) = o#phrasenode (tappl' (SourceCode.WithPos.map ~f:freeze p, tyargs)) in
         (o#with_extra_env extra_env, e, t)
     | InfixAppl ((tyargs, BinaryOp.Name name), e1, e2) when StringMap.mem name extra_env ->
         let tyargs = o#add_extras name tyargs in
