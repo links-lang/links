@@ -13,3 +13,13 @@ stdout : fun : ((a::(Any,Mono)) -b-> c::(Any,Mono), (d::(Any,Mono)) -b-> a::(Any
 XML typing
 fun (x) {<a>{x}</a>}
 stdout : fun : (Xml) -> Xml
+
+ConcatMap (#368)
+tests/typed_ir/T368.links
+filemode : true
+stdout : () : ()
+
+Quantifiers on let-bound values (#620)
+tests/typed_ir/T620.links
+filemode : true
+stdout : () : ()
