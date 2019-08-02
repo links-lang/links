@@ -212,6 +212,7 @@ module MutualBindings = struct
                   rec_location = fn.fun_location;
                   rec_signature = fn.fun_signature;
                   rec_unsafe_signature = fn.fun_unsafe_signature;
+                  rec_frozen = fn.fun_frozen;
                   rec_pos = pos; }) fs in
           [WithPos.make ~pos:mut_pos (Funs fs)] in
 
@@ -225,7 +226,7 @@ end
 
 %token END
 %token EQ IN
-%token FUN LINFUN RARROW LOLLI FATRARROW VAR OP
+%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW VAR OP
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
@@ -296,7 +297,7 @@ end
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.Pattern.with_pos> pattern
-%type <DeclaredLinearity.t * Sugartypes.name *
+%type <(DeclaredLinearity.t * bool) * Sugartypes.name *
        Sugartypes.Pattern.with_pos list list * Location.t *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
@@ -400,11 +401,17 @@ linearity:
 | FUN                                                          { dl_unl }
 | LINFUN                                                       { dl_lin }
 
+fun_kind:
+| FUN                                                          { (dl_unl, false) }
+| LINFUN                                                       { (dl_lin, false) }
+| FROZEN_FUN                                                   { (dl_unl, true) }
+| FROZEN_LINFUN                                                { (dl_lin, true) }
+
 tlfunbinding:
-| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                }
-| OP pattern sigop pattern perhaps_location block              { (dl_unl, WithPos.node $3, [[$2; $4]], $5, $6) }
-| OP PREFIXOP pattern perhaps_location block                   { (dl_unl, $2, [[$3]], $4, $5)          }
-| OP pattern POSTFIXOP perhaps_location block                  { (dl_unl, $3, [[$2]], $4, $5)          }
+| fun_kind VARIABLE arg_lists perhaps_location block           { ($1, $2, $3, $4, $5)                }
+| OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [[$2; $4]], $5, $6) }
+| OP PREFIXOP pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
+| OP pattern POSTFIXOP perhaps_location block                  { ((dl_unl, false), $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
@@ -887,8 +894,8 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signatures linearity VARIABLE arg_lists block                { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
-| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
+| signatures fun_kind VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
+| fun_kind VARIABLE arg_lists block                            { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 

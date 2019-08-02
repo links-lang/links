@@ -735,27 +735,29 @@ class map =
         fun_unsafe_signature; }
 
     method recursive_function  : recursive_function -> recursive_function
-      = fun { rec_binder = a;
-              rec_linearity = b;
-              rec_definition = ((tyvar, ty), d);
-              rec_location = e;
-              rec_signature = f;
-              rec_unsafe_signature = g;
-              rec_pos = h } ->
-      let a = o#binder a in
+      = fun { rec_binder;
+              rec_linearity;
+              rec_definition = ((tyvar, ty), lit);
+              rec_location;
+              rec_signature;
+              rec_unsafe_signature;
+              rec_frozen;
+              rec_pos } ->
+      let rec_binder = o#binder rec_binder in
       let tyvar = o#list (fun o -> o#tyvar) tyvar in
       let ty = o#option (fun o (t, x)-> o#typ t, x) ty in
-      let d = o#funlit d in
-      let e = o#location e in
-      let f = o#option (fun o -> o#datatype') f in
-      let h = o#position h in
-      { rec_binder = a;
-        rec_linearity = b;
-        rec_definition = ((tyvar, ty), d);
-        rec_location = e;
-        rec_signature = f;
-        rec_unsafe_signature = g;
-        rec_pos = h; }
+      let lit = o#funlit lit in
+      let rec_location = o#location rec_location in
+      let rec_signature = o#option (fun o -> o#datatype') rec_signature in
+      let rec_pos = o#position rec_pos in
+      { rec_binder;
+        rec_linearity;
+        rec_definition = ((tyvar, ty), lit);
+        rec_location;
+        rec_signature;
+        rec_unsafe_signature;
+        rec_frozen;
+        rec_pos; }
 
     method program : program -> program =
       fun (bindings, phrase) ->
@@ -1409,19 +1411,20 @@ class fold =
           o
 
     method recursive_function  : recursive_function -> 'self
-      = fun { rec_binder = a;
+      = fun { rec_binder;
               rec_linearity = _;
-              rec_definition = ((b, _), c);
-              rec_location = d;
-              rec_signature = e;
+              rec_definition = ((tyvar, _), lit);
+              rec_location;
+              rec_signature;
               rec_unsafe_signature = _;
-              rec_pos = g } ->
-      let o = o#binder a in
-      let o = o#list (fun o -> o#tyvar) b in
-      let o = o#funlit c in
-      let o = o#location d in
-      let o = o#option (fun o -> o#datatype') e in
-      let o = o#position g
+              rec_frozen = _;
+              rec_pos } ->
+      let o = o#binder rec_binder in
+      let o = o#list (fun o -> o#tyvar) tyvar in
+      let o = o#funlit lit in
+      let o = o#location rec_location in
+      let o = o#option (fun o -> o#datatype') rec_signature in
+      let o = o#position rec_pos
       in o
 
     method program : program -> 'self_type =
@@ -2209,25 +2212,27 @@ class fold_map =
             fun_unsafe_signature; })
 
     method recursive_function  : recursive_function -> 'self * recursive_function
-      = fun { rec_binder = _x;
-              rec_linearity = _x1;
-              rec_definition = (_x_i1, _x_i2);
-              rec_location = _x_i3;
-              rec_signature = _x_i4;
-              rec_unsafe_signature = _x_i5;
-              rec_pos = _x_i6 } ->
-      let (o, _x) = o#binder _x in
-      let (o, _x_i2) = o#funlit _x_i2 in
-      let (o, _x_i3) = o#location _x_i3 in
-      let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4 in
-      let (o, _x_i6) = o#position _x_i6 in
-      (o, { rec_binder = _x;
-            rec_linearity = _x1;
-            rec_definition = (_x_i1, _x_i2);
-            rec_location = _x_i3;
-            rec_signature = _x_i4;
-            rec_unsafe_signature = _x_i5;
-            rec_pos = _x_i6 })
+      = fun { rec_binder;
+              rec_linearity;
+              rec_definition = (ty, lit);
+              rec_location;
+              rec_signature;
+              rec_unsafe_signature;
+              rec_frozen;
+              rec_pos } ->
+      let o, rec_binder = o#binder rec_binder in
+      let o, lit = o#funlit lit in
+      let o, rec_location = o#location rec_location in
+      let o, rec_signature = o#option (fun o -> o#datatype') rec_signature in
+      let o, rec_pos = o#position rec_pos in
+      (o, { rec_binder;
+            rec_linearity;
+            rec_definition = (ty, lit);
+            rec_location;
+            rec_signature;
+            rec_unsafe_signature;
+            rec_frozen;
+            rec_pos })
 
     method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       Binder.traverse_map
