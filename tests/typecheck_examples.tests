@@ -892,3 +892,8 @@ Typecheck example file examples/mvu/keypress.links
 examples/mvu/keypress.links
 filemode : true
 args : --config=tests/examples_default.config
+
+Typecheck example file examples/examplesPage.links
+examples/examplesPage.links
+filemode : args
+args : --config=tests/typecheck_examples.tests.config
