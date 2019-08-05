@@ -2253,9 +2253,10 @@ let add_tyvar_names (f : 'a -> Vars.vars_list) (tys : 'a list) =
     * when printing error messages.  It then builds a consistent set of variable
       names for several different types appearing in the error message.
  *)
-let build_tyvar_names (f : 'a -> Vars.vars_list) (tys : 'a list) =
-  Vars.tyvar_name_counter := 0;
-  Hashtbl.reset Vars.tyvar_name_map;
+let build_tyvar_names ~refresh_tyvar_names (f : 'a -> Vars.vars_list)
+      (tys : 'a list) =
+  if refresh_tyvar_names then
+    begin Vars.tyvar_name_counter := 0; Hashtbl.reset Vars.tyvar_name_map; end;
   add_tyvar_names f tys
 
 (*
@@ -2280,7 +2281,7 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
     let policy = policy () in
     let t = if policy.Print.quantifiers then t
             else Print.strip_quantifiers t in
-    if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
+    build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
     let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
     Print.datatype context (policy, Vars.tyvar_name_map) t
   else
@@ -2289,7 +2290,7 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
 let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
   if Settings.get_value Basicsettings.print_types_pretty then
     let policy = policy () in
-    if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
+    build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
     let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
     Print.row "," context (policy, Vars.tyvar_name_map) row
   else
@@ -2297,33 +2298,28 @@ let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row
 
 let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_field_spec_type_vars x) [f];
+  build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
   Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
 
 let string_of_type_arg ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
   let policy = policy () in
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_type_arg_type_vars x) [arg];
+  build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
   let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
   Print.type_arg context (policy, Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row_var =
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_row_var_vars x) [row_var];
+  build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
   match Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
   with | None -> ""
        | Some s -> s
 
 let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_tycon_type_vars x) [tycon];
+  build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
 let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_quantifier_vars x) [quant];
+  build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
 

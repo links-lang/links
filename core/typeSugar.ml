@@ -426,7 +426,7 @@ end
 
     (* Wrappers for generating type variable names *)
     let build_tyvar_names =
-      Types.build_tyvar_names Types.free_bound_type_vars
+      Types.build_tyvar_names ~refresh_tyvar_names:true Types.free_bound_type_vars
     let add_rowvar_names =
       Types.add_tyvar_names Types.free_bound_row_type_vars
     let add_typearg_names =
