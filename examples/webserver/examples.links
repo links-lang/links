@@ -27,6 +27,8 @@ import Breakout;
 import Tetris;
 import Pacman;
 
+import ExamplesPage;
+
 fun main() {
   addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);
   addStaticRoute("/examplessrc/", "examples/", [("links", "text/plain")]);
@@ -61,8 +63,8 @@ fun main() {
   addRoute("/examples/games/breakout.links", fun(_) {Breakout.main()});
   addRoute("/examples/games/tetris.links", fun(_) {Tetris.main()});
   addRoute("/examples/games/pacman.links", fun(_) {Pacman.main()});
-  addStaticRoute("/", "examples/", [("links", "text/plain")]);
 
+  addRoute("/", fun(_) { ExamplesPage.main() });
   servePages()
 }
 
