@@ -119,8 +119,37 @@ mutual{
     </div>
   }
 }
+ #      setStyle(frame, "left", intToString(x - mdownX + left));
+ #      setStyle(frame, "top", intToString(y - mdownY + top));
+
+ #      var pictureFrame = getNodeById("picture-frame");
+
+ #      # FIXME: should actually be a method that sums up the offsetXxxxs
+ #      # of all ancestor nodes.
+ #      var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
+ #      var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
+
+ #      var preview = getNodeById("crop-preview");
+ #      setStyle(preview, "marginTop", intToString(-(y - mdownY + top - offsetTop)));
+ #      setStyle(preview, "marginLeft", intToString(-(x - mdownX + left - offsetLeft)));
+
 
 fun main() {
+  var left = 16;
+  var top = 112;
+  var frameWidth = 32;
+  var frameHeight = 32;
+
+  var _ = spawnClient {
+    var pictureFrame = getNodeById("picture-frame");
+    var preview = getNodeById("crop-preview");
+    var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
+    var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
+
+    setStyle(preview, "marginTop", intToString(-(top - offsetTop)));
+    setStyle(preview, "marginLeft", intToString(-(left - offsetLeft)));
+  };
+
   page
    <body>
 
@@ -129,7 +158,7 @@ fun main() {
        <div id="picture-frame">
 
          <img src="17-Heriot-Row.jpg" />
-         { makeCroppingFrame(16, 112, 32, 32) }
+         { makeCroppingFrame(left, top, frameWidth, frameHeight) }
        </div>
      </div>
 
@@ -138,7 +167,7 @@ fun main() {
 
      <div id="crop-preview-frame"
           style="border: 1px solid black; overflow: hidden;
-                 width: 32px; height: 32px">
+                 width: {intToString(frameWidth)}px; height: {intToString(frameHeight)}px">
        <img id="crop-preview" style="display: block;"
             src="17-Heriot-Row.jpg" />
      </div>
