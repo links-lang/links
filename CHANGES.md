@@ -1,4 +1,4 @@
-# 0.9
+# 0.9 (Burghmuirhead)
 
 Version 0.9 (Burghmuirhead) presents multiple major new features, bugfixes, as
 well as significant changes and improvements to the Links internals.
