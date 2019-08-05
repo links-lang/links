@@ -357,7 +357,8 @@ val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
 
 (** generating type variable names *)
-val build_tyvar_names : ('a -> Vars.vars_list)
+val build_tyvar_names : refresh_tyvar_names:bool
+                     -> ('a -> Vars.vars_list)
                      -> ('a list)
                      -> unit
 val add_tyvar_names : ('a -> Vars.vars_list)
