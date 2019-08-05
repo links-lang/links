@@ -107,7 +107,7 @@ val binder_of_fun_def : fun_def -> binder
 
 val tapp : value * tyarg list -> value
 
-val letm : binder * tail_computation -> binding
+val letm : ?tyvars:tyvar list -> binder * tail_computation -> binding
 val letmv : binder * value -> binding
 (*val letv : tybinder * value -> binding*)
 

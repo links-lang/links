@@ -117,7 +117,7 @@ let tapp (v, tyargs) =
     | [] -> v
     | _ -> TApp (v, tyargs)
 
-let letm (b, tc) = Let (b, ([], tc))
+let letm ?(tyvars=[]) (b, tc) = Let (b, (tyvars, tc))
 let letmv (b, v) = letm (b, Return v)
 
 let rec is_atom =

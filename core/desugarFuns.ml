@@ -79,11 +79,12 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
   (for recursive functions)
 *)
 let unwrap_def_dp { rec_binder = fb; rec_linearity = lin; rec_definition = tlam;
-                    rec_location = location; rec_signature = t; rec_unsafe_signature = ut;
-                    rec_pos } =
+                    rec_location = location; rec_signature; rec_unsafe_signature;
+                    rec_pos; rec_frozen } =
   let (fb, lin, tlam, location) = unwrap_def (fb, lin, tlam, location) in
   { rec_binder = fb; rec_linearity = lin; rec_definition = tlam;
-    rec_location = location; rec_signature = t; rec_unsafe_signature = ut; rec_pos }
+    rec_location = location; rec_signature; rec_unsafe_signature;
+    rec_pos; rec_frozen }
 
 class desugar_funs env =
 object (o : 'self_type)

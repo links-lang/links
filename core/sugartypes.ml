@@ -142,6 +142,10 @@ end
 type datatype' = Datatype.with_pos * Types.datatype option
     [@@deriving show]
 
+type type_arg' = Datatype.type_arg * Types.type_arg option
+    [@@deriving show]
+
+
 module Pattern = struct
   type t =
     | Any
@@ -239,7 +243,7 @@ and phrasenode =
   | UnaryAppl        of (tyarg list * UnaryOp.t) * phrase
   | FnAppl           of phrase * phrase list
   | TAbstr           of tyvar list * phrase
-  | TAppl            of phrase * tyarg list
+  | TAppl            of phrase * type_arg' list
   | TupleLit         of phrase list
   | RecordLit        of (name * phrase) list * phrase option
   | Projection       of phrase * name
@@ -339,6 +343,7 @@ and recursive_function = {
     rec_location: Location.t;
     rec_signature: datatype' option;
     rec_unsafe_signature: bool;
+    rec_frozen : bool;
     rec_pos: Position.t
   }
   [@@deriving show]
@@ -366,7 +371,20 @@ let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
-    | _  -> TAppl (WithPos.make e, tys)
+    | _  ->
+       let make_arg ty =
+         (Datatype.Type (WithPos.make (Datatype.TypeVar ("$none", None, `Rigid))), Some ty)
+       in
+       TAppl (WithPos.make e, List.map make_arg tys)
+
+let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
+  match tys with
+    | [] -> WithPos.node e
+    | _  ->
+       let make_arg ty =
+         (Datatype.Type (WithPos.make (Datatype.TypeVar ("$none", None, `Rigid))), Some ty)
+       in
+       TAppl (e, List.map make_arg tys)
 
 module Freevars =
 struct
