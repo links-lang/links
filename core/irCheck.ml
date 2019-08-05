@@ -398,8 +398,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
 
 let check_eq_types (ctx : type_eq_context) et at occurrence =
   if not (eq_types occurrence ctx (et, at)) then
+    let exp_str = Types.string_of_datatype et in
+    let act_str = Types.string_of_datatype ~refresh_tyvar_names:false at in
     raise_ir_type_error
-      ("Type mismatch:\n Expected:\n  " ^ Types.string_of_datatype et ^ "\n Actual:\n  " ^ Types.string_of_datatype at)
+      ("Type mismatch:\n Expected:\n  " ^ exp_str ^ "\n Actual:\n  " ^ act_str)
       occurrence
 
 let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
@@ -422,7 +424,11 @@ let ensure_effect_present_in_row ctx allowed_effects required_effect_name requir
 let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurrence =
   ensure
     (eq_types occurrence ctx (`Record allowed_effects, `Record imposed_effects_row))
-    ("Incompatible effects; Allowed:\n" ^ (Types.string_of_row allowed_effects) ^ "\nactual effects:\n" ^  (Types.string_of_row imposed_effects_row))
+    (let allowed_str = Types.string_of_row allowed_effects in
+     let actual_str  = Types.string_of_row ~refresh_tyvar_names:false
+                                           imposed_effects_row in
+     "Incompatible effects:\n Allowed:\n  " ^ allowed_str ^
+     "\n Actual:\n  " ^ actual_str)
     occurrence
 
 
@@ -619,8 +625,13 @@ struct
               end
             else
               begin
-              ensure (eq_types (SVal orig) (o#extract_type_equality_context ()) (vt, t) || is_sub_type (vt, t)) (Printf.sprintf "coercion error: %s is not a subtype of %s"
-                                         (string_of_datatype vt) (string_of_datatype t)) (SVal orig);
+              ensure (eq_types (SVal orig) (o#extract_type_equality_context ())
+                               (vt, t) || is_sub_type (vt, t))
+                (let vt_str = string_of_datatype vt in
+                 let t_str  = string_of_datatype ~refresh_tyvar_names:false t in
+                 Printf.sprintf "coercion error: %s is not a subtype of %s"
+                                vt_str t_str)
+                (SVal orig);
               Coerce (v, t), t, o
               end
       in
