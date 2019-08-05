@@ -115,7 +115,7 @@ module Js =
 struct
   let optimise = Settings.add_bool("optimise_javascript", true, `User)
   let elim_dead_defs = Settings.add_bool("elim_dead_defs", false, `User)
-  let lib_url = Settings.add_string("jsliburl", "lib/", `User)
+  let lib_url = Settings.add_string("jsliburl", "/lib/", `User)
   let lib_dir = Settings.add_string("jslibdir", "", `User)
 
   let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
