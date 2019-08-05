@@ -119,20 +119,6 @@ mutual{
     </div>
   }
 }
- #      setStyle(frame, "left", intToString(x - mdownX + left));
- #      setStyle(frame, "top", intToString(y - mdownY + top));
-
- #      var pictureFrame = getNodeById("picture-frame");
-
- #      # FIXME: should actually be a method that sums up the offsetXxxxs
- #      # of all ancestor nodes.
- #      var offsetLeft = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetLeft"));
- #      var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
-
- #      var preview = getNodeById("crop-preview");
- #      setStyle(preview, "marginTop", intToString(-(y - mdownY + top - offsetTop)));
- #      setStyle(preview, "marginLeft", intToString(-(x - mdownX + left - offsetLeft)));
-
 
 fun main() {
   var left = 16;
