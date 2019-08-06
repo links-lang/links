@@ -891,59 +891,6 @@ and match_record
         bindings
         (match_cases (xs @ vars) clauses def env)
 
-and match_operation
-    : var list -> (annotated_clause list) StringMap.t -> bound_computation -> var -> bound_computation =
-  fun vars bs def var env ->
-    let t = lookup_type var env in
-
-    let context, cexp =
-      if mem_context var env then
-        lookup_context var env
-      else
-        Pattern.CNOperation StringSet.empty, Variable var
-    in
-      match context with
-        | Pattern.COperation name ->
-            if StringMap.mem name bs then
-              match cexp with
-                | Inject (_, (Variable case_variable), _) ->
-                    let annotated_clauses = StringMap.find name bs in
-                    (* let case_type = lookup_type case_variable env in *)
-                      (*                    let inject_type = TypeUtils.inject_type name case_type in *)
-                    let clauses = apply_annotations cexp annotated_clauses in
-                      match_cases (case_variable::vars) clauses def env
-                | _ -> assert false
-            else
-              def env
-        | Pattern.CNOperation names ->
-           let cases, _ = (* TODO eliminate cs. *)
-              StringMap.fold
-                (fun name annotated_clauses (cases, cs) ->
-                   if StringSet.mem name names then
-                     (cases, cs)
-                   else
-                     let case_type = TypeUtils.variant_at name t in
-(*                     let inject_type = TypeUtils.inject_type name case_type in *)
-                     let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
-                     let match_env = bind_type case_variable case_type env in
-                     let match_env =
-                       bind_context var
-                         (Pattern.COperation name,
-                          Inject (name, Variable case_variable, t)) match_env in
-                     let clauses =
-                       apply_annotations
-                         (Inject (name, Variable case_variable, t)) annotated_clauses
-                     in
-                       (StringMap.add name
-                          (case_binder,
-                           match_cases (case_variable::vars) clauses def match_env) cases,
-                        StringSet.add name cs))
-                bs
-                (StringMap.empty, names) in
-
-            ([], Case (Variable var, cases, None))
-        | _ -> assert false
-
 (* the interface to the pattern-matching compiler *)
 let compile_cases
     : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation =
@@ -1190,6 +1137,64 @@ module Handlers = struct
   type raw_effect_clause = Pattern.t list * Pattern.t option * raw_bound_computation
   type effect_clause = annotated_pattern list * annotated_pattern * bound_computation
   type annotated_effect_clause = annotation * effect_clause
+
+  (* apply annotations in an annotated effect clause list *)
+  let apply_effect_annotations : value -> annotated_effect_clause list -> effect_clause list
+    = fun v annotated_clauses ->
+    List.map
+      (fun (annotation, (patterns, resumption, body)) ->
+        (patterns, resumption, apply_annotation v (annotation, body)))
+      annotated_clauses
+
+  let match_operation : var list -> (annotated_effect_clause list) StringMap.t -> bound_computation -> var -> bound_computation
+    = fun vars bs def var env ->
+    let t = lookup_type var env in
+
+    let context, cexp =
+      if mem_context var env then
+        lookup_context var env
+      else
+        Pattern.CNOperation StringSet.empty, Variable var
+    in
+    match context with
+    | Pattern.COperation name ->
+       if StringMap.mem name bs then
+         match cexp with
+         | Inject (_, (Variable case_variable), _) ->
+            let annotated_clauses = StringMap.find name bs in
+            (* let case_type = lookup_type case_variable env in *)
+            (*                    let inject_type = TypeUtils.inject_type name case_type in *)
+            let clauses = apply_effect_annotations cexp annotated_clauses in
+         (* match_cases (case_variable::vars) clauses def env *)
+            assert false
+         | _ -> assert false
+       else
+         def env
+    | Pattern.CNOperation names ->
+       let cases =
+         StringMap.fold
+           (fun name annotated_clauses cases ->
+             if StringSet.mem name names
+             then cases
+             else  let case_type = TypeUtils.variant_at name t in
+                   (*                     let inject_type = TypeUtils.inject_type name case_type in *)
+                   let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
+                   let match_env = bind_type case_variable case_type env in
+                   let match_env =
+                     bind_context var
+                       (Pattern.COperation name,
+                        Inject (name, Variable case_variable, t)) match_env in
+                   let clauses =
+                     apply_annotations
+                       (Inject (name, Variable case_variable, t)) annotated_clauses
+                   in
+                   StringMap.add name
+                     (case_binder,
+                      match_cases (case_variable::vars) clauses def match_env) cases)
+           bs StringMap.empty
+       in
+       ([], Case (Variable var, cases, None))
+    | _ -> assert false
 
   (* arrange operation clauses by label *)
   let arrange_operation_clauses : effect_clause list -> annotated_effect_clause list StringMap.t
