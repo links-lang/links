@@ -212,6 +212,7 @@ module MutualBindings = struct
                   rec_location = fn.fun_location;
                   rec_signature = fn.fun_signature;
                   rec_unsafe_signature = fn.fun_unsafe_signature;
+                  rec_frozen = fn.fun_frozen;
                   rec_pos = pos; }) fs in
           [WithPos.make ~pos:mut_pos (Funs fs)] in
 
@@ -225,7 +226,7 @@ end
 
 %token END
 %token EQ IN
-%token FUN LINFUN RARROW LOLLI FATRARROW VAR OP
+%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW VAR OP
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
@@ -296,7 +297,7 @@ end
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.Pattern.with_pos> pattern
-%type <DeclaredLinearity.t * Sugartypes.name *
+%type <(DeclaredLinearity.t * bool) * Sugartypes.name *
        Sugartypes.Pattern.with_pos list list * Location.t *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
@@ -400,11 +401,17 @@ linearity:
 | FUN                                                          { dl_unl }
 | LINFUN                                                       { dl_lin }
 
+fun_kind:
+| FUN                                                          { (dl_unl, false) }
+| LINFUN                                                       { (dl_lin, false) }
+| FROZEN_FUN                                                   { (dl_unl, true) }
+| FROZEN_LINFUN                                                { (dl_lin, true) }
+
 tlfunbinding:
-| linearity VARIABLE arg_lists perhaps_location block          { ($1, $2, $3, $4, $5)                }
-| OP pattern sigop pattern perhaps_location block              { (dl_unl, WithPos.node $3, [[$2; $4]], $5, $6) }
-| OP PREFIXOP pattern perhaps_location block                   { (dl_unl, $2, [[$3]], $4, $5)          }
-| OP pattern POSTFIXOP perhaps_location block                  { (dl_unl, $3, [[$2]], $4, $5)          }
+| fun_kind VARIABLE arg_lists perhaps_location block           { ($1, $2, $3, $4, $5)                }
+| OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [[$2; $4]], $5, $6) }
+| OP PREFIXOP pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
+| OP pattern POSTFIXOP perhaps_location block                  { ((dl_unl, false), $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
@@ -569,12 +576,16 @@ postfix_expression:
 | QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 }
 | QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
+| postfix_expression targ_spec                                 { with_pos $loc (TAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
 | postfix_expression AT                                        { with_pos $loc (Instantiate $1) }
 
 
 arg_spec:
 | LPAREN perhaps_exps RPAREN                                   { $2 }
+
+targ_spec:
+| LBRACKET type_arg_list RBRACKET                              { List.map (fun x -> (x, None)) $2 }
 
 exps:
 | separated_nonempty_list(COMMA, exp)                          { $1 }
@@ -854,7 +865,7 @@ database_expression:
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
-| VARIABLE+                                                    { $1 }
+| field_label+                                                 { $1 }
 
 fn_dep:
 | fn_dep_cols RARROW fn_dep_cols                               { ($1, $3) }
@@ -866,8 +877,8 @@ lens_expression:
 | LENS exp DEFAULT                                             { with_pos $loc (LensLit ($2, None))}
 | LENS exp TABLEKEYS exp                                       { with_pos $loc (LensKeysLit ($2, $4, None))}
 | LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (LensFunDepsLit ($2, $5, None))}
-| LENSDROP VARIABLE DETERMINED BY
-  VARIABLE DEFAULT exp FROM exp                                { with_pos $loc (LensDropLit ($9, $2, $5, $7, None)) }
+| LENSDROP field_label DETERMINED BY
+  field_label DEFAULT exp FROM exp                             { with_pos $loc (LensDropLit ($9, $2, $5, $7, None)) }
 | LENSSELECT FROM exp BY exp                                   { with_pos $loc (LensSelectLit ($3, $5, None)) }
 | LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { with_pos $loc (LensJoinLit ($2, $4, $6, $9, $11, None)) }
 | LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { with_pos $loc (LensJoinLit ($2, $4, $6,
@@ -887,8 +898,8 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signatures linearity VARIABLE arg_lists block                { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
-| linearity VARIABLE arg_lists block                           { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
+| signatures fun_kind VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
+| fun_kind VARIABLE arg_lists block                            { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
