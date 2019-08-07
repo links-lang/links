@@ -87,25 +87,33 @@ module String = struct
   let pp = Format.pp_print_string
   let show = fun x -> x
 
-  let rev_concat sep l =
-    match l with
+  let rec blits dest pos sep seplen = function
+    | [] -> dest
+    | [xs] ->
+       blit xs 0 dest 0 (length xs); dest
+    | xs :: xss ->
+       let pos = pos - length xs in
+       blit xs 0 dest pos (length xs);
+       let pos = pos - seplen in
+       blit sep 0 dest pos seplen;
+       blits dest pos sep seplen xss
+
+  let rev_concat sep = function
     | [] -> ""
-    | hd :: tl ->
-       let num_sep = ref 0 in
-       let len = ref (-1) in
-       List.iter (fun s -> incr num_sep; len := !len + length s) l;
-       let size = !len + length sep * !num_sep in
-       let bs = Bytes.create size in
-       let pos = ref (size - length hd) in
-       blit hd 0 bs !pos (length hd);
-       List.iter
-         (fun s ->
-           pos := !pos - length sep;
-           blit sep 0 bs !pos (length sep);
-           pos := !pos - length s;
-           blit s 0 bs !pos (length s))
-         tl;
-       Bytes.to_string bs
+    | xs ->
+       let seplen = length sep in
+       let buffer_size =
+         let rec compute_size acc seplen = function
+           | [] -> acc
+           | xs :: [] -> length xs + acc
+           | xs :: xss -> compute_size (length xs + seplen + acc) seplen xss
+         in
+         compute_size 0 seplen xs
+       in
+       let buffer =
+         blits (Bytes.create buffer_size) buffer_size sep seplen xs
+       in
+       Bytes.to_string buffer
 end
 
 module Int = struct

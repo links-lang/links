@@ -1597,11 +1597,8 @@ struct
     var_of_quantifier q, (`Rigid, primary_kind_of_quantifier q, `Bound)
 
   (* find all free and bound type variables *)
-  (*
-    BUG: include_aliases probably shouldn't be an option here - it should always be true
-  *)
-  let rec free_bound_type_vars : include_aliases:bool -> TypeVarSet.t -> datatype -> vars_list = fun ~include_aliases bound_vars t ->
-    let fbtv = free_bound_type_vars ~include_aliases bound_vars in
+  let rec free_bound_type_vars : TypeVarSet.t -> datatype -> vars_list = fun bound_vars t ->
+    let fbtv = free_bound_type_vars bound_vars in
       match t with
         | `Not_typed -> []
         | `Primitive _ -> []
@@ -1614,17 +1611,17 @@ struct
                     if TypeVarSet.mem var bound_vars then
                       [var, (`Recursive, pk_type, `Bound)]
                     else
-                      (var, (`Recursive, pk_type, `Bound))::(free_bound_type_vars ~include_aliases (TypeVarSet.add var bound_vars) body)
+                      (var, (`Recursive, pk_type, `Bound))::(free_bound_type_vars (TypeVarSet.add var bound_vars) body)
                 | `Body t -> fbtv t
             end
         | `Function (f, m, t) ->
-            (fbtv f) @ (free_bound_row_type_vars ~include_aliases bound_vars m) @ (fbtv t)
+            (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
         | `Lolli (f, m, t) ->
-            (fbtv f) @ (free_bound_row_type_vars ~include_aliases bound_vars m) @ (fbtv t)
+            (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
         | `Record row
-        | `Variant row -> free_bound_row_type_vars ~include_aliases bound_vars row
+        | `Variant row -> free_bound_row_type_vars bound_vars row
         | `Lens _ -> []
-        | `Effect row -> free_bound_row_type_vars ~include_aliases bound_vars row
+        | `Effect row -> free_bound_row_type_vars bound_vars row
         | `Table (r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
         | `ForAll (tyvars, body) ->
             let bound_vars, vars =
@@ -1635,42 +1632,40 @@ struct
                 (bound_vars, [])
                 tyvars
             in
-              (List.rev vars) @ (free_bound_type_vars ~include_aliases bound_vars body)
-        | `Alias ((_, _, ts), _) when include_aliases ->
-            List.concat
-              (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) ts)
-        | `Alias (_, d) -> fbtv d
+              (List.rev vars) @ (free_bound_type_vars bound_vars body)
+        | `Alias ((_, _, ts), _) ->
+            concat_map (free_bound_tyarg_vars bound_vars) ts
         | `Application (_, tyargs) ->
-            List.concat (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) tyargs)
+            List.concat (List.map (free_bound_tyarg_vars bound_vars) tyargs)
         | `RecursiveApplication { r_args; _ } ->
-            List.concat (List.map (free_bound_tyarg_vars ~include_aliases bound_vars) r_args)
+            List.concat (List.map (free_bound_tyarg_vars bound_vars) r_args)
         | `Input (t, s)
         | `Output (t, s) ->
-           free_bound_type_vars ~include_aliases bound_vars t @ free_bound_type_vars ~include_aliases bound_vars s
+           free_bound_type_vars bound_vars t @ free_bound_type_vars bound_vars s
         | `Select row
-        | `Choice row -> free_bound_row_type_vars ~include_aliases bound_vars row
-        | `Dual s -> free_bound_type_vars ~include_aliases bound_vars s
+        | `Choice row -> free_bound_row_type_vars bound_vars row
+        | `Dual s -> free_bound_type_vars bound_vars s
         | `End -> []
-  and free_bound_field_spec_type_vars ~include_aliases bound_vars =
+  and free_bound_field_spec_type_vars bound_vars =
     function
-      | `Present t -> free_bound_type_vars ~include_aliases bound_vars t
+      | `Present t -> free_bound_type_vars bound_vars t
       | `Absent -> []
       | `Var point ->
           begin
             match Unionfind.find point with
               | `Var (var, _, freedom) ->
                     [var, ((freedom :> flavour), pk_presence, `Free)]
-              | `Body f -> free_bound_field_spec_type_vars ~include_aliases bound_vars f
+              | `Body f -> free_bound_field_spec_type_vars bound_vars f
           end
-  and free_bound_row_type_vars ~include_aliases bound_vars (field_env, row_var, _) =
+  and free_bound_row_type_vars bound_vars (field_env, row_var, _) =
     let field_type_vars =
       FieldEnv.fold
         (fun _name f tvs ->
-           tvs @ free_bound_field_spec_type_vars ~include_aliases bound_vars f)
+           tvs @ free_bound_field_spec_type_vars bound_vars f)
         field_env [] in
-    let row_var = free_bound_row_var_vars ~include_aliases bound_vars row_var in
+    let row_var = free_bound_row_var_vars bound_vars row_var in
       field_type_vars @ row_var
-  and free_bound_row_var_vars ~include_aliases bound_vars row_var =
+  and free_bound_row_var_vars bound_vars row_var =
     match Unionfind.find row_var with
       | `Closed -> []
       | `Var (var, _, freedom) ->
@@ -1679,19 +1674,19 @@ struct
           if TypeVarSet.mem var bound_vars then
             [var, (`Recursive, pk_row, `Bound)]
           else
-            (var, (`Recursive, pk_row, `Bound))::(free_bound_row_type_vars ~include_aliases (TypeVarSet.add var bound_vars) row)
-      | `Body row -> free_bound_row_type_vars ~include_aliases bound_vars row
-  and free_bound_tyarg_vars ~include_aliases bound_vars =
+            (var, (`Recursive, pk_row, `Bound))::(free_bound_row_type_vars (TypeVarSet.add var bound_vars) row)
+      | `Body row -> free_bound_row_type_vars bound_vars row
+  and free_bound_tyarg_vars bound_vars =
     function
-      | `Type t -> free_bound_type_vars ~include_aliases bound_vars t
-      | `Row row -> free_bound_row_type_vars ~include_aliases bound_vars row
-      | `Presence f -> free_bound_field_spec_type_vars ~include_aliases bound_vars f
+      | `Type t -> free_bound_type_vars bound_vars t
+      | `Row row -> free_bound_row_type_vars bound_vars row
+      | `Presence f -> free_bound_field_spec_type_vars bound_vars f
 
   let free_bound_quantifier_vars quant =
     let var, spec = varspec_of_tyvar quant in
     [(var, spec)]
 
-  let free_bound_tycon_vars ~include_aliases bound_vars tycon_spec =
+  let free_bound_tycon_vars bound_vars tycon_spec =
     let split_vars tyvars =
       let bound_vars, vars =
         List.fold_left
@@ -1703,7 +1698,7 @@ struct
     match tycon_spec with
       | `Alias (tyvars, body) ->
           let (bound_vars, vars) = split_vars tyvars in
-          vars @ (free_bound_type_vars ~include_aliases bound_vars body)
+          vars @ (free_bound_type_vars bound_vars body)
       | `Mutual (tyvars, _) -> snd (split_vars tyvars)
       | `Abstract _ -> []
 
@@ -2235,14 +2230,13 @@ struct
       | t -> t
 end
 
-
-let free_bound_type_vars ?(include_aliases=true) = Vars.free_bound_type_vars ~include_aliases TypeVarSet.empty
-let free_bound_row_type_vars ?(include_aliases=true) = Vars.free_bound_row_type_vars ~include_aliases TypeVarSet.empty
-let free_bound_field_spec_type_vars ?(include_aliases=true) = Vars.free_bound_field_spec_type_vars ~include_aliases TypeVarSet.empty
-let free_bound_type_arg_type_vars ?(include_aliases=true) = Vars.free_bound_tyarg_vars ~include_aliases TypeVarSet.empty
-let free_bound_row_var_vars ?(include_aliases=true) = Vars.free_bound_row_var_vars ~include_aliases TypeVarSet.empty
-let free_bound_quantifier_vars = Vars.free_bound_quantifier_vars
-let free_bound_tycon_type_vars ?(include_aliases=true) = Vars.free_bound_tycon_vars ~include_aliases TypeVarSet.empty
+let free_bound_type_vars            = Vars.free_bound_type_vars TypeVarSet.empty
+let free_bound_row_type_vars        = Vars.free_bound_row_type_vars TypeVarSet.empty
+let free_bound_field_spec_type_vars = Vars.free_bound_field_spec_type_vars TypeVarSet.empty
+let free_bound_type_arg_type_vars   = Vars.free_bound_tyarg_vars TypeVarSet.empty
+let free_bound_row_var_vars         = Vars.free_bound_row_var_vars TypeVarSet.empty
+let free_bound_quantifier_vars      = Vars.free_bound_quantifier_vars
+let free_bound_tycon_type_vars      = Vars.free_bound_tycon_vars TypeVarSet.empty
 
 (** Generates new variable names for things in the list, adding them to already
     existing pool of type variable names.
@@ -2259,9 +2253,10 @@ let add_tyvar_names (f : 'a -> Vars.vars_list) (tys : 'a list) =
     * when printing error messages.  It then builds a consistent set of variable
       names for several different types appearing in the error message.
  *)
-let build_tyvar_names (f : 'a -> Vars.vars_list) (tys : 'a list) =
-  Vars.tyvar_name_counter := 0;
-  Hashtbl.reset Vars.tyvar_name_map;
+let build_tyvar_names ~refresh_tyvar_names (f : 'a -> Vars.vars_list)
+      (tys : 'a list) =
+  if refresh_tyvar_names then
+    begin Vars.tyvar_name_counter := 0; Hashtbl.reset Vars.tyvar_name_map; end;
   add_tyvar_names f tys
 
 (*
@@ -2286,7 +2281,7 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
     let policy = policy () in
     let t = if policy.Print.quantifiers then t
             else Print.strip_quantifiers t in
-    if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_type_vars x) [t];
+    build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
     let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
     Print.datatype context (policy, Vars.tyvar_name_map) t
   else
@@ -2295,7 +2290,7 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
 let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
   if Settings.get_value Basicsettings.print_types_pretty then
     let policy = policy () in
-    if refresh_tyvar_names then build_tyvar_names (fun x -> free_bound_row_type_vars x) [row];
+    build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
     let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
     Print.row "," context (policy, Vars.tyvar_name_map) row
   else
@@ -2303,33 +2298,28 @@ let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row
 
 let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_field_spec_type_vars x) [f];
+  build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
   Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
 
 let string_of_type_arg ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
   let policy = policy () in
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_type_arg_type_vars x) [arg];
+  build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
   let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
   Print.type_arg context (policy, Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row_var =
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_row_var_vars x) [row_var];
+  build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
   match Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
   with | None -> ""
        | Some s -> s
 
 let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_tycon_type_vars x) [tycon];
+  build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
 let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
-  if refresh_tyvar_names then
-    build_tyvar_names (fun x -> free_bound_quantifier_vars x) [quant];
+  build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
 

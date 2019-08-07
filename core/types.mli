@@ -206,9 +206,9 @@ val empty_type : datatype
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 val free_tyarg_vars : type_arg -> TypeVarSet.t
-val free_bound_type_vars     : ?include_aliases:bool -> typ -> Vars.vars_list
-val free_bound_row_type_vars : ?include_aliases:bool -> row -> Vars.vars_list
-val free_bound_type_arg_type_vars : ?include_aliases:bool -> type_arg -> Vars.vars_list
+val free_bound_type_vars          : typ      -> Vars.vars_list
+val free_bound_row_type_vars      : row      -> Vars.vars_list
+val free_bound_type_arg_type_vars : type_arg -> Vars.vars_list
 
 val var_of_quantifier : quantifier -> int
 val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
@@ -357,7 +357,8 @@ val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
 
 (** generating type variable names *)
-val build_tyvar_names : ('a -> Vars.vars_list)
+val build_tyvar_names : refresh_tyvar_names:bool
+                     -> ('a -> Vars.vars_list)
                      -> ('a list)
                      -> unit
 val add_tyvar_names : ('a -> Vars.vars_list)
