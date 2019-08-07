@@ -87,6 +87,18 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
                         ^ env
                         ^ head
                         ^ script_tag (String.concat "\n" defs)
+                        ^ "<script type=\"text/javascript\">
+                             'use strict';
+                             function _isRuntimeReady() {
+                                if (window._JSLIB === void 0 || window._JSLIB !== true) {
+                                   const msg = \"<h1>Fatal error: Runtime dependency `jslib.js' is not loaded.</h1>\";
+                                   document.body.innerHTML = msg;
+                                   document.head.innerHTML = msg;
+                                   return false;
+                                }
+                                return true;
+                             }
+                           </script>"
                      )
                    ^ "<body onload=\'" ^ onload ^ "\'>
   <script type='text/javascript'>
@@ -150,7 +162,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       ~html:(Value.string_of_xml ~close_tags:true bs)
       ~head:(script_tag welcome_msg ^ "\n" ^ script_tag (C.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
              ^ Value.string_of_xml ~close_tags:true hs)
-      ~onload:"_startRealPage()"
+      ~onload:"_isRuntimeReady() && _startRealPage()"
       ~external_files:deps
       []
 end
