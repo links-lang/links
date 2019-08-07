@@ -130,12 +130,12 @@ rule-check: tools/rule-check
 	@echo "Applying rule check"
 	@tools/rule-check
 
-# The below machinery is used to prepare a release using topkg.
+# The below machinery is used to prepare a release using dune-release.
 REPO=../opam-repository
 PACKAGES=$(REPO)/packages
 
 pkg-%:
-	topkg opam pkg -n $*
+	dune-release opam pkg -n $*
 	mkdir -p $(PACKAGES)/$*
 	cp -r $(BUILD_DIR)/$*.* $(PACKAGES)/$*/
 	rm -f $(PACKAGES)/$*/$*.opam
