@@ -134,8 +134,12 @@ rule-check: tools/rule-check
 REPO=../opam-repository
 PACKAGES=$(REPO)/packages
 
+TAG_NAME := $(shell git describe --tags)
+
+link-url-%:
+	if [ "$*" != "links" ]; then ln -f -s $(BUILD_DIR)/links-$(TAG_NAME).url $(BUILD_DIR)/$*-$(TAG_NAME).url; fi
+
 pkg-%:
-	dune-release opam pkg -n $*
 	mkdir -p $(PACKAGES)/$*
 	cp -r $(BUILD_DIR)/$*.* $(PACKAGES)/$*/
 	rm -f $(PACKAGES)/$*/$*.opam
@@ -143,4 +147,6 @@ pkg-%:
 
 PKGS=$(basename $(wildcard *.opam))
 opam-pkg:
+	$(MAKE) $(PKGS:%=link-url-%)
+	dune-release opam pkg --dist-file=$(BUILD_DIR)/links-$(TAG_NAME).tbz
 	$(MAKE) $(PKGS:%=pkg-%)
