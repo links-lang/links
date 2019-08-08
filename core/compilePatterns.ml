@@ -1173,24 +1173,25 @@ module Handlers = struct
     | Pattern.CNOperation names ->
        let cases =
          StringMap.fold
-           (fun name annotated_clauses cases ->
-             if StringSet.mem name names
-             then cases
-             else  let case_type = TypeUtils.variant_at name t in
-                   (*                     let inject_type = TypeUtils.inject_type name case_type in *)
-                   let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
-                   let match_env = bind_type case_variable case_type env in
-                   let match_env =
-                     bind_context var
-                       (Pattern.COperation name,
-                        Inject (name, Variable case_variable, t)) match_env in
-                   let clauses =
-                     apply_annotations
-                       (Inject (name, Variable case_variable, t)) annotated_clauses
-                   in
-                   StringMap.add name
-                     (case_binder,
-                      match_cases (case_variable::vars) clauses def match_env) cases)
+           (assert false)
+           (* (fun name annotated_clauses cases ->
+            *   if StringSet.mem name names
+            *   then cases
+            *   else  let case_type = TypeUtils.variant_at name t in
+            *         (\*                     let inject_type = TypeUtils.inject_type name case_type in *\)
+            *         let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
+            *         let match_env = bind_type case_variable case_type env in
+            *         let match_env =
+            *           bind_context var
+            *             (Pattern.COperation name,
+            *              Inject (name, Variable case_variable, t)) match_env in
+            *         let clauses =
+            *           apply_annotations
+            *             (Inject (name, Variable case_variable, t)) annotated_clauses
+            *         in
+            *         StringMap.add name
+            *           (case_binder,
+            *            match_cases (case_variable::vars) clauses def match_env) cases) *)
            bs StringMap.empty
        in
        ([], Case (Variable var, cases, None))
