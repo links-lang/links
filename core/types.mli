@@ -30,6 +30,8 @@ type 't meta_row_var_basis =
 
 type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
 
+type 't meta_max_basis = 't meta_row_var_basis
+
 module Abstype :
 sig
   type t [@@deriving eq,show]
@@ -393,6 +395,22 @@ sig
     method type_arg : type_arg -> (type_arg * 'self_type)
   end
 end
+
+type visit_context = Utility.StringSet.t * TypeVarSet.t * TypeVarSet.t
+class virtual type_predicate :
+  object('self_type)
+    method var_satisfies : (int * subkind * freedom) -> bool
+    method type_satisfies : visit_context -> typ -> bool
+    method point_satisfies :
+      'a 'c . (visit_context -> 'a -> bool) ->
+        visit_context ->
+        ([< 'a meta_max_basis] as 'c) point ->
+        bool
+    method field_satisfies : visit_context -> field_spec -> bool
+    method row_satisfies : visit_context -> row -> bool
+    method type_satisfies_arg : visit_context -> type_arg -> bool
+    method predicates : ((typ -> bool) * (row -> bool))
+  end
 
 module Transform : TYPE_VISITOR
 module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR

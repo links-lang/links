@@ -42,11 +42,17 @@ sig
   val range : 'a t -> 'a list
   (** The range of an environment *)
 
+  val bindings : 'a t -> (name * 'a) list
+
   val map : ('a -> 'b) -> 'a t -> 'b t
 
   val iter : (name -> 'a -> unit) -> 'a t -> unit
 
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+
+  val filter : (name -> 'a -> bool) -> 'a t -> 'a t
+
+  val filter_map : (name -> 'a -> 'b option) -> 'a t -> 'b t
 end
 (** Output signature of the functor {!Env.Make}. *)
 

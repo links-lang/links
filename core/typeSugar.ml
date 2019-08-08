@@ -380,6 +380,13 @@ sig
   val inconsistent_quantifiers :
     pos:Position.t -> t1:Types.datatype -> t2:Types.datatype -> unit
 
+  val escaped_quantifier :
+    pos:Position.t ->
+    var:string ->
+    annotation:Types.datatype ->
+    escapees:((string * Types.datatype) list) ->
+    unit
+
 end
   = struct
     type griper =
@@ -1515,6 +1522,20 @@ end
                "but the currently allowed effects are" ^ nli () ^
                 code ppr_lt)
 
+    let escaped_quantifier ~pos ~var ~annotation ~escapees =
+      let escaped_tys = List.map snd escapees in
+      build_tyvar_names (annotation :: escaped_tys);
+      let policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
+      let display_ty (var, ty) =
+        Printf.sprintf "%s: %s" var
+          (Types.string_of_datatype ~policy ~refresh_tyvar_names:false ty) in
+      let displayed_tys =
+        List.map display_ty escapees
+        |> String.concat (nli ()) in
+      die pos ("The quantifiers in the type of function" ^ nli () ^
+               display_ty (var, annotation)              ^ nl () ^
+               "escape their scope, as they are present in the types:" ^ nli () ^
+               displayed_tys)
 end
 
 type context = Types.typing_environment = {
@@ -4009,16 +4030,16 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let t_ann = resolve_type_annotation bndr t_ann' in
 
           (* Check that any annotation matches the shape of the function *)
-          let context_body, ft =
+          let context_body, ft, quantifiers =
             match t_ann with
               | None ->
-                  context, make_ft lin pats effects return_type
+                  context, make_ft lin pats effects return_type, []
               | Some t ->
                   (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
                   let ft = if unsafe then make_unsafe_signature t else t in
-                  let _, ft_mono = TypeUtils.split_quantified_type ft in
+                  let quantifiers, ft_mono = TypeUtils.split_quantified_type ft in
 
                   (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
                   let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos ft_mono) in
@@ -4029,7 +4050,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                      the original name as the function is not
                      recursive) *)
                   let v = Utils.dummy_source_name () in
-                  bind_var context (v, ft_mono), ft in
+                  bind_var context (v, ft_mono), ft, quantifiers in
 
           (* We make the patterns monomorphic after unifying with the signature. *)
           make_mono pats;
@@ -4069,6 +4090,27 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                                      " was used in a non-linear function definition"))
                              (usages body)
             else () in
+
+          (* Check that quantifiers have not escaped into the typing context *)
+          let check_escaped_quantifiers quantifiers env =
+            let quantifier_set = IntSet.of_list (List.map fst quantifiers) in
+            (* Note that `type_predicate` returns true iff *all* child nodes of
+             * the type satisfy the predicate. Thus the checker returns true if
+             * *all* type variables are *not* in quantifier_set *)
+            let checker = object(_self)
+              inherit Types.type_predicate
+              method! var_satisfies (i, _, _) = not (IntSet.mem i quantifier_set)
+            end in
+            let (is_safe, _) = checker#predicates in
+            let escapees =
+              Env.filter (fun _ dt -> not (is_safe dt)) env
+              |> Env.bindings in
+            if not (ListUtils.empty escapees) then
+              Gripers.escaped_quantifier ~pos ~var:name ~annotation:ft ~escapees in
+
+          let () =
+            if not (quantifiers = []) then
+              check_escaped_quantifiers quantifiers context.var_env in
 
           let ft = if unsafe then check_unsafe_signature context unify_nopos ft t_ann' else ft in
           let (tyvars, _), ft =

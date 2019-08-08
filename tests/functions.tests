@@ -103,3 +103,9 @@ Closure conversion: Test function with free type variables, but no free term var
 ./tests/functions/closure-conv-type-abstr-only.links
 filemode : true
 stdout : 42 : Int
+
+Quantifiers should not escape their scopes (#687)
+./tests/functions/escaped-quantifier.links
+filemode : true
+stderr : @.*escape their scope.*
+exit : 1
