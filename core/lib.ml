@@ -970,6 +970,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(String) ~> ()",
   IMPURE);
 
+  "domGetAnchor",
+  (`Client, datatype "() ~> String",
+  IMPURE);
+
  (* Cookies *)
   "setCookie",
   (p2D (fun cookieName cookieVal req_data ->
@@ -1373,6 +1377,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
     "jsSetOnEvent",
     (`Client, datatype "(DomNode, String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
+
+    "jsSetWindowEvent",
+    (`Client, datatype "(String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
 
     "jsSetOnLoad",
     (`Client, datatype "((Event) ~e~> ()) ~e~> ()", IMPURE);
