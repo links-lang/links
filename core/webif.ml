@@ -7,7 +7,6 @@ open ProcessTypes
 open Webserver_types
 open Utility
 
-let realpages = Basicsettings.Webif.realpages
 let ( >>= ) = Lwt.bind
 
 module WebIf = functor (Webs : WEBSERVER) ->
