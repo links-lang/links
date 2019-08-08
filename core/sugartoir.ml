@@ -183,13 +183,13 @@ sig
 
   val letfun :
     env ->
-    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * tail_computation sem)) * location) ->
+    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * tail_computation sem)) * bool * location) ->
     (var -> tail_computation sem) ->
     tail_computation sem
 
   val letrec :
     env ->
-    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location) list ->
+    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * bool * location) list ->
     (var list -> tail_computation sem) ->
     tail_computation sem
 
@@ -276,11 +276,11 @@ struct
     val comp_binding : ?tyvars:tyvar list -> var_info * tail_computation -> var M.sem
 
     val fun_binding :
-      Var.var_info * (tyvar list * binder list * computation) * location ->
+      Var.var_info * (tyvar list * binder list * computation) * bool * location ->
       Var.var M.sem
     val rec_binding :
       (Var.var_info * (tyvar list * binder list * (Var.var list -> computation))
-       * location) list ->
+       * bool * location) list ->
       (Var.var list) M.sem
 
     val alien_binding : var_info * string * ForeignLanguage.t -> var M.sem
@@ -310,24 +310,24 @@ struct
       let xb, x = Var.fresh_var x_info in
         lift_binding (letm ~tyvars (xb, e)) x
 
-    let fun_binding (f_info, (tyvars, xsb, body), location) =
+    let fun_binding (f_info, (tyvars, xsb, body), unsafe, location) =
       let fb, f = Var.fresh_var f_info in
-        lift_binding (Fun (fb, (tyvars, xsb, body), None, location)) f
+        lift_binding (Fun (fb, (tyvars, xsb, body), None, unsafe, location)) f
 
     let rec_binding defs =
       let defs, fs =
         List.fold_right
-          (fun (f_info, (tyvars, xsb, body), location) (defs, fs) ->
+          (fun (f_info, (tyvars, xsb, body), unsafe, location) (defs, fs) ->
              let fb, f = Var.fresh_var f_info in
-               ((fb, (tyvars, xsb, body), None, location) :: defs, f :: fs))
+               ((fb, (tyvars, xsb, body), None, unsafe, location) :: defs, f :: fs))
           defs ([], [])
       in
         lift_binding
           (Rec
              (List.map
-                (fun (fb, (tyvars, xsb, body), none, location) ->
+                (fun (fb, (tyvars, xsb, body), none, unsafe, location) ->
                   assert (none = None);
-                   (fb, (tyvars, xsb, body fs), none, location))
+                   (fb, (tyvars, xsb, body fs), none, unsafe, location))
                 defs))
           fs
 
@@ -641,9 +641,10 @@ struct
     let f_info = (ft, "", Scope.Local) in
     let rest f : tail_computation sem = lift (Special (CallCC (Variable f)),
                                               body_type) in
-      M.bind (fun_binding (f_info, ([], [kb], body), loc_unknown)) rest
+      M.bind (fun_binding (f_info, ([], [kb], body), false, loc_unknown)) rest
 
-  let letfun env ((ft, _, _) as f_info, (tyvars, (ps, body)), location) rest =
+  let letfun env ((ft, _, _) as f_info, (tyvars, (ps, body)), unsafe, location)
+        rest =
     let xsb : binder list =
       (* It is important to rename the quantifiers in the type to be
          those used in the body of the function. *)
@@ -668,12 +669,12 @@ struct
         ps
         xsb
     in
-      M.bind (fun_binding (f_info, (tyvars, xsb, body), location)) rest
+      M.bind (fun_binding (f_info, (tyvars, xsb, body), unsafe, location)) rest
 
   let letrec env defs rest =
     let defs =
       List.map
-        (fun ((ft, _, _) as f_info, (tyvars, (ps, body)), location) ->
+        (fun ((ft, _, _) as f_info, (tyvars, (ps, body)), unsafe, location) ->
            let xsb : binder list =
              (* It is important to rename the quantifiers in the type to be those used in
                 the body of the function. *)
@@ -698,7 +699,7 @@ struct
                  ps
                  xsb
            in
-             (f_info, (tyvars, xsb, body), location))
+             (f_info, (tyvars, xsb, body), unsafe, location))
         defs
     in
       M.bind (rec_binding defs) rest
@@ -1125,7 +1126,10 @@ struct
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
-                | Fun { fun_binder = bndr; fun_definition = (tyvars, ([ps], body)); fun_location = location; _ }
+                | Fun { fun_binder           = bndr
+                      ; fun_definition       = (tyvars, ([ps], body))
+                      ; fun_location         = location
+                      ; fun_unsafe_signature = unsafe; _ }
                      when Binder.has_type bndr ->
                     let f  = Binder.to_name bndr in
                     let ft = Binder.to_type bndr in
@@ -1140,7 +1144,7 @@ struct
                     let body = eval body_env body in
                       I.letfun
                         env
-                        ((ft, f, scope), (tyvars, (ps, body)), location)
+                        ((ft, f, scope), (tyvars, (ps, body)), unsafe, location)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
@@ -1159,7 +1163,10 @@ struct
                         ([], [], []) in
                     let defs =
                       List.map
-                        (fun { rec_binder = bndr; rec_definition = ((tyvars, _), (pss, body)); rec_location = location; _ } ->
+                        (fun { rec_binder           = bndr
+                             ; rec_definition       = ((tyvars, _), (pss, body))
+                             ; rec_location         = location
+                             ; rec_unsafe_signature = unsafe; _ } ->
                           assert (List.length pss = 1);
                           let f  = Binder.to_name bndr in
                           let ft = Binder.to_type bndr in
@@ -1173,7 +1180,7 @@ struct
                                ps
                                ([], env) in
                            let body = fun vs -> eval (extend fs (List.combine vs inner_fts) body_env) body in
-                             ((ft, f, scope), (tyvars, (ps, body)), location))
+                             ((ft, f, scope), (tyvars, (ps, body)), unsafe, location))
                         (nodes_of_list defs)
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
@@ -1221,14 +1228,14 @@ struct
               match b with
                 | Let ((x, (_xt, x_name, Scope.Global)), _) ->
                     partition (b::locals @ globals, [], Env.String.bind x_name x nenv) bs
-                | Fun ((f, (_ft, f_name, Scope.Global)), _, _, _) ->
+                | Fun ((f, (_ft, f_name, Scope.Global)), _, _, _, _) ->
                     partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
                 | Rec defs ->
                   (* we depend on the invariant that mutually
                      recursive definitions all have the same scope *)
                     let scope, nenv =
                       List.fold_left
-                        (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _, _) ->
+                        (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _, _, _) ->
                            match f_scope with
                              | Scope.Global -> Scope.Global, Env.String.bind f_name f nenv
                              | Scope.Local -> scope, nenv)

@@ -44,10 +44,10 @@ let variables_in_computation comp =
         traverse_value scrutinee;
         traverse_stringmap (fun (_, c) -> traverse_computation c) cases;
         OptionUtils.opt_iter (fun (_, c) -> traverse_computation c) case_opt
-  and traverse_fundef (bnd, (_, _, _), _, _) =
+  and traverse_fundef (bnd, (_, _, _), _, _, _) =
     let fun_var = Var.var_of_binder bnd in
     match Tables.(lookup fun_defs fun_var) with
-      | Some (_, _, (Some fvs_var), _) ->
+      | Some (_, _, (Some fvs_var), _, _) ->
           Debug.print ("fvs_var: " ^ (string_of_int fvs_var));
           add_variable fvs_var
       | Some _fd -> Debug.print ("fundef without fvs var attached")

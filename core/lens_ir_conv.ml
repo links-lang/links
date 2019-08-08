@@ -42,7 +42,7 @@ module Env = struct
 
   let lookup_fun (f, fvs) =
     match Tables.lookup Tables.fun_defs f with
-    | Some (finfo, (xs, body), z, location) ->
+    | Some (finfo, (xs, body), z, _unsafe, location) ->
         let fn =
           match location with
           | Location.Server
@@ -86,7 +86,7 @@ module Env = struct
 
   let peek_fun_bind f =
     match Tables.lookup Tables.fun_defs f with
-    | Some (_, _, z, _) -> z
+    | Some (_, _, z, _, _) -> z
     | None -> None
 
   let lookup (val_env, exp_env) var =
@@ -249,7 +249,7 @@ let lens_sugar_phrase_of_ir p env =
           Result.bind
             ~f:(fun v -> computation (Env.bind env (x, v)) (bs, tailcomp))
             v
-      | I.Fun (_, _, _, Location.Client) ->
+      | I.Fun (_, _, _, _, Location.Client) ->
           Result.error Of_ir_error.Client_function
       | I.Fun _ ->
           Result.error @@ Of_ir_error.Internal_error "Unexpected function."

@@ -294,7 +294,7 @@ let handle previous_context current_context = function
               let v = Value.Env.find var valenv in
               let t = Env.String.find name var_env' in
               v, t
-           | Some (finfo, _, None, location) ->
+           | Some (finfo, _, None, _, location) ->
               let v =
                 match location with
                 | Location.Server | Location.Unknown ->

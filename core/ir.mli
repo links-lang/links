@@ -59,7 +59,7 @@ and tail_computation =
   | Special    of special
   | Case       of value * (binder * computation) name_map * (binder * computation) option
   | If         of value * computation * computation
-and fun_def = binder * (tyvar list * binder list * computation) * binder option * location
+and fun_def = binder * (tyvar list * binder list * computation) * binder option * bool * location
 and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
@@ -129,5 +129,6 @@ val string_of_special : special -> string
 val string_of_computation : computation -> string
 val string_of_program : program -> string
 
-type eval_fun_def = var_info * (var list * computation) * Var.var option * location
+type eval_fun_def = var_info * (var list * computation) * Var.var option *
+                      bool * location
   [@@deriving show]

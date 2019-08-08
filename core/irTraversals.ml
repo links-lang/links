@@ -437,7 +437,7 @@ struct
             let x, o = o#binder x in
             let tc, _, o = o#tail_computation tc in
               Let (x, (tyvars, tc)), o
-        | Fun (f, (tyvars, xs, body), z, location) ->
+        | Fun (f, (tyvars, xs, body), z, unsafe, location) ->
             let xs, body, z, o =
               let (z, o) = o#optionu (fun o -> o#binder) z in
               let (xs, o) =
@@ -451,22 +451,22 @@ struct
                 xs, body, z, o in
             let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
-              Fun (f, (tyvars, xs, body), z, location), o
+              Fun (f, (tyvars, xs, body), z, unsafe, location), o
         | Rec defs ->
             (* it's important to traverse the function binders first in
                order to make sure they're in scope for all of the
                function bodies *)
             let defs, o =
               List.fold_right
-                (fun (f, (tyvars, xs, body), z, location) (fs, o) ->
+                (fun (f, (tyvars, xs, body), z, unsafe, location) (fs, o) ->
                    let f, o = o#binder f in
-                     ((f, (tyvars, xs, body), z, location)::fs, o))
+                     ((f, (tyvars, xs, body), z, unsafe, location)::fs, o))
                 defs
                 ([], o) in
 
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, unsafe, location) ->
                    let (z, o) = o#optionu (fun o -> o#binder) z in
                    let xs, o =
                      List.fold_right
@@ -476,7 +476,7 @@ struct
                        xs
                        ([], o) in
                   let body, _, o = o#computation body in
-                    (f, (tyvars, xs, body), z, location)::defs, o)
+                    (f, (tyvars, xs, body), z, unsafe, location)::defs, o)
                 ([], o)
                 defs in
             let defs = List.rev defs in
@@ -685,13 +685,13 @@ module ElimDeadDefs = struct
         | Let (x, (_, Return _)) ->
             let b, o = super#binding b in
               b, o#init x
-        | Fun (f, _, _, _) ->
+        | Fun (f, _, _, _, _) ->
             let b, o = super#binding b in
               b, o#init f
         | Rec defs ->
             let fs, o =
               List.fold_right
-                (fun (f, _, _, _) (fs, o) ->
+                (fun (f, _, _, _, _) (fs, o) ->
                    let f, o = o#binder f in
                      (IntSet.add (Var.var_of_binder f) fs, o#initrec f))
                 defs
@@ -699,7 +699,7 @@ module ElimDeadDefs = struct
 
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, unsafe, location) ->
                    let z, o = o#optionu (fun o -> o#binder) z in
                    let xs, o =
                      List.fold_right
@@ -711,7 +711,7 @@ module ElimDeadDefs = struct
                    let o = o#set_rec (Var.var_of_binder f) in
                    let body, _, o = o#computation body in
                    let o = o#set_mutrec (Var.var_of_binder f) in
-                     (f, (tyvars, xs, body), z, location)::defs, o)
+                     (f, (tyvars, xs, body), z, unsafe, location)::defs, o)
                 ([], o)
                 defs in
             let o = o#set_nonrecs fs in
@@ -746,13 +746,13 @@ module ElimDeadDefs = struct
                 match b with
                   | Let ((x, _), (_tyvars, _)) when o#is_dead x ->
                       o#bindings bs
-                  | Fun ((f, _), _, _, _) when o#is_dead f ->
+                  | Fun ((f, _), _, _, _, _) when o#is_dead f ->
                       o#bindings bs
                   | Rec defs ->
                       Debug.if_set show_rec_uses (fun () -> "Rec block:");
                       let fs, defs =
                         List.fold_left
-                          (fun (fs, defs) (((f, (_, name, _)), _, _, _) as def) ->
+                          (fun (fs, defs) (((f, (_, name, _)), _, _, _, _) as def) ->
                              Debug.if_set show_rec_uses
                                (fun () ->
                                   "  (" ^ name ^ ") non-rec uses: "^string_of_int (IntMap.find f env)^

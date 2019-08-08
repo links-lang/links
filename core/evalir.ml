@@ -76,7 +76,7 @@ struct
   let lookup_fun_def f =
     match lookup_fun f with
     | None -> None
-    | Some (finfo, _, None, location) ->
+    | Some (finfo, _, None, _, location) ->
       begin
         match location with
         | Location.Server | Location.Unknown ->
@@ -256,7 +256,7 @@ struct
         [], `Not_typed)) in
     function
     | `FunctionPtr (f, fvs), ps ->
-      let (_finfo, (xs, body), z, _location) = find_fun f in
+      let (_finfo, (xs, body), z, _, _location) = find_fun f in
       let env =
         match z, fvs with
         | None, None            -> env

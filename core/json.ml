@@ -65,7 +65,7 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
       as r ->
       raise (Errors.runtime_error ("Can't jsonize " ^ Value.string_of_value r));
   | `FunctionPtr (f, fvs) ->
-    let (_, _, _, location) = Tables.find Tables.fun_defs f in
+    let (_, _, _, _, location) = Tables.find Tables.fun_defs f in
     let location = jsonize_location location in
     let env_entry =
       match fvs with

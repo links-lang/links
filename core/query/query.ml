@@ -498,7 +498,7 @@ struct
   let lookup_fun env (f, fvs) =
     let open Q in
     match Tables.lookup Tables.fun_defs f with
-    | Some (finfo, (xs, body), z, location) ->
+    | Some (finfo, (xs, body), z, _, location) ->
       Some
       begin
         match Var.name_of_binder (f, finfo) with
@@ -703,7 +703,8 @@ struct
         reduce_artifacts (Q.Apply (xlate env f, List.map (xlate env) ps))
     | Closure (f, _, v) ->
       let open Lang in
-      let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
+      let (_finfo, (xs, body), z_opt, _unsafe, _location) =
+        Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
@@ -732,9 +733,9 @@ struct
               | Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | Fun (_, _, _, Location.Client) ->
+              | Fun (_, _, _, _, Location.Client) ->
                   query_error "Client function"
-              | Fun ((f, _), _, _, _) ->
+              | Fun ((f, _), _, _, _, _) ->
                 (* This should never happen now that we have closure conversion*)
                 raise (internal_error
                   ("Function definition in query: " ^ string_of_int f ^

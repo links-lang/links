@@ -2626,6 +2626,24 @@ let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->
   make_function_type [] effs rtype
 
+let map_effects fn =
+  let transform = object(o)
+    inherit Transform.visitor as super
+
+    method! typ = function
+      | `Function (at, e, rt) -> super#typ (`Function (at, o#eff_row e, rt))
+      | `Lolli (at, e, rt) -> super#typ (`Lolli (at, o#eff_row e, rt))
+      | dt -> super#typ dt
+
+    method eff_row (fsp, rv, d) = (fn fsp, rv, d)
+  end
+  in
+  transform#typ ->- fst
+
+(** Adds the wild effect to the right-most arrow on a type. *)
+let make_unsafe_signature : datatype -> datatype  =
+  map_effects (StringMap.add "wild" (`Present unit_type))
+
 (* We replace some of the generated printing functions here such that
    they may use our own printing functions instead. If the generated functions are
    to be used, we remove potential cycles arising from recursive types/rows first.

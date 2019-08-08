@@ -364,6 +364,7 @@ val add_tyvar_names : ('a -> Vars.vars_list)
 val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : ?linear:bool -> datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
+val make_unsafe_signature : datatype -> datatype
 
 val pp_datatype : Format.formatter -> datatype -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
