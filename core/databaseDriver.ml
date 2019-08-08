@@ -79,7 +79,10 @@ module Locator = struct
          loop false pattern (opam_share driver_name)
       | [] -> raise Not_found
       | path :: paths ->
-         match Glob.files path pattern with
+         let files =
+           try Glob.files path pattern with
+             | Disk.AccessError _ -> [] in
+         match files with
          | [] -> loop fallback pattern paths
          | fs -> fs
     in
@@ -174,7 +177,8 @@ end
 
 let load driver_name =
   let path =
-    String.split_on_char ':'
-      (Settings.get_value Basicsettings.DatabaseDrivers.path)
+    let settings_path =
+      Settings.get_value Basicsettings.DatabaseDrivers.path in
+    if settings_path = "" then [] else String.split_on_char ':' settings_path
   in
   Loader.load ~path driver_name
