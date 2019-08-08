@@ -1523,13 +1523,11 @@ end
                 code ppr_lt)
 
     let escaped_quantifier ~pos ~var ~annotation ~escapees =
-      let quant_policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
-      let show_type ty =
-        Types.string_of_datatype ~policy:quant_policy ~refresh_tyvar_names:true ty in
       let escaped_tys = List.map snd escapees in
       build_tyvar_names (annotation :: escaped_tys);
+      let policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
       let display_ty (var, ty) =
-        let ppr_ty = show_type ty in
+        let ppr_ty = Types.string_of_datatype ~policy ty in
         Printf.sprintf "%s: %s" var ppr_ty in
       let displayed_tys =
         List.map display_ty escapees
@@ -4105,12 +4103,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
             end in
             let (is_safe, _) = checker#predicates in
             let escapees =
-              Env.fold (fun name dt acc ->
-                if not (is_safe dt) then
-                  (name, dt) :: acc
-                else
-                  acc
-              ) env [] in
+              Env.filter (fun _ dt -> not (is_safe dt)) env
+              |> Env.bindings in
             if not (escapees = []) then
               Gripers.escaped_quantifier ~pos ~var:name ~annotation:ft ~escapees in
 

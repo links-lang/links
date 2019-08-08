@@ -78,6 +78,12 @@ sig
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
 
+  val filter : (key -> 'a -> bool) -> 'a t -> 'a t
+  (** filters using both keys and values *)
+
+  val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
+  (** filters and applies a function -- None values discarded *)
+
   val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
@@ -222,6 +228,15 @@ struct
              p, add i v q)
         m (empty, empty)
 
+    let filter_map f m =
+      fold (fun k v acc ->
+        match f k v with
+          | Some x -> add k x acc
+          | None -> acc) m empty
+
+    let filter f =
+      filter_map (fun k v ->
+        if f k v then Some v else None)
 
     let pp af formatter map =
       Format.pp_open_box formatter 0;
