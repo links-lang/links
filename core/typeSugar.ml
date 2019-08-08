@@ -2158,13 +2158,7 @@ let map_effects fn =
 
 (** Adds the wild effect to the right-most arrow on a type. *)
 let make_unsafe_signature =
-  let make_wild fsp =
-    if StringMap.mem "wild" fsp then
-      fsp
-    else
-      StringMap.add "wild" (`Present Types.unit_type) fsp
-  in
-  map_effects make_wild
+  map_effects (StringMap.add "wild" (`Present Types.unit_type))
 
 (* Strips the wild effect from an inferred type, and ensures the given "unsafe"
  *    type is equivalent. *)
