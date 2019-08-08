@@ -1527,8 +1527,8 @@ end
       build_tyvar_names (annotation :: escaped_tys);
       let policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
       let display_ty (var, ty) =
-        let ppr_ty = Types.string_of_datatype ~policy ty in
-        Printf.sprintf "%s: %s" var ppr_ty in
+        Printf.sprintf "%s: %s" var
+          (Types.string_of_datatype ~policy ~refresh_tyvar_names:false ty) in
       let displayed_tys =
         List.map display_ty escapees
         |> String.concat (nli ()) in
@@ -4105,7 +4105,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             let escapees =
               Env.filter (fun _ dt -> not (is_safe dt)) env
               |> Env.bindings in
-            if not (escapees = []) then
+            if not (ListUtils.empty escapees) then
               Gripers.escaped_quantifier ~pos ~var:name ~annotation:ft ~escapees in
 
           let () =
