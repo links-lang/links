@@ -134,7 +134,7 @@ rule-check: tools/rule-check
 REPO=../opam-repository
 PACKAGES=$(REPO)/packages
 
-TAG_NAME := $(shell git describe --tags)
+TAG_NAME = $(shell git describe --tags)
 
 link-url-%:
 	if [ "$*" != "links" ]; then ln -f -s $(BUILD_DIR)/links-$(TAG_NAME).url $(BUILD_DIR)/$*-$(TAG_NAME).url; fi
