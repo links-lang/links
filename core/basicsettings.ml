@@ -270,11 +270,6 @@ module Generalise = struct
   let show_generalisation = Settings.add_bool("show_generalisation", false, `User)
 end
 
-(* Webif stuff *)
-module Webif = struct
-  let realpages = Settings.add_bool ("realpages", false, `System)
-end
-
 (* Json stuff *)
 module Json = struct
   let show_json = Settings.add_bool("show_json", false, `User)
