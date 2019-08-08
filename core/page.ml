@@ -91,7 +91,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
                              'use strict';
                              function _isRuntimeReady() {
                                 if (window._JSLIB === void 0 || window._JSLIB !== true) {
-                                   const msg = \"<h1>Fatal error: Runtime dependency `jslib.js' is not loaded.</h1>\";
+                                   const msg = \"<h1>Startup error: Runtime dependency `jslib.js' is not loaded.</h1>\";
                                    document.body.innerHTML = msg;
                                    document.head.innerHTML = msg;
                                    return false;
