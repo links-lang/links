@@ -1,8 +1,8 @@
- The University of Edinburgh
+ The University of Edinburgh  
  GPL Licence  
  for Links
  
- Copyright (C), 2005-2009, The University Court of the University of Edinburgh, Old 
+ Copyright (C), 2005-2019, The University Court of the University of Edinburgh, Old 
  College, Edinburgh, UK  
  
  PLEASE READ THIS LICENCE ("THE LICENCE") CAREFULLY. 
