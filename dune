@@ -23,6 +23,6 @@
 (install
  (package links)
  (section doc)
- (files (INSTALL as README)))
+ (files (INSTALL.md as README)))
 
 (include install.inc)
