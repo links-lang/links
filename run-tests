@@ -45,9 +45,6 @@ fi
 if [[ "$1" != "db-only" ]]; then
     for i in tests/*.tests; do
         cmnd="./test-harness $i"
-        if [[ -f "$i.config" ]]; then
-            cmnd="$cmnd $i.config"
-        fi
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?
