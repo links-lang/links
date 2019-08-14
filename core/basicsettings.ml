@@ -263,7 +263,6 @@ module Ir = struct
   let typecheck_ir = Settings.add_bool("typecheck_ir", false, `User)
   (* Abort compilation on IR typing error *)
   let fail_on_ir_type_error = Settings.add_bool("fail_on_ir_type_error", false, `User)
-  let simplify_types = Settings.add_bool("simplify_types", false, `User)
 end
 
 (* Generalise stuff *)
