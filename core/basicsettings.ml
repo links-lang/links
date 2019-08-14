@@ -97,7 +97,7 @@ module DatabaseDrivers = struct
 end
 
 (** The banner *)
-let version = "0.9 (Burghmuirhead)"
+let version = "0.9.1 (Burghmuirhead)"
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
