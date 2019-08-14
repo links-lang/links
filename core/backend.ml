@@ -23,11 +23,6 @@ let only_if predicate transformer =
 let only_if_set setting =
              only_if (Settings.get_value setting)
 
-let only_if_any_set settings transformer =
-  if Utility.any_true (List.map Settings.get_value settings)
-  then transformer
-  else (fun _ x -> x)
-
 let debug_tell msg =
   only_if_set
     Basicsettings.debugging_enabled
@@ -99,8 +94,8 @@ struct
         Closures.program Lib.primitive_vars;
         perform_for_side_effects
           (BuildTables.program Lib.primitive_vars);
-        only_if_any_set
-          [Basicsettings.Ir.typecheck_ir; Basicsettings.Ir.simplify_types]
+        only_if_set
+          Basicsettings.Ir.simplify_types
           (run simplify_type_structure_program);
         only_if_set
           Basicsettings.Ir.typecheck_ir
@@ -111,8 +106,8 @@ struct
         (* May perform some optimisations here that are safe to do on the prelude *)
         (fun tenv globals -> Closures.bindings tenv Lib.primitive_vars globals);
         (fun tenv globals -> BuildTables.bindings tenv Lib.primitive_vars globals; globals);
-        only_if_any_set
-          [Basicsettings.Ir.typecheck_ir; Basicsettings.Ir.simplify_types]
+        only_if_set
+          Basicsettings.Ir.simplify_types
           (run simplify_type_structure_bindings);
         only_if_set
           Basicsettings.Ir.typecheck_ir
