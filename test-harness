@@ -4,6 +4,7 @@ links = './links'
 
 import sys, re, time
 import concurrent.futures, threading, multiprocessing
+from os import path
 from subprocess import Popen, PIPE
 
 successes = failures = ignored = 0
@@ -121,9 +122,12 @@ def main():
         filename = sys.argv[1]
         config_file =  sys.argv[2]
     elif len(sys.argv) == 2:
-        filename =  sys.argv[1]
+        filename = sys.argv[1]
     else:
         raise SystemExit('Usage: run <test file> [<links config file>]')
+
+    if path.exists(filename + ".config"):
+        config_file = filename + ".config"
 
     cpus=multiprocessing.cpu_count()
     tp = concurrent.futures.ThreadPoolExecutor(max_workers=cpus)
