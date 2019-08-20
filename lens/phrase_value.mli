@@ -30,6 +30,8 @@ val unbox_int : t -> int
 
 val unbox_serial_newkeymapped : t -> int
 
+val unbox_serial_key : t -> int
+
 val box_float : float -> t
 
 val unbox_float : t -> float
