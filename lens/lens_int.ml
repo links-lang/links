@@ -1,7 +1,7 @@
 module Int = struct
   type t = int [@@deriving eq, show]
 
-  let compare = Stdlib.compare
+  let compare x y = x - y
 end
 
 include Int
