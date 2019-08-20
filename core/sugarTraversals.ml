@@ -358,18 +358,21 @@ class map =
           let _x_i3 = o#phrase _x_i3 in
       let _x_i4 = o#phrase _x_i4 in TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4))
       | LensLit ((_x, _x_i1)) ->
-              let _x = o#phrase _x in
-              let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
-              LensLit (_x, _x_i1)
+          let _x = o#phrase _x in
+          let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
+          LensLit (_x, _x_i1)
+      | LensSerialLit ((_x, _x_i1, _x_i2)) ->
+          let _x = o#phrase _x in
+          LensSerialLit(_x, _x_i1, _x_i2)
       | LensKeysLit ((_x, _x_i1, _x_i2)) ->
-              let _x = o#phrase _x in
-              let _x_i1 = o#phrase _x_i1 in
-              let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
-              LensKeysLit (_x, _x_i1, _x_i2)
+          let _x = o#phrase _x in
+          let _x_i1 = o#phrase _x_i1 in
+          let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
+          LensKeysLit (_x, _x_i1, _x_i2)
       | LensFunDepsLit ((_x, _x_i1, _x_i2)) ->
-              let _x = o#phrase _x in
-              let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
-              LensFunDepsLit (_x, _x_i1, _x_i2)
+          let _x = o#phrase _x in
+          let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
+          LensFunDepsLit (_x, _x_i1, _x_i2)
       | LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#string _x_i1 in
@@ -1095,6 +1098,9 @@ class fold =
       | LensLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o = o#option (fun o -> o#unknown) _x_i1 in
+            o
+      | LensSerialLit ((_x, _x_i1, _x_i2)) ->
+          let o = o#phrase _x in
             o
       | LensKeysLit ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
@@ -1858,6 +1864,9 @@ class fold_map =
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
             (o, (LensLit (_x, _x_i1)))
+      | LensSerialLit ((_x, _x_i1, _x_i2)) ->
+          let (o, _x) = o#phrase _x in
+            (o, (LensSerialLit (_x, _x_i1, _x_i2)))
       | LensKeysLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in

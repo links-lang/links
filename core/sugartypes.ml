@@ -354,6 +354,7 @@ and phrasenode =
   | DBUpdate         of Pattern.with_pos * phrase * phrase option *
                           (Name.t * phrase) list
   | LensLit          of phrase * Lens.Type.t option
+  | LensSerialLit    of phrase * string list * Lens.Type.t option
   (* the lens keys lit is a literal that takes an expression and is converted
      into a LensLit with the corresponding table keys marked in the lens_sort *)
   | LensKeysLit      of phrase * phrase * Lens.Type.t option
@@ -535,6 +536,7 @@ struct
     | TupleLit ps -> union_map phrase ps
 
     | LensLit (l, _) -> phrase l
+    | LensSerialLit (l, _, _) -> phrase l
     | LensFunDepsLit (l, _, _) -> phrase l
     | LensKeysLit (l, _, _) -> phrase l
     | LensSelectLit (l, _, _) -> phrase l

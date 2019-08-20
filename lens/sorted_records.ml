@@ -27,6 +27,8 @@ module Simple_record = struct
   (* if either of the lists are empty, return match
                   this allows us to perform partial matching *)
 
+  let map ~f v = List.map ~f v
+
   let find_index rs ~record =
     let rec pivot s e =
       if s > e then None
@@ -168,6 +170,12 @@ let pp_tabular f rs =
 
 let find rs ~record =
   Simple_record.find_index rs.plus_rows ~record |> Option.is_some
+
+let map_values ~f rs =
+  let {plus_rows; neg_rows; columns} = rs in
+  let plus_rows = Array.map (Simple_record.map ~f) plus_rows in
+  let neg_rows = Array.map (Simple_record.map ~f) neg_rows in
+  {plus_rows; neg_rows; columns}
 
 (** Construct a function which returns the nth value of a list, correspodning to the position of
     that column in cols *)

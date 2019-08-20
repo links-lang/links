@@ -129,6 +129,7 @@ struct
     | Offer _
     | CP _
     | LensLit _
+    | LensSerialLit _
     | LensKeysLit _
     | LensFunDepsLit _
     | LensDropLit _
@@ -2801,6 +2802,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let lens_sort = Sort.make cols in
            let typ = Lens.Type.ConcreteLens lens_sort in
            LensLit (erase table, Some typ), `Lens typ, usages table
+        | LensSerialLit(lens, columns, _) ->
+          let lens = tc lens in
+          let typ =
+            let columns = Lens.Alias.Set.of_list columns in
+            let lens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) |> Lens.Type.set_serial ~columns in
+            lens in
+          LensSerialLit (erase lens, columns, Some typ), `Lens typ, usages lens
         | LensKeysLit (table, keys, _) ->
            relational_lenses_guard pos;
            let open Lens in

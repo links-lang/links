@@ -15,6 +15,9 @@ val type_lens_fun_dep :
   -> columns:Column.List.t
   -> (t, Sort.Lens_sort_error.t) result
 
+(** Change the specified columns to be of serial type. *)
+val set_serial : t -> columns:Alias.Set.t -> t
+
 module Select_lens_error : sig
   type 'a t =
     | SortError of Sort.Select_sort_error.t

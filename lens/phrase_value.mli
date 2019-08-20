@@ -17,6 +17,9 @@ type values = t list [@@deriving show]
 
 val equal : t -> t -> bool
 
+(** Determine if the phrase value is a new key that should be determined by the database. *)
+val is_new_key : t -> bool
+
 val box_bool : bool -> t
 
 val unbox_bool : t -> bool

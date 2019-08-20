@@ -167,6 +167,8 @@ sig
 
   val lens_handle : value sem * Lens.Type.t -> tail_computation sem
 
+  val lens_serial : value sem * Lens.Alias.Set.t * Lens.Type.t -> tail_computation sem
+
   val lens_drop_handle : value sem * string * string * value sem * Lens.Type.t -> tail_computation sem
 
   val lens_select_handle : value sem * [`Static of Lens.Phrase.t | `Dynamic of value sem] * Lens.Type.t -> tail_computation sem
@@ -490,6 +492,11 @@ struct
       bind table
         (fun table ->
             lift (Special (Lens (table, t)), `Lens t))
+
+  let lens_serial (lens, columns, typ) =
+    bind lens
+      (fun lens ->
+         lift (Special (LensSerial {lens; columns; typ}), `Lens typ))
 
   let lens_drop_handle (lens, drop, key, default, typ) =
       bind lens
@@ -959,6 +966,10 @@ struct
           | LensLit (table, Some t) ->
               let table = ev table in
                 I.lens_handle (table, t)
+          | LensSerialLit (lens, columns, Some t) ->
+              let lens = ev lens in
+              let columns = Lens.Alias.Set.of_list columns in
+                I.lens_serial (lens, columns, t)
           | LensDropLit (lens, drop, key, default, Some t) ->
               let lens = ev lens in
               let default = ev default in
@@ -1081,6 +1092,7 @@ struct
           | Switch _
           | TableLit _
           | LensLit _
+          | LensSerialLit _
           | LensDropLit _
           | LensSelectLit _
           | LensJoinLit _

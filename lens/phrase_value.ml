@@ -20,6 +20,13 @@ let equal v1 v2 =
   | _, Serial `NewKey -> false
   | _ -> v1 = v2
 
+let is_new_key v =
+  match v with
+  | Serial `NewKey
+   |Serial (`NewKeyMapped _) ->
+      true
+  | _ -> false
+
 module Unbox_error = struct
   exception E of {value: t; expected: string}
 

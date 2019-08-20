@@ -48,6 +48,8 @@ val plus_rows : t -> Simple_record.t array
 
 val neg_rows : t -> Simple_record.t array
 
+val map_values : f:(Phrase_value.t -> Phrase_value.t) -> t -> t
+
 (** The record set does not contain negative entries. *)
 val is_positive : t -> bool
 

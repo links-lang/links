@@ -212,3 +212,10 @@ let query_exists lens predicate =
           Database.Select.query_exists query ~database)
     in
     res
+
+let set_serial lens ~columns =
+  match lens with
+  | Lens {sort; database; table} ->
+      let sort = Sort.set_serial ~columns sort in
+      Lens {sort; database; table}
+  | _ -> lens

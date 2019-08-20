@@ -613,6 +613,10 @@ struct
               apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))
       end
+    | LensSerial { lens; columns; _ } ->
+      let open Lens in
+      let lens = value env lens |> get_lens |> Value.set_serial ~columns in
+      apply_cont cont env (`Lens lens)
     | LensDrop {lens; drop; key; default; _} ->
         let open Lens in
         let lens = value env lens |> get_lens in
@@ -625,7 +629,6 @@ struct
             ~key:(Alias.Set.singleton key)
           |> Lens_errors.unpack_type_drop_lens_result ~die:(eval_error "%s")
         in
-
         apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
     | LensSelect { lens; predicate; _ } ->
         let open Lens in

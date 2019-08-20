@@ -86,7 +86,8 @@ let apply_table_data ~table ~database data =
   let values = Sorted.plus_rows data |> Array.to_list in
   let fmt_insert f values =
     let values = [values] in
-    let insert = {Database.Insert.table; columns; values; db} in
+    let returning = [] in
+    let insert = {Database.Insert.table; columns; values; db; returning} in
     Database.Insert.fmt f insert
   in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
