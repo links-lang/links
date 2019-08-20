@@ -1,9 +1,7 @@
 module Int = struct
-  include Int
+  type t = int [@@deriving eq, show]
 
-  let pp = Format.pp_print_int
-
-  let show s = string_of_int s
+  let compare = Stdlib.compare
 end
 
 include Int
