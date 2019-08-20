@@ -549,6 +549,10 @@ class transform (env : Types.typing_environment) =
          let (o, table, _) = o#phrase table in
          let (o, t) = o#lens_type t in
             (o, LensLit (table, Some t), `Lens (t))
+      | LensSerialLit (lens,columns,Some t) ->
+         let (o, lens, _) = o#phrase lens in
+         let (o, t) = o#lens_type t in
+            (o, LensSerialLit (lens, columns, Some t), `Lens t)
       | LensDropLit (lens, drop, key, default, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#lens_type t in

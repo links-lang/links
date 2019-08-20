@@ -1486,7 +1486,7 @@ sig isNew : (Serial) -> Bool
 fun isNew(x) {
   switch (x) {
     case NewKey -> true
-    case NewMappedKey (x) -> true
+    case NewKeyMapped (x) -> true
     case Key (x) -> false
   }
 }

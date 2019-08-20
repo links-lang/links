@@ -218,7 +218,11 @@ let apply_delta ~table ~database:db ~sort ~env data =
   (* generate a list of serial columns and each column index *)
   let scolumns =
     Sort.cols sort
-    |> List.mapi ~f:(fun i v -> (i, v))
+    |> List.map ~f:(fun v ->
+           ( List.findi columns ~f:(( = ) (Column.alias v))
+             |> Option.map ~f:fst
+             |> Option.value ~default:0
+           , v ))
     |> List.filter (snd >> Column.typ >> Phrase_type.equal Phrase_type.Serial)
   in
   (* Pattern for records with no new keys. *)
@@ -228,6 +232,7 @@ let apply_delta ~table ~database:db ~sort ~env data =
     |> List.map ~f:(fun row ->
            ( scolumns
              |> List.map ~f:(fun (i, _) ->
+                    Format.eprintf "col i %d\n" i ;
                     List.nth row i |> Phrase_value.is_new_key)
            , row ))
     |> List.groupBy (module MapBoolList) ~f:(fun (k, _) -> k)
@@ -275,11 +280,11 @@ let apply_delta ~table ~database:db ~sort ~env data =
     Format.pp_print_list ~pp_sep:fmt_cmd_sep fmt_fmt f
     @@ List.flatten [fmt_insert_cmds; fmt_delete_cmds; fmt_update_cmds]
   in
-  let cmds = Format.asprintf "%a" fmt_all () in
+  let cmds = Format.asprintf "%a%!" fmt_all () in
   if String.equal "" cmds |> not then exec cmds ;
   (* generate commands where we need  the returning id *)
   List.fold_right
-    (fun (k, values) env ->
+    (fun (k, values_all) env ->
       let returning_cols =
         List.zip_nofail scolumns k
         |> List.filter (fun (_, u) -> u)
@@ -290,7 +295,8 @@ let apply_delta ~table ~database:db ~sort ~env data =
       in
       let returnings = Lens_string.Set.of_list returning in
       let values =
-        values |> List.map ~f:(List.filter (Phrase_value.is_new_key >> not))
+        values_all
+        |> List.map ~f:(List.filter (Phrase_value.is_new_key >> not))
       in
       let columns =
         columns |> List.filter (fun v -> String.Set.mem v returnings |> not)
@@ -312,12 +318,13 @@ let apply_delta ~table ~database:db ~sort ~env data =
         List.fold_right2
           (fun r1 r2 acc ->
             List.fold_right2
-              (fun c1 c2 acc ->
-                let c1 = Phrase_value.unbox_int c1 in
+              (fun (i, _) c2 acc ->
+                let c1 = List.nth r1 i in
+                let c1 = Phrase_value.unbox_serial_newkeymapped c1 in
                 let c2 = Phrase_value.unbox_int c2 in
                 Int.Map.add c1 c2 acc)
-              r1 r2 acc)
-          values res env
+              scolumns r2 acc)
+          values_all res env
       in
       env)
     insert_returning env

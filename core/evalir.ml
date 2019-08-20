@@ -601,14 +601,13 @@ struct
       let open Lens in
       begin
           let sort = Type.sort t in
-          let typ = Type.record_type t |> Lens_type_conv.type_of_lens_phrase_type in
-          match value env table, (TypeUtils.concrete_type typ) with
-            | `Table (((db,_), table, _, _) as tinfo), `Record _row ->
+          match value env table with
+            | `Table (((db,_), table, _, _) as tinfo) ->
               let database = Lens_database_conv.lens_db_of_db db in
               let sort = Sort.update_table_name sort ~table in
               let table = Lens_database_conv.lens_table_of_table tinfo in
                  apply_cont cont env (`Lens (Value.Lens { sort; database; table; }))
-            | `List records, `Record _row ->
+            | `List records ->
               let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
               apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))

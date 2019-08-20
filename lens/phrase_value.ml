@@ -58,6 +58,11 @@ let unbox_int v =
   | Int b -> b
   | _ -> unbox_error v "Int"
 
+let unbox_serial_newkeymapped v =
+  match v with
+  | Serial (`NewKeyMapped v) -> v
+  | _ -> unbox_error v "Serial `NewKeyMapped"
+
 let box_float f = Float f
 
 let unbox_float v =

@@ -14,7 +14,14 @@ let lens_db_of_db (db : Value.database) =
   let execute_select query ~field_types =
     let field_types =
       List.map
-        ~f:(fun (n, v) -> (n, Lens_type_conv.type_of_lens_phrase_type v))
+        ~f:(fun (n, v) ->
+          let context = Env.String.empty in
+          let typ =
+            match v with
+            | Lens.Phrase.Type.Serial -> `Primitive CommonTypes.Primitive.Int
+            | _ -> Lens_type_conv.type_of_lens_phrase_type ~context v
+          in
+          (n, typ))
         field_types
     in
     let result, rs = Database.execute_select_result field_types query db in
