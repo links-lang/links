@@ -58,8 +58,8 @@ let unbox_pair =
           x, y
     | _ -> raise (runtime_type_error "failed to unbox pair")
 
-let rec unbox_list =
-  function
+let rec unbox_list x =
+  match x with
     | Q.Concat vs -> concat_map unbox_list vs
     | Q.Singleton v -> [v]
     | _ -> raise (runtime_type_error "failed to unbox list")
@@ -632,6 +632,8 @@ struct
       reduce_or (v, w)
     | Primitive "==", [v; w] ->
       reduce_eq (v, w)
+    | Primitive "stringToXml", [v] ->
+      Q.Singleton (XML (Value.Text (unbox_string v)))
     | Primitive f, args ->
         Apply (f, args)
     | If (c, t, e), args ->
