@@ -58,8 +58,8 @@ let unbox_pair =
           x, y
     | _ -> raise (runtime_type_error "failed to unbox pair")
 
-let rec unbox_list x =
-  match x with
+let rec unbox_list =
+  function
     | Q.Concat vs -> concat_map unbox_list vs
     | Q.Singleton v -> [v]
     | _ -> raise (runtime_type_error "failed to unbox list")
