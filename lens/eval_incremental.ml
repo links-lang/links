@@ -55,7 +55,7 @@ let lens_put_set_step ~env lens delt
   | LensDrop {lens= l; drop; key; default; _} ->
       let relevant = query_project_records l delt [key] [drop] in
       let delt =
-        Sorted.relational_extend delt ~key ~by:drop ~default ~data:relevant
+        Sorted.relational_extend_exn delt ~key ~by:drop ~default ~data:relevant
       in
       fn ~env l delt
   | LensJoin {left; right; on; del_left; del_right; _} ->
@@ -74,12 +74,12 @@ let lens_put_set_step ~env lens delt
       let delta_l =
         Sorted.merge
           (Sorted.merge
-             (Sorted.join delta_m0 delta_n0 ~on:on')
+             (Sorted.join_exn delta_m0 delta_n0 ~on:on')
              (Sorted.merge
-                (Sorted.join delta_m0
+                (Sorted.join_exn delta_m0
                    (query_join_records right delta_m0 cols_simp)
                    ~on:on')
-                (Sorted.join delta_n0
+                (Sorted.join_exn delta_n0
                    (query_join_records left delta_n0 cols_simp)
                    ~on:on')))
           (Sorted.negate delt)
@@ -89,7 +89,7 @@ let lens_put_set_step ~env lens delt
           (Sorted.merge (query_join_records lens delta_l cols_simp) delt)
           ~columns:cols_simp
       in
-      let delta_l_l = Sorted.join delta_l j ~on:on' in
+      let delta_l_l = Sorted.join_exn delta_l j ~on:on' in
       let delta_l_a = Sorted.merge delta_l (Sorted.negate delta_l_l) in
       let delta_m =
         Sorted.merge
@@ -107,8 +107,8 @@ let lens_put_set_step ~env lens delt
                 (Sorted.filter delta_l_a ~predicate:del_right)
                 ~onto:delta_n0))
       in
-      let env = fn ~env left delta_n in
-      fn ~env right delta_m
+      let env = fn ~env right delta_n in
+      fn ~env left delta_m
   | LensSelect {lens; predicate; _} ->
       let delta_m1 =
         Sorted.merge
@@ -181,7 +181,7 @@ let apply_delta ~table ~database:db ~sort ~env data =
     | _ -> List.hd keys
   in
   let columns, (insert_vals, update_vals, delete_vals) =
-    Sorted.to_diff data ~key
+    Sorted.to_diff_exn data ~key
   in
   let map_env vals =
     let open Phrase_value in

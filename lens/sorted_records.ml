@@ -292,24 +292,56 @@ let minus rs1 rs2 =
     in
     {rs1 with plus_rows}
 
+module Reorder_error = struct
+  type t = Not_subset of {first: string list; cols: string list}
+
+  let pp f v =
+    match v with
+    | Not_subset {first; cols} ->
+        Format.fprintf f
+          "Could not reorder the columns { %a } to the left as they are not a \
+           subset of { %a }."
+          Format.pp_comma_string_list first Format.pp_comma_string_list cols
+end
+
 let reorder_cols cols ~first =
   if not (cols_contain cols first) then
-    failwith "Columns do not contain all reorder keys." ;
-  let rest =
-    List.filter (fun a -> not (List.mem ~equal:String.equal first a)) cols
-  in
-  List.append first rest
+    Reorder_error.Not_subset {first; cols} |> Result.error
+  else
+    let rest =
+      List.filter (fun a -> not (List.mem ~equal:String.equal first a)) cols
+    in
+    List.append first rest |> Result.return
 
 let reorder t ~first =
-  let columns = reorder_cols (columns t) ~first in
-  project_onto t ~columns
+  let open Result.O in
+  reorder_cols (columns t) ~first >>| fun columns -> project_onto t ~columns
 
 let subtract_cols cols remove =
   List.filter (fun a -> not (List.mem ~equal:String.equal remove a)) cols
 
+module Join_error = struct
+  type elt = t
+  type t = Reorder_error of {error: Reorder_error.t; left: elt; right: elt}
+
+  let pp f v =
+    let pp_data f (left, right) =
+      Format.fprintf f "\n\njoin left:\n%a\n\njoin right:\n%a" pp_tabular left
+        pp_tabular right
+    in
+    match v with
+    | Reorder_error {error; left; right} ->
+        Format.fprintf f "Error reordering columns: %a%a" Reorder_error.pp
+          error pp_data (left, right)
+end
+
 let join left right ~on =
+  let open Result.O in
   let on_out, on_left, on_right = List.unzip3 on in
-  let right_cols = reorder_cols right.columns ~first:on_right in
+  reorder_cols right.columns ~first:on_right
+  |> Result.map_error ~f:(fun error ->
+         Join_error.Reorder_error {left; right; error})
+  >>| fun right_cols ->
   let right = project_onto right ~columns:right_cols in
   let lmap = get_cols_map left ~columns:on_left in
   let rjoinmap_right =
@@ -352,6 +384,9 @@ let join left right ~on =
   in
   let columns = List.flatten [l_cols; rjoinmap_right' right_cols] in
   {columns; plus_rows= Array.of_list pos; neg_rows= Array.of_list neg}
+
+let join_exn left right ~on =
+  join left right ~on |> Result.ok_internal ~pp:Join_error.pp
 
 let to_value ts =
   if is_positive ts then
@@ -474,8 +509,10 @@ let relational_merge t ~fun_deps ~update_with =
   merge updated @@ abs update_with
 
 let relational_extend t ~key ~by ~data ~default =
+  let open Result.O in
   let colmap = get_cols_map t ~columns:[key] in
-  let data = reorder data ~first:[key] in
+  reorder data ~first:[key]
+  >>| fun data ->
   let relevant_value_map = Option.value_exn (get_col_map data ~column:by) in
   let extend row =
     let find = colmap row in
@@ -492,6 +529,10 @@ let relational_extend t ~key ~by ~data ~default =
   let columns = List.append t.columns [by] in
   {columns; plus_rows; neg_rows}
 
+let relational_extend_exn t ~key ~by ~data ~default =
+  relational_extend t ~key ~by ~data ~default
+  |> Result.ok_internal ~pp:Reorder_error.pp
+
 let all_values t =
   let recs =
     List.append (Array.to_list t.plus_rows) (Array.to_list t.neg_rows)
@@ -499,8 +540,10 @@ let all_values t =
   List.sort_uniq Simple_record.compare recs
 
 let to_diff t ~key =
+  let open Result.O in
   let key_len = List.length key in
-  let t = reorder t ~first:key in
+  reorder t ~first:key
+  >>| fun t ->
   let insert_vals, update_vals =
     List.partition
       (fun row ->
@@ -517,6 +560,9 @@ let to_diff t ~key =
            Option.is_none row)
   in
   (columns t, (insert_vals, update_vals, delete_vals))
+
+let to_diff_exn t ~key =
+  to_diff t ~key |> Result.ok_internal ~pp:Reorder_error.pp
 
 let force_positive t =
   let t =

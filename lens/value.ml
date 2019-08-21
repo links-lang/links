@@ -116,7 +116,7 @@ let rec compute_memory_sorted lens =
   | LensJoin {left; right; on; _} ->
       let records1 = compute_memory_sorted left in
       let records2 = compute_memory_sorted right in
-      Sorted_records.join records1 records2 ~on
+      Sorted_records.join_exn records1 records2 ~on
 
 let get_memory lens = compute_memory_sorted lens |> Sorted_records.to_value
 
