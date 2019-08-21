@@ -189,8 +189,11 @@ module LensTestHelpers = struct
     (* See lib.ml "InsertRows" *)
     let columns = row_columns data in
     let values = row_values db data in
+    let returning = [] in
     let open Database.Insert in
-    let insert = Format.asprintf "%a" fmt {table; db; columns; values} in
+    let insert =
+      Format.asprintf "%a" fmt {table; db; columns; values; returning}
+    in
     let open Database in
     db.execute insert
 
@@ -312,11 +315,10 @@ module LensTestHelpers = struct
 end
 
 let test_fundep_of_string _test_ctx =
-  let _fds =
-    LensTestHelpers.fundepset_of_string "A B -> C; C -> D; D -> E F"
-  in
+  let fds = LensTestHelpers.fundepset_of_string "A B -> C; C -> D; D -> E F" in
   let _ =
     assert_equal
+      (Format.asprintf "%a" Fun_dep.Set.pp_pretty fds)
       "{{\"A\"; \"B\"; } -> {\"C\"; }; {\"C\"; } -> {\"D\"; }; {\"D\"; } -> \
        {\"E\"; \"F\"; }; }"
   in
