@@ -232,7 +232,6 @@ let apply_delta ~table ~database:db ~sort ~env data =
     |> List.map ~f:(fun row ->
            ( scolumns
              |> List.map ~f:(fun (i, _) ->
-                    Format.eprintf "col i %d\n" i ;
                     List.nth row i |> Phrase_value.is_new_key)
            , row ))
     |> List.groupBy (module MapBoolList) ~f:(fun (k, _) -> k)

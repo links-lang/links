@@ -317,6 +317,9 @@ let reorder t ~first =
   let open Result.O in
   reorder_cols (columns t) ~first >>| fun columns -> project_onto t ~columns
 
+let reorder_exn t ~first =
+  reorder t ~first |> Result.ok_internal ~pp:Reorder_error.pp
+
 let subtract_cols cols remove =
   List.filter (fun a -> not (List.mem ~equal:String.equal remove a)) cols
 

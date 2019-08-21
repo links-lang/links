@@ -100,6 +100,8 @@ end
 (** Reorder the columns, so that the columns [first] appear at the beginning. *)
 val reorder : t -> first:string list -> (t, Reorder_error.t) result
 
+val reorder_exn : t -> first:string list -> t
+
 module Join_error : sig
   type elt = t
   type t = Reorder_error of {error: Reorder_error.t; left: elt; right: elt}

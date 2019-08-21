@@ -202,7 +202,7 @@ let test_find_set _test_ctx =
 
 let test_reorder_cols _test_ctx =
   let reorder = ["test"; "b"] in
-  let res = Sorted.reorder test_data_8 ~first:reorder in
+  let res = Sorted.reorder_exn test_data_8 ~first:reorder in
   assert (Sorted.columns res = ["test"; "b"; "a"; "c"])
 
 let test_find_all_ind_1 test_ctx =
@@ -270,7 +270,7 @@ let test_join_1 test_ctx =
     (Format.asprintf "%a" Sorted.pp_tabular data_l) ;
   LensTestHelpers.print_verbose test_ctx
     (Format.asprintf "%a" Sorted.pp_tabular data_r) ;
-  let joined = Sorted.join data_l data_r ~on:[("B", "B", "B")] in
+  let joined = Sorted.join_exn data_l data_r ~on:[("B", "B", "B")] in
   LensTestHelpers.print_verbose test_ctx
     (Format.asprintf "%a" Sorted.pp_tabular joined) ;
   assert (
@@ -290,7 +290,7 @@ let test_join_neg_1 test_ctx =
     (Format.asprintf "%a" Sorted.pp_tabular data_l) ;
   LensTestHelpers.print_verbose test_ctx
     (Format.asprintf "%a" Sorted.pp_tabular data_r) ;
-  let joined = Sorted.join data_l data_r ~on:[("B", "B", "B")] in
+  let joined = Sorted.join_exn data_l data_r ~on:[("B", "B", "B")] in
   LensTestHelpers.print_verbose test_ctx
     (Format.asprintf "%a" Sorted.pp_tabular joined) ;
   assert (

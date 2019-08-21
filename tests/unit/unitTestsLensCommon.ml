@@ -316,13 +316,9 @@ end
 
 let test_fundep_of_string _test_ctx =
   let fds = LensTestHelpers.fundepset_of_string "A B -> C; C -> D; D -> E F" in
-  let _ =
-    assert_equal
-      (Format.asprintf "%a" Fun_dep.Set.pp_pretty fds)
-      "{{\"A\"; \"B\"; } -> {\"C\"; }; {\"C\"; } -> {\"D\"; }; {\"D\"; } -> \
-       {\"E\"; \"F\"; }; }"
-  in
-  ()
+  assert_equal
+    (Format.asprintf "%a" Fun_dep.Set.pp_pretty fds)
+    "A B -> C; C -> D; D -> E F"
 
 let suite =
   "lens_common_helpers" >::: ["fundep_of_string" >:: test_fundep_of_string]
