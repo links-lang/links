@@ -883,6 +883,8 @@ struct
       Q.reduce_or (v, w)
     | Q.Primitive "==", [v; w] ->
       Q.reduce_eq (v, w)
+    | Q.Primitive "stringToXml", [v] ->
+      Q.Singleton (Q.XML (Value.Text (Q.unbox_string v)))
     | Q.Primitive f, args ->
         Q.Apply (Q.Primitive f, args)
     | Q.If (c, t, e), args ->
