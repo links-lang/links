@@ -2,3 +2,38 @@ Orderby clause (not a semantic test, just syntax)
 for (x <- [1, 2, 3]) orderby (x) [x]
 stdout : [1, 2, 3] : [Int]
 exit : 0
+
+XML literals in query blocks (1)
+query { for (x <- [(<a>asdf</a>)]) [(b=2)] }
+stdout : [(b = 2)] : [(b:Int)]
+exit : 0
+
+XML literals in query blocks (2)
+query { for (x <- (<a>asdf</a>)) [(b=2)] }
+stdout : [(b = 2)] : [(b:Int)]
+exit : 0
+
+XML literals in query blocks (3)
+query { for (x <- (<a>asdf</a>)) [(b=2)] }
+stdout : [(b = 2)] : [(b:Int)]
+exit : 0
+
+XML literals in query blocks (4)
+query {var x = <a>asdf</a>; [(a=1)]}
+stdout : [(a = 1)] : [(a:Int)]
+exit : 0
+
+XML literals in query blocks (5)
+query {var x = <a href="foo.com">asdf</a>; [(a=1)]}
+stdout : [(a = 1)] : [(a:Int)]
+exit : 0
+
+XML literals in query blocks (6)
+query {var x = <a href="foo.com">{stringToXml("asdf")}</a>; [(a=1)]}
+stdout : [(a = 1)] : [(a:Int)]
+exit : 0
+
+XML literals in query blocks (6)
+query {var x = <a {[("href", "foo.com")]}>{stringToXml("asdf")}</a>; [(a=1)]}
+stdout : [(a = 1)] : [(a:Int)]
+exit : 0
