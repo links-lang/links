@@ -164,7 +164,7 @@ let printing_functions = Settings.add_bool ("printing_functions", false, `User)
 let optimise = Settings.add_bool("optimise", false, `User)
 
 (* Allow modules? *)
-let modules = Settings.add_bool("modules", false, `User)
+let modules = Settings.add_bool("modules", true, `User)
 
 (* Use keys in shredding *)
 let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `User)
