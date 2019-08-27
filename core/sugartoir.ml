@@ -65,7 +65,7 @@ let lookup_name_and_type name (nenv, tenv, _eff) =
   let var = NEnv.lookup nenv name in
     var, TEnv.lookup tenv var
 
-let lookup_effects (_, _, eff)= eff
+let lookup_effects (_, _, eff) = eff
 
 (* Hmm... shouldn't we need to use something like this? *)
 
@@ -117,7 +117,8 @@ sig
   val condition : (value sem * tail_computation sem * tail_computation sem) -> tail_computation sem
 
   val comp : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem) -> tail_computation sem
-  val letvar : (var_info * tail_computation sem * (var -> tail_computation sem)) -> tail_computation sem
+  val letvar : (var_info * tail_computation sem * tyvar list *
+               (var -> tail_computation sem)) -> tail_computation sem
 
   val xml : value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
   val record : (name * value sem) list * (value sem) option -> value sem
@@ -159,13 +160,15 @@ sig
 
   val table_handle : value sem * value sem * value sem * (datatype * datatype * datatype) -> tail_computation sem
 
-  val lens_handle : value sem * Lens.Sort.t -> tail_computation sem
+  val lens_handle : value sem * Lens.Type.t -> tail_computation sem
 
-  val lens_drop_handle : value sem * string * string * value sem * Lens.Sort.t -> tail_computation sem
+  val lens_drop_handle : value sem * string * string * value sem * Lens.Type.t -> tail_computation sem
 
-  val lens_select_handle : value sem * Lens.Phrase.t * Lens.Sort.t -> tail_computation sem
+  val lens_select_handle : value sem * [`Static of Lens.Phrase.t | `Dynamic of value sem] * Lens.Type.t -> tail_computation sem
 
-  val lens_join_handle : value sem * value sem * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Sort.t -> tail_computation sem
+  val lens_join_handle : value sem * value sem * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Type.t -> tail_computation sem
+
+  val lens_check : value sem * Lens.Type.t -> tail_computation sem
 
   val lens_get : value sem * datatype -> tail_computation sem
 
@@ -265,7 +268,7 @@ struct
 
     val lift_alist : ('a*'b sem) list -> (('a*'b) list) M.sem
 
-    val comp_binding : var_info * tail_computation -> var M.sem
+    val comp_binding : ?tyvars:tyvar list -> var_info * tail_computation -> var M.sem
 
     val fun_binding :
       Var.var_info * (tyvar list * binder list * computation) * location ->
@@ -298,9 +301,9 @@ struct
                   (fun vs -> lift ((name, v) :: vs))))
         ss (lift [])
 
-    let comp_binding (x_info, e) =
+    let comp_binding ?(tyvars=[]) (x_info , e) =
       let xb, x = Var.fresh_var x_info in
-        lift_binding (letm (xb, e)) x
+        lift_binding (letm ~tyvars (xb, e)) x
 
     let fun_binding (f_info, (tyvars, xsb, body), location) =
       let fb, f = Var.fresh_var f_info in
@@ -478,29 +481,42 @@ struct
         (fun keys ->  lift (Special (Table (database, table, keys, (r, w, n))),
                                `Table (r, w, n)))))
 
-  let lens_handle (table, sort) =
+  let lens_handle (table, t) =
       bind table
         (fun table ->
-            lift (Special (Lens (table, sort)), `Lens (Lens.Type.Lens sort)))
+            lift (Special (Lens (table, t)), `Lens t))
 
-  let lens_drop_handle (lens, drop, key, default, sort) =
+  let lens_drop_handle (lens, drop, key, default, typ) =
       bind lens
         (fun lens ->
             bind default
             (fun default ->
-               lift (Special (LensDrop (lens, drop, key, default, sort)), `Lens (Lens.Type.Lens sort))))
+               lift (Special (LensDrop {lens; drop; key; default; typ}), `Lens typ)))
 
-  let lens_select_handle (lens, pred, sort) =
+  let lens_select_handle (lens, pred, typ) =
       bind lens
         (fun lens ->
-           lift (Special (LensSelect (lens, pred, sort)), `Lens (Lens.Type.Lens sort)))
+           match pred with
+           | `Dynamic pred ->
+             bind pred
+               (fun predicate ->
+                  let predicate = Dynamic predicate in
+                  lift (Special (LensSelect {lens; predicate; typ}), `Lens typ))
+           | `Static predicate ->
+             let predicate = Static predicate in
+             lift (Special (LensSelect {lens; predicate; typ}), `Lens typ))
 
-  let lens_join_handle (lens1, lens2, on, left, right, sort) =
-      bind lens1
-        (fun lens1 ->
-          bind lens2
-          (fun lens2 ->
-            lift (Special (LensJoin (lens1, lens2, on, left, right, sort)), `Lens (Lens.Type.Lens sort))))
+  let lens_join_handle (left, right, on, del_left, del_right, typ) =
+      bind left
+        (fun left ->
+          bind right
+          (fun right ->
+            lift (Special (LensJoin {left; right; on; del_left; del_right; typ}), `Lens typ)))
+
+  let lens_check (lens, t) =
+      bind lens
+         (fun lens ->
+            lift (Special (LensCheck (lens, t)), `Lens t))
 
   let lens_get (lens, rtype) =
       bind lens
@@ -597,10 +613,10 @@ struct
                    (fun offset ->
                       lift (Special (Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
 
-  let letvar (x_info, s, body) =
+  let letvar (x_info, s, tyvars, body) =
     bind s
       (fun e ->
-         M.bind (comp_binding (x_info, e))
+         M.bind (comp_binding ~tyvars (x_info, e))
            (fun x -> body x))
 
   let comp env (p, s, body) =
@@ -630,14 +646,9 @@ struct
         | `ForAll (_, t')
         | t' ->
             begin match TypeUtils.concrete_type t' with
-              | `Function _ as ft' ->
+              | `Function _ | `Lolli _ as ft' ->
                   let args = TypeUtils.arg_types ft' in
-                    List.map (fun arg ->
-                                Var.fresh_binder_of_type arg) args
-              | `Lolli _ as ft' ->
-                  let args = TypeUtils.arg_types ft' in
-                    List.map (fun arg ->
-                                Var.fresh_binder_of_type arg) args
+                    List.map (fun arg -> Var.fresh_binder_of_type arg) args
               | _ -> assert false
             end in
 
@@ -770,6 +781,7 @@ struct
           | _ -> false in
 
       let eff = lookup_effects env in
+
       let instantiate_mb name = instantiate name [`Row eff] in
       let cofv = I.comp_of_value in
       let ec = eval env in
@@ -779,6 +791,7 @@ struct
         match e with
           | Constant c -> cofv (I.constant c)
           | Var x -> cofv (I.var (lookup_name_and_type x env))
+          | FreezeVar x -> cofv (I.var (lookup_name_and_type x env))
           | RangeLit (low, high) ->
               I.apply (instantiate_mb "intRange", [ev low; ev high])
           | ListLit ([], Some t) ->
@@ -788,11 +801,11 @@ struct
                                  [ev e; ev (WithPos.make ~pos (ListLit (es, Some t)))]))
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
-             let kt = Binder.to_type_exn bndr in
+             let kt = Binder.to_type bndr in
              I.escape ((kt, k, Scope.Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
-          | Section (Section.Minus) -> cofv (lookup_var "-")
-          | Section (Section.FloatMinus) -> cofv (lookup_var "-.")
-          | Section (Section.Name name) -> cofv (lookup_var name)
+          | Section Section.Minus | FreezeSection Section.Minus -> cofv (lookup_var "-")
+          | Section Section.FloatMinus | FreezeSection Section.FloatMinus -> cofv (lookup_var "-.")
+          | Section (Section.Name name) | FreezeSection (Section.Name name) -> cofv (lookup_var name)
           | Conditional (p, e1, e2) ->
               I.condition (ev p, ec e1, ec e2)
           | InfixAppl ((tyargs, BinaryOp.Name ((">" | ">=" | "==" | "<" | "<=" | "<>") as op)), e1, e2) ->
@@ -830,20 +843,20 @@ struct
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
           | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
                when Lib.is_pure_primitive f ->
-              cofv (I.apply_pure (instantiate f tyargs, evs es))
+              cofv (I.apply_pure (instantiate f (List.map (snd ->- val_of) tyargs), evs es))
           | FnAppl (e, es) when is_pure_primitive e ->
               cofv (I.apply_pure (ev e, evs es))
           | FnAppl (e, es) ->
               I.apply (ev e, evs es)
           | TAbstr (tyvars, e) ->
               let v = ev e in
-                cofv (I.tabstr (Types.unbox_quantifiers tyvars, v))
+                cofv (I.tabstr (tyvars, v))
           | TAppl (e, tyargs) ->
               let v = ev e in
               let vt = I.sem_type v in
                 begin
                   try
-                    cofv (I.tappl (v, tyargs))
+                    cofv (I.tappl (v, List.map (snd ->- val_of) tyargs))
                   with
                       Instantiate.ArityMismatch (expected, provided) ->
                         raise (Errors.TypeApplicationArityMismatch { pos;
@@ -883,15 +896,20 @@ struct
              let vs = evs ps in
              I.do_operation (name, vs, t)
           | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+             (* it happens that the ambient effects are the right ones
+                for all of the patterns here (they match those of the
+                initial computations for parameterised handlers and
+                the bodies of the cases) *)
+             let eff = lookup_effects env in
              let henv, params =
-               let empty_env = (NEnv.empty, TEnv.empty, Types.make_empty_open_row (lin_any, res_any)) in
+               let empty_env = (NEnv.empty, TEnv.empty, eff) in
                 match (sh_descr.shd_params) with
                 | None -> empty_env, []
                 | Some { shp_bindings = bindings; shp_types = types } ->
                    let env, bindings =
                      List.fold_right2
                        (fun (p, body) t (env, bindings) ->
-                         let p, penv = CompilePatterns.desugar_pattern p in
+                         let p, penv = CompilePatterns.desugar_pattern eff p in
                          let bindings = ((fun env -> eval env body), p, t) :: bindings in
                          ((env ++ penv), bindings))
                        bindings types (empty_env, [])
@@ -901,14 +919,14 @@ struct
              let eff_cases =
                List.map
                  (fun (p, body) ->
-                   let p, penv = CompilePatterns.desugar_pattern p in
+                   let p, penv = CompilePatterns.desugar_pattern eff p in
                    (p, fun env -> eval ((env ++ henv) ++ penv) body))
                  sh_effect_cases
              in
              let val_cases =
                 List.map
                   (fun (p, body) ->
-                    let p, penv = CompilePatterns.desugar_pattern p in
+                    let p, penv = CompilePatterns.desugar_pattern eff p in
                     (p, fun env -> eval ((env ++ henv) ++ penv) body))
                   sh_value_cases
              in
@@ -917,7 +935,7 @@ struct
               let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern p in
+                     let p, penv = CompilePatterns.desugar_pattern (lookup_effects env) p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -942,8 +960,13 @@ struct
                 I.lens_drop_handle (lens, drop, key, default, t)
           | LensSelectLit (lens, pred, Some t) ->
               let lens = ev lens in
-              let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
-                I.lens_select_handle (lens, pred, t)
+              let trow = Lens.Type.sort t |> Lens.Sort.record_type in
+              if Lens_sugar_conv.is_static trow pred then
+                let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
+                I.lens_select_handle (lens, `Static pred, t)
+              else
+                let pred = ev pred in
+                I.lens_select_handle (lens, `Dynamic pred, t)
           | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
               let lens1 = ev lens1 in
               let lens2 = ev lens2 in
@@ -951,6 +974,9 @@ struct
               let left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left |> Lens.Phrase.of_sugar in
               let right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right |> Lens.Phrase.of_sugar in
                 I.lens_join_handle (lens1, lens2, on, left, right, t)
+          | LensCheckLit (lens, Some t) ->
+              let lens = ev lens in
+                I.lens_check (lens, t)
           | LensGetLit (lens, Some t) ->
               let lens = ev lens in
                 I.lens_get (lens, t)
@@ -996,7 +1022,7 @@ struct
 	      let returning = ev returning in
 	      I.db_insert_returning env (source, rows, returning)
           | DBUpdate (p, source, where, fields) ->
-              let p, penv = CompilePatterns.desugar_pattern p in
+              let p, penv = CompilePatterns.desugar_pattern (lookup_effects env) p in
               let env' = env ++ penv in
               let source = ev source in
               let where =
@@ -1006,7 +1032,7 @@ struct
               let body = eval env' (WithPos.make ~pos (RecordLit (fields, None))) in
                 I.db_update env (p, source, where, body)
           | DBDelete (p, source, where) ->
-              let p, penv = CompilePatterns.desugar_pattern p in
+              let p, penv = CompilePatterns.desugar_pattern (lookup_effects env) p in
               let env' = env ++ penv in
               let source = ev source in
               let where =
@@ -1019,10 +1045,11 @@ struct
           | Select (l, e) ->
              I.select (l, ev e)
           | Offer (e, cases, Some t) ->
-              let cases =
+             let eff = lookup_effects env in
+             let cases =
                 List.map
                   (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern p in
+                     let p, penv = CompilePatterns.desugar_pattern eff p in
                        (p, fun env ->  eval (env ++ penv) body))
                   cases
               in
@@ -1032,6 +1059,7 @@ struct
           | Spawn _
           | Receive _
           | Section (Section.Project _)
+          | FreezeSection (Section.Project _)
           | FunLit _
           | Iteration _
           | InfixAppl ((_, BinaryOp.RegexMatch _), _, _)
@@ -1051,6 +1079,7 @@ struct
           | LensDropLit _
           | LensSelectLit _
           | LensJoinLit _
+          | LensCheckLit _
           | LensGetLit _
           | LensPutLit _
           | LensFunDepsLit _
@@ -1060,6 +1089,7 @@ struct
           | DoOperation _
           | TryInOtherwise _
           | Raise
+          | Instantiate _ | Generalise _
           | CP _ ->
               Debug.print ("oops: " ^ show_phrasenode e);
               assert false
@@ -1073,30 +1103,32 @@ struct
             begin
               let open Sugartypes in
               match b with
-                | Val ({node=Pattern.Variable bndr; _}, (_, body), _, _)
+                | Val ({node=Pattern.Variable bndr; _}, (tyvars, body), _, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
-                    let xt = Binder.to_type_exn bndr in
+                    let xt = Binder.to_type bndr in
                     let x_info = (xt, x, scope) in
                       I.letvar
                         (x_info,
                          ec body,
+                         tyvars,
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Val (p, (_, body), _, _) ->
-                    let p, penv = CompilePatterns.desugar_pattern p in
+                    let p, penv = CompilePatterns.desugar_pattern (lookup_effects env) p in
                     let env' = env ++ penv in
                     let s = ev body in
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
-                | Fun (bndr, _, (tyvars, ([ps], body)), location, _)
+                | Fun { fun_binder = bndr; fun_definition = (tyvars, ([ps], body)); fun_location = location; _ }
                      when Binder.has_type bndr ->
                     let f  = Binder.to_name bndr in
-                    let ft = Binder.to_type_exn bndr in
+                    let ft = Binder.to_type bndr in
+                    let eff = TypeUtils.effect_row ft in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
-                           let p, penv = CompilePatterns.desugar_pattern p in
+                           let p, penv = CompilePatterns.desugar_pattern eff p in
                              p::ps, body_env ++ penv)
                         ps
                         ([], env) in
@@ -1108,26 +1140,30 @@ struct
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
                 | Funs defs ->
+                   (* FIXME: inner and outers should be the same now,
+                      so we shouldn't need to do all of this *)
                     let fs, inner_fts, outer_fts =
                       List.fold_right
-                        (fun (bndr, _, ((_tyvars, inner_opt), _), _, _, _) (fs, inner_fts, outer_fts) ->
+                        (fun { rec_binder = bndr; rec_definition = ((_tyvars, inner_opt), _); _ }
+                             (fs, inner_fts, outer_fts) ->
                           let f = Binder.to_name bndr in
-                          let outer  = Binder.to_type_exn bndr in
+                          let outer  = Binder.to_type bndr in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
                         defs
                         ([], [], []) in
                     let defs =
                       List.map
-                        (fun (bndr, _, ((tyvars, _), (pss, body)), location, _, _) ->
+                        (fun { rec_binder = bndr; rec_definition = ((tyvars, _), (pss, body)); rec_location = location; _ } ->
                           assert (List.length pss = 1);
                           let f  = Binder.to_name bndr in
-                          let ft = Binder.to_type_exn bndr in
+                          let ft = Binder.to_type bndr in
+                          let eff = TypeUtils.effect_row ft in
                           let ps = List.hd pss in
-                           let ps, body_env =
+                          let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
-                                  let p, penv = CompilePatterns.desugar_pattern p in
+                                  let p, penv = CompilePatterns.desugar_pattern eff p in
                                     p::ps, body_env ++ penv)
                                ps
                                ([], env) in
@@ -1139,7 +1175,7 @@ struct
                 | Foreign (bndr, raw_name, language, _file, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
-                    let xt = Binder.to_type_exn bndr in
+                    let xt = Binder.to_type bndr in
                     I.alien ((xt, x, scope), raw_name, language, fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Typenames _
                 | Infix ->

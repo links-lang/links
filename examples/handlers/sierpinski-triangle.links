@@ -20,8 +20,8 @@ typename Priority = [|High|Low|];
 typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield |e}~> ();
 typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ());
 typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Int);
-typename Fiber(e::Eff) = (prio:Priority, f: (SchedulerState(Fiber({ |e}))) ~e~> ());
-typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
+typename Fiber = (prio:Priority, f: (SchedulerState(Fiber)) ~> ());
+typename FiberQueue = PrioQueue(Fiber);
 typename Update = [|TextUpdate: String | LocationUpdate: Float|];
 typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: [STriangle({ |e})]);
 

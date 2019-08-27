@@ -3,6 +3,8 @@ module T = Types
 module PT = CommonTypes.Primitive
 module LPT = Lens.Phrase.Type
 
+type 'a die = string -> 'a
+
 let primitive t = `Primitive t
 
 let to_links_map m =
@@ -25,7 +27,7 @@ let rec type_of_lens_phrase_type t =
       T.make_record_type (to_links_map ts)
 
 let rec lens_phrase_type_of_type t =
-  match t with
+  match TypeUtils.concrete_type t with
   | `Primitive p -> (
     match p with
     | PT.Bool -> LPT.Bool
@@ -48,7 +50,7 @@ let rec lens_phrase_type_of_type t =
                | _ ->
                    failwith
                      "lens_phrase_type_of_type only works on records with \
-                      present types." )
+                      present types.")
       in
       LPT.Record fields
   | _ ->
@@ -56,8 +58,10 @@ let rec lens_phrase_type_of_type t =
       @@ Format.asprintf "Unsupported type %a in lens_phrase_type_of_type."
            Types.pp_typ t
 
-let lens_type_of_type t =
-  match t with `Lens l -> l | _ -> failwith "Expected a lens type."
+let lens_type_of_type ~die t =
+  match TypeUtils.concrete_type t with
+  | `Lens l -> l
+  | _ -> die "Expected a lens type."
 
 let sort_cols_of_table t ~table =
   let record_fields rt =
@@ -71,14 +75,14 @@ let sort_cols_of_table t ~table =
       String.Map.to_list
         (fun name typ ->
           let alias = name in
-          Lens.Column.make ~table ~name ~alias ~typ ~present:true )
+          Lens.Column.make ~table ~name ~alias ~typ ~present:true)
         fields
     in
     cols
   in
   (* get the underlying record type of either a table, a record or an application *)
   let extract_record_type t =
-    match t with
+    match TypeUtils.concrete_type t with
     | `Record _ as r -> r
     | `Application (_, [`Type (`Record _ as r)]) -> r
     | `Table (r, _, _) -> r

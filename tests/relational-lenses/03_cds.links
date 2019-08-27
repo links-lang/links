@@ -1,0 +1,56 @@
+var db = database "links";
+
+var albumsTable =
+    table "albums"
+    with (album: String, quantity: Int)
+    tablekeys [["album"]]
+    from db;
+
+var tracksTable =
+    table "tracks"
+    with (track: String, date: Int, rating: Int, album: String)
+    tablekeys [["track", "album"]]
+    from db;
+
+var albumsLens = lens albumsTable with { album -> quantity };
+var tracksLens = lens tracksTable with { track -> date rating };
+
+var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
+
+fun test() {
+  var old = lensget joinedLens;
+
+  var newTracks = [
+    (album = "Wish", date = 1992, quantity = 5, rating = 4, track = "Trust"),
+    (track="It's the end of the world as we know it",
+       rating=5, album="Eponymous", date=1988, quantity=42),
+    (album = "Show", date = 1989, quantity = 3, rating = 3, track = "Lullaby"),
+    (album = "Galore", date = 1989, quantity = 1, rating = 3, track = "Lullaby"),
+    (album = "Paris", date = 1989, quantity = 4, rating = 5, track = "Lovesong"),
+    (album = "Galore", date = 1989, quantity = 1, rating = 5, track = "Lovesong")
+  ];
+
+  lensput joinedLens with newTracks;
+
+  assertEq(lensget joinedLens, newTracks);
+  assertEq(lensget albumsLens, [
+    (album = "Eponymous", quantity = 42),
+    (album = "Disintegration", quantity = 7),
+    (album = "Wish", quantity = 5),
+    (album = "Paris", quantity = 4),
+    (album = "Galore", quantity = 1),
+    (album = "Show", quantity = 3)
+  ]);
+  assertEq(lensget tracksLens, [
+    (album = "Wish", date = 1992, rating = 4, track = "Trust"),
+    (album = "Eponymous", date = 1988, rating = 5, track = "It's the end of the world as we know it"),
+    (album = "Show", date = 1989, rating = 3, track = "Lullaby"),
+    (album = "Galore", date = 1989, rating = 3, track = "Lullaby"),
+    (album = "Paris", date = 1989, rating = 5, track = "Lovesong"),
+    (album = "Galore", date = 1989, rating = 5, track = "Lovesong")
+  ]);
+
+  lensput joinedLens with old;
+}
+
+test()

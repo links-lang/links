@@ -48,7 +48,7 @@ SOURCES=links
 DB_SOURCES=links-postgresql,links-sqlite3
 # Note: this relies on lazy expansion of `SOURCES'.
 COMMON_FLAGS=--only-packages $(SOURCES) --build-dir=$(BUILD_DIR)
-DEV_FLAGS=$(COMMON_FLAGS) --profile=development
+DEV_FLAGS=$(COMMON_FLAGS) --profile=dev
 REL_FLAGS=$(COMMON_FLAGS) --profile=release
 
 # Build rules.
@@ -130,12 +130,16 @@ rule-check: tools/rule-check
 	@echo "Applying rule check"
 	@tools/rule-check
 
-# The below machinery is used to prepare a release using topkg.
+# The below machinery is used to prepare a release using dune-release.
 REPO=../opam-repository
 PACKAGES=$(REPO)/packages
 
+TAG_NAME = $(shell git describe --tags)
+
+link-url-%:
+	if [ "$*" != "links" ]; then ln -f -s $(BUILD_DIR)/links-$(TAG_NAME).url $(BUILD_DIR)/$*-$(TAG_NAME).url; fi
+
 pkg-%:
-	topkg opam pkg -n $*
 	mkdir -p $(PACKAGES)/$*
 	cp -r $(BUILD_DIR)/$*.* $(PACKAGES)/$*/
 	rm -f $(PACKAGES)/$*/$*.opam
@@ -143,4 +147,6 @@ pkg-%:
 
 PKGS=$(basename $(wildcard *.opam))
 opam-pkg:
+	$(MAKE) $(PKGS:%=link-url-%)
+	dune-release opam pkg --dist-file=$(BUILD_DIR)/links-$(TAG_NAME).tbz
 	$(MAKE) $(PKGS:%=pkg-%)

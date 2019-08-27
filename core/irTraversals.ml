@@ -311,18 +311,27 @@ struct
               Table (db, table_name, keys, tt), `Table tt, o
         | Lens (table, rtype) ->
             let table, _, o = o#value table in
-              Lens (table, rtype), `Lens (Lens.Type.Lens rtype), o
-        | LensDrop (lens, drop, key, default, rtype) ->
+              Lens (table, rtype), `Lens rtype, o
+        | LensDrop {lens; drop; key; default; typ} ->
             let lens, _, o = o#value lens in
             let default, _, o = o#value default in
-              LensDrop (lens, drop, key, default, rtype), `Lens (Lens.Type.Lens rtype), o
-        | LensSelect (lens, pred, sort) ->
+              LensDrop {lens; drop; key; default; typ}, `Lens typ, o
+        | LensSelect {lens; predicate; typ} ->
             let lens, _, o = o#value lens in
-              LensSelect (lens, pred, sort), `Lens (Lens.Type.Lens sort), o
-        | LensJoin (lens1, lens2, on, left, right, sort) ->
-            let lens1, _, o = o#value lens1 in
-            let lens2, _, o = o#value lens2 in
-              LensJoin (lens1, lens2, on, left, right, sort), `Lens (Lens.Type.Lens sort), o
+            let predicate, o =
+              (match predicate with
+               | Dynamic predicate ->
+                 let predicate, _, o = o#value predicate in
+                 Dynamic predicate, o
+              | Static predicate -> Static predicate, o) in
+              LensSelect {lens; predicate; typ}, `Lens typ, o
+        | LensJoin {left; right; on; del_left; del_right; typ} ->
+            let left, _, o = o#value left in
+            let right, _, o = o#value right in
+              LensJoin {left; right; on; del_left; del_right; typ}, `Lens typ, o
+        | LensCheck (lens, t) ->
+            let lens, _, o = o#value lens in
+              LensCheck (lens, t), `Lens t, o
         | LensGet (lens, rtype) ->
             let lens, _, o = o#value lens in
               LensGet (lens, rtype), Types.make_list_type rtype, o
@@ -933,8 +942,7 @@ module ElimTypeAliases =
         inherit Types.Transform.visitor as super
 
         method! typ = function
-          | `Alias ((_, _), typ) ->
-             o#typ typ
+          | `Alias (_, typ) -> o#typ typ
           | other -> super#typ other
       end
 

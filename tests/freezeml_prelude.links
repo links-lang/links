@@ -1,0 +1,65 @@
+sig head : forall a, e::Row. ([a]) -e-> a
+fun head(x :: _) { x }
+
+sig tail : forall a, e::Row. ([a]) -e-> [a]
+fun tail(_ :: xs) { xs }
+
+sig single : forall a, e::Row. (a) -e-> [a]
+fun single(x) { [x] }
+
+typename ST(s, a) = () {}-> a;
+
+# We leave off the quantifiers as we need access to the variables
+# within the body.
+sig runST : (forall s. ST(s, a)) -e-> a
+fun runST(f) {
+  var f = f : () -e-> a <- () {}-> a;
+  f()
+}
+
+sig argST : forall s. ST(s, Int)
+fun argST() { 0 }
+
+sig pair : forall a, b, e::Row. (a) -e-> (b) -e-> (a, b)
+fun pair(x)(y) { (x, y) }
+
+sig pair' : forall b, a, e::Row. (a) -e-> (b) -e-> (a, b)
+fun pair'(x)(y) { (x, y) }
+
+sig id : forall a, e::Row. (a) -e-> a
+fun id(x) { x }
+
+sig ids : [forall a, e::Row. (a) -e-> a]
+var ids = [ ~id ];
+
+sig inc : (Int) -> Int
+fun inc(x) { x + 1 }
+
+sig choose : forall a, e::Row, f::Row. (a) -e-> (a) -f-> (a)
+fun choose(x)(_) { x }
+
+sig poly : forall e::Row. (forall a, e::Row. (a) -e-> a) -e-> (Int, Bool)
+fun poly (id) { (id(0), id(true)) }
+
+sig auto : forall e::Row. (forall a,e::Row. (a) -e-> a) -e-> (forall a,e::Row. (a) -e-> a)
+fun auto(id) { ~id }
+
+sig auto' : forall b, e::Row, f::Row. (forall a,e::Row. (a) -e-> a) -e-> (b) -f-> b
+fun auto'(id) { id }
+
+sig map : forall a,b,e::Row,f::Row. ((a) ~e~> b) -f-> ([a]) ~e~> [b]
+fun map(f)(xs) {
+  switch(xs) {
+    case [] -> []
+    case x :: xs -> f(x) :: map(f)(xs)
+  }
+}
+
+sig revapp : forall a,b,e::Row,f::Row. (a) -e-> ((a) -f-> b) -f-> b
+fun revapp(x)(f) { f(x) }
+
+sig app : forall a,b,e::Row,f::Row. ((a) -e-> b) -f-> (a) -e-> b
+fun app(f)(x) { f(x) }
+
+sig first : forall a::Any,b::Any,c::Any,e::Row. ((a) -e-> b, (a, c)) -e-> (b, c)
+fun first(f, (x, y)) { (f(x), y) }

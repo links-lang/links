@@ -1,0 +1,201 @@
+fun main() {
+  var _ = spawnClient {
+    var examples = "examples/";
+    var frame = getNodeById("exampleFrame");
+    var nav = getNodeById("navigation");
+    var loadingOverlay = getNodeById("loadingOverlay");
+
+    fun isMobile() {
+      var navWidth = stringToInt(domGetPropertyFromRef(nav, "offsetWidth"));
+      var bodyWidth = stringToInt(domGetPropertyFromRef(getNodeById("container"), "offsetWidth"));
+      not(navWidth < (bodyWidth / 2))
+    }
+
+    fun replaceExample(url) {
+      var exampleUrl = "/" ^^ examples ^^ url;
+      domSetStyleAttrFromRef(loadingOverlay, "display", "flex");
+      if (isMobile()) {
+        redirect(exampleUrl)
+      } else {
+        domSetPropertyFromRef(frame, "data", exampleUrl)
+      }
+    }
+
+    fun interceptNavigation() {
+      var anchor = domGetAnchor();
+      if (anchor <> "") {
+        var newLoc = implode(tl(explode(anchor)));
+        replaceExample(newLoc)
+      } else {
+        ()
+      }
+    }
+
+    jsSetOnEvent(frame, "load", fun(_) {
+      domSetStyleAttrFromRef(loadingOverlay, "display", "none")
+    }, false);
+    jsSetWindowEvent("hashchange", fun(_) {
+      interceptNavigation()
+    }, false)
+  };
+
+  page
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Links examples</title>
+        <link rel="stylesheet" type="text/css" href="/examples/css/doc.css" />
+      </head>
+      <body>
+        <div id="container">
+          <header>
+            <h1>Links examples</h1>
+          </header>
+          <nav id="navigation">
+            <section>
+              <h3>The following examples are described in <a href="http://links-lang.org/papers/links-fmco06.pdf">Links: Web Programming Without Tiers</a></h3>
+              <ul>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("dictionary/dictSuggestUpdate.links")}" href="/examples/dictionary/dictSuggestUpdate.links" >Dictionary suggestion with database update</a>
+                  <a href="/examplessrc/dictionary/dictSuggestUpdate.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("draggable.links")}" href="/examples/draggable.links" >Draggable lists</a>
+                  <a href="/examplessrc/draggable.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("progress.links")}" href="/examples/progress.links" >Progress bar</a>
+                  <a href="/examplessrc/progress.links" target="_blank">source</a>
+                </li>
+              </ul>
+            </section>
+            <section>
+              <h3>The following examples appeared in earlier drafts of the same paper</h3>
+              <ul>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("factorial.links")}" href="/examples/factorial.links" >Factorial</a>
+                  <a href="/examplessrc/factorial.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("dictionary/dictSuggest.links")}" href="/examples/dictionary/dictSuggest.links" >Dictionary suggestion (with styles)</a>
+                  <a href="/examplessrc/dictionary/dictSuggest.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("dictionary/dictSuggestLite.links")}" href="/examples/dictionary/dictSuggestLite.links" >Dictionary suggestion (no styles)</a>
+                  <a href="/examplessrc/dictionary/dictSuggestLite.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("draggableDb.links")}" href="/examples/draggableDb.links" >Draggable lists (database version)</a>
+                  <a href="/examplessrc/draggableDb.links" target="_blank">source</a>
+                </li>
+              </ul>
+            </section>
+            <section>
+              <h3>Formlets examples</h3>
+              <ul>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("buttons.links")}" href="/examples/buttons.links" >Buttons</a>
+                  <a href="/examplessrc/buttons.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("formsTest.links")}" href="/examples/formsTest.links" >A simple test formlet</a>
+                  <a href="/examplessrc/formsTest.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("validate.links")}" href="/examples/validate.links" >Validation</a>
+                  <a href="/examplessrc/validate.links" target="_blank">source</a>
+                </li>
+              </ul>
+            </section>
+            <section>
+              <h3>Other examples</h3>
+              <ul>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("loginFlow.links")}" href="/examples/loginFlow.links" >Login flow using <code>sendSuspend</code></a>
+                  <a href="/examplessrc/loginFlow.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("paginate.links")}" href="/examples/paginate.links" >Pagination</a>
+                  <a href="/examplessrc/paginate.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("mandelbrot.links")}" href="/examples/mandelbrot.links" >Mandelbrot sets</a>
+                  <a href="/examplessrc/mandelbrot.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("mandelcolor.links")}" href="/examples/mandelcolor.links" >Multi-coloured mandelbrot set</a>
+                  <a href="/examplessrc/mandelcolor.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("todo.links")}" href="/examples/todo.links" >Todo list (client)</a>
+                  <a href="/examplessrc/todo.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("todoDb.links")}" href="/examples/todoDb.links" >Todo list (server)</a>
+                  <a href="/examplessrc/todoDb.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("crop.links")}" href="/examples/crop.links" >Draggable Cropping Frame</a>
+                  <a href="/examplessrc/crop.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("wine.links")}" href="/examples/wine.links" >Winestore</a>
+                  <a href="/examplessrc/wine.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("filter.links")}" href="/examples/filter.links" >Dynamic wine filtering</a>
+                  <a href="/examplessrc/filter.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("citations.links")}" href="/examples/citations.links" >Citeseer data</a>
+                  <a href="/examplessrc/citations.links" target="_blank">source</a>
+                </li>
+              </ul>
+            </section>
+            <section>
+              <h3>Game examples</h3>
+              <ul>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("games/twentyfortyeight.links")}" href="/examples/games/twentyfortyeight.links" >2048 in Links</a>
+                  <a href="/examplessrc/games/twentyfortyeight.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("games/breakout.links")}" href="/examples/games/breakout.links" >Breakout in Links</a>
+                  <a href="/examplessrc/games/breakout.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("games/tetris.links")}" href="/examples/games/tetris.links" >Tetris in Links</a>
+                  <a href="/examplessrc/games/tetris.links" target="_blank">source</a>
+                </li>
+                <li>
+                  <a class="frame-link" l:onclick="{domSetAnchor("games/pacman.links")}" href="/examples/games/pacman.links" >Pillman</a>
+                  <a href="/examplessrc/games/pacman.links" target="_blank">source</a>
+                </li>
+              </ul>
+            </section>
+          </nav>
+          <main>
+            <div class="loading-overlay" id="loadingOverlay">
+              <div>
+                <div class="sk-folding-cube sk-blue">
+                  <div class="sk-cube1 sk-cube"></div>
+                  <div class="sk-cube2 sk-cube"></div>
+                  <div class="sk-cube3 sk-cube"></div>
+                </div>
+                <div class="sk-folding-cube sk-red">
+                  <div class="sk-cube1 sk-cube"></div>
+                  <div class="sk-cube2 sk-cube"></div>
+                  <div class="sk-cube3 sk-cube"></div>
+                </div>
+              </div>
+              <span>Loading example</span>
+            </div>
+            <object type="text/html" id="exampleFrame"></object>
+          </main>
+        </div>
+      </body>
+    </html>
+}
+
+main()

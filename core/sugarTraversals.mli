@@ -60,12 +60,20 @@ class map :
     method datatypenode    : Datatype.t -> Datatype.t
     method datatype'       : datatype' -> datatype'
     method type_arg        : Datatype.type_arg -> Datatype.type_arg
+    method type_arg'       : type_arg' -> type_arg'
     method constant        : Constant.t -> Constant.t
     method binop           : BinaryOp.t -> BinaryOp.t
     method tybinop         : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
+    method function_definition : function_definition -> function_definition
+    method recursive_function  : recursive_function -> recursive_function
     method program         : program -> program
+    method typ             : Types.datatype -> Types.datatype
+    method type_row        : Types.row -> Types.row
+    method tyarg           : tyarg -> tyarg
+    method tyvar           : tyvar -> tyvar
+    method type_field_spec : Types.field_spec -> Types.field_spec
     method unknown         : 'a. 'a -> 'a
   end
 
@@ -130,11 +138,14 @@ class fold :
     method datatypenode    : Datatype.t -> 'self
     method datatype'       : datatype' -> 'self
     method type_arg        : Datatype.type_arg -> 'self
+    method type_arg'       : type_arg' -> 'self
     method constant        : Constant.t -> 'self
     method binop           : BinaryOp.t -> 'self
     method tybinop         : tyarg list * BinaryOp.t -> 'self
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
+    method function_definition : function_definition -> 'self
+    method recursive_function  : recursive_function -> 'self
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
   end
@@ -163,6 +174,7 @@ object ('self)
   method datatype        : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatypenode    : Datatype.t -> 'self * Datatype.t
   method datatype'       : datatype' -> 'self * datatype'
+  method type_arg'       : type_arg' -> 'self * type_arg'
   method directive       : directive -> 'self * directive
   method fieldconstraint : fieldconstraint -> 'self * fieldconstraint
   method fieldspec       : Datatype.fieldspec -> 'self * Datatype.fieldspec
@@ -201,5 +213,7 @@ object ('self)
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
   method tyunary_op      : tyarg list * UnaryOp.t -> 'self * (tyarg list * UnaryOp.t)
   method unary_op        : UnaryOp.t -> 'self * UnaryOp.t
+  method function_definition : function_definition -> 'self * function_definition
+  method recursive_function  : recursive_function -> 'self * recursive_function
   method unknown         : 'a . 'a -> 'self * 'a
 end

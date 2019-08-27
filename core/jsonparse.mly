@@ -5,11 +5,6 @@ open Utility
 open ProcessTypes
 open WebsocketMessages
 
-module Links_core = (* See Note [Dune "wrapped" workaround] in parser.mly *)
-struct
-  module Value = Value
-end
-
 let internal_error message =
   raise (Errors.internal_error ~filename:"jsonparse.mly" ~message)
 
@@ -17,8 +12,6 @@ let internal_error message =
    (where they are escaped in json.ml)
 *)
 let websocket_req assoc_list =
-  (* Pervasives is opened in order to get "pipe" behaviour of |> *)
-  let open Pervasives in
   let opcode = Value.unbox_string @@ List.assoc "opcode" assoc_list in
   (* If we add more opcodes in, we might have to push these inwards *)
   let get_field field = List.assoc field assoc_list in

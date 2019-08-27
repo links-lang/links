@@ -288,3 +288,17 @@ Mismatched tags
 <a></b>
 stderr : @.*Closing.*tag.*does.*not.*match.*
 exit : 1
+
+Attributes with hyphens are OK
+<button class="navbar-toggler" type="button" data-toggle="collapse"></button>
+stdout : <button type="button" data-toggle="collapse" class="navbar-toggler"/> : Xml
+
+Tags with hyphens are not OK
+<button-monstrosity type="button"></button-monstrosity>
+stderr : @..*
+exit : 1
+
+Variables with hyphens are not OK
+var hello-world = "hello"
+stderr : @..*
+exit : 1

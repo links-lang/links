@@ -1,21 +1,21 @@
-opam-version: "1.2"
+opam-version: "2.0"
 maintainer: "Jan Stolarek <jan.stolarek@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
+synopsis: "MySQL database driver for the Links Programming Language"
+description: "MySQL database driver for the Links Programming Language"
 homepage: "https://github.com/links-lang/links"
-dev-repo: "https://github.com/links-lang/links.git"
+dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-2"
 
-available: [
-  ocaml-version >= "4.06.0"
-]
-
 build: [
-  [ "jbuilder" "build" "-p" name "-j" jobs ]
+  [ "dune" "subst" ] {pinned}
+  [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
 depends: [
-  "jbuilder" {build}
+  "ocaml" {>= "4.06.0"}
+  "dune" {>= "1.10.0"}
   "mysql"
   "links"
 ]

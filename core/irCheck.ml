@@ -127,6 +127,8 @@ type type_eq_context = {
   tyenv: Types.kind Env.t (* track kinds of bound typevars *)
 }
 
+
+(* Detects recursion at any level *)
 module RecursionDetector =
 struct
   class visitor =
@@ -157,6 +159,26 @@ end
 
 
 
+(* For both rows and types, detect recursion at top-level or immeiately under
+   a `Body or `Alias *)
+let rec is_toplevel_rec_type = function
+  | `MetaTypeVar mtv ->
+     begin match Unionfind.find mtv with
+       | `Recursive _ -> true
+       | `Body b -> is_toplevel_rec_type b
+       | _ -> false
+     end
+  | `Alias (_, t') -> is_toplevel_rec_type t'
+  | _ -> false
+
+let rec is_toplevel_rec_row (_, row_var, _) =
+  match Unionfind.find row_var with
+       | `Recursive _ -> true
+       | `Body r -> is_toplevel_rec_row r
+       | _ -> false
+
+
+
 let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
   fun context (t1, t2) ->
     let lookupVar lvar map =
@@ -180,19 +202,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
              | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurrence
            end
         | false, _ -> false in
-    let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
-      | `ForAll (qs, t) ->
-        begin match collapse_toplevel_forall t with
-          | `ForAll (qs', t') ->
-              `ForAll (Types.box_quantifiers (Types.unbox_quantifiers qs @ Types.unbox_quantifiers qs'), t')
-          | t ->
-              begin
-                match Types.unbox_quantifiers qs with
-                  | [] -> t
-                  | _ -> `ForAll (qs, t)
-              end
-        end
-      | t -> t in
+
     let remove_absent_fields_if_closed row =
       (* assumes that row is flattened already and ignores recursive rows *)
       let (field_env, row_var, dual) = row in
@@ -209,29 +219,18 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
     let rec eqt ((context, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
 
-      let rec unalias = function
-        | `Alias (_, x) -> unalias x
-        | x             -> x in
 
-      let t1 = unalias (collapse_toplevel_forall t1) in
-      let t2 = unalias (collapse_toplevel_forall t2) in
-
-      (* If t2 is recursive at the top, we give up. t1 is checked for recursion later on *)
-      if match t2 with
-        | `MetaTypeVar mtv ->
-          begin match Unionfind.find mtv with
-            | `Recursive _ -> true
-            | _ -> false
-          end
-        | `RecursiveApplication _ -> true
-        | _ -> false
-      then
+      (* If t1 or t2 is recursive at the top, we give up. *)
+      if is_toplevel_rec_type t1 || is_toplevel_rec_type t2 then
         begin
         Debug.print "IR typechecker encountered recursive type";
         true
         end
       else
       begin
+      (* Collapses nested Foralls, unpacks `Alias, `Body *)
+      let t1 = TypeUtils.concrete_type t1 in
+      let t2 = TypeUtils.concrete_type t2 in
       match t1 with
       | `Not_typed ->
           begin match t2 with
@@ -245,13 +244,13 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
           end
       | `MetaTypeVar lpoint ->
           begin match Unionfind.find lpoint with
-            | `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
+            | `Recursive _ -> assert false (* removed by now *)
             | lpoint_cont ->
               begin match t2 with
                 `MetaTypeVar rpoint ->
                 begin match lpoint_cont, Unionfind.find rpoint with
                 | `Var lv, `Var rv -> handle_variable pk_type lv rv context
-                | `Body _, `Body _ -> raise (internal_error "Should have removed `Body by now")
+                | `Body _, `Body _ -> assert false (* removed by now *)
                 | _ -> false
                 end
                 | _                   -> false
@@ -303,15 +302,15 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | `ForAll (qs', t') ->
             let (context', quantifiers_match) =
               List.fold_left2 (fun (context, prev_eq) lqvar rqvar ->
-                  let lid, _ , _ = lqvar in
-                  let rid, _, _ = rqvar in
+                  let lid, _ = lqvar in
+                  let rid, _ = rqvar in
                   let l_kind = Types.kind_of_quantifier lqvar in
                   let r_kind = Types.kind_of_quantifier rqvar in
                   let ctx' = { typevar_subst = IntMap.add lid rid context.typevar_subst;
                                tyenv = Env.bind context.tyenv (rid, r_kind)
                              } in
                   (ctx', prev_eq && l_kind = r_kind)
-                ) (context,true) (Types.unbox_quantifiers qs) (Types.unbox_quantifiers qs') in
+                ) (context,true) qs qs' in
             if quantifiers_match then
               eqt (context', t, t')
             else false
@@ -323,12 +322,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | _          -> false
          end
 
-      | `Alias (_, t1_inner) ->
-        begin match t2 with
-          | `Alias (_, t2_inner) -> eqt (context, t1_inner, t2_inner)
-          | t2 -> eqt (context, t1_inner, t2)
-        end
-
+      | `Alias (_, _) -> assert false
       | `Table (lt1, lt2, lt3) ->
          begin match t2 with
          | `Table (rt1, rt2, rt3) ->
@@ -353,13 +347,17 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `End, `End -> true
       | _, _ -> false
     and eq_rows (context, r1, r2) =
-      let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
-      let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
-      let r1 = eq_field_envs (context, lfield_env, rfield_env) in
-      let r2 = eq_row_vars (context, lrow_var, rrow_var) in
-        r1 && r2 && ldual=rdual
+      if is_toplevel_rec_row r1 || is_toplevel_rec_row r2 then
+        (Debug.print "IR typechecker encountered recursive type";
+        true)
+      else
+        let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
+        let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
+        let r1 = eq_field_envs (context, lfield_env, rfield_env) in
+        let r2 = eq_row_vars (context, lrow_var, rrow_var) in
+          r1 && r2 && ldual=rdual
     and eq_presence (context, l, r) =
-      match l, r with
+      match Types.concrete_field_spec l, Types.concrete_field_spec r with
       | `Absent, `Absent -> true
       | `Present lt, `Present rt -> eqt (context, lt, rt)
       | `Var lpoint, `Var rpoint ->
@@ -398,8 +396,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
 
 let check_eq_types (ctx : type_eq_context) et at occurrence =
   if not (eq_types occurrence ctx (et, at)) then
+    let exp_str = Types.string_of_datatype et in
+    let act_str = Types.string_of_datatype ~refresh_tyvar_names:false at in
     raise_ir_type_error
-      ("Type mismatch:\n Expected:\n  " ^ Types.string_of_datatype et ^ "\n Actual:\n  " ^ Types.string_of_datatype at)
+      ("Type mismatch:\n Expected:\n  " ^ exp_str ^ "\n Actual:\n  " ^ act_str)
       occurrence
 
 let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
@@ -422,7 +422,11 @@ let ensure_effect_present_in_row ctx allowed_effects required_effect_name requir
 let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurrence =
   ensure
     (eq_types occurrence ctx (`Record allowed_effects, `Record imposed_effects_row))
-    ("Incompatible effects; Allowed:\n" ^ (Types.string_of_row allowed_effects) ^ "\nactual effects:\n" ^  (Types.string_of_row imposed_effects_row))
+    (let allowed_str = Types.string_of_row allowed_effects in
+     let actual_str  = Types.string_of_row ~refresh_tyvar_names:false
+                                           imposed_effects_row in
+     "Incompatible effects:\n Allowed:\n  " ^ allowed_str ^
+     "\n Actual:\n  " ^ actual_str)
     occurrence
 
 
@@ -619,8 +623,13 @@ struct
               end
             else
               begin
-              ensure (eq_types (SVal orig) (o#extract_type_equality_context ()) (vt, t) || is_sub_type (vt, t)) (Printf.sprintf "coercion error: %s is not a subtype of %s"
-                                         (string_of_datatype vt) (string_of_datatype t)) (SVal orig);
+              ensure (eq_types (SVal orig) (o#extract_type_equality_context ())
+                               (vt, t) || is_sub_type (vt, t))
+                (let vt_str = string_of_datatype vt in
+                 let t_str  = string_of_datatype ~refresh_tyvar_names:false t in
+                 Printf.sprintf "coercion error: %s is not a subtype of %s"
+                                vt_str t_str)
+                (SVal orig);
               Coerce (v, t), t, o
               end
       in
@@ -759,7 +768,7 @@ struct
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in
               let row = TypeUtils.extract_row list_content_type in
-              ensure (Types.is_base_row row) "Only base types allowed in query result record" (SSpec special));
+              ensure (Types.Base.row_satisfies row) "Only base types allowed in query result record" (SSpec special));
 
               Query (range, e, t), t, o
 
@@ -1016,6 +1025,7 @@ struct
         | LensDrop _
         | LensSelect _
         | LensGet _
+        | LensCheck _
         | LensJoin _
         | LensPut _ -> (* just do type reconstruction *) super#special special
       in
@@ -1088,7 +1098,7 @@ struct
         let o, _ = o#set_allowed_effects previously_allowed_effects in
 
 
-        let is_linear = not (Types.is_unl_type exp_unquant_t) in
+        let is_linear = not (Types.Unl.type_satisfies exp_unquant_t) in
         let actual_ft_unquant =
           Types.make_function_type
             ~linear:is_linear

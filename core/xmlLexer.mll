@@ -16,7 +16,7 @@
       Stack.push lexer lexers
 
     method pop_lexer =
-      let _ = Stack.pop lexers in ()
+      ignore (Stack.pop lexers) [@warning "-5"]
 
     method next_lexer =
       Stack.top lexers
@@ -33,10 +33,12 @@
 }
 
 let def_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*)
+let def_attr_id = (['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '_' '-' '0'-'9']*)
 let def_kind = ['A'-'Z'] def_id*
 let octal_code = (['0'-'3']['0'-'7']['0'-'7'])
 let hex_code   = (['0'-'9''a'-'f''A'-'F']['0'-'9''a'-'f''A'-'F'])
-let def_qname = ('#' | def_id (':' def_id)*)
+let def_qname = ('#' | def_attr_id (':' def_attr_id)*)
+let def_tagname = ('#' | def_id (':' def_attr_id)*)
 let def_integer = (['1'-'9'] ['0'-'9']* | '0')
 let def_float = (def_integer '.' ['0'-'9']+ ('e' ('-')? def_integer)?)
 let def_blank = [' ' '\t' '\n' '\r']
@@ -61,7 +63,7 @@ rule lex ctxt nl = parse
   | "<?"                                { (* come back here after ignoring <?...> *)
                                           ctxt#push_lexer (ignore ctxt nl); IGNORE }
   | def_blank                           { IGNORE }
-  | '<' (def_qname as id)               { (* come back here after scanning the start tag *)
+  | '<' (def_tagname as id)             { (* come back here after scanning the start tag *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML id }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse
@@ -78,7 +80,7 @@ and starttag ctxt nl = parse
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and xmllex ctxt nl = parse
   | [^ '<' ]* as cdata                  { bump_lines lexbuf (count_newlines cdata); CDATA cdata }
-  | "</" (def_qname as var) '>'         { (* fall back *)
+  | "</" (def_tagname as var) '>'       { (* fall back *)
                                           ctxt#pop_lexer; ENDTAG var }
   | "<![CDATA["                         { (* switch to cdata, then back here *)
                                           ctxt#push_lexer (cdata ctxt nl); LCDATA }
@@ -86,7 +88,7 @@ and xmllex ctxt nl = parse
                                           ctxt#push_lexer (ignore ctxt nl); IGNORE }
   | "<?"                                { (* come back here after ignoring <?...> *)
                                           ctxt#push_lexer (ignore ctxt nl); IGNORE }
-  | '<' (def_qname as var)              { (* switch to `starttag' to handle the nested xml, then back here *)
+  | '<' (def_tagname as var)            { (* switch to `starttag' to handle the nested xml, then back here *)
                                           ctxt#push_lexer (starttag ctxt nl); LXML var }
   | eof                                 { END }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }

@@ -9,6 +9,8 @@ let raise_invalid_element pos =
   raise (desugaring_error ~pos ~stage:DesugarPages
     ~message:"Invalid element in page literal")
 
+let closed_wild = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)
+
 let rec is_raw phrase =
   match phrase.node with
   | TextNode _ -> true
@@ -30,10 +32,14 @@ let rec is_raw phrase =
      - the environment is unchanged after calling o#phrase formlet
 *)
 let rec desugar_page (o, page_type) =
-  let desugar_nodes : phrase list -> phrase =
-    fun children ->
-     fn_appl "joinManyP" [`Row (o#lookup_effects)]
-       [list ~ty:page_type (List.map (desugar_page (o, page_type)) children)]
+  let desugar_nodes : phrase list -> phrase = function
+    | [] -> var "unitP"
+    | page :: ps ->
+       let page = desugar_page (o, page_type) page in
+       List.fold_left (fun prev page ->
+           let page = desugar_page (o, page_type) page in
+           fn_appl "joinP" [`Row (o#lookup_effects)] [prev; page])
+       page ps
   in
     fun ({node=e; pos} as phrase) ->
       match e with
@@ -45,7 +51,7 @@ let rec desugar_page (o, page_type) =
             let formlet_type = Types.concrete_type formlet_type in
             let a = Types.fresh_type_variable (lin_any, res_any) in
             let b = Types.fresh_type_variable (lin_any, res_any) in
-              Unify.datatypes (`Alias (("Formlet", [`Type a]), b), formlet_type);
+              Unify.datatypes (`Alias (("Formlet", [(PrimaryKind.Type, default_subkind)], [`Type a]), b), formlet_type);
               fn_appl "formP" [`Type a; `Row (o#lookup_effects)]
                       [formlet; handler; attributes]
         | PagePlacement (page) -> page
@@ -54,7 +60,7 @@ let rec desugar_page (o, page_type) =
         | Xml (name, attrs, dynattrs, children) ->
             let x = Utility.gensym ~prefix:"xml" () in
             fn_appl "plugP" [`Row (o#lookup_effects)]
-               [fun_lit ~args:[Types.make_tuple_type [Types.xml_type], o#lookup_effects]
+               [fun_lit ~args:[Types.make_tuple_type [Types.xml_type], closed_wild]
                         dl_unl [[variable_pat ~ty:Types.xml_type x]]
                         (xml name attrs dynattrs [block ([], var x)]);
                 desugar_nodes children]

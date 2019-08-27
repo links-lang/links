@@ -11,6 +11,7 @@ fun println(msg) {
 
 # Don't use a for comprehension to define concatMap, as
 # for comprehensions are desugared into concatMap!
+unsafe sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
 fun concatMap(f, l) {
   switch (l) {
     case [] -> []
@@ -18,6 +19,7 @@ fun concatMap(f, l) {
   }
 }
 
+unsafe sig map : ((a) -b-> c, [a]) -b-> [c]
 fun map(f, l) {
   switch (l) {
     case []     -> []
@@ -51,7 +53,7 @@ fun sortBy (f, l) {
 
 # need to be careful to make sure this doesn't get
 # optimised away - it does if we eta reduce it
-sig sortByBase : ((a) ~b~> (| _::Base), [a]) ~b~> [a]
+unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
 fun sortByBase(f, l) {sortBy(f, l)}
 
 fun all(p, l) {
@@ -173,6 +175,7 @@ fun flip(f) {
   fun(x,y) { f(y,x) }
 }
 
+sig curry : ((a, b) -d-> c) -> (a) -> (b) -d-> c
 fun curry(f) {
   fun (x)(y) { f(x,y) }
 }
@@ -257,30 +260,31 @@ fun join(glue,list) {
 # elemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # notElemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
+sig span : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+fun span(p, xs) {
+  fun go(acc, xs, p) {
+    switch(xs) {
+      case [] -> (acc, [])
+      case x :: xs ->
+        if (p(x)) {
+          go(x :: acc, xs, p)
+        } else {
+          (reverse(acc), x :: xs)
+        }
+    }
+  }
+  go([], xs, p)
+}
 # splitAt :: Int -> ([a]) -> ([a],[a])
 
 sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun takeWhile(pred, list) {
-  switch (list) {
-    case [] -> []
-    case (h::t) ->
-      switch (pred(h)) {
-        case true -> h :: takeWhile(pred, t)
-        case false -> []
-      }
-  }
+  first(span(pred, list))
 }
 
 sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
 fun dropWhile(pred, list) {
-  switch (list) {
-    case [] -> []
-    case (h::t) ->
-      switch (pred(h)) {
-        case true -> dropWhile(pred, t)
-        case false -> list
-      }
-  }
+  second(span(pred, list))
 }
 
 # until :: ((a) -> Bool) -> ((a) -> a) -> (a) -> a
@@ -323,9 +327,25 @@ fun last(list) {
   }
 }
 
+fun intercalate(bone, rushes) {
+  switch (rushes) {
+    case [] -> []
+    case [x] -> x
+    case x::xs -> x ++ bone ++ intercalate(bone, xs)
+  }
+}
+
+sig unlines : ([String]) ~> String
+fun unlines(ws) {
+  implode(intercalate(explode("\n"), map(explode, ws)))
+}
+
+sig unwords : ([String]) ~> String
+fun unwords(ws) {
+  implode(intercalate(explode(" "), map(explode, ws)))
+}
+
 # lines :: String -> [String]
-# unlines :: [String] -> String
-# unwords :: [String] -> String
 # words :: String -> [String]
 
 ### Defined internally to Links:
@@ -588,16 +608,15 @@ typename Attributes = [(String, String)];
 # attributes for a multipart form
 var multipart = [("enctype", "multipart/form-data")];
 
-infixr 0 $;
 sig $ : ((a) -b-> c, a) -b-> c
 op f $ x { f(x) }
 
 # state monad
-sig runState : (State (d,a), d) -%-> (a,d)
+sig runState : (State (d,a), d) {}~> (a,d)
 fun runState(s, i) { s(i) }
 
 infixl 1 >>=;
-sig >>= : (State (d,a), (a) -%-> State(d,b)) -%-> State (d,b)
+sig >>= : (State (d,a), (a) {}~> State(d,b)) -> State (d,b)
 op x >>= f {
    (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
@@ -605,7 +624,7 @@ op x >>= f {
 sig return : (a) -> State (b,a)
 fun return(a) { fun (s) { (a,s) } }
 
-sig fmap : ((a) -%-> b, State (c,a)) -%-> State (c,b)
+sig fmap : ((a) {}~> b, State (c,a)) -> State (c,b)
 fun fmap(f, x) { x >>= return `compose` f }
 
 sig pure : (a) -> Formlet(a)
@@ -616,7 +635,7 @@ fun pure(v) {
 sig pureE : (a) -> Maybe (a)
 fun pureE (x) { Just (x) }
 
-sig applyE : (Maybe ((a) -%-> b), Maybe (a)) -%-> Maybe (b)
+sig applyE : (Maybe ((a) -e-> b), Maybe (a)) -e-> Maybe (b)
 fun applyE (f, x) {
   switch ((f, x)) {
     case (Just (f), Just (x)) -> Just (f(x))
@@ -625,7 +644,7 @@ fun applyE (f, x) {
 }
 
 infixr 1 @@@;
-sig @@@ : (Formlet (a), Formlet ((a) -%-> b)) -%-> Formlet (b)
+sig @@@ : (Formlet (a), Formlet ((a) {}~> b)) -> Formlet (b)
 op m @@@ k {
   m >>= fun((x,c)){
   k >>= fun((y,f)){
@@ -641,7 +660,7 @@ op m @@@ k {
 #   Returns a formlet that post-processes the formlet x by running its
 #   output through f.   (This is fmap for the Formlet functor.)
 #   (This could be written more efficiently.)
-sig @@=> : (Formlet(a), (a) -%-> b) -%-> Formlet(b)
+sig @@=> : (Formlet(a), (a) {}~> b) -> Formlet(b)
 op m @@=> f {
   m @@@ pure(f)
 }
@@ -652,7 +671,7 @@ fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
 sig text : (String) ~> Formlet (())
 fun text(s) { xml(stringToXml(s)) }
 
-sig plug : (XmlContext, Formlet (a)) -%-> Formlet (a)
+sig plug : (XmlContext, Formlet (a)) -> Formlet (a)
 op f `plug` m {
   m >>= fun((x,collector)){ return((f(x),
     fun (env) { var (xml,c) = collector (env);
@@ -692,7 +711,7 @@ typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
 typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
 typename Handler (a) = (a) {}~> Page;
 
-sig pickleCont : (() { |_}-> Page) ~> String
+sig pickleCont : (() { |e}-> Page) ~> String
 fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
 
 sig unitP : Page
@@ -726,7 +745,7 @@ fun plugP(context, (i, k, fs)) {
   (i, fun (xs) {context(k(xs))}, fs)
 }
 
-sig mkForm : ((Env) { |_}~> Page, Xml, Attributes) ~> Xml
+sig mkForm : ((Env) { |e}~> Page, Xml, Attributes) ~> Xml
 fun mkForm(cont, contents, attributes) {
   <form enctype="application/x-www-form-urlencoded"
         action="#" method="POST" {attributes}>
@@ -736,7 +755,6 @@ fun mkForm(cont, contents, attributes) {
     {contents}
   </form>
 }
-
 
 sig validate :
   (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) {}~> Page
@@ -754,7 +772,7 @@ fun validate(c, h, k, zs, i, attributes) (env) {
   }
 }
 
-sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) { |_}-> (MultiXmlContext, RecForms, Int) ~> Xml
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) { |e}-> (MultiXmlContext, RecForms, Int) ~> Xml
 fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
   mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
 }
@@ -938,7 +956,7 @@ var checkbox = fun(gen) {checkboxDefault(false)(gen)};
 # and passes this list of pairs to the 'layout' function, which should
 # return XML. The result is a formlet that will return the value from
 # 'items' that is associated with the radio button selected by the user.
-sig inputRadiogroup : ([a], a, ([(Xml, a)]) -%-> Xml) -%->
+sig inputRadiogroup : ([a], a, ([(Xml, a)]) {}~> Xml) ->
                      Formlet (a)
 fun inputRadiogroup(items, selected, layout) {
   nextName >>= fun (name) {
@@ -977,7 +995,7 @@ fun preludeOptionKeyed (key, (data,text), selected) {
   }
 }
 
-sig preludeOptionsKeyed : ([(String,(a,String))], a) { |_}~>
+sig preludeOptionsKeyed : ([(String,(a,String))], a) { |e}~>
                          (Xml, (String) -> [a])
 fun preludeOptionsKeyed(items, def) {
   switch (items) {
@@ -990,7 +1008,7 @@ fun preludeOptionsKeyed(items, def) {
 }
 
 sig preludeMultiOptionsKeyed
-    : ([(String, (a,String,Bool))]) { |_}~> (Xml, (String) -> [a])
+    : ([(String, (a,String,Bool))]) { |e}~> (Xml, (String) -> [a])
 fun preludeMultiOptionsKeyed(items) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))
@@ -1068,7 +1086,7 @@ typename Either (a,b) = [|Left:a | Right : b|];
 
 # given a formlet and a "predicate", return a new formlet that uses
 # the predicate for validation.
-sig satisfies : (Formlet (a), (a,Xml) -%-> Either(Xml,Xml)) ~> Formlet(a)
+sig satisfies : (Formlet (a), (a,Xml) {}~> Either(Xml,Xml)) -> Formlet(a)
 fun satisfies(f, validate) {
    f >>= fun((xml,collector)) {
    return((xml, fun (env) {
@@ -1091,7 +1109,7 @@ fun errorMsg (f, msg) (x,xml) {
 
 infixr 5 `errorMsg`;
 
-sig transform : (Formlet(a), (a) -%-> Bool, (a) -%-> String, (a) ~b~> c) ~b~> Formlet(c)
+sig transform : (Formlet(a), (a) {}~> Bool, (a) {}~> String, (a) {}~> b) -> Formlet(b)
 fun transform(f, predicate, error, g) {
   formlet
     <#>{f `satisfies` (predicate `errorMsg` error) -> v}</#>
@@ -1146,8 +1164,8 @@ fun sendSuspend(pagef) {
 }
 
 #### SESSION TYPING STUFF ####
-
-sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
+#sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row.((s) {SessionFail:[||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1156,7 +1174,8 @@ fun fork(f) {
   request(ap)
 }
 
-sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+#sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+sig linFork : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ ()) ~e~> ~s
 fun linFork(f) {
   var ap = new();
   var _ = spawnAngel {
@@ -1165,7 +1184,8 @@ fun linFork(f) {
   request(ap)
 }
 
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+#sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:[||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
   var x = accept(ap);
   var _ = spawn {f(x)};
@@ -1181,7 +1201,8 @@ fun reproduce(ap, f) {
 # spawnAngel which allows us to spawn a process that will continue to
 # run even if the main process terminates.)
 
-sig connect : forall s::Session,e::Row.((s) ~e~> (), (~s) ~e~> a) ~e~> a
+#sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
+sig connect : forall s::Session,e::Row,a.((s) {SessionFail:[||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
   var ap = new();
   var done = new();
@@ -1221,7 +1242,8 @@ fun makeEndBang() {
 
 # with split ends we synchronise on the termination of each spawned
 # child process
-sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+#sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+sig forkSync : forall s::Session,e::Row.((s) {SessionFail:[||]}~> EndBang) ~e~> ~s
 fun forkSync(f) {
   var ap = new();
   var _ = spawn {
@@ -1232,7 +1254,8 @@ fun forkSync(f) {
   request(ap)
 }
 
-sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
+#sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
+sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
   var ap = new();
   var _ = spawn {
@@ -1243,13 +1266,15 @@ fun linForkSync(f) {
   request(ap)
 }
 
-sig linkSync : forall s::Session.(s, ~s) ~> EndBang
+#sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
+sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:[||] | e}~> EndBang
 fun linkSync(s, c) {
   link(s, c);
   makeEndBang()
 }
 
-sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
+#sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
+sig runSync : ((!a.EndBang) {SessionFail:[||]}~> EndBang) ~e~> a
 fun runSync(f) {
   var c = forkSync(f);
   var (v, c) = receive(c);
@@ -1267,7 +1292,7 @@ fun lf(f) {
 }
 
 ### Handler stuff
-typename Comp(e::Eff, a) = () ~e~> a;
+typename Comp(a, e::Eff) = () ~e~> a;
 typename Zero = [||];
 
 # Composition operators
@@ -1284,17 +1309,10 @@ op f ->- g {
   g -<- f
 }
 
-# Explicit application
-infixr 1 @;
-sig @ : ((a) -e-> b, a) -e-> b
-op f @ m {
-  f(m)
-}
-
 # Effect row generalisation
-sig gen0 : (Comp({ }, a)) -> Comp({ |%}, a)
+sig gen0 : (Comp(a, { })) -> Comp(a, { |e})
 fun gen0(f) {
-  (f : (Comp({ |%}, a)) <- (Comp({ }, a)))
+  (f : (Comp(a, { |e})) <- (Comp(a, { })))
 }
 
 sig gen1 : ((a) {}~> b) -> ((a) { |%}~> b)
@@ -1329,6 +1347,23 @@ fun maximum(a,b) {
 }
 
 ####
+
+sig partition : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+fun partition(pred, xs) {
+  fun go(ayes, noes, xs) {
+    switch(xs) {
+      case [] -> (ayes, noes)
+      case x :: xs ->
+        if (pred(x)) {
+          go(x :: ayes, noes, xs)
+        } else {
+          go(ayes, x :: noes, xs)
+        }
+    }
+  }
+  go([], [], xs)
+}
+
 sig groupByFlat : ((a) -b-> c, [a]) -b-> [(c, [a])]
 fun groupByFlat(project, ts) {
   for(t <- ts)
@@ -1385,4 +1420,3 @@ fun serveThese(routes) {
   var _ = map(fun ((s,p)) {addRoute(s,fun (_) {p()})}, routes);
   servePages()
 }
-

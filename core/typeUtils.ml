@@ -30,10 +30,10 @@ let concrete_type t =
           begin
             match ct rec_names t with
               | `ForAll (qs', t') ->
-                  `ForAll (box_quantifiers (unbox_quantifiers qs @ unbox_quantifiers qs'), t')
+                  `ForAll (qs @ qs', t')
               | t ->
                   begin
-                    match unbox_quantifiers qs with
+                    match qs with
                       | [] -> t
                       | _ -> `ForAll (qs, t)
                   end
@@ -65,11 +65,11 @@ let split_row name row =
       match (StringMap.find name field_env) with
         | `Present t -> t
         | `Absent ->
-            error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
+            error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
         | `Var _ ->
-            error ("Attempt to split row "^string_of_row row ^" on var field" ^ name)
+            error ("Attempt to split row "^string_of_row row ^" on var field " ^ name)
     else
-      error ("Attempt to split row "^string_of_row row ^" on absent field" ^ name)
+      error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
   in
     t, (StringMap.remove name field_env, row_var, dual)
 
@@ -227,14 +227,14 @@ let abs_type _ = assert false
 let app_type _ _ = assert false
 
 let quantifiers t = match concrete_type t with
-  | `ForAll (qs, _) -> Types.unbox_quantifiers qs
+  | `ForAll (qs, _) -> qs
   | _ -> []
 
 
 (* Given a type, return its list of toplevel quantifiers and the remaining non-quantified type.
    This merges adjacent ForAlls *)
 let split_quantified_type qt = match concrete_type qt with
-  | `ForAll (qtref, t) -> (Types.unbox_quantifiers qtref, t)
+  | `ForAll (qs, t) -> (qs, t)
   | t -> ([], t)
 
 let record_without t names =

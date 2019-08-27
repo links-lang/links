@@ -97,7 +97,7 @@ module DatabaseDrivers = struct
 end
 
 (** The banner *)
-let version = "0.9 (Burghmuirhead)"
+let version = "0.9.1 (Burghmuirhead)"
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
@@ -115,7 +115,7 @@ module Js =
 struct
   let optimise = Settings.add_bool("optimise_javascript", true, `User)
   let elim_dead_defs = Settings.add_bool("elim_dead_defs", false, `User)
-  let lib_url = Settings.add_string("jsliburl", "lib/", `User)
+  let lib_url = Settings.add_string("jsliburl", "/lib/", `User)
   let lib_dir = Settings.add_string("jslibdir", "", `User)
 
   let hide_database_info = Settings.add_bool("js_hide_database_info", true, `System)
@@ -220,10 +220,17 @@ module TypeSugar = struct
   let show_pre_sugar_typing = Settings.add_bool("show_pre_sugar_typing", false, `User)
   let show_post_sugar_typing = Settings.add_bool("show_post_sugar_typing", false, `User)
   let dodgey_type_isomorphism = Settings.add_bool("dodgey_type_isomorphism", false, `User)
+  let generalise_toplevel = Settings.add_bool("generalise_toplevel", true, `User)
 
   (* Shall we re-run the frontend type-checker after each TransformSugar transformation? *)
   let check_frontend_transformations =
     Settings.add_bool("recheck_frontend_transformations", false, `User)
+
+  let check_frontend_transformations_dump =
+    Settings.add_bool("recheck_frontend_transformations_dump", false, `User)
+
+  let check_frontend_transformations_filter =
+    Settings.add_string("recheck_frontend_transformations_filter", "all", `User)
 end
 
 (* Types stuff *)
@@ -256,16 +263,12 @@ module Ir = struct
   let typecheck_ir = Settings.add_bool("typecheck_ir", false, `User)
   (* Abort compilation on IR typing error *)
   let fail_on_ir_type_error = Settings.add_bool("fail_on_ir_type_error", false, `User)
+  let simplify_types = Settings.add_bool("simplify_types", false, `User)
 end
 
 (* Generalise stuff *)
 module Generalise = struct
   let show_generalisation = Settings.add_bool("show_generalisation", false, `User)
-end
-
-(* Webif stuff *)
-module Webif = struct
-  let realpages = Settings.add_bool ("realpages", false, `System)
 end
 
 (* Json stuff *)
@@ -282,7 +285,6 @@ end
 module Instantiate = struct
   let show_recursion = Settings.add_bool("show_recursion", false, `User)
   let show_instantiation = Settings.add_bool("show_instantiation", false, `User)
-  let quantified_instantiation = Settings.add_bool("quantified_instantiation", false, `User)
 end
 
 (* Evaluation stuff *)
@@ -333,5 +335,10 @@ module Readline = struct
 end
 
 module Sessions = struct
-  let exceptions_enabled = Settings.add_bool ("session_exceptions", false, `User)
+  let exceptions_enabled = Settings.add_bool ("session_exceptions", false, `System)
+end
+
+module Database = struct
+  let coerce_null_integers = Settings.add_bool("coerce_null_integers", false, `User)
+  let null_integer = Settings.add_int ("null_integer", (-1), `User)
 end

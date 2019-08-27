@@ -4,7 +4,6 @@ open Ir
 open Lwt
 open Utility
 open Proc
-open Pervasives
 open Var
 
 let internal_error message =
@@ -55,7 +54,10 @@ struct
   let error msg : 'a = raise (Exceptions.EvaluationError msg)
 
   let eval_error fmt : 'r =
-    Printf.kprintf error fmt
+    Printf.ksprintf error fmt
+
+  let type_error ~action expected value =
+    eval_error "Attempting to %s %s (need %s instead)" action (Value.string_of_value value) expected
 
   let db_connect : Value.t -> Value.database * string = fun db ->
     let driver = Value.unbox_string (Value.project "driver" db)
@@ -182,14 +184,14 @@ struct
 (*                               (label, value env v)::fs) *)
 (*                            fields *)
 (*                            fs) *)
-            | _ -> eval_error "Error adding fields: non-record"
+            | v -> type_error ~action:"add field to" "record" v
         end
     | Project (label, r) ->
         begin
           match value env r with
             | `Record fields when List.mem_assoc label fields ->
                 List.assoc label fields
-            | _ -> eval_error "Error projecting label %s" label
+            | v -> type_error ~action:("projecting label " ^ label) "record" v
         end
     | Erase (labels, r) ->
         begin
@@ -197,7 +199,9 @@ struct
             | `Record fields when
                 StringSet.for_all (fun label -> List.mem_assoc label fields) labels ->
                 `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields)
-            | _ -> eval_error "Error erasing labels {%s}" (String.concat "," (StringSet.elements labels))
+            | v ->
+               type_error ~action:(Printf.sprintf "erase labels {%s}" (String.concat "," (StringSet.elements labels)))
+                 "record" v
         end
     | Inject (label, v, _) -> `Variant (label, value env v)
     | TAbs (_, v) -> value env v
@@ -281,10 +285,10 @@ struct
                      (ProcessTypes.ProcessID.to_string id) ^ " has no mailbox.");
                    Lwt.return ()) >>= fun _ ->
             apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("spawnAt",_), [func; loc] ->
+    | `PrimitiveFunction ("spawnAt",_), [loc; func] ->
         let req_data = Value.Env.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-            client_call req_data "_spawnWrapper" cont [func; loc]
+            client_call req_data "_spawnWrapper" cont [loc; func]
         else
           begin
             match loc with
@@ -299,10 +303,10 @@ struct
                 apply_cont cont env (`Pid (`ServerPid new_pid))
               | _ -> assert false
           end
-    | `PrimitiveFunction ("spawnAngelAt",_), [func; loc] ->
+    | `PrimitiveFunction ("spawnAngelAt",_), [loc; func] ->
         let req_data = Value.Env.request_data env in
         if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
-            client_call req_data "_spawnWrapper" cont [func; loc]
+            client_call req_data "_spawnWrapper" cont [loc; func]
         else
           begin
             match loc with
@@ -544,7 +548,8 @@ struct
        eval_error "Continuation applied to multiple (or zero) arguments"
     | `Resumption r, vs ->
        resume env cont r vs
-    | _                        -> eval_error "Application of non-function"
+    | `Alien, _ -> eval_error "Can't make alien call on the server.";
+    | v, _ -> type_error ~action:"apply" "function" v
   and resume env (cont : continuation) (r : resumption) vs =
     Proc.yield (fun () -> K.Eval.resume ~env cont r vs)
   and apply_cont (cont : continuation) env v =
@@ -562,14 +567,14 @@ struct
                 frame &> cont)
            in
            tail_computation env cont' tc
-          (* function definitions are stored in the global fun map *)
-          | Fun _ ->
-            computation env cont (bs, tailcomp)
-          | Rec _ ->
-            computation env cont (bs, tailcomp)
-          | Alien _ ->
-            computation env cont (bs, tailcomp)
-          | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
+        (* function definitions are stored in the global fun map *)
+        | Fun _ ->
+          computation env cont (bs, tailcomp)
+        | Rec _ ->
+          computation env cont (bs, tailcomp)
+        | Alien ((var, _) as b, _, _) ->
+          computation (Value.Env.bind var (`Alien, Var.scope_of_binder b) env) cont (bs, tailcomp)
+        | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     | Ir.Return v   -> apply_cont cont env (value env v)
     | Apply (f, ps) -> apply cont env (value env f, List.map (value env) ps)
@@ -585,7 +590,7 @@ struct
             | None, _, #Value.t -> eval_error "Pattern matching failed on %s" label
             | _ -> assert false (* v not a variant *)
           end
-        | _ -> eval_error "Case of non-variant"
+        | v -> type_error ~action:"take case of" "variant" v
       end
     | If (c,t,e)    ->
         computation env cont
@@ -601,10 +606,11 @@ struct
     function
     | Wrong _                    -> raise Exceptions.Wrong
     | Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
-    | Lens (table, sort) ->
+    | Lens (table, t) ->
       let open Lens in
       begin
-          let typ = Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
+          let sort = Type.sort t in
+          let typ = Type.record_type t |> Lens_type_conv.type_of_lens_phrase_type in
           match value env table, (TypeUtils.concrete_type typ) with
             | `Table (((db,_), table, _, _) as tinfo), `Record _row ->
               let database = Lens_database_conv.lens_db_of_db db in
@@ -616,30 +622,41 @@ struct
               apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))
       end
-    | LensDrop (lens, drop, key, def, _sort) ->
+    | LensDrop {lens; drop; key; default; _} ->
         let open Lens in
         let lens = value env lens |> get_lens in
-        let default = value env def |> Lens_value_conv.lens_phrase_value_of_value in
+        let default = value env default |> Lens_value_conv.lens_phrase_value_of_value in
         let sort =
           Lens.Sort.drop_lens_sort
             (Lens.Value.sort lens)
-            ~drop:(Alias.Set.singleton drop)
+            ~drop:[drop]
+            ~default:[default]
             ~key:(Alias.Set.singleton key)
+          |> Lens_errors.unpack_type_drop_lens_result ~die:(eval_error "%s")
         in
+
         apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
-    | LensSelect (lens, predicate, _sort) ->
+    | LensSelect { lens; predicate; _ } ->
         let open Lens in
         let lens = value env lens |> get_lens in
+        let predicate =
+          match predicate with
+          | Static predicate -> predicate
+          | Dynamic predicate ->
+            let p = Lens_ir_conv.lens_sugar_phrase_of_ir predicate env
+                    |> Lens_ir_conv.Of_ir_error.unpack_exn ~die:(eval_error "%s") in
+            p in
         let sort =
           Lens.Sort.select_lens_sort
             (Lens.Value.sort lens)
             ~predicate
+          |> Lens_errors.unpack_sort_select_result ~die:(eval_error "%s")
         in
         apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
-    | LensJoin (lens1, lens2, on, del_left, del_right, _sort) ->
+    | LensJoin { left; right; on; del_left; del_right; _ } ->
         let open Lens in
-        let lens1 = value env lens1 |> get_lens in
-        let lens2 = value env lens2 |> get_lens in
+        let lens1 = value env left |> get_lens in
+        let lens2 = value env right |> get_lens in
         let left, right=
           if Lens.Sort.join_lens_should_swap
                (Lens.Value.sort lens1)
@@ -647,12 +664,16 @@ struct
           then lens2, lens1
           else lens1, lens2
         in
+        let on = List.map (fun a -> a, a, a) on in
         let sort, on =
           Lens.Sort.join_lens_sort
             (Lens.Value.sort lens1)
             (Lens.Value.sort lens2) ~on
-        in
+          |> Lens_errors.unpack_sort_join_result ~die:(eval_error "%s") in
         apply_cont cont env (`Lens (Value.LensJoin {left; right; on; del_left; del_right; sort}))
+    | LensCheck (lens, _typ) ->
+        let lens = value env lens in
+        apply_cont cont env lens
     | LensGet (lens, _rtype) ->
         let lens = value env lens |> get_lens in
         (* let callfn = fun fnptr -> fnptr in *)
@@ -663,12 +684,12 @@ struct
         let lens = value env lens |> get_lens in
         let data = value env data |> Value.unbox_list in
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
-        let classic = Settings.get_value Basicsettings.RelationalLenses.classic_lenses in
-        if classic then
-            Lens.Helpers.Classic.lens_put lens data
-        else
-            Lens.Helpers.Incremental.lens_put lens data;
-        apply_cont cont env (Value.box_unit ())
+        let behaviour =
+          if Settings.get_value Basicsettings.RelationalLenses.classic_lenses
+          then Lens.Eval.Classic
+          else Lens.Eval.Incremental in
+        Lens.Eval.put ~behaviour lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
+        Value.box_unit () |> apply_cont cont env
     | Table (db, name, keys, (readtype, _, _)) ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
@@ -896,7 +917,7 @@ struct
         Proc.run (fun () -> computation env cont program)
       ) with
         | NotFound s -> raise (internal_error ("NotFound " ^ s ^
-					" while interpreting."))
+                    " while interpreting."))
 
   let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     fun env program ->

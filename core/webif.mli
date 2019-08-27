@@ -2,8 +2,6 @@
 
 open Webserver_types
 
-val realpages : bool Settings.setting
-
 module WebIf : functor (Webs : WEBSERVER) ->
 sig
 

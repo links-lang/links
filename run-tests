@@ -45,9 +45,6 @@ fi
 if [[ "$1" != "db-only" ]]; then
     for i in tests/*.tests; do
         cmnd="./test-harness $i"
-        if [[ -f "$i.config" ]]; then
-            cmnd="$cmnd $i.config"
-        fi
         echo cmnd=$cmnd
         eval $cmnd
         ret_code=$?
@@ -79,11 +76,24 @@ run_database_testsuite () {
     if [ "$port" != "" ]; then
         port_string="-p $port"
     fi
+    host_string=""
+    host=`grep database_args $1/config \
+	  | sed 's/database_args=\([^:]*\):[^:]*:[^:]*:.*/\1/'`
+    if [ "$host" != "" ]; then
+        host_string="-h $host"
+    fi
+    pass_string=""
+    pass=`grep database_args $1/config \
+	  | sed 's/database_args=[^:]*:[^:]*:[^:]*:\(.*\)/\1/'`
+    if [ "$pass" != "" ]; then
+        pass_string="PGPASSWORD=$pass "
+    fi
 
     # Prepare the database by running all the *.sql files
     for s in $1/*.sql; do
-        cmnd="psql $user_string $port_string -v ON_ERROR_STOP=1 -q -d links -f $s"
+        cmnd="psql $host_string $user_string $port_string -v ON_ERROR_STOP=1 -q -d links -f $s"
         echo cmnd=$cmnd
+        cmnd="$pass_string$cmnd"
         eval $cmnd
         ret_code=$?
         if [ $ret_code != 0 ]; then

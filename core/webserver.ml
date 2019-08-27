@@ -3,7 +3,6 @@ open Lwt
 open ProcessTypes
 open Utility
 open Webserver_types
-open Pervasives
 open Var
 
 let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
@@ -258,7 +257,7 @@ struct
         let prefixed_lib_url =
           let base_url = Settings.get_value Basicsettings.Appserver.internal_base_url in
           let js_url = Settings.get_value Basicsettings.Js.lib_url in
-          if base_url = "" then js_url else
+          if base_url = "" then "/" ^ (Utility.strip_slashes js_url) ^ "/" else
           "/" ^
           (base_url |> Utility.strip_slashes) ^ "/" ^
           (js_url |> Utility.strip_slashes) ^ "/" in

@@ -46,14 +46,15 @@ class map =
       | Name _x -> let _x = o#name _x in Name _x
 
     method tyunary_op : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t =
-      fun (_x, _x_i1) -> (_x, o#unary_op _x_i1)
+      fun (_x, _x_i1) -> (o#list (fun o -> o#tyarg) _x, o#unary_op _x_i1)
 
     method binder : Binder.with_pos -> Binder.with_pos =
       fun bndr ->
         let name = o#name (Binder.to_name bndr) in
-        let ty  = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
+        let ty  = Binder.to_type bndr |> o#typ in
         let pos = WithPos.pos bndr |> o#position in
-        WithPos.make ~pos (name,ty)
+        let bndr' = Binder.(set_type (set_name bndr name) ty) in
+        WithPos.map2 bndr' ~f_pos:(fun _ -> pos) ~f_node:(fun x -> x)
 
     method sentence : sentence -> sentence =
       function
@@ -148,8 +149,8 @@ class map =
     method datatype' : datatype' -> datatype' =
       fun (x, y) ->
         let x = o#datatype x in
-        let y = o#unknown y in
-          (x,y)
+        let y = o#option (fun o -> o#typ) y in
+        (x,y)
 
     method given_spawn_location : given_spawn_location -> given_spawn_location =
       function
@@ -160,13 +161,18 @@ class map =
       function
       | Constant _x -> let _x = o#constant _x in Constant _x
       | Var _x -> let _x = o#name _x in Var _x
+      | FreezeVar _x -> let _x = o#name _x in FreezeVar _x
       | QualifiedVar _xs ->
           let _xs = o#list (fun o -> o#name) _xs in QualifiedVar _xs
-      | FunLit (_x, _x1, _x_i1, _x_i2) -> let _x_i1 = o#funlit _x_i1 in
-                                           let _x_i2 = o#location _x_i2 in FunLit (_x, _x1, _x_i1, _x_i2)
+      | FunLit (_x, _x1, _x_i1, _x_i2) ->
+          let _x = o#option (fun o -> o#list (fun o (t, r) -> (o#typ t, o#type_row r))) _x in
+          let _x_i1 = o#funlit _x_i1 in
+          let _x_i2 = o#location _x_i2 in
+          FunLit (_x, _x1, _x_i1, _x_i2)
       | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let _given_spawn_location = o#given_spawn_location _given_spawn_location in
           let _block_phr = o#phrase _block_phr in
+          let _dt = o#option (fun o -> o#type_row) _dt in
           Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)
       | Query (_x, _x_i1, _x_i2) ->
           let _x =
@@ -177,7 +183,9 @@ class map =
               _x in
           let _x_i1 = o#phrase _x_i1 in Query (_x, _x_i1, _x_i2)
       | ListLit (_x, _x_i1) ->
-          let _x = o#list (fun o -> o#phrase) _x in ListLit (_x, _x_i1)
+          let _x = o#list (fun o -> o#phrase) _x in
+          let _x_i1 = o#option (fun o -> o#typ) _x_i1 in
+         ListLit (_x, _x_i1)
       | Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#list (fun o -> o#iterpatt) _x in
           let _x_i1 = o#phrase _x_i1 in
@@ -188,6 +196,7 @@ class map =
           let _x = o#binder _x in
           let _x_i1 = o#phrase _x_i1 in Escape ((_x, _x_i1))
       | Section _x -> let _x = o#section _x in Section _x
+      | FreezeSection _x -> let _x = o#section _x in FreezeSection _x
       | Conditional ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#phrase _x_i1 in
@@ -211,9 +220,13 @@ class map =
           let _x_i1 = o#list (fun o -> o#phrase) _x_i1
           in FnAppl ((_x, _x_i1))
       | TAbstr ((_x, _x_i1)) ->
-          let _x_i1 = o#phrase _x_i1 in TAbstr ((_x, _x_i1))
+          let _x = o#list (fun o -> o#tyvar) _x in
+          let _x_i1 = o#phrase _x_i1 in
+          TAbstr ((_x, _x_i1))
       | TAppl ((_x, _x_i1)) ->
-          let _x = o#phrase _x in TAppl ((_x, _x_i1))
+          let _x = o#phrase _x in
+          let _x_i1 = o#list (fun o -> o#type_arg') _x_i1 in
+          TAppl ((_x, _x_i1))
       | TupleLit _x ->
           let _x = o#list (fun o -> o#phrase) _x in TupleLit _x
       | RecordLit ((_x, _x_i1)) ->
@@ -244,13 +257,20 @@ class map =
           let _x = o#phrase _x in
           let _x_i1 = o#datatype' _x_i1 in
           let _x_i2 = o#datatype' _x_i2 in Upcast ((_x, _x_i1, _x_i2))
+      | Instantiate _x ->
+          let _x = o#phrase _x in
+          Instantiate _x
+      | Generalise _x ->
+          let _x = o#phrase _x in
+          Generalise _x
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#name _x in
-          let _x_i1 = o#option (fun o -> o#phrase) _x_i1
-          in ConstructorLit ((_x, _x_i1, _x_i2))
+          let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in
+          let _x_i2 = o#option (fun o -> o#typ) _x_i2 in
+          ConstructorLit ((_x, _x_i1, _x_i2))
       | DoOperation (name, ps, t) ->
           let ps  = o#list (fun o -> o#phrase) ps in
-          let t   = o#option (fun o -> o#unknown) t in
+          let t   = o#option (fun o -> o#typ) t in
           DoOperation (name, ps, t)
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let m = o#phrase sh_expr in
@@ -282,7 +302,7 @@ class map =
                  let _x = o#pattern _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i1 in
-          let _x_i2 = o#option (fun o -> o#unknown) _x_i2
+          let _x_i2 = o#option (fun o -> o#typ) _x_i2
           in Switch ((_x, _x_i1, _x_i2))
       | Receive ((_x, _x_i1)) ->
           let _x =
@@ -291,7 +311,7 @@ class map =
                  let _x = o#pattern _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x in
-          let _x_i1 = o#option (fun o -> o#unknown) _x_i1
+          let _x_i1 = o#option (fun o -> o#typ) _x_i1
           in Receive (_x, _x_i1)
       (* | Link ((_x, _x_i1)) -> *)
       (*     let _x = o#phrase _x in *)
@@ -323,9 +343,11 @@ class map =
           let _x = o#phrase _x in
           let y = o#datatype y in
           let z = o#option
-            (fun o r ->
-               let r = o#unknown r in
-                 r) z in
+            (fun o (a, b, c) ->
+              let a = o#typ a in
+              let b = o#typ b in
+              let c = o#typ c in
+              (a, b, c)) z in
           let _x_i2 =
             o#list
               (fun o (_x, _x_i1) ->
@@ -357,24 +379,28 @@ class map =
           LensDropLit((_x, _x_i1, _x_i2, _x_i3, _x_i4))
       | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
-          (* let _x_i1 = o#phrase _x_i1 in *)
+          let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
-            LensSelectLit ((_x, _x_i1, _x_i2))
+          LensSelectLit ((_x, _x_i1, _x_i2))
       | LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#phrase _x_i1 in
           let _x_i2 = o#phrase _x_i2 in
           (* _x_i3 and _x_i4 are both phrases which are left unchanged *)
           let _x_i5 = o#option (fun o -> o#unknown) _x_i5 in
-            LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5))
-      | LensGetLit ((_x, _x_i1)) ->
+          LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5))
+      | LensCheckLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
+          LensCheckLit ((_x, _x_i1))
+      | LensGetLit ((_x, _x_i1)) ->
+          let _x = o#phrase _x in
+          let _x_i1 = o#option (fun o -> o#typ) _x_i1 in
             LensGetLit ((_x, _x_i1))
       | LensPutLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#phrase _x_i1 in
-          let _x_i2 = o#option (fun o -> o#unknown) _x_i2 in
+          let _x_i2 = o#option (fun o -> o#typ) _x_i2 in
             LensPutLit ((_x, _x_i1, _x_i2))
       | DBDelete ((_x, _x_i1, _x_i2)) ->
           let _x = o#pattern _x in
@@ -427,6 +453,7 @@ class map =
           let _pat = o#pattern _pat in
           let _p2 = o#phrase _p2 in
           let _p3 = o#phrase _p3 in
+          let _ty = o#option (fun o -> o#typ) _ty in
           TryInOtherwise (_p1, _pat, _p2, _p3, _ty)
       | Raise -> Raise
 
@@ -436,10 +463,16 @@ class map =
         WithPos.map2 ~f_pos:o#position ~f_node:o#phrasenode p
 
     method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
+      let arg_pair (o : 'self_type) =
+        o#option (fun o (dt, args) ->
+            let dt = o#typ dt in
+            let args = o#list (fun o -> o#tyarg) args in
+            (o#typ dt, args))
+      in
       function
       | CPUnquote (bs, e)  -> CPUnquote (o#list (fun o -> o#binding) bs, o#phrase e)
-      | CPGrab (c, x, p)   -> CPGrab (c, x, o#cp_phrase p)
-      | CPGive (c, e, p)   -> CPGive (c, o#option (fun o -> o#phrase) e, o#cp_phrase p)
+      | CPGrab ((c, a), x, p)   -> CPGrab ((c, arg_pair o a), x, o#cp_phrase p)
+      | CPGive ((c, a), e, p)   -> CPGive ((c, arg_pair o a), o#option (fun o -> o#phrase) e, o#cp_phrase p)
       | CPGiveNothing c    -> CPGiveNothing (o#binder c)
       | CPSelect (c, l, p) -> CPSelect (c, l, o#cp_phrase p)
       | CPOffer (c, bs)    -> CPOffer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
@@ -513,16 +546,17 @@ class map =
         let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
 
     method handle_params : handler_parameterisation -> handler_parameterisation =
-      fun params ->
-      let bindings =
+      fun { shp_bindings; shp_types }->
+      let shp_bindings =
         o#list
           (fun o (pat, expr) ->
             let expr = o#phrase expr in
             let pat = o#pattern pat in
             (pat, expr))
-          params.shp_bindings
+          shp_bindings
       in
-      { params with shp_bindings = bindings }
+      let shp_types = o#list (fun o -> o#typ) shp_types in
+      { shp_bindings; shp_types }
 
     method fieldspec : Datatype.fieldspec -> Datatype.fieldspec =
       let open Datatype in function
@@ -600,6 +634,12 @@ class map =
       | Row _x -> let _x = o#row _x in Row _x
       | Presence _x -> let _x = o#fieldspec _x in Presence _x
 
+    method type_arg' : type_arg' -> type_arg' =
+      fun (x, y) ->
+        let x = o#type_arg x in
+        let y = o#option (fun o -> o#tyarg) y in
+        (x, y)
+
     method constant : Constant.t -> Constant.t =
       function
       | Constant.Float _x  -> let _x = o#float _x  in Constant.Float _x
@@ -620,34 +660,21 @@ class map =
       | Name _x -> let _x = o#name _x in Name _x
 
     method tybinop : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t =
-      fun (_x, _x_i1) -> (_x, o#binop _x_i1)
+      fun (_x, _x_i1) -> (o#list (fun o -> o#tyarg) _x, o#binop _x_i1)
 
     method bindingnode : bindingnode -> bindingnode =
       function
       | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x    = o#pattern _x in
+          let _x_i1 = o#list (fun o -> o#tyvar) _x_i1 in
           let _x_i2 = o#phrase _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
           in Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))
-      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
-          let _x = o#binder _x in
-          let _x_i2 = o#funlit _x_i2 in
-          let _x_i3 = o#location _x_i3 in
-          let _x_i4 = o#option (fun o -> o#datatype') _x_i4
-          in Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))
+      | Fun f -> Fun (o#function_definition f)
       | Funs _x ->
-          let _x =
-            o#list
-              (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
-                 let _x = o#binder _x in
-                 let _x_i2 = o#funlit _x_i2 in
-                 let _x_i3 = o#location _x_i3 in
-                 let _x_i4 = o#option (fun o -> o#datatype') _x_i4 in
-                 let _x_i5 = o#position _x_i5
-                 in (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5))
-              _x
-          in Funs _x
+          let _x = o#list (fun o -> o#recursive_function) _x in
+          Funs _x
       | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let _x = o#binder _x in
           let _x_i1 = o#name _x_i1 in
@@ -675,10 +702,10 @@ class map =
           Typenames ts
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
-      | Module (n, bs) ->
-          let n = o#name n in
-          let bs = o#list (fun o -> o#binding) bs in
-          Module (n, bs)
+      | Module { binder; members } ->
+          let binder = o#binder binder in
+          let members = o#list (fun o -> o#binding) members in
+          Module { binder; members }
       | AlienBlock (lang, lib, dts) ->
           let lang = o#name lang in
           let lib = o#name lib in
@@ -692,11 +719,66 @@ class map =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
 
+    method function_definition : function_definition -> function_definition
+      = fun { fun_binder;
+              fun_linearity;
+              fun_definition = (tyvar, lit);
+              fun_location;
+              fun_signature;
+              fun_frozen;
+              fun_unsafe_signature; } ->
+      let fun_binder = o#binder fun_binder in
+      let tyvar = o#list (fun o -> o#tyvar) tyvar in
+      let lit = o#funlit lit in
+      let fun_location = o#location fun_location in
+      let fun_signature = o#option (fun o -> o#datatype') fun_signature in
+      { fun_binder;
+        fun_linearity;
+        fun_definition = (tyvar, lit);
+        fun_location;
+        fun_signature;
+        fun_frozen;
+        fun_unsafe_signature; }
+
+    method recursive_function  : recursive_function -> recursive_function
+      = fun { rec_binder;
+              rec_linearity;
+              rec_definition = ((tyvar, ty), lit);
+              rec_location;
+              rec_signature;
+              rec_unsafe_signature;
+              rec_frozen;
+              rec_pos } ->
+      let rec_binder = o#binder rec_binder in
+      let tyvar = o#list (fun o -> o#tyvar) tyvar in
+      let ty = o#option (fun o (t, x)-> o#typ t, x) ty in
+      let lit = o#funlit lit in
+      let rec_location = o#location rec_location in
+      let rec_signature = o#option (fun o -> o#datatype') rec_signature in
+      let rec_pos = o#position rec_pos in
+      { rec_binder;
+        rec_linearity;
+        rec_definition = ((tyvar, ty), lit);
+        rec_location;
+        rec_signature;
+        rec_unsafe_signature;
+        rec_frozen;
+        rec_pos; }
+
     method program : program -> program =
       fun (bindings, phrase) ->
         let bindings = o#list (fun o -> o#binding) bindings in
         let phrase = o#option (fun o -> o#phrase) phrase in
           (bindings, phrase)
+
+    method typ : Types.datatype -> Types.datatype = o#unknown
+    method type_row : Types.row -> Types.row = o#unknown
+    method type_field_spec : Types.field_spec -> Types.field_spec = o#unknown
+    method tyarg : tyarg -> tyarg = function
+      | `Type t -> `Type (o#typ t)
+      | `Row r -> `Row (o#type_row r)
+      | `Presence p -> `Presence (o#type_field_spec p)
+    method tyvar : tyvar -> tyvar = o#unknown
 
     method unknown : 'a. 'a -> 'a = fun x -> x
   end
@@ -736,7 +818,6 @@ class fold =
     method binder : Binder.with_pos -> 'self_type =
       fun bndr ->
         let o = o#name (Binder.to_name bndr) in
-        let o = o#option (fun o -> o#unknown) (Binder.to_type bndr) in
         let o = o#position (WithPos.pos bndr) in o
 
     method sentence : sentence -> 'self_type =
@@ -835,6 +916,7 @@ class fold =
       function
       | Constant _x -> let o = o#constant _x in o
       | Var _x -> let o = o#name _x in o
+      | FreezeVar _x -> let o = o#name _x in o
       | QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
@@ -859,6 +941,7 @@ class fold =
       | Escape ((_x, _x_i1)) ->
           let o = o#binder _x in let o = o#phrase _x_i1 in o
       | Section _x -> let o = o#section _x in o
+      | FreezeSection _x -> let o = o#section _x in o
       | Conditional ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
@@ -877,10 +960,12 @@ class fold =
           let o = o#phrase _x in
           let o = o#list (fun o -> o#phrase) _x_i1 in o
       | TAbstr ((_x, _x_i1)) ->
-          let o = o#list (fun o -> o#tyvar) (Types.unbox_quantifiers _x) in
+          let o = o#list (fun o -> o#tyvar) (_x) in
           let o = o#phrase _x_i1 in o
       | TAppl ((_x, _x_i1)) ->
-          let o = o#phrase _x in o
+          let o = o#phrase _x in
+          let o = o#list (fun o -> o#type_arg') _x_i1 in
+          o
       | TupleLit _x -> let o = o#list (fun o -> o#phrase) _x in o
       | RecordLit ((_x, _x_i1)) ->
           let o =
@@ -901,6 +986,8 @@ class fold =
           in o
       | TypeAnnotation ((_x, _x_i1)) ->
           let o = o#phrase _x in let o = o#datatype' _x_i1 in o
+      | Instantiate _x -> o#phrase _x
+      | Generalise _x -> o#phrase _x
       | Upcast ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
           let o = o#datatype' _x_i1 in let o = o#datatype' _x_i2 in o
@@ -1013,7 +1100,7 @@ class fold =
             o
       | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let o = o#phrase _x in
-          (* let o = o#phrase _x_i1 in *)
+          let o = o#phrase _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2 in
             o
       | LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5)) ->
@@ -1021,6 +1108,10 @@ class fold =
           let o = o#phrase _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#option (fun o -> o#unknown) _x_i5 in
+            o
+      | LensCheckLit ((_x, _x_i1)) ->
+          let o = o#phrase _x in
+          let o = o#option (fun o -> o#unknown) _x_i1 in
             o
       | LensGetLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
@@ -1237,6 +1328,12 @@ class fold =
       | Row _x -> let o = o#row _x in o
       | Presence _x -> let o = o#fieldspec _x in o
 
+    method type_arg' : type_arg' -> 'self_type =
+      fun (x, y) ->
+        let o = o#type_arg x in
+        let o = o#unknown y in
+        o
+
     method constant : Constant.t -> 'self_type =
       function
       | Constant.Float  _x -> let o = o#float  _x in o
@@ -1266,24 +1363,10 @@ class fold =
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
-      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
-          let o = o#binder _x in
-          let o = o#list (fun o -> o#tyvar) _x_i1 in
-          let o = o#funlit _x_i2 in
-          let o = o#location _x_i3 in
-          let o = o#option (fun o -> o#datatype') _x_i4 in o
+      | Fun f -> o#function_definition f
       | Funs _x ->
-          let o =
-            o#list
-              (fun o (_x, _x1, ((_x_i1, _), _x_i2), _x_i3, _x_i4, _x_i5) ->
-                 let o = o#binder _x in
-                 let o = o#list (fun o -> o#tyvar) _x_i1 in
-                 let o = o#funlit _x_i2 in
-                 let o = o#location _x_i3 in
-                 let o = o#option (fun o -> o#datatype') _x_i4 in
-                 let o = o#position _x_i5 in o)
-              _x
-          in o
+          let o = o#list (fun o -> o#recursive_function) _x in
+          o
       | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let o = o#binder _x in
           let o = o#name _x_i1 in
@@ -1303,16 +1386,15 @@ class fold =
               o#list
                 (fun o (_x, _x_i1) ->
                    let o = o (* #quantifier _x*) in
-                   let o = o#unknown _x_i1
+                   let o = o#option (fun o -> o#tyvar) _x_i1
                    in o) _x_i1
             in let o = o#datatype' _x_i2 in o) ts in
           o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
-      | Module (n, bs) ->
-          let o = o#name n in
-          let o = o#list (fun o -> o#binding) bs in
-          o
+      | Module { binder; members } ->
+          let o = o#binder binder in
+          o#list (fun o -> o#binding) members
       | AlienBlock (lang, lib, dts) ->
           let o = o#name lang in
           let o = o#name lib in
@@ -1326,6 +1408,38 @@ class fold =
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
+
+    method function_definition : function_definition -> 'self
+      = fun { fun_binder;
+              fun_linearity = _;
+              fun_definition = (tyvar, lit);
+              fun_location;
+              fun_signature;
+              fun_frozen = _;
+              fun_unsafe_signature = _ } ->
+          let o = o#binder fun_binder in
+          let o = o#list (fun o -> o#tyvar) tyvar in
+          let o = o#funlit lit in
+          let o = o#location fun_location in
+          let o = o#option (fun o -> o#datatype') fun_signature in
+          o
+
+    method recursive_function  : recursive_function -> 'self
+      = fun { rec_binder;
+              rec_linearity = _;
+              rec_definition = ((tyvar, _), lit);
+              rec_location;
+              rec_signature;
+              rec_unsafe_signature = _;
+              rec_frozen = _;
+              rec_pos } ->
+      let o = o#binder rec_binder in
+      let o = o#list (fun o -> o#tyvar) tyvar in
+      let o = o#funlit lit in
+      let o = o#location rec_location in
+      let o = o#option (fun o -> o#datatype') rec_signature in
+      let o = o#position rec_pos
+      in o
 
     method program : program -> 'self_type =
       fun (bindings, phrase) ->
@@ -1491,6 +1605,7 @@ class fold_map =
       function
       | Constant _x -> let (o, _x) = o#constant _x in (o, (Constant _x))
       | Var _x -> let (o, _x) = o#name _x in (o, (Var _x))
+      | FreezeVar _x -> let (o, _x) = o#name _x in (o, (FreezeVar _x))
       | QualifiedVar _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, (QualifiedVar _xs))
@@ -1525,6 +1640,7 @@ class fold_map =
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#phrase _x_i1 in (o, (Escape ((_x, _x_i1))))
       | Section _x -> let (o, _x) = o#section _x in (o, (Section _x))
+      | FreezeSection _x -> let (o, _x) = o#section _x in (o, (FreezeSection _x))
       | Conditional ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in
@@ -1549,7 +1665,9 @@ class fold_map =
       | TAbstr ((_x, _x_i1)) ->
           let (o, _x_i1) = o#phrase _x_i1 in (o, (TAbstr ((_x, _x_i1))))
       | TAppl ((_x, _x_i1)) ->
-          let (o, _x) = o#phrase _x in (o, (TAppl ((_x, _x_i1))))
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#list (fun o -> o#type_arg') _x_i1 in
+          (o, (TAppl ((_x, _x_i1))))
       | TupleLit _x ->
           let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (TupleLit _x))
       | RecordLit ((_x, _x_i1)) ->
@@ -1582,6 +1700,12 @@ class fold_map =
           let (o, _x_i1) = o#datatype' _x_i1 in
           let (o, _x_i2) = o#datatype' _x_i2
           in (o, (Upcast ((_x, _x_i1, _x_i2))))
+      | Instantiate _x ->
+          let (o, _x) = o#phrase _x in
+          (o, Instantiate _x)
+      | Generalise _x ->
+          let (o, _x) = o#phrase _x in
+          (o, Generalise _x)
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
@@ -1704,7 +1828,7 @@ class fold_map =
             (o, (LensDropLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
       | LensSelectLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
-          (* let (o, _x_i1) = o#phrase _x_i1 in *)
+          let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2 in
             (o, (LensSelectLit ((_x, _x_i1, _x_i2))))
 
@@ -1714,6 +1838,10 @@ class fold_map =
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i5) = o#option (fun o -> o#unknown) _x_i5 in
             (o, (LensJoinLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4, _x_i5))))
+      | LensCheckLit ((_x, _x_i1)) ->
+          let (o, _x) = o#phrase _x in
+          let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
+            (o, (LensCheckLit ((_x, _x_i1))))
       | LensGetLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
@@ -1991,6 +2119,11 @@ class fold_map =
       | Row _x -> let (o, _x) = o#row _x in (o, Row _x)
       | Presence _x -> let (o, _x) = o#fieldspec _x in (o, Presence _x)
 
+    method type_arg' : type_arg' -> ('self_type * type_arg') =
+      fun (x, y) ->
+        let o, x = o#type_arg x in
+        (o, (x, y))
+
     method constant : Constant.t -> ('self_type * Constant.t) =
       function
       | Constant.Float _x ->
@@ -2028,24 +2161,10 @@ class fold_map =
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
           in (o, (Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
-      | Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
-          let (o, _x) = o#binder _x in
-          let (o, _x_i2) = o#funlit _x_i2 in
-          let (o, _x_i3) = o#location _x_i3 in
-          let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-          in (o, (Fun ((_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4))))
+      | Fun f -> let o, f = o#function_definition f in o, Fun f
       | Funs _x ->
-          let (o, _x) =
-            o#list
-              (fun o (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5) ->
-                 let (o, _x) = o#binder _x in
-                 let (o, _x_i2) = o#funlit _x_i2 in
-                 let (o, _x_i3) = o#location _x_i3 in
-                 let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4 in
-                 let (o, _x_i5) = o#position _x_i5
-                 in (o, (_x, _x1, (_x_i1, _x_i2), _x_i3, _x_i4, _x_i5)))
-              _x
-          in (o, (Funs _x))
+          let (o, _x) = o#list (fun o -> o#recursive_function) _x in
+          (o, (Funs _x))
       | Foreign ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
           let (o, _x) = o#binder _x in
           let (o, _x_i1) = o#name _x_i1 in
@@ -2073,10 +2192,10 @@ class fold_map =
           in (o, Typenames ts)
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
-      | Module (n, bs) ->
-          let (o, n) = o#string n in
-          let (o, bs) = o#list (fun o -> o#binding) bs in
-          (o, (Module (n, bs)))
+      | Module { binder; members } ->
+          let (o, binder) = o#binder binder in
+          let (o, members) = o#list (fun o -> o#binding) members in
+          (o, (Module { binder; members }))
       | AlienBlock (lang, lib, dts) ->
           let (o, lang) = o#name lang in
           let (o, lib) = o#name lib in
@@ -2093,12 +2212,55 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
 
+    method function_definition : function_definition -> 'self * function_definition
+      = fun { fun_binder;
+              fun_linearity;
+              fun_definition = (tyvar, lit);
+              fun_location;
+              fun_signature;
+              fun_frozen;
+              fun_unsafe_signature; }->
+      let o, fun_binder = o#binder fun_binder in
+      let o, lit = o#funlit lit in
+      let o, fun_location = o#location fun_location in
+      let o, fun_signature = o#option (fun o -> o#datatype') fun_signature in
+      (o, { fun_binder;
+            fun_linearity;
+            fun_definition = (tyvar, lit);
+            fun_location;
+            fun_signature;
+            fun_frozen;
+            fun_unsafe_signature; })
+
+    method recursive_function  : recursive_function -> 'self * recursive_function
+      = fun { rec_binder;
+              rec_linearity;
+              rec_definition = (ty, lit);
+              rec_location;
+              rec_signature;
+              rec_unsafe_signature;
+              rec_frozen;
+              rec_pos } ->
+      let o, rec_binder = o#binder rec_binder in
+      let o, lit = o#funlit lit in
+      let o, rec_location = o#location rec_location in
+      let o, rec_signature = o#option (fun o -> o#datatype') rec_signature in
+      let o, rec_pos = o#position rec_pos in
+      (o, { rec_binder;
+            rec_linearity;
+            rec_definition = (ty, lit);
+            rec_location;
+            rec_signature;
+            rec_unsafe_signature;
+            rec_frozen;
+            rec_pos })
+
     method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       Binder.traverse_map
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_name:(fun o v -> o#name v)
-        ~f_ty:(fun o v -> o#option (fun o -> o#unknown) v)
+        ~f_ty:(fun o v -> o, v)
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
   end

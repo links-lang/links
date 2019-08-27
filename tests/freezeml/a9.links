@@ -1,0 +1,4 @@
+sig f : forall a, e::Eff,f::Eff. ((a) -e-> a) -f-> ([a]) -e-> a
+fun f(g)(x :: _) { g(x) }
+
+f(choose(~id))(ids)

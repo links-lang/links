@@ -113,6 +113,7 @@
     "true"
     "typename"
     "update"
+    "unsafe"
     "values"
     "var"
     "where"
@@ -124,21 +125,21 @@
    ;; comments
    '("\\(^\\|[^</]\\)#.*$" . font-lock-comment-face)
    ;; XML forests
-   '("<#>.*</#>" . font-lock-xml-face)
+   '("<#>.*</#>" . font-lock-function-name-face)
    ;; XML tags
-   '("</?[a-z][^>]*>" 0 font-lock-xml-face t)
+   '("</?[a-z][^>]*>" 0 font-lock-function-name-face t)
    ;; XML escapes (attributes)
-   '("\"{[^}]*}\"" 0 font-lock-normal-face t)
+   '("\"{[^}]*}\"" 0 'default t)
    ;; special operations
    `(,(regexp-opt links-keywords 'words) . font-lock-keyword-face)
    ;; types & variant tags
-   '("\\<[A-Z][A-Za-z0-9_]*\\>" . font-lock-type-face)
+   '("\\<[A-Z][A-Za-z0-9_']*\\>" . font-lock-type-face)
    ;; variable names
-   '("\\<\\(var\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+   '("\\<\\(var\\) +\\([a-z][A-Za-z0-9_']*\\)\\>"
      (1 font-lock-keyword-face)
      (2 font-lock-variable-name-face))
    ;; function names
-   '("\\<\\(fun\\|sig\\) +\\([a-z][A-Za-z0-9_]*\\)\\>"
+   '("\\<\\(fun\\|sig\\) +\\([a-z][A-Za-z0-9_']*\\)\\>"
      (1 font-lock-keyword-face)
      (2 font-lock-function-name-face))
    ;; type operators

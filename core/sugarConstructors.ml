@@ -37,28 +37,26 @@ module SugarConstructors (Position : Pos)
   type name_or_pat = PatName of name | Pat of Pattern.with_pos
 
   (* Optionally stores a datatype signature.  Isomporphic to Option. *)
-  type signature = Sig of (name WithPos.t * datatype') WithPos.t | NoSig
-  let sig_of_opt = function
-    | Some s -> Sig s
-    | None   -> NoSig
+  type signature = (name WithPos.t * datatype') WithPos.t option
 
   (* Produces a datatype if a name is accompanied by a signature.  Raises an
      exception if name does not match a name in a signature. *)
   let datatype_opt_of_sig_opt sig_opt name =
     match sig_opt with
-    | Sig {node=({node=signame; _}, datatype); pos} ->
+    | Some {node=({node=signame; _}, datatype); pos} ->
        (* Ensure that name in a signature matches name in a declaration. *)
        if signame <> name then
          raise (ConcreteSyntaxError (pos,
                Printf.sprintf "Signature for `%s' should precede definition of `%s', not `%s'."
                   signame signame name));
        Some datatype
-    | NoSig -> None
+    | None -> None
 
 
   (** Common stuff *)
 
   let var ?(ppos=dp) name = with_pos ppos (Var name)
+  let freeze_var ?(ppos=dp) name = with_pos ppos (FreezeVar name)
 
   (* Create a Block from block_body. *)
   let block_node       block_contents = Block block_contents
@@ -70,9 +68,14 @@ module SugarConstructors (Position : Pos)
   (* Create a record with a given list of labels. *)
   let record ?(ppos=dp) ?exp lbls = with_pos ppos (RecordLit (lbls, exp))
 
-  (* Create a tuple.  Preserves 1-tuples. *)
-  let tuple ?(one_tuple_hack=true) ?(ppos=dp) = function
-    | [e] when one_tuple_hack -> record ~ppos [("1", e)]
+  (* Create a tuple *)
+  let tuple ?(ppos=dp) = function
+    | es  -> with_pos ppos (TupleLit es)
+
+  (* Create a tuple for orderby clauses (includes a hack to ensure
+     that 1-tuples are preserved) *)
+  let orderby_tuple ?(ppos=dp) = function
+    | [e] -> record ~ppos [("1", e)]
     | es  -> with_pos ppos (TupleLit es)
 
   let cp_unit ppos = with_pos ppos (CPUnquote ([], tuple ~ppos []))
@@ -93,7 +96,10 @@ module SugarConstructors (Position : Pos)
 
   (** Binders **)
 
-  let binder ?(ppos=dp) ?ty name = with_pos ppos (name, ty)
+  let binder ?(ppos=dp) ?ty name =
+    match ty with
+    | None -> with_pos ppos (Binder.make ~name ())
+    | Some ty -> with_pos ppos (Binder.make ~name ~ty ())
 
   (** Imports **)
 
@@ -137,7 +143,7 @@ module SugarConstructors (Position : Pos)
     with_pos ppos (Spawn (spawn_kind, location, blk, row))
 
   let fn_appl_node ?(ppos=dp) name tyvars vars =
-    FnAppl (with_pos ppos (tappl (Var name, tyvars)), vars)
+    FnAppl (with_pos ppos (tappl (FreezeVar name, tyvars)), vars)
 
   let fn_appl ?(ppos=dp) name tyvars vars =
     with_pos ppos (fn_appl_node ~ppos name tyvars vars)
@@ -148,14 +154,25 @@ module SugarConstructors (Position : Pos)
 
   (** Bindings *)
   (* Create a function binding. *)
-  let fun_binding ?(ppos=dp) sig_opt (linearity, bndr, args, location, blk) =
-    let datatype = datatype_opt_of_sig_opt sig_opt bndr in
-    with_pos ppos (Fun (binder bndr, linearity,
-                         ([], (args, blk)), location, datatype))
+  let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
+    let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
+    with_pos ppos (Fun { fun_binder = binder bndr;
+                         fun_linearity = linearity;
+                         fun_definition = ([], (args, blk));
+                         fun_location = location;
+                         fun_signature;
+                         fun_frozen = frozen;
+                         fun_unsafe_signature = unsafe_sig })
 
   let fun_binding' ?(ppos=dp) ?(linearity=dl_unl) ?(tyvars=[])
         ?(location=loc_unknown) ?annotation bndr fnlit =
-    with_pos ppos (Fun (bndr, linearity, (tyvars, fnlit), location, annotation))
+    with_pos ppos (Fun { fun_binder = bndr;
+                         fun_linearity = linearity;
+                         fun_definition = (tyvars, fnlit);
+                         fun_location = location;
+                         fun_signature = annotation;
+                         fun_frozen = false;
+                         fun_unsafe_signature = false })
 
 
   (* Create a Val binding.  This function takes either a name for a variable
@@ -168,14 +185,17 @@ module SugarConstructors (Position : Pos)
          let datatype = datatype_opt_of_sig_opt sig_opt name in
          (pat, datatype)
       | Pat pat ->
-         assert (sig_opt = NoSig);
+         assert (sig_opt = None);
          (pat, None) in
     with_pos ppos (Val (pat, ([], phrase), location, datatype))
 
   (* A commonly used wrapper around val_binding *)
   let val_binding ?(ppos=dp) pat phrase =
-    val_binding' ~ppos NoSig (Pat pat, phrase, loc_unknown)
+    val_binding' ~ppos None (Pat pat, phrase, loc_unknown)
 
+  (* Create a module binding. *)
+  let module_binding ?(ppos=dp) binder members =
+    with_pos ppos (Module { binder; members })
 
   (** Database queries *)
 

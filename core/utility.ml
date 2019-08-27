@@ -78,6 +78,12 @@ sig
   val partition : (key -> 'a -> bool) -> 'a t -> ('a t * 'a t)
   (** divide the map by a predicate *)
 
+  val filter : (key -> 'a -> bool) -> 'a t -> 'a t
+  (** filters using both keys and values *)
+
+  val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
+  (** filters and applies a function -- None values discarded *)
+
   val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
@@ -87,30 +93,37 @@ module String = struct
   let pp = Format.pp_print_string
   let show = fun x -> x
 
-  let rev_concat sep l =
-    match l with
+  let rec blits dest pos sep seplen = function
+    | [] -> dest
+    | [xs] ->
+       blit xs 0 dest 0 (length xs); dest
+    | xs :: xss ->
+       let pos = pos - length xs in
+       blit xs 0 dest pos (length xs);
+       let pos = pos - seplen in
+       blit sep 0 dest pos seplen;
+       blits dest pos sep seplen xss
+
+  let rev_concat sep = function
     | [] -> ""
-    | hd :: tl ->
-       let num_sep = ref 0 in
-       let len = ref (-1) in
-       List.iter (fun s -> incr num_sep; len := !len + length s) l;
-       let size = !len + length sep * !num_sep in
-       let bs = Bytes.create size in
-       let pos = ref (size - length hd) in
-       blit hd 0 bs !pos (length hd);
-       List.iter
-         (fun s ->
-           pos := !pos - length sep;
-           blit sep 0 bs !pos (length sep);
-           pos := !pos - length s;
-           blit s 0 bs !pos (length s))
-         tl;
-       Bytes.to_string bs
+    | xs ->
+       let seplen = length sep in
+       let buffer_size =
+         let rec compute_size acc seplen = function
+           | [] -> acc
+           | xs :: [] -> length xs + acc
+           | xs :: xss -> compute_size (length xs + seplen + acc) seplen xss
+         in
+         compute_size 0 seplen xs
+       in
+       let buffer =
+         blits (Bytes.create buffer_size) buffer_size sep seplen xs
+       in
+       Bytes.to_string buffer
 end
 
 module Int = struct
   type t = int
-  (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
   let compare i j = i-j
   let pp = Format.pp_print_int
@@ -120,7 +133,6 @@ end
 module IntPair = struct
   type t = int * int
     [@@deriving show]
-  (*let compare = Pervasives.compare*)
   (*This is a bit of a hack, but should be OK as long as the integers are between 0 and 2^30 or so. *)
   let compare (i1,i2) (j1,j2) = if i1 = j1 then i2-j2 else i1-j1
 end
@@ -216,6 +228,15 @@ struct
              p, add i v q)
         m (empty, empty)
 
+    let filter_map f m =
+      fold (fun k v acc ->
+        match f k v with
+          | Some x -> add k x acc
+          | None -> acc) m empty
+
+    let filter f =
+      filter_map (fun k v ->
+        if f k v then Some v else None)
 
     let pp af formatter map =
       Format.pp_open_box formatter 0;
@@ -399,11 +420,23 @@ struct
       | (x::xs) -> let ys, y = unsnoc xs in x :: ys, y
       | []   -> raise (Invalid_argument "unsnoc")
 
+  (** [unsnoc_opt list]: Partition [list] into its last element and all the
+     others. @return Some (others, lastElem) or None if the list is empty. *)
+  let unsnoc_opt = function
+    | [] -> None
+    | xs -> Some (unsnoc xs)
+
   (** [last list]: Return the last element of a list *)
-  let last l =
-    try
-      snd (unsnoc l)
-    with Invalid_argument _ -> invalid_arg "last"
+  let rec last = function
+    | [x] -> x
+    | _ :: xs -> last xs
+    | [] -> invalid_arg "last"
+
+  (** [last_opt list]: Return the last element of a list, or None if the list is
+     empty. *)
+  let last_opt = function
+    | [] -> None
+    | xs -> Some (last xs)
 
   (** [curtail list]: Return a copy of the list with the last element removed. *)
   let curtail l =
@@ -451,6 +484,13 @@ struct
     | 0, _ -> []
     | _, [] -> []
     | _, h :: t -> h :: take (n - 1) t
+
+  let rec split n list = match n, list with
+    | 0, xs -> ([], xs)
+    | _, [] -> ([], [])
+    | _, h :: t ->
+       let (x, y) = split (n - 1) t in
+       (h :: x, y)
 
   let remove x = List.filter ((<>)x)
 

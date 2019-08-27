@@ -71,10 +71,11 @@ and binding =
 and special =
   | Wrong      of Types.datatype
   | Database   of value
-  | Lens       of value * Lens.Sort.t
-  | LensDrop   of value * string * string * value * Lens.Sort.t
-  | LensSelect of value * Lens.Phrase.t * Lens.Sort.t
-  | LensJoin   of value * value * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Sort.t
+  | Lens       of value * Lens.Type.t
+  | LensDrop   of { lens: value; drop : string; key : string; default : value; typ : Lens.Type.t }
+  | LensSelect of { lens : value; predicate : lens_predicate; typ : Lens.Type.t }
+  | LensJoin   of { left : value; right : value; on : string list; del_left : Lens.Phrase.t; del_right : Lens.Phrase.t; typ : Lens.Type.t }
+  | LensCheck  of value * Lens.Type.t
   | LensGet    of value * Types.datatype
   | LensPut    of value * value * Types.datatype
   | Table      of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
@@ -97,6 +98,7 @@ and handler = {
     ih_depth: handler_depth;
 }
 and handler_depth = | Deep of (binder * value) list | Shallow
+and lens_predicate = Static of Lens.Phrase.t | Dynamic of value
   [@@deriving show]
 
 let binding_scope : binding -> scope =
@@ -115,7 +117,7 @@ let tapp (v, tyargs) =
     | [] -> v
     | _ -> TApp (v, tyargs)
 
-let letm (b, tc) = Let (b, ([], tc))
+let letm ?(tyvars=[]) (b, tc) = Let (b, (tyvars, tc))
 let letmv (b, v) = letm (b, Return v)
 
 let rec is_atom =

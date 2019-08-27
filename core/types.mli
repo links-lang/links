@@ -30,6 +30,8 @@ type 't meta_row_var_basis =
 
 type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
 
+type 't meta_max_basis = 't meta_row_var_basis
+
 module Abstype :
 sig
   type t [@@deriving eq,show]
@@ -93,6 +95,7 @@ and rec_appl = {
   r_name: string;
   r_dual: bool;
   r_unique_name: string;
+  r_quantifiers : kind list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
@@ -107,11 +110,11 @@ and typ =
     | `Effect of row
     | `Table of typ * typ * typ
     | `Lens of Lens.Type.t
-    | `Alias of ((string * type_arg list) * typ)
+    | `Alias of ((string * kind list * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
-    | `ForAll of (quantifier list ref * typ)
+    | `ForAll of (quantifier list * typ)
     | (typ, row) session_type_basis ]
 and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
@@ -121,7 +124,7 @@ and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
-and quantifier = int * subkind * meta_var
+and quantifier = int * kind
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
     [@@deriving show]
@@ -130,39 +133,34 @@ type session_type = (typ, row) session_type_basis
 
 type datatype = typ
 
-(* base kind stuff *)
-val is_base_type : datatype -> bool
-val is_base_row : row -> bool
+(** A constraint that a subkind imposes on types. *)
+module type Constraint = sig
+  val type_satisfies : datatype -> bool
+  val row_satisfies : row -> bool
 
-val is_baseable_type : datatype -> bool
-val is_baseable_row : row -> bool
+  (** Can this type be modified using {!make_type} to satisfy this constraint?
+     *)
+  val can_type_be : datatype -> bool
+  val can_row_be : row -> bool
 
-val basify_type : datatype -> unit
-val basify_row : row -> unit
+  (** Attempt to modify this type to satisfy this constraint. One should call
+     {!can_type_be} before calling this.
 
-(* unl stuff *)
-val is_unl_type : datatype -> bool
-val is_unl_row : row -> bool
+     This will attempt to convert any flexible type variables with compatible
+     subkinds to one with a more restrictive one, so that {!is_type} now returns
+     true. *)
+  val make_type : datatype -> unit
+  val make_row : row -> unit
+end
 
-val type_can_be_unl : datatype -> bool
-val row_can_be_unl : row -> bool
-(* val session_can_be_unl : datatype -> bool *)
+module Base : Constraint
+module Unl : Constraint
+module Session : Constraint
+module Mono : Constraint
 
-val make_type_unl : datatype -> unit
-val make_row_unl : row -> unit
-(* val make_session_unl : datatype -> unit *)
+(** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
+val get_restriction_constraint : Restriction.t -> (module Constraint) option
 
-(* session kind stuff *)
-val is_session_type : datatype -> bool
-val is_session_row : row -> bool
-
-val is_sessionable_type : datatype -> bool
-val is_sessionable_row : row -> bool
-
-val sessionify_type : datatype -> unit
-val sessionify_row : row -> unit
-
-(* val dual_session : datatype -> datatype *)
 val dual_row : row -> row
 val dual_type : datatype -> datatype
 
@@ -176,10 +174,12 @@ type tycon_spec = [
 ]
 
 type environment        = datatype Env.String.t
- and tycon_environment  = tycon_spec Env.String.t
- and typing_environment = { var_env   : environment ;
-                            tycon_env : tycon_environment ;
-                            effect_row : row }
+type tycon_environment  = tycon_spec Env.String.t
+type typing_environment = { var_env    : environment ;
+                            rec_vars   : Utility.StringSet.t ;
+                            tycon_env  : tycon_environment ;
+                            effect_row : row ;
+                            desugared : bool }
 
 val empty_typing_environment : typing_environment
 
@@ -190,16 +190,6 @@ val normalise_datatype : datatype -> datatype
 val normalise_row : row -> row
 val normalise_typing_environment : typing_environment -> typing_environment
 
-val hoist_quantifiers : datatype -> unit
-
-val is_rigid_quantifier : quantifier -> bool
-
-val box_quantifiers : quantifier list -> quantifier list ref
-val unbox_quantifiers : quantifier list ref -> quantifier list
-
-(* val flexible_of_type : datatype -> datatype option *)
-
-val normalise_quantifier : quantifier -> quantifier
 val for_all : quantifier list * datatype -> datatype
 
 (** useful types *)
@@ -212,27 +202,26 @@ val int_type : datatype
 val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
+val empty_type : datatype
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 val free_tyarg_vars : type_arg -> TypeVarSet.t
-val free_bound_type_vars     : ?include_aliases:bool -> typ -> Vars.vars_list
-val free_bound_row_type_vars : ?include_aliases:bool -> row -> Vars.vars_list
+val free_bound_type_vars          : typ      -> Vars.vars_list
+val free_bound_row_type_vars      : row      -> Vars.vars_list
+val free_bound_type_arg_type_vars : type_arg -> Vars.vars_list
 
 val var_of_quantifier : quantifier -> int
 val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
 val kind_of_quantifier : quantifier -> kind
 val subkind_of_quantifier : quantifier -> subkind
 val type_arg_of_quantifier : quantifier -> type_arg
-val freshen_quantifier : quantifier -> quantifier * type_arg
-val freshen_quantifier_flexible : quantifier -> quantifier * type_arg
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
+val quantifier_of_type_arg : type_arg -> quantifier
 val quantifiers_of_type_args : type_arg list -> quantifier list
-
-val flexible_type_vars : TypeVarSet.t -> datatype -> quantifier Utility.IntMap.t
 
 (** Fresh type variables *)
 val type_variable_counter : int ref
@@ -258,13 +247,9 @@ val fresh_rigid_presence_variable : subkind -> field_spec
 
 (** fresh quantifiers *)
 val fresh_type_quantifier : subkind -> quantifier * datatype
-val fresh_flexible_type_quantifier : subkind -> quantifier * datatype
-
 val fresh_row_quantifier : subkind -> quantifier * row
-val fresh_flexible_row_quantifier : subkind -> quantifier * row
-
 val fresh_presence_quantifier : subkind -> quantifier * field_spec
-val fresh_flexible_presence_quantifier : subkind -> quantifier * field_spec
+val fresh_quantifier : kind -> quantifier * type_arg
 
 (** {0 rows} *)
 (** empty row constructors *)
@@ -374,7 +359,8 @@ val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
 
 (** generating type variable names *)
-val build_tyvar_names : ('a -> Vars.vars_list)
+val build_tyvar_names : refresh_tyvar_names:bool
+                     -> ('a -> Vars.vars_list)
                      -> ('a list)
                      -> unit
 val add_tyvar_names : ('a -> Vars.vars_list)
@@ -387,9 +373,6 @@ val make_thunk_type : row -> datatype -> datatype
 
 val pp_datatype : Format.formatter -> datatype -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
-
-(* Recursive type applications *)
-val recursive_applications : datatype -> string list
 
 module type TYPE_VISITOR =
 sig
@@ -412,6 +395,22 @@ sig
     method type_arg : type_arg -> (type_arg * 'self_type)
   end
 end
+
+type visit_context = Utility.StringSet.t * TypeVarSet.t * TypeVarSet.t
+class virtual type_predicate :
+  object('self_type)
+    method var_satisfies : (int * subkind * freedom) -> bool
+    method type_satisfies : visit_context -> typ -> bool
+    method point_satisfies :
+      'a 'c . (visit_context -> 'a -> bool) ->
+        visit_context ->
+        ([< 'a meta_max_basis] as 'c) point ->
+        bool
+    method field_satisfies : visit_context -> field_spec -> bool
+    method row_satisfies : visit_context -> row -> bool
+    method type_satisfies_arg : visit_context -> type_arg -> bool
+    method predicates : ((typ -> bool) * (row -> bool))
+  end
 
 module Transform : TYPE_VISITOR
 module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR

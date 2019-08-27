@@ -1,15 +1,29 @@
+---
+config: tests/typed_ir.tests.config
+---
+
 Anonymous constant function
 fun (x) {1}
-stdout : fun : (_) -> Int
+stdout : fun : (_::(Unl,Mono)) -> Int
 
 Anonymous identity function
 fun (x) {x}
-stdout : fun : (a::Any) -> a::Any
+stdout : fun : (a::(Any,Mono)) -> a::(Any,Mono)
 
 Anonymous composition function
 fun (f,g) {fun (x){f (g(x))}}
-stdout : fun : ((a::Any) -b-> c::Any, (d::Any) -b-> a::Any) -> (d::Any) -b-> c::Any
+stdout : fun : ((a::(Any,Mono)) -b-> c::(Any,Mono), (d::(Any,Mono)) -b-> a::(Any,Mono)) -> (d::(Any,Mono)) -b-> c::(Any,Mono)
 
 XML typing
 fun (x) {<a>{x}</a>}
 stdout : fun : (Xml) -> Xml
+
+ConcatMap (#368)
+tests/typed_ir/T368.links
+filemode : true
+stdout : () : ()
+
+Quantifiers on let-bound values (#620)
+tests/typed_ir/T620.links
+filemode : true
+stdout : () : ()

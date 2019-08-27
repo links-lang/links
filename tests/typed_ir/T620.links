@@ -1,0 +1,7 @@
+sig foo : () -> ()
+fun foo() {
+  ()
+}
+
+sig bar : () ~> ()
+var bar = foo;

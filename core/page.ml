@@ -9,7 +9,6 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exceptions_enabled)
 
   let get_js_lib_url () =
-    let open Pervasives in
     let base_url = Settings.get_value Basicsettings.Appserver.external_base_url |> strip_slashes in
     let base_url = Utility.strip_slashes base_url in
     let js_url = Settings.get_value js_lib_url |> strip_slashes in
@@ -35,8 +34,10 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
             (Env.String.bind tyenv.Types.var_env
                ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
             ("stringifyB64", dt "(a) -> String");
+       Types.rec_vars = StringSet.empty;
        Types.tycon_env = tyenv.Types.tycon_env;
-       Types.effect_row = tyenv.Types.effect_row } in
+       Types.effect_row = tyenv.Types.effect_row;
+       Types.desugared = tyenv.Types.desugared } in
     let nenv =
       Env.String.bind
         (Env.String.bind nenv
@@ -86,6 +87,18 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
                         ^ env
                         ^ head
                         ^ script_tag (String.concat "\n" defs)
+                        ^ "<script type=\"text/javascript\">
+                             'use strict';
+                             function _isRuntimeReady() {
+                                if (window._JSLIB === void 0 || window._JSLIB !== true) {
+                                   const msg = \"<h1>Startup error: Runtime dependency `jslib.js' is not loaded.</h1>\";
+                                   document.body.innerHTML = msg;
+                                   document.head.innerHTML = msg;
+                                   return false;
+                                }
+                                return true;
+                             }
+                           </script>"
                      )
                    ^ "<body onload=\'" ^ onload ^ "\'>
   <script type='text/javascript'>
@@ -136,7 +149,6 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       let _venv, code = C.generate_program venv ([], Ir.Return (Ir.Extend (StringMap.empty, None))) in
       let code = f code in
       let code =
-        let open Pervasives in
         code |> (C.generate_stubs valenv defs) |> C.wrap_with_server_lib_stubs
       in
       G.string_of_js code
@@ -150,7 +162,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       ~html:(Value.string_of_xml ~close_tags:true bs)
       ~head:(script_tag welcome_msg ^ "\n" ^ script_tag (C.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
              ^ Value.string_of_xml ~close_tags:true hs)
-      ~onload:"_startRealPage()"
+      ~onload:"_isRuntimeReady() && _startRealPage()"
       ~external_files:deps
       []
 end

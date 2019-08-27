@@ -47,7 +47,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isg f && isgr m && isg t
         | `ForAll (qs, t) ->
             is_guarded
-              (bind_quantifiers (unbox_quantifiers qs) bound_vars)
+              (bind_quantifiers qs bound_vars)
               expanded_apps var t
         | `Record row ->
             begin
@@ -143,7 +143,7 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isp f || isnr m || isn t
         | `ForAll (qs, t) ->
             is_negative
-              (bind_quantifiers (unbox_quantifiers qs) bound_vars)
+              (bind_quantifiers qs bound_vars)
               expanded_apps var t
         | `Record row -> isnr row
         | `Effect row
@@ -229,7 +229,7 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isn f || ispr m || isp t
         | `ForAll (qs, t) ->
             is_positive
-              (bind_quantifiers (unbox_quantifiers qs) bound_vars)
+              (bind_quantifiers qs bound_vars)
               expanded_apps var t
         | `Record row -> ispr row
         | `Effect row
@@ -291,7 +291,7 @@ and is_positive_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> boo
       | `Type t -> is_positive bound_vars expanded_apps var t
       | `Row r -> is_positive_row bound_vars expanded_apps var r
       | `Presence f -> is_positive_presence bound_vars expanded_apps var f
-and is_positive_lens_typ: TypeVarSet.t  -> StringSet.t-> int -> Lens.Type.t -> bool =
+and is_positive_lens_typ: TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t -> bool =
   fun bound_vars expanded_apps var typ ->
     let sort = Lens.Type.sort typ in
     let cols = Lens.Sort.cols sort in

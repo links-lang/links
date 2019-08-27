@@ -54,7 +54,7 @@ fun schedule(main) {
 fun get() { do Get }
 fun put(st) { do Put(st) }
 
-sig runState : (Comp({Get:s, Put: (s) -> () |e}, a), s) {Get{_}, Put{_} |e}~> (a, s)
+sig runState : (Comp(a, {Get:s, Put: (s) -> () |e}), s) {Get{_}, Put{_} |e}~> (a, s)
 fun runState(m, st) {
   handle(m())(st <- st) {
     case Return(x)      -> (x, st)

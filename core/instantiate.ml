@@ -10,8 +10,6 @@ let internal_error message =
 let show_recursion = Basicsettings.Instantiate.show_recursion
 let show_instantiation = Basicsettings.Instantiate.show_instantiation
 
-let quantified_instantiation = Basicsettings.Instantiate.quantified_instantiation
-
 (*
   instantiation environment:
     for stopping cycles during instantiation
@@ -29,7 +27,7 @@ type instantiation_maps = (datatype IntMap.t * row IntMap.t * field_spec IntMap.
      - is instantiation for first-class polymorphism correct?
 *)
 
-let instantiate_datatype : instantiation_maps -> datatype -> datatype =
+let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) * (field_spec -> field_spec) =
   fun (tenv, renv, penv) ->
     let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
       let rec_type_env, rec_row_env = rec_env in
@@ -68,8 +66,8 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
           | `Table (f, d, r) -> `Table (inst rec_env f, inst rec_env d, inst rec_env r)
           | `ForAll (qs, t) ->
               `ForAll (qs, inst rec_env t)
-          | `Alias ((name, ts), d) ->
-              `Alias ((name, List.map (inst_type_arg rec_env) ts), inst rec_env d)
+          | `Alias ((name, qs, ts), d) ->
+              `Alias ((name, qs, List.map (inst_type_arg rec_env) ts), inst rec_env d)
           | `Application (n, elem_type) ->
               `Application (n, List.map (inst_type_arg rec_env) elem_type)
           | `RecursiveApplication app ->
@@ -169,7 +167,10 @@ let instantiate_datatype : instantiation_maps -> datatype -> datatype =
         | `Row r -> `Row (inst_row rec_env r)
         | `Presence f -> `Presence (inst_presence rec_env f)
     in
-      inst (IntMap.empty, IntMap.empty)
+    let env = (IntMap.empty, IntMap.empty) in
+    inst env, inst_row env, inst_presence env
+
+let instantiate_datatype = instantiates ->- fst3
 
 (** instantiate_typ t
 
@@ -203,32 +204,21 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
           let t = `Var point in
             tenv, renv, IntMap.add var t penv, `Presence t :: tys, (var, subkind, `Presence point) :: qs in
 
-        let tenv, renv, penv, tys, qs =
+        let open PrimaryKind in
+        let tenv, renv, penv, tys, _qs =
           List.fold_left
             (fun env ->
                function
-                 | (var, subkind, `Type _)     -> typ (var, subkind) env
-                 | (var, subkind, `Row _)      -> row (var, subkind) env
-                 | (var, subkind, `Presence _) -> presence (var, subkind) env)
-            (IntMap.empty, IntMap.empty, IntMap.empty, [], []) (unbox_quantifiers quantifiers) in
+                 | (var, (Type, subkind))     -> typ (var, subkind) env
+                 | (var, (Row, subkind))      -> row (var, subkind) env
+                 | (var, (Presence, subkind)) -> presence (var, subkind) env)
+            (IntMap.empty, IntMap.empty, IntMap.empty, [], []) quantifiers in
 
         let tys = List.rev tys in
-        let qs = List.rev qs in
+        (* let qs = List.rev qs in *)
         let body = instantiate_datatype (tenv, renv, penv) t in
-          Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> Types.string_of_type_arg t) tys);
-            (* EXPERIMENTAL *)
-
-            (* HACK: currently we appear to need to strip the quantifiers
-               in the one case where this function is called with
-               rigid set to true
-            *)
-(*             if rigid then *)
-(*               tys, body *)
-(*             else *)
-          if Settings.get_value quantified_instantiation && not(rigid) then
-              tys, `ForAll (box_quantifiers qs, body)
-          else
-            tys, body
+        Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> Types.string_of_type_arg t) tys);
+        tys, body
     | t -> [], t
 
 (** instantiate_rigid t
@@ -304,23 +294,26 @@ let var = instantiate
 let typ = instantiate_typ
 let typ_rigid = instantiate_rigid
 let datatype = instantiate_datatype
+let row = instantiates ->- snd3
+let presence = instantiates ->- thd3
 
 module SEnv = Env.String
 
-let populate_instantiation_maps dt_str qs tyargs =
+let populate_instantiation_maps ~name qs tyargs =
+  let open PrimaryKind in
   List.fold_right2
     (fun var tyarg (tenv, renv, penv) ->
        match (var, tyarg) with
-         | (var, _subkind, `Type _), `Type t ->
+         | (var, (Type, _subkind)), `Type t ->
              (IntMap.add var t tenv, renv, penv)
-         | (var, _subkind, `Row _), `Row row ->
+         | (var, (Row, _subkind)), `Row row ->
              (tenv, IntMap.add var row renv, penv)
-         | (var, _, `Presence _), `Presence f ->
+         | (var, (Presence, _subkind)), `Presence f ->
              (tenv, renv, IntMap.add var f penv)
          | _ ->
              raise (internal_error
                ("Kind mismatch in type application: " ^
-                dt_str ^ " applied to type arguments: " ^
+                name ^ " applied to type arguments: " ^
                 mapstrcat ", " (fun t -> Types.string_of_type_arg t) tyargs)))
     qs tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
 
@@ -353,15 +346,15 @@ let instantiation_maps_of_type_arguments :
         vars, []
       else
         (take tyargs_length vars, drop tyargs_length vars) in
-    let tenv, renv, penv = populate_instantiation_maps (Types.string_of_datatype pt) vars tyargs in
+    let tenv, renv, penv = populate_instantiation_maps ~name:(Types.string_of_datatype pt) vars tyargs in
     match remaining_quantifiers with
       | [] -> t, (tenv, renv, penv)
-      | _ -> `ForAll (Types.box_quantifiers remaining_quantifiers, t),  (tenv, renv, penv)
+      | _ -> `ForAll (remaining_quantifiers, t),  (tenv, renv, penv)
 
 
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun pt tyargs ->
-  let (t, instantiation_maps) = instantiation_maps_of_type_arguments true pt tyargs in
+  let (t, instantiation_maps) = instantiation_maps_of_type_arguments false pt tyargs in
   instantiate_datatype instantiation_maps t
 
 (*
@@ -371,25 +364,26 @@ let freshen_quantifiers t =
   match concrete_type t with
     | `ForAll (qs, body) ->
         begin
-          match Types.unbox_quantifiers qs with
+          match qs with
             | [] -> body
             | qs ->
-                let qs, tyargs =
-                  List.split
-                    (List.map
-                       (function
-                          | (_, subkind, `Type _) ->
-                              let q, t = Types.fresh_type_quantifier subkind in
-                                q, `Type t
-                          | (_, subkind, `Row _) ->
-                              let q, r = Types.fresh_row_quantifier subkind in
-                                q, `Row r
-                          | (_, subkind, `Presence _) ->
-                              let q, f = Types.fresh_presence_quantifier subkind in
-                                q, `Presence f)
-                       qs)
+               let open PrimaryKind in
+               let qs, tyargs =
+                 List.split
+                   (List.map
+                      (function
+                       | (_, (Type, subkind)) ->
+                          let q, t = Types.fresh_type_quantifier subkind in
+                          q, `Type t
+                       | (_, (Row, subkind)) ->
+                          let q, r = Types.fresh_row_quantifier subkind in
+                          q, `Row r
+                       | (_, (Presence, subkind)) ->
+                          let q, f = Types.fresh_presence_quantifier subkind in
+                          q, `Presence f)
+                      qs)
                 in
-                  `ForAll (Types.box_quantifiers qs, apply_type t tyargs)
+                  `ForAll (qs, apply_type t tyargs)
         end
     | t -> t
 
@@ -404,18 +398,18 @@ let replace_quantifiers t qs' =
             (fun q q' ->
               assert (primary_kind_of_quantifier q = primary_kind_of_quantifier q');
               type_arg_of_quantifier q')
-            (Types.unbox_quantifiers qs)
+            qs
             qs'
         in
-          `ForAll (Types.box_quantifiers qs', apply_type t tyargs)
+          `ForAll (qs', apply_type t tyargs)
     | t -> t
 
 let recursive_application name qs tyargs body =
-  let tenv, renv, penv = populate_instantiation_maps name qs tyargs in
+  let tenv, renv, penv = populate_instantiation_maps ~name qs tyargs in
   let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
   body
 
-let alias name tyargs env =
+let alias name tyargs env : Types.typ =
   (* This is just type application.
 
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
@@ -432,9 +426,9 @@ let alias name tyargs env =
           "Type alias %s applied with incorrect arity (%d instead of %d). This should have been checked prior to instantiation."
           name (List.length tyargs) (List.length vars)))
     | Some (`Alias (vars, body)) ->
-        let tenv, renv, penv = populate_instantiation_maps name vars tyargs in
+        let tenv, renv, penv = populate_instantiation_maps ~name vars tyargs in
         (* instantiate the type variables bound by the alias
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)
         let (_, body) = typ (instantiate_datatype (tenv, renv, penv) body) in
-          `Alias ((name, tyargs), body)
+          `Alias ((name, List.map snd vars, tyargs), body)

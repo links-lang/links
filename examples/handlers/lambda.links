@@ -53,14 +53,14 @@ fun var_(x) {
   do Var(x)
 }
 
-sig lit : (a) -> Comp({ |e}, a)
+sig lit : (a) -> Comp(a)
 fun lit(x)() { x }
 
 ## Elimination forms
 
 # Due to the (current) lack of multi-handlers in Links, we are going
 # simulate them by reifying operations.
-typename Expr(a) = Comp({Var:(Var) -> Expr(a), Lam:(Var) -> ()}, a);
+typename Expr(a) = Comp(a, {Var:(Var) -> Expr(a), Lam:(Var) -> ()});
 typename Step(a) = [|Val:a
                     |Lam:(Var, Expr(a))|];
 
@@ -128,7 +128,7 @@ fun add() {
 
 var add3 = app(add, lit(3));
 
-sig exThreePlusSeven : Comp({ }, Int)
+sig exThreePlusSeven : Comp(Int, {})
 fun exThreePlusSeven() {
   catchAll(
     app(

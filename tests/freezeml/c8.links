@@ -1,0 +1,9 @@
+sig g : forall a,f::Row,g::Row. ([a]) -f-> ([a]) -g-> a
+fun g(x)(y) {
+  switch((x, y)) {
+    case (x :: _, _) -> x
+    case ([], x :: _) -> x
+  }
+}
+
+g(single(~id))(ids)

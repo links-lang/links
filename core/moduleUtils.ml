@@ -159,10 +159,11 @@ let create_module_info_map program =
     (* Recursively traverse a list of modules *)
     let rec traverse_modules = function
       | [] -> []
-      | {node=Module (submodule_name, mod_bs);_} :: bs ->
+      | {node=Module { binder; members };_} :: bs ->
           (* Recursively process *)
+          let submodule_name = Binder.to_name binder in
           let new_path = if name = "" then [] else parent_path @ [name] in
-          create_and_add_module_info new_path submodule_name mod_bs;
+          create_and_add_module_info new_path submodule_name members;
           (* Add the name to the list, process remainder. *)
           submodule_name :: (traverse_modules bs)
       | _bs -> assert false in (* List should only contain modules *)
@@ -172,10 +173,10 @@ let create_module_info_map program =
       | [] -> []
       | { node = Val (pat, _, _, _); _ } :: bs ->
          (get_pattern_variables pat) @ get_binding_names bs
-      | { node = Fun (bndr, _, _, _, _); _ } :: bs ->
-         Binder.to_name bndr :: (get_binding_names bs)
+      | { node = Fun fn; _ } :: bs ->
+         Binder.to_name fn.fun_binder :: (get_binding_names bs)
       | { node = Funs fs ; _ } :: bs ->
-          (List.map (fun (bnd, _, _, _, _, _) -> Binder.to_name bnd) fs)
+          (List.map (fun fn -> Binder.to_name fn.rec_binder) fs)
           @ get_binding_names bs
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 

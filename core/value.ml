@@ -10,7 +10,7 @@ let internal_error message =
   Errors.internal_error ~filename:"value.ml" ~message
 
 let serialiser = Basicsettings.Serialisation.serialiser
-let session_exception_operation = "_SessionFail"
+let session_exception_operation = "SessionFail"
 
 class type otherfield =
 object
@@ -796,6 +796,7 @@ type t = [
 | `SessionChannel of chan
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
+| `Alien
 ]
 and continuation = t Continuation.t
 and resumption = t Continuation.resumption
@@ -824,7 +825,9 @@ and compressed_t = [
 | `ClientDomRef of int
 | `ClientFunction of string
 | `Continuation of compressed_continuation
-| `Resumption of compressed_resumption ]
+| `Resumption of compressed_resumption
+| `Alien
+]
 and compressed_env = compressed_t Env.compressed_t
   [@@deriving yojson]
 
@@ -860,6 +863,7 @@ and compress_val (v : t) : compressed_t =
       | `SessionChannel _ -> assert false (* mmmmm *)
       | `AccessPointID _ -> assert false (* mmmmm *)
       | `SpawnLocation _sl -> assert false (* wheeee! *)
+      | `Alien -> `Alien
 
 let uncompress_primitive_value : compressed_primitive_value -> [> primitive_value] =
   function
@@ -894,6 +898,7 @@ and uncompress_val globals (v : compressed_t) : t =
       | `ClientFunction f -> `ClientFunction f
       | `Continuation cont -> `Continuation (uncompress_continuation globals cont)
       | `Resumption res -> `Resumption (uncompress_resumption globals res)
+      | `Alien -> `Alien
 
 let _escape =
   Str.global_replace (Str.regexp "\\\"") "\\\"" (* FIXME: Can this be right? *)
@@ -956,6 +961,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
      fprintf ppf "Server access point %s" (AccessPointID.to_string apid)
   | `Pid (`ServerPid i) -> fprintf ppf "Pid Server (%s)" (ProcessID.to_string i)
   | `Pid (`ClientPid (cid, i)) -> fprintf ppf "Pid Client num %s, process %s" (ClientID.to_string cid) (ProcessID.to_string i)
+  | `Alien -> fprintf ppf "alien"
 and p_record_fields ppf = function
   | [] -> fprintf ppf ""
   | [(l, v)] -> fprintf ppf "@[@{<recordlabel>%a@} = %a@]"
@@ -1067,13 +1073,17 @@ let string_of_xml ?(close_tags = false): xml -> string =
 (*   | `AccessPointID (`ServerAccessPoint (apid)) -> *)
 (*       "Server access point " ^ (AccessPointID.to_string apid) *)
 
+let type_error ?(action="unbox") expected value =
+  Printf.sprintf "Attempting to %s %s (need %s instead)" action (string_of_value value) expected
+  |> internal_error
+
 (** {1 Record manipulations} *)
 
 (** [project field value] returns projects the field labeled [field]
     from the Links value [value], provided [value] is a record. *)
 let project name = function
   | (`Record fields) -> List.assoc name fields
-  | _ -> raise (raise (internal_error ("Match failure in record projection")))
+  | v -> raise (type_error ~action:"project" "record" v)
 
 (** Given a Links tuple, returns an Ocaml list of the Links values in that
     tuple. *)
@@ -1091,11 +1101,12 @@ let untuple : t -> t list =
 (** {1 Boxing and unboxing of primitive types} *)
 let box_bool b = `Bool b
 and unbox_bool : t -> bool   = function
-  | `Bool b  -> b | _ -> raise (raise (internal_error "Type error unboxing bool"))
+  | `Bool b  -> b
+  | v -> raise (type_error "boolean" v)
 and box_int i = `Int i
 and unbox_int  : t -> int    = function
   | `Int i   -> i
-  | _other -> raise (internal_error("Type error unboxing int"))
+  | v -> raise (type_error "int" v)
 and box_float f = `Float f
 and unbox_float : t -> float = function
   | `Float f -> f
@@ -1105,28 +1116,32 @@ and unbox_float : t -> float = function
    * on the client, but this is easier and more performant (if a little hacky)
    *)
   | `Int i -> float_of_int i
-  | _ -> raise (internal_error "Type error unboxing float")
+  | v -> raise (type_error "float" v)
 and box_char c = `Char c
 and unbox_char :  t -> char = function
-  | `Char f -> f | _ -> raise (internal_error "Type error unboxing char")
+  | `Char f -> f
+  | v -> raise (type_error "char" v)
 and box_xml x = `XML x
 and unbox_xml  :  t -> xmlitem = function
-  | `XML x -> x | _ -> raise (internal_error "Type error unboxing xml")
+  | `XML x -> x
+  | v -> raise (type_error "char" v)
 and box_string s = `String s
 and unbox_string : t -> string = function
   | `String s -> s
-  | v ->
-     raise (internal_error ("Type error unboxing string: " ^ string_of_value v))
+  | v -> raise (type_error "string" v)
 and box_list l = `List l
 and unbox_list : t -> t list = function
-  | `List l -> l | v -> raise (internal_error ("Type error unboxing list: " ^ string_of_value v))
+  | `List l -> l
+  | v -> raise (type_error "list" v)
 and box_record fields = `Record fields
 and unbox_record : t -> (string * t) list = function
-  | `Record fields -> fields | _ -> raise (internal_error "Type error unboxing record")
+  | `Record fields -> fields
+  | v -> raise (type_error "record" v)
 and box_unit : unit -> t
   = fun () -> `Record []
 and unbox_unit : t -> unit = function
-  | `Record [] -> () | _ -> raise (internal_error "Type error unboxing unit")
+  | `Record [] -> ()
+  | v -> raise (type_error "unit" v)
 
 let box_op : t list -> t -> t =
   fun ps k -> let box = List.fold_left
@@ -1141,31 +1156,31 @@ let box : t list -> t = fun ps -> `Record (List.mapi (fun i p -> (string_of_int 
 let box_pair : t -> t -> t = fun a b -> `Record [("1", a); ("2", b)]
 let unbox_pair = function
   | (`Record [(_, a); (_, b)]) -> (a, b)
-  | _ -> raise (internal_error ("Match failure in pair conversion"))
+  | v -> raise (type_error "pair" v)
 let box_variant : string -> t -> t = fun l v -> `Variant (l, v)
 let unbox_variant : t -> (string * t) = function
   | `Variant x -> x
-  | _ -> raise (internal_error ("Type error unboxing variant"))
+  | v -> raise (type_error "variant" v)
 let box_pid dist_pid = `Pid dist_pid
 let unbox_pid = function
   | `Pid dist_pid -> dist_pid
-  | _ -> raise (internal_error "Type error unboxing pid")
+  | v -> raise (type_error "pid" v)
 let box_socket (inc, outc) = `Socket (inc, outc)
 let unbox_socket = function
   | `Socket p -> p
-  | _ -> raise (internal_error "Type error unboxing socket")
+  | v -> raise (type_error "socket" v)
 let box_spawn_loc sl = `SpawnLocation sl
 let unbox_spawn_loc = function
   | `SpawnLocation sl -> sl
-  | _ -> raise (internal_error "Type error unboxing spawn location")
+  | v -> raise (type_error "SpawnLocation" v)
 let box_channel ch = `SessionChannel ch
 let unbox_channel = function
   | `SessionChannel x -> x
-  | _ -> raise (internal_error "Type error unboxing session channel")
+  | v -> raise (type_error "SessionChannel" v)
 let box_access_point ap = `AccessPointID ap
 let unbox_access_point = function
   | `AccessPointID x -> x
-  | _ -> raise (internal_error "Type error unboxing access point")
+  | v -> raise (type_error "AccessPointID" v)
 let intmap_of_record = function
   | `Record members ->
       Some(IntMap.from_alist(
@@ -1290,7 +1305,7 @@ and value_of_xmlitem =
 
 let rec xml_of_variants vs = match vs with
   | (`List variant_items) -> List.map xmlitem_of_variant variant_items
-  | _ -> raise (internal_error "Cannot construct xml from variants")
+  | v -> raise (type_error ~action:"construct XML from" "list" v)
 and xmlitem_of_variant =
   function
     | `Variant ("Text", boxed_string) ->
@@ -1318,7 +1333,7 @@ and xmlitem_of_variant =
         else if (String.contains name ':')
         then raise (internal_error "Illegal character in tagname")
         else NsNode(ns, name, xml_of_variants variant_children)
-    | _ -> raise (internal_error "Cannot construct xml from variant")
+    | v -> raise (type_error ~action:"construct XML from" "variant" v)
 
 (* Some utility functions for databases used by insertion *)
 
@@ -1330,13 +1345,13 @@ let row_columns_values db v =
   in
   let row_columns : t -> string list = function
     | `List ((`Record fields)::_) -> List.map fst fields
-    | r -> raise (internal_error ("forming query from non-row (row_columns): "^ string_of_value r))
+    | v -> raise (type_error ~action:"form query columns from" "a list of records" v)
   in
   let row_values db = function
     | `List records ->
-	(List.map (function
+    (List.map (function
           | `Record fields -> List.map (escaped_string_of_value db -<- snd) fields
-          | _ -> raise (internal_error "forming query from non-row")) records)
-    | r -> raise (internal_error ("forming query from non-row (row_values): "^ string_of_value r))
+          | v -> raise (type_error ~action:"form query field from" "record" v)) records)
+    | v -> raise (type_error ~action:"form query row from" "list" v)
   in
   (row_columns v, row_values db v)

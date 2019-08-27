@@ -2,7 +2,6 @@ open CommonTypes
 open List
 
 (*open Value*)
-open SourceCode
 open Types
 open Utility
 open Proc
@@ -66,7 +65,7 @@ let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = f
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   ((`PFun (fun _ x -> conversion_op' ~unbox:unbox ~conv:conv ~box:box x) : located_primitive),
    (let q, r = Types.fresh_row_quantifier (lin_any, res_any) in
-      (`ForAll (Types.box_quantifiers [q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
+      (`ForAll ([q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
    pure)
 
 let string_to_xml : Value.t -> Value.t = function
@@ -199,9 +198,6 @@ let add_attribute : Value.t * Value.t -> Value.t -> Value.t =
 let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
   List.fold_right add_attribute
 
-let prelude_tyenv = ref None (* :-( *)
-let prelude_nenv = ref None (* :-( *)
-
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", int_op (+) PURE;
   "-", int_op (-) PURE;
@@ -304,14 +300,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   "sysexit",
-  (p1 (fun ret -> Pervasives.exit (Value.unbox_int ret)),
+  (p1 (fun ret -> exit (Value.unbox_int ret)),
    datatype "(Int) ~> a",
    IMPURE);
 
   "show",
   (p1 (fun v -> Value.box_string (Value.string_of_value v)),
    datatype "(a) ~> String",
-   PURE);
+   IMPURE);
 
   "exit",
   (`Continuation Value.Continuation.empty,
@@ -335,12 +331,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "Send",
   (p2 (fun _pid _msg ->
          assert(false)), (* Now handled in evalir.ml *)
-   datatype "forall a::Type(Any, Any).(Process ({hear:a|_}), a) ~> ()",
+   datatype "forall a::Type(Any, Any).(Process ({hear:a|e}), a) ~> ()",
    IMPURE);
 
   "self",
   (`PFun (fun _ _ -> `Pid (`ServerPid (Proc.get_current_pid()))),
-   datatype "() ~e~> Process ({ |e })",
+   datatype "() {hear{a}|e}~> Process ({ hear{a} })",
    IMPURE);
 
   "here",
@@ -377,32 +373,57 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawn",
   (`PFun (fun _ -> assert false),
-  datatype "(() ~e~@ _) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(() ~e~@ _) ~> Process ({ |e })"
+    end,
   IMPURE);
 
   "spawnAt",
   (`PFun (fun _ -> assert false),
-   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(Location, () {SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
+    end,
    IMPURE);
 
   "spawnClient",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(() ~e~@ _) ~> Process ({ |e })"
+    end,
    IMPURE);
 
   "spawnAngel",
   (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(() ~e~@ _) ~> Process ({ |e })"
+    end,
    IMPURE);
 
   "spawnAngelAt",
   (`PFun (fun _ -> assert false),
-   datatype "(Location, (() ~e~@ _)) ~> Process ({ |e })",
+    begin
+    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+      datatype "(Location, () { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+    else
+      datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
+    end,
    IMPURE);
 
   "spawnWait",
   (`PFun (fun _ -> assert false),
-   datatype "(() { |_}~> a) ~> a",
+   datatype "(() { |e}~> a) ~> a",
    IMPURE);
 
   "spawnWait'",
@@ -902,7 +923,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
   (`PFun (fun _ -> assert false),
-  datatype "([(String, (Event) { |_}~> ())]) ~> String",
+  datatype "([(String, (Event) { |e}~> ())]) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)
@@ -947,6 +968,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* domSetAnchor : String -> () *)
   "domSetAnchor",
   (`Client, datatype "(String) ~> ()",
+  IMPURE);
+
+  "domGetAnchor",
+  (`Client, datatype "() ~> String",
   IMPURE);
 
  (* Cookies *)
@@ -1103,7 +1128,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Database functions *)
   "AsList",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(r, w, n)) -> [r]",
+   datatype "(TableHandle(r, w, n)) {}-> [r]",
   IMPURE);
 
   "getDatabaseConfig",
@@ -1296,7 +1321,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      in the prelude and is just a wrapper for this function.
    *)
    (`Server (p1 (Value.marshal_value ->- Value.box_string)),
-    datatype "(() { |_}-> a) ~> String",
+    datatype "(() { |e}-> a) ~> String",
     IMPURE));
 
   (* REDUNDANT *)
@@ -1352,6 +1377,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
     "jsSetOnEvent",
     (`Client, datatype "(DomNode, String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
+
+    "jsSetWindowEvent",
+    (`Client, datatype "(String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
 
     "jsSetOnLoad",
     (`Client, datatype "((Event) ~e~> ()) ~e~> ()", IMPURE);
@@ -1471,35 +1499,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          datatype "() -> Int",
          IMPURE);
 
-    "dumpTypes",
-  (`Server (p1 (fun code ->
-                  try
-                    let ts = DumpTypes.program (val_of (!prelude_tyenv)) (Value.unbox_string code) in
-
-                    let line {Lexing.pos_lnum=l; _} = l in
-                    let start {Lexing.pos_bol=b; Lexing.pos_cnum=c; _ } = c-b in
-                    let finish {Lexing.pos_bol=b; Lexing.pos_cnum=c; _} = c-b in
-
-                    let resolve (name, t, pos) =
-                      (* HACK: we need to be more principled about foralls  *)
-                      let t =
-                        match Types.concrete_type t with
-                          | `ForAll (_, t) -> t
-                          | _ -> t
-                      in
-                        `Record [("name", Value.box_string name);
-                                 ("t", Value.box_string (Types.string_of_datatype t));
-                                 ("pos", `Record [("line", Value.box_int (Position.start pos |> line));
-                                                  ("start", Value.box_int (Position.start pos |> start));
-                                                  ("finish", Value.box_int (Position.finish pos |> finish))])]
-                    in
-                      `Variant ("Success", Value.box_list (List.map resolve ts))
-                  with e ->
-                    `Variant ("Failure", Value.box_string(Errors.format_exception e ^ "\n"))
-               )),
-            datatype "(String) ~> [|Success:[(name:String, t:String, pos:(line:Int, start:Int, finish:Int))] | Failure:String|]",
-            IMPURE);
-
     "connectSocket",
     (`Server (p2 (fun serverv portv ->
                   try
@@ -1579,26 +1578,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     PURE)
 ]
 
-(* HACK
-
-   these functions are recursive, so type inference has no way of
-   knowing that they are in fact tame
-*)
-let patch_prelude_funs tyenv =
-  {tyenv with
-     var_env =
-      List.fold_right
-        (fun (name, t) env ->
-          if Env.String.has env name then
-            Env.String.bind env (name, t)
-          else
-            env)
-        [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
-         ("concatMap", datatype "((a) -b-> [c], [a]) -b-> [c]");
-         ("sortByBase", datatype "((a) -b-> (|_::Base), [a]) -b-> [a]");
-         ("filter", datatype "((a) -b-> Bool, [a]) -b-> [a]")]
-        tyenv.Types.var_env}
-
 let impl : located_primitive -> primitive option = function
   | `Client -> None
   | `Server p
@@ -1647,8 +1626,10 @@ let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
 
 let typing_env = {Types.var_env = type_env;
+                  Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
-                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)}
+                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type);
+                  Types.desugared = false }
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 

@@ -9,7 +9,7 @@ var cartItems = [(name = "Apple", quantity = 5, price = 0.5, id = 0),
             (name = "Water", quantity = 8, price = 0.2, id = 2),
             (name = "Beef Steak", quantity = 2, price = 4.5, id = 3)];
 
-sig deleteItem : (Int, Process( {hear : Cmd, wild:() |_} ))~> ()
+sig deleteItem : (Int, Process( {hear : Cmd} ))~> ()
 fun deleteItem(id, pId) client {
     pId ! Delete(id)
 }
@@ -37,12 +37,12 @@ fun getQuantityInput(id, prevQty) {
     }
 }
 
-sig updateItem : (Item, Process( {hear : Cmd, wild:() | %} )) ~%~> ()
+sig updateItem : (Item, Process( {hear : Cmd} )) ~%~> ()
 fun updateItem(item, pId) client{
     pId ! Update(item.id, getQuantityInput(item.id, item.quantity))
 }
 
-sig attachActionToItems: ([Item], Process( {hear : Cmd, wild:() |%} )) ~%~>  [ActionableItem({ |_})]
+sig attachActionToItems: ([Item], Process( {hear : Cmd} )) ~%~>  [ActionableItem({ |_})]
 fun attachActionToItems(items, pid){
     map(fun(item) {
             var del = fun() {

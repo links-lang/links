@@ -4,9 +4,6 @@ open ProcessTypes
 open Utility
 open WebsocketMessages
 
-(* We want to shadow |>, so this needs to come after Utility. *)
-open Pervasives
-
 type abort_type = string * string
 exception Aborted of abort_type
 
@@ -202,18 +199,26 @@ struct
       begin
         let (t, w) = Lwt.task () in
         Hashtbl.add state.angels new_pid t;
-        async (fun () -> Lwt.with_value current_pid_key (Some new_pid)
-                          (fun () -> Lwt.with_value angel_done (Some w) pstate))
+        async (fun () ->
+            Lwt.with_value current_pid_key (Some new_pid)
+              (fun () -> Lwt.with_value angel_done (Some w) pstate) >>= fun _ ->
+            Lwt.return_unit)
       end
     else
-      async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
+      async (fun () ->
+          Lwt.with_value current_pid_key (Some new_pid) pstate >>= fun _ ->
+          Lwt.return_unit
+        );
     Lwt.return new_pid
 
   (** Creates a spawnWait process *)
   let create_spawnwait_process parent_pid pstate =
     let new_pid = ProcessID.create () in
     Hashtbl.add state.spawnwait_processes new_pid (parent_pid, None);
-    async (fun () -> Lwt.with_value current_pid_key (Some new_pid) pstate);
+    async (fun () ->
+        Lwt.with_value current_pid_key (Some new_pid) pstate >>= fun _ ->
+        Lwt.return_unit
+      );
     Lwt.return new_pid
 
   (* Grabs the result of a finished spawnWait process *)

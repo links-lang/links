@@ -1,6 +1,5 @@
 open Operators
 open CommonTypes
-open SourceCode
 open Sugartypes
 
 (*
@@ -63,31 +62,16 @@ object ('self)
   method backup_quantifiers : Utility.IntSet.t
   method restore_quantifiers : Utility.IntSet.t -> 'self
 
-  method rec_bodies :
-    (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-     Location.t * datatype' option * Position.t) list ->
-    ('self * (Binder.with_pos * DeclaredLinearity.t *
-              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-              Location.t * datatype' option * Position.t) list)
+  method rec_bodies : recursive_function list -> ('self * recursive_function list)
 
-  method rec_activate_outer_bindings :
-    (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-     Location.t * datatype' option * Position.t) list ->
-    ('self * (Binder.with_pos * DeclaredLinearity.t *
-              ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-              Location.t * datatype' option * Position.t) list)
+  method rec_activate_outer_bindings : recursive_function list -> ('self * recursive_function list)
 
-  method rec_activate_inner_bindings :
-    (Binder.with_pos * DeclaredLinearity.t *
-     ((tyvar list * (Types.datatype * Types.quantifier option list) option) * funlit) *
-     Location.t * datatype' option * Position.t) list -> 'self
+  method rec_activate_inner_bindings : recursive_function list -> 'self
 
   method sugar_datatype   : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatype         : Types.datatype -> 'self * Types.datatype
   method datatype'        : datatype' -> 'self * datatype'
-  method lens_sort        : Lens.Sort.t -> 'self * Lens.Sort.t
+  method lens_type        : Lens.Type.t -> 'self * Lens.Type.t
   method row              : Types.row -> 'self * Types.row
 
   method patternnode     : Pattern.t -> 'self * Pattern.t

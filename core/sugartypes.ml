@@ -7,26 +7,47 @@ open Utility
 
 type name = string [@@deriving show]
 
-module Binder = struct
-  type t = name * Types.datatype option
+module Binder: sig
+  type t
   and with_pos = t WithPos.t
   [@@deriving show]
+
+  val make : ?name:name -> ?ty:Types.datatype -> unit -> t
+
+  val to_name : with_pos -> string
+  val to_type : with_pos -> Types.datatype
+
+  val set_name : with_pos -> name -> with_pos
+  val set_type : with_pos -> Types.datatype -> with_pos
+
+  val erase_type : with_pos -> with_pos
+  val has_type : with_pos -> bool
+
+  val traverse_map : with_pos -> o:'o
+                     -> f_pos:('o -> Position.t -> 'a * Position.t)
+                     -> f_name:('a -> name -> 'b * name)
+                     -> f_ty:('b -> Types.datatype -> 'c * Types.datatype)
+                     -> 'c * with_pos
+end = struct
+  type t = name * Types.datatype
+  and with_pos = t WithPos.t
+  [@@deriving show]
+
+  let make ?(name="") ?(ty=`Not_typed) () = (name, ty)
 
   let to_name b = let (n, _ ) = WithPos.node b in n
   let to_type b = let (_, ty) = WithPos.node b in ty
 
-  let to_type_exn b = to_type b |> OptionUtils.val_of
+  let set_name b name = WithPos.map ~f:(fun (_   , ty) -> name, ty ) b
+  let set_type b typ  = WithPos.map ~f:(fun (name, _ ) -> name, typ) b
 
-  let set_name b name = WithPos.map ~f:(fun (_   , ty) -> name, ty      ) b
-  let set_type b typ  = WithPos.map ~f:(fun (name, _ ) -> name, Some typ) b
-
-  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, None) b
-  let has_type   b = to_type b |> OptionUtils.is_some
+  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, `Not_typed) b
+  let has_type   b = match to_type b with `Not_typed -> false | _ -> true
 
   let traverse_map : with_pos -> o:'o
             -> f_pos:('o -> Position.t -> 'a * Position.t)
             -> f_name:('a -> name -> 'b * name)
-            -> f_ty:('b -> Types.datatype option -> 'c * Types.datatype option)
+            -> f_ty:('b -> Types.datatype -> 'c * Types.datatype)
             -> 'c * with_pos = fun b ~o ~f_pos ~f_name ~f_ty ->
     WithPos.traverse_map b ~o ~f_pos ~f_node:(fun o (n, ty) ->
         let o, name = f_name o n  in
@@ -49,6 +70,7 @@ type tyarg = Types.type_arg
 *)
 
 let default_subkind : subkind = (lin_unl, res_any)
+let default_effect_subkind : subkind = (lin_unl, res_any)
 
 type kind = PrimaryKind.t option * subkind option
     [@@deriving show]
@@ -119,6 +141,10 @@ end
 (* Store the denotation along with the notation once it's computed *)
 type datatype' = Datatype.with_pos * Types.datatype option
     [@@deriving show]
+
+type type_arg' = Datatype.type_arg * Types.type_arg option
+    [@@deriving show]
+
 
 module Pattern = struct
   type t =
@@ -192,6 +218,7 @@ and iterpatt =
 and phrasenode =
   | Constant         of Constant.t
   | Var              of name
+  | FreezeVar        of name
   | QualifiedVar     of name list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
@@ -208,20 +235,23 @@ and phrasenode =
                         * (*orderby:*) phrase option
   | Escape           of Binder.with_pos * phrase
   | Section          of Section.t
+  | FreezeSection    of Section.t
   | Conditional      of phrase * phrase * phrase
   | Block            of block_body
   | InfixAppl        of (tyarg list * BinaryOp.t) * phrase * phrase
   | Regex            of regex
   | UnaryAppl        of (tyarg list * UnaryOp.t) * phrase
   | FnAppl           of phrase * phrase list
-  | TAbstr           of tyvar list ref * phrase
-  | TAppl            of phrase * tyarg list
+  | TAbstr           of tyvar list * phrase
+  | TAppl            of phrase * type_arg' list
   | TupleLit         of phrase list
   | RecordLit        of (name * phrase) list * phrase option
   | Projection       of phrase * name
   | With             of phrase * (name * phrase) list
   | TypeAnnotation   of phrase * datatype'
   | Upcast           of phrase * datatype' * datatype'
+  | Instantiate      of phrase
+  | Generalise       of phrase
   | ConstructorLit   of name * phrase option * Types.datatype option
   | DoOperation      of name * phrase list * Types.datatype option
   | Handle           of handler
@@ -236,18 +266,19 @@ and phrasenode =
   | DBInsert         of phrase * name list * phrase * phrase option
   | DBUpdate         of Pattern.with_pos * phrase * phrase option *
                           (name * phrase) list
-  | LensLit          of phrase * Lens.Sort.t option
+  | LensLit          of phrase * Lens.Type.t option
   (* the lens keys lit is a literal that takes an expression and is converted
      into a LensLit with the corresponding table keys marked in the lens_sort *)
-  | LensKeysLit      of phrase * phrase * Lens.Sort.t option
+  | LensKeysLit      of phrase * phrase * Lens.Type.t option
   | LensFunDepsLit   of phrase * (string list * string list) list *
-                          Lens.Sort.t option
+                          Lens.Type.t option
   | LensDropLit      of phrase * string * string * phrase *
-                          Lens.Sort.t option
-  | LensSelectLit    of phrase * phrase * Lens.Sort.t option
+                          Lens.Type.t option
+  | LensSelectLit    of phrase * phrase * Lens.Type.t option
   | LensJoinLit      of phrase * phrase * phrase * phrase * phrase *
-                          Lens.Sort.t option
+                          Lens.Type.t option
   | LensGetLit       of phrase * Types.datatype option
+  | LensCheckLit     of phrase * Lens.Type.t option
   | LensPutLit       of phrase * phrase * Types.datatype option
   | Xml              of name * (name * (phrase list)) list * phrase option *
                           phrase list
@@ -279,7 +310,7 @@ and bindingnode =
   | Typenames of typename list
   | Infix
   | Exp     of phrase
-  | Module  of name * binding list
+  | Module  of { binder: Binder.with_pos; members: binding list }
   | AlienBlock of name * name * ((Binder.with_pos * datatype') list)
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
@@ -296,15 +327,25 @@ and cp_phrasenode =
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
 and typename = (name * (quantifier * tyvar option) list * datatype' * Position.t)
-(* SJF: It would be nice to make these records at some point. *)
-and function_definition =
-  Binder.with_pos * DeclaredLinearity.t * (tyvar list * funlit) *
-                   Location.t * datatype' option
-and recursive_function =
-  (Binder.with_pos * DeclaredLinearity.t *
-    ((tyvar list *
-      (Types.datatype * Types.quantifier option list) option)
-      * funlit) * Location.t * datatype' option * Position.t)
+and function_definition = {
+    fun_binder: Binder.with_pos;
+    fun_linearity: DeclaredLinearity.t;
+    fun_definition: tyvar list * funlit;
+    fun_location: Location.t;
+    fun_signature: datatype' option;
+    fun_unsafe_signature: bool;
+    fun_frozen : bool;
+  }
+and recursive_function = {
+    rec_binder: Binder.with_pos;
+    rec_linearity: DeclaredLinearity.t;
+    rec_definition: (tyvar list * (Types.datatype * int option list) option) * funlit;
+    rec_location: Location.t;
+    rec_signature: datatype' option;
+    rec_unsafe_signature: bool;
+    rec_frozen : bool;
+    rec_pos: Position.t
+  }
   [@@deriving show]
 
 type directive = string * string list
@@ -325,12 +366,25 @@ exception ConcreteSyntaxError       of (Position.t * string)
 let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
-    | _  -> TAbstr (Types.box_quantifiers tyvars, WithPos.make e)
+    | _  -> TAbstr (tyvars, WithPos.make e)
 
 let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
-    | _  -> TAppl (WithPos.make e, tys)
+    | _  ->
+       let make_arg ty =
+         (Datatype.Type (WithPos.make (Datatype.TypeVar ("$none", None, `Rigid))), Some ty)
+       in
+       TAppl (WithPos.make e, List.map make_arg tys)
+
+let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
+  match tys with
+    | [] -> WithPos.node e
+    | _  ->
+       let make_arg ty =
+         (Datatype.Type (WithPos.make (Datatype.TypeVar ("$none", None, `Rigid))), Some ty)
+       in
+       TAppl (e, List.map make_arg tys)
 
 module Freevars =
 struct
@@ -369,11 +423,14 @@ struct
     let p = WithPos.node p in
     match p with
     | Var v -> singleton v
+    | FreezeVar v -> singleton v
     | Section (Section.Name n) -> singleton n
+    | FreezeSection (Section.Name n) -> singleton n
 
     | Constant _
     | TextNode _
     | Section (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
+    | FreezeSection (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
 
     | Spawn (_, _, p, _)
     | TAbstr (_, p)
@@ -383,6 +440,8 @@ struct
     | Page p
     | PagePlacement p
     | Upcast (p, _, _)
+    | Instantiate p
+    | Generalise p
     | Select (_, p)
     | TypeAnnotation (p, _) -> phrase p
 
@@ -396,6 +455,7 @@ struct
     | LensDropLit (l, _, _, _, _) -> phrase l
     | LensJoinLit (l1, l2, _, _, _, _) -> union_all [phrase l1; phrase l2]
 
+    | LensCheckLit (l, _) -> phrase l
     | LensGetLit (l, _) -> phrase l
     | LensPutLit (l, data, _) -> union_all [phrase l; phrase data]
 
@@ -477,18 +537,18 @@ struct
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
     | Raise -> empty
-  and binding (binding: binding)
+  and binding (binding': binding)
       : StringSet.t (* vars bound in the pattern *)
       * StringSet.t (* free vars in the rhs *) =
-    match WithPos.node binding with
+    match WithPos.node binding' with
     | Val (pat, (_, rhs), _, _) -> pattern pat, phrase rhs
-    | Fun (bndr, _, (_, fn), _, _) ->
+    | Fun { fun_binder = bndr; fun_definition = (_, fn); _} ->
        let name = singleton (Binder.to_name bndr) in
        name, (diff (funlit fn) name)
     | Funs funs ->
         let names, rhss =
           List.fold_right
-            (fun (bndr, _, (_, rhs), _, _, _) (names, rhss) ->
+            (fun { rec_binder = bndr; rec_definition = (_, rhs); _ } (names, rhss) ->
                (add (Binder.to_name bndr) names, rhs::rhss))
             funs
             (empty, []) in
@@ -505,12 +565,13 @@ struct
               StringSet.add (Binder.to_name bndr) acc)
             (StringSet.empty) decls in
         bound_foreigns, empty
-        (* TODO: this needs to be implemented *)
-    | Module _ ->
-        raise (
-          Errors.internal_error
-            ~filename:"sugartypes.ml"
-            ~message:"Freevars for modules not implemented yet")
+    | Module { members; _ } ->
+       List.fold_left
+         (fun (bnd, fvs) b ->
+           let bnd', fvs' = binding b in
+           let fvs'' = diff fvs' bnd in
+           union bnd bnd', union fvs fvs'')
+         (empty, empty) members
   and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and block (binds, expr : binding list * phrase) : StringSet.t =
