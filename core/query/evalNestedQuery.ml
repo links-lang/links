@@ -261,11 +261,11 @@ struct
       let open QL in
       function
         | Singleton r ->
-          [For (None, gs, os, Q.Eval.reduce_where_then (cond, Singleton (inner r)))]
+          [For (None, gs, os, reduce_where_then (cond, Singleton (inner r)))]
         | Concat vs ->
           concat_map (query gs os cond) vs
         | If (cond', v, Concat []) ->
-           query gs os (Q.Eval.reduce_and (cond, cond')) v
+           query gs os (reduce_and (cond, cond')) v
         | For (_, gs', os', body) ->
           query (gs @ gs') (os @ os') cond body
         | _ -> assert false
@@ -428,7 +428,7 @@ struct
           match x, y with
             | None,   _       -> y
             | _   ,   None    -> x
-            | Some c, Some c' -> Some (Q.Eval.reduce_and (c, c')))
+            | Some c, Some c' -> Some (QL.reduce_and (c, c')))
         (init (conds c))
         None in
 

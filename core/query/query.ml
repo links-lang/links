@@ -2,6 +2,8 @@ open Utility
 open CommonTypes
 open Var
 
+exception DbEvaluationError of string
+
 let internal_error message =
   Errors.internal_error ~filename:"query/query.ml" ~message
 
@@ -10,6 +12,10 @@ let runtime_type_error error =
     ("Runtime type error: " ^ error ^ ".\n" ^
      "This should not happen if the type system / checker is correct. " ^
      "Please file a bug report.")
+
+let query_error fmt =
+  let error msg = raise (DbEvaluationError msg) in
+    Printf.kprintf error fmt
 
 module Lang =
 struct
@@ -39,6 +45,57 @@ struct
       | Constant  of Constant.t
   and env = Value.env * t Env.Int.t
       [@@deriving show]
+
+  let nil = Concat []
+
+  module S =
+  struct
+    (** [pt]: A printable version of [t] *)
+    type pt =
+      | For       of (Var.var * pt) list * pt list * pt
+      | If        of pt * pt * pt
+      | Table     of Value.table
+      | Singleton of pt
+      | Concat    of pt list
+      | Record    of pt StringMap.t
+      | Project   of pt * string
+      | Erase     of pt * StringSet.t
+      | Variant   of string * pt
+      | XML       of Value.xmlitem
+      | Apply     of pt * pt list
+      | Lam       of Ir.var list * Ir.computation
+      | Case      of pt * (binder * pt) StringMap.t * (binder * pt) option
+      | Primitive of string
+      | Var       of (Var.var * Types.datatype StringMap.t)
+      | Constant  of Constant.t
+        [@@deriving show]
+  end
+
+  let rec pt_of_t : t -> S.pt = fun v ->
+    let bt = pt_of_t in
+      match (v : t) with
+        | For (_, gs, os, b) ->
+            S.For (List.map (fun (x, source) -> (x, bt source)) gs,
+                  List.map bt os,
+                  bt b)
+        | If (c, t, e) -> S.If (bt c, bt t, bt e)
+        | Table t -> S.Table t
+        | Singleton v -> S.Singleton (bt v)
+        | Concat vs -> S.Concat (List.map bt vs)
+        | Record fields -> S.Record (StringMap.map bt fields)
+        | Variant (name, v) -> S.Variant (name, bt v)
+        | XML xmlitem -> S.XML xmlitem
+        | Project (v, name) -> S.Project (bt v, name)
+        | Erase (v, names) -> S.Erase (bt v, names)
+        | Apply (u, vs) -> S.Apply (bt u, List.map bt vs)
+        | Case (u, cl, d) -> S.Case (bt u, StringMap.map (fun (x,y) -> (x, bt y)) cl, opt_app (fun (x,y) -> Some (x, bt y)) None d)
+        | Closure ((xs, e), _) -> S.Lam (xs, e)
+        | Primitive f -> S.Primitive f
+        | Var (v, t) -> S.Var (v, t)
+        | Constant c -> S.Constant c
+        | Database _ -> assert false
+
+  let string_of_t = S.show_pt -<- pt_of_t
 
   let rec tail_of_t : t -> t = fun v ->
     let tt = tail_of_t in
@@ -197,6 +254,168 @@ struct
       | _ -> false
 
 
+  (* simple optimisations *)
+  let reduce_and (a, b) =
+    match a, b with
+      | Constant (Constant.Bool true), x
+      | x, Constant (Constant.Bool true)
+      | (Constant (Constant.Bool false) as x), _
+      | _, (Constant (Constant.Bool false) as x) -> x
+      | _ -> Apply  (Primitive "&&", [a; b])
+
+  let reduce_or (a, b) =
+    match a, b with
+      | (Constant (Constant.Bool true) as x), _
+      | _, (Constant (Constant.Bool true) as x)
+      | Constant (Constant.Bool false), x
+      | x, Constant (Constant.Bool false) -> x
+      | _ -> Apply  (Primitive "||", [a; b])
+
+  let reduce_not a =
+    match a with
+      | Constant (Constant.Bool false) -> Constant (Constant.Bool true)
+      | Constant (Constant.Bool true)  -> Constant (Constant.Bool false)
+      | _                       -> Apply  (Primitive "not", [a])
+
+  let rec reduce_eq (a, b) =
+    let bool x = Constant (Constant.Bool x) in
+    let eq_constant =
+      function
+        | (Constant.Bool a  , Constant.Bool b)   -> bool (a = b)
+        | (Constant.Int a   , Constant.Int b)    -> bool (a = b)
+        | (Constant.Float a , Constant.Float b)  -> bool (a = b)
+        | (Constant.Char a  , Constant.Char b)   -> bool (a = b)
+        | (Constant.String a, Constant.String b) -> bool (a = b)
+        | (a, b)                 -> Apply (Primitive "==", [Constant a; Constant b])
+    in
+      match a, b with
+        | (Constant a, Constant b) -> eq_constant (a, b)
+        | (Variant (s1, a), Variant (s2, b)) ->
+          if s1 <> s2 then
+            Constant (Constant.Bool false)
+          else
+            reduce_eq (a, b)
+        | (Record lfields, Record rfields) ->
+          List.fold_right2
+            (fun (_, v1) (_, v2) e ->
+              reduce_and (reduce_eq (v1, v2), e))
+            (StringMap.to_alist lfields)
+            (StringMap.to_alist rfields)
+            (Constant (Constant.Bool true))
+        | (a, b) -> Apply (Primitive "==", [a; b])
+
+  let reduce_concat vs =
+    let vs =
+      concat_map
+        (function
+          | Concat vs -> vs
+          | v -> [v])
+        vs
+    in
+      match vs with
+        | [v] -> v
+        | vs -> Concat vs
+
+  let rec reduce_where_then (c, t) =
+    match t with
+      (* optimisation *)
+      | Constant (Constant.Bool true) -> t
+      | Constant (Constant.Bool false) -> Concat []
+
+      | Concat vs ->
+        reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
+      | For (_, gs, os, body) ->
+        For (None, gs, os, reduce_where_then (c, body))
+      | If (c', t', Concat []) ->
+        reduce_where_then (reduce_and (c, c'), t')
+      | _ ->
+        If (c, t, Concat [])
+
+  let reduce_for_body (gs, os, body) =
+    match body with
+      | For (_, gs', os', body') -> For (None, gs @ gs', os @ os', body')
+      | _                         -> For (None, gs, os, body)
+
+  let rec reduce_for_source : t * (t -> t) -> t =
+    fun (source, body) ->
+      let rs = fun source -> reduce_for_source (source, body) in
+        match source with
+          | Singleton v -> body v
+          | Concat vs ->
+            reduce_concat (List.map rs vs)
+          | If (c, t, Concat []) ->
+            reduce_for_source
+              (t, fun v -> reduce_where_then (c, body v))
+          | For (_, gs, os, v) ->
+            (* NOTE:
+
+               We are relying on peculiarities of the way we manage
+               the environment in order to avoid having to
+               augment it with the generator bindings here.
+
+               In particular, we rely on the fact that if a variable
+               is not found on a lookup then we return the eta
+               expansion of that variable rather than complaining that
+               it isn't bound in the environment.
+
+            *)
+            reduce_for_body (gs, os, rs v)
+          | Table table ->
+            let field_types = table_field_types table in
+            (* we need to generate a fresh variable in order to
+               correctly handle self joins *)
+            let x = Var.fresh_raw_var () in
+              (* Debug.print ("fresh variable: " ^ string_of_int x); *)
+              reduce_for_body ([(x, source)], [], body (Var (x, field_types)))
+          | v -> query_error "Bad source in for comprehension: %s" (string_of_t v)
+
+  let rec reduce_if_body (c, t, e) =
+    match t with
+      | Record then_fields ->
+        begin match e with
+          | Record else_fields ->
+            assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
+            Record
+              (StringMap.fold
+                 (fun name t fields ->
+                   let e = StringMap.find name else_fields in
+                     StringMap.add name (reduce_if_body (c, t, e)) fields)
+                 then_fields
+                 StringMap.empty)
+          (* NOTE: this relies on any record variables having
+             been eta-expanded by this point *)
+          | _ -> query_error "Mismatched fields"
+        end
+      | _ ->
+        begin
+          match t, e with
+            | Constant (Constant.Bool true), _ ->
+              reduce_or (c, e)
+            | _, Constant (Constant.Bool false) ->
+              reduce_and (c, t)
+            | _ ->
+              If (c, t, e)
+        end
+
+  let reduce_if_condition (c, t, e) =
+    match c with
+      | Constant (Constant.Bool true) -> t
+      | Constant (Constant.Bool false) -> e
+      | If (c', t', _) ->
+        reduce_if_body
+          (reduce_or (reduce_and (c', t'),
+                      reduce_and (reduce_not c', t')),
+           t,
+           e)
+      | _ ->
+        if is_list t then
+          if e = nil then
+            reduce_where_then (c, t)
+          else
+            reduce_concat [reduce_where_then (c, t);
+                           reduce_where_then (reduce_not c, e)]
+        else
+          reduce_if_body (c, t, e)
 end
 
 module Q = Lang
@@ -236,57 +455,7 @@ let used_database v : Value.database option =
       | Q.Concat vs -> comprehensions vs
       | v -> used v
 
-module S =
-struct
-
-  (** [pt]: A printable version of [t] *)
-  type pt =
-    | For       of (Var.var * pt) list * pt list * pt
-    | If        of pt * pt * pt
-    | Table     of Value.table
-    | Singleton of pt
-    | Concat    of pt list
-    | Record    of pt StringMap.t
-    | Project   of pt * string
-    | Erase     of pt * StringSet.t
-    | Variant   of string * pt
-    | XML       of Value.xmlitem
-    | Apply     of pt * pt list
-    | Lam       of Ir.var list * Ir.computation
-    | Case      of pt * (binder * pt) StringMap.t * (binder * pt) option
-    | Primitive of string
-    | Var       of (Var.var * Types.datatype StringMap.t)
-    | Constant  of Constant.t
-      [@@deriving show]
-
-  let rec pt_of_t : Q.t -> pt = fun v ->
-    let bt = pt_of_t in
-      match (v : Q.t) with
-        | Q.For (_, gs, os, b) ->
-            For (List.map (fun (x, source) -> (x, bt source)) gs,
-                  List.map bt os,
-                  bt b)
-        | Q.If (c, t, e) -> If (bt c, bt t, bt e)
-        | Q.Table t -> Table t
-        | Q.Singleton v -> Singleton (bt v)
-        | Q.Concat vs -> Concat (List.map bt vs)
-        | Q.Record fields -> Record (StringMap.map bt fields)
-        | Q.Variant (name, v) -> Variant (name, bt v)
-        | Q.XML xmlitem -> XML xmlitem
-        | Q.Project (v, name) -> Project (bt v, name)
-        | Q.Erase (v, names) -> Erase (bt v, names)
-        | Q.Apply (u, vs) -> Apply (bt u, List.map bt vs)
-        | Q.Case (u, cl, d) -> Case (bt u, StringMap.map (fun (x,y) -> (x, bt y)) cl, opt_app (fun (x,y) -> Some (x, bt y)) None d)
-        | Q.Closure ((xs, e), _) -> Lam (xs, e)
-        | Q.Primitive f -> Primitive f
-        | Q.Var (v, t) -> Var (v, t)
-        | Q.Constant c -> Constant c
-        | Q.Database _ -> assert false
-
-  let t = show_pt -<- pt_of_t
-end
-
-let string_of_t = S.t
+let string_of_t = Q.string_of_t
 
 let labels_of_field_types field_types =
   StringMap.fold
@@ -303,14 +472,6 @@ let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
 
 module Eval =
 struct
-  exception DbEvaluationError of string
-
-  let nil = Q.Concat []
-
-  let eval_error fmt =
-    let error msg = raise (DbEvaluationError msg) in
-      Printf.kprintf error fmt
-
   let env_of_value_env value_env = (value_env, Env.Int.empty)
   let (++) (venv, eenv) (venv', eenv') =
     Value.Env.shadow venv ~by:venv', Env.Int.extend eenv eenv'
@@ -393,7 +554,7 @@ struct
         match Value.Env.lookup var val_env, Env.Int.find exp_env var with
         | None, Some v -> v
         | Some v, None -> expression_of_value v
-        | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
+        | Some _, Some v -> v (*query_error "Variable %d bound twice" var*)
         | None, None ->
           begin
             try expression_of_value (Lib.primitive_stub (Lib.primitive_name var)) with
@@ -423,7 +584,7 @@ struct
             | Q.Var (x, field_types) ->
                 (* eta-expand record variables *)
                 eta_expand_var (x, field_types)
-            | Q.Primitive "Nil" -> nil
+            | Q.Primitive "Nil" -> Q.nil
             (* We could consider detecting and eta-expand tables here.
                The only other possible sources of table values would
                be `Special or built-in functions that return table
@@ -463,14 +624,14 @@ struct
             Q.Record (StringMap.fold
                        (fun label v fields ->
                          if StringMap.mem label fields then
-                           eval_error
+                           query_error
                              "Error adding fields: label %s already present"
                              label
                          else
                            StringMap.add label (xlate env v) fields)
                        ext_fields
                        fields)
-          | _ -> eval_error "Error adding fields: non-record"
+          | _ -> query_error "Error adding fields: non-record"
       end
     | Project (label, r) -> Q.Project (xlate env r, label)
     | Erase (labels, r) -> Q.Erase (xlate env r, labels)
@@ -527,14 +688,14 @@ struct
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
               | Fun (_, _, _, (Location.Client | Location.Native)) ->
-                  eval_error "Client function"
+                  query_error "Client function"
               | Fun ((f, _), _, _, _) ->
                 (* This should never happen now that we have closure conversion*)
                 raise (internal_error
                   ("Function definition in query: " ^ string_of_int f ^
                    ". This should have been closure-converted."))
               | Rec _ ->
-                  eval_error "Recursive function"
+                  query_error "Recursive function"
               | Alien _ -> (* just skip it *)
                   computation env (bs, tailcomp)
               | Module _ -> raise (internal_error "Not implemented modules yet")
@@ -558,7 +719,7 @@ struct
         (Q.unbox_list keys)
         in
             Q.Table ((db, params), Q.unbox_string name, unboxed_keys, row)
-         | _ -> eval_error "Error evaluating table handle"
+         | _ -> query_error "Error evaluating table handle"
        end
     | Special _s ->
       (* FIXME:
@@ -583,7 +744,7 @@ struct
   let rec norm env : Q.t -> Q.t =
     function
     | Q.Record fl -> Q.Record (StringMap.map (norm env) fl)
-    | Q.Concat xs -> reduce_concat (List.map (norm env) xs)
+    | Q.Concat xs -> Q.reduce_concat (List.map (norm env) xs)
     | Q.Project (r, label) ->
       let rec project (r, label) =
         match r with
@@ -595,7 +756,7 @@ struct
           | Q.Var (_x, field_types) ->
             assert (StringMap.mem label field_types);
             Q.Project (r, label)
-          | _ -> eval_error ("Error projecting from record: %s") (string_of_t r)
+          | _ -> query_error ("Error projecting from record: %s") (string_of_t r)
       in
         project (norm env r, label)
     | Q.Erase (r, labels) ->
@@ -618,13 +779,13 @@ struct
           | Q.Var (_x, field_types) ->
             assert (StringSet.subset labels (labels_of_field_types field_types));
             Q.Erase (r, labels)
-          | _ -> eval_error "Error erasing from record"
+          | _ -> query_error "Error erasing from record"
       in
         erase (norm env r, labels)
     | Q.Variant (label, v) -> Q.Variant (label, norm env v)
     | Q.Apply (f, xs) -> apply env (norm env f, List.map (norm env) xs)
     | Q.If (c, t, e) ->
-        reduce_if_condition (norm env c, norm env t, norm env e)
+        Q.reduce_if_condition (norm env c, norm env t, norm env e)
     | Q.Case (v, cases, default) ->
       let rec reduce_case (v, cases, default) =
         match v with
@@ -635,7 +796,7 @@ struct
                   norm (bind env (x, v)) c
                 | None, Some ((z, _), c) ->
                   norm (bind env (z, w)) c
-                | None, None -> eval_error "Pattern matching failed"
+                | None, None -> query_error "Pattern matching failed"
             end
           | Q.If (c, t, e) ->
             Q.If
@@ -661,15 +822,15 @@ struct
     | Q.Primitive "AsList", [xs] ->
         xs
     | Q.Primitive "Cons", [x; xs] ->
-        reduce_concat [Q.Singleton x; xs]
+        Q.reduce_concat [Q.Singleton x; xs]
     | Q.Primitive "Concat", ([_xs; _ys] as l) ->
-        reduce_concat l
+        Q.reduce_concat l
     | Q.Primitive "ConcatMap", [f; xs] ->
         begin
           match f with
             | Q.Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
-                  reduce_for_source 
+                  Q.reduce_for_source
                     (xs, fun v -> norm_comp (bind env (x, v)) body)
             | _ -> assert false
         end
@@ -678,7 +839,7 @@ struct
           match f with
             | Q.Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
-                  reduce_for_source 
+                  Q.reduce_for_source
                     (xs, fun v -> Q.Singleton (norm_comp (bind env (x, v)) body))
             | _ -> assert false
         end
@@ -715,182 +876,21 @@ struct
                   end
         end
     | Q.Primitive "not", [v] ->
-      reduce_not (v)
+      Q.reduce_not (v)
     | Q.Primitive "&&", [v; w] ->
-      reduce_and (v, w)
+      Q.reduce_and (v, w)
     | Q.Primitive "||", [v; w] ->
-      reduce_or (v, w)
+      Q.reduce_or (v, w)
     | Q.Primitive "==", [v; w] ->
-      reduce_eq (v, w)
+      Q.reduce_eq (v, w)
     | Q.Primitive f, args ->
         Q.Apply (Q.Primitive f, args)
     | Q.If (c, t, e), args ->
-        reduce_if_condition (c, apply env (t, args), apply env (e, args))
+        Q.reduce_if_condition (c, apply env (t, args), apply env (e, args))
     | Q.Apply (f, args), args' ->
         apply env (f, args @ args')
-    | t, _ -> eval_error "Application of non-function: %s" (string_of_t t)
+    | t, _ -> query_error "Application of non-function: %s" (string_of_t t)
 
-  and reduce_concat vs =
-    let vs =
-      concat_map
-        (function
-          | Q.Concat vs -> vs
-          | v -> [v])
-        vs
-    in
-      match vs with
-        | [v] -> v
-        | vs -> Q.Concat vs
-  and reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
-    fun (source, body) ->
-      let rs = fun source -> reduce_for_source (source, body) in
-        let open Q in
-        match source with
-          | Singleton v -> body v
-          | Concat vs ->
-            reduce_concat (List.map rs vs)
-          | If (c, t, Concat []) ->
-            reduce_for_source 
-              (t, fun v -> reduce_where_then (c, body v))
-          | For (_, gs, os, v) ->
-            (* NOTE:
-
-               We are relying on peculiarities of the way we manage
-               the environment in order to avoid having to
-               augment it with the generator bindings here.
-
-               In particular, we rely on the fact that if a variable
-               is not found on a lookup then we return the eta
-               expansion of that variable rather than complaining that
-               it isn't bound in the environment.
-
-            *)
-            reduce_for_body (gs, os, rs v)
-          | Table table ->
-            let field_types = table_field_types table in
-            (* we need to generate a fresh variable in order to
-               correctly handle self joins *)
-            let x = Var.fresh_raw_var () in
-              (* Debug.print ("fresh variable: " ^ string_of_int x); *)
-              reduce_for_body ([(x, source)], [], body (Var (x, field_types)))
-          | v -> eval_error "Bad source in for comprehension: %s" (string_of_t v)
-  and reduce_for_body (gs, os, body) =
-    match body with
-      | Q.For (_, gs', os', body') -> Q.For (None, gs @ gs', os @ os', body')
-      | _                         -> Q.For (None, gs, os, body)
-  and reduce_if_condition (c, t, e) =
-    let open Q in
-    match c with
-      | Constant (Constant.Bool true) -> t
-      | Constant (Constant.Bool false) -> e
-      | If (c', t', _) ->
-        reduce_if_body
-          (reduce_or (reduce_and (c', t'),
-                      reduce_and (reduce_not c', t')),
-           t,
-           e)
-      | _ ->
-        if is_list t then
-          if e = nil then
-            reduce_where_then (c, t)
-          else
-            reduce_concat [reduce_where_then (c, t);
-                           reduce_where_then (reduce_not c, e)]
-        else
-          reduce_if_body (c, t, e)
-  and reduce_where_then (c, t) =
-    let open Q in
-    match t with
-      (* optimisation *)
-      | Constant (Constant.Bool true) -> t
-      | Constant (Constant.Bool false) -> Concat []
-
-      | Concat vs ->
-        reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
-      | For (_, gs, os, body) ->
-        For (None, gs, os, reduce_where_then (c, body))
-      | If (c', t', Concat []) ->
-        reduce_where_then (reduce_and (c, c'), t')
-      | _ ->
-        If (c, t, Concat [])
-  and reduce_if_body (c, t, e) =
-    let open Q in
-    match t with
-      | Record then_fields ->
-        begin match e with
-          | Record else_fields ->
-            assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
-            Record
-              (StringMap.fold
-                 (fun name t fields ->
-                   let e = StringMap.find name else_fields in
-                     StringMap.add name (reduce_if_body (c, t, e)) fields)
-                 then_fields
-                 StringMap.empty)
-          (* NOTE: this relies on any record variables having
-             been eta-expanded by this point *)
-          | _ -> eval_error "Mismatched fields"
-        end
-      | _ ->
-        begin
-          match t, e with
-            | Constant (Constant.Bool true), _ ->
-              reduce_or (c, e)
-            | _, Constant (Constant.Bool false) ->
-              reduce_and (c, t)
-            | _ ->
-              If (c, t, e)
-        end
-  (* simple optimisations *)
-  and reduce_and (a, b) =
-    let open Q in
-    match a, b with
-      | Constant (Constant.Bool true), x
-      | x, Constant (Constant.Bool true)
-      | (Constant (Constant.Bool false) as x), _
-      | _, (Constant (Constant.Bool false) as x) -> x
-      | _ -> Apply  (Primitive "&&", [a; b])
-  and reduce_or (a, b) =
-    let open Q in
-    match a, b with
-      | (Constant (Constant.Bool true) as x), _
-      | _, (Constant (Constant.Bool true) as x)
-      | Constant (Constant.Bool false), x
-      | x, Constant (Constant.Bool false) -> x
-      | _ -> Apply  (Primitive "||", [a; b])
-  and reduce_not a =
-    let open Q in
-    match a with
-      | Constant (Constant.Bool false) -> Constant (Constant.Bool true)
-      | Constant (Constant.Bool true)  -> Constant (Constant.Bool false)
-      | _                       -> Apply  (Primitive "not", [a])
-  and reduce_eq (a, b) =
-    let open Q in
-    let bool x = Constant (Constant.Bool x) in
-    let eq_constant =
-      function
-        | (Constant.Bool a  , Constant.Bool b)   -> bool (a = b)
-        | (Constant.Int a   , Constant.Int b)    -> bool (a = b)
-        | (Constant.Float a , Constant.Float b)  -> bool (a = b)
-        | (Constant.Char a  , Constant.Char b)   -> bool (a = b)
-        | (Constant.String a, Constant.String b) -> bool (a = b)
-        | (a, b)                 -> Apply (Primitive "==", [Constant a; Constant b])
-    in
-      match a, b with
-        | (Constant a, Constant b) -> eq_constant (a, b)
-        | (Variant (s1, a), Variant (s2, b)) ->
-          if s1 <> s2 then
-            Constant (Constant.Bool false)
-          else
-            reduce_eq (a, b)
-        | (Record lfields, Record rfields) ->
-          List.fold_right2
-            (fun (_, v1) (_, v2) e ->
-              reduce_and (reduce_eq (v1, v2), e))
-            (StringMap.to_alist lfields)
-            (StringMap.to_alist rfields)
-            (Constant (Constant.Bool true))
-        | (a, b) -> Apply (Primitive "==", [a; b])
   and norm_comp env c = norm env (computation env c)
 
 (*
@@ -904,7 +904,7 @@ struct
 	*)
 
   let eval env e =
-    Debug.print ("Query.eval e: "^Ir.show_computation e); 
+    Debug.print ("Query.eval e: "^Ir.show_computation e);
     Debug.debug_time "Query.eval" (fun () ->
       norm_comp (env_of_value_env env) e)
 

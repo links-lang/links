@@ -30,6 +30,8 @@ sig
   and env = Value.env * t Env.Int.t
       [@@deriving show]
 
+  val reduce_where_then : t * t -> t
+  val reduce_and : t * t -> t
 end
 
 val unbox_xml : Lang.t -> Value.xmlitem
@@ -62,8 +64,6 @@ sig
   val bind : 'a * 'b Env.Int.t -> Env.Int.name * 'b -> 'a * 'b Env.Int.t
   val eta_expand_var : Var.var * Types.datatype StringMap.t -> Lang.t
   val computation : Value.t Value.Env.t * Lang.t Env.Int.t -> Ir.computation -> Lang.t
-  val reduce_where_then : Lang.t * Lang.t -> Lang.t
-  val reduce_and : Lang.t * Lang.t -> Lang.t
   val eval : Value.t Value.Env.t -> Ir.computation -> Lang.t
 end
 
