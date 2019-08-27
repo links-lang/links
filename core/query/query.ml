@@ -583,7 +583,7 @@ struct
   let rec norm env : Q.t -> Q.t =
     function
     | Q.Record fl -> Q.Record (StringMap.map (norm env) fl)
-    | Q.Concat xs -> reduce_concat env xs
+    | Q.Concat xs -> reduce_concat (List.map (norm env) xs)
     | Q.Project (r, label) ->
       let rec project (r, label) =
         match r with
@@ -624,10 +624,10 @@ struct
     | Q.Variant (label, v) -> Q.Variant (label, norm env v)
     | Q.Apply (f, xs) -> apply env (norm env f, List.map (norm env) xs)
     | Q.If (c, t, e) ->
-        reduce_if_condition env (c, norm env t, norm env e)
+        reduce_if_condition (norm env c, norm env t, norm env e)
     | Q.Case (v, cases, default) ->
       let rec reduce_case (v, cases, default) =
-        match norm env v with
+        match v with
           | Q.Variant (label, v) as w ->
             begin
               match StringMap.lookup label cases, default with
@@ -661,16 +661,16 @@ struct
     | Q.Primitive "AsList", [xs] ->
         xs
     | Q.Primitive "Cons", [x; xs] ->
-        reduce_concat env [Q.Singleton x; xs]
+        reduce_concat [Q.Singleton x; xs]
     | Q.Primitive "Concat", ([_xs; _ys] as l) ->
-        reduce_concat env l
+        reduce_concat l
     | Q.Primitive "ConcatMap", [f; xs] ->
         begin
           match f with
             | Q.Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
-                  reduce_for_source env
-                    (xs, fun v -> let env = bind env (x, v) in norm_comp env body)
+                  reduce_for_source 
+                    (xs, fun v -> norm_comp (bind env (x, v)) body)
             | _ -> assert false
         end
     | Q.Primitive "Map", [f; xs] ->
@@ -678,8 +678,8 @@ struct
           match f with
             | Q.Closure (([x], body), closure_env) ->
                 let env = env ++ closure_env in
-                  reduce_for_source env
-                    (xs, fun v -> let env = bind env (x, v) in Q.Singleton (norm_comp env body))
+                  reduce_for_source 
+                    (xs, fun v -> Q.Singleton (norm_comp (bind env (x, v)) body))
             | _ -> assert false
         end
     | Q.Primitive "SortBy", [f; xs] ->
@@ -715,23 +715,22 @@ struct
                   end
         end
     | Q.Primitive "not", [v] ->
-      reduce_not env (v)
+      reduce_not (v)
     | Q.Primitive "&&", [v; w] ->
-      reduce_and env (v, w)
+      reduce_and (v, w)
     | Q.Primitive "||", [v; w] ->
-      reduce_or env (v, w)
+      reduce_or (v, w)
     | Q.Primitive "==", [v; w] ->
-      reduce_eq env (v, w)
+      reduce_eq (v, w)
     | Q.Primitive f, args ->
         Q.Apply (Q.Primitive f, args)
     | Q.If (c, t, e), args ->
-        reduce_if_condition env (c, apply env (t, args), apply env (e, args))
+        reduce_if_condition (c, apply env (t, args), apply env (e, args))
     | Q.Apply (f, args), args' ->
         apply env (f, args @ args')
     | t, _ -> eval_error "Application of non-function: %s" (string_of_t t)
 
-  and reduce_concat env vs =
-    let vs = List.map (norm env) vs in
+  and reduce_concat vs =
     let vs =
       concat_map
         (function
@@ -742,17 +741,17 @@ struct
       match vs with
         | [v] -> v
         | vs -> Q.Concat vs
-  and reduce_for_source env : Q.t * (Q.t -> Q.t) -> Q.t =
+  and reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
     fun (source, body) ->
-      let rs = fun source -> reduce_for_source env (source, body) in
+      let rs = fun source -> reduce_for_source (source, body) in
         let open Q in
-        match norm env source with
+        match source with
           | Singleton v -> body v
           | Concat vs ->
-            reduce_concat env (List.map rs vs)
+            reduce_concat (List.map rs vs)
           | If (c, t, Concat []) ->
-            reduce_for_source env
-              (t, fun v -> reduce_where_then env (c, body v))
+            reduce_for_source 
+              (t, fun v -> reduce_where_then (c, body v))
           | For (_, gs, os, v) ->
             (* NOTE:
 
@@ -779,49 +778,43 @@ struct
     match body with
       | Q.For (_, gs', os', body') -> Q.For (None, gs @ gs', os @ os', body')
       | _                         -> Q.For (None, gs, os, body)
-  and reduce_if_condition env (c, t, e) =
+  and reduce_if_condition (c, t, e) =
     let open Q in
-    let c = norm env c in
     match c with
       | Constant (Constant.Bool true) -> t
       | Constant (Constant.Bool false) -> e
       | If (c', t', _) ->
-        reduce_if_body env
-          (reduce_or env (reduce_and env (c', t'),
-                      reduce_and env (reduce_not env c', t')),
+        reduce_if_body
+          (reduce_or (reduce_and (c', t'),
+                      reduce_and (reduce_not c', t')),
            t,
            e)
       | _ ->
         if is_list t then
           if e = nil then
-            reduce_where_then env (c, t)
+            reduce_where_then (c, t)
           else
-            reduce_concat env [reduce_where_then env (c, t);
-                           reduce_where_then env (reduce_not env c, e)]
+            reduce_concat [reduce_where_then (c, t);
+                           reduce_where_then (reduce_not c, e)]
         else
-          reduce_if_body env (c, t, e)
-  and reduce_where_then env (c, t) =
+          reduce_if_body (c, t, e)
+  and reduce_where_then (c, t) =
     let open Q in
-    let t = norm env t in
     match t with
       (* optimisation *)
       | Constant (Constant.Bool true) -> t
       | Constant (Constant.Bool false) -> Concat []
 
       | Concat vs ->
-        reduce_concat env (List.map (fun v -> reduce_where_then env (c, v)) vs)
+        reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
       | For (_, gs, os, body) ->
-        For (None, gs, os, reduce_where_then env (c, body))
+        For (None, gs, os, reduce_where_then (c, body))
       | If (c', t', Concat []) ->
-        reduce_where_then env (reduce_and env (c, c'), t')
+        reduce_where_then (reduce_and (c, c'), t')
       | _ ->
         If (c, t, Concat [])
-  and reduce_if_body env (c, t, e) =
+  and reduce_if_body (c, t, e) =
     let open Q in
-    (* WR: I believe t and e here are always normalized, so no reason to
-       re-normalize them?
-    let t = norm env t in
-    *)
     match t with
       | Record then_fields ->
         begin match e with
@@ -831,7 +824,7 @@ struct
               (StringMap.fold
                  (fun name t fields ->
                    let e = StringMap.find name else_fields in
-                     StringMap.add name (reduce_if_body env (c, t, e)) fields)
+                     StringMap.add name (reduce_if_body (c, t, e)) fields)
                  then_fields
                  StringMap.empty)
           (* NOTE: this relies on any record variables having
@@ -842,36 +835,36 @@ struct
         begin
           match t, e with
             | Constant (Constant.Bool true), _ ->
-              reduce_or env (c, e)
+              reduce_or (c, e)
             | _, Constant (Constant.Bool false) ->
-              reduce_and env (c, t)
+              reduce_and (c, t)
             | _ ->
               If (c, t, e)
         end
   (* simple optimisations *)
-  and reduce_and env (a, b) =
+  and reduce_and (a, b) =
     let open Q in
-    match norm env a, norm env b with
+    match a, b with
       | Constant (Constant.Bool true), x
       | x, Constant (Constant.Bool true)
       | (Constant (Constant.Bool false) as x), _
       | _, (Constant (Constant.Bool false) as x) -> x
       | _ -> Apply  (Primitive "&&", [a; b])
-  and reduce_or env (a, b) =
+  and reduce_or (a, b) =
     let open Q in
-    match norm env a, norm env b with
+    match a, b with
       | (Constant (Constant.Bool true) as x), _
       | _, (Constant (Constant.Bool true) as x)
       | Constant (Constant.Bool false), x
       | x, Constant (Constant.Bool false) -> x
       | _ -> Apply  (Primitive "||", [a; b])
-  and reduce_not env a =
+  and reduce_not a =
     let open Q in
-    match norm env a with
+    match a with
       | Constant (Constant.Bool false) -> Constant (Constant.Bool true)
       | Constant (Constant.Bool true)  -> Constant (Constant.Bool false)
       | _                       -> Apply  (Primitive "not", [a])
-  and reduce_eq env (a, b) =
+  and reduce_eq (a, b) =
     let open Q in
     let bool x = Constant (Constant.Bool x) in
     let eq_constant =
@@ -883,17 +876,17 @@ struct
         | (Constant.String a, Constant.String b) -> bool (a = b)
         | (a, b)                 -> Apply (Primitive "==", [Constant a; Constant b])
     in
-      match norm env a, norm env b with
+      match a, b with
         | (Constant a, Constant b) -> eq_constant (a, b)
         | (Variant (s1, a), Variant (s2, b)) ->
           if s1 <> s2 then
             Constant (Constant.Bool false)
           else
-            reduce_eq env (a, b)
+            reduce_eq (a, b)
         | (Record lfields, Record rfields) ->
           List.fold_right2
             (fun (_, v1) (_, v2) e ->
-              reduce_and env (reduce_eq env (v1, v2), e))
+              reduce_and (reduce_eq (v1, v2), e))
             (StringMap.to_alist lfields)
             (StringMap.to_alist rfields)
             (Constant (Constant.Bool true))
@@ -911,12 +904,9 @@ struct
 	*)
 
   let eval env e =
-(*    Debug.print ("e: "^Ir.show_computation e); *)
-    norm_comp (env_of_value_env env) e
-
-  let reduce_where_then = reduce_where_then (Value.Env.empty, Env.Int.empty)
-
-  let reduce_and = reduce_and (Value.Env.empty, Env.Int.empty)
+    Debug.print ("Query.eval e: "^Ir.show_computation e); 
+    Debug.debug_time "Query.eval" (fun () ->
+      norm_comp (env_of_value_env env) e)
 
 end
 
