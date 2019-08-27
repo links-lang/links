@@ -632,6 +632,8 @@ struct
       reduce_or (v, w)
     | Primitive "==", [v; w] ->
       reduce_eq (v, w)
+    | Primitive "stringToXml", [v] ->
+      Q.Singleton (XML (Value.Text (unbox_string v)))
     | Primitive f, args ->
         Apply (f, args)
     | If (c, t, e), args ->
