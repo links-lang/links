@@ -127,6 +127,8 @@ type type_eq_context = {
   tyenv: Types.kind Env.t (* track kinds of bound typevars *)
 }
 
+
+(* Detects recursion at any level *)
 module RecursionDetector =
 struct
   class visitor =
@@ -157,6 +159,26 @@ end
 
 
 
+(* For both rows and types, detect recursion at top-level or immeiately under
+   a `Body or `Alias *)
+let rec is_toplevel_rec_type = function
+  | `MetaTypeVar mtv ->
+     begin match Unionfind.find mtv with
+       | `Recursive _ -> true
+       | `Body b -> is_toplevel_rec_type b
+       | _ -> false
+     end
+  | `Alias (_, t') -> is_toplevel_rec_type t'
+  | _ -> false
+
+let rec is_toplevel_rec_row (_, row_var, _) =
+  match Unionfind.find row_var with
+       | `Recursive _ -> true
+       | `Body r -> is_toplevel_rec_row r
+       | _ -> false
+
+
+
 let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
   fun context (t1, t2) ->
     let lookupVar lvar map =
@@ -180,19 +202,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
              | None -> raise_ir_type_error ("Type variable "  ^ (string_of_int rid) ^ " is unbound") occurrence
            end
         | false, _ -> false in
-    let rec collapse_toplevel_forall : Types.datatype -> Types.datatype = function
-      | `ForAll (qs, t) ->
-        begin match collapse_toplevel_forall t with
-          | `ForAll (qs', t') ->
-              `ForAll (qs @ qs', t')
-          | t ->
-              begin
-                match qs with
-                  | [] -> t
-                  | _ -> `ForAll (qs, t)
-              end
-        end
-      | t -> t in
+
     let remove_absent_fields_if_closed row =
       (* assumes that row is flattened already and ignores recursive rows *)
       let (field_env, row_var, dual) = row in
@@ -209,29 +219,18 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
     let rec eqt ((context, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
 
-      let rec unalias = function
-        | `Alias (_, x) -> unalias x
-        | x             -> x in
 
-      let t1 = unalias (collapse_toplevel_forall t1) in
-      let t2 = unalias (collapse_toplevel_forall t2) in
-
-      (* If t2 is recursive at the top, we give up. t1 is checked for recursion later on *)
-      if match t2 with
-        | `MetaTypeVar mtv ->
-          begin match Unionfind.find mtv with
-            | `Recursive _ -> true
-            | _ -> false
-          end
-        | `RecursiveApplication _ -> true
-        | _ -> false
-      then
+      (* If t1 or t2 is recursive at the top, we give up. *)
+      if is_toplevel_rec_type t1 || is_toplevel_rec_type t2 then
         begin
         Debug.print "IR typechecker encountered recursive type";
         true
         end
       else
       begin
+      (* Collapses nested Foralls, unpacks `Alias, `Body *)
+      let t1 = TypeUtils.concrete_type t1 in
+      let t2 = TypeUtils.concrete_type t2 in
       match t1 with
       | `Not_typed ->
           begin match t2 with
@@ -245,13 +244,13 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
           end
       | `MetaTypeVar lpoint ->
           begin match Unionfind.find lpoint with
-            | `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
+            | `Recursive _ -> assert false (* removed by now *)
             | lpoint_cont ->
               begin match t2 with
                 `MetaTypeVar rpoint ->
                 begin match lpoint_cont, Unionfind.find rpoint with
                 | `Var lv, `Var rv -> handle_variable pk_type lv rv context
-                | `Body _, `Body _ -> raise (internal_error "Should have removed `Body by now")
+                | `Body _, `Body _ -> assert false (* removed by now *)
                 | _ -> false
                 end
                 | _                   -> false
@@ -323,12 +322,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | _          -> false
          end
 
-      | `Alias (_, t1_inner) ->
-        begin match t2 with
-          | `Alias (_, t2_inner) -> eqt (context, t1_inner, t2_inner)
-          | t2 -> eqt (context, t1_inner, t2)
-        end
-
+      | `Alias (_, _) -> assert false
       | `Table (lt1, lt2, lt3) ->
          begin match t2 with
          | `Table (rt1, rt2, rt3) ->
@@ -353,13 +347,17 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | `End, `End -> true
       | _, _ -> false
     and eq_rows (context, r1, r2) =
-      let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
-      let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
-      let r1 = eq_field_envs (context, lfield_env, rfield_env) in
-      let r2 = eq_row_vars (context, lrow_var, rrow_var) in
-        r1 && r2 && ldual=rdual
+      if is_toplevel_rec_row r1 || is_toplevel_rec_row r2 then
+        (Debug.print "IR typechecker encountered recursive type";
+        true)
+      else
+        let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
+        let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
+        let r1 = eq_field_envs (context, lfield_env, rfield_env) in
+        let r2 = eq_row_vars (context, lrow_var, rrow_var) in
+          r1 && r2 && ldual=rdual
     and eq_presence (context, l, r) =
-      match l, r with
+      match Types.concrete_field_spec l, Types.concrete_field_spec r with
       | `Absent, `Absent -> true
       | `Present lt, `Present rt -> eqt (context, lt, rt)
       | `Var lpoint, `Var rpoint ->
