@@ -265,7 +265,7 @@ struct
         | Concat vs ->
           concat_map (query gs os cond) vs
         | If (cond', v, Concat []) ->
-           query gs os (reduce_and (cond, cond')) v
+          query gs os (reduce_and (cond, cond')) v
         | For (_, gs', os', body) ->
           query (gs @ gs') (os @ os') cond body
         | _ -> assert false
