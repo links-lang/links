@@ -644,7 +644,12 @@ struct
         let children =
           List.fold_right
             (fun v children ->
-               let v = xlate env v in
+               let reduce_sToXml = function
+               | Q.Apply (Q.Primitive "stringToXml", [u]) ->
+                 Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
+               | u -> u
+               in
+               let v = reduce_sToXml (xlate env v) in
                  List.map Q.unbox_xml (Q.unbox_list v) @ children)
             children [] in
         let children =
