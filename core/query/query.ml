@@ -897,16 +897,6 @@ struct
 
   and norm_comp env c = norm env (computation env c)
 
-(*
-  let norm env t0 =
-    begin
-      Printf.printf "NORM: input %s\n" (string_of_t t0);
-      let res = norm env t0 in
-      Printf.printf "NORM: output %s\n\n" (string_of_t res);
-      res
-    end
-	*)
-
   let eval env e =
     Debug.print ("Query.eval e: "^Ir.show_computation e);
     Debug.debug_time "Query.eval" (fun () ->
