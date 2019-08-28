@@ -31,7 +31,6 @@ let tag_query : QL.t -> QL.t =
         | Variant (l, e) -> Variant (l, tag e)
         | XML v -> XML v
         | Apply (u, vs) -> Apply (tag u, List.map tag vs)
-(*        | ApplyPrim (f, es) -> ApplyPrim (f, List.map tag es) *)
         | Closure ((xs, body), env) -> Closure ((xs, body), env)
         | Case (u, cs, d) -> Case (tag u, StringMap.map (fun (x,y) -> (x, tag y)) cs, opt_app (fun (x,y) -> Some (x, tag y)) None d)
         | Primitive p -> Primitive p

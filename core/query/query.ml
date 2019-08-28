@@ -576,6 +576,12 @@ struct
     let field_types = Q.field_types_of_list xs in
       ([x, xs], [], Q.Singleton (eta_expand_var (x, field_types)))
 
+  let reduce_artifacts = function
+  | Q.Apply (Q.Primitive "stringToXml", [u]) ->
+    Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
+  | Q.Apply (Q.Primitive "AsList", [xs]) -> xs
+  | u -> u
+
   let rec xlate env : Ir.value -> Q.t = let open Ir in function
     | Constant c -> Q.Constant c
     | Variable var ->
@@ -644,13 +650,8 @@ struct
         let children =
           List.fold_right
             (fun v children ->
-               let reduce_sToXml = function
-               | Q.Apply (Q.Primitive "stringToXml", [u]) ->
-                 Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
-               | u -> u
-               in
-               let v = reduce_sToXml (xlate env v) in
-                 List.map Q.unbox_xml (Q.unbox_list v) @ children)
+               let v = xlate env v in
+               List.map Q.unbox_xml (Q.unbox_list v) @ children)
             children [] in
         let children =
           StringMap.fold
@@ -661,7 +662,7 @@ struct
           Q.Singleton (Q.XML (Value.Node (tag, children)))
 
     | ApplyPure (f, ps) ->
-        Q.Apply (xlate env f, List.map (xlate env) ps)
+        reduce_artifacts (Q.Apply (xlate env f, List.map (xlate env) ps))
     | Closure (f, _, v) ->
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
@@ -708,7 +709,7 @@ struct
   and tail_computation env : Ir.tail_computation -> Q.t = let open Ir in function
     | Return v -> xlate env v
     | Apply (f, args) ->
-        Q.Apply (xlate env f, List.map (xlate env) args)
+        reduce_artifacts (Q.Apply (xlate env f, List.map (xlate env) args))
     | Special (Ir.Query (None, e, _)) -> computation env e
     | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
        (** WR: this case is because shredding needs to access the keys of tables
@@ -824,8 +825,6 @@ struct
             bind env (x, arg)) xs args env in
         (* Debug.print("Applied"); *)
           norm_comp env body
-    | Q.Primitive "AsList", [xs] ->
-        xs
     | Q.Primitive "Cons", [x; xs] ->
         Q.reduce_concat [Q.Singleton x; xs]
     | Q.Primitive "Concat", ([_xs; _ys] as l) ->
@@ -888,8 +887,6 @@ struct
       Q.reduce_or (v, w)
     | Q.Primitive "==", [v; w] ->
       Q.reduce_eq (v, w)
-    | Q.Primitive "stringToXml", [v] ->
-      Q.Singleton (Q.XML (Value.Text (Q.unbox_string v)))
     | Q.Primitive f, args ->
         Q.Apply (Q.Primitive f, args)
     | Q.If (c, t, e), args ->
