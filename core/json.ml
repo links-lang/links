@@ -4,7 +4,11 @@ open CommonTypes
 open Utility
 
 (* Setting *)
-let show_json = Basicsettings.Json.show_json
+let show_json
+  = Settings.(flag "show_json"
+              |> convert parse_bool
+              |> sync)
+
 
 (* Type synonyms *)
 type handler_id = int

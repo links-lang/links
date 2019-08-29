@@ -2,12 +2,14 @@ open Utility
 
 type websocket_url = string
 val webs_running : bool Settings.setting
-
+val jslib_url : string option Settings.setting
 
 
 module type WEBSERVER =
 sig
   type request_handler_fn = { request_handler: Value.env * Value.t; error_handler: Value.env * Value.t }
+
+  val get_websocket_url : unit -> string
 
   val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> Loader.ext_dep list -> unit
   val set_prelude : Ir.binding list -> unit

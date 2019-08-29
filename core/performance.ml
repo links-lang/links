@@ -1,9 +1,20 @@
 (* Measure performance *)
-let measuring = Basicsettings.Performance.measuring
-let noisy = Basicsettings.Performance.noisy_gc
+let measuring
+  = Settings.(flag "measure_performance"
+              |> synopsis "Instruments the server-side runtime to measure various performance characteristics"
+              |> convert parse_bool
+              |> CLI.(add (long "measure_performance"))
+              |> sync)
+
+let noisy_gc
+  = Settings.(flag "noisy_garbage_collection"
+              |> synopsis "Prints information about garbage collection cycles"
+              |> convert parse_bool
+              |> sync)
+
 
 let notify_gc () =
-  Debug.if_set noisy (fun _ -> "Completing GC cycle")
+  Debug.if_set noisy_gc (fun _ -> "Completing GC cycle")
 
 let measure_diff_l obtain diff e =
   let start = obtain () in
@@ -31,7 +42,7 @@ let write_memory s t =
   flush stderr
 
 let measure_l name (e) : 'b =
-  if Settings.get_value measuring then
+  if Settings.get measuring then
     let _ = write_begin name in
     let (result, time_taken), memory_allocated =
       measure_memory_l (lazy (time_l e))

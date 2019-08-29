@@ -1565,14 +1565,12 @@ let extract_tuple (field_env, _, _) =
                         | `Absent
                         | `Var _ -> assert false) field_env
 
-(* whether to display mailbox annotations on arrow types
-   [NOTE]
-      unused mailbox parameters are never shown
- *)
-let show_mailbox_annotations = Basicsettings.Types.show_mailbox_annotations
+let show_raw_type_vars
+  = Settings.(flag "show_raw_type_vars"
+              |> synopsis "Print type variables as raw numbers rather than letters"
+              |> convert parse_bool
+              |> sync)
 
-(* pretty-print type vars as raw numbers rather than letters *)
-let show_raw_type_vars = Basicsettings.Types.show_raw_type_vars
 
 
 module Vars =
@@ -1737,7 +1735,7 @@ struct
      variables.  Both folds work by side-effecting on the hash table, which is
      then returned to be used freely outside of this module. *)
   let make_names (vars:vars_list) =
-    if Settings.get_value show_raw_type_vars then
+    if Settings.get show_raw_type_vars then
       let _ = List.fold_left
         (fun _ (var, spec) ->
            match Hashtbl.lookup tyvar_name_map var with
@@ -1763,16 +1761,36 @@ struct
   let find_spec var tbl =      Hashtbl.find tbl var
 end
 
+let effect_sugar
+  = Settings.(flag "effect_sugar"
+              |> convert parse_bool
+              |> sync)
+
 (** Type printers *)
 
 module Print =
 struct
   module BS = Basicsettings
-  let show_quantifiers     = BS.Types.Print.show_quantifiers
-  let show_flavours        = BS.Types.Print.show_flavours
-  let show_kinds           = BS.Types.Print.show_kinds
-  let hide_fresh_type_vars = BS.Types.Print.hide_fresh_type_vars
-  let effect_sugar         = BS.Types.effect_sugar
+  let show_quantifiers
+    = Settings.(flag "show_quantifiers"
+                |> convert parse_bool
+                |> sync)
+
+  let show_flavours
+    = Settings.(flag "show_flavours"
+                |> convert parse_bool
+                |> sync)
+
+  let show_kinds
+    = Settings.(option ~default:(Some "default") "show_kinds"
+                |> to_string from_string_option
+                |> convert Utility.some
+                |> sync)
+
+  let hide_fresh_type_vars
+    = Settings.(flag ~default:true "hide_fresh_type_vars"
+                |> convert parse_bool
+                |> sync)
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
@@ -1782,11 +1800,11 @@ struct
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
   let default_policy () =
-    {quantifiers=Settings.get_value show_quantifiers;
-     flavours=Settings.get_value show_flavours;
-     hide_fresh=Settings.get_value hide_fresh_type_vars;
-     kinds=Settings.get_value show_kinds;
-     effect_sugar=Settings.get_value effect_sugar}
+    {quantifiers=Settings.get show_quantifiers;
+     flavours=Settings.get show_flavours;
+     hide_fresh=Settings.get hide_fresh_type_vars;
+     kinds=val_of (Settings.get show_kinds);
+     effect_sugar=Settings.get effect_sugar}
 
   let empty_context = { bound_vars = TypeVarSet.empty; shared_effect = None }
 
@@ -2274,10 +2292,17 @@ See Note [Variable names in error messages].
 
  *)
 
+(* Pretty print types or use generated printer? *)
+let print_types_pretty
+  = Settings.(flag ~default:true "print_types_pretty"
+              |> synopsis "Toggles whether to use the pretty printer or derived printer for printing types"
+              |> convert parse_bool
+              |> sync)
+
 (* string conversions *)
 let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (t : datatype) =
-  if Settings.get_value Basicsettings.print_types_pretty then
+  if Settings.get print_types_pretty then
     let policy = policy () in
     let t = if policy.Print.quantifiers then t
             else Print.strip_quantifiers t in
@@ -2288,7 +2313,7 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
     show_datatype (DecycleTypes.datatype t)
 
 let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
-  if Settings.get_value Basicsettings.print_types_pretty then
+  if Settings.get print_types_pretty then
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
     let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
@@ -2645,18 +2670,18 @@ let make_thunk_type : row -> datatype -> datatype
    by the generated code for printing the IR, do not call them yourself.
    Use string_of_* instead *)
 let pp_datatype : Format.formatter -> datatype -> unit = fun fmt t ->
-  if Settings.get_value Basicsettings.print_types_pretty then
+  if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_datatype t)
   else
     pp_datatype fmt (DecycleTypes.datatype t)
 let pp_quantifier : Format.formatter -> quantifier -> unit = fun fmt t ->
-  if Settings.get_value Basicsettings.print_types_pretty then
+  if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_quantifier t)
   else
     pp_quantifier fmt (DecycleTypes.quantifier t)
 let show_quantifier : quantifier -> string = (fun x -> Format.asprintf "%a" pp_quantifier x)
 let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
-  if Settings.get_value Basicsettings.print_types_pretty then
+  if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_type_arg t)
   else
     pp_type_arg fmt (DecycleTypes.type_arg t)
@@ -2665,12 +2690,12 @@ let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
     | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
     | other -> other in
 
-  if Settings.get_value Basicsettings.print_types_pretty then
+  if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_tycon_spec t)
   else
     pp_tycon_spec fmt (decycle_tycon_spec t)
 let pp_row : Format.formatter -> row -> unit = fun fmt t ->
-  if Settings.get_value Basicsettings.print_types_pretty then
+  if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_row t)
   else
     pp_row fmt (DecycleTypes.row t)

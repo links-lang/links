@@ -4,20 +4,50 @@ open Utility
 
 module BS = Basicsettings
 
+let to_evaluate
+  = Settings.(multi_option "evaluate"
+              |> synopsis "Evaluates an expression"
+              |> privilege `System
+              |> hint "<expression>"
+              |> hidden
+              |> convert (fun s -> [s])
+              |> CLI.(add (short 'e' <&> long "evaluate"))
+              |> sync)
 
-(** Ensure the settings were parsed correctly *)
-let _ = ParseSettings.validate_settings ()
+let _ =
+  let print_keywords _ =
+    List.iter (fun (kw, _) -> Printf.printf "%s\n%!" kw) Lexer.keywords;
+    exit 0
+  in
+  Settings.(flag "print_keywords"
+            |> synopsis "Print keywords and exit"
+            |> privilege `System
+            |> action print_keywords
+            |> hidden
+            |> CLI.(add (long "print-keywords"))
+            |> sync)
 
-
-
-let to_evaluate : string list ref = ParseSettings.to_evaluate
-let file_list : string list ref = ParseSettings.file_list
+let _ =
+  let show_help _ =
+    Printf.fprintf stdout "usage: %s [options] [source-files [-- arguments]]\n\n" (Filename.basename Sys.executable_name);
+    Printf.fprintf stdout "Options are:\n";
+    Settings.print_cli_options stdout;
+    flush stderr; exit 0
+  in
+  Settings.(flag "help"
+            |> synopsis "Print help message and exit"
+            |> privilege `System
+            |> action show_help
+            |> hidden
+            |> convert parse_bool
+            |> CLI.(add (short 'h' <&> long "help"))
+            |> sync)
 
 
 let print_simple rtype value =
   print_string (Value.string_of_value value);
   print_endline
-    (if Settings.get_value (BS.printing_types) then
+    (if Settings.get (Repl.printing_types) then
           " : " ^ Types.string_of_datatype rtype
         else
           "")
@@ -30,31 +60,30 @@ let process_exprarg envs expr =
   let result = Driver.NonInteractive.evaluate_string_in envs expr in
   print_simple result.Driver.result_type result.Driver.result_value
 
-
-
 let main () =
+  Settings.ensure_all_handled ();
+  let file_list = Settings.get_anonymous_arguments () in
+  let to_evaluate = Settings.get to_evaluate in
+
   let prelude, envs = measure "prelude" Driver.NonInteractive.load_prelude () in
 
-  for_each !to_evaluate (process_exprarg envs);
+  for_each to_evaluate (process_exprarg envs);
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
-  for_each !file_list (process_filearg prelude envs);
-  let should_start_repl = !to_evaluate = [] && !file_list = [] in
+  for_each file_list (process_filearg prelude envs);
+  let should_start_repl = to_evaluate = [] && file_list = [] in
   if should_start_repl then
     begin
-      print_endline (Settings.get_value BS.welcome_note);
+      Printf.printf "%s%!" (val_of (Settings.get BS.welcome_note));
       Repl.interact envs
     end
 
 
 
 let _ =
-  if !ParseSettings.print_keywords
-  then (List.iter (fun (k,_) -> print_endline k) Lexer.keywords; exit 0);
-
-(* parse common cmdline arguments and settings *)
+  (* Determine whether web mode should be enabled. *)
   begin match Utility.getenv "REQUEST_METHOD" with
-    | Some _ -> Settings.set_value BS.web_mode true
+    | Some _ -> Settings.set BS.web_mode true
     | None -> ()
   end;
 

@@ -1,6 +1,6 @@
 (** Facilities for optional debugging messages. *)
 
-val debugging_enabled : bool Settings.setting
+val enabled : bool Settings.setting
 
 (** print a debug message without line feed if debugging is enabled *)
 val print_no_lf : string -> unit

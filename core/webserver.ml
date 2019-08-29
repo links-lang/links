@@ -5,9 +5,28 @@ open Utility
 open Webserver_types
 open Var
 
-let jslibdir : string Settings.setting = Basicsettings.Js.lib_dir
+let jslib_dir = Settings.(option "jslibdir"
+                          |> synopsis "Server-side (physical) location of the JavaScript runtime"
+                          |> to_string from_string_option
+                          |> convert Utility.(Sys.expand ->- some)
+                          |> sync)
+
 let host_name = Basicsettings.Appserver.hostname
 let port = Basicsettings.Appserver.port
+
+(* Base URL for websocket connections *)
+let websocket_url
+  = let parse_ws_url url =
+      if String.length url = 0
+      then raise (Invalid_argument "the websocket endpoint cannot be empty")
+      else Some url
+    in
+    Settings.(option ~default:(Some "/ws/") "websocket_url"
+              |> privilege `System
+              |> synopsis "Endpoint for requests over websockets"
+              |> to_string from_string_option
+              |> convert parse_ws_url
+              |> sync)
 
 module Trie =
 struct
@@ -85,7 +104,8 @@ struct
   let set_accepting_websocket_requests v =
     accepting_websocket_requests := v
 
-  let ws_url = Settings.get_value Basicsettings.websocket_url
+  let get_websocket_url () =
+    val_of (Settings.get websocket_url)
 
   let set_prelude bs =
     prelude := bs
@@ -177,7 +197,7 @@ struct
           let open Page in
           let page =
             RealPage.page
-              ~wsconn_url:(if !accepting_websocket_requests then Some ws_url else None)
+              ~wsconn_url:(if !accepting_websocket_requests then Some (get_websocket_url ()) else None)
               (Lib.nenv, Lib.typing_env)
               (* hypothesis: local definitions shouldn't matter,
                * they should all end up in valenv... *)
@@ -197,7 +217,7 @@ struct
       let render_servercont_cont valenv v =
         let open Page in
         RealPage.page
-          ~wsconn_url:(if !accepting_websocket_requests then Some (ws_url) else None)
+          ~wsconn_url:(if !accepting_websocket_requests then Some (get_websocket_url ()) else None)
           (Lib.nenv, Lib.typing_env)
           (!prelude @ !globals)
           (valenv, v)
@@ -225,7 +245,7 @@ struct
           Cohttp_lwt_unix.Server.respond_file ~headers ~fname () >>= fun resp ->
           Lwt.return (`Response resp) in
 
-      let is_websocket_request = is_prefix_of ws_url in
+      let is_websocket_request = is_prefix_of (get_websocket_url ()) in
 
       let route rt =
         let rec up = function
@@ -255,31 +275,35 @@ struct
         up (Trie.longest_match (Str.split (Str.regexp "/") path) !rt, String.length path == 1 ||path.[String.length path - 1] <> '/') in
 
         let prefixed_lib_url =
-          let base_url = Settings.get_value Basicsettings.Appserver.internal_base_url in
-          let js_url = Settings.get_value Basicsettings.Js.lib_url in
-          if base_url = "" then "/" ^ (Utility.strip_slashes js_url) ^ "/" else
-          "/" ^
-          (base_url |> Utility.strip_slashes) ^ "/" ^
-          (js_url |> Utility.strip_slashes) ^ "/" in
+          let js_url = from_option "" (Settings.get jslib_url) in
+          match Settings.get Basicsettings.Appserver.internal_base_url with
+          | None | Some "" ->
+             "/" ^ (Utility.strip_slashes js_url) ^ "/"
+          | Some base_url ->
+             "/" ^
+               (base_url |> Utility.strip_slashes) ^ "/" ^
+                 (js_url |> Utility.strip_slashes) ^ "/"
+        in
         Debug.print ("Prefixed_lib_url: " ^ prefixed_lib_url) ;
         Debug.print ("Path: " ^ path) ;
 
         if is_prefix_of prefixed_lib_url path then
         let liburl_length = String.length prefixed_lib_url in
         let uri_path = (String.sub path liburl_length (String.length path - liburl_length)) in
-        let linkslib = match Settings.get_value jslibdir with
-          | "" ->
+        let linkslib = match Settings.get jslib_dir with
+          | None | Some "" ->
              begin
                (match Utility.getenv "LINKS_LIB" with
                 | None -> Filename.dirname Sys.executable_name
                 | Some path -> path) / "lib" / "js"
              end
-          | s -> s in
+          | Some s -> s
+        in
         serve_static linkslib uri_path []
       (* Handle websocket connections *)
       else if (is_websocket_request path) then
-        let websocket_path = Settings.get_value Basicsettings.websocket_url in
-        let ws_url_length = String.length websocket_path in
+        let ws_url = get_websocket_url () in
+        let ws_url_length = String.length ws_url in
         (* TODO: Sanity checking of client ID here *)
         let client_id = ClientID.of_string @@
           String.sub path ws_url_length ((String.length path) - ws_url_length) in
@@ -312,7 +336,7 @@ struct
     Debug.print ("Starting server?\n");
     Lwt.async_exception_hook :=
       (fun exn -> Debug.print ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
-    Settings.set_value Basicsettings.web_mode true;
-    Settings.set_value webs_running true;
-    start_server (Settings.get_value host_name) (Settings.get_value port) rt
+    Settings.set Basicsettings.web_mode true;
+    Settings.set webs_running true;
+    start_server (val_of (Settings.get host_name)) (val_of (Settings.get port)) rt
 end

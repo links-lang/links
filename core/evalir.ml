@@ -12,8 +12,26 @@ let internal_error message =
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
-let dynamic_static_routes = Basicsettings.Evalir.dynamic_static_routes
+let dynamic_static_routes
+  = Settings.(flag "dynamic_static_routes"
+              |> convert parse_bool
+              |> sync)
 let allow_static_routes = ref true
+
+(** If [true], then enable concurrency on the server:
+
+    - Child processes are abandoned if the main process ends.
+
+    - A run-time error results if the server tries to call the client
+    with child processes still running.
+*)
+let concurrent_server =
+  Settings.(flag ~default:true "concurrenct_server"
+            |> privilege `System
+            |> synopsis "Use the concurrent runtime on the app-server"
+            |> convert parse_bool
+            |> sync)
+
 
 module type EVALUATOR = sig
   type v = Value.t
@@ -105,8 +123,10 @@ struct
      let client_id = RequestData.get_client_id req_data in
      let conn_url =
        if (Webs.is_accepting_websocket_requests ()) then
-         Some (Settings.get_value Basicsettings.websocket_url) else
-         None in
+         Some (Webs.get_websocket_url ())
+       else
+         None
+     in
      let st = List.fold_left
        (fun st_acc arg -> ResolveJsonState.add_value_information arg st_acc)
        (JsonState.empty client_id conn_url) args in
@@ -123,7 +143,7 @@ struct
      result =
 
        fun req_data name cont args ->
-         if not(Settings.get_value Basicsettings.web_mode) then
+         if not(Settings.get Basicsettings.web_mode) then
            raise (internal_error "Can't make client call outside web mode.");
          (*if not(Proc.singlethreaded()) then
            raise (internal_error "Remaining procs on server at client call!"); *)
@@ -266,7 +286,7 @@ struct
     (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         let req_data = Value.Env.request_data env in
-        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
+        if Settings.get Basicsettings.web_mode && not (Settings.get concurrent_server) then
           client_call req_data "_SendWrapper" cont [pid; msg]
         else
           let unboxed_pid = Value.unbox_pid pid in
@@ -287,7 +307,7 @@ struct
             apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawnAt",_), [loc; func] ->
         let req_data = Value.Env.request_data env in
-        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
+        if Settings.get Basicsettings.web_mode && not (Settings.get concurrent_server) then
             client_call req_data "_spawnWrapper" cont [loc; func]
         else
           begin
@@ -305,7 +325,7 @@ struct
           end
     | `PrimitiveFunction ("spawnAngelAt",_), [loc; func] ->
         let req_data = Value.Env.request_data env in
-        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
+        if Settings.get Basicsettings.web_mode && not (Settings.get concurrent_server) then
             client_call req_data "_spawnWrapper" cont [loc; func]
         else
           begin
@@ -363,7 +383,7 @@ struct
 (*         if (Settings.get_value Basicsettings.web_mode) then *)
 (*             Debug.print("receive in web server mode--not implemented."); *)
         let req_data = Value.Env.request_data env in
-        if Settings.get_value Basicsettings.web_mode && not (Settings.get_value Basicsettings.concurrent_server) then
+        if Settings.get Basicsettings.web_mode && not (Settings.get concurrent_server) then
           client_call req_data "_recvWrapper" cont []
         else
         begin match Mailbox.pop_message () with
@@ -462,7 +482,7 @@ struct
           Proc.block (fun () -> apply_cont K.(grab_frame &> cont) env (`Record [])) in
 
         let throw_or_block () =
-          if Settings.get_value (Basicsettings.Sessions.exceptions_enabled) then
+          if Settings.get (Basicsettings.Sessions.exceptions_enabled) then
             invoke_session_exception ()
           else block () in
 
@@ -502,12 +522,13 @@ struct
        let path = Value.unbox_string pathv in
        let is_dir_handler = String.length path > 0 && path.[String.length path - 1] = '/' in
        let path = if String.length path == 0 || path.[0] <> '/' then "/" ^ path else path in
-       let base_url = Settings.get_value (Basicsettings.Appserver.internal_base_url) in
        let path =
-         if base_url = "" then path
-         else
-           let base_url = Utility.strip_slashes base_url in
-           "/" ^ base_url ^ path in
+         match Settings.get (Basicsettings.Appserver.internal_base_url) with
+         | None | Some "" -> path
+         | Some base_url ->
+            let base_url = Utility.strip_slashes base_url in
+            "/" ^ base_url ^ path
+       in
        Webs.add_route is_dir_handler path (Right {Webs.request_handler = (env, handler); Webs.error_handler = (env, error_handler)});
        apply_cont cont env (`Record [])
     | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv; mime_typesv] ->
@@ -515,18 +536,19 @@ struct
          eval_error "Attempt to add a static route after they have been disabled";
        let uri = Value.unbox_string uriv in
        let uri = if String.length uri == 0 || uri.[0] <> '/' then "/" ^ uri else uri in
-       let base_uri = Settings.get_value (Basicsettings.Appserver.internal_base_url) in
        let uri =
-         if base_uri = "" then uri
-         else
-           let base_uri = Utility.strip_slashes base_uri in
-           "/" ^ base_uri ^ uri in
+         match Settings.get (Basicsettings.Appserver.internal_base_url) with
+         | None | Some "" -> uri
+         | Some base_uri ->
+            let base_uri = Utility.strip_slashes base_uri in
+            "/" ^ base_uri ^ uri
+       in
        let path = Value.unbox_string pathv in
        let mime_types = List.map (fun v -> let (x, y) = Value.unbox_pair v in (Value.unbox_string x, Value.unbox_string y)) (Value.unbox_list mime_typesv) in
        Webs.add_route true uri (Left (path, mime_types));
        apply_cont cont env (`Record [])
     | `PrimitiveFunction ("servePages", _), [] ->
-       if not (Settings.get_value(dynamic_static_routes)) then
+       if not (Settings.get (dynamic_static_routes)) then
          allow_static_routes := false;
        begin
          Webs.start env >>= fun () ->
@@ -685,7 +707,7 @@ struct
         let data = value env data |> Value.unbox_list in
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let behaviour =
-          if Settings.get_value Basicsettings.RelationalLenses.classic_lenses
+          if Settings.get Basicsettings.RelationalLenses.classic_lenses
           then Lens.Eval.Classic
           else Lens.Eval.Incremental in
         Lens.Eval.put ~behaviour lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
@@ -710,7 +732,7 @@ struct
          | None -> None
          | Some (limit, offset) ->
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
-       if Settings.get_value Basicsettings.Shredding.shredding then
+       if Settings.get Basicsettings.Shredding.shredding then
          begin
            if range != None then eval_error "Range is not supported for nested queries";
            match EvalNestedQuery.compile_shredded env e with
@@ -896,7 +918,7 @@ struct
           | ReceivePartnerCancelled ->
               (* If session exceptions enabled, then cancel this endpoint and
                * invoke the session exception. Otherwise, block, as per old semantics. *)
-              if (Settings.get_value Basicsettings.Sessions.exceptions_enabled) then
+              if (Settings.get Basicsettings.Sessions.exceptions_enabled) then
                 begin
                   Session.cancel unboxed_chan >>= fun _ ->
                   invoke_session_exception ()

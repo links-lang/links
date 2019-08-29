@@ -5,6 +5,13 @@ exception IllformedPluginDescription of string
 exception DependencyLoadFailure of string * Dynlink.error
 exception LoadFailure of string * Dynlink.error
 
+let driver
+  = Settings.(option "database_driver"
+              |> synopsis "Selects the runtime database backend"
+              |> to_string from_string_option
+              |> convert Utility.some
+              |> sync)
+
 (* There are two artifacts associated with a dynamic loadable database
    driver:
 
@@ -174,11 +181,33 @@ module Loader = struct
     with Dynlink.Error e -> raise (LoadFailure (target.cma, e))
 end
 
+let default_path_string () =
+  let open Utility in
+  let module Glob = Glob.Make(DefaultPolicy) in
+  let _build = Filename.(dirname (dirname (dirname Sys.argv.(0)))) in
+  let install = Filename.concat _build "install" in
+  let files =
+    try Glob.files install (Str.regexp "links_[A-Za-z0-9]+_dependencies\\.json$")
+    with Disk.AccessError _ -> []
+  in
+  let paths = List.map Disk.File.dirname files in
+  String.concat ":" paths
+
+(** List of directories where to look for database drivers, split by ':'
+      Initialized to point to where the drivers are compiled to if building in the current directory **)
+let path =
+  Settings.(option ~default:(Some (default_path_string ())) "db_driver_path"
+            |> privilege `System
+            |> synopsis "Search paths for database drivers"
+            |> to_string from_string_option
+            |> convert Utility.(Sys.expand ->- some)
+            |> sync)
 
 let load driver_name =
   let path =
-    let settings_path =
-      Settings.get_value Basicsettings.DatabaseDrivers.path in
-    if settings_path = "" then [] else String.split_on_char ':' settings_path
+    match Settings.get path with
+    | None | Some "" -> []
+    | Some settings_path ->
+       String.split_on_char ':' settings_path
   in
   Loader.load ~path driver_name

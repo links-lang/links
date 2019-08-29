@@ -618,7 +618,10 @@ end
 *)
 module ElimDeadDefs =
 struct
-  let show_rec_uses = Basicsettings.Ir.show_rec_uses
+  let show_rec_uses
+    = Settings.(flag "show_rec_uses"
+                |> convert parse_bool
+                |> sync)
 
   let counter tyenv =
   object (o : 'self_type)

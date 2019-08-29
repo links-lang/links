@@ -7,9 +7,17 @@ exception ArityMismatch of (int * int)
 let internal_error message =
   Errors.internal_error ~filename:"instantiate.ml" ~message
 
-let show_recursion = Basicsettings.Instantiate.show_recursion
-let show_instantiation = Basicsettings.Instantiate.show_instantiation
+let show_recursion
+  = Settings.(flag "show_recursion"
+              |> depends Debug.enabled
+              |> convert parse_bool
+              |> sync)
 
+let show_instantiation
+  = Settings.(flag "show_instantiation"
+              |> depends Debug.enabled
+              |> convert parse_bool
+              |> sync)
 (*
   instantiation environment:
     for stopping cycles during instantiation

@@ -3,9 +3,40 @@ open Printf
 open SourceCode.WithPos
 open Sugartypes
 
-let module_sep = "."
+(* Paths to look for .links files in chasing pass *)
+let links_file_paths
+  = let from_list xs = String.concat "," xs in
+    let parse value =
+      List.map Utility.Sys.expand (String.split_on_char ':' value)
+    in
+    Settings.(multi_option "links_file_paths"
+              |> synopsis "Search paths for Links modules"
+              |> hint "<dir[[:dir']...]>"
+              |> to_string from_list
+              |> convert parse
+              |> CLI.(add (long "path"))
+              |> sync)
 
-let path_sep = ":"
+
+(* Should we use the extra standard library definitions? *)
+let use_stdlib
+  = Settings.(flag ~default:true "use_stdlib"
+              |> convert parse_bool
+              |> sync)
+
+(* Standard library path *)
+let stdlib_path =
+  let dir =
+    match Utility.getenv "LINKS_LIB" with
+    | Some path -> Filename.concat path "stdlib"
+    | None -> ""
+  in
+  Settings.(option ~default:(Some dir) "stdlib_path"
+            |> to_string from_string_option
+            |> convert Utility.(Sys.expand ->- some)
+            |> sync)
+
+let module_sep = "."
 
 type term_shadow_table = string list stringmap
 type type_shadow_table = string list stringmap
@@ -19,22 +50,23 @@ let try_parse_file filename =
       Filename.chop_suffix path dir_sep else path in
 
   let poss_stdlib_dir =
-    let stdlib_path = Settings.get_value Basicsettings.StdLib.stdlib_path in
-    if Settings.get_value Basicsettings.StdLib.use_stdlib then
-      if stdlib_path <> "" then
-        [check_n_chop stdlib_path]
-      else
-        (* Otherwise, follow the same logic as for the prelude.
+    if Settings.get use_stdlib then
+      match Settings.get stdlib_path with
+      | None ->
+        (* Follow the same logic as for the prelude.
          * Firstly, check the current directory.
          * Secondly, check OPAM *)
-        let chopped_path = check_n_chop @@ Basicsettings.locate_file "stdlib" in
+        let chopped_path = check_n_chop @@ locate_file "stdlib" in
         [Filename.concat chopped_path "stdlib"]
-    else [] in
+      | Some stdlib_path ->
+         [check_n_chop stdlib_path]
+    else []
+  in
 
   let poss_dirs =
-    let path_setting = Settings.get_value Basicsettings.links_file_paths in
-    let split_dirs = Str.split (Str.regexp path_sep) path_setting in
-    "" :: "." :: poss_stdlib_dir @ (List.map (check_n_chop) split_dirs) in
+    let paths = Settings.get links_file_paths in
+    "" :: "." :: poss_stdlib_dir @ (List.map (check_n_chop) paths)
+  in
 
   (* Loop through, trying to open the module with each path *)
   let rec loop = (function

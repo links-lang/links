@@ -1088,7 +1088,7 @@ let gens_index (gs : (Var.var * Q.t) list)   =
            labels
            [])
   in
-  let get_fields = if Settings.get_value Basicsettings.use_keys_in_shredding
+  let get_fields = if Settings.get Basicsettings.use_keys_in_shredding
                    then key_fields
                    else all_fields
   in concat_map (table_index get_fields) gs
