@@ -73,8 +73,8 @@ steps:
                  sudo LINKS_CI=1 tools/configure-postgresql &&
                  sudo systemctl reload postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
-                 sudo -u postgres createdb -O $(whoami) links ;;
-        "Darwin") brew install postgresql libpq sqlite3 &&
+                 sudo -u postgres createdb -O $(whoami) links && python3-sphinx;;
+        "Darwin") brew install postgresql libpq sqlite3 sphinx-doc &&
                   pg_ctl -D /usr/local/var/postgres start &&
                   sleep 5 &&
                   /usr/local/opt/postgres/bin/createdb -O $(whoami) links ;;
@@ -88,6 +88,10 @@ steps:
       ./opam2_local pin add links-postgresql . -y
       ./opam2_local pin add links-sqlite3 . -y
     displayName: 'Links dependencies'
+
+  - script: |
+      make doc
+    displayName: 'Build Documentation'
 
   - script: |
       eval `./opam2_local env`
