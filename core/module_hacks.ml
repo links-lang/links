@@ -4,7 +4,5 @@ module Name = struct
 
   let prettify : string -> string
   = fun name ->
-    if Settings.get_value Basicsettings.modules
-    then Str.global_replace module_name_hack_pat "." name
-    else name
+    Str.global_replace module_name_hack_pat "." name
 end
