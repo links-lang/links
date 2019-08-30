@@ -4,6 +4,7 @@ links = './links'
 
 import sys, re, time
 import concurrent.futures, threading, multiprocessing
+from os import path
 from subprocess import Popen, PIPE
 
 successes = failures = ignored = 0
@@ -26,7 +27,7 @@ def parse(stream):
     are auxiliary options"""
     def tests():
         tests = []
-        for line in stream.readlines():
+        for line in stream:
             if not str.strip(line) and tests[-1]:
                 yield tests
                 tests = []
@@ -114,6 +115,34 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
         failures += 1
         print('!FAILURE: %s [TIMED OUT]' % name)
 
+def peek_line(f):
+    pos = f.tell()
+    line = f.readline()
+    f.seek(pos)
+    return line
+
+def parseTestScript(stream):
+    header = dict()
+    if peek_line(stream) == "---\n":
+        stream.readline()
+        line_num = 1
+        line = peek_line(stream)
+        while not (line == "---\n"):
+            raw_line = stream.readline()
+            line_num += 1
+            line = str.strip(raw_line)
+            keyvalue = list(map(str.strip, str.split(line, ':', 1)))
+            if len(keyvalue) == 2:
+                header[keyvalue[0]] = keyvalue[1]
+            else:
+                raise SystemExit("Syntax error on line " + str(line_num) + ": " + raw_line)
+            line = peek_line(stream)
+        stream.readline()
+        stream.readline()
+    yield header
+    yield from parse(stream)
+
+
 def main():
     config_file = None
 
@@ -121,13 +150,21 @@ def main():
         filename = sys.argv[1]
         config_file =  sys.argv[2]
     elif len(sys.argv) == 2:
-        filename =  sys.argv[1]
+        filename = sys.argv[1]
     else:
         raise SystemExit('Usage: run <test file> [<links config file>]')
 
     cpus=multiprocessing.cpu_count()
     tp = concurrent.futures.ThreadPoolExecutor(max_workers=cpus)
-    for name, code, opts in parse(open(filename, 'r')):
+
+    stream = parseTestScript(open(filename, 'r'))
+    # Process the header, if any.
+    header = next(stream)
+    if config_file == None and "config" in header:
+        config_file = header["config"]
+
+    # Process the body.
+    for name, code, opts in stream:
         # enqueues execution of
         # evaluate(name, code, config_file, **opts)
         # in the thread pool

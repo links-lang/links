@@ -97,7 +97,7 @@ module DatabaseDrivers = struct
 end
 
 (** The banner *)
-let version = "0.9 (Burghmuirhead)"
+let version = "0.9.1 (Burghmuirhead)"
 let welcome_note = Settings.add_string ("welcome_note",
 " _     _ __   _ _  __  ___\n\
  / |   | |  \\ | | |/ / / ._\\\n\
@@ -162,9 +162,6 @@ let printing_functions = Settings.add_bool ("printing_functions", false, `User)
 
 (* Optimization pass? *)
 let optimise = Settings.add_bool("optimise", false, `User)
-
-(* Allow modules? *)
-let modules = Settings.add_bool("modules", false, `User)
 
 (* Use keys in shredding *)
 let use_keys_in_shredding = Settings.add_bool("use_keys_in_shredding", true, `User)
@@ -263,6 +260,7 @@ module Ir = struct
   let typecheck_ir = Settings.add_bool("typecheck_ir", false, `User)
   (* Abort compilation on IR typing error *)
   let fail_on_ir_type_error = Settings.add_bool("fail_on_ir_type_error", false, `User)
+  let simplify_types = Settings.add_bool("simplify_types", false, `User)
 end
 
 (* Generalise stuff *)

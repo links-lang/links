@@ -1,3 +1,7 @@
+---
+config: tests/typed_ir.tests.config
+---
+
 Anonymous constant function
 fun (x) {1}
 stdout : fun : (_::(Unl,Mono)) -> Int
