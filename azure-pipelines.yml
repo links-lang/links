@@ -35,11 +35,20 @@ steps:
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install ocaml python3-sphinx;;
-        "Darwin") brew install ocaml sphinx-doc;;
+        "Linux") sudo apt-get install ocaml python3-setuptools python3-pip;;
+        "Darwin") brew install ocaml python3 &&
+                  brew postinstall python3;;
         *) exit 1 ;;
       esac
     displayName: 'System dependencies'
+
+  - bash: |
+      export PATH=$PATH:$HOME/.local/bin
+      pip3 install -U --upgrade pip &&
+      pip3 install -U wheel &&
+      pip3 install -U Sphinx
+    displayName: 'Install Sphinx'
+
 
   - bash: |
       case $AGENT_OS in
