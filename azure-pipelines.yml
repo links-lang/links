@@ -35,11 +35,11 @@ steps:
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install ocaml ;;
-        "Darwin") brew install ocaml ;;
+        "Linux") sudo apt-get install ocaml python3-sphinx;;
+        "Darwin") brew install ocaml sphinx-doc;;
         *) exit 1 ;;
       esac
-    displayName: 'OCaml system compiler'
+    displayName: 'System dependencies'
 
   - bash: |
       case $AGENT_OS in
@@ -73,8 +73,8 @@ steps:
                  sudo LINKS_CI=1 tools/configure-postgresql &&
                  sudo systemctl reload postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
-                 sudo -u postgres createdb -O $(whoami) links && python3-sphinx;;
-        "Darwin") brew install postgresql libpq sqlite3 sphinx-doc &&
+                 sudo -u postgres createdb -O $(whoami) links;;
+        "Darwin") brew install postgresql libpq sqlite3 &&
                   pg_ctl -D /usr/local/var/postgres start &&
                   sleep 5 &&
                   /usr/local/opt/postgres/bin/createdb -O $(whoami) links ;;
