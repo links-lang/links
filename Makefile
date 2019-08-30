@@ -123,12 +123,27 @@ clean:
 	dune clean
 	rm -rf *.install
 	rm -rf links linx
+	rm -rf doc/_build
+
+.PHONY: clean-doc
+clean-doc:
+	rm -rf doc/_build
 
 # Applies some ad-hoc checks on the source code.
 .PHONY: rule-check
 rule-check: tools/rule-check
 	@echo "Applying rule check"
 	@tools/rule-check
+
+doc/_build/html:
+	cd doc && make html
+
+.PHONY: doc
+doc : doc/_build/html
+
+.PHONY: open-doc
+open-doc: doc/_build/html
+	xdg-open doc/_build/html/index.html
 
 # The below machinery is used to prepare a release using dune-release.
 REPO=../opam-repository
