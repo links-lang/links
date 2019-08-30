@@ -163,33 +163,37 @@ struct
     (* We need to be a bit careful about what we respond here. If we are evaluating
      * a ServerCont or EvalMain, that is fine -- but we need to construct a b64-encoded
      * JSON object if we're responding to a ClientReturn or RemoteCall. *)
+
+    let handle_ajax_error = function
+      | Aborted r -> Lwt.return r
+      | e ->
+         let formatted_exn =
+           Errors.format_exception e
+           |> Json.js_dq_escape_string in
+         let error_json =
+           "{ \"error\": \"" ^ formatted_exn ^ "\"}" in
+         Lwt.return
+           ("text/plain", Utility.base64encode (error_json)) in
+
+    let handle_html_error e =
+      let mime_type = "text/html; charset=utf-8" in
+      match e with
+       | Aborted r -> Lwt.return r
+       | Failure msg as e ->
+          prerr_endline msg;
+          Lwt.return (mime_type, error_page (Errors.format_exception_html e))
+       | exc ->
+           Lwt.return (mime_type, error_page (Errors.format_exception_html exc)) in
+
+    let handle_error e =
+      if (is_ajax_call cgi_args) then
+        handle_ajax_error e
+      else
+        handle_html_error e in
+
     Lwt.catch
       (fun () -> perform_request valenv run render_cont render_servercont_cont request )
-      (fun e ->
-        if (is_ajax_call cgi_args) then
-          begin
-            match e with
-             | Aborted r -> Lwt.return r
-             | e ->
-                let formatted_exn =
-                  Errors.format_exception e
-                  |> Json.js_dq_escape_string in
-                let error_json =
-                  "{ \"error\": \"" ^ formatted_exn ^ "\"}" in
-                Lwt.return
-                  ("text/plain", Utility.base64encode (error_json))
-          end
-        else
-          begin
-            let mime_type = "text/html; charset=utf-8" in
-            match e with
-             | Aborted r -> Lwt.return r
-             | Failure msg as e ->
-                prerr_endline msg;
-                Lwt.return (mime_type, error_page (Errors.format_exception_html e))
-             | exc ->
-                 Lwt.return (mime_type, error_page (Errors.format_exception_html exc))
-          end) >>=
+      (handle_error) >>=
     fun (content_type, content) ->
       response_printer [("Content-type", content_type)] content
 end
