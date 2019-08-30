@@ -479,26 +479,17 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
       | b -> super#bindingnode b
 
-    method extension_guard pos =
-      if not (Settings.get_value Basicsettings.modules) then
-           raise (Errors.desugaring_error
-                    ~pos ~stage:Errors.DesugarModules
-                    ~message:("Modules are not enabled. To enable modules set the `modules' setting to true or use the flag `-m'."))
-
     method bindings = function
       | [] -> []
       | { node = Import { path; pollute }; pos } :: bs ->
-         self#extension_guard pos;
          self#import_module pos path;
          (if pollute then self#open_module pos path);
          self#bindings bs
       | { node = Open names; pos } :: bs ->
         (* Affects [scope]. *)
-         self#extension_guard pos;
          self#open_module pos names; self#bindings bs
-      | ({ node = Module _; pos } as module') :: bs ->
+      | ({ node = Module _; _ } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
-         self#extension_guard pos;
          let bs', scope' = desugar_module ~toplevel renamer scope module' in
          scope <- scope'; bs' @ self#bindings bs
       | b :: bs ->
