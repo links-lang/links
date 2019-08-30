@@ -167,13 +167,18 @@ struct
       (fun () -> perform_request valenv run render_cont render_servercont_cont request )
       (fun e ->
         if (is_ajax_call cgi_args) then
-          let formatted_exn =
-            Errors.format_exception e
-            |> Json.js_dq_escape_string in
-          let error_json =
-            "{ \"error\": \"" ^ formatted_exn ^ "\"}" in
-          Lwt.return
-            ("text/plain", Utility.base64encode (error_json))
+          begin
+            match e with
+             | Aborted r -> Lwt.return r
+             | e ->
+                let formatted_exn =
+                  Errors.format_exception e
+                  |> Json.js_dq_escape_string in
+                let error_json =
+                  "{ \"error\": \"" ^ formatted_exn ^ "\"}" in
+                Lwt.return
+                  ("text/plain", Utility.base64encode (error_json))
+          end
         else
           begin
             let mime_type = "text/html; charset=utf-8" in
