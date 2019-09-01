@@ -44,8 +44,8 @@ steps:
 
   - bash: |
       export PATH=$PATH:$HOME/.local/bin
-      pip3 install -U wheel &&
-      pip3 install -U Sphinx
+      sudo pip3 install wheel &&
+      sudo pip3 install Sphinx
     displayName: 'Install Sphinx'
 
 
