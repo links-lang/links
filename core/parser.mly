@@ -952,7 +952,7 @@ arrow_prefix:
 | LBRACE efields RBRACE                                        { $2            }
 
 straight_arrow_prefix:
-| arrow_prefix                                                 { $1       }
+| hear_arrow_prefix | arrow_prefix                             { $1       }
 | MINUS nonrec_row_var | MINUS kinded_nonrec_row_var           { ([], $2) }
 
 squig_arrow_prefix:
