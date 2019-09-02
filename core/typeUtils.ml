@@ -56,7 +56,7 @@ let extract_row t = match concrete_type t with
   | t ->
       error
         ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
-         ^ string_of_datatype t)
+         ^ TypePrinter.string_of_datatype t)
 
 let split_row name row =
   let (field_env, row_var, dual) = fst (unwrap_row row) in
@@ -65,11 +65,11 @@ let split_row name row =
       match (StringMap.find name field_env) with
         | `Present t -> t
         | `Absent ->
-            error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
+            error ("Attempt to split row "^ TypePrinter.string_of_row row ^" on absent field " ^ name)
         | `Var _ ->
-            error ("Attempt to split row "^string_of_row row ^" on var field " ^ name)
+            error ("Attempt to split row "^TypePrinter.string_of_row row ^" on var field " ^ name)
     else
-      error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
+      error ("Attempt to split row "^TypePrinter.string_of_row row ^" on absent field " ^ name)
   in
     t, (StringMap.remove name field_env, row_var, dual)
 
@@ -78,7 +78,7 @@ let rec variant_at ?(overstep_quantifiers=true) name t = match (concrete_type t,
   | (`Variant row, _) ->
       let t, _ = split_row name row in t
   | (t, _) ->
-      error ("Attempt to deconstruct non-variant type "^string_of_datatype t)
+      error ("Attempt to deconstruct non-variant type "^TypePrinter.string_of_datatype t)
 
 let rec split_variant_type name t = match concrete_type t with
   | `ForAll (_, t) -> split_variant_type name t
@@ -86,7 +86,7 @@ let rec split_variant_type name t = match concrete_type t with
       let t, row = split_row name row in
         `Variant (make_singleton_closed_row (name, `Present t)), `Variant row
   | t ->
-      error ("Attempt to split non-variant type "^string_of_datatype t)
+      error ("Attempt to split non-variant type "^TypePrinter.string_of_datatype t)
 
 let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type t, overstep_quantifiers) with
   | (`ForAll (_, t), true) -> project_type name t
@@ -94,14 +94,14 @@ let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type 
       let t, _ = split_row name row in
         t
   | (t, _) ->
-      error ("Attempt to project non-record type "^string_of_datatype t)
+      error ("Attempt to project non-record type "^TypePrinter.string_of_datatype t)
 
 let rec select_type name t = match concrete_type t with
   | `ForAll (_, t) -> select_type name t
   | `Select row ->
     let t, _ = split_row name row in t
   | t ->
-    error ("Attempt to select from non-selection type "^string_of_datatype (concrete_type t))
+    error ("Attempt to select from non-selection type "^ TypePrinter.string_of_datatype (concrete_type t))
 
 let rec split_choice_type name t = match concrete_type t with
   | `ForAll (_, t) -> split_choice_type name t
@@ -109,14 +109,14 @@ let rec split_choice_type name t = match concrete_type t with
       let t, row = split_row name row in
         `Choice (make_singleton_closed_row (name, `Present t)), `Choice row
   | t ->
-      error ("Attempt to split non-choice type "^string_of_datatype t)
+      error ("Attempt to split non-choice type "^ TypePrinter.string_of_datatype t)
 
 let rec choice_at name t = match concrete_type t with
   | `ForAll (_, t) -> choice_at name t
   | `Choice row ->
       let t, _ = split_row name row in t
   | t ->
-      error ("Attempt to deconstruct non-choice type "^string_of_datatype t)
+      error ("Attempt to deconstruct non-choice type "^ TypePrinter.string_of_datatype t)
 
 
 (*
@@ -139,23 +139,23 @@ let rec erase_type ?(overstep_quantifiers=true) names t =
               else
                 StringMap.add name `Absent field_env
             | Some `Absent ->
-              error ("Attempt to remove absent field "^name^" from row "^string_of_row row)
+              error ("Attempt to remove absent field "^name^" from row "^TypePrinter.string_of_row row)
             | Some (`Var _) ->
-              error ("Attempt to remove var field "^name^" from row "^string_of_row row)
+              error ("Attempt to remove var field "^name^" from row "^TypePrinter.string_of_row row)
             | None ->
-              error ("Attempt to remove absent field "^name^" from row "^string_of_row row))
+              error ("Attempt to remove absent field "^name^" from row "^TypePrinter.string_of_row row))
           names
           field_env
       in
         `Record (field_env, row_var, duality)
-  | (t, _) -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
+  | (t, _) -> error ("Attempt to erase field from non-record type "^ TypePrinter.string_of_datatype t)
 
 let rec return_type ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers)  with
   | (`ForAll (_, t), true) -> return_type t
   | (`Function (_, _, t), _) -> t
   | (`Lolli (_, _, t), _) -> t
   | (t, _) ->
-      error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
+      error ("Attempt to take return type of non-function: " ^ TypePrinter.string_of_datatype t)
 
 let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers) with
   | (`ForAll (_, t), true) -> arg_types t
@@ -167,16 +167,16 @@ let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overs
 (*  `Function ((`Function (), {Op: a -> b}, c) *)
 (*            , <empty effects>, d) *)
 (*   which is wrong; the formal parameter should be wrapped inside a `Record. *)
-(* *\) (\*error ("arg_types: " ^ (string_of_datatype t') ^ ", ret: " ^ string_of_datatype t'')*\) *)
+(* *\) (\*error ("arg_types: " ^ (string_of_datatype t') ^ ", ret: " ^ TypePrinter.string_of_datatype t'')*\) *)
   | (t, _) ->
-     error ("Attempt to take arg types of non-function: " ^ string_of_datatype t)
+     error ("Attempt to take arg types of non-function: " ^ TypePrinter.string_of_datatype t)
 
 let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers)  with
   | (`ForAll (_, t), true) -> effect_row t
   | (`Function (_, effects, _), _) -> effects
   | (`Lolli (_, effects, _), _) -> effects
   | (t, _) ->
-      error ("Attempt to take effects of non-function: " ^ string_of_datatype t)
+      error ("Attempt to take effects of non-function: " ^ TypePrinter.string_of_datatype t)
 
 
 let iter_row (iter_func : string -> field_spec -> unit) row  =
@@ -200,25 +200,25 @@ let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, ov
   | `Application (l, [`Type t]), _
       when Types.Abstype.equal l Types.list -> t
   | (t, _) ->
-      error ("Attempt to take element type of non-list: " ^ string_of_datatype t)
+      error ("Attempt to take element type of non-list: " ^ TypePrinter.string_of_datatype t)
 
 let rec table_read_type t = match concrete_type t with
   | `ForAll (_, t) -> table_read_type t
   | `Table (r, _, _) -> r
   | t ->
-      error ("Attempt to take read type of non-table: " ^ string_of_datatype t)
+      error ("Attempt to take read type of non-table: " ^ TypePrinter.string_of_datatype t)
 
 let rec table_write_type t = match concrete_type t with
   | `ForAll (_, t) -> table_write_type t
   | `Table (_, w, _) -> w
   | t ->
-      error ("Attempt to take write type of non-table: " ^ string_of_datatype t)
+      error ("Attempt to take write type of non-table: " ^ TypePrinter.string_of_datatype t)
 
 let rec table_needed_type t = match concrete_type t with
   | `ForAll (_, t) -> table_needed_type t
   | `Table (_, _, n) -> n
   | t ->
-      error ("Attempt to take needed type of non-table: " ^ string_of_datatype t)
+      error ("Attempt to take needed type of non-table: " ^ TypePrinter.string_of_datatype t)
 
 let inject_type name t =
   `Variant (make_singleton_open_row (name, `Present t) (lin_any, res_any))

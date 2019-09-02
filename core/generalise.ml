@@ -139,7 +139,7 @@ let get_type_args kind bound_vars t =
   remove_duplicates (get_type_args kind bound_vars t)
 
 let env_type_vars (env : Types.environment) =
-  TypeVarSet.union_all (List.map free_type_vars (Env.String.range env))
+  TypeVarSet.union_all (List.map FreeTypeVars.free_type_vars (Env.String.range env))
 
 let rigidify_type_arg : type_arg -> unit =
   let rigidify_point point =
@@ -176,7 +176,7 @@ let mono_type_args : type_arg -> unit =
 let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quantifier list * type_arg list) * datatype) =
   fun kind ?(unwrap=true) env t ->
     (* throw away any existing top-level quantifiers *)
-    Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
+    Debug.if_set show_generalisation (fun () -> "Generalising : " ^ TypePrinter.string_of_datatype t);
     let t = match Types.concrete_type t with
       | `ForAll (_, t) when unwrap -> t
       | _ -> t in
@@ -220,7 +220,7 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quanti
             quantifiers, type_args
       end in
 *)
-      Debug.if_set show_generalisation (fun () -> "Generalised: " ^ string_of_datatype quantified);
+      Debug.if_set show_generalisation (fun () -> "Generalised: " ^ TypePrinter.string_of_datatype quantified);
       ((quantifiers, type_args), quantified)
 
 (** only generalise rigid type variables *)
