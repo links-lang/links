@@ -901,7 +901,7 @@ end = functor (K : CONTINUATION) -> struct
                          ("name", gv table_name);
                          ("keys", gv keys);
                          ("row",
-                          strlit (Types.string_of_datatype (readtype)))])])
+                          strlit (Types.Print.string_of_datatype (readtype)))])])
       | LensSelect _ | LensJoin _ | LensDrop _ | Lens _ | LensCheck _ ->
               (* Is there a reason to not use js_hide_database_info ? *)
               K.apply kappa (Dict [])

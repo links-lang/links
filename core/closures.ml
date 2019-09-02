@@ -141,7 +141,7 @@ struct
 
       (* t is a type_arg, which ranges over ordinary types, rows and presence specs *)
       method typ (t : Types.type_arg) =
-        let free_type_vars = Types.free_tyarg_vars t in
+        let free_type_vars = Types.Vars.free_tyarg_vars t in
         (*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*)
         Types.TypeVarSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o
 

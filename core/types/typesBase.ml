@@ -1599,10 +1599,7 @@ let extend_typing_environment
   ; effect_row = er
   ; desugared  = dr }
 
-let string_of_environment = show_environment
 
-let string_of_typing_environment { var_env = env; _ }
-  = string_of_environment env
 
 let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec IntMap.t =
   let module S = IntSet in

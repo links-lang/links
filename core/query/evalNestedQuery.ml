@@ -91,7 +91,7 @@ struct
     | `Application (l, [`Type t]) when l = Types.list ->
        `List (nested_type_of_type t)
     | t ->
-       Debug.print ("Can't convert to nested_type: " ^ Types.string_of_datatype t);
+       Debug.print ("Can't convert to nested_type: " ^ Types.Print.string_of_datatype t);
        assert false
 
   (* erase annotations from a package to obtain the underlying type *)
@@ -797,4 +797,3 @@ let compile_shredded : Value.env -> Ir.computation
           let t = Q.type_of_expression v in
           let p = unordered_query_package t v in
             Some (db, p)
-

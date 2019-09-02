@@ -18,7 +18,7 @@ let print_value rtype value =
   then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get_value(BS.printing_types) then
-               " : "^ Types.string_of_datatype rtype
+               " : "^ Types.Print.string_of_datatype rtype
                      else "")
     end
   else
@@ -42,7 +42,7 @@ let print_value rtype value =
     fprintf std_formatter "@[%a@;<1 4>: %s@]"
             Value.p_value value
             (if Settings.get_value(BS.printing_types) then
-           Types.string_of_datatype rtype
+           Types.Print.string_of_datatype rtype
              else "");
     pp_print_newline std_formatter ()
 
@@ -80,12 +80,12 @@ let rec directives
           Env.String.fold
             (fun k s () ->
                Printf.fprintf stderr "typename %s = %s\n" k
-                 (Types.string_of_tycon_spec s))
+                 (Types.Print.string_of_tycon_spec s))
             (Lib.typing_env.Types.tycon_env) ();
           StringSet.iter (fun n ->
                             let t = Env.String.lookup Lib.type_env n in
                               Printf.fprintf stderr " %-16s : %s\n"
-                                n (Types.string_of_datatype t))
+                                n (Types.Print.string_of_datatype t))
             (Env.String.domain Lib.type_env)),
      "list builtin functions and values");
 
@@ -98,7 +98,7 @@ let rec directives
           (fun k ->
              let t = Env.String.lookup typeenv k in
                Printf.fprintf stderr " %-16s : %s\n" k
-                 (Types.string_of_datatype t))
+                 (Types.Print.string_of_datatype t))
           (StringSet.diff (Env.String.domain typeenv)
              (Env.String.domain Lib.type_env));
         envs),
@@ -110,7 +110,7 @@ let rec directives
                           let s = Env.String.lookup tycon_env k in
                           Printf.fprintf stderr " %s = %s\n"
                             (Module_hacks.Name.prettify k)
-                            (Types.string_of_tycon_spec s))
+                            (Types.Print.string_of_tycon_spec s))
           (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
         envs),
      "display the current type alias environment");
@@ -120,7 +120,7 @@ let rec directives
         Env.String.fold
           (fun name var () ->
             if not (Lib.is_primitive name) then
-              let ty = (Types.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
+              let ty = (Types.Print.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
                         -<- Env.String.lookup tyenv.Types.var_env) name in
               let name =
                 if Settings.get_value Debug.debugging_enabled
@@ -175,7 +175,7 @@ let rec directives
                 (fun id ->
                    try begin
                      let t' = Env.String.lookup tenv id in
-                     let ttype = Types.string_of_datatype t' in
+                     let ttype = Types.Print.string_of_datatype t' in
                      let fresh_envs = Types.make_fresh_envs t' in
                      let t' = Instantiate.datatype fresh_envs t' in
                        Unify.datatypes (t,t');
@@ -213,7 +213,7 @@ let evaluate_parse_result envs parse_result =
             (fun name spec () ->
               Printf.printf "%s = %s\n%!"
                 (Module_hacks.Name.prettify name)
-                (Types.string_of_tycon_spec spec))
+                (Types.Print.string_of_tycon_spec spec))
             (tyenv'.Types.tycon_env)
             ();
 
@@ -242,7 +242,7 @@ let evaluate_parse_result envs parse_result =
                 Printf.printf "%s = %s : %s\n%!"
                   (Module_hacks.Name.prettify name)
                   (Value.string_of_value v)
-                  (Types.string_of_datatype t))
+                  (Types.Print.string_of_datatype t))
             nenv'
             ();
 

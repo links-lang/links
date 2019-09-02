@@ -838,7 +838,7 @@ let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
   function
     | #primitive_value_basis as v -> v
     | `Table ((_database, db), table, keys, row) ->
-        `Table (db, table, keys, Types.string_of_datatype (`Record row))
+        `Table (db, table, keys, Types.Print.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
 
 let rec compress_continuation cont : compressed_continuation = Continuation.compress ~compress_val cont

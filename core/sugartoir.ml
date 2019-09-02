@@ -860,7 +860,7 @@ struct
                   with
                       Instantiate.ArityMismatch (expected, provided) ->
                         raise (Errors.TypeApplicationArityMismatch { pos;
-                          name=(Types.string_of_datatype vt); expected; provided })
+                          name=(Types.Print.string_of_datatype vt); expected; provided })
                 end
           | TupleLit [e] ->
               (* It isn't entirely clear whether there should be any 1-tuples at this stage,

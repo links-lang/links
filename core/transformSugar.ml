@@ -135,7 +135,7 @@ let check_type_application (e, t) k =
     with Instantiate.ArityMismatch (exp, prov) ->
       prerr_endline ("Arity mismatch in type application");
       prerr_endline ("Expression: " ^ show_phrasenode e);
-      prerr_endline ("Type: "^Types.string_of_datatype t);
+      prerr_endline ("Type: "^Types.Print.string_of_datatype t);
       raise (Instantiate.ArityMismatch (exp, prov))
   end
 
@@ -418,7 +418,7 @@ class transform (env : Types.typing_environment) =
                       | `Record row ->
                           `Record (Types.extend_row field_types row)
                       | t ->
-                          Debug.print ("bad t: " ^ Types.string_of_datatype t);
+                          Debug.print ("bad t: " ^ Types.Print.string_of_datatype t);
                           assert false
                   end
           in
@@ -893,7 +893,7 @@ class transform (env : Types.typing_environment) =
          let s = Binder.to_type bndr in
          let envs = o#backup_envs in
          let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
-         let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
+         let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.Print.string_of_datatype s)) in
          let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
          let o = o#restore_envs envs in
          o, CPComp (bndr, left, right), t

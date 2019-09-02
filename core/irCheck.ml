@@ -396,8 +396,8 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
 
 let check_eq_types (ctx : type_eq_context) et at occurrence =
   if not (eq_types occurrence ctx (et, at)) then
-    let exp_str = Types.string_of_datatype et in
-    let act_str = Types.string_of_datatype ~refresh_tyvar_names:false at in
+    let exp_str = Types.Print.string_of_datatype et in
+    let act_str = Types.Print.string_of_datatype ~refresh_tyvar_names:false at in
     raise_ir_type_error
       ("Type mismatch:\n Expected:\n  " ^ exp_str ^ "\n Actual:\n  " ^ act_str)
       occurrence
@@ -415,15 +415,15 @@ let ensure_effect_present_in_row ctx allowed_effects required_effect_name requir
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) in
   match StringMap.find_opt required_effect_name map with
     | Some (`Present et) -> check_eq_types ctx et required_effect_type occurrence
-    | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurrence
+    | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.Print.string_of_row allowed_effects) occurrence
 
 
 
 let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurrence =
   ensure
     (eq_types occurrence ctx (`Record allowed_effects, `Record imposed_effects_row))
-    (let allowed_str = Types.string_of_row allowed_effects in
-     let actual_str  = Types.string_of_row ~refresh_tyvar_names:false
+    (let allowed_str = Types.Print.string_of_row allowed_effects in
+     let actual_str  = Types.Print.string_of_row ~refresh_tyvar_names:false
                                            imposed_effects_row in
      "Incompatible effects:\n Allowed:\n  " ^ allowed_str ^
      "\n Actual:\n  " ^ actual_str)
@@ -604,7 +604,7 @@ struct
                 let inner_instantiation_maps = (inner_typemap, inner_rowmap, inner_presencemap) in
 
                 let uninstantiated_type_of_environment = (Var.type_of_binder binder) in
-                Debug.print (IntMap.show TypePrinter.pp_datatype (fst3 inner_instantiation_maps));
+                (*Debug.print (IntMap.show TypePrinter.pp_datatype (fst3 inner_instantiation_maps));*)
                 let type_of_environment = Instantiate.datatype inner_instantiation_maps uninstantiated_type_of_environment in
                 o#check_eq_types type_of_environment zt (SVal orig)
               | _, None -> raise_ir_type_error "Providing closure to a function that does not need one" (SVal orig)
@@ -625,8 +625,8 @@ struct
               begin
               ensure (eq_types (SVal orig) (o#extract_type_equality_context ())
                                (vt, t) || is_sub_type (vt, t))
-                (let vt_str = string_of_datatype vt in
-                 let t_str  = string_of_datatype ~refresh_tyvar_names:false t in
+                (let vt_str = Types.Print.string_of_datatype vt in
+                 let t_str  = Types.Print.string_of_datatype ~refresh_tyvar_names:false t in
                  Printf.sprintf "coercion error: %s is not a subtype of %s"
                                 vt_str t_str)
                 (SVal orig);

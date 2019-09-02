@@ -216,8 +216,8 @@ struct
                     (Printf.sprintf
                        "Arity mismatch in type application (Ir.Transform). Expression: %s\n type: %s\n args: %s\n"
                        (show_value (TApp (v, ts)))
-                       (Types.string_of_datatype t)
-                       (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts))))
+                       (Types.Print.string_of_datatype t)
+                       (String.concat "," (List.map (fun t -> Types.Print.string_of_type_arg t) ts))))
               end
         | XmlNode (tag, attributes, children) ->
             let (attributes, _, o) = o#name_map (fun o -> o#value) attributes in

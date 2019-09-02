@@ -1,3 +1,5 @@
+(* Detection of free variables in types *)
+(* Do not use this module directly, but its export via Types.Vars *)
 
 open TypesBase
 open CommonTypes
@@ -14,9 +16,6 @@ open CommonTypes
   val find : int -> names -> string
   val find_spec : int -> names -> string * spec
 
-val make_names : vars_list -> names
-
-val tyvar_name_counter : int ref
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
@@ -25,3 +24,7 @@ val free_tyarg_vars : type_arg -> TypeVarSet.t
 val free_bound_type_vars          : typ      -> vars_list
 val free_bound_row_type_vars      : row      -> vars_list
 val free_bound_type_arg_type_vars : type_arg -> vars_list
+val free_bound_field_spec_type_vars : field_spec -> vars_list
+val free_bound_row_var_vars         : row_var -> vars_list
+val free_bound_tycon_type_vars      : tycon_spec -> vars_list
+val free_bound_quantifier_vars      : quantifier -> vars_list

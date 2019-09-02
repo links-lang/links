@@ -18,7 +18,7 @@ let print_simple rtype value =
   print_string (Value.string_of_value value);
   print_endline
     (if Settings.get_value (BS.printing_types) then
-          " : " ^ Types.string_of_datatype rtype
+          " : " ^ Types.Print.string_of_datatype rtype
         else
           "")
 
@@ -59,4 +59,3 @@ let _ =
   end;
 
   main()
-

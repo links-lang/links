@@ -426,18 +426,18 @@ end
        types in error messages.  This will be done manually by calling
        build_tyvar_names in the gripers.
        See Notes [Variable names in error messages] and [Refreshing type variable names] *)
-    let show_type   = Types.string_of_datatype ~policy:error_policy ~refresh_tyvar_names:false
-    let show_row    = Types.string_of_row      ~policy:error_policy ~refresh_tyvar_names:false
-    let show_effectrow row = "{" ^ (Types.string_of_row ~policy:error_policy ~refresh_tyvar_names:false row) ^ "}"
-    let show_type_arg = Types.string_of_type_arg ~policy:error_policy ~refresh_tyvar_names:false
+    let show_type   = Types.Print.string_of_datatype ~policy:error_policy ~refresh_tyvar_names:false
+    let show_row    = Types.Print.string_of_row      ~policy:error_policy ~refresh_tyvar_names:false
+    let show_effectrow row = "{" ^ (Types.Print.string_of_row ~policy:error_policy ~refresh_tyvar_names:false row) ^ "}"
+    let show_type_arg = Types.Print.string_of_type_arg ~policy:error_policy ~refresh_tyvar_names:false
 
     (* Wrappers for generating type variable names *)
     let build_tyvar_names =
-      Types.build_tyvar_names ~refresh_tyvar_names:true Types.free_bound_type_vars
+      Types.Print.build_tyvar_names ~refresh_tyvar_names:true Types.Vars.free_bound_type_vars
     let add_rowvar_names =
-      Types.add_tyvar_names Types.free_bound_row_type_vars
+      Types.Print.add_tyvar_names Types.Vars.free_bound_row_type_vars
     let add_typearg_names =
-      Types.add_tyvar_names Types.free_bound_type_arg_type_vars
+      Types.Print.add_tyvar_names Types.Vars.free_bound_type_arg_type_vars
 
     let die pos msg = raise (Errors.Type_error (pos, msg))
 
@@ -1011,7 +1011,7 @@ end
       build_tyvar_names [ty];
       add_typearg_names tys;
       let quant_policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
-      let ppr_type  = Types.string_of_datatype ~policy:quant_policy ~refresh_tyvar_names:false ty in
+      let ppr_type  = Types.Print.string_of_datatype ~policy:quant_policy ~refresh_tyvar_names:false ty in
       let ppr_types = List.map (fun t -> tab() ^ code (show_type_arg t)) tys in
       die pos ("The term"                                     ^ nli () ^
                 code lexpr                                    ^ nl  () ^
@@ -1505,7 +1505,7 @@ end
    (* quantifier checks *)
    let inconsistent_quantifiers ~pos ~t1:l ~t2:r =
      let policy () = {(Types.Print.default_policy ()) with Types.Print.quantifiers = true} in
-     let typ = Types.string_of_datatype ~policy in
+     let typ = Types.Print.string_of_datatype ~policy in
        die pos ("Inconsistent quantifiers, expected: " ^ nli () ^
                 typ l                                  ^ nl ()  ^
                 "actual: "                             ^ nli () ^
@@ -1528,7 +1528,7 @@ end
       let policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
       let display_ty (var, ty) =
         Printf.sprintf "%s: %s" var
-          (Types.string_of_datatype ~policy ~refresh_tyvar_names:false ty) in
+          (Types.Print.string_of_datatype ~policy ~refresh_tyvar_names:false ty) in
       let displayed_tys =
         List.map display_ty escapees
         |> String.concat (nli ()) in
@@ -2519,9 +2519,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                           | `Present t ->
                                               if StringMap.mem label field_env then
                                                 failwith ("Could not extend record "^ expr_string (erase r)^" (of type "^
-                                                            Types.string_of_datatype rtype^") with the label "^
+                                                            Types.Print.string_of_datatype rtype^") with the label "^
                                                             label^
-                                                            " (of type"^Types.string_of_datatype (`Record (field_env, Unionfind.fresh `Closed, false))^
+                                                            " (of type"^Types.Print.string_of_datatype (`Record (field_env, Unionfind.fresh `Closed, false))^
                                                             ") because the labels overlap")
                                               else
                                                 StringMap.add label (`Present t) field_env'
@@ -2570,7 +2570,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                   if Types.Unl.can_type_be t then
                                     Types.Unl.make_type t
                                   else
-                                    Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a non-linear function literal."))
+                                    Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.Print.string_of_datatype t ^ " is used in a non-linear function literal."))
                                (usages body)
               else () in
 
@@ -2990,7 +2990,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
             if not (Types.Unl.can_type_be (typ p)) then
-              Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
+              Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.Print.string_of_datatype (typ p) ^ ")");
 
             (* If we've previously typed this spawn block, ensure we've inferred the
                same types this time round.
@@ -3111,7 +3111,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                             | `Lolli _ -> `Lolli (a, e, r)
                           in
                           (* the free type variables in the arguments (and effects) *)
-                          let arg_vars = Types.TypeVarSet.union (Types.free_type_vars fps) (Types.free_row_type_vars fe) in
+                          let arg_vars = Types.TypeVarSet.union (Types.Vars.free_type_vars fps) (Types.Vars.free_row_type_vars fe) in
                           (* return true if this quantifier appears free in the arguments (or effects) *)
                           let free_in_arg q = Types.TypeVarSet.mem (Types.var_of_quantifier q) arg_vars in
 
@@ -3430,7 +3430,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         match StringMap.lookup l field_env with
                         | Some (`Present t) ->
                           (* the free type variables in the projected type *)
-                          let vars = Types.free_type_vars t in
+                          let vars = Types.Vars.free_type_vars t in
 
                           (* return true if this quantifier appears
                              free in the projected type *)
@@ -3795,7 +3795,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              | _  -> val_cases, eff_cases
            in
            let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases val_cases eff_cases in
-           (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
+           (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.Print.string_of_datatype rt) (Types.Print.string_of_row inner_eff) (Types.Print.string_of_row outer_eff); *)
            (* Patch the result type of `m' *)
            let () =
               unify ~handle:Gripers.handle_return (pos_and_typ m, no_pos rt)
@@ -3805,7 +3805,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let m_pos = exp_pos m in
              let () = unify ~handle:Gripers.handle_comp_effects ((m_pos, m_effects), no_pos (`Effect inner_eff)) in
              let inner_eff' = make_operations_presence_polymorphic inner_eff in
-             (* Printf.printf "inner_eff': %s\n%!" (Types.string_of_row inner_eff'); *)
+             (* Printf.printf "inner_eff': %s\n%!" (Types.Print.string_of_row inner_eff'); *)
              let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect inner_eff'), no_pos (`Effect outer_eff)) in
              let () = unify ~handle:Gripers.handle_unify_with_context (no_pos (`Effect outer_eff), no_pos (`Effect context.effect_row)) in
              inner_eff, outer_eff
@@ -3813,7 +3813,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let eff_cases =
              List.map (fun (p, _, body) -> (p, body)) eff_cases
            in
-           (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
+           (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.Print.string_of_datatype rt) (Types.Print.string_of_row inner_eff) (Types.Print.string_of_row outer_eff); *)
            let descr = { descr with
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
@@ -4035,15 +4035,15 @@ and type_binding : context -> binding -> binding * context * usagemap =
               | None ->
                   context, make_ft lin pats effects return_type, []
               | Some t ->
-                  (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
+                  (* Debug.print ("t: " ^ Types.Print.string_of_datatype t); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
                   let ft = if unsafe then make_unsafe_signature t else t in
                   let quantifiers, ft_mono = TypeUtils.split_quantified_type ft in
 
-                  (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
+                  (* Debug.print ("ft_mono: " ^ Types.Print.string_of_datatype ft_mono); *)
                   let () = unify pos ~handle:Gripers.bind_fun_annotation (no_pos shape, no_pos ft_mono) in
-                    (* Debug.print ("return type: " ^Types.string_of_datatype (TypeUtils.concrete_type return_type)); *)
+                    (* Debug.print ("return type: " ^Types.Print.string_of_datatype (TypeUtils.concrete_type return_type)); *)
                   (* HACK: Place a dummy name in the environment in
                      order to ensure that the generalisation check
                      does the right thing (it would be unsound to use
@@ -4086,7 +4086,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                 if Types.Unl.can_type_be t then
                                   Types.Unl.make_type t
                                 else
-                                  Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^
+                                  Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.Print.string_of_datatype t ^
                                                      " was used in a non-linear function definition"))
                              (usages body)
             else () in
@@ -4207,7 +4207,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                          *)
                          make_ft_poly_curry lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any))
                      | Some t ->
-                         (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
+                         (* Debug.print ("t: " ^ Types.Print.string_of_datatype t); *)
                          let shape = make_ft lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any)) in
                          let t = if unsafe then make_unsafe_signature t else t in
                          let ft = match t with
@@ -4215,7 +4215,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                            | _ when frozen -> t
                            | _ -> Generalise.generalise_rigid context.var_env t |> snd
                          in
-                         (* Debug.print ("ft: " ^ Types.string_of_datatype ft); *)
+                         (* Debug.print ("ft: " ^ Types.Print.string_of_datatype ft); *)
                          (* make sure the annotation has the right shape *)
                          let _, ft_mono = TypeUtils.split_quantified_type ft in
                          let () = unify pos ~handle:Gripers.bind_rec_annotation (no_pos shape, no_pos ft_mono) in
@@ -4273,7 +4273,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                                               Types.Unl.make_type t
                                             else
                                               Gripers.die pos ("Use of variable " ^ v ^ " of linear type " ^
-                                                                 Types.string_of_datatype t ^ " in unlimited function binding.")
+                                                                 Types.Print.string_of_datatype t ^ " in unlimited function binding.")
                                           else ())
                                          (usages body);
                         StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
