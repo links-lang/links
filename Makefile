@@ -139,7 +139,8 @@ doc/_build/html:
 	cd doc && make html
 
 .PHONY: doc
-doc : doc/_build/html
+doc :
+	make -C doc html
 
 .PHONY: open-doc
 open-doc: doc/_build/html
