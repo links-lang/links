@@ -136,11 +136,10 @@ rule-check: tools/rule-check
 	@tools/rule-check
 
 doc/_build/html:
-	cd doc && make html
+	make -C doc html
 
 .PHONY: doc
-doc :
-	make -C doc html
+doc : doc/_build/html
 
 .PHONY: open-doc
 open-doc: doc/_build/html
