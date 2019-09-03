@@ -24,7 +24,7 @@ interactive window::
 You can now write an expression, and Links will show you the result. Note that
 in interactive mode, each expression must be terminated with a semicolon.
 
-.. code-block::
+::
 
   links> 1 + 2 + 3;;
   6 : Int

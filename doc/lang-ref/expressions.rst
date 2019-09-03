@@ -7,7 +7,7 @@ Conditional expressions
 A conditional expression has a condition, a consequent, and an else
 clause. None of the three may be omitted.
 
-.. code-block::
+::
 
   if (x == y) {
     expr1
@@ -464,7 +464,7 @@ list.
 The ``take`` and ``drop`` functions return the first ``n`` elements of
 a list, and all *but* the first ``n`` elements of a list, respectively.
 
-.. code-block::
+::
 
   links> take(2,[1,2,3]);
   [1, 2] : [Int]
