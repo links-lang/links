@@ -28,147 +28,173 @@ type instantiation_maps = (datatype IntMap.t * row IntMap.t * field_spec IntMap.
 *)
 
 let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) * (field_spec -> field_spec) =
-  fun (tenv, renv, penv) ->
-    let rec inst : inst_env -> datatype -> datatype = fun rec_env datatype ->
-      let rec_type_env, rec_row_env = rec_env in
-        match datatype with
-          | `Not_typed -> raise (internal_error "`Not_typed' passed to `instantiate'")
-          | `Primitive _  -> datatype
-          | `MetaTypeVar point ->
-              let t = Unionfind.find point in
-                begin
-                  match t with
-                    | `Var (var, _, _) ->
-                        if IntMap.mem var tenv then
-                          IntMap.find var tenv
-                        else
-                          datatype
-                    | `Recursive (var, t) ->
-                        Debug.if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
+  let rec inst_typ : instantiation_maps -> inst_env -> datatype -> datatype = fun inst_maps rec_env datatype ->
+    let inst = inst_typ inst_maps rec_env in
+    let instr = inst_row inst_maps rec_env in
+    let tenv, _, _ = inst_maps in
+    let rec_type_env, rec_row_env = rec_env in
+      match datatype with
+        | `Not_typed -> raise (internal_error "`Not_typed' passed to `instantiate'")
+        | `Primitive _  -> datatype
+        | `MetaTypeVar point ->
+            let t = Unionfind.find point in
+              begin
+                match t with
+                  | `Var (var, _, _) ->
+                      if IntMap.mem var tenv then
+                        IntMap.find var tenv
+                      else
+                        datatype
+                  | `Recursive (var, t) ->
+                      Debug.if_set (show_recursion) (fun () -> "rec (instantiate)1: " ^(string_of_int var));
 
-                        if IntMap.mem var rec_type_env then
-                          (`MetaTypeVar (IntMap.find var rec_type_env))
-                        else
-                          begin
-                            let var' = Types.fresh_raw_variable () in
-                            let point' = Unionfind.fresh (`Var (var', (lin_any, res_any), `Flexible)) in
-                            let t' = inst (IntMap.add var point' rec_type_env, rec_row_env) t in
-                            let _ = Unionfind.change point' (`Recursive (var', t')) in
-                              `MetaTypeVar point'
-                          end
-                    | `Body t -> inst rec_env t
-                end
-          | `Function (f, m, t) -> `Function (inst rec_env f, inst_row rec_env m, inst rec_env t)
-          | `Lolli (f, m, t) -> `Lolli (inst rec_env f, inst_row rec_env m, inst rec_env t)
-          | `Record row -> `Record (inst_row rec_env row)
-          | `Variant row -> `Variant (inst_row rec_env row)
-          | `Effect row -> `Effect (inst_row rec_env row)
-          | `Table (f, d, r) -> `Table (inst rec_env f, inst rec_env d, inst rec_env r)
-          | `ForAll (qs, t) ->
-              `ForAll (qs, inst rec_env t)
-          | `Alias ((name, qs, ts), d) ->
-              `Alias ((name, qs, List.map (inst_type_arg rec_env) ts), inst rec_env d)
-          | `Application (n, elem_type) ->
-              `Application (n, List.map (inst_type_arg rec_env) elem_type)
-          | `RecursiveApplication app ->
-              `RecursiveApplication { app with r_args =
-                List.map (inst_type_arg rec_env) app.r_args }
-          | `Input (t, s) -> `Input (inst rec_env t, inst rec_env s)
-          | `Output (t, s) -> `Output (inst rec_env t, inst rec_env s)
-          | `Select fields -> `Select (inst_row rec_env fields)
-          | `Choice fields -> `Choice (inst_row rec_env fields)
-          | `Dual s -> Types.dual_type (inst rec_env s)
-          | `Lens s -> `Lens s
-          | `End -> `End
-
-    and inst_presence : inst_env -> field_spec -> field_spec = fun rec_env ->
-      function
-        | `Present t -> `Present (inst rec_env t)
-        | `Absent -> `Absent
-        | `Var point ->
-            begin
-              match Unionfind.find point with
-                | `Var (var, _, _) ->
-                    if IntMap.mem var penv then
-                      IntMap.find var penv
-                    else
-                      `Var point
-                | `Body f ->
-                    inst_presence rec_env f
-            end
-    and inst_row : inst_env -> row -> row = fun rec_env row ->
-      (* BUG?
-
-         If we change this to unwrap_row then it sometimes leads to
-         divergence during type inference. Is this the correct
-         behaviour? Why does this happen? *)
-      let field_env, row_var, dual = flatten_row row in
-
-      let is_closed =
-        match Unionfind.find row_var with
-          | `Closed -> true
-          | _ -> false in
-
-      let field_env' = StringMap.fold
-        (fun label f field_env' ->
-           let rec add =
-             function
-               | `Present t -> StringMap.add label (`Present (inst rec_env t)) field_env'
-               | `Absent ->
-                   if is_closed then field_env'
-                   else StringMap.add label `Absent field_env'
-               | `Var point ->
-                   match Unionfind.find point with
-                     | `Var (var, _, _) ->
-                         let f =
-                           if IntMap.mem var penv then
-                             IntMap.find var penv
-                           else
-                             `Var point
-                         in
-                           StringMap.add label f field_env'
-                     | `Body f ->
-                         add f
+                      if IntMap.mem var rec_type_env then
+                        (`MetaTypeVar (IntMap.find var rec_type_env))
+                      else
+                        begin
+                          let var' = Types.fresh_raw_variable () in
+                          let point' = Unionfind.fresh (`Var (var', (lin_any, res_any), `Flexible)) in
+                          let t' = inst_typ inst_maps (IntMap.add var point' rec_type_env, rec_row_env) t in
+                          let _ = Unionfind.change point' (`Recursive (var', t')) in
+                            `MetaTypeVar point'
+                        end
+                  | `Body t -> inst t
+              end
+        | `Function (f, m, t) -> `Function (inst f, instr m, inst t)
+        | `Lolli (f, m, t) -> `Lolli (inst f, instr m, inst t)
+        | `Record row -> `Record (instr row)
+        | `Variant row -> `Variant (instr row)
+        | `Effect row -> `Effect (instr row)
+        | `Table (f, d, r) -> `Table (inst f, inst d, inst r)
+        | `ForAll (qs, t) ->
+           let remove_shadowed_quantifier (tmap,rmap,pmap) q =
+             let var = Types.var_of_quantifier q in
+             let open CommonTypes.PrimaryKind in
+             match Types.primary_kind_of_quantifier q with
+               | Type ->
+                  (IntMap.remove var tmap, rmap, pmap)
+               | Row ->
+                  (tmap, IntMap.remove var rmap, pmap)
+               | Presence ->
+                  (tmap, rmap, IntMap.remove var pmap)
            in
-             add f)
-        field_env
-        StringMap.empty in
-      let field_env'', row_var', dual' = inst_row_var rec_env row_var dual in
-        StringMap.fold StringMap.add field_env' field_env'', row_var', dual'
-          (* precondition: row_var has been flattened *)
-    and inst_row_var : inst_env -> row_var -> bool -> row = fun (rec_type_env, rec_row_env) row_var dual ->
-      let dual_if = if dual then dual_row else fun x -> x in
-      match row_var with
-        | point ->
-            begin
-              match Unionfind.find point with
-                | `Closed -> (StringMap.empty, row_var, dual)
-                | `Var (var, _, _) ->
-                    if IntMap.mem var renv then
-                      dual_if (IntMap.find var renv)
-                    else
-                      (StringMap.empty, row_var, dual)
-                | `Recursive (var, rec_row) ->
-                    if IntMap.mem var rec_row_env then
-                      (StringMap.empty, IntMap.find var rec_row_env, dual)
-                    else
-                      begin
-                        let var' = Types.fresh_raw_variable () in
-                        let point' = Unionfind.fresh (`Var (var', (lin_any, res_any), `Flexible)) in
-                        let rec_row' = inst_row (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
-                        let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
-                          (StringMap.empty, point', dual)
-                      end
-                | `Body row -> dual_if (inst_row (rec_type_env, rec_row_env) row)
-            end
-    and inst_type_arg : inst_env -> type_arg -> type_arg = fun rec_env ->
-      function
-        | `Type t -> `Type (inst rec_env t)
-        | `Row r -> `Row (inst_row rec_env r)
-        | `Presence f -> `Presence (inst_presence rec_env f)
-    in
-    let env = (IntMap.empty, IntMap.empty) in
-    inst env, inst_row env, inst_presence env
+           let updated_inst_maps =
+             List.fold_left remove_shadowed_quantifier inst_maps qs
+           in
+            `ForAll (qs, inst_typ updated_inst_maps rec_env t)
+        | `Alias ((name, qs, ts), d) ->
+            `Alias ((name, qs, List.map (inst_type_arg inst_maps rec_env) ts), inst d)
+        | `Application (n, elem_type) ->
+            `Application (n, List.map (inst_type_arg inst_maps rec_env) elem_type)
+        | `RecursiveApplication app ->
+            `RecursiveApplication { app with r_args =
+              List.map (inst_type_arg inst_maps rec_env) app.r_args }
+        | `Input (t, s) -> `Input (inst t, inst s)
+        | `Output (t, s) -> `Output (inst t, inst s)
+        | `Select fields -> `Select (instr fields)
+        | `Choice fields -> `Choice (instr fields)
+        | `Dual s -> Types.dual_type (inst s)
+        | `Lens s -> `Lens s
+        | `End -> `End
+
+  and inst_presence : instantiation_maps -> inst_env -> field_spec -> field_spec = fun inst_maps rec_env ->
+    let inst = inst_typ inst_maps rec_env in
+    let (_, _, penv) = inst_maps in
+    function
+      | `Present t -> `Present (inst t)
+      | `Absent -> `Absent
+      | `Var point ->
+          begin
+            match Unionfind.find point with
+              | `Var (var, _, _) ->
+                  if IntMap.mem var penv then
+                    IntMap.find var penv
+                  else
+                    `Var point
+              | `Body f ->
+                  inst_presence  inst_maps rec_env f
+          end
+  and inst_row : instantiation_maps -> inst_env -> row -> row = fun inst_maps rec_env row ->
+    let inst = inst_typ inst_maps rec_env in
+    let (_, _, penv) = inst_maps in
+    (* BUG?
+
+       If we change this to unwrap_row then it sometimes leads to
+       divergence during type inference. Is this the correct
+       behaviour? Why does this happen? *)
+    let field_env, row_var, dual = flatten_row row in
+
+    let is_closed =
+      match Unionfind.find row_var with
+        | `Closed -> true
+        | _ -> false in
+
+    let field_env' = StringMap.fold
+      (fun label f field_env' ->
+         let rec add =
+           function
+             | `Present t -> StringMap.add label (`Present (inst t)) field_env'
+             | `Absent ->
+                 if is_closed then field_env'
+                 else StringMap.add label `Absent field_env'
+             | `Var point ->
+                 match Unionfind.find point with
+                   | `Var (var, _, _) ->
+                       let f =
+                         if IntMap.mem var penv then
+                           IntMap.find var penv
+                         else
+                           `Var point
+                       in
+                         StringMap.add label f field_env'
+                   | `Body f ->
+                       add f
+         in
+           add f)
+      field_env
+      StringMap.empty in
+    let field_env'', row_var', dual' = inst_row_var inst_maps rec_env row_var dual in
+      StringMap.fold StringMap.add field_env' field_env'', row_var', dual'
+        (* precondition: row_var has been flattened *)
+  and inst_row_var : instantiation_maps -> inst_env -> row_var -> bool -> row = fun inst_maps rec_env row_var dual ->
+    let instr = inst_row inst_maps rec_env in
+    let (_, renv, _) = inst_maps in
+    let (rec_type_env, rec_row_env) = rec_env in
+    let dual_if = if dual then dual_row else fun x -> x in
+    match row_var with
+      | point ->
+          begin
+            match Unionfind.find point with
+              | `Closed -> (StringMap.empty, row_var, dual)
+              | `Var (var, _, _) ->
+                  if IntMap.mem var renv then
+                    dual_if (IntMap.find var renv)
+                  else
+                    (StringMap.empty, row_var, dual)
+              | `Recursive (var, rec_row) ->
+                  if IntMap.mem var rec_row_env then
+                    (StringMap.empty, IntMap.find var rec_row_env, dual)
+                  else
+                    begin
+                      let var' = Types.fresh_raw_variable () in
+                      let point' = Unionfind.fresh (`Var (var', (lin_any, res_any), `Flexible)) in
+                      let rec_row' = inst_row inst_maps (rec_type_env, IntMap.add var point' rec_row_env) rec_row in
+                      let _ = Unionfind.change point' (`Recursive (var', rec_row')) in
+                        (StringMap.empty, point', dual)
+                    end
+              | `Body row -> dual_if (instr row)
+          end
+  and inst_type_arg : instantiation_maps -> inst_env -> type_arg -> type_arg = fun inst_maps rec_env ->
+    function
+      | `Type t -> `Type (inst_typ inst_maps rec_env t)
+      | `Row r -> `Row (inst_row inst_maps rec_env r)
+      | `Presence f -> `Presence (inst_presence inst_maps rec_env f)
+  in
+  let env = (IntMap.empty, IntMap.empty) in
+  fun inst_maps ->
+    inst_typ inst_maps env,
+    inst_row inst_maps env,
+    inst_presence inst_maps env
 
 let instantiate_datatype = instantiates ->- fst3
 

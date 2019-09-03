@@ -62,3 +62,5 @@ val jsonize_call :
   string -> (* Name of the function *)
   Value.t list -> (* Arguments *)
   json_string
+
+val js_dq_escape_string : json_string -> json_string

@@ -38,17 +38,6 @@ object(self)
     let (shadow_table, _) = shadow_open name fqn mt shadow_table shadow_table in
     {< shadow_table = shadow_table >}
 
-  method extension_guard pos =
-    if not (Settings.get_value Basicsettings.modules) then
-      raise (Errors.disabled_extension ~pos ~setting:("modules", true) ~flag:"-m" "Modules")
-
-  method! binding = let open SourceCode.WithPos in function
-    | ({ node = Import _; pos } as b)
-    | ({ node = Open _; pos } as b) ->
-       self#extension_guard pos;
-       self#bindingnode b.node
-    | b -> self#bindingnode b.node
-
   method! bindingnode = function
     | Import { path = ns; _ } ->
         (* Try to resolve the import; if not, add to ICs list *)
