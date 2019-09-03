@@ -12,6 +12,7 @@ This is very much a work-in-progress, so please bear with us.
    install
    getting-started
    language-ref
+   settings
    advanced-features
    library-ref
    resources
