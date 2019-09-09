@@ -5,22 +5,12 @@ open Sugartypes
 
 (* Paths to look for .links files in chasing pass *)
 let links_file_paths
-  = let from_list xs = String.concat "," xs in
-    let parse value =
-      let parts =
-        List.(concat
-                (map
-                   (String.split_on_char ':')
-                   (String.split_on_char ',' value)))
-      in
-      List.map Sys.expand parts
-    in
-    Settings.(multi_option ~default:["."] "links_file_paths"
+  = Settings.(multi_option ~default:["."] "links_file_paths"
               |> synopsis "Search paths for Links modules"
               |> hint "<dir[[:dir']...]>"
-              |> to_string from_list
+              |> to_string string_of_paths
               |> keep_default
-              |> convert parse
+              |> convert parse_paths
               |> CLI.(add (long "path"))
               |> sync)
 

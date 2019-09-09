@@ -124,6 +124,17 @@ let no_action : 'a -> unit
 let from_string_option : string option -> string
   = fun opt -> Utility.from_option "" opt
 
+let string_of_paths xs = String.concat "," xs
+let parse_paths value =
+  let parts =
+    List.(concat
+            (map
+               (String.split_on_char ':')
+               (String.split_on_char ',' value)))
+  in
+  List.map Utility.Sys.expand parts
+
+
 let parse_bool = function
   | "true"
   | "yes"

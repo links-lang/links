@@ -191,23 +191,17 @@ let default_path_string () =
     with Disk.AccessError _ -> []
   in
   let paths = List.map Disk.File.dirname files in
-  String.concat ":" paths
+  paths
 
 (** List of directories where to look for database drivers, split by ':'
       Initialized to point to where the drivers are compiled to if building in the current directory **)
 let path =
-  Settings.(option ~default:(Some (default_path_string ())) "db_driver_path"
-            |> privilege `System
+  Settings.(multi_option ~default:(default_path_string ()) "db_driver_path"
             |> synopsis "Search paths for database drivers"
-            |> to_string from_string_option
-            |> convert Utility.(Sys.expand ->- some)
+            |> to_string string_of_paths
+            |> convert parse_paths
             |> sync)
 
 let load driver_name =
-  let path =
-    match Settings.get path with
-    | None | Some "" -> []
-    | Some settings_path ->
-       String.split_on_char ':' settings_path
-  in
+  let path = Settings.get path in
   Loader.load ~path driver_name

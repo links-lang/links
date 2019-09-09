@@ -38,6 +38,8 @@ val sync : 'a setting -> 'a setting
 
 (* Miscellaneous. *)
 val from_string_option : string option -> string
+val string_of_paths : string list -> string
+val parse_paths : string -> string list
 val parse_bool : string -> bool
 val parse_and_set_user : string -> string -> unit
 val fetch_synopsis : string -> string option
