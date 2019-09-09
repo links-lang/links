@@ -30,7 +30,7 @@ module JsonState : sig
   val add_buffer : channel_id -> Value.t list -> t -> t
 
   (** Serialises the state as a JSON string *)
-  val to_string : t -> Yojson.t
+  val to_json : t -> Yojson.t
 end
 
 type json_state = JsonState.t

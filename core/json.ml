@@ -215,7 +215,7 @@ let show_buffers bufs =
         ("values", json_values)]) (ChannelIDMap.bindings bufs) in
   `List bufs
 
-let print_json_state client_id conn_url procs handlers aps bufs =
+let serialise_json_state client_id conn_url procs handlers aps bufs =
   let ws_url_data =
   (match conn_url with
      | Some ws_conn_url ->
@@ -274,7 +274,7 @@ module JsonState = struct
   let get_carried_channels state = state.channels
 
   (** Serialises the state as a JSON string *)
-  let to_string s = print_json_state s.client_id s.ws_conn_url s.processes s.handlers s.aps s.buffers
+  let to_json s = serialise_json_state s.client_id s.ws_conn_url s.processes s.handlers s.aps s.buffers
 
   let _merge s s' =
     let select_left _ x _ = Some x in
@@ -296,7 +296,7 @@ end
 type json_state = JsonState.t
 
 let value_with_state v s =
-  `Assoc [("value", v); ("state", JsonState.to_string s)]
+  `Assoc [("value", v); ("state", JsonState.to_json s)]
 
 (* External interface *)
 let jsonize_value_with_state value state =
