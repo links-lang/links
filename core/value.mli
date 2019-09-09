@@ -286,3 +286,5 @@ val is_channel : t -> bool
 val session_exception_operation : string
 
 val row_columns_values : database -> t -> string list * string list list
+
+val from_json : Yojson.t -> t
