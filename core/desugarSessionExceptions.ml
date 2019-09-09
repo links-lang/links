@@ -122,7 +122,7 @@ object (o : 'self_type)
           (inner_effects, try_dt, outer_effects, otherwise_dt) in
 
         let hndl_desc = {
-          shd_depth = Shallow;
+          shd_depth = Deep;
           shd_types = types;
           shd_raw_row = raw_row;
           shd_params = None;
