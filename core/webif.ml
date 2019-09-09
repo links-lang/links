@@ -131,7 +131,8 @@ struct
         Proc.resolve_external_processes arg;
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
         let json_state = generate_json_state req_data result in
-        let result_json = Json.jsonize_value_with_state result json_state in
+        let result_json =
+          Json.jsonize_value_with_state result json_state |> Json.json_to_string in
         Lwt.return ("text/plain", Utility.base64encode result_json)
       | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
@@ -150,9 +151,12 @@ struct
            assert(false));
            *)
         let json_state = generate_json_state req_data r in
+        let jsonized_val =
+          Json.jsonize_value_with_state r json_state
+            |> Json.json_to_string in
         Lwt.return
           ("text/plain",
-            Utility.base64encode (Json.jsonize_value_with_state r json_state))
+            Utility.base64encode jsonized_val)
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()

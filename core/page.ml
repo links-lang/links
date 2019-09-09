@@ -143,7 +143,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     (* Add channel information to the JSON state; mark all as residing on client *)
     let json_state = ResolveJsonState.add_channel_information client_id json_state in
 
-    let state_string = JsonState.to_string json_state in
+    let state_string = JsonState.to_string json_state |> Json.json_to_string in
 
     let printed_code =
       let _venv, code = C.generate_program venv ([], Ir.Return (Ir.Extend (StringMap.empty, None))) in

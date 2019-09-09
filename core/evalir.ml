@@ -114,6 +114,7 @@ struct
      let st = ResolveJsonState.add_process_information client_id st in
      let st = ResolveJsonState.add_channel_information client_id st in
      Json.jsonize_call st continuation name args
+      |> Json.json_to_string
 
    let client_call :
      RequestData.request_data ->

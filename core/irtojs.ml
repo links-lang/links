@@ -215,7 +215,7 @@ module Js_CodeGen : JS_CODEGEN = struct
                                  elems)))
         | Arr elems ->
            let rec show_list = function
-             | [] -> PP.text Json.nil_literal
+             | [] -> PP.text (Json.nil_literal |> Json.json_to_string)
              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
            show_list elems
         | Bind (name, value, body) ->
@@ -1211,7 +1211,7 @@ end = functor (K : CONTINUATION) -> struct
       (* Debug.print ("let_binding: " ^ x_name); *)
          let varenv = VEnv.bind varenv (x, x_name) in
          let value = Value.Env.find x valenv in
-         let jsonized_val = Json.jsonize_value value in
+         let jsonized_val = Json.jsonize_value value |> Json.json_to_string in
          let state = ResolveJsonState.add_value_information value state in
          (state,
           varenv,
