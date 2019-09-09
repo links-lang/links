@@ -21,6 +21,8 @@ val privilege : privilege -> 'a setting -> 'a setting
 val depends : bool setting -> bool setting -> bool setting
 val hint : string -> 'a setting -> 'a setting
 val hidden : 'a setting -> 'a setting
+val show_default : bool -> 'a setting -> 'a setting
+val keep_default : 'a list setting -> 'a list setting
 
 (* CLI argument construction. *)
 module CLI: sig

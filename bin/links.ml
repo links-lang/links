@@ -24,6 +24,7 @@ let _ =
             |> privilege `System
             |> action print_keywords
             |> hidden
+            |> show_default false
             |> CLI.(add (long "print-keywords"))
             |> sync)
 
@@ -39,6 +40,7 @@ let _ =
             |> privilege `System
             |> action show_help
             |> hidden
+            |> show_default false
             |> convert parse_bool
             |> CLI.(add (short 'h' <&> long "help"))
             |> sync)

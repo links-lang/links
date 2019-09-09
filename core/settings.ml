@@ -291,6 +291,7 @@ let get_rest_arguments : unit -> string list
 module Settings = struct
   type 'a payload = {
       name: string;
+      default: 'a;
       mutable value: 'a;
       mutable privilege: privilege;
       mutable synopsis: string;
@@ -298,7 +299,8 @@ module Settings = struct
       mutable of_string: string -> 'a;
       mutable action: 'a -> unit;
       mutable arg_hint: string;
-      mutable hidden: bool }
+      mutable hidden: bool;
+      mutable show_default: bool }
 
   type _ setting =
     | Flag : { common: bool payload;
@@ -306,7 +308,8 @@ module Settings = struct
     | Option : { common: 'a option payload;
                  readonly: bool } -> 'a option setting
     | MultiOption : { common: 'a list payload;
-                      mutable initial : bool }  -> 'a list setting
+                      mutable initial : bool;
+                      mutable keep_default : bool }  -> 'a list setting
   (* Existential wrapper for [setting]. *)
   and packed = Pack : 'a setting -> packed
 
@@ -357,7 +360,7 @@ module Settings = struct
           ?(to_string=(fun _ -> "<unknown>")) ?(of_string=no_conv) ?(arg_hint="")
           ?(hidden=false) name value ->
     if is_valid_name name
-    then { name; value; privilege; synopsis; to_string; of_string; action; arg_hint; hidden }
+    then { name; default = value; value; privilege; synopsis; to_string; of_string; action; arg_hint; hidden; show_default = true }
     else raise (Bad_setting_name name)
 
   let from_string : type a. a setting -> string -> a
@@ -414,10 +417,13 @@ module Settings = struct
 
   let append : type a. ?privilege:privilege -> a list setting -> a list -> unit
     = fun ?(privilege=`System) ((MultiOption payload) as setting) value ->
-    (if payload.initial
-     then (payload.initial <- false; set ~privilege setting value)
+    (if payload.initial && not payload.keep_default
+     then set ~privilege setting value
      else set ~privilege setting ((get setting) @ value))
 
+  let keep_default : type a. a list setting -> a list setting = function
+    | (MultiOption payload) as setting ->
+       payload.keep_default <- true; setting
 
   let convert (type a) : (string -> a) -> a setting -> a setting
     = fun conv setting ->
@@ -485,7 +491,7 @@ module Settings = struct
 
   let multi_option : type a. ?default:a list -> string -> a list setting
     = fun ?(default=[]) name ->
-    let setting = MultiOption ({ initial = true; common = payload ~to_string:generic_string_of_list name default }) in
+    let setting = MultiOption ({ initial = true; keep_default = false; common = payload ~to_string:generic_string_of_list name default }) in
     register setting; setting
 
   let toggle : ?privilege:privilege -> bool setting -> unit
@@ -507,6 +513,13 @@ module Settings = struct
      | MultiOption payload -> payload.common.to_string <- to_string);
     setting
 
+  let as_string : type a. a setting -> a -> string
+    = fun setting value ->
+    match setting with
+    | Flag payload -> payload.common.to_string value
+    | Option payload -> payload.common.to_string value
+    | MultiOption payload -> payload.common.to_string value
+
   let privilege : type a. privilege -> a setting -> a setting
     = fun privilege setting ->
     (match setting with
@@ -523,6 +536,24 @@ module Settings = struct
   let is_readonly : type a. a setting -> bool = function
     | Option payload -> payload.readonly
     | _ -> false
+
+  let get_default : type a. a setting -> a = function
+   | Flag payload -> payload.common.default
+   | Option payload -> payload.common.default
+   | MultiOption payload -> payload.common.default
+
+  let get_show_default : type a. a setting -> bool = function
+   | Flag payload -> payload.common.show_default
+   | Option payload -> payload.common.show_default
+   | MultiOption payload -> payload.common.show_default
+
+  let show_default : type a. bool -> a setting -> a setting
+    = fun bit setting ->
+    (match setting with
+     | Flag payload -> payload.common.show_default <- bit
+     | Option payload -> payload.common.show_default <- bit
+     | MultiOption payload -> payload.common.show_default <- bit);
+    setting
 
   let print_settings oc =
     let print_setting : out_channel -> string * packed -> unit
@@ -934,8 +965,30 @@ let print_cli_options oc =
       (fun (x, _) (y, _) -> String.compare x y)
       (Hashtbl.fold (fun name desc descs -> (name, desc) :: descs) settings [])
   in
+  let extended_synopsis (Pack setting) =
+    let default =
+      if get_show_default setting then
+        match setting with
+        | Flag _ ->
+           Some (Settings.(as_string setting (get_default setting)))
+        | Option _ ->
+           (match Settings.get_default setting with
+            | None -> None
+            | (Some _) as default ->
+               Some (Settings.as_string setting default))
+        | MultiOption _ ->
+           match Settings.get_default setting with
+           | [] -> None
+           | xs -> Some (Settings.as_string setting xs)
+      else None
+    in
+    match default with
+    | None -> Settings.get_synopsis setting
+    | Some default ->
+       Printf.sprintf "%s (default: %s)" (Settings.get_synopsis setting) default
+  in
   let print_option (_name, (short, long, Pack setting)) =
-    let synopsis = Settings.get_synopsis setting in
+    let synopsis = extended_synopsis (Pack setting) in
     let hint = Settings.get_hint setting in
     let has_hint = hint <> "" in
     match short, long with

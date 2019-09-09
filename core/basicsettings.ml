@@ -22,6 +22,7 @@ let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> synopsis "Print version and exit"
                         |> to_string from_string_option
                         |> action (fun _ -> Printf.printf "Links version %s\n%!" version; exit 0)
+                        |> show_default false
                         |> CLI.(add (fun arg -> short 'v' (long "version" arg)))
                         |> sync)
 
