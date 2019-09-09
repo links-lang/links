@@ -7,12 +7,19 @@ open Sugartypes
 let links_file_paths
   = let from_list xs = String.concat "," xs in
     let parse value =
-      List.map Utility.Sys.expand (String.split_on_char ':' value)
+      let parts =
+        List.(concat
+                (map
+                   (String.split_on_char ':')
+                   (String.split_on_char ',' value)))
+      in
+      List.map Sys.expand parts
     in
-    Settings.(multi_option "links_file_paths"
+    Settings.(multi_option ~default:["."] "links_file_paths"
               |> synopsis "Search paths for Links modules"
               |> hint "<dir[[:dir']...]>"
               |> to_string from_list
+              |> keep_default
               |> convert parse
               |> CLI.(add (long "path"))
               |> sync)
@@ -65,7 +72,7 @@ let try_parse_file filename =
 
   let poss_dirs =
     let paths = Settings.get links_file_paths in
-    "" :: "." :: poss_stdlib_dir @ (List.map (check_n_chop) paths)
+    "" :: poss_stdlib_dir @ (List.map (check_n_chop) paths)
   in
 
   (* Loop through, trying to open the module with each path *)

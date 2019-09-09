@@ -29,6 +29,8 @@
 
   *)
 
+module Printexc = Utility.Printexc
+
 type privilege = [`User | `System]
 
 (* Error handling. *)
