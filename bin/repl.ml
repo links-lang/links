@@ -32,15 +32,15 @@ let print_setting_description : out_channel -> Settings.Reflection.t -> unit
     | `MultiOption -> "multi option"
   in
   let open Settings.Reflection in
-  Printf.fprintf oc "%10s: %s\n" "name" descr.name;
-  Printf.fprintf oc "%10s: %s\n" "type" (show_type descr.kind);
-  Printf.fprintf oc "%10s: %s\n" "default" (show_option descr.current_value);
-  Printf.fprintf oc "%10s: %s\n" "value" (show_option descr.current_value);
+  Printf.fprintf oc "%13s: %s\n" "name" descr.name;
+  Printf.fprintf oc "%13s: %s\n" "type" (show_type descr.kind);
+  Printf.fprintf oc "%13s: %s\n" "default" (show_option descr.default);
+  Printf.fprintf oc "%13s: %s\n" "current value" (show_option descr.current_value);
   (match descr.value_hint with
    | None -> ()
    | Some hint ->
-      Printf.fprintf oc "%12s(value description: %s)\n" "" hint);
-  Printf.fprintf oc "%10s: %s\n" "synopsis" (show_option descr.synopsis)
+      Printf.fprintf oc "%15s(value description: %s)\n" "" hint);
+  Printf.fprintf oc "%13s: %s\n" "synopsis" (show_option descr.synopsis)
 
 module BS = Basicsettings
 

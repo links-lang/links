@@ -416,11 +416,12 @@ module Settings = struct
            then List.iter (fun dependee -> if not (get dependee) then set ~privilege dependee true) depends)
        | Option payload ->
           if not payload.readonly
-          then payload.common.value <- value;
-          invoke setting value
+          then (payload.common.value <- value;
+                invoke setting value)
+          else raise (Cannot_set_readonly (get_name setting))
        | MultiOption payload ->
           payload.common.value <- value;
-          if not payload.initial then payload.initial <- false;
+          payload.initial <- false;
           invoke setting value
 
   let trigger : type a. privilege -> a setting -> unit
@@ -861,7 +862,7 @@ let handle_all : unhandled list -> unit
                     | Settings.Option _ ->
                        Settings.set ~privilege setting (Settings.from_string setting value)
                     | Settings.MultiOption _ ->
-                       Settings.append setting (Settings.from_string setting value)
+                       Settings.append ~privilege setting (Settings.from_string setting value)
                   in
                   (* If the key is a group, then interpret the tail as a value argument... *)
                   if String.length key > 1
@@ -900,7 +901,7 @@ let handle_all : unhandled list -> unit
                       | Settings.Option _ ->
                          Settings.set ~privilege setting (Settings.from_string setting value)
                       | Settings.MultiOption _ ->
-                         Settings.append setting (Settings.from_string setting value));
+                         Settings.append ~privilege setting (Settings.from_string setting value));
                      rest'
                   | _ -> raise (Missing_argument ("--" ^ key))
              with Not_found ->
@@ -917,7 +918,13 @@ let handle_all : unhandled list -> unit
                let (Settings.Pack setting) = Hashtbl.find CLI.longs key in
                if Settings.is_readonly setting
                then raise (Cannot_set_readonly (Printf.sprintf "--%s" key));
-               Settings.set ~privilege setting (Settings.from_string setting value)
+               match setting with
+               | Settings.MultiOption _ ->
+                  (* Writing to a multi option via the CLI is
+                     interpreted as appending. *)
+                  Settings.append ~privilege setting (Settings.from_string setting value)
+               | _ ->
+                  Settings.set ~privilege setting (Settings.from_string setting value)
              with Not_found ->
                let key = Store.long_key key in
                Store.add key unhandled); rest
@@ -926,6 +933,9 @@ let handle_all : unhandled list -> unit
                let (Settings.Pack setting) = Hashtbl.find Settings.settings key in
                if Settings.is_readonly setting
                then raise (Cannot_set_readonly (Printf.sprintf "%s" key));
+               (* Note: Writing to a multi option via a key-value pair
+                  is interpreted as _overriding_ the current value
+                  rather than appending. *)
                Settings.set ~privilege setting (Settings.from_string setting value)
              with Not_found ->
                Store.add key unhandled); rest

@@ -198,6 +198,7 @@ let default_path_string () =
 let path =
   Settings.(multi_option ~default:(default_path_string ()) "db_driver_path"
             |> synopsis "Search paths for database drivers"
+            |> hint "<dir[,dir']...>"
             |> to_string string_of_paths
             |> convert parse_paths
             |> sync)

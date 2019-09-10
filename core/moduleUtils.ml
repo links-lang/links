@@ -7,9 +7,9 @@ open Sugartypes
 let links_file_paths
   = Settings.(multi_option ~default:["."] "links_file_paths"
               |> synopsis "Search paths for Links modules"
-              |> hint "<dir[[:dir']...]>"
-              |> to_string string_of_paths
+              |> hint "<dir[,dir']...>"
               |> keep_default
+              |> to_string string_of_paths
               |> convert parse_paths
               |> CLI.(add (long "path"))
               |> sync)
