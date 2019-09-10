@@ -63,8 +63,42 @@ def check_expected(name, item, got, expected, errors):
     else:
         return True
 
+# Ensures "foo bar" is interpreted as a single argument and not two.
+def patch_arguments(args = []):
+    result = []
+    i = 0
+    while i < len(args):
+        if args[i].startswith("\""):
+            components = [args[i][1:]]
+            i += 1
+            while i < len(args):
+                if args[i].endswith("\""):
+                    components.append(args[i][0:len(args[i])-1])
+                    i +=1
+                    result.append(" ".join(components))
+                    break
+                else:
+                    components.append(args[i])
+                    i += 1
+        else:
+            result.append(args[i])
+            i += 1
+    return result
+
+def split_arguments(args = []):
+    links_args = []
+    rest_args  = []
+    i = 0
+    for i in range(0, len(args)):
+        if args[i] == "--":
+            rest_args = args[i:]
+            break
+        else:
+            links_args.append(args[i])
+    return (links_args, rest_args)
+
 def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = None, filemode='', args='', ignore = None):
-    arg_array = str.split(args)
+    arg_array, rest_array = split_arguments(patch_arguments(str.split(args)))
     global failures
 
     if config_file != None:
@@ -81,7 +115,7 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
     if not filemode.startswith('true'):
         arg_array += ["-e"]
 
-    proc = Popen([links] + arg_array + [code], stdout=PIPE, stderr=PIPE, env=env)
+    proc = Popen([links] + arg_array + [code] + rest_array, stdout=PIPE, stderr=PIPE, env=env)
 
     passed = True
     errors = []
