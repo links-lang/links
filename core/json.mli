@@ -30,7 +30,7 @@ module JsonState : sig
   val add_buffer : channel_id -> Value.t list -> t -> t
 
   (** Serialises the state as a JSON string *)
-  val to_json : t -> Yojson.t
+  val to_json : t -> Yojson.Basic.t
 end
 
 type json_state = JsonState.t
@@ -44,12 +44,12 @@ val parse_json_b64 : string -> Value.t
 (* Jsonization *)
 
 (** Returns a JSON representation of a given value. *)
-val jsonize_value : Value.t -> Yojson.t
+val jsonize_value : Value.t -> Yojson.Basic.t
 
 (** Given a JSON state (calculated from resolveJsonState) and a value,
  * returns an object of the form {"value" : v, "state" : s}, where v is
  * the value to serialise and s is the state to serialise. *)
-val jsonize_value_with_state : Value.t -> json_state -> Yojson.t
+val jsonize_value_with_state : Value.t -> json_state -> Yojson.Basic.t
 
 (** Given a json_state, continuation, function name, and list of arguments, JSONises a call
  * to the client. *)
@@ -58,9 +58,9 @@ val jsonize_call :
   Value.continuation -> (* Continuation to serialise *)
   string -> (* Name of the function *)
   Value.t list -> (* Arguments *)
-  Yojson.t
+  Yojson.Basic.t
 
-val json_to_string : Yojson.t -> string
-val nil_literal : Yojson.t
+val json_to_string : Yojson.Basic.t -> string
+val nil_literal : Yojson.Basic.t
 val js_dq_escape_string : json_string -> json_string
 

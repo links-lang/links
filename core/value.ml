@@ -1364,24 +1364,24 @@ let row_columns_values db v =
  * Therefore, for objects with more than one field, it's best to do
  * individual field lookups. We can be match directly on ones with single
  * fields though. *)
-let rec from_json (json: Yojson.t) : t =
+let rec from_json (json: Yojson.Basic.t) : t =
   let unwrap_string = function
       | `String str -> str
       | x -> raise (
           runtime_error ("JSON type error. Expected string, got " ^
-            Yojson.to_string x)) in
+            Yojson.Basic.to_string x)) in
 
   let unwrap_int = function
       | `Int i -> i
       | x -> raise (
           runtime_error ("JSON type error. Expected int, got " ^
-            Yojson.to_string x)) in
+            Yojson.Basic.to_string x)) in
 
   let unwrap_list = function
       | `List xs -> xs
       | x -> raise (
           runtime_error ("JSON type error. Expected string, got " ^
-            Yojson.to_string x)) in
+            Yojson.Basic.to_string x)) in
 
   let assoc_string key xs = unwrap_string (List.assoc key xs) in
 
@@ -1393,7 +1393,7 @@ let rec from_json (json: Yojson.t) : t =
               | `List xs -> Some (`List ((from_json hd) :: xs))
               | _ ->
                   raise (runtime_error ("JSON type error -- expected list, got " ^
-                    (Yojson.to_string tl)))
+                    (Yojson.Basic.to_string tl)))
           end
       | _ -> None in
 
@@ -1443,7 +1443,7 @@ let rec from_json (json: Yojson.t) : t =
   | `Assoc [("_c", `String c)] -> box_char (c.[0])
   | `Assoc [("_c", nonsense)] ->
      raise (runtime_error (
-          "char payload should be a string. Got: " ^ (Yojson.to_string nonsense)))
+          "char payload should be a string. Got: " ^ (Yojson.Basic.to_string nonsense)))
   | `Assoc [("_serverAPID", `String apid_str)] ->
       let apid = AccessPointID.of_string apid_str in
       `AccessPointID (`ServerAccessPoint (apid))
@@ -1456,7 +1456,7 @@ let rec from_json (json: Yojson.t) : t =
   | `Assoc [("_serverPid", nonsense)]
   | `Assoc [("_clientSpawnLoc", nonsense)] ->
      raise (runtime_error (
-          "process / AP ID payload should be a string. Got: " ^ (Yojson.to_string nonsense)))
+          "process / AP ID payload should be a string. Got: " ^ (Yojson.Basic.to_string nonsense)))
   | `Assoc [("_serverSpawnLoc", _)] ->
       `SpawnLocation (`ServerSpawnLoc)
   | `Assoc ["_db", `Assoc assoc] ->
@@ -1468,7 +1468,7 @@ let rec from_json (json: Yojson.t) : t =
       `Database (db_connect driver params)
   | `Assoc [("_db", nonsense)] ->
        raise (runtime_error (
-            "db should be an assoc list. Got: " ^ (Yojson.to_string nonsense)))
+            "db should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
   | `Assoc [("_table", `Assoc bs)] ->
       let db =
         begin
@@ -1495,7 +1495,7 @@ let rec from_json (json: Yojson.t) : t =
         `Table (db, name, keys, row)
   | `Assoc [("_table", nonsense)] ->
        raise (runtime_error (
-            "table should be an assoc list. Got: " ^ (Yojson.to_string nonsense)))
+            "table should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
   | `Assoc [("_xml", `Assoc xs)] ->
       let elem_type = assoc_string "type" xs in
       begin
@@ -1523,11 +1523,11 @@ let rec from_json (json: Yojson.t) : t =
       end
   | `Assoc [("_xml", nonsense)] ->
        raise (runtime_error (
-            "xml should be an assoc list. Got: " ^ (Yojson.to_string nonsense)))
+            "xml should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
   | `Assoc ["_domRefKey", `Int id] -> `ClientDomRef id
   | `Assoc ["_domRefKey", nonsense] ->
        raise (runtime_error (
-            "dom ref key should be an integer. Got: " ^ (Yojson.to_string nonsense)))
+            "dom ref key should be an integer. Got: " ^ (Yojson.Basic.to_string nonsense)))
   | `Assoc xs ->
       (* For non-singleton assoc lists, try each () of these in turn.
        * If all else fails, parse as a record. *)
@@ -1543,5 +1543,5 @@ let rec from_json (json: Yojson.t) : t =
           | None -> parse_record xs
       end
   | nonsense ->
-      raise (runtime_error ("unsupported JSON: " ^ (Yojson.to_string nonsense)))
+      raise (runtime_error ("unsupported JSON: " ^ (Yojson.Basic.to_string nonsense)))
 

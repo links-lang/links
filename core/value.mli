@@ -287,4 +287,4 @@ val session_exception_operation : string
 
 val row_columns_values : database -> t -> string list * string list list
 
-val from_json : Yojson.t -> t
+val from_json : Yojson.Basic.t -> t

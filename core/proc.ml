@@ -484,8 +484,7 @@ struct
       | None -> Lwt.return ()
 
   let decode_message json_str =
-    Jsonparse.parse_websocket_request Jsonlex.jsonlex
-      (Lexing.from_string json_str)
+    WebsocketMessages.from_json (Yojson.Basic.from_string json_str)
 
   let decode_and_handle client_id data =
     match decode_message data with
@@ -614,7 +613,7 @@ struct
 
   let deliver_lost_messages client_id carrier_channel_id lost_msg_table =
     let json_buf msgs = `List (List.map (Json.jsonize_value) msgs |> List.rev) in
-    let json_table : Yojson.t =
+    let json_table : Yojson.Basic.t =
       `Assoc
         (List.map (fun (cid, msgs) ->
           (ChannelID.to_string cid, json_buf msgs)) lost_msg_table) in

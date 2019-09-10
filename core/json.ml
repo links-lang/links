@@ -14,11 +14,11 @@ type websocket_url = string
 type json_string = string
 
 let parse_json str =
-  Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)
+  Yojson.Basic.from_string str |> Value.from_json
 
 let nil_literal = `Null
 
-let parse_json_b64 str = parse_json(Utility.base64decode str)
+let parse_json_b64 str = parse_json (Utility.base64decode str)
 
 (* Helper functions for jsonization *)
 (*
@@ -28,7 +28,7 @@ let parse_json_b64 str = parse_json(Utility.base64decode str)
     of view it certainly isn't a very good idea to pass this kind of
     information to the client.
 *)
-let json_of_db (db, params) : Yojson.t =
+let json_of_db (db, params) : Yojson.Basic.t =
   let driver = db#driver_name() in
   let (name, args) = Value.parse_db_string params in
   `Assoc [("_db",
@@ -40,7 +40,7 @@ let json_of_db (db, params) : Yojson.t =
 WARNING:
   May need to be careful about free type variables / aliases in row
 *)
-let json_of_table ((db, params), name, keys, row) : Yojson.t =
+let json_of_table ((db, params), name, keys, row) : Yojson.Basic.t =
   let json_of_key k = `List (List.map (fun x -> `String x) k) in
   let json_of_keylist ks = `List (List.map json_of_key ks)  in
   `Assoc [
@@ -73,12 +73,12 @@ let jsonize_location loc = `String (
     | Location.Native  -> "native"
     | Location.Unknown -> "unknown")
 
-let rec cons_listify : Yojson.t list -> Yojson.t = function
+let rec cons_listify : Yojson.Basic.t list -> Yojson.Basic.t = function
   | [] -> `Null
   | x::xs ->
       `Assoc [("_head", x); ("_tail", cons_listify xs)]
 
-let rec jsonize_value' : Value.t -> Yojson.t =
+let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   function
   | `Lens _ -> raise (Errors.runtime_error "relational lens serialization not supported")
   | `PrimitiveFunction _
@@ -129,7 +129,7 @@ let rec jsonize_value' : Value.t -> Yojson.t =
   | `SpawnLocation (`ServerSpawnLoc) ->
       `Assoc [("_serverSpawnLoc", `List [])]
   | `Alien -> raise (Errors.runtime_error "Can't jsonize alien")
-and jsonize_primitive : Value.primitive_value -> Yojson.t  = function
+and jsonize_primitive : Value.primitive_value -> Yojson.Basic.t  = function
   | `Bool value -> `Bool value
   | `Int value -> `Int value
   | `Float value -> `Float value
@@ -167,7 +167,7 @@ and json_of_xmlitem = function
   | Value.Node (name, children) -> json_of_xmlitem (Value.NsNode ("", name, children))
   | _ -> raise (Errors.runtime_error "Cannot jsonize a detached attribute.")
 
-and jsonize_values : Value.t list -> Yojson.t list  =
+and jsonize_values : Value.t list -> Yojson.Basic.t list  =
   fun vs ->
     let ss =
       List.fold_left
@@ -304,7 +304,7 @@ let jsonize_value_with_state value state =
       (fun () -> "jsonize_value_with_state => " ^ Value.string_of_value value);
   let jv = jsonize_value' value in
   let jv_s = value_with_state jv state in
-  let jv_str = Yojson.to_string jv_s in
+  let jv_str = Yojson.Basic.to_string jv_s in
   Debug.if_set show_json (fun () -> "jsonize_value_with_state <= " ^ jv_str);
   jv_s
 
@@ -312,7 +312,7 @@ let jsonize_value v =
   Debug.if_set show_json
       (fun () -> "jsonize_value => " ^ Value.string_of_value v);
   let jv = jsonize_value' v in
-  let jv_str = Yojson.to_string jv in
+  let jv_str = Yojson.Basic.to_string jv in
   Debug.if_set show_json (fun () -> "jsonize_value <= " ^ jv_str);
   jv
 
@@ -330,4 +330,4 @@ let jsonize_call s cont name args =
   value_with_state v s
 
 (* Eta expansion needed to suppress optional arguments *)
-let json_to_string json = Yojson.to_string json
+let json_to_string json = Yojson.Basic.to_string json

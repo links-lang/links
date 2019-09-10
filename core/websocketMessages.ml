@@ -35,7 +35,7 @@ let from_json json : incoming_websocket_message =
         | Some (`String x) -> x
         | Some x ->
             raise (
-              runtime_error ("Type mismatch: expected string, got " ^ (Yojson.to_string x)))
+              runtime_error ("Type mismatch: expected string, got " ^ (Yojson.Basic.to_string x)))
         | None ->
             raise (runtime_error ("Field " ^ field ^ " not found"))
     in
@@ -116,13 +116,13 @@ let from_json json : incoming_websocket_message =
             | Some x ->
                 raise (runtime_error
                   ("Invalid opcode found; expected string, got: " ^
-                   (Yojson.to_string x)))
+                   (Yojson.Basic.to_string x)))
             | None ->
                 raise (runtime_error
                   ("No opcode field found in message: " ^
-                   (Yojson.to_string json)))
+                   (Yojson.Basic.to_string json)))
         end
     | _ ->
         raise (runtime_error
-          ("Invalid websocket message received: " ^ (Yojson.to_string json)))
+          ("Invalid websocket message received: " ^ (Yojson.Basic.to_string json)))
 
