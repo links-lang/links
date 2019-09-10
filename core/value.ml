@@ -1376,7 +1376,7 @@ let rec from_json (json: Yojson.t) : t =
           runtime_error ("JSON type error. Expected string, got " ^
             Yojson.to_string x)) in
   let assoc_string key xs = unwrap_string (List.assoc key xs) in
-  let parse_list xs : (t option) =
+  let parse_list xs () =
     match (List.assoc_opt "_head" xs, List.assoc_opt "_tail" xs) with
       | (Some hd, Some tl) ->
           begin
@@ -1387,15 +1387,15 @@ let rec from_json (json: Yojson.t) : t =
                     (Yojson.to_string tl)))
           end
       | _ -> None in
-  let parse_client_ap xs = failwith "TODO" in
-  let parse_client_id xs = failwith "TODO" in
-  let parse_client_pid xs = failwith "TODO" in
-  let parse_session_channel xs = failwith "TODO" in
-  let parse_server_func xs = failwith "TODO" in
+  let parse_client_ap xs () = failwith "TODO" in
+  let parse_client_id xs () = failwith "TODO" in
+  let parse_client_pid xs () = failwith "TODO" in
+  let parse_session_channel xs () = failwith "TODO" in
+  let parse_server_func xs () = failwith "TODO" in
   let parse_record xs = `Record (List.map (fun (k, v) -> (k, from_json v)) xs) in
-  let (<|>) (o1: t option) (o2: t option) : t option =
-    match o1 with
-      | Some x -> Some x
+  let (<|>) (o1: unit -> t option) (o2: unit -> t option) : unit -> t option =
+    match o1 () with
+      | Some x -> (fun () -> Some x)
       | None -> o2 in
   match json with
   | `Int i -> box_int i
@@ -1501,7 +1501,7 @@ let rec from_json (json: Yojson.t) : t =
           <|> (parse_session_channel xs)
           <|> (parse_server_func xs) in
       begin
-        match result with
+        match result () with
           | Some v -> v
           | None -> parse_record xs
       end
