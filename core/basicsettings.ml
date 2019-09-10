@@ -54,36 +54,6 @@ module RelationalLenses = struct
               |> sync)
 end
 
-
-(** App server stuff *)
-module Appserver = struct
-  let hostname =
-    Settings.(option ~default:(Some "0.0.0.0") "host"
-              |> synopsis "The host address of the app-server"
-              |> to_string from_string_option
-              |> convert Utility.some
-              |> sync)
-
-  let port =
-    Settings.(option ~default:(Some 8080) "port"
-              |> synopsis "The port for listening to incoming requests for the app-server"
-              |> to_string (function Some i -> string_of_int i | None -> "<none>")
-              |> convert (fun n -> Some (int_of_string n))
-              |> sync)
-
-  let external_base_url
-    = Settings.(option "external_base_url"
-                |> to_string from_string_option
-                |> convert Utility.some
-                |> sync)
-
-  let internal_base_url
-    = Settings.(option "internal_base_url"
-                |> to_string from_string_option
-                |> convert Utility.some
-                |> sync)
-end
-
 (* Handlers stuff *)
 module Handlers = struct
   let enabled

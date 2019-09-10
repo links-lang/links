@@ -11,8 +11,19 @@ let jslib_dir = Settings.(option "jslibdir"
                           |> convert Utility.(Sys.expand ->- some)
                           |> sync)
 
-let host_name = Basicsettings.Appserver.hostname
-let port = Basicsettings.Appserver.port
+let hostname =
+  Settings.(option ~default:(Some "0.0.0.0") "host"
+            |> synopsis "The host address of the app-server"
+            |> to_string from_string_option
+            |> convert Utility.some
+            |> sync)
+
+let port =
+  Settings.(option ~default:(Some 8080) "port"
+            |> synopsis "The port for listening to incoming requests for the app-server"
+            |> to_string (function Some i -> string_of_int i | None -> "<none>")
+            |> convert (fun n -> Some (int_of_string n))
+            |> sync)
 
 (* Base URL for websocket connections *)
 let websocket_url
@@ -106,6 +117,12 @@ struct
 
   let get_websocket_url () =
     val_of (Settings.get websocket_url)
+
+  let get_internal_base_url () =
+    Settings.get internal_base_url
+
+  let get_external_base_url () =
+    Settings.get external_base_url
 
   let set_prelude bs =
     prelude := bs
@@ -276,8 +293,8 @@ struct
 
         let prefixed_lib_url =
           let js_url = from_option "" (Settings.get jslib_url) in
-          match Settings.get Basicsettings.Appserver.internal_base_url with
-          | None | Some "" ->
+          match Settings.get internal_base_url with
+          | None ->
              "/" ^ (Utility.strip_slashes js_url) ^ "/"
           | Some base_url ->
              "/" ^
@@ -338,5 +355,5 @@ struct
       (fun exn -> Debug.print ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
     Settings.set Basicsettings.web_mode true;
     Settings.set webs_running true;
-    start_server (val_of (Settings.get host_name)) (val_of (Settings.get port)) rt
+    start_server (val_of (Settings.get hostname)) (val_of (Settings.get port)) rt
 end

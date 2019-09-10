@@ -352,8 +352,6 @@ struct
            continuation to it.  Otherwise, block the process (put its
            continuation in the blocked_processes table) and let the
            scheduler choose a different thread.  *)
-(*         if (Settings.get_value Basicsettings.web_mode) then *)
-(*             Debug.print("receive in web server mode--not implemented."); *)
         begin match Mailbox.pop_message () with
           Some message ->
            Debug.print("delivered message.");
@@ -491,8 +489,8 @@ struct
        let is_dir_handler = String.length path > 0 && path.[String.length path - 1] = '/' in
        let path = if String.length path == 0 || path.[0] <> '/' then "/" ^ path else path in
        let path =
-         match Settings.get (Basicsettings.Appserver.internal_base_url) with
-         | None | Some "" -> path
+         match Settings.get (Webserver_types.internal_base_url) with
+         | None -> path
          | Some base_url ->
             let base_url = Utility.strip_slashes base_url in
             "/" ^ base_url ^ path
@@ -505,8 +503,8 @@ struct
        let uri = Value.unbox_string uriv in
        let uri = if String.length uri == 0 || uri.[0] <> '/' then "/" ^ uri else uri in
        let uri =
-         match Settings.get (Basicsettings.Appserver.internal_base_url) with
-         | None | Some "" -> uri
+         match Webs.get_internal_base_url () with
+         | None -> uri
          | Some base_uri ->
             let base_uri = Utility.strip_slashes base_uri in
             "/" ^ base_uri ^ uri
