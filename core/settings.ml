@@ -110,13 +110,13 @@ let no_conv : string -> 'a
 
 let generic_string_of_option : _ option -> string
   = function
-  | None -> "<none>"
-  | Some _ -> "<some>"
+  | None -> "(none)"
+  | Some _ -> "(some)"
 
 let generic_string_of_list : _ list -> string
   = function
-  | [] -> "<empty>"
-  | xs -> Printf.sprintf "<nonempty:%d>" (List.length xs)
+  | [] -> "(empty)"
+  | xs -> Printf.sprintf "(nonempty:%d)" (List.length xs)
 
 let no_action : 'a -> unit
   = fun _ -> ()
@@ -597,15 +597,6 @@ module Settings = struct
     List.iter (print_setting oc) (List.sort (fun (name, _) (name', _) -> String.compare name name') user);
     Printf.fprintf oc "\nSystem settings\n%!";
     List.iter (print_setting oc) (List.sort (fun (name, _) (name', _) -> String.compare name name') sys)
-
-  let fetch_synopsis : string -> string option
-    = fun setting_name ->
-    try
-      let (Pack setting) = Hashtbl.find settings setting_name in
-      match get_synopsis setting with
-      | "" -> None
-      | synopsis -> Some synopsis
-    with Not_found -> raise (Unknown_setting setting_name)
 end
 
 module Config = struct
@@ -953,6 +944,41 @@ let sync : type a. a setting -> a setting
   let name = get_name setting in
   let updates = Store.fetch (name :: Hashtbl.find_all CLI.cli_forms name) in
   handle_all updates; setting
+
+module Reflection = struct
+  type t =
+    { name: string;
+      current_value: string option;
+      default: string option;
+      value_hint: string option;
+      synopsis: string option;
+      kind: [`Flag | `Option | `MultiOption ]
+    }
+
+  let make kind name current_value default value_hint synopsis =
+    { name; current_value; default; value_hint; synopsis; kind }
+
+  (* Lifts a string into a option type. The empty string maps to None. *)
+  let coerce = function "" -> None | s -> Some s
+
+  let reflect : string -> t
+    = fun setting_name ->
+    try
+      let (Pack setting) = Hashtbl.find settings setting_name in
+      let kind = match setting with
+        | Flag _ -> `Flag
+        | Option _ -> `Option
+        | MultiOption _ -> `MultiOption
+      in
+      make
+        kind
+        (Settings.get_name setting)
+        (coerce (Settings.as_string setting (Settings.get setting)))
+        (coerce (Settings.as_string setting (Settings.get_default setting)))
+        (coerce (Settings.get_hint setting))
+        (coerce (Settings.get_synopsis setting))
+    with Not_found -> raise (Unknown_setting setting_name)
+end
 
 (* Pretty prints CLI options to [oc]. *)
 let print_cli_options oc =

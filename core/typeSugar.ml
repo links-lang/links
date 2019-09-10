@@ -13,7 +13,7 @@ let relational_lenses_guard pos =
   let relational_lenses_disabled pos =
     Errors.disabled_extension ~pos ~setting:("relational_lenses", true) "Relational lenses"
   in
-  if not (Settings.get Basicsettings.RelationalLenses.relational_lenses)
+  if not (Settings.get Lens.relational_lenses)
   then raise (relational_lenses_disabled pos)
 
 let endbang_antiquotes

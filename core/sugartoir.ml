@@ -52,7 +52,7 @@ open Var
 let show_compiled_ir
   = Settings.(flag "show_compiled_ir"
               |> depends Debug.enabled
-              |> hint "Dumps the IR to stderr"
+              |> synopsis "Dumps the IR to stderr"
               |> convert parse_bool
               |> sync)
 

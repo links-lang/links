@@ -673,7 +673,7 @@ struct
         let data = value env data |> Value.unbox_list in
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let behaviour =
-          if Settings.get Basicsettings.RelationalLenses.classic_lenses
+          if Settings.get Lens.classic_lenses
           then Lens.Eval.Classic
           else Lens.Eval.Incremental in
         Lens.Eval.put ~behaviour lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");

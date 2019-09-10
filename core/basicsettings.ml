@@ -26,34 +26,6 @@ let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> CLI.(add (fun arg -> short 'v' (long "version" arg)))
                         |> sync)
 
-module RelationalLenses = struct
-  let nonincremental : bool Settings.setting option ref = ref None
-  let incremental : bool Settings.setting option ref = ref None
-  let relational_lenses =
-    let setting =
-      Settings.(flag "relational_lenses"
-                |> synopsis "Enables the incremental relational lenses extenion"
-                |> action (fun _ -> Settings.set (Utility.val_of !nonincremental) false)
-                |> convert parse_bool)
-    in incremental := Some setting; setting
-  let classic_lenses =   (* Use naive/non-incremental relational lenses instead of incremental ones *)
-    let setting =
-      Settings.(flag "relational_lenses_classic"
-                |> synopsis "Enables non-incremental relational lenses extension"
-                |> action (fun _ -> Settings.set (Utility.val_of !incremental) false)
-                |> convert parse_bool)
-    in nonincremental := Some setting; setting
-
-  let relational_lenses = Settings.sync relational_lenses
-  let classic_lenses = Settings.sync classic_lenses
-
-  let debug =
-    Settings.(flag "relational_lenses_debug"
-              |> synopsis "Enables debug mode for relational lenses extensions (development)"
-              |> convert parse_bool
-              |> sync)
-end
-
 (* Handlers stuff *)
 module Handlers = struct
   let enabled

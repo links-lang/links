@@ -23,6 +23,25 @@ let print_colors
               |> convert parse_bool
               |> sync)
 
+let print_setting_description : out_channel -> Settings.Reflection.t -> unit
+  = fun oc descr ->
+  let show_option = function None -> "(none)" | Some s -> s in
+  let show_type = function
+    | `Flag -> "flag"
+    | `Option -> "option"
+    | `MultiOption -> "multi option"
+  in
+  let open Settings.Reflection in
+  Printf.fprintf oc "%10s: %s\n" "name" descr.name;
+  Printf.fprintf oc "%10s: %s\n" "type" (show_type descr.kind);
+  Printf.fprintf oc "%10s: %s\n" "default" (show_option descr.current_value);
+  Printf.fprintf oc "%10s: %s\n" "value" (show_option descr.current_value);
+  (match descr.value_hint with
+   | None -> ()
+   | Some hint ->
+      Printf.fprintf oc "%12s(value description: %s)\n" "" hint);
+  Printf.fprintf oc "%10s: %s\n" "synopsis" (show_option descr.synopsis)
+
 module BS = Basicsettings
 
 (** The prompt used for interactive mode *)
@@ -209,11 +228,10 @@ let rec directives
     ((fun envs args ->
       (match args with
        | [setting_name] ->
-          (match Settings.fetch_synopsis setting_name with
-           | None -> prerr_endline "(undocumented)"
-           | Some doc -> prerr_endline doc
-           | exception Settings.Unknown_setting setting_name ->
-              Printf.fprintf stderr "Unknown setting '%s'\n%!" setting_name);
+          (try
+             print_setting_description stderr (Settings.Reflection.reflect setting_name)
+           with Settings.Unknown_setting setting_name ->
+             Printf.fprintf stderr "Unknown setting '%s'\n%!" setting_name);
        | _ -> prerr_endline "syntax: @help setting");
       envs),
      "print the documentation of a given setting");

@@ -1258,6 +1258,7 @@ end
 let backend =
   Settings.(option ~default:(Some "cps") "js_compiler"
             |> privilege `System
+            |> hint "<cps>"
             |> synopsis "Selects the JavaScript compiler"
             |> to_string from_string_option
             |> convert Utility.some

@@ -33,7 +33,7 @@ module CLI: sig
   val short : char -> arg -> arg
 end
 
-(* Synchronise settings.*)
+(* Synchronise settings. *)
 val sync : 'a setting -> 'a setting
 
 (* Miscellaneous. *)
@@ -42,11 +42,24 @@ val string_of_paths : string list -> string
 val parse_paths : string -> string list
 val parse_bool : string -> bool
 val parse_and_set_user : string -> string -> unit
-val fetch_synopsis : string -> string option
 
 (* Pretty-printing. *)
 val print_settings : out_channel -> unit
 val print_cli_options : out_channel -> unit
+
+(* Describe settings. *)
+module Reflection: sig
+  type t =
+    { name: string;
+      current_value: string option;
+      default: string option;
+      value_hint: string option;
+      synopsis: string option;
+      kind: [`Flag | `Option | `MultiOption ]
+    }
+
+  val reflect : string -> t
+end
 
 (* Getters for anonymous and rest arguments. *)
 val get_anonymous_arguments : unit -> string list
