@@ -1397,6 +1397,12 @@ let rec from_json (json: Yojson.Basic.t) : t =
           end
       | _ -> None in
 
+  let parse_variant xs () =
+    match (List.assoc_opt "_label" xs, List.assoc_opt "_value" xs) with
+      | (Some k, Some v) ->
+          Some (box_variant (unwrap_string k) (from_json v))
+      | _ -> None in
+
   let parse_client_ap xs () =
     match (List.assoc_opt "_clientAPID" xs, List.assoc_opt "_clientId" xs) with
       | (Some apid, Some cid) ->
@@ -1439,6 +1445,8 @@ let rec from_json (json: Yojson.Basic.t) : t =
   | `Int i -> box_int i
   | `Float f -> box_float f
   | `String s -> box_string s
+  | `Bool b -> box_bool b
+  | `List xs -> `List (List.map from_json xs)
   | `Assoc [] -> box_record [] (* Unit tuple *)
   | `Assoc [("_c", `String c)] -> box_char (c.[0])
   | `Assoc [("_c", nonsense)] ->
@@ -1533,6 +1541,7 @@ let rec from_json (json: Yojson.Basic.t) : t =
        * If all else fails, parse as a record. *)
       let result =
         (parse_list xs)
+          <|> (parse_variant xs)
           <|> (parse_client_ap xs)
           <|> (parse_client_pid xs)
           <|> (parse_session_channel xs)
