@@ -1364,7 +1364,7 @@ let row_columns_values db v =
  * Therefore, for objects with more than one field, it's best to do
  * individual field lookups. We can be match directly on ones with single
  * fields though. *)
-let rec from_json json =
+let rec from_json (json: Yojson.t) : t =
   let unwrap_string = function
       | `String str -> str
       | x -> raise (
@@ -1376,11 +1376,32 @@ let rec from_json json =
           runtime_error ("JSON type error. Expected string, got " ^
             Yojson.to_string x)) in
   let assoc_string key xs = unwrap_string (List.assoc key xs) in
+  let parse_list xs : (t option) =
+    match (List.assoc_opt "_head" xs, List.assoc_opt "_tail" xs) with
+      | (Some hd, Some tl) ->
+          begin
+            match from_json tl with
+              | `List xs -> Some (`List ((from_json hd) :: xs))
+              | _ ->
+                  raise (runtime_error ("JSON type error -- expected list, got " ^
+                    (Yojson.to_string tl)))
+          end
+      | _ -> None in
+  let parse_client_ap xs = failwith "TODO" in
+  let parse_client_id xs = failwith "TODO" in
+  let parse_client_pid xs = failwith "TODO" in
+  let parse_session_channel xs = failwith "TODO" in
+  let parse_server_func xs = failwith "TODO" in
+  let parse_record xs = `Record (List.map (fun (k, v) -> (k, from_json v)) xs) in
+  let (<|>) (o1: t option) (o2: t option) : t option =
+    match o1 with
+      | Some x -> Some x
+      | None -> o2 in
   match json with
   | `Int i -> box_int i
   | `Float f -> box_float f
   | `String s -> box_string s
-  | `Assoc [] -> `Record [] (* Unit tuple *)
+  | `Assoc [] -> box_record [] (* Unit tuple *)
   | `Assoc [("_c", `String c)] -> box_char (c.[0])
   | `Assoc [("_c", nonsense)] ->
      raise (runtime_error (
@@ -1469,7 +1490,21 @@ let rec from_json json =
   | `Assoc ["_domRefKey", nonsense] ->
        raise (runtime_error (
             "dom ref key should be an integer. Got: " ^ (Yojson.to_string nonsense)))
-  | `Assoc _xs -> failwith "TODO"
+  | `Assoc xs ->
+      (* For non-singleton assoc lists, try each of these in turn.
+       * If all else fails, parse as a record. *)
+      let result =
+        (parse_list xs)
+          <|> (parse_client_ap xs)
+          <|> (parse_client_id xs)
+          <|> (parse_client_pid xs)
+          <|> (parse_session_channel xs)
+          <|> (parse_server_func xs) in
+      begin
+        match result with
+          | Some v -> v
+          | None -> parse_record xs
+      end
   | nonsense ->
       raise (runtime_error ("unsupported JSON: " ^ (Yojson.to_string nonsense)))
 
