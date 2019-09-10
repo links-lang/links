@@ -171,13 +171,10 @@ struct
     let handle_ajax_error = function
       | Aborted r -> Lwt.return r
       | e ->
-         let formatted_exn =
-           Errors.format_exception e
-           |> Json.js_dq_escape_string in
-         let error_json =
-           "{ \"error\": \"" ^ formatted_exn ^ "\"}" in
+          let json =
+            `Assoc [("error", `String (Errors.format_exception e))] in
          Lwt.return
-           ("text/plain", Utility.base64encode (error_json)) in
+           ("text/plain", Utility.base64encode (Yojson.Basic.to_string json)) in
 
     let handle_html_error e =
       let mime_type = "text/html; charset=utf-8" in

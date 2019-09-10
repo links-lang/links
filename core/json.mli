@@ -62,5 +62,4 @@ val jsonize_call :
 
 val json_to_string : Yojson.Basic.t -> string
 val nil_literal : Yojson.Basic.t
-val js_dq_escape_string : json_string -> json_string
 

@@ -49,23 +49,6 @@ let json_of_table ((db, params), name, keys, row) : Yojson.Basic.t =
         ("row", `String (Types.string_of_datatype (`Record row)));
         ("keys", json_of_keylist keys)])]
 
-let js_dq_escape_string str =
-  (* escape for placement in double-quoted string *)
-  Str.global_replace (Str.regexp_string "\"") "\\\""
-    (Str.global_replace (Str.regexp_string "\n") "\\n"
-      (Str.global_replace (Str.regexp_string "\r") "\\r"
-       (Str.global_replace (Str.regexp_string "\\") "\\\\"
-          str)))
-
-    (*
-(** Escape the argument for inclusion in a double-quoted string. *)
-let js_dq_escape_char =
-  function
-    '"' -> "\\\""
-  | '\\' -> "\\\\"
-  | ch -> String.make 1 ch
-          *)
-
 let jsonize_location loc = `String (
   match loc with
     | Location.Client  -> "client"
