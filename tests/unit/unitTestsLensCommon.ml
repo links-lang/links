@@ -16,8 +16,10 @@ let leave_tables_opt =
   Conf.make_bool "leave_tables" false "Do not delete tables after run."
 
 let database_args_opt =
+  let module Database = Links_core.Database in
+  let connection_args = Settings.get Database.connection_info in
   Conf.make_string "database_args"
-    ("links:" ^ (Links_core.Utility.from_option "" (Settings.get Links_core.Database.connection_info)))
+    ("links:" ^ Links_core.Utility.from_option "" connection_args)
     "Database connection args."
 
 let verbose_opt = Conf.make_bool "v" false "Print verbose information."
