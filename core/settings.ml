@@ -827,6 +827,39 @@ end
    instead of writing directly to the store? *)
 let handle_all : unhandled list -> unit
   = fun xs ->
+  let handle_short_option : type a. privilege -> string -> a Settings.setting -> unhandled list -> unhandled list
+    = fun privilege key setting rest ->
+    let handle value =
+        match setting with
+        | Settings.Flag _ -> assert false
+        | Settings.Option _ ->
+           Settings.set ~privilege setting (Settings.from_string setting value)
+        | Settings.MultiOption _ ->
+           Settings.append ~privilege setting (Settings.from_string setting value)
+    in
+    (* If the key is a group, then interpret the tail as a value argument... *)
+    if String.length key > 1
+    then let value = String.sub key 1 (String.length key - 1) in
+         handle value; rest
+    else (* ... otherwise expect the next element in the command stream to be a value argument. *)
+      (match rest with
+       | { argument = Value value; _ } :: rest' ->
+          handle value; rest'
+       | _ -> raise (Missing_argument ("-" ^ key)))
+  in
+  let handle_long_option : type a. privilege -> string -> a Settings.setting -> unhandled list -> unhandled list
+    = fun privilege key setting rest ->
+    match rest with
+    | { argument = Value value; _ } :: rest' ->
+       (match setting with
+        | Settings.Flag _ -> assert false
+        | Settings.Option _ ->
+           Settings.set ~privilege setting (Settings.from_string setting value)
+        | Settings.MultiOption _ ->
+           Settings.append ~privilege setting (Settings.from_string setting value));
+       rest'
+    | _ -> raise (Missing_argument ("--" ^ key))
+  in
   let rec handle xs =
     match xs with
     | [] -> ()
@@ -855,24 +888,10 @@ let handle_all : unhandled list -> unit
                   if String.length key > 1
                   then raise (Cannot_set_readonly (Printf.sprintf "-%c" c))
                   else Settings.trigger privilege setting; rest
-               | Settings.Option _ | Settings.MultiOption _ ->
-                  let handle value =
-                    match setting with
-                    | Settings.Flag _ -> assert false
-                    | Settings.Option _ ->
-                       Settings.set ~privilege setting (Settings.from_string setting value)
-                    | Settings.MultiOption _ ->
-                       Settings.append ~privilege setting (Settings.from_string setting value)
-                  in
-                  (* If the key is a group, then interpret the tail as a value argument... *)
-                  if String.length key > 1
-                  then let value = String.sub key 1 (String.length key - 1) in
-                       handle value; rest
-                  else (* ... otherwise expect the next element in the command stream to be a value argument. *)
-                    (match rest with
-                     | { argument = Value value; _ } :: rest' ->
-                        handle value; rest'
-                     | _ -> raise (Missing_argument ("-" ^ key)))
+               | Settings.Option _ ->
+                  handle_short_option privilege key setting rest
+               | Settings.MultiOption _ ->
+                  handle_short_option privilege key setting rest
              with Not_found ->
                    let key = Store.short_key key in
                    Store.add key unhandled;
@@ -893,17 +912,10 @@ let handle_all : unhandled list -> unit
                   Settings.toggle ~privilege setting; rest
                | Settings.Option _ when Settings.is_readonly setting ->
                   Settings.trigger privilege setting; rest
-               | Settings.Option _ | Settings.MultiOption _ ->
-                  match rest with
-                  | { argument = Value value; _ } :: rest' ->
-                     (match setting with
-                      | Settings.Flag _ -> assert false
-                      | Settings.Option _ ->
-                         Settings.set ~privilege setting (Settings.from_string setting value)
-                      | Settings.MultiOption _ ->
-                         Settings.append ~privilege setting (Settings.from_string setting value));
-                     rest'
-                  | _ -> raise (Missing_argument ("--" ^ key))
+               | Settings.Option _ ->
+                  handle_long_option privilege key setting rest
+               | Settings.MultiOption _ ->
+                  handle_long_option privilege key setting rest
              with Not_found ->
                    let key = Store.long_key key in
                    Store.add key unhandled;

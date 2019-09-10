@@ -8,7 +8,7 @@ before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y ocaml-nox ocaml-native-compilers
   - ./install_local_opam2.sh
-  - ./opam2_local switch create ocaml-base-compiler.4.08.1
+  - ./opam2_local switch create ocaml-base-compiler.4.06.0
   - eval `./opam2_local config env`
   - ./opam2_local install -y postgresql oUnit ocamlformat
   - make rule-check
