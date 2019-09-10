@@ -9,6 +9,17 @@ let connection_info
               |> convert Utility.some
               |> sync)
 
+let relax_query_type_constraint =
+  Settings.(flag "relax_query_type_constraint"
+            |> convert parse_bool
+            |> sync)
+
+let shredding =
+  Settings.(flag "shredding"
+            |> synopsis "Enables database query shredding"
+            |> convert parse_bool
+            |> sync)
+
 (* Hacky database query result manipulation settings. *)
 let coerce_null_integers
   = Settings.(flag "coerce_null_integers"

@@ -2,7 +2,7 @@ open CommonTypes
 open Utility
 open Ir
 
-let typecheck_ir
+let typecheck
   = Settings.(flag "typecheck_ir"
               |> synopsis "Type check the IR (development)"
               |> convert parse_bool
@@ -773,7 +773,7 @@ struct
             (* The type of the body must match the type the query is annotated with *)
             o#check_eq_types original_t t (SSpec special);
 
-            (if Settings.get  Basicsettings.Shredding.relax_query_type_constraint then
+            (if Settings.get Database.relax_query_type_constraint then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in

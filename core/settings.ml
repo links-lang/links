@@ -373,7 +373,8 @@ module Settings = struct
           ?(to_string=(fun _ -> "<unknown>")) ?(of_string=no_conv) ?(arg_hint="")
           ?(hidden=false) name value ->
     if is_valid_name name
-    then { name; default = value; value; privilege; synopsis; to_string; of_string; action; arg_hint; hidden; show_default = true }
+    then { name; default = value; value; privilege; synopsis;
+           to_string; of_string; action; arg_hint; hidden; show_default = true }
     else raise (Bad_setting_name name)
 
   let from_string : type a. a setting -> string -> a
@@ -1127,7 +1128,7 @@ let config =
 (* Synchronises every setting. If any CLI argument is left unhandled
    then it print an error message and exits, if a config key-value
    pair is left unhandled then it prints a warning. *)
-let ensure_all_handled : unit -> unit
+let ensure_all_synchronised : unit -> unit
   = fun () ->
   handle_all (Store.fetch_all ());
   let loop xs =
@@ -1147,7 +1148,7 @@ let ensure_all_handled : unit -> unit
   then if (loop (Store.fetch_all ()))
        then exit 1
 
-let handled_defined : unit -> unit
+let synchronise_defined : unit -> unit
   = fun () ->
   handle_all (Store.fetch_all ());
   Store.clear ()

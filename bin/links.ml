@@ -63,7 +63,10 @@ let process_exprarg envs expr =
   print_simple result.Driver.result_type result.Driver.result_value
 
 let main () =
-  Settings.ensure_all_handled ();
+  (* Attempt to synchronise all settings. If any setting commands are
+     left unhandled, then error and exit. *)
+  Settings.ensure_all_synchronised ();
+
   let file_list = Settings.get_anonymous_arguments () in
   let to_evaluate = Settings.get to_evaluate in
 
@@ -73,14 +76,9 @@ let main () =
     (* TBD: accumulate type/value environment so that "interact" has access *)
 
   for_each file_list (process_filearg prelude envs);
-  let should_start_repl = to_evaluate = [] && file_list = [] in
-  if should_start_repl then
-    begin
-      Printf.printf "%s%!" (val_of (Settings.get BS.welcome_note));
-      Repl.interact envs
-    end
-
-
+  match file_list, to_evaluate with
+  | [], [] -> Repl.interact envs
+  | _, _ -> ()
 
 let _ =
   (* Determine whether web mode should be enabled. *)

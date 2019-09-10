@@ -54,6 +54,6 @@ val get_rest_arguments : unit -> string list
 
 (* The following handler exits if any CLI argument is left
    unhandled. *)
-val ensure_all_handled : unit -> unit
+val ensure_all_synchronised : unit -> unit
 (* The following handler ignores any unhandled argument. *)
-val handled_defined : unit -> unit
+val synchronise_defined : unit -> unit

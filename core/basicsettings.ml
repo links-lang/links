@@ -26,31 +26,6 @@ let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> CLI.(add (fun arg -> short 'v' (long "version" arg)))
                         |> sync)
 
-let welcome_note =
-" _     _ __   _ _  __  ___\n\
- / |   | |  \\ | | |/ / / ._\\\n\
- | |   | | , \\| |   /  \\  \\\n\
- | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
- |_____|_|_| \\__|_| \\_|____/\n\
-Welcome to Links version " ^ (Utility.val_of (Settings.get version)) ^ "\n"
-let welcome_note = Settings.(option ~default:(Some welcome_note) ~readonly:true "welcome_note"
-                             |> privilege `System
-                             |> to_string from_string_option
-                             |> sync)
-
-module Shredding = struct
-  let relax_query_type_constraint =
-    Settings.(flag "relax_query_type_constraint"
-              |> convert parse_bool
-              |> sync)
-
-  let shredding =
-    Settings.(flag "shredding"
-              |> synopsis "Enables database query shredding"
-              |> convert parse_bool
-              |> sync)
-end
-
 module RelationalLenses = struct
   let nonincremental : bool Settings.setting option ref = ref None
   let incremental : bool Settings.setting option ref = ref None
@@ -108,12 +83,6 @@ module Appserver = struct
                 |> convert Utility.some
                 |> sync)
 end
-
-(* Use keys in shredding *)
-let use_keys_in_shredding
-  = Settings.(flag ~default:true "use_keys_in_shredding"
-              |> convert parse_bool
-              |> sync)
 
 (* Handlers stuff *)
 module Handlers = struct

@@ -9,10 +9,9 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   let session_exceptions_enabled = Settings.get (Basicsettings.Sessions.exceptions_enabled)
 
   let get_js_lib_url () =
-    (* let base_url = Utility.strip_slashes base_url in *)
     let js_url = from_option "" (opt_map strip_slashes (Settings.get jslib_url)) in
     match opt_map strip_slashes (Settings.get Basicsettings.Appserver.external_base_url) with
-    | None | Some "" ->
+    | None ->
        "/" ^ js_url ^ "/"
     | Some base_url ->
       "/" ^ base_url ^ "/" ^ js_url ^ "/"

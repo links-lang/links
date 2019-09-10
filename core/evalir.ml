@@ -732,7 +732,7 @@ struct
          | None -> None
          | Some (limit, offset) ->
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
-       if Settings.get Basicsettings.Shredding.shredding then
+       if Settings.get Database.shredding then
          begin
            if range != None then eval_error "Range is not supported for nested queries";
            match EvalNestedQuery.compile_shredded env e with

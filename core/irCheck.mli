@@ -1,6 +1,6 @@
 open Ir
 
-val typecheck_ir : bool Settings.setting
+val typecheck : bool Settings.setting
 
 module Typecheck : sig
    val program : Types.datatype Env.Int.t -> program -> program

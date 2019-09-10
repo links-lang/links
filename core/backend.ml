@@ -118,10 +118,10 @@ struct
         perform_for_side_effects
           (BuildTables.program Lib.primitive_vars);
         only_if_any_set
-          [IrCheck.typecheck_ir; simplify_types]
+          [IrCheck.typecheck; simplify_types]
           (run simplify_type_structure_program);
         only_if_set
-          IrCheck.typecheck_ir
+          IrCheck.typecheck
           (run typechecking_pipeline);
       ]
 
@@ -130,10 +130,10 @@ struct
         (fun tenv globals -> Closures.bindings tenv Lib.primitive_vars globals);
         (fun tenv globals -> BuildTables.bindings tenv Lib.primitive_vars globals; globals);
         only_if_any_set
-          [IrCheck.typecheck_ir; simplify_types]
+          [IrCheck.typecheck; simplify_types]
           (run simplify_type_structure_bindings);
         only_if_set
-          IrCheck.typecheck_ir
+          IrCheck.typecheck
           (run prelude_typechecking_pipeline);
       ]
 

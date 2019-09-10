@@ -289,8 +289,21 @@ let evaluate_parse_result envs parse_result =
 
 
 (** Interactive loop *)
+let welcome_note =
+" _     _ __   _ _  __  ___\n\
+ / |   | |  \\ | | |/ / / ._\\\n\
+ | |   | | , \\| |   /  \\  \\\n\
+ | |___| | |\\ \\ | |\\ \\ _\\  \\\n\
+ |_____|_|_| \\__|_| \\_|____/\n\
+Welcome to Links version " ^ (Utility.val_of (Settings.get BS.version)) ^ "\n"
+let welcome_note = Settings.(option ~default:(Some welcome_note) ~readonly:true "welcome_note"
+                             |> privilege `System
+                             |> to_string from_string_option
+                             |> sync)
+
 let interact envs =
   Settings.set BS.interactive_mode true;
+  Printf.printf "%s%!" (val_of (Settings.get welcome_note));
   let rec interact envs =
     let evaluate_replitem parse envs =
         Errors.display ~default:(fun _ -> envs)
