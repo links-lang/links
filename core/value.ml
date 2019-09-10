@@ -1370,12 +1370,21 @@ let rec from_json (json: Yojson.t) : t =
       | x -> raise (
           runtime_error ("JSON type error. Expected string, got " ^
             Yojson.to_string x)) in
+
+  let unwrap_int = function
+      | `Int i -> i
+      | x -> raise (
+          runtime_error ("JSON type error. Expected int, got " ^
+            Yojson.to_string x)) in
+
   let unwrap_list = function
       | `List xs -> xs
       | x -> raise (
           runtime_error ("JSON type error. Expected string, got " ^
             Yojson.to_string x)) in
+
   let assoc_string key xs = unwrap_string (List.assoc key xs) in
+
   let parse_list xs () =
     match (List.assoc_opt "_head" xs, List.assoc_opt "_tail" xs) with
       | (Some hd, Some tl) ->
@@ -1387,11 +1396,40 @@ let rec from_json (json: Yojson.t) : t =
                     (Yojson.to_string tl)))
           end
       | _ -> None in
-  let parse_client_ap xs () = failwith "TODO" in
-  let parse_client_id xs () = failwith "TODO" in
-  let parse_client_pid xs () = failwith "TODO" in
-  let parse_session_channel xs () = failwith "TODO" in
-  let parse_server_func xs () = failwith "TODO" in
+
+  let parse_client_ap xs () =
+    match (List.assoc_opt "_clientAPID" xs, List.assoc_opt "_clientId" xs) with
+      | (Some apid, Some cid) ->
+          let apid = unwrap_string apid |> AccessPointID.of_string in
+          let cid =  unwrap_string cid  |> ClientID.of_string in
+          Some (`AccessPointID (`ClientAccessPoint (cid, apid)))
+      | _ -> None in
+
+  let parse_client_pid xs () =
+    match (List.assoc_opt "_clientPid" xs, List.assoc_opt "_clientID" xs) with
+      | (Some pid_str, Some id_str) ->
+          let pid = unwrap_string pid_str |> ProcessID.of_string in
+          let id =  unwrap_string id_str  |> ClientID.of_string in
+          Some (`Pid (`ClientPid (id, pid)))
+      | _ -> None in
+
+  let parse_session_channel xs () =
+    match (List.assoc_opt "_sessEP1" xs, List.assoc_opt "_sessEP2" xs) with
+      | (Some ep1, Some ep2) ->
+          let ep1 = unwrap_string ep1 |> ChannelID.of_string in
+          let ep2 = unwrap_string ep2 |> ChannelID.of_string in
+          Some (`SessionChannel (ep1, ep2))
+      | _ -> None in
+
+  let parse_server_func xs () =
+    match (List.assoc_opt "_serverFunc" xs, List.assoc_opt "_env" xs) with
+      | (Some func_id, None)
+      | (Some func_id, Some (`List [])) ->
+          Some (`FunctionPtr (unwrap_int func_id, None))
+      | (Some func_id, Some fvs) ->
+          Some (`FunctionPtr (unwrap_int func_id, Some (from_json fvs)))
+      | _ -> None in
+
   let parse_record xs = `Record (List.map (fun (k, v) -> (k, from_json v)) xs) in
   let (<|>) (o1: unit -> t option) (o2: unit -> t option) : unit -> t option =
     match o1 () with
@@ -1491,12 +1529,11 @@ let rec from_json (json: Yojson.t) : t =
        raise (runtime_error (
             "dom ref key should be an integer. Got: " ^ (Yojson.to_string nonsense)))
   | `Assoc xs ->
-      (* For non-singleton assoc lists, try each of these in turn.
+      (* For non-singleton assoc lists, try each () of these in turn.
        * If all else fails, parse as a record. *)
       let result =
         (parse_list xs)
           <|> (parse_client_ap xs)
-          <|> (parse_client_id xs)
           <|> (parse_client_pid xs)
           <|> (parse_session_channel xs)
           <|> (parse_server_func xs) in
