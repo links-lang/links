@@ -18,20 +18,6 @@ let dynamic_static_routes
               |> sync)
 let allow_static_routes = ref true
 
-(** If [true], then enable concurrency on the server:
-
-    - Child processes are abandoned if the main process ends.
-
-    - A run-time error results if the server tries to call the client
-    with child processes still running.
-*)
-let concurrent_server =
-  Settings.(flag ~default:true "concurrenct_server"
-            |> privilege `System
-            |> synopsis "Use the concurrent runtime on the app-server"
-            |> convert parse_bool
-            |> sync)
-
 
 module type EVALUATOR = sig
   type v = Value.t
@@ -285,62 +271,48 @@ struct
       apply_cont cont env (`String (string_of_int key))
     (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
-        let req_data = Value.Env.request_data env in
-        if Settings.get Basicsettings.web_mode && not (Settings.get concurrent_server) then
-          client_call req_data "_SendWrapper" cont [pid; msg]
-        else
-          let unboxed_pid = Value.unbox_pid pid in
-          (try
-             match unboxed_pid with
-              (* Send a message to a process which lives on the server *)
-              | `ServerPid serv_pid ->
-                  Lwt.return @@ Mailbox.send_server_message msg serv_pid
-              (* Send a message to a process which lives on another client *)
-              | `ClientPid (client_id, process_id) ->
-                  Mailbox.send_client_message msg client_id process_id
-           with
-                 UnknownProcessID id ->
-                   Debug.print (
-                     "Couldn't deliver message because destination process " ^
-                     (ProcessTypes.ProcessID.to_string id) ^ " has no mailbox.");
-                   Lwt.return ()) >>= fun _ ->
-            apply_cont cont env (`Record [])
+        let unboxed_pid = Value.unbox_pid pid in
+        (try
+           match unboxed_pid with
+           (* Send a message to a process which lives on the server *)
+           | `ServerPid serv_pid ->
+              Lwt.return @@ Mailbox.send_server_message msg serv_pid
+           (* Send a message to a process which lives on another client *)
+           | `ClientPid (client_id, process_id) ->
+              Mailbox.send_client_message msg client_id process_id
+         with
+           UnknownProcessID id ->
+           Debug.print (
+               "Couldn't deliver message because destination process " ^
+                 (ProcessTypes.ProcessID.to_string id) ^ " has no mailbox.");
+           Lwt.return ()) >>= fun _ ->
+        apply_cont cont env (`Record [])
     | `PrimitiveFunction ("spawnAt",_), [loc; func] ->
-        let req_data = Value.Env.request_data env in
-        if Settings.get Basicsettings.web_mode && not (Settings.get concurrent_server) then
-            client_call req_data "_spawnWrapper" cont [loc; func]
-        else
-          begin
-            match loc with
-              | `SpawnLocation (`ClientSpawnLoc client_id) ->
-                Proc.create_client_process client_id func >>= fun new_pid ->
-                apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
-              | `SpawnLocation (`ServerSpawnLoc) ->
-                let var = Var.dummy_var in
-                let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
-                Proc.create_process false
-                  (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
-                apply_cont cont env (`Pid (`ServerPid new_pid))
-              | _ -> assert false
-          end
+        begin match loc with
+          | `SpawnLocation (`ClientSpawnLoc client_id) ->
+             Proc.create_client_process client_id func >>= fun new_pid ->
+             apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
+          | `SpawnLocation (`ServerSpawnLoc) ->
+             let var = Var.dummy_var in
+             let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
+             Proc.create_process false
+               (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
+             apply_cont cont env (`Pid (`ServerPid new_pid))
+          | _ -> assert false
+        end
     | `PrimitiveFunction ("spawnAngelAt",_), [loc; func] ->
-        let req_data = Value.Env.request_data env in
-        if Settings.get Basicsettings.web_mode && not (Settings.get concurrent_server) then
-            client_call req_data "_spawnWrapper" cont [loc; func]
-        else
-          begin
-            match loc with
-              | `SpawnLocation (`ClientSpawnLoc client_id) ->
-                Proc.create_client_process client_id func >>= fun new_pid ->
-                apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
-              | `SpawnLocation (`ServerSpawnLoc) ->
-                let var = Var.dummy_var in
-                let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
-                Proc.create_process true
-                  (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
-                apply_cont cont env (`Pid (`ServerPid new_pid))
-              | _ -> assert false
-          end
+        begin match loc with
+        | `SpawnLocation (`ClientSpawnLoc client_id) ->
+           Proc.create_client_process client_id func >>= fun new_pid ->
+           apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
+        | `SpawnLocation (`ServerSpawnLoc) ->
+           let var = Var.dummy_var in
+           let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
+           Proc.create_process true
+             (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
+           apply_cont cont env (`Pid (`ServerPid new_pid))
+        | _ -> assert false
+        end
     | `PrimitiveFunction ("spawnWait", _), [func] ->
         let our_pid = Proc.get_current_pid () in
         (* Create the new process *)
@@ -382,17 +354,13 @@ struct
            scheduler choose a different thread.  *)
 (*         if (Settings.get_value Basicsettings.web_mode) then *)
 (*             Debug.print("receive in web server mode--not implemented."); *)
-        let req_data = Value.Env.request_data env in
-        if Settings.get Basicsettings.web_mode && not (Settings.get concurrent_server) then
-          client_call req_data "_recvWrapper" cont []
-        else
         begin match Mailbox.pop_message () with
-            Some message ->
-              Debug.print("delivered message.");
-              apply_cont cont env message
-          | None ->
-              let recv_frame = K.Frame.of_expr env (Lib.prim_appln "recv" []) in
-              Proc.block (fun () -> apply_cont K.(recv_frame &> cont) env (`Record []))
+          Some message ->
+           Debug.print("delivered message.");
+           apply_cont cont env message
+        | None ->
+           let recv_frame = K.Frame.of_expr env (Lib.prim_appln "recv" []) in
+           Proc.block (fun () -> apply_cont K.(recv_frame &> cont) env (`Record []))
         end
     (* end of mailbox stuff *)
     (* start of session stuff *)
