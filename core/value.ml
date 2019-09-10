@@ -3,11 +3,14 @@ open Notfound
 open ProcessTypes
 open Var
 
+module E = Env
 
 let _ = ParseSettings.config_file
 
 let internal_error message =
   Errors.internal_error ~filename:"value.ml" ~message
+
+let runtime_error message = Errors.runtime_error message
 
 let serialiser = Basicsettings.Serialisation.serialiser
 let session_exception_operation = "SessionFail"
@@ -1356,5 +1359,117 @@ let row_columns_values db v =
   in
   (row_columns v, row_values db v)
 
-(* JSON *)
-let from_json x = failwith "TODO"
+(* JSON deserialisation *)
+(* The JSON spec says that the fields in an object must be unordered.
+ * Therefore, for objects with more than one field, it's best to do
+ * individual field lookups. We can be match directly on ones with single
+ * fields though. *)
+let rec from_json json =
+  let unwrap_string = function
+      | `String str -> str
+      | x -> raise (
+          runtime_error ("JSON type error. Expected string, got " ^
+            Yojson.to_string x)) in
+  let unwrap_list = function
+      | `List xs -> xs
+      | x -> raise (
+          runtime_error ("JSON type error. Expected string, got " ^
+            Yojson.to_string x)) in
+  let assoc_string key xs = unwrap_string (List.assoc key xs) in
+  match json with
+  | `Int i -> box_int i
+  | `Float f -> box_float f
+  | `String s -> box_string s
+  | `Assoc [] -> `Record [] (* Unit tuple *)
+  | `Assoc [("_c", `String c)] -> box_char (c.[0])
+  | `Assoc [("_c", nonsense)] ->
+     raise (runtime_error (
+          "char payload should be a string. Got: " ^ (Yojson.to_string nonsense)))
+  | `Assoc [("_serverAPID", `String apid_str)] ->
+      let apid = AccessPointID.of_string apid_str in
+      `AccessPointID (`ServerAccessPoint (apid))
+  | `Assoc [("_serverPid", `String pid_str)] ->
+      `Pid (`ServerPid (ProcessID.of_string pid_str))
+  | `Assoc [("_clientSpawnLoc", `String client_id_str)] ->
+      let client_id = ClientID.of_string client_id_str in
+      `SpawnLocation (`ClientSpawnLoc (client_id))
+  | `Assoc [("_serverAPID", nonsense)]
+  | `Assoc [("_serverPid", nonsense)]
+  | `Assoc [("_clientSpawnLoc", nonsense)] ->
+     raise (runtime_error (
+          "process / AP ID payload should be a string. Got: " ^ (Yojson.to_string nonsense)))
+  | `Assoc [("_serverSpawnLoc", _)] ->
+      `SpawnLocation (`ServerSpawnLoc)
+  | `Assoc ["_db", `Assoc assoc] ->
+      let driver = assoc_string "driver" assoc in
+      let params =
+        reconstruct_db_string
+          (assoc_string "name" assoc,
+           assoc_string "args" assoc) in
+      `Database (db_connect driver params)
+  | `Assoc [("_db", nonsense)] ->
+       raise (runtime_error (
+            "db should be an assoc list. Got: " ^ (Yojson.to_string nonsense)))
+  | `Assoc [("_table", `Assoc bs)] ->
+      let db =
+        begin
+          match List.assoc "db" bs |> from_json with
+            | `Database db -> db
+            | _ -> raise (runtime_error ("first argument to a table must be a database"))
+        end in
+      let name = assoc_string "name" bs in
+      let row_type =
+        DesugarDatatypes.read
+          ~aliases:E.String.empty
+          (assoc_string "row" bs) in
+      let row =
+        begin
+          match row_type with
+            | `Record row -> row
+            | _ -> raise (runtime_error ("tables must have record type"))
+        end in
+      let keys = List.assoc "keys" bs |> unwrap_list in
+      let keys =
+        List.map (function
+          | `List part_keys -> List.map unwrap_string part_keys
+          | _ -> raise (runtime_error "keys must be lists of strings")) keys in
+        `Table (db, name, keys, row)
+  | `Assoc [("_table", nonsense)] ->
+       raise (runtime_error (
+            "table should be an assoc list. Got: " ^ (Yojson.to_string nonsense)))
+  | `Assoc [("_xml", `Assoc xs)] ->
+      let elem_type = assoc_string "type" xs in
+      begin
+        match elem_type with
+          | "TEXT" -> `XML (Text (assoc_string "text" xs))
+          | "ELEMENT" ->
+              let tag = assoc_string "tagname" xs in
+              let attrs = List.assoc "attributes" xs in
+              let attrs = match attrs with
+                | `Assoc attrs -> attrs
+                | _ ->
+                    raise (runtime_error ("xml attributes should be an assoc list")) in
+              let attrs = List.fold_left (fun attrs (label, value) ->
+                Attr (label, unwrap_string value) :: attrs) [] attrs in
+              let body = List.assoc "body" xs |> unwrap_list in
+              let body = List.map (fun x ->
+                  let val_body = from_json x in
+                  match val_body with
+                    | `XML body -> body
+                    | _ -> raise (runtime_error ("xml body should be a list of xmlitems"))
+                  ) body
+              in `XML (Node (tag, attrs @ body))
+          | _ -> raise
+            (runtime_error ("xml of unknown type in jsonparse. Got type " ^ elem_type))
+      end
+  | `Assoc [("_xml", nonsense)] ->
+       raise (runtime_error (
+            "xml should be an assoc list. Got: " ^ (Yojson.to_string nonsense)))
+  | `Assoc ["_domRefKey", `Int id] -> `ClientDomRef id
+  | `Assoc ["_domRefKey", nonsense] ->
+       raise (runtime_error (
+            "dom ref key should be an integer. Got: " ^ (Yojson.to_string nonsense)))
+  | `Assoc _xs -> failwith "TODO"
+  | nonsense ->
+      raise (runtime_error ("unsupported JSON: " ^ (Yojson.to_string nonsense)))
+
