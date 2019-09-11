@@ -2,10 +2,20 @@ open CommonTypes
 open Utility
 open Ir
 
-(* ERROR HANDLING*)
+let typecheck
+  = Settings.(flag "typecheck_ir"
+              |> synopsis "Type check the IR (development)"
+              |> convert parse_bool
+              |> sync)
 
-let fail_on_ir_type_error =
-  Settings.get_value Basicsettings.Ir.fail_on_ir_type_error
+
+(* ERROR HANDLING*)
+let fail_on_ir_type_error
+  = Settings.(flag "fail_on_ir_type_error"
+              |> synopsis "Abort compilation if an IR type error occurs (experimental)"
+              |> convert parse_bool
+              |> sync)
+
 
 let internal_error message =
   raise (Errors.internal_error ~filename:"irCheck.ml" ~message)
@@ -61,7 +71,7 @@ let raise_ir_type_error msg occurrence =
    If we are supposed to continue after IR type errors, we print a debug
    message and return the alternative value in case of an exception. *)
 let handle_ir_type_error lazy_val alternative occurrence =
-  if fail_on_ir_type_error then
+  if Settings.get fail_on_ir_type_error then
     (* All exceptions are left unhandled, leaving them for the error handling
        facilities outside of the IR type checker *)
     Lazy.force lazy_val
@@ -763,7 +773,7 @@ struct
             (* The type of the body must match the type the query is annotated with *)
             o#check_eq_types original_t t (SSpec special);
 
-            (if Settings.get_value Basicsettings.Shredding.relax_query_type_constraint then
+            (if Settings.get Database.relax_query_type_constraint then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in

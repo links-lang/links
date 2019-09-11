@@ -374,7 +374,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawn",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled then
       datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
@@ -384,7 +384,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawnAt",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled then
       datatype "(Location, () {SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
@@ -394,7 +394,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawnClient",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled then
       datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
@@ -404,7 +404,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawnAngel",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled then
       datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
@@ -414,7 +414,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawnAngelAt",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled then
       datatype "(Location, () { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
@@ -1134,14 +1134,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "getDatabaseConfig",
   (`PFun
      (fun _ _ ->
-    let driver = Settings.get_value Basicsettings.database_driver
-    and args = Settings.get_value Basicsettings.database_args in
-      if driver = "" then
-        raise (Errors.settings_error
-          "Default database driver not defined. Set `database_driver`.")
-      else
-        `Record(["driver", Value.box_string driver;
-             "args", Value.box_string args])),
+    let args = from_option "" (Settings.get Database.connection_info) in
+    match Settings.get DatabaseDriver.driver with
+    | None ->
+       raise (Errors.settings_error
+                "Default database driver not defined. Set `database_driver`.")
+    | Some driver ->
+       `Record(["driver", Value.box_string driver;
+                "args", Value.box_string args])),
    datatype "() ~> (driver:String, args:String)",
   IMPURE);
 
@@ -1576,7 +1576,15 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     "verify",
     (`Server (p2 (fun str -> Value.box_bool -<- (Bcrypt.verify (Value.unbox_string str)) -<- Bcrypt.hash_of_string -<- Value.unbox_string)),
     datatype "(String, String) ~> Bool",
-    PURE)
+    PURE);
+
+    (* CLI *)
+    "getArgs",
+    (`Server
+       (`PFun (fun _ _ ->
+            Value.(box_list (List.map box_string (Settings.get_rest_arguments ()))))),
+     datatype "() ~> [String]",
+     IMPURE)
 ]
 
 let impl : located_primitive -> primitive option = function

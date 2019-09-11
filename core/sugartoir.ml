@@ -49,7 +49,12 @@ open Var
    frontend and call/cc in the IR) is silly.
 *)
 
-let show_compiled_ir = Basicsettings.Sugartoir.show_compiled_ir
+let show_compiled_ir
+  = Settings.(flag "show_compiled_ir"
+              |> depends Debug.enabled
+              |> synopsis "Dumps the IR to stderr"
+              |> convert parse_bool
+              |> sync)
 
 type datatype = Types.datatype
 

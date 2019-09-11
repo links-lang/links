@@ -4,6 +4,8 @@ open Scanner
 module LinksLexer : (LexerSig with type token         = Parser.token and
                                    type lexer_context = Lexer.lexer_context)
 
+val pp : string option Settings.setting
+
 (* Grammar for types *)
 val datatype    :  Sugartypes.Datatype.with_pos LinksLexer.grammar
 (* Grammar for interactive shell *)
@@ -28,7 +30,7 @@ val parse_channel : ?interactive:(unit -> unit)
                   -> (in_channel * string)
                   -> 'a * position_context
 
-val parse_readline : string
-                   -> ?in_context:LinksLexer.lexer_context
-                   -> 'a LinksLexer.grammar
-                   -> ('a * position_context)
+module Readline: sig
+  val prepare_prompt : string -> unit
+  val parse : string -> (Sugartypes.sentence * position_context)
+end

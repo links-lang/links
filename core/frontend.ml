@@ -1,5 +1,37 @@
 open Utility
 
+(* Shall we re-run the frontend type-checker after each TransformSugar transformation? *)
+let check_frontend_transformations =
+  Settings.(flag "recheck_frontend_transformations"
+            |> synopsis "Toggles whether to re-run the type checker after each (front end) transformation pass"
+            |> convert parse_bool
+            |> sync)
+
+let check_frontend_transformations_dump =
+  Settings.(flag "recheck_frontend_transformations_dump"
+            |> synopsis "Toggles whether to dump the AST after each transformation pass"
+            |> convert parse_bool
+            |> sync)
+
+let check_frontend_transformations_filter =
+  Settings.(option ~default:(Some "all") "recheck_frontend_transformations_filter"
+            |> convert Utility.some
+            |> sync)
+
+(* Print Sugar AST before frontend processing? *)
+let show_pre_frontend_ast
+  = Settings.(flag "show_pre_frontend_ast"
+              |> synopsis "Dumps the undecorated front-end AST"
+              |> convert parse_bool
+              |> sync)
+
+(* Print Sugar AST after frontend processing? *)
+let show_post_frontend_ast
+  = Settings.(flag "show_post_frontend_ast"
+              |> synopsis "Dumps the decorated front-end AST"
+              |> convert parse_bool
+              |> sync)
+
 module Pipeline :
 sig
   val program :
@@ -23,14 +55,14 @@ struct
     Debug.print (s ^ ": " ^ Sugartypes.show_sentence sentence);
     sentence
 
-  let session_exceptions = Settings.get_value Basicsettings.Sessions.exceptions_enabled
+  let session_exceptions = Settings.get Basicsettings.Sessions.exceptions_enabled
 
   let type_check_transformer transformer =
-    Settings.get_value Basicsettings.TypeSugar.check_frontend_transformations &&
-    match Settings.get_value Basicsettings.TypeSugar.check_frontend_transformations_filter with
-    | "all" -> true
-    | "" | "none" -> false
-    | filter -> String.split_on_char '\n' filter |> List.mem transformer
+    Settings.get check_frontend_transformations &&
+    match Settings.get check_frontend_transformations_filter with
+    | None | Some "" | Some "none" -> false
+    | Some "all" -> true
+    | Some filter -> String.split_on_char '\n' filter |> List.mem transformer
 
   let trace_type_check_error name print pre post e =
     let trace = Printexc.get_raw_backtrace () in
@@ -43,9 +75,9 @@ struct
       Format.pp_print_flush formatter ();
       Buffer.contents buffer
     in
-    Debug.if_set Basicsettings.TypeSugar.check_frontend_transformations_dump
+    Debug.if_set check_frontend_transformations_dump
       (fun () -> Printf.sprintf "Before %s:\n%s\n\n" name (print pre));
-    Debug.if_set Basicsettings.TypeSugar.check_frontend_transformations_dump
+    Debug.if_set check_frontend_transformations_dump
       (fun () -> Printf.sprintf "After %s:\n%s\n\n" name (print post));
     Printexc.raise_with_backtrace e trace
 
@@ -105,7 +137,7 @@ struct
 
 
 let program prev_tyenv pos_context program =
-  if Settings.get_value Basicsettings.show_pre_frontend_ast then
+  if Settings.get show_pre_frontend_ast then
     Debug.print ("Pre-Frontend AST:\n" ^ Sugartypes.show_program program);
 
 
@@ -141,7 +173,7 @@ let program prev_tyenv pos_context program =
 
   let ffi_files = ModuleUtils.get_ffi_files result_program in
 
-  if Settings.get_value Basicsettings.show_post_frontend_ast then
+  if Settings.get show_post_frontend_ast then
     Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_program result_program);
 
   (result_program, t, cur_tyenv), ffi_files
@@ -189,7 +221,7 @@ let program prev_tyenv pos_context program =
 
 
 let interactive prev_tyenv pos_context sentence =
-  if Settings.get_value Basicsettings.show_pre_frontend_ast then
+  if Settings.get show_pre_frontend_ast then
     Debug.print ("Pre-Frontend AST:\n" ^ Sugartypes.show_sentence sentence);
 
   let pre_transformers =
@@ -221,7 +253,7 @@ let interactive prev_tyenv pos_context sentence =
       post_tc_sentence
       interactive_post_typing_transformers in
 
-  if Settings.get_value Basicsettings.show_post_frontend_ast then
+  if Settings.get show_post_frontend_ast then
     Debug.print ("Post-Frontend AST:\n" ^ Sugartypes.show_sentence result_sentence);
 
    (result_sentence, t, post_tyenv)
