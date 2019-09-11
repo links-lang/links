@@ -10,7 +10,7 @@ let web_mode =
 (** [true] if we're in interactive mode *)
 let interactive_mode =
   Settings.(flag "interactive_mode"
-            |> synopsis "Enter the REPL on startup"
+            |> synopsis "Signifies whether Links is running in REPL mode"
             |> privilege `System
             |> convert parse_bool
             |> sync)

@@ -509,8 +509,13 @@ module Settings = struct
     let setting = MultiOption ({ initial = true; keep_default = false; common = payload ~to_string:generic_string_of_list name default }) in
     register setting; setting
 
+  let get_default : type a. a setting -> a = function
+   | Flag payload -> payload.common.default
+   | Option payload -> payload.common.default
+   | MultiOption payload -> payload.common.default
+
   let toggle : ?privilege:privilege -> bool setting -> unit
-    = fun ?(privilege=`System) setting -> set ~privilege setting (not (get setting))
+    = fun ?(privilege=`System) setting -> set ~privilege setting (not (get_default setting))
 
   let synopsis : type a. string -> a setting -> a setting
     = fun synopsis setting ->
@@ -551,11 +556,6 @@ module Settings = struct
   let is_readonly : type a. a setting -> bool = function
     | Option payload -> payload.readonly
     | _ -> false
-
-  let get_default : type a. a setting -> a = function
-   | Flag payload -> payload.common.default
-   | Option payload -> payload.common.default
-   | MultiOption payload -> payload.common.default
 
   let get_show_default : type a. a setting -> bool = function
    | Flag payload -> payload.common.show_default

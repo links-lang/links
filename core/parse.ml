@@ -121,7 +121,7 @@ module Readline = struct
 
   let native_readline
     = Settings.(flag ~default:true "native_readline"
-                |> synopsis "Toggles whether to use the native readline support in REPL mode"
+                |> synopsis "Selects whether to use the native readline support in REPL mode"
                 |> convert parse_bool
                 |> action load_history
                 |> CLI.(add (short 'r' <&> long "rlwrap"))
