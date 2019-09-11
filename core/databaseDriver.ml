@@ -1,10 +1,5 @@
 open Utility
 
-exception LocateFailure of string
-exception IllformedPluginDescription of string
-exception DependencyLoadFailure of string * Dynlink.error
-exception LoadFailure of string * Dynlink.error
-
 let driver
   = Settings.(option "database_driver"
               |> synopsis "Selects the runtime database backend"
@@ -149,7 +144,7 @@ module Loader = struct
       let filename = Filename.concat basedir (plugin_file name) in
       try
         Dynlink.loadfile filename
-      with Dynlink.Error e -> raise (DependencyLoadFailure (filename, e))
+      with Dynlink.Error e -> raise (Errors.dependency_load_failure filename e)
     in
     List.iter (load basedir) dependency.cmas
 
@@ -158,7 +153,7 @@ module Loader = struct
     = fun ?(opam_fallback=true) ?(path=[]) driver_name ->
     let candidates =
       try Locator.locate ~opam_fallback path driver_name
-      with Not_found -> raise (LocateFailure driver_name)
+      with Not_found -> raise (Errors.driver_locate_failure driver_name)
     in
     let open Locator in
     let target = match candidates with
@@ -173,12 +168,12 @@ module Loader = struct
     let dependencies =
       try parse target.dependencies
       with Illformed ->
-        raise (IllformedPluginDescription target.dependencies)
+        raise (Errors.illformed_plugin_description target.dependencies)
     in
     List.iter load_dependency dependencies;
     try
       Dynlink.loadfile target.cma
-    with Dynlink.Error e -> raise (LoadFailure (target.cma, e))
+    with Dynlink.Error e -> raise (Errors.load_failure target.cma e)
 end
 
 let default_path_string () =
