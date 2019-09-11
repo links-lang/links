@@ -33,7 +33,6 @@ let websocket_url
       else Some url
     in
     Settings.(option ~default:(Some "/ws/") "websocket_url"
-              |> privilege `System
               |> synopsis "Endpoint for requests over websockets"
               |> to_string from_string_option
               |> convert parse_ws_url
