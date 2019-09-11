@@ -34,7 +34,7 @@ let print_setting_description : out_channel -> Settings.Reflection.t -> unit
   let open Settings.Reflection in
   Printf.fprintf oc "%13s: %s\n" "name" descr.name;
   Printf.fprintf oc "%13s: %s\n" "type" (show_type descr.kind);
-  Printf.fprintf oc "%13s: %s\n" "default" (show_option descr.default);
+  Printf.fprintf oc "%13s: %s\n" "default value" (show_option descr.default);
   Printf.fprintf oc "%13s: %s\n" "current value" (show_option descr.current_value);
   (match descr.value_hint with
    | None -> ()
