@@ -218,7 +218,12 @@ object ('self)
   method freedom         : Freedom.t -> 'self * Freedom.t
   method type_variable   : type_variable -> 'self * type_variable
   method known_type_variable : known_type_variable -> 'self * known_type_variable
+  method typ             : Types.datatype -> ('self * Types.datatype)
+  method type_row        : Types.row -> ('self* Types.row)
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
+  method tyvar           : Types.quantifier -> ('self * Types.quantifier)
+  method type_field_spec : Types.field_spec -> ('self * Types.field_spec)
+  method tyarg           : Types.type_arg -> ('self * Types.type_arg)
   method tyunary_op      : tyarg list * UnaryOp.t -> 'self * (tyarg list * UnaryOp.t)
   method unary_op        : UnaryOp.t -> 'self * UnaryOp.t
   method function_definition : function_definition -> 'self * function_definition

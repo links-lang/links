@@ -1506,6 +1506,9 @@ class fold_map =
     method bool : bool -> ('self_type * bool) =
       function | false -> (o, false) | true -> (o, true)
 
+
+
+
     method unary_op : UnaryOp.t -> ('self_type * UnaryOp.t) =
       let open UnaryOp in function
       | Minus -> (o, Minus)
@@ -1514,6 +1517,7 @@ class fold_map =
 
     method tyunary_op : tyarg list * UnaryOp.t -> 'self_type * (tyarg list * UnaryOp.t) =
       fun (_x, _x_i1) ->
+        let (o, _x) = o#list (fun o -> o#tyarg) _x in
         let (o, _x_i1) = o#unary_op _x_i1 in (o, (_x, _x_i1))
 
     method sentence : sentence -> ('self_type * sentence) =
@@ -1628,10 +1632,17 @@ class fold_map =
           (o, (QualifiedVar _xs))
       | FunLit (_x, _x1, _x_i1, _x_i2) ->
         let (o, _x_i1) = o#funlit _x_i1 in
+        let handle_funtype o (t, r) =
+          let (o, t) = o#typ t in
+          let (o,r) = o#type_row r in
+          (o, (t,r))
+        in
+        let (o, _x) = o#option (fun o -> o#list handle_funtype) _x in
         let (o, _x_i2) = o#location _x_i2 in (o, (FunLit (_x, _x1, _x_i1, _x_i2)))
       | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
           let (o, _given_spawn_location) = o#given_spawn_location _given_spawn_location in
           let (o, _block_phr) = o#phrase _block_phr in
+          let (o, _dt) = o#option (fun o -> o#type_row) _dt in
           (o, (Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)))
       | Query (_x, _policy, _x_i1, _x_i2) ->
           let (o, _x) =
@@ -1642,7 +1653,9 @@ class fold_map =
               _x in
           let (o, _x_i1) = o#phrase _x_i1 in (o, (Query (_x, _policy, _x_i1, _x_i2)))
       | ListLit (_x, _x_i1) ->
-          let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (ListLit (_x, _x_i1)))
+          let (o, _x) = o#list (fun o -> o#phrase) _x in
+          let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1 in
+          (o, (ListLit (_x, _x_i1)))
       | RangeLit ((_x_i1, _x_i2)) ->
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2
@@ -1680,7 +1693,9 @@ class fold_map =
           let (o, _x_i1) = o#list (fun o -> o#phrase) _x_i1
           in (o, (FnAppl ((_x, _x_i1))))
       | TAbstr ((_x, _x_i1)) ->
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (TAbstr ((_x, _x_i1))))
+          let o, _x = o#list (fun o -> o#tyvar) _x in
+          let (o, _x_i1) = o#phrase _x_i1 in
+          (o, (TAbstr ((_x, _x_i1))))
       | TAppl ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#list (fun o -> o#type_arg') _x_i1 in
@@ -1725,12 +1740,13 @@ class fold_map =
           (o, Generalise _x)
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
-          in (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
+          let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1 in
+          let o, _x_i2 = o#option (fun o -> o#typ) _x_i2 in
+          (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
       | DoOperation (name, ps, t) ->
-     let (o, t) = o#option (fun o -> o#unknown) t in
-     let (o, ps) = o#list (fun o -> o#phrase) ps in
-     (o, DoOperation (name, ps, t))
+          let (o, t) = o#option (fun o -> o#typ) t in
+          let (o, ps) = o#list (fun o -> o#phrase) ps in
+          (o, DoOperation (name, ps, t))
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let (o, m) = o#phrase sh_expr in
           let (o, params) =
@@ -1761,7 +1777,7 @@ class fold_map =
                  let (o, _x) = o#pattern _x in
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i1 in
-          let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
+          let (o, _x_i2) = o#option (fun o -> o#typ) _x_i2
           in (o, (Switch ((_x, _x_i1, _x_i2))))
       | Receive ((_x, _x_i1)) ->
           let (o, _x) =
@@ -1770,7 +1786,7 @@ class fold_map =
                  let (o, _x) = o#pattern _x in
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x in
-          let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
+          let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
           in (o, (Receive ((_x, _x_i1))))
       (* | Link ((_x, _x_i1)) -> *)
       (*     let (o, _x) = o#phrase _x in *)
@@ -1808,9 +1824,11 @@ class fold_map =
                let (o, _x) = o#datatype _x in
                let (o, _x_i1) =
                  o#option
-                   (fun o _x ->
-                      let (o, _x) = o#unknown _x in (o, _x))
-                   _x_i1
+                   (fun o (a, b, c) ->
+                     let o, a = o#typ a in
+                     let o, b = o#typ b in
+                     let o, c = o#typ c in
+                     o, (a, b, c)) _x_i1
                in (o, (_x, _x_i1)))
               _x_i1 in
           let (o, _x_i2) =
@@ -1861,12 +1879,12 @@ class fold_map =
             (o, (LensCheckLit ((_x, _x_i1))))
       | LensGetLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in
+          let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1 in
             (o, (LensGetLit ((_x, _x_i1))))
       | LensPutLit ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#phrase _x_i1 in
-          let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2 in
+          let (o, _x_i2) = o#option (fun o -> o#typ) _x_i2 in
             (o, (LensPutLit ((_x, _x_i1, _x_i2))))
       | DBDelete ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#pattern _x in
@@ -1923,6 +1941,7 @@ class fold_map =
           let (o, _pat) = o#pattern _pat in
           let (o, _p2) = o#phrase _p2 in
           let (o, _p3) = o#phrase _p3 in
+          let o, _ty = o#option (fun o -> o#typ) _ty in
           (o, (TryInOtherwise (_p1, _pat, _p2, _p3, _ty)))
       | Raise -> (o, Raise)
 
@@ -1933,18 +1952,28 @@ class fold_map =
         ~f_node:(fun o v -> o#phrasenode v)
 
     method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
+      let arg_pair (o : 'self_type) =
+        o#option (fun o (dt, args) ->
+            let o, dt = o#typ dt in
+            let o, args = o#list (fun o -> o#tyarg) args in
+            let o, dt = o#typ dt in
+            o, (dt, args))
+      in
+
       function
       | CPUnquote (bs, e) ->
          let o, bs = o#list (fun o -> o#binding) bs in
          let o, e = o#phrase e in
          o, CPUnquote (bs, e)
-      | CPGrab (c, x, p) ->
+      | CPGrab ((c, a), x, p) ->
+         let o, a = arg_pair o a in
          let o, p = o#cp_phrase p in
-         o, CPGrab (c, x, p)
-      | CPGive (c, e, p) ->
+         o, CPGrab ((c, a), x, p)
+      | CPGive ((c, a), e, p) ->
+         let o, a = arg_pair o a in
          let o, e = o#option (fun o -> o#phrase) e in
          let o, p = o#cp_phrase p in
-         o, CPGive (c, e, p)
+         o, CPGive ((c, a), e, p)
       | CPGiveNothing c ->
          let o, c = o#binder c in
          o, CPGiveNothing c
@@ -2035,16 +2064,17 @@ class fold_map =
         let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
 
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
-      fun params ->
-        let (o, bindings) =
+      fun { shp_bindings; shp_types } ->
+        let (o, shp_bindings) =
           o#list
             (fun o (pat, expr) ->
               let (o, expr) = o#phrase expr in
               let (o, pat) = o#pattern pat in
               (o, (pat, expr)))
-            params.shp_bindings
+            shp_bindings
         in
-        (o, { params with shp_bindings = bindings })
+        let o, shp_types = o#list (fun o -> o#typ) shp_types in
+        (o, { shp_bindings; shp_types })
 
     method fieldspec : Datatype.fieldspec -> ('self_type * Datatype.fieldspec) =
       let open Datatype in function
@@ -2063,7 +2093,7 @@ class fold_map =
     method datatype' : datatype' -> ('self_type * datatype') =
       fun (_x, _x_i1) ->
         let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
+        let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
         in (o, (_x, _x_i1))
 
     method datatypenode : Datatype.t -> ('self_type * Datatype.t) =
@@ -2139,6 +2169,7 @@ class fold_map =
     method type_arg' : type_arg' -> ('self_type * type_arg') =
       fun (x, y) ->
         let o, x = o#type_arg x in
+        let o, y = o#option (fun o -> o#tyarg) y in
         (o, (x, y))
 
     method constant : Constant.t -> ('self_type * Constant.t) =
@@ -2168,6 +2199,7 @@ class fold_map =
 
     method tybinop : tyarg list * BinaryOp.t -> 'self_type * (tyarg list * BinaryOp.t) =
       fun (_x, _x_i1) ->
+        let (o, _x) = o#list (fun o -> o#tyarg) _x in
         let (o, _x_i1) = o#binop _x_i1 in (o, (_x, _x_i1))
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
@@ -2247,6 +2279,7 @@ class fold_map =
               fun_frozen;
               fun_unsafe_signature; }->
       let o, fun_binder = o#binder fun_binder in
+      let o, tyvar = o#list (fun o -> o#tyvar) tyvar in
       let o, lit = o#funlit lit in
       let o, fun_location = o#location fun_location in
       let o, fun_signature = o#option (fun o -> o#datatype') fun_signature in
@@ -2261,18 +2294,20 @@ class fold_map =
     method recursive_functionnode  : recursive_functionnode -> 'self * recursive_functionnode
       = fun { rec_binder;
               rec_linearity;
-              rec_definition = (ty, lit);
+              rec_definition = ((tyvar, ty), lit);
               rec_location;
               rec_signature;
               rec_unsafe_signature;
               rec_frozen } ->
       let o, rec_binder = o#binder rec_binder in
+      let o, tyvar = o#list (fun o -> o#tyvar) tyvar in
+      let o, ty = o#option (fun o (t, x)-> let o, t = o#typ t in o, (t, x)) ty in
       let o, lit = o#funlit lit in
       let o, rec_location = o#location rec_location in
       let o, rec_signature = o#option (fun o -> o#datatype') rec_signature in
       (o, { rec_binder;
             rec_linearity;
-            rec_definition = (ty, lit);
+            rec_definition = ((tyvar, ty), lit);
             rec_location;
             rec_signature;
             rec_unsafe_signature;
@@ -2289,7 +2324,21 @@ class fold_map =
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_name:(fun o v -> o#name v)
-        ~f_ty:(fun o v -> o, v)
+        ~f_ty:(fun o v -> o#typ v)
+
+    method typ : Types.datatype -> ('self_type * Types.datatype) =
+      o#unknown
+    method type_row : Types.row -> ('self_type * Types.row) =
+      o#unknown
+    method tyarg : Types.type_arg -> ('self_type * Types.type_arg) =
+      function
+      | `Type t -> let o,t = o#typ t in o, `Type t
+      | `Row r -> let o, r = o#type_row r in o, `Row r
+      | `Presence p -> let o, p =o#type_field_spec p in o, `Presence p
+    method tyvar : Types.quantifier -> ('self_type * Types.quantifier) =
+      o#unknown
+    method type_field_spec : Types.field_spec -> ('self_type * Types.field_spec) =
+      o#unknown
 
     method unknown : 'a. 'a -> ('self_type * 'a) = fun x -> (o, x)
   end
