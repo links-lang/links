@@ -96,10 +96,7 @@ module SugarConstructors (Position : Pos)
 
   (** Binders **)
 
-  let binder ?(ppos=dp) ?ty name =
-    match ty with
-    | None -> with_pos ppos (Binder.make ~name ())
-    | Some ty -> with_pos ppos (Binder.make ~name ~ty ())
+  let binder ?(ppos=dp) ?ty name = with_pos ppos (Binder.make ~name ?ty ())
 
   (** Imports **)
 
