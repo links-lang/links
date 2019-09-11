@@ -604,12 +604,12 @@ module Config = struct
   type t = (string * string) list
   (* Ad-hoc config format parser. *)
   module Parser = struct
-    open Utility
     type state =
       { mutable result: (string * string) list }
 
     let parse : in_channel -> t
       = fun ic ->
+      let open Utility in
       let strip_comment s =
         if String.contains s '#'
         then let i = String.index s '#' in
@@ -666,10 +666,10 @@ module Config = struct
 end
 
 module CLI = struct
-  open Utility
   exception Invalid_CLI_parameter_name of string
   let is_parameter_name : string -> bool
     = fun src ->
+    let open Utility in
     let len = String.length src in
     if len = 0 then false
     else
@@ -793,7 +793,7 @@ module CLI = struct
 
   let short : char -> arg -> arg
     = fun c ((Settings.Pack setting) as arg) ->
-    (if not (Char.isAlnum c)
+    (if not (Utility.Char.isAlnum c)
      then raise (Invalid_CLI_parameter_name (String.make 1 c)));
     (if Hashtbl.mem shorts c
      then raise (Name_clash (String.make 1 c))
