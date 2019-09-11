@@ -667,6 +667,7 @@ end
 
 module CLI = struct
   open Utility
+  exception Invalid_CLI_parameter_name of string
   let is_parameter_name : string -> bool
     = fun src ->
     let len = String.length src in
@@ -675,7 +676,7 @@ module CLI = struct
       let exception Invalid in
       try
         for i = 0 to len - 1 do
-          if not (Char.isAlnum src.[i] || Char.equal src.[i] '-')
+          if not (Char.isAlnum src.[i] || Char.equal src.[i] '-' || Char.equal src.[i] '_')
           then raise Invalid
         done; true
       with Invalid -> false
@@ -705,12 +706,6 @@ module CLI = struct
     let is_done : t -> bool
       = fun st -> st.cell_ptr >= Array.length st.input
 
-    let value_at : int -> string -> string
-      = fun i s ->
-      if i < String.length s
-      then String.sub s i (String.length s - i)
-      else ""
-
     let push : arg -> t -> unit
       = fun arg st ->
       st.args <- arg :: st.args
@@ -738,26 +733,20 @@ module CLI = struct
       else value st
     and long_parameter : t -> t
       = fun st ->
-      let exception Expect_value of int in
-      let exception Treat_as_value in
       let src = st.input.(st.cell_ptr) in
       (try
-         for i = 2 to String.length src - 1 do
-           if not (Char.isAlnum src.[i] || Char.equal src.[i] '-')
-           then if Char.equal src.[i] '='
-                then raise (Expect_value i)
-                else raise Treat_as_value
-         done;
+        let idx = String.index src '=' in
+        let name = String.sub src 2 (idx - 2) in
+        if is_parameter_name name
+        then let value = String.sub src (idx+1) (String.length src - idx - 1) in
+             push (LongParameterValue (name, value)) st
+        else push (Value src) st
+       with Not_found ->
          let name = String.sub src 2 (String.length src - 2) in
-         push (LongParameter name) st
-       with
-       | Expect_value i ->
-          let value = value_at (i+1) src in
-          let name = String.sub src 2 (i - 2) in
-          push (LongParameterValue (name, value)) st;
-       | Treat_as_value ->
-          push (Value src) st);
-      incr st; parse st;
+         if is_parameter_name name
+         then push (LongParameter name) st
+         else push (Value src) st);
+      incr st; parse st
     and short_parameter : t -> t
       = fun st ->
       let src = st.input.(st.cell_ptr) in
@@ -804,6 +793,8 @@ module CLI = struct
 
   let short : char -> arg -> arg
     = fun c ((Settings.Pack setting) as arg) ->
+    (if not (Char.isAlnum c)
+     then raise (Invalid_CLI_parameter_name (String.make 1 c)));
     (if Hashtbl.mem shorts c
      then raise (Name_clash (String.make 1 c))
      else (Hashtbl.add shorts c arg;
@@ -812,6 +803,8 @@ module CLI = struct
 
   let long : string -> arg -> arg
     = fun s ((Settings.Pack setting) as arg) ->
+    (if not (is_parameter_name s)
+     then raise (Invalid_CLI_parameter_name s));
     (if Hashtbl.mem longs s
      then raise (Name_clash s)
      else (Hashtbl.add longs s arg;
