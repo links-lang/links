@@ -2,6 +2,36 @@ open List
 open CommonTypes
 open Utility
 
+let connection_info
+  = Settings.(option "database_args"
+              |> synopsis "Database host, name, user, and password"
+              |> to_string from_string_option
+              |> convert Utility.some
+              |> sync)
+
+let relax_query_type_constraint =
+  Settings.(flag "relax_query_type_constraint"
+            |> convert parse_bool
+            |> sync)
+
+let shredding =
+  Settings.(flag "shredding"
+            |> synopsis "Enables database query shredding"
+            |> convert parse_bool
+            |> sync)
+
+(* Hacky database query result manipulation settings. *)
+let coerce_null_integers
+  = Settings.(flag "coerce_null_integers"
+              |> convert parse_bool
+              |> sync)
+
+let null_integer
+  = Settings.(option ~default:(Some (-1)) "null_integer"
+              |> to_string (function Some i -> string_of_int i | None -> "<none>")
+              |> convert (fun s -> Some (int_of_string s))
+              |> sync)
+
 type database = Value.database
 let runtime_error str = (Errors.runtime_error str)
 
@@ -33,8 +63,8 @@ let value_of_db_string (value:string) t =
          * If "coerce_null_integers" is true and a null integer is found,
          * then instead of crashing, "null_integer" is used instead. *)
         if value = "" then
-          if Settings.get_value (Basicsettings.Database.coerce_null_integers) then
-            Value.box_int (Settings.get_value Basicsettings.Database.null_integer)
+          if Settings.get coerce_null_integers then
+            Value.box_int (val_of (Settings.get null_integer))
           else
             raise (Errors.RuntimeError ("Attempted to read null integer from the database"))
         else

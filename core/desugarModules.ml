@@ -516,7 +516,7 @@ let renamer : Epithet.t ref = ref Epithet.empty
 
 let desugar_program : Sugartypes.program -> Sugartypes.program
   = fun program ->
-  let interacting = Settings.get_value Basicsettings.interactive_mode in
+  let interacting = Settings.get Basicsettings.interactive_mode in
   (* TODO move to this logic to the loader. *)
   let program = Chaser.add_dependencies program in
   let program = DesugarAlienBlocks.transform_alien_blocks program in

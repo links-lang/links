@@ -3,7 +3,11 @@ open Types
 open CommonTypes
 
 (* debug flags *)
-let show_generalisation = Basicsettings.Generalise.show_generalisation
+let show_generalisation
+  = Settings.(flag "show_generalisation"
+              |> convert parse_bool
+              |> sync)
+
 let show_recursion = Instantiate.show_recursion
 
 let internal_error message = Errors.internal_error ~filename:"generalise" ~message

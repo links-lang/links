@@ -13,15 +13,38 @@ let relational_lenses_guard pos =
   let relational_lenses_disabled pos =
     Errors.disabled_extension ~pos ~setting:("relational_lenses", true) "Relational lenses"
   in
-  if not (Settings.get_value Basicsettings.RelationalLenses.relational_lenses)
+  if not (Settings.get Lens.relational_lenses)
   then raise (relational_lenses_disabled pos)
 
-(* let constrain_absence_types = Basicsettings.Typing.contrain_absence_types *)
-let endbang_antiquotes = Basicsettings.TypeSugar.endbang_antiquotes
+let endbang_antiquotes
+  = Settings.(flag "endbang_antiquotes"
+              |> convert parse_bool
+              |> sync)
 
-let check_top_level_purity = Basicsettings.TypeSugar.check_top_level_purity
+let check_top_level_purity
+  = Settings.(flag "check_top_level_purity"
+              |> convert parse_bool
+              |> sync)
 
-let dodgey_type_isomorphism = Basicsettings.TypeSugar.dodgey_type_isomorphism
+let show_pre_sugar_typing
+  = Settings.(flag "show_pre_sugar_typing"
+              |> convert parse_bool
+              |> sync)
+
+let show_post_sugar_typing
+  = Settings.(flag "show_post_sugar_typing"
+              |> convert parse_bool
+              |> sync)
+
+let dodgey_type_isomorphism
+  = Settings.(flag "dodgey_type_isomorphism"
+              |> convert parse_bool
+              |> sync)
+
+let generalise_toplevel
+  = Settings.(flag ~default:true "generalise_toplevel"
+              |> convert parse_bool
+              |> sync)
 
 module Env = Env.String
 
@@ -396,7 +419,7 @@ end
       error:Unify.error ->
       unit
 
-    let wm () = Settings.get_value Basicsettings.web_mode
+    let wm () = Settings.get  Basicsettings.web_mode
 
     let code s =
       if wm () then
@@ -2927,7 +2950,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            let () = if Settings.get_value Basicsettings.Shredding.relax_query_type_constraint then ()
+            let () = if Settings.get  Database.shredding then ()
                      else let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable (lin_any, res_base), false)) in
                           unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
             Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
@@ -2976,7 +2999,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              *)
             let inner_effects = Types.row_with ("wild", `Present Types.unit_type) pid_effects in
             let inner_effects =
-              if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+              if Settings.get  Basicsettings.Sessions.exceptions_enabled then
                 let ty = Types.make_pure_function_type [] (Types.empty_type) in
                 Types.row_with (Value.session_exception_operation, `Present ty) inner_effects
               else
@@ -3117,7 +3140,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                           (* quantifiers for the return type *)
                           let rqs =
-                            if Settings.get_value dodgey_type_isomorphism then
+                            if Settings.get  dodgey_type_isomorphism then
                               let rta, rqs =
                                 List.map (fun q -> (q, Types.quantifier_of_type_arg q)) tyargs
                                 |> List.filter (fun (_, q) -> free_in_arg q)
@@ -3325,7 +3348,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    unify ~handle:Gripers.iteration_base_order
                      (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row (lin_unl, res_base))))) orderby in
             let () =
-              if is_query && not (Settings.get_value Basicsettings.Shredding.relax_query_type_constraint) then
+              if is_query && not (Settings.get Database.relax_query_type_constraint) then
                 unify ~handle:Gripers.iteration_base_body
                   (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row (lin_unl, res_base))))) in
             let e = Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
@@ -3517,7 +3540,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | Upcast _ -> assert false
         | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
            ignore
-             (if not (Settings.get_value Basicsettings.Handlers.enabled)
+             (if not (Settings.get  Basicsettings.Handlers.enabled)
               then raise (Errors.disabled_extension
                             ~pos ~setting:("enable_handlers", true)
                             ~flag:"--enable-handlers" "Handlers"));
@@ -4473,7 +4496,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
     | CPUnquote (bindings, e) ->
        let context', bindings, usage_builder = type_bindings context bindings in
        let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
-         if Settings.get_value endbang_antiquotes then
+         if Settings.get endbang_antiquotes then
            unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
          CPUnquote (bindings, e), t, usage_builder u
     | CPGrab ((c, _), None, p) ->
@@ -4597,7 +4620,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
 let type_check_general context body =
   let body, typ, _ = type_check context body in
   if Utils.is_generalisable body
-     && Settings.get_value Basicsettings.TypeSugar.generalise_toplevel then
+     && Settings.get generalise_toplevel then
     match Utils.generalise ~unwrap:false context.var_env typ with
     | ([], _), typ -> body, typ
     | (qs, _), qtyp ->
@@ -4609,9 +4632,6 @@ let type_check_general context body =
        qtyp
   else
     body, typ
-
-let show_pre_sugar_typing = Basicsettings.TypeSugar.show_pre_sugar_typing
-let show_post_sugar_typing = Basicsettings.TypeSugar.show_post_sugar_typing
 
 let binding_purity_check bindings =
   List.iter (fun ({pos;_} as b) ->
@@ -4628,7 +4648,7 @@ struct
            "before type checking: \n"^ show_program (bindings, body));
       let tyenv', bindings, _ = type_bindings tyenv bindings in
       let tyenv' = Types.normalise_typing_environment tyenv' in
-      if Settings.get_value check_top_level_purity then
+      if Settings.get check_top_level_purity then
         binding_purity_check bindings; (* TBD: do this only in web mode? *)
       let program, typ, tyenv' =
         match body with

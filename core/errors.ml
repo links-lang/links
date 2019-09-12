@@ -72,7 +72,6 @@ let format_exception =
       pos_prefix ~pos
         (Printf.sprintf "Error %s: %s\nIn expression: %s.\n"
            (string_of_stage stage) message expr)
-  | Getopt.Error s -> s
   | Type_error (pos, s) ->
       let pos, expr = Position.resolve_start_expr pos in
       pos_prefix ~pos

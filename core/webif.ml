@@ -102,9 +102,9 @@ struct
 
 
   let get_websocket_url () =
-    if Webs.is_accepting_websocket_requests () then
-      Some (Settings.get_value Basicsettings.websocket_url)
-      else None
+    if Webs.is_accepting_websocket_requests ()
+    then Some (Webs.get_websocket_url ())
+    else None
 
   let generate_json_state req_data v =
     let client_id = RequestData.get_client_id req_data in

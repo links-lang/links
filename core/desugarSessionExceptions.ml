@@ -204,18 +204,12 @@ let wrap_linear_handlers =
   end
 
 let settings_check prog =
-  if not (contains_session_exceptions prog) then () else
-  if not (Settings.get_value Basicsettings.Sessions.exceptions_enabled) then
-    raise (
-      Errors.settings_error
-        ("File contains session exceptions but session_exceptions not enabled. " ^
+  if not (contains_session_exceptions prog) then ()
+  else if not (Settings.get Basicsettings.Sessions.exceptions_enabled)
+  then raise (
+           Errors.settings_error
+             ("File contains session exceptions but session_exceptions not enabled. " ^
                 "Please set 'session_exceptions' configuration flag to true."))
-  else if not (Settings.get_value Basicsettings.Handlers.enabled) then
-    raise (
-      Errors.settings_error
-        ("File contains session exceptions, which require handlers, " ^
-         " but handlers are not enabled. " ^
-         "Please set 'enable_handlers' configuration flag to true."))
   else ()
 
 let insert_toplevel_handlers env =

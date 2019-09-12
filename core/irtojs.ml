@@ -4,10 +4,8 @@ open Utility
 open CommonTypes
 open Ir
 
-let _ = ParseSettings.config_file
-
-let js_hide_database_info = Basicsettings.Js.hide_database_info
-let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exceptions_enabled)
+let js_hide_database_info = Js.hide_database_info
+let session_exceptions_enabled = Settings.get Basicsettings.Sessions.exceptions_enabled
 
 let internal_error message = Errors.internal_error ~filename:"irtojs.ml" ~message
 
@@ -890,7 +888,7 @@ end = functor (K : CONTINUATION) -> struct
       match sp with
       | Wrong _ -> Die "Internal Error: Pattern matching failed" (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | Database _ | Table _
-          when Settings.get_value js_hide_database_info ->
+          when Settings.get js_hide_database_info ->
          K.apply kappa (Dict [])
       | Database v ->
          K.apply kappa (Dict [("_db", gv v)])
@@ -1257,12 +1255,21 @@ end = functor (K : CONTINUATION) -> struct
   let primitive_bindings = K.primitive_bindings
 end
 
+let backend =
+  Settings.(option ~default:(Some "cps") "js_compiler"
+            |> privilege `System
+            |> hint "<cps>"
+            |> synopsis "Selects the JavaScript compiler"
+            |> to_string from_string_option
+            |> convert Utility.some
+            |> sync)
+
 module Continuation =
   (val
-      (match Settings.get_value Basicsettings.Js.backend with
-      | "cps" when Settings.get_value Basicsettings.Handlers.enabled ->
+      (match Settings.get backend with
+      | Some "cps" when Settings.get Basicsettings.Handlers.enabled ->
          (module Higher_Order_Continuation : CONTINUATION)
-      | "cps" ->
+      | Some "cps" ->
          (module Default_Continuation : CONTINUATION)
       (** TODO: better error handling *)
       | _ -> raise (Errors.runtime_error "Unrecognised JS backend.")) : CONTINUATION)

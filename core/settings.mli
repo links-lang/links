@@ -1,50 +1,72 @@
-(*
-  Compiler settings
-*)
-
-(* abstract type of a setting
-     this should encode a name and a mutable value
- *)
 type 'a setting
+type privilege = [ `System | `User ]
 
-type mode = [`User | `System]
+exception Unknown_setting of string
 
-(* add a new setting *)
-val add_bool : ?hook:(bool -> unit) -> (string * bool * mode) -> bool setting
-val add_int : ?hook:(int -> unit) -> (string * int * mode) -> int setting
-val add_string : ?hook:(string -> unit) -> (string * string * mode) -> string setting
+(* Read and write settings. *)
+val get : 'a setting -> 'a
+val set : ?privilege:privilege -> 'a setting -> 'a -> unit
 
-(*
-  parse_and_set(name, value)
-    bind name to the parsed value
-*)
-val parse_and_set : string * string -> bool -> unit
+(* Create settings. *)
+val flag : ?default:bool -> string -> bool setting
+val option : ?default:'a option -> ?readonly:bool -> string -> 'a option setting
+val multi_option : ?default:'a list -> string -> 'a list setting
 
-(*
- parse_and_set_user(name, value)
-   as parse_and_set(name, value), but only user settings can be set
-*)
-val parse_and_set_user : string * string -> bool -> unit
+(* Decorating settings. *)
+val synopsis : string -> 'a setting -> 'a setting
+val action : ('a -> unit) -> 'a setting -> 'a setting
+val convert : (string -> 'a) -> 'a setting -> 'a setting
+val to_string : ('a -> string) -> 'a setting -> 'a setting
+val privilege : privilege -> 'a setting -> 'a setting
+val depends : bool setting -> bool setting -> bool setting
+val hint : string -> 'a setting -> 'a setting
+val hidden : 'a setting -> 'a setting
+val show_default : bool -> 'a setting -> 'a setting
+val keep_default : 'a list setting -> 'a list setting
 
-(* lookup a setting *)
-val lookup_bool : string -> bool setting
-val lookup_int : string -> int setting
-val lookup_string : string -> string setting
+(* CLI argument construction. *)
+module CLI: sig
+  type arg
+  val add : (arg -> arg) -> 'a setting -> 'a setting
+  val (<&>) : (arg -> arg) -> (arg -> arg) -> (arg -> arg)
+  val long : string -> arg -> arg
+  val short : char -> arg -> arg
+end
 
-(* get the value of a setting *)
-val get_value : 'a setting -> 'a
+(* Synchronise settings. *)
+val sync : 'a setting -> 'a setting
 
-(* get the name of a setting *)
-val get_name : 'a setting -> string
+(* Miscellaneous. *)
+val from_string_option : string option -> string
+val string_of_paths : string list -> string
+val parse_paths : string -> string list
+val parse_bool : string -> bool
+val parse_and_set_user : string -> string -> unit
 
-(* set the value of a setting *)
-val set_value : 'a setting -> 'a -> unit
+(* Pretty-printing. *)
+val print_settings : out_channel -> unit
+val print_cli_options : out_channel -> unit
 
-(* print all registered settings *)
-val print_settings : unit -> string list
+(* Describe settings. *)
+module Reflection: sig
+  type t =
+    { name: string;
+      current_value: string option;
+      default: string option;
+      value_hint: string option;
+      synopsis: string option;
+      kind: [`Flag | `Option | `MultiOption ]
+    }
 
-(* ... *)
-val from_argv : string array -> string list
+  val reflect : string -> t
+end
 
-(* ... *)
-val load_file : bool -> string -> unit
+(* Getters for anonymous and rest arguments. *)
+val get_anonymous_arguments : unit -> string list
+val get_rest_arguments : unit -> string list
+
+(* The following handler exits if any CLI argument is left
+   unhandled. *)
+val ensure_all_synchronised : unit -> unit
+(* The following handler ignores any unhandled argument. *)
+val synchronise_defined : unit -> unit

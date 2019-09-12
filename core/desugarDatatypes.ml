@@ -56,7 +56,12 @@ module SEnv = Env.String
 
 let internal_error message = Errors.internal_error ~filename:"desugarDatatypes.ml" ~message
 
-let has_effect_sugar () = Settings.get_value Basicsettings.Types.effect_sugar
+let infer_kinds
+  = Settings.(flag "infer_kinds"
+              |> convert parse_bool
+              |> sync)
+
+let has_effect_sugar () = Settings.get Types.effect_sugar
 
 let typevar_primary_kind_mismatch pos var ~expected ~actual =
   Type_error
@@ -119,9 +124,9 @@ let concrete_subkind =
 
 let is_anon x = x.[0] = '$'
 
-(** Ensure this variable has some kind, if {!Basicsettings.Types.infer_kinds} is disabled. *)
+(** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
 let ensure_kinded = function
-  | name, (None, subkind), freedom when not (Settings.get_value Basicsettings.Types.infer_kinds) ->
+  | name, (None, subkind), freedom when not (Settings.get infer_kinds) ->
       (name, (Some pk_type, subkind), freedom)
   | v -> v
 

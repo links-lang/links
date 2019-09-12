@@ -201,8 +201,14 @@ module WithPos = struct
 
   let pos t = t.pos
 
+  let show_sugar_positions
+    = Settings.(flag "show_sugar_positions"
+                |> synopsis "Toggles whether to show source positions in dumped ASTs"
+                |> convert parse_bool
+                |> sync)
+
   let pp polyfmt fmt t =
-    if Settings.get_value Basicsettings.show_sugar_positions then
+    if Settings.get show_sugar_positions then
       pp polyfmt fmt t
     else
       (* Call formatter for the node only *)

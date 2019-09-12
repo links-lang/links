@@ -45,7 +45,7 @@ server.
 To run the examples that don't use the database with the Links
 application server issue the following command:
 ```
-$ linx -m --path=$OPAM_SWITCH_PREFIX/share/links/examples:$OPAM_SWITCH_PREFIX/share/links/examples/games $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples-nodb.links
+$ linx --path=$OPAM_SWITCH_PREFIX/share/links/examples --path=$OPAM_SWITCH_PREFIX/share/links/examples/games $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples-nodb.links
 ```
 (This version just displays the source code for examples that use the
 database.)
@@ -61,11 +61,10 @@ To run the examples using the Links application server issue the
 following command:
 
 ```
-$ linx -m --path=$OPAM_SWITCH_PREFIX/share/links/examples:$OPAM_SWITCH_PREFIX/share/links/examples/games:$OPAM_SWITCH_PREFIX/share/links/examples/dictionary $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples.links
+$ linx -m --path=$OPAM_SWITCH_PREFIX/share/links/examples --path=$OPAM_SWITCH_PREFIX/share/links/examples/games --path=$OPAM_SWITCH_PREFIX/share/links/examples/dictionary $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples.links
 ```
 
-* The -m flag enables support for Links' module system, new in Gorgie.
-* The --path flag says that files can be found in the following
+* The `--path` option tells Links to look for source files in the following
   directories under `$OPAM_SWITCH_PREFIX/share/links`:
   - examples
   - examples/games
@@ -76,18 +75,18 @@ $ linx -m --path=$OPAM_SWITCH_PREFIX/share/links/examples:$OPAM_SWITCH_PREFIX/sh
 But first you need to do a few things.
 
   1) By default Links uses a config file inside `$OPAM_SWITCH_PREFIX/etc/links` directory.  Use
-     --config=/custom/config/file flag to use a different configuration file.
+     `--config=/custom/config/file` option to use a different configuration file.
 
   2) The default config file should contain paths to JavaScript libraries:
 
-       jsliburl=/lib/
-       jslibdir=$OPAM_SWITCH_PREFIX/lib/links/js
+         jsliburl=/lib/
+         jslibdir=$OPAM_SWITCH_PREFIX/lib/links/js
 
      To use database examples you need to add a database configuration
      to the config file:
 
-       database_driver=postgresql
-       database_args=:5432:fred:
+         database_driver=postgresql
+         database_args=:5432:fred:
 
      The database user fred should exist. With postgres, perhaps the
      easiest way to do this is to tie fred to your unix username and
@@ -97,24 +96,22 @@ But first you need to do a few things.
   have tied your username to the database as described in 2) then you
   can use the scripts in examples/dbsetup.
 
-    cd examples/dbsetup
+    $ cd examples/dbsetup
     ./createdbs
     ./populatedbs
 
   Otherwise you can adapt them to your particular database set up.
 
-  Postgresl data dumps for the larger databases (citations and
-  dictionary) can be obtained from a separate repository:
-
-    github.com/links-lang/links-data
+  Postgres data dumps for the larger databases (citations and
+  dictionary) can be obtained from a separate repository: https://github.com/links-lang/links-data.
 
 For convenience you may want to add the `path` to the config file
 
-    path=$OPAM_SWITCH_PREFIX/share/links/examples:$OPAM_SWITCH_PREFIX/share/links/examples/games:$OPAM_SWITCH_PREFIX/share/links/examples/dictionary
+    path=$OPAM_SWITCH_PREFIX/share/links/examples,$OPAM_SWITCH_PREFIX/share/links/examples/games,$OPAM_SWITCH_PREFIX/share/links/examples/dictionary
 
 Then simply issue the following command to run the database examples application:
 ```
-$ linx -m $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples.links
+$ linx $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples.links
 ```
 
 # Documentation

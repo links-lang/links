@@ -40,7 +40,7 @@ object (o : 'self_type)
         let process_type = `Application (Types.process, [`Row inner_eff]) in
         let fun_effects = Types.row_with ("wild", `Present Types.unit_type) inner_eff in
         let fun_effects =
-          if Settings.get_value Basicsettings.Sessions.exceptions_enabled then
+          if Settings.get Basicsettings.Sessions.exceptions_enabled then
             let ty = Types.make_pure_function_type [] (Types.empty_type) in
             Types.row_with (Value.session_exception_operation, `Present ty) fun_effects
           else fun_effects

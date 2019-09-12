@@ -5,14 +5,26 @@ open Var
 
 module E = Env
 
-let _ = ParseSettings.config_file
-
 let internal_error message =
   Errors.internal_error ~filename:"value.ml" ~message
 
 let runtime_error message = Errors.runtime_error message
 
-let serialiser = Basicsettings.Serialisation.serialiser
+let serialiser
+  = Settings.(option ~default:(Some "Yojson") "serialiser"
+              |> synopsis "Selects the backend used for serialising data between server and client"
+              |> to_string from_string_option
+              |> convert Utility.some
+              |> sync)
+
+(** Set this to [true] to print the body and environment of a
+    function. When [false], functions are simply printed as [fun] *)
+let printing_functions
+  = Settings.(flag "printing_functions"
+              |> synopsis "Prints the definition of function-values"
+              |> convert parse_bool
+              |> sync)
+
 let session_exception_operation = "SessionFail"
 
 class type otherfield =
@@ -693,7 +705,7 @@ module Eff_Handler_Continuation = struct
            in
            apply ~env k v
 
-      let session_exn_enabled = Settings.get_value Basicsettings.Sessions.exceptions_enabled
+      let session_exn_enabled = Settings.get Basicsettings.Sessions.exceptions_enabled
       let trap k (opname, arg) =
         let open Trap in
         let rec handle k' = function
@@ -777,7 +789,7 @@ module Eff_Handler_Continuation = struct
 end
 
 module Continuation
-  = (val (if not (Settings.get_value Basicsettings.Handlers.enabled) then
+  = (val (if not (Settings.get Basicsettings.Handlers.enabled) then
            (module Pure_Continuation : COMPRESSABLE_CONTINUATION)
          else
            (module Eff_Handler_Continuation : COMPRESSABLE_CONTINUATION)) : COMPRESSABLE_CONTINUATION)
@@ -937,7 +949,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
   | `Variant (label, (`Record _ as value)) -> fprintf ppf "@{<constructor>%s@}@[%a@]" label p_value value
   | `Variant (label, value) -> fprintf ppf "@{<constructor>%s@}(@[%a)@]" label p_value value
-  | `FunctionPtr (x, fvs) -> if Settings.get_value Basicsettings.printing_functions then
+  | `FunctionPtr (x, fvs) -> if Settings.get printing_functions then
                                match fvs with
                                | None -> fprintf ppf "%i" x (* ^ opt_app string_of_value "" fvs *)
                                | Some t -> fprintf ppf "%i%a" x p_value t
@@ -1241,7 +1253,7 @@ let value_serialisers : (string * compressed_t serialiser) list = [
 
 let retrieve_serialiser : (string * 'a serialiser) list -> 'a serialiser =
   fun serialisers ->
-    let name = Settings.get_value serialiser in
+    let name = val_of (Settings.get serialiser) in
     try List.assoc name serialisers
     with NotFound _ -> raise (internal_error ("Unknown serialisation method : " ^ name))
 

@@ -4,17 +4,17 @@ open Irtojs
 module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   open Utility
 
-  let js_lib_url = Basicsettings.Js.lib_url
-  let js_hide_database_info = Basicsettings.Js.hide_database_info
-  let session_exceptions_enabled = Settings.get_value (Basicsettings.Sessions.exceptions_enabled)
+  let jslib_url = Webserver_types.jslib_url
+  let external_base = Webserver_types.external_base_url
+  let hide_database_info = Js.hide_database_info
+  let session_exceptions_enabled = Settings.get (Basicsettings.Sessions.exceptions_enabled)
 
   let get_js_lib_url () =
-    let base_url = Settings.get_value Basicsettings.Appserver.external_base_url |> strip_slashes in
-    let base_url = Utility.strip_slashes base_url in
-    let js_url = Settings.get_value js_lib_url |> strip_slashes in
-    if base_url = "" then
-      "/" ^ js_url ^ "/"
-    else
+    let js_url = from_option "" (opt_map strip_slashes (Settings.get jslib_url)) in
+    match opt_map strip_slashes (Settings.get external_base) with
+    | None ->
+       "/" ^ js_url ^ "/"
+    | Some base_url ->
       "/" ^ base_url ^ "/" ^ js_url ^ "/"
 
   let ext_script_tag ?(base=get_js_lib_url()) file =
@@ -63,15 +63,15 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       string_of_bool onoff ^ ";</script>"
     in
     let db_config_script =
-      if Settings.get_value js_hide_database_info then
+      if Settings.get hide_database_info then
         script_tag("    function _getDatabaseConfig() {
      return {}
     }
     var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n")
       else
         script_tag("    function _getDatabaseConfig() {
-      return {driver:'" ^ Settings.get_value Basicsettings.database_driver ^
-                      "', args:'" ^ Settings.get_value Basicsettings.database_args ^"'}
+      return {driver:'" ^ from_option "" (Settings.get DatabaseDriver.driver) ^
+                      "', args:'" ^ from_option "" (Settings.get Database.connection_info) ^"'}
     }
     var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n") in
     let env =
@@ -80,7 +80,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
                     "};\n  _makeCgiEnvironment();\n") in
     "<!DOCTYPE html>\n" ^
     in_tag "html" (in_tag "head"
-                     (  debug_flag (Settings.get_value Debug.debugging_enabled)
+                     (  debug_flag (Settings.get Debug.enabled)
                         ^ ext_script_tag "jslib.js" ^ "\n"
                         ^ ffiLibs ^ "\n"
                         ^ db_config_script
@@ -155,7 +155,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       G.string_of_js code
     in
     let welcome_msg =
-      "_debug(\"Links version " ^ Basicsettings.version ^ "\");"
+      "_debug(\"Links version " ^ (val_of (Settings.get Basicsettings.version)) ^ "\");"
     in
     make_boiler_page
       ~cgi_env
