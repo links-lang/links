@@ -164,7 +164,6 @@ val get_restriction_constraint : Restriction.t -> (module Constraint) option
 val dual_row : row -> row
 val dual_type : datatype -> datatype
 
-val type_var_number : quantifier -> int
 type alias_type = quantifier list * typ [@@deriving show]
 
 type tycon_spec = [
@@ -221,6 +220,8 @@ val type_arg_of_quantifier : quantifier -> type_arg
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
 val eq_quantifiers : quantifier -> quantifier -> bool
+
+val add_quantified_vars : quantifier list -> TypeVarSet.t -> TypeVarSet.t
 
 val quantifier_of_type_arg : type_arg -> quantifier
 val quantifiers_of_type_args : type_arg list -> quantifier list
