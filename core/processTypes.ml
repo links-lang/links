@@ -10,7 +10,7 @@ module type NAME = sig
   val equal : t -> t -> bool
   val to_string : t -> string
   val of_string : string -> t
-  val to_json : t -> string
+  val to_json : t -> Yojson.Basic.t
   val pp : Format.formatter -> t -> unit
   val show : t -> string
 end
@@ -82,7 +82,7 @@ struct
   let equal n1 n2 = (compare n1 n2) = 0
   let to_string n = n
   let of_string n = n
-  let to_json n = "\"" ^ n ^ "\""
+  let to_json n = `String n
   let pp = Format.pp_print_string
   let show = fun x  -> Format.asprintf "%a" pp x
 end

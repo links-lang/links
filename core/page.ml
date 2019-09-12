@@ -143,7 +143,8 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     (* Add channel information to the JSON state; mark all as residing on client *)
     let json_state = ResolveJsonState.add_channel_information client_id json_state in
 
-    let state_string = JsonState.to_string json_state in
+    let state_string = JsonState.to_json json_state |> Json.json_to_string in
+    let escaped_state_string = `String state_string |> Json.json_to_string in
 
     let printed_code =
       let _venv, code = C.generate_program venv ([], Ir.Return (Ir.Extend (StringMap.empty, None))) in
@@ -160,7 +161,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       ~cgi_env
       ~body:printed_code
       ~html:(Value.string_of_xml ~close_tags:true bs)
-      ~head:(script_tag welcome_msg ^ "\n" ^ script_tag (C.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ state_string ^ "\n" ^ init_vars)
+      ~head:(script_tag welcome_msg ^ "\n" ^ script_tag (C.primitive_bindings) ^ "\n" ^ script_tag("  var _jsonState = " ^ escaped_state_string ^ "\n" ^ init_vars)
              ^ Value.string_of_xml ~close_tags:true hs)
       ~onload:"_isRuntimeReady() && _startRealPage()"
       ~external_files:deps
