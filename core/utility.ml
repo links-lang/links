@@ -1273,7 +1273,10 @@ end = struct
     type t = link_t
 
     let follow link =
-      let node = Unix.stat (to_filename link) in
+      let node =
+        try Unix.stat (to_filename link)
+        with Unix.Unix_error _ -> raise (AccessError (to_filename link))
+      in
       match node.st_kind with
       | S_REG -> make_file node.st_ino (File.make link.root link.rev_suffix)
       | S_DIR -> make_dir node.st_ino (Directory.make link.root link.rev_suffix)
