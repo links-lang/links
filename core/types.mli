@@ -220,6 +220,8 @@ val type_arg_of_quantifier : quantifier -> type_arg
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
+val eq_quantifiers : quantifier -> quantifier -> bool
+
 val quantifier_of_type_arg : type_arg -> quantifier
 val quantifiers_of_type_args : type_arg list -> quantifier list
 

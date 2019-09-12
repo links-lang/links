@@ -494,6 +494,9 @@ let primary_kind_of_type_arg : type_arg -> PrimaryKind.t =
   | `Row _      -> pk_row
   | `Presence _ -> pk_presence
 
+let eq_quantifiers : quantifier -> quantifier -> bool =
+  fun p q -> var_of_quantifier p = var_of_quantifier q
+
 let add_quantified_vars qs vars =
   List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
 
@@ -869,6 +872,7 @@ let pp_meta_type_var = fun f _ -> Utility.format_omission f
 let pp_meta_row_var = fun f _ -> Utility.format_omission f*)
 
 let type_var_number = var_of_quantifier
+
 
 module Env = Env.String
 

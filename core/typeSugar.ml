@@ -4157,11 +4157,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
                  match TypeUtils.quantifiers t with
                  | [] -> tyvars, ft
                  | t_tyvars ->
-                   (* FIXME: use a suitable eq_quantifier function *)
                    if not (List.for_all
                              (fun q ->
-                               let n = Types.type_var_number q in
-                               List.exists (fun q -> Types.type_var_number q = n) t_tyvars) tyvars)
+                               List.exists (Types.eq_quantifiers q) t_tyvars) tyvars)
                    then
                      Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
                    t_tyvars, t
@@ -4340,8 +4338,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                            if not
                                 (List.for_all
                                    (fun q ->
-                                     let n = Types.type_var_number q in
-                                     List.exists (fun q -> Types.type_var_number q = n) outer_tyvars) body_tyvars) then
+                                     List.exists (Types.eq_quantifiers q) outer_tyvars) body_tyvars) then
                              Gripers.inconsistent_quantifiers ~pos ~t1:outer ~t2:gen;
 
                            (* We could check that inner_tyvars is
@@ -4364,12 +4361,12 @@ and type_binding : context -> binding -> binding * context * usagemap =
                               Some i:  use the i-th type argument
                             *)
                            let extras =
-                             let rec find n i =
+                             let rec find p i =
                                function
                                | [] -> None
-                               | q :: _ when Types.type_var_number q = n -> Some i
-                               | _ :: qs -> find n (i+1) qs in
-                             let find q = find (Types.type_var_number q) 0 inner_tyvars in
+                               | q :: _ when Types.eq_quantifiers p q -> Some i
+                               | _ :: qs -> find p (i+1) qs in
+                             let find p = find p 0 inner_tyvars in
                              List.map find outer_tyvars
                            in
                            (inner, extras), outer, outer_tyvars
