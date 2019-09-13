@@ -207,14 +207,14 @@ module MutualBindings = struct
       | fs ->
           let fs =
             List.rev_map (fun (({ fun_definition = (tvs, fl); _ } as fn), pos) ->
-                { rec_binder = fn.fun_binder;
-                  rec_linearity = fn.fun_linearity;
-                  rec_definition = ((tvs, None), fl);
-                  rec_location = fn.fun_location;
-                  rec_signature = fn.fun_signature;
-                  rec_unsafe_signature = fn.fun_unsafe_signature;
-                  rec_frozen = fn.fun_frozen;
-                  rec_pos = pos; }) fs in
+                WithPos.make ~pos
+                  { rec_binder           = fn.fun_binder
+                  ; rec_linearity        = fn.fun_linearity
+                  ; rec_definition       = ((tvs, None), fl)
+                  ; rec_location         = fn.fun_location
+                  ; rec_signature        = fn.fun_signature
+                  ; rec_unsafe_signature = fn.fun_unsafe_signature
+                  ; rec_frozen           = fn.fun_frozen}) fs in
           [WithPos.make ~pos:mut_pos (Funs fs)] in
 
     let type_binding = function

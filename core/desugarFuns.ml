@@ -1,7 +1,7 @@
 open CommonTypes
 open Operators
 open Utility
-(* open SourceCode.WithPos *)
+open SourceCode
 open Sugartypes
 open SugarConstructors.DummyPositions
 
@@ -80,11 +80,11 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
 *)
 let unwrap_def_dp { rec_binder = fb; rec_linearity = lin; rec_definition = tlam;
                     rec_location = location; rec_signature; rec_unsafe_signature;
-                    rec_pos; rec_frozen } =
+                    rec_frozen } =
   let (fb, lin, tlam, location) = unwrap_def (fb, lin, tlam, location) in
   { rec_binder = fb; rec_linearity = lin; rec_definition = tlam;
     rec_location = location; rec_signature; rec_unsafe_signature;
-    rec_pos; rec_frozen }
+    rec_frozen }
 
 class desugar_funs env =
 object (o : 'self_type)
@@ -153,7 +153,7 @@ object (o : 'self_type)
         let (o, b) = super#bindingnode b in
           begin
             match b with
-              | Funs defs -> (o, Funs (List.map unwrap_def_dp defs))
+              | Funs defs -> (o, Funs (List.map (WithPos.map ~f:unwrap_def_dp) defs))
               | _ -> assert false
           end
     | b -> super#bindingnode b
@@ -185,7 +185,7 @@ object
         if
           List.exists
             (function
-               | { rec_definition = (_, ([_], _)); _ } -> false
+               | {WithPos.node={ rec_definition = (_, ([_], _)); _ }; _ } -> false
                | _ -> true) defs
         then
           {< has_no_funs = false >}
