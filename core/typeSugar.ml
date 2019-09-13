@@ -2271,33 +2271,34 @@ let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = fun p ->
         children Env.empty
   | _ -> Env.empty
 
-(* given a list of argument patterns and a return type
-   return the corresponding function type *)
-let make_ft declared_linearity ps effects return_type =
+(* make a function type constructor based on declared linearity *)
+let make_ftcon declared_linearity p =
+  if DeclaredLinearity.is_linear declared_linearity
+  then `Lolli p
+  else `Function p
+
+(* given a declared linearity, list of argument patterns, effects, and a return
+   type return the corresponding function type *)
+let make_ft decl_lin ps effects return_type =
   let pattern_typ (_, _, t) = t in
-  let args =
-    Types.make_tuple_type -<- List.map pattern_typ in
-  let ftcon = fun p -> if DeclaredLinearity.is_linear declared_linearity then `Lolli p else `Function p in
+  let args = Types.make_tuple_type -<- List.map pattern_typ in
   let rec ft =
     function
-      | [p] -> ftcon (args p, effects, return_type)
-      | p::ps -> ftcon (args p, Types.make_empty_open_row default_effect_subkind, ft ps)
+      | [p]   -> make_ftcon decl_lin (args p, effects, return_type)
+      | p::ps -> make_ftcon decl_lin (args p, Types.make_empty_open_row default_effect_subkind, ft ps)
       | [] -> assert false
-  in
-    ft ps
+  in ft ps
 
 let make_ft_poly_curry declared_linearity ps effects return_type =
   let pattern_typ (_, _, t) = t in
-  let args =
-    Types.make_tuple_type -<- List.map pattern_typ in
-  let ftcon = fun p -> if DeclaredLinearity.is_linear declared_linearity then `Lolli p else `Function p in
+  let args = Types.make_tuple_type -<- List.map pattern_typ in
   let rec ft =
     function
-      | [p] -> [], ftcon (args p, effects, return_type)
+      | [p] -> [], make_ftcon declared_linearity (args p, effects, return_type)
       | p::ps ->
           let qs, t = ft ps in
           let q, eff = Types.fresh_row_quantifier default_subkind in
-            q::qs, ftcon (args p, eff, t)
+            q::qs, make_ftcon declared_linearity (args p, eff, t)
       | [] -> assert false in
   Types.for_all (ft ps)
 
@@ -2605,11 +2606,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             (match argss_prev with
              | None -> ()
              | Some argss_prev ->
-                let ftcon = fun p -> if DeclaredLinearity.is_linear lin then `Lolli p else `Function p in
                 let rec ft =
                   function
-                  | [p, effects] -> ftcon (p, effects, typ body)
-                  | (p, e)::ps -> ftcon (p, e, ft ps)
+                  | [p, effects] -> make_ftcon lin (p, effects, typ body)
+                  | (p, e)::ps -> make_ftcon lin (p, e, ft ps)
                   | [] -> raise (internal_error "Empty argument list")
                 in
                 let ftype_prev = ft argss_prev in
