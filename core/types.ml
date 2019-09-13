@@ -1495,26 +1495,15 @@ let normalise_row = normalise_row IntSet.empty
 
 let quantifier_of_type_arg =
   let open PrimaryKind in
+  let quantifier_of_point point kind = match Unionfind.find point with
+    | `Var (var, subkind, _) -> (var, (kind, subkind))
+    | _ -> assert false in
   function
-  | `Type (`MetaTypeVar point) ->
-     begin
-       match Unionfind.find point with
-       | `Var (var, subkind, _) -> (var, (Type, subkind))
-       | _ -> assert false
-     end
-  | `Row (fields, row_var, _dual) ->
+  | `Type (`MetaTypeVar point) -> quantifier_of_point point Type
+  | `Row (fields, point, _dual) ->
      assert (StringMap.is_empty fields);
-     begin
-       match Unionfind.find row_var with
-       | `Var (var, subkind, _) -> (var, (Row, subkind))
-       | _ -> assert false
-     end
-  | `Presence (`Var point) ->
-     begin
-       match Unionfind.find point with
-       | `Var (var, subkind, _) -> (var, (Presence, subkind))
-       | _ -> assert false
-     end
+     quantifier_of_point point Row
+  | `Presence (`Var point) -> quantifier_of_point point Presence
   | _ -> assert false
 
 let quantifiers_of_type_args = List.map quantifier_of_type_arg
