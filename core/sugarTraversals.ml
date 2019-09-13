@@ -687,19 +687,9 @@ class map =
       | Open _xs ->
           let _xs = o#list (fun o -> o#name) _xs in
           Open _xs
-      | Typenames (ts) ->
-          let ts = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let _x = o#name _x in
-            let _x_i1 =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let _x = _x (*o#quantifier _x*) in
-                   let _x_i1 = o#unknown _x_i1
-                   in (_x, _x_i1))
-                _x_i1
-            in let _x_i2 = o#datatype' _x_i2 in (_x, _x_i1, _x_i2, _x_i3)
-          ) ts in
-          Typenames ts
+      | Typenames ts ->
+          let _x = o#list (fun o -> o#typename) ts in
+          Typenames _x
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
       | Module { binder; members } ->
@@ -718,6 +708,19 @@ class map =
     method binding : binding -> binding =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
+
+    method typenamenode : typenamenode -> typenamenode =
+      fun (_x, _x_i1, _x_i2) ->
+      let _x = o#name _x in
+      let _x_i1 = o#list (fun o (_x, _x_i1) ->
+                      let _x_i1 = o#unknown _x_i1 in (_x, _x_i1))
+                    _x_i1 in
+      let _x_i2 = o#datatype' _x_i2 in
+      (_x, _x_i1, _x_i2)
+
+    method typename : typename -> typename =
+      fun p ->
+        WithPos.map2 ~f_pos:o#position ~f_node:o#typenamenode p
 
     method function_definition : function_definition -> function_definition
       = fun { fun_binder;
@@ -1379,16 +1382,8 @@ class fold =
       | Open _xs ->
           let o = o#list (fun o -> o#name) _xs in
           o
-      | Typenames (ts) ->
-          let o = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let o = o#name _x in
-            let o =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let o = o (* #quantifier _x*) in
-                   let o = o#option (fun o -> o#tyvar) _x_i1
-                   in o) _x_i1
-            in let o = o#datatype' _x_i2 in o) ts in
+      | Typenames ts ->
+          let o = o#list (fun o -> o#typename) ts in
           o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
@@ -1408,6 +1403,23 @@ class fold =
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
+
+    method typenamenode : typenamenode -> 'self_type =
+      fun (_x, _x_i1, _x_i2) ->
+      let o = o#name _x in
+      let o =
+        o#list
+          (fun o (_x, _x_i1) ->
+            let o = o#option (fun o -> o#tyvar) _x_i1
+            in o) _x_i1 in
+      let o = o#datatype' _x_i2 in
+      o
+
+    method typename : typename -> 'self_type =
+      WithPos.traverse
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#typenamenode v)
 
     method function_definition : function_definition -> 'self
       = fun { fun_binder;
@@ -2178,18 +2190,9 @@ class fold_map =
       | Open _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, Open _xs)
-      | Typenames (ts) ->
-          let (o, ts) = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let (o, _x) = o#name _x in
-            let (o, _x_i1) =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
-                   in (o, (_x, _x_i1)))
-                _x_i1 in
-            let (o, _x_i2) = o#datatype' _x_i2
-            in (o, (_x, _x_i1, _x_i2, _x_i3))) ts
-          in (o, Typenames ts)
+      | Typenames ts ->
+          let (o, _x) = o#list (fun o -> o#typename) ts in
+          (o, (Typenames _x))
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
       | Module { binder; members } ->
@@ -2211,6 +2214,24 @@ class fold_map =
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
+
+    method typenamenode : typenamenode -> ('self_type * typenamenode) =
+      fun (_x, _x_i1, _x_i2) ->
+      let (o, _x) = o#name _x in
+      let (o, _x_i1) =
+        o#list
+          (fun o (_x, _x_i1) ->
+            let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
+            in (o, (_x, _x_i1)))
+          _x_i1 in
+      let (o, _x_i2) = o#datatype' _x_i2
+      in (o, (_x, _x_i1, _x_i2))
+
+    method typename : typename -> ('self_type * typename) =
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#typenamenode v)
 
     method function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;

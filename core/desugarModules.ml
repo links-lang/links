@@ -442,7 +442,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
        (* Same procedure as above. *)
          let ts' =
            List.fold_right
-             (fun (name, tyvars, dt, pos) ts ->
+             (fun {node=(name, tyvars, dt); pos} ts ->
                (self#type_binder name, tyvars, dt, pos) :: ts)
                ts []
          in
@@ -450,7 +450,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
            List.fold_right
              (fun (name, tyvars, dt, pos) ts ->
                  let dt' = self#datatype' dt in
-                 (name, tyvars, dt', pos) :: ts)
+                 SourceCode.WithPos.make ~pos (name, tyvars, dt') :: ts)
              ts' []
            in
            Typenames ts''
