@@ -4409,7 +4409,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
            StringMap.empty)
       | Foreign _ -> assert false
       | Typenames ts ->
-          let env = List.fold_left (fun env (name, vars, (_, dt'), _) ->
+          let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
               match dt' with
                 | Some dt ->
                     bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))

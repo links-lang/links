@@ -192,7 +192,8 @@ module MutualBindings = struct
   let fun_name fn = Binder.to_name fn.fun_binder in
   let ty_name (n, _, _, _) = n in
   let tys_with_pos =
-      List.map (fun (n, qs, dt, pos) -> ((n, qs, dt, pos), pos)) tys in
+      List.map (fun {WithPos.node=(n, qs, dt); pos} -> ((n, qs, dt, pos), pos))
+        tys in
   check fun_name funs; check ty_name tys_with_pos
 
 
@@ -425,7 +426,7 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5, (pos $loc))]) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [with_pos $loc ($2, $3, datatype $5)]) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }

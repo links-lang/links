@@ -803,12 +803,12 @@ class transform (env : Types.typing_environment) =
          let (o, f) = o#binder f in
          (o, Foreign (f, raw_name, language, file, t))
       | Typenames ts ->
-          let (o, _) = listu o (fun o (name, vars, (x, dt'), pos) ->
+          let (o, _) = listu o (fun o {node=(name, vars, (x, dt')); pos} ->
               match dt' with
                 | Some dt ->
                    let o = o#bind_tycon name
                      (`Alias (List.map (snd ->- val_of) vars, dt)) in
-                   (o, (name, vars, (x, dt'), pos))
+                   (o, WithPos.make ~pos (name, vars, (x, dt')))
                 | None -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Typenames ts)
