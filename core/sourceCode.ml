@@ -224,6 +224,8 @@ module WithPos = struct
     let node = f_node t.node in
     make ~pos node
 
+  let nodes_of_list xs = List.map node xs
+
   let traverse t ~o ~f_pos ~f_node =
     let o = f_pos o t.pos in
     let o = f_node o t.node in

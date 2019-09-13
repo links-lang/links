@@ -4198,12 +4198,12 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let inner_rec_vars, inner_env, patss =
             List.fold_left
               (fun (inner_rec_vars, inner_env, patss)
-                   { rec_binder = bndr; rec_linearity = lin;
-                     rec_definition = ((_, def), (pats, _));
-                     rec_signature = t_ann';
-                     rec_unsafe_signature = unsafe;
-                     rec_frozen = frozen;
-                     rec_pos = pos; _ } ->
+                   {node= { rec_binder = bndr; rec_linearity = lin;
+                            rec_definition = ((_, def), (pats, _));
+                            rec_signature = t_ann';
+                            rec_unsafe_signature = unsafe;
+                            rec_frozen = frozen;
+                            _ }; _ } ->
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
@@ -4262,9 +4262,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
               (List.rev
                 (List.fold_left2
                    (fun defs_and_uses
-                        ({ rec_binder = bndr; rec_linearity = lin;
-                           rec_definition = (_, (_, body));
-                           rec_pos = pos; _ } as fn)
+                        {node={ rec_binder = bndr; rec_linearity = lin;
+                                rec_definition = (_, (_, body)); _ } as fn; pos }
                         pats ->
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
@@ -4305,13 +4304,13 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let _, ft_mono = TypeUtils.split_quantified_type ft in
                       let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft_mono) in
 
-                      ((fn, Binder.erase_type bndr, (([], None), (pats, body))), used) :: defs_and_uses) [] defs patss)) in
+                      ((make ~pos fn, Binder.erase_type bndr, (([], None), (pats, body))), used) :: defs_and_uses) [] defs patss)) in
 
           (* Generalise to obtain the outer types *)
           let defs, outer_env =
             let defs, outer_env =
               List.fold_left2
-                (fun (defs, outer_env) (fn, bndr, (_, (_, body))) pats ->
+                (fun (defs, outer_env) ({node=fn;pos}, bndr, (_, (_, body))) pats ->
                    let name = Binder.to_name bndr in
                    let inner = Env.lookup inner_env name in
                    let t_ann = resolve_type_annotation bndr fn.rec_signature in
@@ -4386,7 +4385,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
-                   ({ fn with
+                   (make ~pos { fn with
                       rec_binder = Binder.set_type bndr outer;
                       rec_definition = ((tyvars, Some inner), (pats, body)) }::defs,
                       Env.bind outer_env (name, outer)))
@@ -4394,7 +4393,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             in
               List.rev defs, outer_env in
 
-          let defined = List.map (fun x -> Binder.to_name x.rec_binder) defs
+          let defined = List.map (fun x -> Binder.to_name x.node.rec_binder) defs
 
           in
             Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))

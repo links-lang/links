@@ -337,16 +337,16 @@ and function_definition = {
     fun_unsafe_signature: bool;
     fun_frozen : bool;
   }
-and recursive_function = {
+and recursive_functionnode = {
     rec_binder: Binder.with_pos;
     rec_linearity: DeclaredLinearity.t;
     rec_definition: (tyvar list * (Types.datatype * int option list) option) * funlit;
     rec_location: Location.t;
     rec_signature: datatype' option;
     rec_unsafe_signature: bool;
-    rec_frozen : bool;
-    rec_pos: Position.t
+    rec_frozen : bool
   }
+and recursive_function = recursive_functionnode WithPos.t
   [@@deriving show]
 
 type directive = string * string list
@@ -551,7 +551,7 @@ struct
           List.fold_right
             (fun { rec_binder = bndr; rec_definition = (_, rhs); _ } (names, rhss) ->
                (add (Binder.to_name bndr) names, rhs::rhss))
-            funs
+            (WithPos.nodes_of_list funs)
             (empty, []) in
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Foreign (bndr, _, _, _, _) -> singleton (Binder.to_name bndr), empty

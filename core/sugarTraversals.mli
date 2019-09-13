@@ -70,6 +70,7 @@ class map :
     method typename        : typename -> typename
     method function_definition : function_definition -> function_definition
     method recursive_function  : recursive_function -> recursive_function
+    method recursive_functionnode : recursive_functionnode -> recursive_functionnode
     method program         : program -> program
     method typ             : Types.datatype -> Types.datatype
     method type_row        : Types.row -> Types.row
@@ -150,6 +151,7 @@ class fold :
     method typename        : typename -> 'self
     method function_definition : function_definition -> 'self
     method recursive_function  : recursive_function -> 'self
+    method recursive_functionnode  : recursive_functionnode -> 'self
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
   end
@@ -221,5 +223,6 @@ object ('self)
   method unary_op        : UnaryOp.t -> 'self * UnaryOp.t
   method function_definition : function_definition -> 'self * function_definition
   method recursive_function  : recursive_function -> 'self * recursive_function
+  method recursive_functionnode  : recursive_functionnode -> 'self * recursive_functionnode
   method unknown         : 'a . 'a -> 'self * 'a
 end
