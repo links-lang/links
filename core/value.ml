@@ -1454,6 +1454,7 @@ let rec from_json (json: Yojson.Basic.t) : t =
       | Some x -> (fun () -> Some x)
       | None -> o2 in
   match json with
+  | `Null -> `List []
   | `Int i -> box_int i
   | `Float f -> box_float f
   | `String s -> box_string s
@@ -1563,6 +1564,4 @@ let rec from_json (json: Yojson.Basic.t) : t =
           | Some v -> v
           | None -> parse_record xs
       end
-  | nonsense ->
-      raise (runtime_error ("unsupported JSON: " ^ (Yojson.Basic.to_string nonsense)))
 
