@@ -35,11 +35,19 @@ steps:
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install ocaml ;;
-        "Darwin") brew install ocaml ;;
+        "Linux") sudo apt-get install ocaml python3-setuptools python3-pip;;
+        "Darwin") brew install ocaml python3 &&
+                  brew postinstall python3;;
         *) exit 1 ;;
       esac
-    displayName: 'OCaml system compiler'
+    displayName: 'System dependencies'
+
+  - bash: |
+      export PATH=$PATH:$HOME/.local/bin
+      sudo pip3 install wheel &&
+      sudo pip3 install Sphinx
+    displayName: 'Install Sphinx'
+
 
   - bash: |
       case $AGENT_OS in
@@ -73,7 +81,7 @@ steps:
                  sudo LINKS_CI=1 tools/configure-postgresql &&
                  sudo systemctl reload postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
-                 sudo -u postgres createdb -O $(whoami) links ;;
+                 sudo -u postgres createdb -O $(whoami) links;;
         "Darwin") brew install postgresql libpq sqlite3 &&
                   pg_ctl -D /usr/local/var/postgres start &&
                   sleep 5 &&
@@ -88,6 +96,10 @@ steps:
       ./opam2_local pin add links-postgresql . -y
       ./opam2_local pin add links-sqlite3 . -y
     displayName: 'Links dependencies'
+
+  - script: |
+      make doc
+    displayName: 'Build Documentation'
 
   - script: |
       eval `./opam2_local env`
