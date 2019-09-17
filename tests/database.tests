@@ -37,3 +37,20 @@ XML literals in query blocks (6)
 query {var x = <a {[("href", "foo.com")]}>{stringToXml("asdf")}</a>; [(a=1)]}
 stdout : [(a = 1)] : [(a:Int)]
 exit : 0
+
+Explicit query evaluator annotation (1)
+query nested { for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }
+stdout : [(x = 1, y = [4, 5, 6]), (x = 2, y = [4, 5, 6]), (x = 3, y = [4, 5, 6])] : [(x:Int,y:[Int])]
+exit : 0
+
+Explicit query evaluator annotation (2)
+query plain { for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }
+args : --config=tests/shredding/config.sample
+stderr : @..*
+exit : 1
+
+Explicit query evaluator annotation (3)
+query [5] plain { for (x <- [1..10]) [x] }
+args : --config=tests/shredding/config.sample
+stdout : [1, 2, 3, 4, 5]
+exit : 1
