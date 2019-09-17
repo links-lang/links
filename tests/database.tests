@@ -50,7 +50,7 @@ stderr : @..*
 exit : 1
 
 Explicit query evaluator annotation (3)
-query [5] plain { for (x <- [1..10]) [x] }
+query [4] plain { for (x <- [1, 2, 3, 4, 5, 6]) [(x = x)] }
 args : --config=tests/shredding/config.sample
-stdout : [1, 2, 3, 4, 5]
-exit : 1
+stdout : [(x = 1), (x = 2), (x = 3), (x = 4)] : [(x : Int)]
+exit : 0
