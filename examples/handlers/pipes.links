@@ -248,7 +248,7 @@ fun expoPipe(n)() {
   expoPipe0(n)
 }
 
-fun nested(start, depth, end) {
+fun nested_pipe(start, depth, end) {
   var pipeline = produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> printer(intToString);
   pipeline()
 }
