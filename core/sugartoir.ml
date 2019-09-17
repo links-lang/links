@@ -133,7 +133,7 @@ sig
 
   val coerce : value sem * datatype -> value sem
 
-  val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
+  val query : (value sem * value sem) option * QueryPolicy.t * tail_computation sem -> tail_computation sem
 
   val db_insert : env -> (value sem * value sem) -> tail_computation sem
   val db_insert_returning : env -> (value sem * value sem * value sem) -> tail_computation sem
@@ -606,17 +606,17 @@ struct
                  let where = CompilePatterns.let_pattern env p (Variable x, xt) (reify where, Types.bool_type) in
                    lift (Special (Delete ((xb, source), Some where)), Types.unit_type))
 
-  let query (range, s) =
+  let query (range, policy, s) =
     let bs, e = reify s in
       match range with
         | None ->
-            lift (Special (Query (None, (bs, e), sem_type s)), sem_type s)
+            lift (Special (Query (None, policy, (bs, e), sem_type s)), sem_type s)
         | Some (limit, offset) ->
             bind limit
               (fun limit ->
                  bind offset
                    (fun offset ->
-                      lift (Special (Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
+                      lift (Special (Query (Some (limit, offset), policy, (bs, e), sem_type s)), sem_type s)))
 
   let letvar (x_info, s, tyvars, body) =
     bind s
@@ -1015,8 +1015,8 @@ struct
                    (instantiate_mb "stringToXml",
                     [ev (WithPos.make ~pos (Sugartypes.Constant (Constant.String name)))]))
           | Block (bs, e) -> eval_bindings Scope.Local env bs e
-          | Query (range, _policy, e, _) ->
-              I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
+          | Query (range, policy, e, _) ->
+              I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, policy, ec e)
 	  | DBInsert (source, _fields, rows, None) ->
 	      let source = ev source in
 	      let rows = ev rows in

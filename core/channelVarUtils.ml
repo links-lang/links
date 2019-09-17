@@ -68,7 +68,7 @@ let variables_in_computation comp =
     | Select (_, value) -> traverse_value value
     | Wrong _ -> ()
     | Table (v1, v2, v3, _) -> List.iter (traverse_value) [v1; v2; v3]
-    | Query (vs_opt, comp, _) ->
+    | Query (vs_opt, _, comp, _) ->
         OptionUtils.opt_iter
           (fun (v1, v2) -> List.iter (traverse_value) [v1; v2]) vs_opt;
         traverse_computation comp

@@ -674,7 +674,7 @@ struct
     | Return v -> value env v
     | Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
-    | Special (Ir.Query (None, e, _)) -> computation env e
+    | Special (Ir.Query (None, _, e, _)) -> computation env e
     | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
        (** WR: this case is because shredding needs to access the keys of tables
            but can we avoid it (issue #432)? *)

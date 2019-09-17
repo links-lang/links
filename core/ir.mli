@@ -80,7 +80,7 @@ and special =
   | LensGet    of value * Types.datatype
   | LensPut    of value * value * Types.datatype
   | Table      of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
-  | Query      of (value * value) option * computation * Types.datatype
+  | Query      of (value * value) option * QueryPolicy.t * computation * Types.datatype
   | InsertRows of value * value
   | InsertReturning of value * value * value
   | Update     of (binder * value) * computation option * computation

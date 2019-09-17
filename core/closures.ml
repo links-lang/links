@@ -132,7 +132,7 @@ struct
             let o1 = o#typ (`Type t1) in
             let o2 = o1#typ (`Type t2) in
             o2#typ (`Type t3)
-          | Query (_, _, t)
+          | Query (_, _, _, t)
           | DoOperation (_, _, t) ->
             o#typ (`Type t)
           | _ -> o in
