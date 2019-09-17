@@ -1015,7 +1015,7 @@ struct
                    (instantiate_mb "stringToXml",
                     [ev (WithPos.make ~pos (Sugartypes.Constant (Constant.String name)))]))
           | Block (bs, e) -> eval_bindings Scope.Local env bs e
-          | Query (range, e, _) ->
+          | Query (range, _policy, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
 	  | DBInsert (source, _fields, rows, None) ->
 	      let source = ev source in

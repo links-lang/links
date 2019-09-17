@@ -217,9 +217,8 @@ module SugarConstructors (Position : Pos)
        opt_map (fun name -> constant_str ~ppos name) var_opt))
 
   (* Create a query. *)
-  let query ?(ppos=dp) phrases_opt blk =
-    with_pos ppos (Query (phrases_opt, blk, None))
-
+  let query ?(ppos=dp) phrases_opt policy blk =
+    with_pos ppos (Query (phrases_opt, policy, blk, None))
 
   (** Operator applications *)
   (* Apply a binary infix operator. *)

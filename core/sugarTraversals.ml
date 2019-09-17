@@ -174,14 +174,14 @@ class map =
           let _block_phr = o#phrase _block_phr in
           let _dt = o#option (fun o -> o#type_row) _dt in
           Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)
-      | Query (_x, _x_i1, _x_i2) ->
+      | Query (_x, _policy, _x_i1, _x_i2) ->
           let _x =
             o#option
               (fun o (_x, _x_i1) ->
                  let _x = o#phrase _x in
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x in
-          let _x_i1 = o#phrase _x_i1 in Query (_x, _x_i1, _x_i2)
+          let _x_i1 = o#phrase _x_i1 in Query (_x, _policy, _x_i1, _x_i2)
       | ListLit (_x, _x_i1) ->
           let _x = o#list (fun o -> o#phrase) _x in
           let _x_i1 = o#option (fun o -> o#typ) _x_i1 in
@@ -924,7 +924,7 @@ class fold =
          let o = o#given_spawn_location _given_spawn_location in
          let o = o#phrase _block_phr in
          o
-      | Query (_x, _x_i1, _x_i2) ->
+      | Query (_x, _policy, _x_i1, _x_i2) ->
           let o =
             o#option
               (fun o (_x, _x_i1) ->
@@ -1616,14 +1616,14 @@ class fold_map =
           let (o, _given_spawn_location) = o#given_spawn_location _given_spawn_location in
           let (o, _block_phr) = o#phrase _block_phr in
           (o, (Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)))
-      | Query (_x, _x_i1, _x_i2) ->
+      | Query (_x, _policy, _x_i1, _x_i2) ->
           let (o, _x) =
             o#option
               (fun o (_x, _x_i1) ->
                  let (o, _x) = o#phrase _x in
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (Query (_x, _x_i1, _x_i2)))
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (Query (_x, _policy, _x_i1, _x_i2)))
       | ListLit (_x, _x_i1) ->
           let (o, _x) = o#list (fun o -> o#phrase) _x in (o, (ListLit (_x, _x_i1)))
       | RangeLit ((_x_i1, _x_i2)) ->

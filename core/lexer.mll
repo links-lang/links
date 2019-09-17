@@ -198,6 +198,7 @@ let keywords = [
  "mu"       , MU;
  "mutual"   , MUTUAL;
  "native"   , NATIVE;
+ "nested"   , NESTED;
  "nu"       , NU;
  "offer"    , OFFER;
  "on"       , ON;
@@ -206,6 +207,7 @@ let keywords = [
  "open"     , OPEN;
  "otherwise", OTHERWISE;
  "page"     , PAGE;
+ "plain"    , PLAIN;
  "query"    , QUERY;
  "raise"    , RAISE;
  "readonly" , READONLY;

@@ -132,7 +132,7 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> phrase -> name list -> phrase -> string option
      -> phrase
   val query
-      : ?ppos:t -> (phrase * phrase) option -> phrase -> phrase
+      : ?ppos:t -> (phrase * phrase) option -> QueryPolicy.t -> phrase -> phrase
 
   (* Operator applications *)
   val infix_appl' : ?ppos:t -> phrase -> BinaryOp.t -> phrase -> phrase

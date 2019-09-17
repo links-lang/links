@@ -254,6 +254,7 @@ end
 %token SEMICOLON
 %token TRUE FALSE
 %token BARBAR AMPAMP
+%token PLAIN NESTED
 %token <int> UINTEGER
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
@@ -568,13 +569,18 @@ spawn_expression:
 | SPAWNCLIENT block                                            { spawn ~ppos:$loc Demon  SpawnClient               $2 }
 | SPAWNWAIT   block                                            { spawn ~ppos:$loc Wait   NoSpawnLocation           $2 }
 
+query_policy:
+| PLAIN                                                        { QueryPolicy.Plain }
+| NESTED                                                       { QueryPolicy.Nested }
+| /* empty */                                                  { QueryPolicy.Default }
+
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 }
 | block                                                        { $1 }
-| QUERY block                                                  { query ~ppos:$loc None $2 }
-| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 }
-| QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
+| QUERY query_policy block                                     { query ~ppos:$loc None $2 $3 }
+| QUERY LBRACKET exp RBRACKET query_policy block               { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 $6 }
+| QUERY LBRACKET exp COMMA exp RBRACKET query_policy block     { query ~ppos:$loc (Some ($3, $5)) $7 $8 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
 | postfix_expression targ_spec                                 { with_pos $loc (TAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }

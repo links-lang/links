@@ -210,3 +210,8 @@ module Constant = struct
     | String s    -> "'" ^ escape_string s ^ "'"
     | Float value -> string_of_float' value
 end
+
+module QueryPolicy = struct
+  type t = Plain | Nested | Default
+    [@@deriving show]
+end
