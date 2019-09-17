@@ -53,4 +53,5 @@ Explicit query evaluator annotation (3)
 query [4] plain { for (x <- [1, 2, 3, 4, 5, 6]) [(x = x)] }
 args : --config=tests/shredding/config.sample
 stdout : [(x = 1), (x = 2), (x = 3), (x = 4)] : [(x : Int)]
+ignore : pending #756
 exit : 0
