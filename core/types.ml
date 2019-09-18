@@ -11,7 +11,12 @@ type 'a stringmap = 'a Utility.stringmap [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
 
 (* type var sets *)
-module TypeVarSet = Utility.IntSet
+module TypeVarSet = struct
+  include Utility.IntSet
+
+  let add_quantifiers : Quantifier.t list -> t -> t = fun qs vars ->
+    List.fold_right IntSet.add (List.map Quantifier.to_var qs) vars
+end
 
 (* type var sets *)
 module TypeVarMap = Utility.IntMap
@@ -475,10 +480,6 @@ let primary_kind_of_type_arg : type_arg -> PrimaryKind.t =
   | `Row _      -> pk_row
   | `Presence _ -> pk_presence
 
-let add_quantified_vars : Quantifier.t list -> TypeVarSet.t -> TypeVarSet.t =
-  fun qs vars -> List.fold_right IntSet.add (List.map Quantifier.to_var qs) vars
-
-
 (** A constraint provides a way of ensuring a type (or row) satisfies the
    requirements of some subkind. *)
 module type Constraint = sig
@@ -536,7 +537,7 @@ class virtual type_predicate = object(self)
     | `Lens _ -> true
     | `Alias (_, t) -> self#type_satisfies vars t
     | `MetaTypeVar point -> self#point_satisfies self#type_satisfies vars point
-    | `ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, add_quantified_vars qs quant_vars) t
+    | `ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     | `Application (_, ts) ->
        (* This does assume that all abstract types satisfy the predicate. *)
        List.for_all (self#type_satisfies_arg vars) ts
@@ -596,7 +597,7 @@ class virtual type_iter = object(self)
     | `Lens _ -> ()
     | `Alias (_, t) -> self#visit_type vars t
     | `MetaTypeVar point -> self#visit_point self#visit_type vars point
-    | `ForAll (qs, t) -> self#visit_type (rec_appl, rec_vars, add_quantified_vars qs quant_vars) t
+    | `ForAll (qs, t) -> self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     | `Application (_, ts) -> List.iter (self#visit_type_arg vars) ts
     | `RecursiveApplication { r_args; _ } -> List.iter (self#visit_type_arg vars) r_args
     | `Select r | `Choice r -> self#visit_row vars r
@@ -1031,7 +1032,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
       | `RecursiveApplication { r_args; _ } ->
           S.union_all (List.map (free_tyarg_vars' rec_vars) r_args)
       | `ForAll (tvars, body)    -> S.diff (free_type_vars' rec_vars body)
-                                           (add_quantified_vars tvars S.empty)
+                                           (TypeVarSet.add_quantifiers tvars S.empty)
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
@@ -2375,7 +2376,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
       | `RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
       | `ForAll (qs, t)          ->
-          make_env (add_quantified_vars qs boundvars) t
+          make_env (TypeVarSet.add_quantifiers qs boundvars) t
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with

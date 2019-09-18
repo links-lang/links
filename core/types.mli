@@ -6,7 +6,12 @@ type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
 
 (* type var sets *)
-module TypeVarSet : Utility.INTSET
+module TypeVarSet : sig
+  include Utility.INTSET
+
+  val add_quantifiers : Quantifier.t list -> t -> t
+end
+
 module TypeVarMap : Utility.INTMAP
 
 (* points *)
@@ -211,8 +216,6 @@ val quantifier_of_type_arg : type_arg -> Quantifier.t
 val quantifiers_of_type_args : type_arg list -> Quantifier.t list
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
-
-val add_quantified_vars : Quantifier.t list -> TypeVarSet.t -> TypeVarSet.t
 
 (** Fresh type variables *)
 val type_variable_counter : int ref
