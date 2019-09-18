@@ -174,7 +174,7 @@ and eq_sessions : (datatype * datatype) -> bool =
     eq_types (l, r)
   | `End, `End -> true
   | _, _ -> false
-and eq_quantifier : (quantifier * quantifier) -> bool =
+and eq_quantifier : (Quantifier.t * Quantifier.t) -> bool =
   function
     | (lvar, _), (rvar, _) -> lvar = rvar
 and eq_rows : (row * row) -> bool =

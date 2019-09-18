@@ -54,7 +54,7 @@ module Utils : sig
   val instantiate : Types.environment -> string ->
                     (Types.type_arg list * Types.datatype)
   val generalise : ?unwrap:bool -> Types.environment -> Types.datatype ->
-                   ((Types.quantifier list*Types.type_arg list) * Types.datatype)
+                   ((Quantifier.t list*Types.type_arg list) * Types.datatype)
 
   (* val is_pure : phrase -> bool *)
   val is_pure_binding : binding -> bool

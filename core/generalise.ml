@@ -177,7 +177,7 @@ let mono_type_args : type_arg -> unit =
 (** generalise:
     Universally quantify any free type variables in the expression.
 *)
-let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quantifier list * type_arg list) * datatype) =
+let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((Quantifier.t list * type_arg list) * datatype) =
   fun kind ?(unwrap=true) env t ->
     (* throw away any existing top-level quantifiers *)
     Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
@@ -233,5 +233,5 @@ let generalise_rigid = generalise `Rigid
 (** generalise both rigid and flexible type variables *)
 let generalise = generalise `All
 
-let get_quantifiers_rigid (env : environment) (t : datatype) : quantifier list =
+let get_quantifiers_rigid (env : environment) (t : datatype) : Quantifier.t list =
   get_type_args `Rigid (env_type_vars env) t |> Types.quantifiers_of_type_args

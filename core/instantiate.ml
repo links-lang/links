@@ -365,7 +365,7 @@ let instantiation_maps_of_type_arguments :
 
     if (not arities_okay) then
       (Debug.print (Printf.sprintf "# Type variables (total %d)" vars_length);
-       let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.show_quantifier t) vars in
+       let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Quantifier.to_string t) vars in
        Debug.print tyvars;
        Debug.print (Printf.sprintf "\n# Type arguments (total %d)" tyargs_length);
        let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ Types.string_of_type_arg arg) tyargs in

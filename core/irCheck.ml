@@ -1066,7 +1066,7 @@ struct
       (if it exists), must be added to the environment before calling *)
     method handle_funbinding
              (expected_overall_funtype : datatype)
-             (tyvars : Types.quantifier list)
+             (tyvars : Quantifier.t list)
              (parameter_types : datatype list)
              (body : computation)
              (is_recursive : bool)

@@ -721,7 +721,7 @@ class transform (env : Types.typing_environment) =
         | Constant.Bool v   -> (o, Constant.Bool v  , Types.bool_type  )
         | Constant.Char v   -> (o, Constant.Char v  , Types.char_type  )
 
-    method quantifiers : Types.quantifier list -> ('self_type * Types.quantifier list) =
+    method quantifiers : Quantifier.t list -> ('self_type * Quantifier.t list) =
       fun qs -> (o, qs)
     method backup_quantifiers : IntSet.t = IntSet.empty
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o

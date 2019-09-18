@@ -134,6 +134,13 @@ module Kind = struct
     [@@deriving eq,show]
 end
 
+module Quantifier = struct
+  type t = int * Kind.t
+    [@@deriving show]
+
+  let to_string = Format.asprintf "%a" pp
+end
+
 module Location = struct
   type t = Client | Server | Native | Unknown
     [@@deriving show]

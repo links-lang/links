@@ -3,7 +3,7 @@ open CommonTypes
 open Ir
 open Var
 
-type freevars = {termvars: (Ir.binder list) ; typevars: Types.quantifier list} [@@deriving show]
+type freevars = {termvars: (Ir.binder list) ; typevars: Quantifier.t list} [@@deriving show]
 type fenv = freevars IntMap.t [@@deriving show]
 
 module ClosureVars =
@@ -583,7 +583,7 @@ struct
       (** Given a list of free variables, return a tuple containing the following:
         - a list of fresh quantifiers, each corresponding to one free variable
         - Three maps mapping the old free variables to fresh ones (to be used with Instantiate)  **)
-      method create_substitutions_replacing_free_variables (free_type_vars : Types.quantifier list) =
+      method create_substitutions_replacing_free_variables (free_type_vars : Quantifier.t list) =
         List.fold_right (fun oldq (qs, (type_map, row_map, presence_map) ) ->
           let typevar = Types.var_of_quantifier oldq in
           let primary_kind = Types.primary_kind_of_quantifier oldq in
