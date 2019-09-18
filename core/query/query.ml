@@ -42,7 +42,7 @@ struct
       | Primitive of string
       | Var       of Var.var * Types.datatype StringMap.t
       | Constant  of Constant.t
-  and env = Value.env * t Env.Int.t
+  and env = { venv: Value.env; qenv: t Env.Int.t; policy: QueryPolicy.t }
       [@@deriving show]
 
 end
@@ -321,11 +321,24 @@ struct
     let error msg = raise (DbEvaluationError msg) in
       Printf.kprintf error fmt
 
-  let env_of_value_env value_env = (value_env, Env.Int.empty)
-  let (++) (venv, eenv) (venv', eenv') =
-    Value.Env.shadow venv ~by:venv', Env.Int.extend eenv eenv'
+  let env_of_value_env policy value_env =
+    let open Lang in
+    { venv = value_env; qenv = Env.Int.empty; policy }
 
-  let lookup_fun (f, fvs) =
+  let empty_env policy =
+    let open Lang in
+    { venv = Value.Env.empty; qenv = Env.Int.empty; policy }
+
+  let (++) e1 e2 =
+    let open Lang in
+    if (e1.policy <> e2.policy) then
+      raise (internal_error "Trying to append environments with different query policies")
+    else
+      let venv = Value.Env.shadow e1.venv ~by:e2.venv in
+      let qenv = Env.Int.extend e1.qenv e2.qenv in
+      { policy = e1.policy; venv; qenv }
+
+  let lookup_fun env (f, fvs) =
     let open Q in
     match Tables.lookup Tables.fun_defs f with
     | Some (finfo, (xs, body), z, location) ->
@@ -344,12 +357,12 @@ struct
           begin
             match location with
             | Location.Server | Location.Unknown ->
-                let env =
+                let env' =
                   match z, fvs with
                   | None, None       -> Value.Env.empty
                   | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) Value.Env.empty
                   | _, _ -> assert false in
-                Closure ((xs, body), env_of_value_env env)
+                Closure ((xs, body), env_of_value_env env.policy env')
             | Location.Client ->
               raise (Errors.runtime_error ("Attempt to use client function: " ^
                 Js.var_name_binder (f, finfo) ^ " in query"))
@@ -360,16 +373,16 @@ struct
       end
     | None -> None
 
-  let find_fun (f, fvs) =
-    match lookup_fun (f, fvs) with
+  let find_fun env (f, fvs) =
+    match lookup_fun env (f, fvs) with
     | Some v -> v
     | None ->
       raise (internal_error ("Attempt to find undefined function: " ^
         string_of_int f))
 
-  let rec expression_of_value : Value.t -> Q.t =
+  let rec expression_of_value : Lang.env -> Value.t -> Q.t = fun env v ->
     let open Q in
-    function
+    match v with
       | `Bool b   -> Constant (Constant.Bool b)
       | `Int i    -> Constant (Constant.Int i)
       | `Char c   -> Constant (Constant.Char c)
@@ -378,37 +391,41 @@ struct
       | `Table t -> Table t
       | `Database db -> Database db
       | `List vs ->
-          Concat (List.map (fun v -> Singleton (expression_of_value v)) vs)
+          Concat (List.map (fun v -> Singleton (expression_of_value env v)) vs)
       | `Record fields ->
           Record
             (List.fold_left
-               (fun fields (name, v) -> StringMap.add name (expression_of_value v) fields)
+               (fun fields (name, v) -> StringMap.add name (expression_of_value env v) fields)
                StringMap.empty
                fields)
-      | `Variant (name, v) -> Variant (name, expression_of_value v)
+      | `Variant (name, v) -> Variant (name, expression_of_value env v)
       | `XML xmlitem -> XML xmlitem
-      | `FunctionPtr (f, fvs) -> find_fun (f, fvs)
+      | `FunctionPtr (f, fvs) -> find_fun env (f, fvs)
       | `PrimitiveFunction (f,_) -> Primitive f
       | v ->
           raise (internal_error (Printf.sprintf
               "Cannot convert value %s to expression" (Value.string_of_value v)))
 
 
-  let bind (val_env, exp_env) (x, v) =
-    (val_env, Env.Int.bind exp_env (x, v))
+  let bind env (x, v) =
+    let open Lang in
+    { env with qenv = Env.Int.bind env.qenv (x, v) }
 
-  let lookup (val_env, exp_env) var =
-    match lookup_fun (var, None) with
+  let lookup env var =
+    let open Lang in
+    let val_env = env.venv in
+    let exp_env = env.qenv in
+    match lookup_fun env (var, None) with
     | Some v -> v
     | None ->
       begin
         match Value.Env.lookup var val_env, Env.Int.find exp_env var with
         | None, Some v -> v
-        | Some v, None -> expression_of_value v
+        | Some v, None -> expression_of_value env v
         | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
         | None, None ->
           begin
-            try expression_of_value (Lib.primitive_stub (Lib.primitive_name var)) with
+            try expression_of_value env (Lib.primitive_stub (Lib.primitive_name var)) with
             | NotFound _ ->
                 raise (internal_error ("Variable " ^ string_of_int var ^ " not found"));
           end
@@ -426,6 +443,22 @@ struct
     let x = Var.fresh_raw_var () in
     let field_types = field_types_of_list xs in
       ([x, xs], [], Q.Singleton (eta_expand_var (x, field_types)))
+
+  let check_policies_compatible env_policy block_policy =
+    let open QueryPolicy in
+    let resolve = function
+      | Flat -> `Flat
+      | Nested -> `Nested
+      | Default ->
+          if (Settings.get Database.shredding) then `Nested else `Flat in
+    let show = function | `Nested -> "nested" | `Flat -> "flat" in
+    let expected = resolve env_policy in
+    let actual = resolve block_policy in
+    if expected = actual then () else
+      let error = Printf.sprintf
+        "Incompatible query evaluation annotations. Expected %s, got %s."
+        (show expected) (show actual) in
+      raise (Errors.runtime_error error)
 
   let rec value env : Ir.value -> Q.t = let open Ir in function
     | Constant c -> Q.Constant c
@@ -544,11 +577,12 @@ struct
     | ApplyPure (f, ps) ->
         apply env (value env f, List.map (value env) ps)
     | Closure (f, _, v) ->
+      let open Lang in
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
       let z = OptionUtils.val_of z_opt in
       (* Debug.print ("Converting evalir closure: " ^ Var.show_binder (f, _finfo) ^ " to query closure"); *)
       (* yuck! *)
-      let env' = bind (Value.Env.empty, Env.Int.empty) (z, value env v) in
+      let env' = bind (empty_env env.policy) (z, value env v) in
       Q.Closure ((xs, body), env')
       (* (\* Debug.print("looking up query closure: "^string_of_int f); *\) *)
       (* begin *)
@@ -674,7 +708,10 @@ struct
     | Return v -> value env v
     | Apply (f, args) ->
         apply env (value env f, List.map (value env) args)
-    | Special (Ir.Query (None, _, e, _)) -> computation env e
+    | Special (Ir.Query (None, policy, e, _)) ->
+        let open Lang in
+        check_policies_compatible env.policy policy;
+        computation env e
     | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
        (** WR: this case is because shredding needs to access the keys of tables
            but can we avoid it (issue #432)? *)
@@ -887,9 +924,9 @@ struct
             (Constant (Constant.Bool true))
         | (a, b) -> Apply ("==", [a; b])
 
-  let eval env e =
+  let eval policy env e =
 (*    Debug.print ("e: "^Ir.show_computation e); *)
-    computation (env_of_value_env env) e
+    computation (env_of_value_env policy env) e
 end
 
 
@@ -1157,7 +1194,7 @@ let delete : Value.database -> ((Ir.var * string) * Q.t option) -> string =
 let compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
   fun db env ((x, table, field_types), where, body) ->
-    let env = Eval.bind (Eval.env_of_value_env env) (x, Q.Var (x, field_types)) in
+    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Default env) (x, Q.Var (x, field_types)) in
 (*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
     let where = opt_map (Eval.computation env) where in
 (*       Debug.print ("body: "^Ir.show_computation body); *)
@@ -1169,7 +1206,7 @@ let compile_update : Value.database -> Value.env ->
 let compile_delete : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
   fun db env ((x, table, field_types), where) ->
-    let env = Eval.bind (Eval.env_of_value_env env) (x, Q.Var (x, field_types)) in
+    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Default env) (x, Q.Var (x, field_types)) in
     let where = opt_map (Eval.computation env) where in
     let q = delete db ((x, table), where) in
       Debug.print ("Generated update query: "^q);
