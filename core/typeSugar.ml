@@ -290,6 +290,7 @@ sig
   val update_outer : griper
 
   val range_bound : griper
+  val range_wild : griper
 
   val spawn_outer : griper
   val spawn_wait_outer : griper
@@ -906,6 +907,14 @@ end
 
     let range_bound ~pos ~t1:_l ~t2:(_, _t) ~error:_ =
       die pos "Range bounds must be integers."
+    let range_wild ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Ranges are wild"                       ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let spawn_location ~pos ~t1:l ~t2:(_, t) ~error:_ =
       fixed_type pos "Spawn locations" t l
@@ -3085,10 +3094,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               InfixAppl ((tyargs, op), erase l, erase r), rettyp, merge_usages [usages l; usages r; op_usages]
         | RangeLit (l, r) ->
             let l, r = tc l, tc r in
+	    let outer_effects =
+              Types.make_singleton_open_row ("wild", `Present Types.unit_type)
+                                            default_effect_subkind in
             let () = unify ~handle:Gripers.range_bound  (pos_and_typ l,
                                                          no_pos Types.int_type)
             and () = unify ~handle:Gripers.range_bound  (pos_and_typ r,
                                                          no_pos Types.int_type)
+            and () = unify ~handle:Gripers.range_wild   (no_pos (`Record context.effect_row),
+                                                         no_pos (`Record outer_effects))
             in RangeLit (erase l, erase r),
                Types.make_list_type Types.int_type,
                merge_usages [usages l; usages r]
