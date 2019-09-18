@@ -80,10 +80,9 @@ module RecIdMap : RECIDMAP
 module type RECIDSET = Utility.Set with type elt = rec_id
 module RecIdSet : RECIDSET
 
-
 type tygroup = {
   id: int;
-  type_map: ((quantifier list * typ) Utility.StringMap.t);
+  type_map: ((Quantifier.t list * typ) Utility.StringMap.t);
   linearity_map: bool Utility.StringMap.t
 }
 
@@ -111,7 +110,7 @@ and typ =
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
-    | `ForAll of (quantifier list * typ)
+    | `ForAll of (Quantifier.t list * typ)
     | (typ, row) session_type_basis ]
 and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
@@ -121,7 +120,6 @@ and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
-and quantifier = int * Kind.t
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
     [@@deriving show]
@@ -161,12 +159,12 @@ val get_restriction_constraint : Restriction.t -> (module Constraint) option
 val dual_row : row -> row
 val dual_type : datatype -> datatype
 
-type alias_type = quantifier list * typ [@@deriving show]
+type alias_type = Quantifier.t list * typ [@@deriving show]
 
 type tycon_spec = [
   | `Alias of alias_type
   | `Abstract of Abstype.t
-  | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
+  | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
 ]
 
 type environment        = datatype Env.String.t
@@ -186,7 +184,7 @@ val normalise_datatype : datatype -> datatype
 val normalise_row : row -> row
 val normalise_typing_environment : typing_environment -> typing_environment
 
-val for_all : quantifier list * datatype -> datatype
+val for_all : Quantifier.t list * datatype -> datatype
 
 (** useful types *)
 val unit_type : datatype
@@ -208,20 +206,13 @@ val free_bound_type_vars          : typ      -> Vars.vars_list
 val free_bound_row_type_vars      : row      -> Vars.vars_list
 val free_bound_type_arg_type_vars : type_arg -> Vars.vars_list
 
-val var_of_quantifier : quantifier -> int
-val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
-val kind_of_quantifier : quantifier -> Kind.t
-val subkind_of_quantifier : quantifier -> Subkind.t
-val type_arg_of_quantifier : quantifier -> type_arg
+val type_arg_of_quantifier : Quantifier.t -> type_arg
+val quantifier_of_type_arg : type_arg -> Quantifier.t
+val quantifiers_of_type_args : type_arg list -> Quantifier.t list
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
-val eq_quantifiers : quantifier -> quantifier -> bool
-
-val add_quantified_vars : quantifier list -> TypeVarSet.t -> TypeVarSet.t
-
-val quantifier_of_type_arg : type_arg -> quantifier
-val quantifiers_of_type_args : type_arg list -> quantifier list
+val add_quantified_vars : Quantifier.t list -> TypeVarSet.t -> TypeVarSet.t
 
 (** Fresh type variables *)
 val type_variable_counter : int ref
@@ -240,16 +231,16 @@ val fresh_rigid_type_variable : Subkind.t -> datatype
 val fresh_row_variable : Subkind.t -> row_var
 val fresh_rigid_row_variable : Subkind.t -> row_var
 
-val fresh_session_variable : CommonTypes.Linearity.t -> datatype
+val fresh_session_variable : Linearity.t -> datatype
 
 val fresh_presence_variable : Subkind.t -> field_spec
 val fresh_rigid_presence_variable : Subkind.t -> field_spec
 
 (** fresh quantifiers *)
-val fresh_type_quantifier : Subkind.t -> quantifier * datatype
-val fresh_row_quantifier : Subkind.t -> quantifier * row
-val fresh_presence_quantifier : Subkind.t -> quantifier * field_spec
-val fresh_quantifier : Kind.t -> quantifier * type_arg
+val fresh_type_quantifier : Subkind.t -> Quantifier.t * datatype
+val fresh_row_quantifier : Subkind.t -> Quantifier.t * row
+val fresh_presence_quantifier : Subkind.t -> Quantifier.t * field_spec
+val fresh_quantifier : Kind.t -> Quantifier.t * type_arg
 
 (** {0 rows} *)
 (** empty row constructors *)
@@ -390,7 +381,7 @@ sig
     method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
     method field_spec : field_spec -> (field_spec * 'self_type)
     method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
-    method quantifier : quantifier -> (quantifier * 'self_type)
+    method quantifier : Quantifier.t -> (Quantifier.t * 'self_type)
     method type_arg : type_arg -> (type_arg * 'self_type)
   end
 end

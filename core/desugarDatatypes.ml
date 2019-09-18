@@ -371,12 +371,12 @@ module Desugar = struct
          self#row (fields, var)
      end)#datatype
 
-  (** Desugars quantifiers into Types.quantifiers, returning the updated
+  (** Desugars quantifiers into Quantifier.ts, returning the updated
      variable environment.
 
      This is used within the `typename` and `Forall` desugaring. *)
   let desugar_quantifiers (var_env: var_env) (qs: Sugartypes.quantifier list) body pos :
-      (Types.quantifier list * var_env) =
+      (Quantifier.t list * var_env) =
     (* Bind all quantified variables, and then do a naive {!typevars} pass over this set to infer
        any unannotated kinds, and verify existing kinds/subkinds match up.
 
@@ -583,7 +583,7 @@ module Desugar = struct
             let _ = Unionfind.change point (`Recursive (var, datatype { var_env with tyvars; row_operations } t)) in
               `MetaTypeVar point
         | Forall (qs, t) ->
-            let (qs: Types.quantifier list), var_env = desugar_quantifiers var_env qs t pos in
+            let (qs: Quantifier.t list), var_env = desugar_quantifiers var_env qs t pos in
             let t = datatype var_env t in
               `ForAll (qs, t)
         | Unit -> Types.unit_type
@@ -758,7 +758,7 @@ module Desugar = struct
     | Presence f -> `Presence (fieldspec var_env alias_env f node)
 
   (* pre condition: all subkinds have been filled in *)
-  let generate_var_mapping (vars : type_variable list) : Types.quantifier list * var_env =
+  let generate_var_mapping (vars : type_variable list) : Quantifier.t list * var_env =
     let addt x t envs = { envs with tyvars = StringMap.add x (`Type t) envs.tyvars } in
     let addr x r envs = { envs with tyvars = StringMap.add x (`Row r) envs.tyvars } in
     let addf x f envs = { envs with tyvars = StringMap.add x (`Presence f) envs.tyvars } in

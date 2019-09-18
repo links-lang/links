@@ -114,7 +114,7 @@ sig
 
   val escape : (var_info * Types.row * (var -> tail_computation sem)) -> tail_computation sem
 
-  val tabstr : (Types.quantifier list * value sem) -> value sem
+  val tabstr : (Quantifier.t list * value sem) -> value sem
   val tappl : (value sem * Types.type_arg list) -> value sem
 
   val apply : (value sem * (value sem) list) -> tail_computation sem
@@ -183,13 +183,13 @@ sig
 
   val letfun :
     env ->
-    (var_info * (Types.quantifier list * (CompilePatterns.Pattern.t list * tail_computation sem)) * location) ->
+    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * tail_computation sem)) * location) ->
     (var -> tail_computation sem) ->
     tail_computation sem
 
   val letrec :
     env ->
-    (var_info * (Types.quantifier list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location) list ->
+    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location) list ->
     (var list -> tail_computation sem) ->
     tail_computation sem
 

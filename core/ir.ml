@@ -14,7 +14,7 @@ type binder = Var.binder
   [@@deriving show]
 
 (* type variables *)
-type tyvar = Types.quantifier
+type tyvar = Quantifier.t
   [@@deriving show]
 type tyarg = Types.type_arg
   [@@deriving show]
