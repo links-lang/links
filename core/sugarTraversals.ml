@@ -527,7 +527,7 @@ class map =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#patternnode p
 
-    method name : name -> name = o#string
+    method name : Name.t -> Name.t = o#string
 
     method location : Location.t -> Location.t = o#unknown
 
@@ -1235,7 +1235,7 @@ class fold =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method name : name -> 'self_type = o#string
+    method name : Name.t -> 'self_type = o#string
 
     method location : Location.t -> 'self_type = o#unknown
 
@@ -2016,7 +2016,7 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method name : name -> ('self_type * name) = o#string
+    method name : Name.t -> ('self_type * Name.t) = o#string
 
     method location : Location.t -> ('self_type * Location.t) = o#unknown
 

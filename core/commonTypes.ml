@@ -167,6 +167,11 @@ let loc_unknown = Location.Unknown
 type freedom = [`Flexible | `Rigid]
     [@@deriving show]
 
+module Name = struct
+  type t = string
+    [@@deriving show]
+end
+
 module Primitive = struct
   type t = Bool | Int | Char | Float | XmlItem | DB | String
     [@@deriving show]

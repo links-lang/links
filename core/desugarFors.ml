@@ -54,7 +54,7 @@ let tt = function
   It roughly corresponds to [[qs]].
 *)
 let results :  Types.row ->
-  (Sugartypes.phrase list * Sugartypes.name list * Types.datatype list) -> Sugartypes.phrase =
+  (Sugartypes.phrase list * Name.t list * Types.datatype list) -> Sugartypes.phrase =
   fun eff (es, xs, ts) ->
     (* let results_type = Types.make_tuple_type ts in *)
     let rec results =
@@ -102,7 +102,7 @@ object (o : 'self_type)
   *)
   method qualifiers : Sugartypes.iterpatt list ->
     'self_type *
-      (Sugartypes.phrase list * Sugartypes.Pattern.with_pos list * Sugartypes.name list *
+      (Sugartypes.phrase list * Sugartypes.Pattern.with_pos list * Name.t list *
          Types.datatype list) =
     fun qs ->
       let o, (es, ps, xs, ts) =

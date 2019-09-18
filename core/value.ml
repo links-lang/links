@@ -1,3 +1,4 @@
+open CommonTypes
 open Utility
 open Notfound
 open ProcessTypes
@@ -406,7 +407,7 @@ module type CONTINUATION_EVALUATOR = sig
                result
 
   val trap : v t ->                        (* the continuation *)
-             (Ir.name * v) ->              (* operation name and its argument *)
+             (Name.t * v) ->              (* operation name and its argument *)
              trap_result
 end
 

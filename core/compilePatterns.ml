@@ -30,8 +30,8 @@ struct
     | Any
     | Nil
     | Cons     of t * t
-    | Variant  of name * t
-    | Effect   of name * t list * t
+    | Variant  of Name.t * t
+    | Effect   of Name.t * t list * t
     | Negative of StringSet.t
     | Record   of t StringMap.t * t option
     | Constant of Constant.t

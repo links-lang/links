@@ -46,7 +46,7 @@ object ('self)
 
   method bind_tycon      : string -> Types.tycon_spec -> 'self
 
-  method lookup_type     : name -> Types.datatype
+  method lookup_type     : Name.t -> Types.datatype
   method lookup_effects  : Types.row
   method with_effects    : Types.row -> 'self
 

@@ -125,11 +125,11 @@ sig
   val letvar : (var_info * tail_computation sem * tyvar list *
                (var -> tail_computation sem)) -> tail_computation sem
 
-  val xml : value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
-  val record : (name * value sem) list * (value sem) option -> value sem
+  val xml : value sem * string * (Name.t * (value sem) list) list * (value sem) list -> value sem
+  val record : (Name.t * value sem) list * (value sem) option -> value sem
 
-  val project : value sem * name -> value sem
-  val update : value sem * (name * value sem) list -> value sem
+  val project : value sem * Name.t -> value sem
+  val update : value sem * (Name.t * value sem) list -> value sem
 
   val coerce : value sem * datatype -> value sem
 
@@ -141,7 +141,7 @@ sig
   val db_update : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
   val db_delete : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option) -> tail_computation sem
 
-  val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
+  val do_operation : Name.t * (value sem) list * Types.datatype -> tail_computation sem
 
   val handle : env -> (tail_computation sem *
                          (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
@@ -152,7 +152,7 @@ sig
 
   val switch : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
-  val inject : name * value sem * datatype -> value sem
+  val inject : Name.t * value sem * datatype -> value sem
   (* val case : *)
   (*   value sem * string * (var_info * (var -> tail_computation sem)) * *)
   (*   (var_info * (var -> tail_computation sem)) option -> *)
@@ -193,9 +193,9 @@ sig
     (var list -> tail_computation sem) ->
     tail_computation sem
 
-  val alien : var_info * name * language * (var -> tail_computation sem) -> tail_computation sem
+  val alien : var_info * Name.t * language * (var -> tail_computation sem) -> tail_computation sem
 
-  val select : name * value sem -> tail_computation sem
+  val select : Name.t * value sem -> tail_computation sem
 
   val offer : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 end
@@ -283,7 +283,7 @@ struct
        * location) list ->
       (Var.var list) M.sem
 
-    val alien_binding : var_info * name * language -> var M.sem
+    val alien_binding : var_info * Name.t * language -> var M.sem
 
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
