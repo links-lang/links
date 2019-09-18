@@ -74,6 +74,15 @@ let restriction_of_string p =
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
 
+let query_policy_of_string p =
+  function
+  | "flat" -> QueryPolicy.Flat
+  | "nested" -> QueryPolicy.Nested
+  | rest      ->
+     raise (ConcreteSyntaxError (pos p, "Invalid query policy: " ^ rest ^ ", expected 'flat' or 'nested'"))
+
+
+
 let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string    pos lin  in
@@ -254,7 +263,6 @@ end
 %token SEMICOLON
 %token TRUE FALSE
 %token BARBAR AMPAMP
-%token PLAIN NESTED
 %token <int> UINTEGER
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
@@ -570,8 +578,7 @@ spawn_expression:
 | SPAWNWAIT   block                                            { spawn ~ppos:$loc Wait   NoSpawnLocation           $2 }
 
 query_policy:
-| PLAIN                                                        { QueryPolicy.Plain }
-| NESTED                                                       { QueryPolicy.Nested }
+| VARIABLE                                                     { query_policy_of_string $loc $1 }
 | /* empty */                                                  { QueryPolicy.Default }
 
 postfix_expression:

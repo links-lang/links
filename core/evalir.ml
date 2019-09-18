@@ -702,10 +702,10 @@ struct
        let evaluator =
          let open QueryPolicy in
          match policy with
-           | Plain -> `Plain
+           | Flat -> `Flat
            | Nested -> `Nested
            | Default ->
-               if Settings.get Database.shredding then `Nested else `Plain in
+               if Settings.get Database.shredding then `Nested else `Flat in
 
        let evaluate_standard () =
          match EvalQuery.compile env (range, e) with
@@ -757,7 +757,7 @@ struct
 
        begin
          match evaluator with
-           | `Plain -> evaluate_standard ()
+           | `Flat -> evaluate_standard ()
            | `Nested -> evaluate_nested ()
        end
     | InsertRows (source, rows) ->

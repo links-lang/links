@@ -2954,12 +2954,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let evaluator =
               match policy with
                 | Nested -> `Nested
-                | Plain -> `Plain
-                | Default -> if (Settings.get Database.shredding) then `Nested else `Plain in
+                | Flat -> `Flat
+                | Default -> if (Settings.get Database.shredding) then `Nested else `Flat in
             let () =
               match evaluator with
                 | `Nested -> ()
-                | `Plain  ->
+                | `Flat  ->
                      let shape =
                        Types.make_list_type
                          (`Record (StringMap.empty,
