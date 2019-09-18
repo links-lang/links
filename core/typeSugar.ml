@@ -49,7 +49,7 @@ let generalise_toplevel
 module Env = Env.String
 
 module Utils : sig
-  val dummy_source_name : unit -> name
+  val dummy_source_name : unit -> Name.t
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string ->
                     (Types.type_arg list * Types.datatype)

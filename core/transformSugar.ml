@@ -164,7 +164,7 @@ class transform (env : Types.typing_environment) =
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
 
-    method lookup_type : name -> Types.datatype = fun var ->
+    method lookup_type : Name.t -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
 
     method lookup_effects : Types.row = effect_row
