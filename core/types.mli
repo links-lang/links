@@ -12,9 +12,6 @@ module TypeVarMap : Utility.INTMAP
 (* points *)
 type 'a point = 'a Unionfind.point
 
-type kind = PrimaryKind.t * Subkind.t
-    [@@deriving eq,show]
-
 type 't meta_type_var_non_rec_basis =
     [ `Var of (int * Subkind.t * freedom)
     | `Body of 't ]
@@ -35,8 +32,8 @@ type 't meta_max_basis = 't meta_row_var_basis
 module Abstype :
 sig
   type t [@@deriving eq,show]
-  val make  : string -> kind list -> t
-  val arity : t -> kind list
+  val make  : string -> Kind.t list -> t
+  val arity : t -> Kind.t list
   val name  : t -> string
   val compare : t -> t -> int
 end
@@ -95,7 +92,7 @@ and rec_appl = {
   r_name: string;
   r_dual: bool;
   r_unique_name: string;
-  r_quantifiers : kind list;
+  r_quantifiers : Kind.t list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
@@ -110,7 +107,7 @@ and typ =
     | `Effect of row
     | `Table of typ * typ * typ
     | `Lens of Lens.Type.t
-    | `Alias of ((string * kind list * type_arg list) * typ)
+    | `Alias of ((string * Kind.t list * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
@@ -124,7 +121,7 @@ and meta_type_var = (typ meta_type_var_basis) point
 and meta_row_var = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
-and quantifier = int * kind
+and quantifier = int * Kind.t
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
     [@@deriving show]
@@ -213,7 +210,7 @@ val free_bound_type_arg_type_vars : type_arg -> Vars.vars_list
 
 val var_of_quantifier : quantifier -> int
 val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
-val kind_of_quantifier : quantifier -> kind
+val kind_of_quantifier : quantifier -> Kind.t
 val subkind_of_quantifier : quantifier -> Subkind.t
 val type_arg_of_quantifier : quantifier -> type_arg
 
@@ -252,7 +249,7 @@ val fresh_rigid_presence_variable : Subkind.t -> field_spec
 val fresh_type_quantifier : Subkind.t -> quantifier * datatype
 val fresh_row_quantifier : Subkind.t -> quantifier * row
 val fresh_presence_quantifier : Subkind.t -> quantifier * field_spec
-val fresh_quantifier : kind -> quantifier * type_arg
+val fresh_quantifier : Kind.t -> quantifier * type_arg
 
 (** {0 rows} *)
 (** empty row constructors *)

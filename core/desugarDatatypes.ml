@@ -601,7 +601,7 @@ module Desugar = struct
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
-            let match_quantifiers : type a. (a -> Types.kind) -> a list -> Types.type_arg list = fun proj qs ->
+            let match_quantifiers : type a. (a -> Kind.t) -> a list -> Types.type_arg list = fun proj qs ->
               let match_kinds i (q, t) =
                 let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
                   | Type _ -> PrimaryKind.Type

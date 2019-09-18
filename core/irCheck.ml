@@ -134,7 +134,7 @@ module Env = Env.Int
 
 type type_eq_context = {
   typevar_subst : Var.var IntMap.t; (* equivalences of typevars *)
-  tyenv: Types.kind Env.t (* track kinds of bound typevars *)
+  tyenv: Kind.t Env.t (* track kinds of bound typevars *)
 }
 
 

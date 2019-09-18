@@ -129,6 +129,11 @@ let pk_type     = PrimaryKind.Type
 let pk_row      = PrimaryKind.Row
 let pk_presence = PrimaryKind.Presence
 
+module Kind = struct
+  type t = PrimaryKind.t * Subkind.t
+    [@@deriving eq,show]
+end
+
 module Location = struct
   type t = Client | Server | Native | Unknown
     [@@deriving show]

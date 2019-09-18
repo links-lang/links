@@ -19,9 +19,6 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point [@@deriving show]
 
-type kind = PrimaryKind.t * Subkind.t
-    [@@deriving eq,show]
-
 type 't meta_type_var_non_rec_basis =
     [ `Var of (int * Subkind.t * freedom)
     | `Body of 't ]
@@ -48,7 +45,7 @@ module Abstype =
 struct
   type t = { id    : istring ;
              name  : istring ;
-             arity : kind list }
+             arity : Kind.t list }
       [@@deriving eq,show]
   let make name arity =
     let id = Utility.gensym ~prefix:"abstype:" () in
@@ -140,7 +137,7 @@ and rec_appl = {
   r_name: string;
   r_dual: bool;
   r_unique_name: string;
-  r_quantifiers : kind list;
+  r_quantifiers : Kind.t list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
@@ -155,7 +152,7 @@ and typ =
     | `Effect of row
     | `Table of typ * typ * typ
     | `Lens of Lens.Type.t
-    | `Alias of ((string * kind list * type_arg list) * typ)
+    | `Alias of ((string * Kind.t list * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
@@ -169,7 +166,7 @@ and meta_type_var  = (typ meta_type_var_basis) point
 and meta_row_var   = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
-and quantifier = int * kind
+and quantifier = int * Kind.t
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
       [@@deriving show]
@@ -478,7 +475,7 @@ let var_of_quantifier : quantifier -> int =
   function
     | var, _ -> var
 
-let kind_of_quantifier : quantifier -> kind =
+let kind_of_quantifier : quantifier -> Kind.t =
   fun (_, k) -> k
 
 let primary_kind_of_quantifier : quantifier -> PrimaryKind.t =
@@ -1881,7 +1878,7 @@ struct
       | (Linearity.Unl, Restriction.Effect)  -> Restriction.to_string res_effect
       | (l, r) -> full (l, r)
 
-  let kind : (policy * names) -> kind -> string =
+  let kind : (policy * names) -> Kind.t -> string =
     let full (policy, _vars) (k, sk) =
       PrimaryKind.to_string k ^ subkind (policy, _vars) sk in
     fun (policy, _vars) (k, sk) ->
