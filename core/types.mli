@@ -206,20 +206,13 @@ val free_bound_type_vars          : typ      -> Vars.vars_list
 val free_bound_row_type_vars      : row      -> Vars.vars_list
 val free_bound_type_arg_type_vars : type_arg -> Vars.vars_list
 
-val var_of_quantifier : Quantifier.t -> int
-val primary_kind_of_quantifier : Quantifier.t -> PrimaryKind.t
-val kind_of_quantifier : Quantifier.t -> Kind.t
-val subkind_of_quantifier : Quantifier.t -> Subkind.t
 val type_arg_of_quantifier : Quantifier.t -> type_arg
+val quantifier_of_type_arg : type_arg -> Quantifier.t
+val quantifiers_of_type_args : type_arg list -> Quantifier.t list
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
-val eq_quantifiers : Quantifier.t -> Quantifier.t -> bool
-
 val add_quantified_vars : Quantifier.t list -> TypeVarSet.t -> TypeVarSet.t
-
-val quantifier_of_type_arg : type_arg -> Quantifier.t
-val quantifiers_of_type_args : type_arg list -> Quantifier.t list
 
 (** Fresh type variables *)
 val type_variable_counter : int ref
@@ -238,7 +231,7 @@ val fresh_rigid_type_variable : Subkind.t -> datatype
 val fresh_row_variable : Subkind.t -> row_var
 val fresh_rigid_row_variable : Subkind.t -> row_var
 
-val fresh_session_variable : CommonTypes.Linearity.t -> datatype
+val fresh_session_variable : Linearity.t -> datatype
 
 val fresh_presence_variable : Subkind.t -> field_spec
 val fresh_rigid_presence_variable : Subkind.t -> field_spec

@@ -138,7 +138,22 @@ module Quantifier = struct
   type t = int * Kind.t
     [@@deriving show]
 
+  let to_var = function
+    | (var, _) -> var
+
+  let to_kind : t -> Kind.t = function
+    | (_, k) -> k
+
+  let to_primary_kind : t -> PrimaryKind.t = function
+    | (_, (pk, _)) -> pk
+
+  let to_subkind : t -> Subkind.t = function
+    | (_, (_, sk)) -> sk
+
   let to_string = Format.asprintf "%a" pp
+
+  let eq : t -> t -> bool = fun lvar rvar ->
+    to_var lvar = to_var rvar
 end
 
 module Location = struct

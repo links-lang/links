@@ -469,31 +469,14 @@ let check_rec : int -> var_set -> 'a -> (var_set -> 'a) -> 'a =
     else
       k (IntSet.add var rec_vars)
 
-let var_of_quantifier : Quantifier.t -> int =
-  function
-    | var, _ -> var
-
-let kind_of_quantifier : Quantifier.t -> Kind.t =
-  fun (_, k) -> k
-
-let primary_kind_of_quantifier : Quantifier.t -> PrimaryKind.t =
-  fun (_, (pk, _)) -> pk
-
-let subkind_of_quantifier : Quantifier.t -> Subkind.t
-  = fun q ->
-    snd (kind_of_quantifier q)
-
 let primary_kind_of_type_arg : type_arg -> PrimaryKind.t =
   function
   | `Type _     -> pk_type
   | `Row _      -> pk_row
   | `Presence _ -> pk_presence
 
-let eq_quantifiers : Quantifier.t -> Quantifier.t -> bool =
-  fun p q -> var_of_quantifier p = var_of_quantifier q
-
 let add_quantified_vars : Quantifier.t list -> TypeVarSet.t -> TypeVarSet.t =
-  fun qs vars -> List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
+  fun qs vars -> List.fold_right IntSet.add (List.map Quantifier.to_var qs) vars
 
 
 (** A constraint provides a way of ensuring a type (or row) satisfies the
@@ -1576,7 +1559,7 @@ struct
   let tyvar_name_counter = ref 0
 
   let varspec_of_tyvar q =
-    var_of_quantifier q, (`Rigid, primary_kind_of_quantifier q, `Bound)
+    Quantifier.to_var q, (`Rigid, Quantifier.to_primary_kind q, `Bound)
 
   (* find all free and bound type variables *)
   let rec free_bound_type_vars : TypeVarSet.t -> datatype -> vars_list = fun bound_vars t ->
@@ -1904,8 +1887,8 @@ struct
 
   let quantifier : (policy * names) -> Quantifier.t -> string =
     fun (policy, vars) q ->
-      let k = kind_of_quantifier q in
-      Vars.find (var_of_quantifier q) vars ^ has_kind (kind (policy, vars) k)
+      let k = Quantifier.to_kind q in
+      Vars.find (Quantifier.to_var q) vars ^ has_kind (kind (policy, vars) k)
 
   (** If type variable names are hidden return a generic name n1. Otherwise
      pass name of type variable to n2 so that it can construct a name. *)
@@ -2066,7 +2049,7 @@ struct
               let bound_vars =
                 List.fold_left
                   (fun bound_vars tyvar ->
-                     TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
+                     TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
                   bound_vars tyvars
               in
                 if not (policy.flavours) then
@@ -2212,7 +2195,7 @@ struct
     let bound_vars tyvars =
       List.fold_left
         (fun bound_vars tyvar ->
-           TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
+           TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
         bound_vars tyvars in
 
     function

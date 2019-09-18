@@ -76,9 +76,9 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
         | `Table (f, d, r) -> `Table (inst f, inst d, inst r)
         | `ForAll (qs, t) ->
            let remove_shadowed_quantifier (tmap,rmap,pmap) q =
-             let var = Types.var_of_quantifier q in
+             let var = Quantifier.to_var q in
              let open CommonTypes.PrimaryKind in
-             match Types.primary_kind_of_quantifier q with
+             match Quantifier.to_primary_kind q with
                | Type ->
                   (IntMap.remove var tmap, rmap, pmap)
                | Row ->
@@ -430,7 +430,7 @@ let replace_quantifiers t qs' =
         let tyargs =
           List.map2
             (fun q q' ->
-              assert (primary_kind_of_quantifier q = primary_kind_of_quantifier q');
+              assert (Quantifier.to_primary_kind q = Quantifier.to_primary_kind q');
               type_arg_of_quantifier q')
             qs
             qs'

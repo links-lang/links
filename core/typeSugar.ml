@@ -3136,7 +3136,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           (* the free type variables in the arguments (and effects) *)
                           let arg_vars = Types.TypeVarSet.union (Types.free_type_vars fps) (Types.free_row_type_vars fe) in
                           (* return true if this quantifier appears free in the arguments (or effects) *)
-                          let free_in_arg q = Types.TypeVarSet.mem (Types.var_of_quantifier q) arg_vars in
+                          let free_in_arg q = Types.TypeVarSet.mem (Quantifier.to_var q) arg_vars in
 
                           (* quantifiers for the return type *)
                           let rqs =
@@ -3457,7 +3457,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                           (* return true if this quantifier appears
                              free in the projected type *)
-                          let free_in_body q = Types.TypeVarSet.mem (Types.var_of_quantifier q) vars in
+                          let free_in_body q = Types.TypeVarSet.mem (Quantifier.to_var q) vars in
 
                           (* quantifiers for the projected type *)
                           let pta, pqs =
@@ -4159,7 +4159,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                  | t_tyvars ->
                    if not (List.for_all
                              (fun q ->
-                               List.exists (Types.eq_quantifiers q) t_tyvars) tyvars)
+                               List.exists (Quantifier.eq q) t_tyvars) tyvars)
                    then
                      Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
                    t_tyvars, t
@@ -4337,7 +4337,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                            if not
                                 (List.for_all
                                    (fun q ->
-                                     List.exists (Types.eq_quantifiers q) outer_tyvars) body_tyvars) then
+                                     List.exists (Quantifier.eq q) outer_tyvars) body_tyvars) then
                              Gripers.inconsistent_quantifiers ~pos ~t1:outer ~t2:gen;
 
                            (* We could check that inner_tyvars is
@@ -4363,7 +4363,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                              let rec find p i =
                                function
                                | [] -> None
-                               | q :: _ when Types.eq_quantifiers p q -> Some i
+                               | q :: _ when Quantifier.eq p q -> Some i
                                | _ :: qs -> find p (i+1) qs in
                              let find p = find p 0 inner_tyvars in
                              List.map find outer_tyvars
