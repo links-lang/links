@@ -40,7 +40,7 @@ module type SugarConstructorsSig = sig
   val with_dummy_pos : 'a -> 'a WithPos.t
 
   (* Fresh type variables. *)
-  val fresh_known_type_variable  : freedom -> known_type_variable
+  val fresh_known_type_variable  : Freedom.t -> known_type_variable
 
   (* Helper data types and functions for passing arguments to smart
      constructors.  *)

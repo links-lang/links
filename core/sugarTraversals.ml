@@ -74,7 +74,7 @@ class map =
 
     method kind : kind -> kind = fun x -> x
 
-    method freedom : freedom -> freedom = fun x -> x
+    method freedom : Freedom.t -> Freedom.t = fun x -> x
 
     method type_variable : type_variable -> type_variable =
       fun (_x, _x_i1, _x_i2) ->
@@ -841,7 +841,7 @@ class fold =
 
     method kind : kind -> 'self_type = fun _ -> o
 
-    method freedom : freedom -> 'self_type = fun _ -> o
+    method freedom : Freedom.t -> 'self_type = fun _ -> o
 
     method type_variable : type_variable -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
@@ -1535,7 +1535,7 @@ class fold_map =
 
     method kind : kind -> ('self_type * kind) = fun k -> (o, k)
 
-    method freedom : freedom -> ('self_type * freedom) = fun k -> (o, k)
+    method freedom : Freedom.t -> ('self_type * Freedom.t) = fun k -> (o, k)
 
     method type_variable : type_variable -> ('self_type * type_variable) =
       fun (_x, _x_i1, _x_i2) ->
