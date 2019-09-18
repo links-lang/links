@@ -19,11 +19,11 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point [@@deriving show]
 
-type kind = PrimaryKind.t * subkind
+type kind = PrimaryKind.t * Subkind.t
     [@@deriving eq,show]
 
 type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * subkind * freedom)
+    [ `Var of (int * Subkind.t * freedom)
     | `Body of 't ]
       [@@deriving show]
 
@@ -484,7 +484,7 @@ let kind_of_quantifier : quantifier -> kind =
 let primary_kind_of_quantifier : quantifier -> PrimaryKind.t =
   fun (_, (pk, _)) -> pk
 
-let subkind_of_quantifier : quantifier -> subkind
+let subkind_of_quantifier : quantifier -> Subkind.t
   = fun q ->
     snd (kind_of_quantifier q)
 
@@ -539,7 +539,7 @@ type visit_context = StringSet.t * var_set * var_set
    By default, this visits the entire type, and returns true iff all child nodes
    of the type satisfy the predicate. *)
 class virtual type_predicate = object(self)
-  method var_satisfies : (int * subkind * freedom) -> bool = fun _ -> true
+  method var_satisfies : (int * Subkind.t * freedom) -> bool = fun _ -> true
 
   method point_satisfies : 'a 'c . (visit_context -> 'a -> bool) -> visit_context -> ([< 'a meta_max_basis] as 'c) point -> bool
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
@@ -599,7 +599,7 @@ end
     By default this does nothing. However, it can be extended by {!Constraint}s
     to mutate various flexible type variables. *)
 class virtual type_iter = object(self)
-  method visit_var : 'a 'c. ([< 'a meta_max_basis > `Var] as 'c) point -> (int * subkind * freedom) -> unit = fun _ _ -> ()
+  method visit_var : 'a 'c. ([< 'a meta_max_basis > `Var] as 'c) point -> (int * Subkind.t * freedom) -> unit = fun _ _ -> ()
 
   method visit_point : 'a 'c . (visit_context -> 'a -> unit) -> visit_context -> ([< 'a meta_max_basis > `Var] as 'c) point -> unit
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
@@ -1863,7 +1863,7 @@ struct
     else
       empty_context
 
-  let subkind : (policy * names) -> subkind -> string =
+  let subkind : (policy * names) -> Subkind.t -> string =
     let full (l, r) = "(" ^ Linearity.to_string l ^ "," ^
                         Restriction.to_string r ^ ")" in
 

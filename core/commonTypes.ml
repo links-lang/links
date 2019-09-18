@@ -102,16 +102,14 @@ let res_mono    = Restriction.Mono
 let res_session = Restriction.Session
 let res_effect  = Restriction.Effect
 
-type subkind = Linearity.t * Restriction.t
+module Subkind = struct
+  type t = Linearity.t * Restriction.t
     [@@deriving eq,show]
 
-let min_subkind (ll, lr) (rl, rr) =
-  match Restriction.min lr rr with
-  | Some r -> Some (Linearity.min ll rl, r)
-  | None -> None
-
-let string_of_subkind (lin, res) =
-  Printf.sprintf "(%s,%s)" (Linearity.to_string lin) (Restriction.to_string res)
+  let to_string (lin, res) =
+    Printf.sprintf "(%s,%s)" (Linearity.to_string   lin)
+                             (Restriction.to_string res)
+end
 
 module PrimaryKind = struct
   type t =

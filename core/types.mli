@@ -12,11 +12,11 @@ module TypeVarMap : Utility.INTMAP
 (* points *)
 type 'a point = 'a Unionfind.point
 
-type kind = PrimaryKind.t * subkind
+type kind = PrimaryKind.t * Subkind.t
     [@@deriving eq,show]
 
 type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * subkind * freedom)
+    [ `Var of (int * Subkind.t * freedom)
     | `Body of 't ]
 
 
@@ -214,7 +214,7 @@ val free_bound_type_arg_type_vars : type_arg -> Vars.vars_list
 val var_of_quantifier : quantifier -> int
 val primary_kind_of_quantifier : quantifier -> PrimaryKind.t
 val kind_of_quantifier : quantifier -> kind
-val subkind_of_quantifier : quantifier -> subkind
+val subkind_of_quantifier : quantifier -> Subkind.t
 val type_arg_of_quantifier : quantifier -> type_arg
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
@@ -231,37 +231,37 @@ val type_variable_counter : int ref
 val fresh_raw_variable : unit -> int
 
 (** type variable construction *)
-val make_type_variable : int -> subkind -> datatype
-val make_rigid_type_variable : int -> subkind -> datatype
-val make_row_variable : int -> subkind -> row_var
-val make_rigid_row_variable : int -> subkind -> row_var
+val make_type_variable : int -> Subkind.t -> datatype
+val make_rigid_type_variable : int -> Subkind.t -> datatype
+val make_row_variable : int -> Subkind.t -> row_var
+val make_rigid_row_variable : int -> Subkind.t -> row_var
 
 (** fresh type variable generation *)
-val fresh_type_variable : subkind -> datatype
-val fresh_rigid_type_variable : subkind -> datatype
+val fresh_type_variable : Subkind.t -> datatype
+val fresh_rigid_type_variable : Subkind.t -> datatype
 
-val fresh_row_variable : subkind -> row_var
-val fresh_rigid_row_variable : subkind -> row_var
+val fresh_row_variable : Subkind.t -> row_var
+val fresh_rigid_row_variable : Subkind.t -> row_var
 
 val fresh_session_variable : CommonTypes.Linearity.t -> datatype
 
-val fresh_presence_variable : subkind -> field_spec
-val fresh_rigid_presence_variable : subkind -> field_spec
+val fresh_presence_variable : Subkind.t -> field_spec
+val fresh_rigid_presence_variable : Subkind.t -> field_spec
 
 (** fresh quantifiers *)
-val fresh_type_quantifier : subkind -> quantifier * datatype
-val fresh_row_quantifier : subkind -> quantifier * row
-val fresh_presence_quantifier : subkind -> quantifier * field_spec
+val fresh_type_quantifier : Subkind.t -> quantifier * datatype
+val fresh_row_quantifier : Subkind.t -> quantifier * row
+val fresh_presence_quantifier : Subkind.t -> quantifier * field_spec
 val fresh_quantifier : kind -> quantifier * type_arg
 
 (** {0 rows} *)
 (** empty row constructors *)
 val make_empty_closed_row : unit -> row
-val make_empty_open_row : subkind -> row
+val make_empty_open_row : Subkind.t -> row
 
 (** singleton row constructors *)
 val make_singleton_closed_row : (string * field_spec) -> row
-val make_singleton_open_row : (string * field_spec) -> subkind -> row
+val make_singleton_open_row : (string * field_spec) -> Subkind.t -> row
 
 (** row predicates *)
 val is_closed_row : row -> bool
@@ -401,7 +401,7 @@ end
 type visit_context = Utility.StringSet.t * TypeVarSet.t * TypeVarSet.t
 class virtual type_predicate :
   object('self_type)
-    method var_satisfies : (int * subkind * freedom) -> bool
+    method var_satisfies : (int * Subkind.t * freedom) -> bool
     method type_satisfies : visit_context -> typ -> bool
     method point_satisfies :
       'a 'c . (visit_context -> 'a -> bool) ->

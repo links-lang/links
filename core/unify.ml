@@ -722,7 +722,7 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
        | `Body f' -> unify_presence' rec_env (f, f')
      end
 
-and unify_rows' : ?var_sk:subkind -> unify_env -> ((row * row) -> unit) =
+and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row * row) -> unit) =
   let unwrap_row r =
     let r', rvar = unwrap_row r in
     (* Debug.print (Printf.sprintf "Unwrapped row %s giving %s\n" (string_of_row r) (string_of_row r')); *)
