@@ -30,7 +30,7 @@ class map :
     method binder          : Binder.with_pos -> Binder.with_pos
     method sentence        : sentence -> sentence
     method section         : Section.t -> Section.t
-    method subkind         : subkind -> subkind
+    method subkind         : Subkind.t -> Subkind.t
     method kind            : kind -> kind
     method freedom         : freedom -> freedom
     method type_variable   : type_variable -> type_variable
@@ -109,7 +109,7 @@ class fold :
     method binder          : Binder.with_pos -> 'self
     method sentence        : sentence -> 'self
     method section         : Section.t -> 'self
-    method subkind         : subkind -> 'self
+    method subkind         : Subkind.t -> 'self
     method kind            : kind -> 'self
     method freedom         : freedom -> 'self
     method type_variable   : type_variable -> 'self
@@ -213,7 +213,7 @@ object ('self)
   method section         : Section.t -> 'self * Section.t
   method sentence        : sentence -> 'self * sentence
   method string          : Name.t -> 'self * Name.t
-  method subkind         : subkind -> 'self * subkind
+  method subkind         : Subkind.t -> 'self * Subkind.t
   method kind            : kind -> 'self * kind
   method freedom         : freedom -> 'self * freedom
   method type_variable   : type_variable -> 'self * type_variable

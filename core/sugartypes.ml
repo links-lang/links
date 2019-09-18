@@ -67,17 +67,17 @@ type tyarg = Types.type_arg
    i.e. in let-bindings.
 *)
 
-let default_subkind : subkind = (lin_unl, res_any)
-let default_effect_subkind : subkind = (lin_unl, res_any)
+let default_subkind : Subkind.t = (lin_unl, res_any)
+let default_effect_subkind : Subkind.t = (lin_unl, res_any)
 
-type kind = PrimaryKind.t option * subkind option
+type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
 
 type type_variable = Name.t * kind * freedom
     [@@deriving show]
 
 (* type variable of primary kind Type? *)
-type known_type_variable = Name.t * subkind option * freedom
+type known_type_variable = Name.t * Subkind.t option * freedom
     [@@deriving show]
 
 type quantifier = type_variable
@@ -89,7 +89,7 @@ let string_of_type_variable ((var, (kind, subkind), _) : type_variable) =
   match kind with
   | None -> var
   | Some kind ->
-     let subkind = OptionUtils.opt_app string_of_subkind "" subkind in
+     let subkind = OptionUtils.opt_app Subkind.to_string "" subkind in
      var ^ "::" ^ PrimaryKind.to_string kind ^ subkind
 
 type fieldconstraint = Readonly | Default
