@@ -20,7 +20,7 @@ module TypeVarMap = Utility.IntMap
 type 'a point = 'a Unionfind.point [@@deriving show]
 
 type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * Subkind.t * freedom)
+    [ `Var of (int * Subkind.t * Freedom.t)
     | `Body of 't ]
       [@@deriving show]
 
@@ -536,7 +536,7 @@ type visit_context = StringSet.t * var_set * var_set
    By default, this visits the entire type, and returns true iff all child nodes
    of the type satisfy the predicate. *)
 class virtual type_predicate = object(self)
-  method var_satisfies : (int * Subkind.t * freedom) -> bool = fun _ -> true
+  method var_satisfies : (int * Subkind.t * Freedom.t) -> bool = fun _ -> true
 
   method point_satisfies : 'a 'c . (visit_context -> 'a -> bool) -> visit_context -> ([< 'a meta_max_basis] as 'c) point -> bool
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
@@ -596,7 +596,7 @@ end
     By default this does nothing. However, it can be extended by {!Constraint}s
     to mutate various flexible type variables. *)
 class virtual type_iter = object(self)
-  method visit_var : 'a 'c. ([< 'a meta_max_basis > `Var] as 'c) point -> (int * Subkind.t * freedom) -> unit = fun _ _ -> ()
+  method visit_var : 'a 'c. ([< 'a meta_max_basis > `Var] as 'c) point -> (int * Subkind.t * Freedom.t) -> unit = fun _ _ -> ()
 
   method visit_point : 'a 'c . (visit_context -> 'a -> unit) -> visit_context -> ([< 'a meta_max_basis > `Var] as 'c) point -> unit
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->

@@ -73,11 +73,11 @@ let default_effect_subkind : Subkind.t = (lin_unl, res_any)
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
 
-type type_variable = Name.t * kind * freedom
+type type_variable = Name.t * kind * Freedom.t
     [@@deriving show]
 
 (* type variable of primary kind Type? *)
-type known_type_variable = Name.t * Subkind.t option * freedom
+type known_type_variable = Name.t * Subkind.t option * Freedom.t
     [@@deriving show]
 
 type quantifier = type_variable

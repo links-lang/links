@@ -167,8 +167,10 @@ let loc_server  = Location.Server
 let loc_native  = Location.Native
 let loc_unknown = Location.Unknown
 
-type freedom = [`Flexible | `Rigid]
+module Freedom = struct
+  type t = [`Flexible | `Rigid]
     [@@deriving show]
+end
 
 module Name = struct
   type t = string

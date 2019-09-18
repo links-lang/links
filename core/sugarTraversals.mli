@@ -32,7 +32,7 @@ class map :
     method section         : Section.t -> Section.t
     method subkind         : Subkind.t -> Subkind.t
     method kind            : kind -> kind
-    method freedom         : freedom -> freedom
+    method freedom         : Freedom.t -> Freedom.t
     method type_variable   : type_variable -> type_variable
     method known_type_variable   : known_type_variable -> known_type_variable
     method row_var         : Datatype.row_var -> Datatype.row_var
@@ -111,7 +111,7 @@ class fold :
     method section         : Section.t -> 'self
     method subkind         : Subkind.t -> 'self
     method kind            : kind -> 'self
-    method freedom         : freedom -> 'self
+    method freedom         : Freedom.t -> 'self
     method type_variable   : type_variable -> 'self
     method known_type_variable : known_type_variable -> 'self
     method row_var         : Datatype.row_var -> 'self
@@ -215,7 +215,7 @@ object ('self)
   method string          : Name.t -> 'self * Name.t
   method subkind         : Subkind.t -> 'self * Subkind.t
   method kind            : kind -> 'self * kind
-  method freedom         : freedom -> 'self * freedom
+  method freedom         : Freedom.t -> 'self * Freedom.t
   method type_variable   : type_variable -> 'self * type_variable
   method known_type_variable : known_type_variable -> 'self * known_type_variable
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg

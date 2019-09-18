@@ -13,7 +13,7 @@ module TypeVarMap : Utility.INTMAP
 type 'a point = 'a Unionfind.point
 
 type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * Subkind.t * freedom)
+    [ `Var of (int * Subkind.t * Freedom.t)
     | `Body of 't ]
 
 
@@ -398,7 +398,7 @@ end
 type visit_context = Utility.StringSet.t * TypeVarSet.t * TypeVarSet.t
 class virtual type_predicate :
   object('self_type)
-    method var_satisfies : (int * Subkind.t * freedom) -> bool
+    method var_satisfies : (int * Subkind.t * Freedom.t) -> bool
     method type_satisfies : visit_context -> typ -> bool
     method point_satisfies :
       'a 'c . (visit_context -> 'a -> bool) ->
