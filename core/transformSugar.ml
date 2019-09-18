@@ -731,14 +731,14 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> (o, [])
-          | { rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn :: defs ->
+          | {node={ rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn; pos} :: defs ->
               let (o, tyvars) = o#quantifiers tyvars in
               let (o, inner) = o#datatype inner in
               let inner_effects = fun_effects inner (fst lam) in
               let (o, lam, _) = o#funlit inner_effects lam in
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
-              (o, { fn with rec_definition = ((tyvars, Some (inner, extras)), lam) } :: defs)
+              (o, make ~pos { fn with rec_definition = ((tyvars, Some (inner, extras)), lam) } :: defs)
           | _ :: _ -> assert false
       in
         list o
@@ -747,11 +747,11 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> o, []
-          | { rec_binder; rec_signature;  _ } as fn :: defs ->
+          | {node={ rec_binder; rec_signature;  _ } as fn; pos} :: defs ->
               let (o, rec_binder) = o#binder rec_binder in
               let (o, defs) = list o defs in
               let (o, rec_signature) = optionu o (fun o -> o#datatype') rec_signature in
-              (o, { fn with rec_binder; rec_signature } :: defs)
+              (o, make ~pos { fn with rec_binder; rec_signature } :: defs)
       in
         list o
 
@@ -759,7 +759,7 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> o
-          | { rec_binder = f; rec_definition = ((_tyvars, Some (inner, _extras)), _lam); _ } :: defs ->
+          | {node={ rec_binder = f; rec_definition = ((_tyvars, Some (inner, _extras)), _lam); _ }; _} :: defs ->
               let (o, _) = o#binder (Binder.set_type f inner) in
               list o defs
           | _ :: _ -> assert false
@@ -803,12 +803,12 @@ class transform (env : Types.typing_environment) =
          let (o, f) = o#binder f in
          (o, Foreign (f, raw_name, language, file, t))
       | Typenames ts ->
-          let (o, _) = listu o (fun o (name, vars, (x, dt'), pos) ->
+          let (o, _) = listu o (fun o {node=(name, vars, (x, dt')); pos} ->
               match dt' with
                 | Some dt ->
                    let o = o#bind_tycon name
                      (`Alias (List.map (snd ->- val_of) vars, dt)) in
-                   (o, (name, vars, (x, dt'), pos))
+                   (o, WithPos.make ~pos (name, vars, (x, dt')))
                 | None -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Typenames ts)

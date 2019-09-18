@@ -424,15 +424,15 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
            2) Process the function bodies. *)
         let (fs' : recursive_function list) =
           List.fold_right
-            (fun fn fs -> { fn with rec_binder = self#binder fn.rec_binder } :: fs)
+            (fun {node;pos} fs -> make ~pos { node with rec_binder = self#binder node.rec_binder } :: fs)
             fs []
         in
         let fs'' =
           List.fold_right
-            (fun ({ rec_definition = (tvs, funlit); rec_signature = dt; _ } as fn) fs ->
+            (fun {node={ rec_definition = (tvs, funlit); rec_signature = dt; _ } as fn; pos} fs ->
               let dt' = self#option (fun o -> o#datatype') dt in
               let funlit' = self#funlit funlit in
-              { fn with rec_definition = (tvs, funlit'); rec_signature = dt' } :: fs)
+              make ~pos { fn with rec_definition = (tvs, funlit'); rec_signature = dt' } :: fs)
             fs' []
         in
         Funs fs''
@@ -442,7 +442,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
        (* Same procedure as above. *)
          let ts' =
            List.fold_right
-             (fun (name, tyvars, dt, pos) ts ->
+             (fun {node=(name, tyvars, dt); pos} ts ->
                (self#type_binder name, tyvars, dt, pos) :: ts)
                ts []
          in
@@ -450,7 +450,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
            List.fold_right
              (fun (name, tyvars, dt, pos) ts ->
                  let dt' = self#datatype' dt in
-                 (name, tyvars, dt', pos) :: ts)
+                 SourceCode.WithPos.make ~pos (name, tyvars, dt') :: ts)
              ts' []
            in
            Typenames ts''

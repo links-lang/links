@@ -494,8 +494,11 @@ let primary_kind_of_type_arg : type_arg -> PrimaryKind.t =
   | `Row _      -> pk_row
   | `Presence _ -> pk_presence
 
-let add_quantified_vars qs vars =
-  List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
+let eq_quantifiers : quantifier -> quantifier -> bool =
+  fun p q -> var_of_quantifier p = var_of_quantifier q
+
+let add_quantified_vars : quantifier list -> TypeVarSet.t -> TypeVarSet.t =
+  fun qs vars -> List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
 
 
 (** A constraint provides a way of ensuring a type (or row) satisfies the
@@ -868,10 +871,7 @@ let pp_row = fun f _ -> Utility.format_omission f
 let pp_meta_type_var = fun f _ -> Utility.format_omission f
 let pp_meta_row_var = fun f _ -> Utility.format_omission f*)
 
-let type_var_number = var_of_quantifier
-
 module Env = Env.String
-
 
 (* type ops stuff *)
   let empty_field_env = FieldEnv.empty
@@ -1053,7 +1053,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
       | `RecursiveApplication { r_args; _ } ->
           S.union_all (List.map (free_tyarg_vars' rec_vars) r_args)
       | `ForAll (tvars, body)    -> S.diff (free_type_vars' rec_vars body)
-                                           (List.fold_right (S.add -<- type_var_number) tvars S.empty)
+                                           (add_quantified_vars tvars S.empty)
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
@@ -1495,26 +1495,15 @@ let normalise_row = normalise_row IntSet.empty
 
 let quantifier_of_type_arg =
   let open PrimaryKind in
+  let quantifier_of_point point kind = match Unionfind.find point with
+    | `Var (var, subkind, _) -> (var, (kind, subkind))
+    | _ -> assert false in
   function
-  | `Type (`MetaTypeVar point) ->
-     begin
-       match Unionfind.find point with
-       | `Var (var, subkind, _) -> (var, (Type, subkind))
-       | _ -> assert false
-     end
-  | `Row (fields, row_var, _dual) ->
+  | `Type (`MetaTypeVar point) -> quantifier_of_point point Type
+  | `Row (fields, point, _dual) ->
      assert (StringMap.is_empty fields);
-     begin
-       match Unionfind.find row_var with
-       | `Var (var, subkind, _) -> (var, (Row, subkind))
-       | _ -> assert false
-     end
-  | `Presence (`Var point) ->
-     begin
-       match Unionfind.find point with
-       | `Var (var, subkind, _) -> (var, (Presence, subkind))
-       | _ -> assert false
-     end
+     quantifier_of_point point Row
+  | `Presence (`Var point) -> quantifier_of_point point Presence
   | _ -> assert false
 
 let quantifiers_of_type_args = List.map quantifier_of_type_arg
@@ -2408,12 +2397,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
       | `RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
       | `ForAll (qs, t)          ->
-          make_env
-            (List.fold_right
-               (fun q boundvars -> S.add (var_of_quantifier q) boundvars)
-               qs
-               boundvars)
-            t
+          make_env (add_quantified_vars qs boundvars) t
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with

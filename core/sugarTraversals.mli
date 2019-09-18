@@ -66,8 +66,11 @@ class map :
     method tybinop         : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
+    method typenamenode    : typenamenode -> typenamenode
+    method typename        : typename -> typename
     method function_definition : function_definition -> function_definition
     method recursive_function  : recursive_function -> recursive_function
+    method recursive_functionnode : recursive_functionnode -> recursive_functionnode
     method program         : program -> program
     method typ             : Types.datatype -> Types.datatype
     method type_row        : Types.row -> Types.row
@@ -144,8 +147,11 @@ class fold :
     method tybinop         : tyarg list * BinaryOp.t -> 'self
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
+    method typenamenode    : typenamenode -> 'self
+    method typename        : typename -> 'self
     method function_definition : function_definition -> 'self
     method recursive_function  : recursive_function -> 'self
+    method recursive_functionnode  : recursive_functionnode -> 'self
     method program         : program -> 'self
     method unknown         : 'a. 'a -> 'self
   end
@@ -166,6 +172,8 @@ object ('self)
   method binder          : Binder.with_pos -> 'self * Binder.with_pos
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
+  method typenamenode    : typenamenode -> 'self * typenamenode
+  method typename        : typename -> 'self * typename
   method binop           : BinaryOp.t -> 'self * BinaryOp.t
   method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)
   method bool            : bool -> 'self * bool
@@ -215,5 +223,6 @@ object ('self)
   method unary_op        : UnaryOp.t -> 'self * UnaryOp.t
   method function_definition : function_definition -> 'self * function_definition
   method recursive_function  : recursive_function -> 'self * recursive_function
+  method recursive_functionnode  : recursive_functionnode -> 'self * recursive_functionnode
   method unknown         : 'a . 'a -> 'self * 'a
 end

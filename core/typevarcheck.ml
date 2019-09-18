@@ -3,8 +3,6 @@ open Types
 
 module FieldEnv = Utility.StringMap
 
-let bind_quantifiers  = List.fold_right (Types.type_var_number ->- TypeVarSet.add)
-
 (* TODO
 
    - Actually make use of the bool argument to is_guarded_row.  We can't
@@ -47,7 +45,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isg f && isgr m && isg t
         | `ForAll (qs, t) ->
             is_guarded
-              (bind_quantifiers qs bound_vars)
+              (Types.add_quantified_vars qs bound_vars)
               expanded_apps var t
         | `Record row ->
             begin
@@ -143,7 +141,7 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isp f || isnr m || isn t
         | `ForAll (qs, t) ->
             is_negative
-              (bind_quantifiers qs bound_vars)
+              (Types.add_quantified_vars qs bound_vars)
               expanded_apps var t
         | `Record row -> isnr row
         | `Effect row
@@ -229,7 +227,7 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isn f || ispr m || isp t
         | `ForAll (qs, t) ->
             is_positive
-              (bind_quantifiers qs bound_vars)
+              (Types.add_quantified_vars qs bound_vars)
               expanded_apps var t
         | `Record row -> ispr row
         | `Effect row

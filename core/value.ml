@@ -1424,7 +1424,7 @@ let rec from_json (json: Yojson.Basic.t) : t =
       | _ -> None in
 
   let parse_client_pid xs () =
-    match (List.assoc_opt "_clientPid" xs, List.assoc_opt "_clientID" xs) with
+    match (List.assoc_opt "_clientPid" xs, List.assoc_opt "_clientId" xs) with
       | (Some pid_str, Some id_str) ->
           let pid = unwrap_string pid_str |> ProcessID.of_string in
           let id =  unwrap_string id_str  |> ClientID.of_string in

@@ -1155,7 +1155,7 @@ struct
                           let outer  = Binder.to_type bndr in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
-                        defs
+                        (nodes_of_list defs)
                         ([], [], []) in
                     let defs =
                       List.map
@@ -1174,7 +1174,7 @@ struct
                                ([], env) in
                            let body = fun vs -> eval (extend fs (List.combine vs inner_fts) body_env) body in
                              ((ft, f, scope), (tyvars, (ps, body)), location))
-                        defs
+                        (nodes_of_list defs)
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
                 | Foreign (bndr, raw_name, language, _file, _)

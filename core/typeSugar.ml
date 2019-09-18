@@ -2271,33 +2271,34 @@ let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = fun p ->
         children Env.empty
   | _ -> Env.empty
 
-(* given a list of argument patterns and a return type
-   return the corresponding function type *)
-let make_ft declared_linearity ps effects return_type =
+(* make a function type constructor based on declared linearity *)
+let make_ftcon declared_linearity p =
+  if DeclaredLinearity.is_linear declared_linearity
+  then `Lolli p
+  else `Function p
+
+(* given a declared linearity, list of argument patterns, effects, and a return
+   type return the corresponding function type *)
+let make_ft decl_lin ps effects return_type =
   let pattern_typ (_, _, t) = t in
-  let args =
-    Types.make_tuple_type -<- List.map pattern_typ in
-  let ftcon = fun p -> if DeclaredLinearity.is_linear declared_linearity then `Lolli p else `Function p in
+  let args = Types.make_tuple_type -<- List.map pattern_typ in
   let rec ft =
     function
-      | [p] -> ftcon (args p, effects, return_type)
-      | p::ps -> ftcon (args p, Types.make_empty_open_row default_effect_subkind, ft ps)
+      | [p]   -> make_ftcon decl_lin (args p, effects, return_type)
+      | p::ps -> make_ftcon decl_lin (args p, Types.make_empty_open_row default_effect_subkind, ft ps)
       | [] -> assert false
-  in
-    ft ps
+  in ft ps
 
 let make_ft_poly_curry declared_linearity ps effects return_type =
   let pattern_typ (_, _, t) = t in
-  let args =
-    Types.make_tuple_type -<- List.map pattern_typ in
-  let ftcon = fun p -> if DeclaredLinearity.is_linear declared_linearity then `Lolli p else `Function p in
+  let args = Types.make_tuple_type -<- List.map pattern_typ in
   let rec ft =
     function
-      | [p] -> [], ftcon (args p, effects, return_type)
+      | [p] -> [], make_ftcon declared_linearity (args p, effects, return_type)
       | p::ps ->
           let qs, t = ft ps in
           let q, eff = Types.fresh_row_quantifier default_subkind in
-            q::qs, ftcon (args p, eff, t)
+            q::qs, make_ftcon declared_linearity (args p, eff, t)
       | [] -> assert false in
   Types.for_all (ft ps)
 
@@ -2605,11 +2606,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             (match argss_prev with
              | None -> ()
              | Some argss_prev ->
-                let ftcon = fun p -> if DeclaredLinearity.is_linear lin then `Lolli p else `Function p in
                 let rec ft =
                   function
-                  | [p, effects] -> ftcon (p, effects, typ body)
-                  | (p, e)::ps -> ftcon (p, e, ft ps)
+                  | [p, effects] -> make_ftcon lin (p, effects, typ body)
+                  | (p, e)::ps -> make_ftcon lin (p, e, ft ps)
                   | [] -> raise (internal_error "Empty argument list")
                 in
                 let ftype_prev = ft argss_prev in
@@ -4169,11 +4169,9 @@ and type_binding : context -> binding -> binding * context * usagemap =
                  match TypeUtils.quantifiers t with
                  | [] -> tyvars, ft
                  | t_tyvars ->
-                   (* FIXME: use a suitable eq_quantifier function *)
                    if not (List.for_all
                              (fun q ->
-                               let n = Types.type_var_number q in
-                               List.exists (fun q -> Types.type_var_number q = n) t_tyvars) tyvars)
+                               List.exists (Types.eq_quantifiers q) t_tyvars) tyvars)
                    then
                      Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
                    t_tyvars, t
@@ -4212,12 +4210,12 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let inner_rec_vars, inner_env, patss =
             List.fold_left
               (fun (inner_rec_vars, inner_env, patss)
-                   { rec_binder = bndr; rec_linearity = lin;
-                     rec_definition = ((_, def), (pats, _));
-                     rec_signature = t_ann';
-                     rec_unsafe_signature = unsafe;
-                     rec_frozen = frozen;
-                     rec_pos = pos; _ } ->
+                   {node= { rec_binder = bndr; rec_linearity = lin;
+                            rec_definition = ((_, def), (pats, _));
+                            rec_signature = t_ann';
+                            rec_unsafe_signature = unsafe;
+                            rec_frozen = frozen;
+                            _ }; _ } ->
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let pats = List.map (List.map tpc) pats in
@@ -4276,9 +4274,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
               (List.rev
                 (List.fold_left2
                    (fun defs_and_uses
-                        ({ rec_binder = bndr; rec_linearity = lin;
-                           rec_definition = (_, (_, body));
-                           rec_pos = pos; _ } as fn)
+                        {node={ rec_binder = bndr; rec_linearity = lin;
+                                rec_definition = (_, (_, body)); _ } as fn; pos }
                         pats ->
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
@@ -4319,13 +4316,13 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let _, ft_mono = TypeUtils.split_quantified_type ft in
                       let () = unify pos ~handle:Gripers.bind_rec_rec (no_pos shape, no_pos ft_mono) in
 
-                      ((fn, Binder.erase_type bndr, (([], None), (pats, body))), used) :: defs_and_uses) [] defs patss)) in
+                      ((make ~pos fn, Binder.erase_type bndr, (([], None), (pats, body))), used) :: defs_and_uses) [] defs patss)) in
 
           (* Generalise to obtain the outer types *)
           let defs, outer_env =
             let defs, outer_env =
               List.fold_left2
-                (fun (defs, outer_env) (fn, bndr, (_, (_, body))) pats ->
+                (fun (defs, outer_env) ({node=fn;pos}, bndr, (_, (_, body))) pats ->
                    let name = Binder.to_name bndr in
                    let inner = Env.lookup inner_env name in
                    let t_ann = resolve_type_annotation bndr fn.rec_signature in
@@ -4352,8 +4349,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                            if not
                                 (List.for_all
                                    (fun q ->
-                                     let n = Types.type_var_number q in
-                                     List.exists (fun q -> Types.type_var_number q = n) outer_tyvars) body_tyvars) then
+                                     List.exists (Types.eq_quantifiers q) outer_tyvars) body_tyvars) then
                              Gripers.inconsistent_quantifiers ~pos ~t1:outer ~t2:gen;
 
                            (* We could check that inner_tyvars is
@@ -4376,12 +4372,12 @@ and type_binding : context -> binding -> binding * context * usagemap =
                               Some i:  use the i-th type argument
                             *)
                            let extras =
-                             let rec find n i =
+                             let rec find p i =
                                function
                                | [] -> None
-                               | q :: _ when Types.type_var_number q = n -> Some i
-                               | _ :: qs -> find n (i+1) qs in
-                             let find q = find (Types.type_var_number q) 0 inner_tyvars in
+                               | q :: _ when Types.eq_quantifiers p q -> Some i
+                               | _ :: qs -> find p (i+1) qs in
+                             let find p = find p 0 inner_tyvars in
                              List.map find outer_tyvars
                            in
                            (inner, extras), outer, outer_tyvars
@@ -4401,7 +4397,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
-                   ({ fn with
+                   (make ~pos { fn with
                       rec_binder = Binder.set_type bndr outer;
                       rec_definition = ((tyvars, Some inner), (pats, body)) }::defs,
                       Env.bind outer_env (name, outer)))
@@ -4409,7 +4405,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             in
               List.rev defs, outer_env in
 
-          let defined = List.map (fun x -> Binder.to_name x.rec_binder) defs
+          let defined = List.map (fun x -> Binder.to_name x.node.rec_binder) defs
 
           in
             Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
@@ -4424,7 +4420,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
            StringMap.empty)
       | Foreign _ -> assert false
       | Typenames ts ->
-          let env = List.fold_left (fun env (name, vars, (_, dt'), _) ->
+          let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
               match dt' with
                 | Some dt ->
                     bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))

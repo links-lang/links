@@ -898,18 +898,18 @@ object (self)
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
         let (mutual_env, venvs_map, ts) =
-          List.fold_left (fun (alias_env, venvs_map, ts) (t, args, (d, _), pos) ->
+          List.fold_left (fun (alias_env, venvs_map, ts) {node=(t, args, (d, _)); pos} ->
             let args = List.map fst args in
             let qs, var_env =  Desugar.desugar_quantifiers closed_env args d pos in
             let alias_env = SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)) in
             let venvs_map = StringMap.add t var_env venvs_map in
             let args = List.map2 (fun x y -> (x, Some y)) args qs in
-            (alias_env, venvs_map, (t, args, (d, None), pos) :: ts))
+            (alias_env, venvs_map, WithPos.make ~pos (t, args, (d, None)) :: ts))
             (alias_env, venvs_map, []) ts in
 
         (* First gather any types which require an implicit effect variable. *)
         let (implicits, dep_graph) =
-          List.fold_left (fun (implicits, dep_graph) (t, _, (d, _), _) ->
+          List.fold_left (fun (implicits, dep_graph) {node=(t, _, (d, _)); _} ->
               let d = Desugar.cleanup_effects mutual_env d in
               let eff = Desugar.gather_mutual_info mutual_env d in
               let has_imp = eff#has_implicit in
@@ -935,7 +935,7 @@ object (self)
         in
         (* Now patch up the types to include this effect variable. *)
         let (mutual_env, venvs_map, ts) =
-          List.fold_left (fun (alias_env, venvs_map, ts) ((t, args, (d, _), pos)  as tn)->
+          List.fold_left (fun (alias_env, venvs_map, ts) ({node=(t, args, (d, _)); pos} as tn) ->
               if StringMap.find t implicits then
                 let var = Types.fresh_raw_variable () in
                 let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
@@ -950,14 +950,14 @@ object (self)
                     shared_effect = Some (lazy (Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid)))) }
                 in
                 let venvs_map = StringMap.add t var_env venvs_map in
-                (alias_env, venvs_map, (t, args, (d, None), pos) :: ts)
+                (alias_env, venvs_map, WithPos.make ~pos (t, args, (d, None)) :: ts)
               else
                 (alias_env, venvs_map, tn :: ts)) (mutual_env, venvs_map, []) ts
         in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
         let desugared_mutuals =
-          List.map (fun (name, args, dt, pos) ->
+          List.map (fun {node=(name, args, dt); pos} ->
             (* Desugar the datatype *)
             let var_env = StringMap.find name venvs_map in
             let dt' = Desugar.datatype' var_env mutual_env dt in
@@ -966,13 +966,13 @@ object (self)
               match dt' with
                | (t, Some dt) -> (t, dt)
                | _ -> assert false in
-            (name, args, (t, Some dt), pos)
+            WithPos.make ~pos (name, args, (t, Some dt))
           ) ts in
 
         (* Given the desugared datatypes, we now need to handle linearity.
            First, calculate linearity up to recursive application *)
         let linearity_env =
-          List.fold_left (fun lin_map (name, _, (_, dt), _) ->
+          List.fold_left (fun lin_map {node=(name, _, (_, dt)); _} ->
             let dt = OptionUtils.val_of dt in
             let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
             lin_map) StringMap.empty desugared_mutuals in
@@ -1005,7 +1005,7 @@ object (self)
         (* NB: type aliases are scoped; we allow shadowing.
            We also allow type aliases to shadow abstract types. *)
         let alias_env =
-          List.fold_left (fun alias_env (t, args, (_, dt'), _) ->
+          List.fold_left (fun alias_env {node=(t, args, (_, dt')); _} ->
             let dt = OptionUtils.val_of dt' in
             let semantic_qs = List.map (snd ->- val_of) args in
             let alias_env =
