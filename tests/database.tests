@@ -72,6 +72,16 @@ stderr : @..*
 exit : 1
 
 Nested query annotations (4)
-query plain { query plain { for (i <- [1,2,3]) [(x = i)] } }
+query flat { query flat { for (i <- [1,2,3]) [(x = i)] } }
 stdout : [(x = 1), (x = 2), (x = 3)] : [(x:Int)]
 exit : 0
+
+Nested query annotations (5)
+query nested { query flat { for (i <- [1,2,3]) [(x = i)] } }
+stderr : @..*
+exit : 1
+
+Nested query annotations (5)
+query flat { query nested { for (i <- [1,2,3]) [(x = i)] } }
+stderr : @..*
+exit : 1
