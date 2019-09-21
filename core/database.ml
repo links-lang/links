@@ -2,6 +2,8 @@ open List
 open CommonTypes
 open Utility
 
+module TP = TypePrinter.BySetting
+
 type database = Value.database
 let runtime_error str = (Errors.runtime_error str)
 
@@ -44,7 +46,7 @@ let value_of_db_string (value:string) t =
        else Value.box_float (float_of_string value)
     | t -> raise (runtime_error
       ("value_of_db_string: unsupported datatype: '" ^
-        Types.Print.string_of_datatype t ^"'"))
+        TP.string_of_datatype t ^"'"))
 
 let execute_command  (query:string) (db: database) : Value.t =
   let result = (db#exec query) in
@@ -111,7 +113,7 @@ let result_signature field_types result =
               ("Column " ^ name ^
                " had no type info in query's type spec: " ^
                mapstrcat ", " (fun (name, t) -> name ^ ":" ^
-                 Types.Print.string_of_datatype t)
+                 TP.string_of_datatype t)
                field_types))
     in let rs, null_query = rs 0
     in if null_query then [] else rs

@@ -3,6 +3,9 @@
 open CommonTypes
 
 
+module Types = TypePrinter.BySettingPrintableTypes
+
+
 type scope = Var.Scope.t
   [@@deriving show]
 (* term variables *)

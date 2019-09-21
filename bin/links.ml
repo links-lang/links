@@ -3,7 +3,7 @@ open Performance
 open Utility
 
 module BS = Basicsettings
-
+module TP = TypePrinter.BySetting
 
 (** Ensure the settings were parsed correctly *)
 let _ = ParseSettings.validate_settings ()
@@ -18,7 +18,7 @@ let print_simple rtype value =
   print_string (Value.string_of_value value);
   print_endline
     (if Settings.get_value (BS.printing_types) then
-          " : " ^ Types.Print.string_of_datatype rtype
+          " : " ^ TP.string_of_datatype rtype
         else
           "")
 

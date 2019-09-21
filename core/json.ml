@@ -3,6 +3,8 @@ open ProcessTypes
 open CommonTypes
 open Utility
 
+module TP = TypePrinter.Raw
+
 (* Setting *)
 let show_json = Basicsettings.Json.show_json
 
@@ -41,7 +43,7 @@ let json_of_table ((db, params), name, keys, row) =
   let json_of_key k = "[" ^ (mapstrcat ", " (fun x -> x) k) ^ "]" in
   let json_of_keylist ks = "[" ^ (mapstrcat ", " json_of_key ks) ^ "]" in
     "{_table:{db:'" ^ json_of_db (db, params) ^ "',name:\"" ^ name ^
-      "\",row:\"" ^ Types.Print.string_of_datatype (`Record row) ^
+      "\",row:\"" ^ TP.string_of_datatype (`Record row) ^
       "\",keys:\"" ^ json_of_keylist keys ^ "\"}}"
 
 let js_dq_escape_string str =

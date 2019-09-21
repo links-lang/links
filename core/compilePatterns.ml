@@ -32,7 +32,8 @@ struct
     | Constant of Constant.t
     | Variable of binder
     | As       of binder * t
-    | HasType  of t * Types.datatype
+    | HasType  of t * (Types.datatype
+         [@printer TypePrinter.BySetting.pp_datatype ])
     [@@deriving show]
 
   type context =
@@ -1122,4 +1123,3 @@ let compile_choices
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled choices: "^(string_of_computation result));
       result
-

@@ -3,6 +3,7 @@ open Notfound
 open ProcessTypes
 open Var
 
+module TP = TypePrinter.BySetting
 
 let _ = ParseSettings.config_file
 
@@ -181,7 +182,7 @@ let split_html : xml -> xml * xml =
   | [Node ("body", xs)] -> [], xs
   | xs -> [], xs
 
-type table = (database * string) * string * string list list * Types.row
+type table = (database * string) * string * string list list * (Types.row [@printer TypePrinter.BySetting.pp_row] )
   [@@deriving show]
 
 type primitive_value_basis =  [
@@ -838,7 +839,7 @@ let compress_primitive_value : primitive_value -> [>compressed_primitive_value]=
   function
     | #primitive_value_basis as v -> v
     | `Table ((_database, db), table, keys, row) ->
-        `Table (db, table, keys, Types.Print.string_of_datatype (`Record row))
+        `Table (db, table, keys, TP.string_of_datatype (`Record row))
     | `Database (_database, s) -> `Database s
 
 let rec compress_continuation cont : compressed_continuation = Continuation.compress ~compress_val cont

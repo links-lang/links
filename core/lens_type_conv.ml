@@ -39,7 +39,7 @@ let rec lens_phrase_type_of_type t =
         failwith
         @@ Format.asprintf
              "Unsupported primitive type %a in lens_phrase_type_of_type."
-             Types.pp_typ t )
+             TypePrinter.Pretty.pp_datatype t )
   | `Record (r, _, _) ->
       let fields =
         Utility.StringMap.to_alist r
@@ -56,7 +56,7 @@ let rec lens_phrase_type_of_type t =
   | _ ->
       failwith
       @@ Format.asprintf "Unsupported type %a in lens_phrase_type_of_type."
-           Types.pp_typ t
+           TypePrinter.Pretty.pp_datatype t
 
 let lens_type_of_type ~die t =
   match TypeUtils.concrete_type t with

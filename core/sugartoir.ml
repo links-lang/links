@@ -6,6 +6,8 @@ open SourceCode.WithPos
 open Ir
 open Var
 
+module TP = TypePrinter.BySetting
+
 (* {0 Sugar To IR}
 
    This module implements a compiler from the syntactic sugar to the
@@ -860,7 +862,7 @@ struct
                   with
                       Instantiate.ArityMismatch (expected, provided) ->
                         raise (Errors.TypeApplicationArityMismatch { pos;
-                          name=(Types.Print.string_of_datatype vt); expected; provided })
+                          name=(TP.string_of_datatype vt); expected; provided })
                 end
           | TupleLit [e] ->
               (* It isn't entirely clear whether there should be any 1-tuples at this stage,

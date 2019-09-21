@@ -19,8 +19,7 @@ val intset_of_typevarset : TypeVarSet.t -> Utility.IntSet.t
 (* points *)
 type 'a point = 'a Unionfind.point
 
-type kind = PrimaryKind.t * subkind
-    [@@deriving eq,show]
+type kind = PrimaryKind.t * subkind [@@deriving eq, show]
 
 type 't meta_type_var_non_rec_basis =
     [ `Var of (int * subkind * freedom)
@@ -67,6 +66,7 @@ type ('t, 'r) session_type_basis =
     | `Choice of 'r
     | `Dual of 't
     | `End ]
+  [@@deriving show]
 
 (* End Lenses *)
 
@@ -74,7 +74,7 @@ type ('t, 'r) session_type_basis =
 
 type rec_id =
   | MuBoundId of int
-  | NominalId of string [@@deriving show]
+  | NominalId of string
 
 module type RECIDMAP = Utility.Map with type key = rec_id
 module RecIdMap : RECIDMAP
@@ -125,7 +125,6 @@ and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of me
 and quantifier = int * kind
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
-    [@@deriving show]
 
 type session_type = (typ, row) session_type_basis
 
@@ -163,7 +162,7 @@ val dual_row : row -> row
 val dual_type : datatype -> datatype
 
 val type_var_number : quantifier -> int
-type alias_type = quantifier list * typ [@@deriving show]
+type alias_type = quantifier list * typ
 
 type tycon_spec = [
   | `Alias of alias_type
@@ -383,10 +382,3 @@ class virtual type_predicate :
 
 module Transform : TYPE_VISITOR
 module ElimRecursiveTypeCyclesTransform : TYPE_VISITOR
-
-val raw_show_datatype : datatype -> string
-val raw_show_row : row -> string
-
-val raw_pp_datatype : Format.formatter -> datatype -> unit
-val raw_pp_tycon_spec: Format.formatter -> tycon_spec -> unit
-val raw_pp_row : Format.formatter -> row -> unit

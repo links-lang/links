@@ -2,6 +2,8 @@
 
 open Utility
 
+(* module Types = TypePrinter.BySettingPrintableTypes *)
+
 module Scope = struct
   type t = Local | Global
   [@@deriving show]
@@ -18,7 +20,10 @@ end
 (** Term variables *)
 type var = int
   [@@deriving show,eq,yojson]
-type var_info = Types.datatype * string * Scope.t
+type var_info =
+  (Types.datatype [@printer TypePrinter.BySetting.pp_datatype ]) *
+    string *
+    Scope.t
   [@@deriving show]
 type binder = var * var_info
   [@@deriving show]

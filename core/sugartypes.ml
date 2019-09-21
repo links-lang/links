@@ -7,6 +7,9 @@ open Utility
 
 type name = string [@@deriving show]
 
+module Types = TypePrinter.BySettingPrintableTypes
+
+
 module Binder: sig
   type t
   and with_pos = t WithPos.t

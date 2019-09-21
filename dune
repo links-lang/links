@@ -8,6 +8,7 @@
           -warn-error -a   ;; Do not treat warnings as errors.
           -w A-4-44-45-60  ;; Ignores warnings 4, 44, 45, and 60.
           -g               ;; Adds debugging information to the resulting executable / library.
+;;          -dsource
          )))
  (release
   (flags (:standard

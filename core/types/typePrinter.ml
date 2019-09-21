@@ -1,7 +1,190 @@
-(** Type printers *)
-(* Do not use this module directly, but its export via Types.Print *)
+open Types
+open CommonTypes
 
-open TypesBase
+
+module type TYPE_PRINTER_T =
+sig
+
+  val pp_datatype : Format.formatter -> datatype -> unit
+  val pp_quantifier : Format.formatter -> quantifier -> unit
+  val pp_type_arg : Format.formatter -> type_arg -> unit
+  val pp_row : Format.formatter -> row -> unit
+
+  val string_of_datatype : Types.datatype -> string
+  val string_of_field_spec: Types.field_spec -> string
+  val string_of_type_arg : Types.type_arg -> string
+  val string_of_row : Types.row -> string
+  val string_of_quantifier : Types.quantifier -> string
+  val string_of_tycon_spec : Types.tycon_spec -> string
+
+end
+
+
+module DecycleTypes  =
+struct
+  let elim_recursive_type_cycles_visitor = new ElimRecursiveTypeCyclesTransform.visitor
+
+  let datatype t = fst (elim_recursive_type_cycles_visitor#typ t)
+  let row r = fst (elim_recursive_type_cycles_visitor#row r)
+  let field_spec p = fst (elim_recursive_type_cycles_visitor#field_spec p)
+  let type_arg ta = fst (elim_recursive_type_cycles_visitor#type_arg ta)
+  let row_var rv = fst (elim_recursive_type_cycles_visitor#row_var rv)
+  let quantifier q = fst (elim_recursive_type_cycles_visitor#quantifier q)
+
+end
+
+
+
+
+
+module type PRINTABLE_TYPES =
+sig
+
+  include (module type of Types)
+  include TYPE_PRINTER_T
+
+end
+
+
+
+
+
+
+module Raw : TYPE_PRINTER_T =
+struct
+
+  type 'a point = 'a Unionfind.point [@@deriving show]
+
+
+  (* Workaround *)
+  module Stdlib =
+  struct
+    type 'a ref = 'a Pervasives.ref [@@deriving show]
+  end
+
+  type 't meta_type_var_non_rec_basis =
+    [ `Var of (int * subkind * freedom)
+    | `Body of 't ]
+      [@@deriving show]
+
+  type 't meta_type_var_basis =
+    [ 't meta_type_var_non_rec_basis
+    | `Recursive of (int * 't) ]
+      [@@deriving show]
+
+  type 'r meta_row_var_basis =
+    [ 'r meta_type_var_basis | `Closed ]
+      [@@deriving show]
+
+  type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
+                                      [@@deriving show]
+
+
+
+
+
+(* type ('a, 'b) session_type_basis   = [%import: (a', 'b) Types.session_type_basis ]
+ * [@@deriving show] *)
+
+
+  type  rec_id            = [%import: Types.rec_id]
+  and  tygroup           = [%import: Types.tygroup]
+  and  rec_appl          = [%import: Types.rec_appl]
+  and  typ               =  [%import: Types.typ]
+  and  field_spec        =  [%import: Types.field_spec]
+  and  field_spec_map    =  [%import: Types.field_spec_map]
+  and  row_var           =  [%import: Types.row_var]
+  and  row               =  [%import: Types.row]
+  and  meta_type_var     =  [%import: Types.meta_type_var]
+  and  meta_row_var      =  [%import: Types.meta_row_var]
+  and  meta_presence_var =  [%import: Types.meta_presence_var]
+  and  meta_var          =  [%import: Types.meta_var]
+  and  quantifier        =  [%import: Types.quantifier]
+  and  type_arg          =  [%import: Types.type_arg]
+  and  tycon_spec        = [%import: Types.tycon_spec]
+  and  alias_type        = [%import: Types.alias_type]
+  and session_type =  [%import: Types.session_type ]
+  [@@deriving show]
+
+
+
+
+
+
+
+
+  (* We replace some of the generated printing functions here such that
+   they may use our own printing functions instead. If the generated functions are
+   to be used, we remove potential cycles arising from recursive types/rows first.
+   They are here because they are needed
+   by the generated code for printing the IR, do not call them yourself.
+   Use string_of_* instead *)
+
+
+
+  let mk_decycled_pp pp_fun decycle_fun fmt scrutinee =
+    pp_fun fmt (decycle_fun scrutinee)
+
+
+  let pp_datatype : Format.formatter -> datatype -> unit =
+    mk_decycled_pp pp_typ DecycleTypes.datatype
+
+  let pp_quantifier : Format.formatter -> quantifier -> unit =
+    mk_decycled_pp pp_quantifier DecycleTypes.quantifier
+
+
+  let pp_row : Format.formatter -> row -> unit =
+    mk_decycled_pp pp_row DecycleTypes.row
+
+  let pp_type_arg : Format.formatter -> type_arg -> unit =
+    mk_decycled_pp pp_type_arg DecycleTypes.type_arg
+
+
+  let pp_tycon_spec : Format.formatter -> tycon_spec -> unit =
+    let decycle_tycon_spec = function
+      | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
+      | other -> other in
+    mk_decycled_pp  pp_tycon_spec decycle_tycon_spec
+
+
+
+
+
+
+let mk_string_of_fn fn x =
+  Format.asprintf "%a" fn x
+
+
+let string_of_quantifier : quantifier -> string =
+ mk_string_of_fn pp_quantifier
+
+let string_of_datatype : datatype -> string =
+  mk_string_of_fn pp_datatype
+
+let string_of_row : row -> string =
+  mk_string_of_fn pp_row
+
+let string_of_type_arg : type_arg -> string =
+  mk_string_of_fn pp_type_arg
+
+let string_of_field_spec : field_spec -> string =
+  mk_string_of_fn pp_field_spec
+
+let string_of_tycon_spec : tycon_spec -> string =
+  mk_string_of_fn pp_tycon_spec
+
+end
+
+
+
+
+module Pretty  =
+struct
+
+(** Type printers *)
+(* Do not use this module directly, but its export via TP.*)
+
+open Types
 
 open Utility
 open CommonTypes
@@ -583,65 +766,148 @@ See Note [Variable names in error messages].
 
  *)
 
-module DecycleTypes  =
-struct
-  let elim_recursive_type_cycles_visitor = new ElimRecursiveTypeCyclesTransform.visitor
 
-  let datatype t = fst (elim_recursive_type_cycles_visitor#typ t)
-  let row r = fst (elim_recursive_type_cycles_visitor#row r)
-  (*let field_spec p = fst (elim_recursive_type_cycles_visitor#field_spec p)
-  let type_arg ta = fst (elim_recursive_type_cycles_visitor#type_arg ta)
-  let row_var rv = fst (elim_recursive_type_cycles_visitor#row_var rv)
-  let quantifier q = fst (elim_recursive_type_cycles_visitor#quantifier q) *)
-
-end
 
 (* string conversions *)
 
 
-let string_of_datatype ?(policy=default_policy) ?(refresh_tyvar_names=true)
-                       (t : datatype) =
-  if Settings.get_value Basicsettings.print_types_pretty then
-    let policy = policy () in
-    let t = if policy.quantifiers then t
-            else strip_quantifiers t in
-    build_tyvar_names ~refresh_tyvar_names Vars.free_bound_type_vars [t];
-    let context = context_with_shared_effect policy (fun o -> o#typ t) in
-    datatype context (policy, tyvar_name_map) t
-  else
-    raw_show_datatype (DecycleTypes.datatype t)
+let pol_string_of_datatype ?(policy=default_policy) ?(refresh_tyvar_names=true)
+      (t : datatype) =
+  let policy = policy () in
+  let t = if policy.quantifiers then t
+          else strip_quantifiers t in
+  build_tyvar_names ~refresh_tyvar_names Vars.free_bound_type_vars [t];
+  let context = context_with_shared_effect policy (fun o -> o#typ t) in
+  datatype context (policy, tyvar_name_map) t
 
-let string_of_row ?(policy=default_policy) ?(refresh_tyvar_names=true) therow =
-  if Settings.get_value Basicsettings.print_types_pretty then
-    let policy = policy () in
-    build_tyvar_names ~refresh_tyvar_names Vars.free_bound_row_type_vars [therow];
-    let context = context_with_shared_effect policy (fun o -> o#row therow) in
-    row "," context (policy, tyvar_name_map) therow
-  else
-    raw_show_row (DecycleTypes.row therow)
 
-let string_of_presence ?(policy=default_policy) ?(refresh_tyvar_names=true)
-                       (f : field_spec) =
+let pol_string_of_row ?(policy=default_policy) ?(refresh_tyvar_names=true) therow =
+  let policy = policy () in
+  build_tyvar_names ~refresh_tyvar_names Vars.free_bound_row_type_vars [therow];
+  let context = context_with_shared_effect policy (fun o -> o#row therow) in
+  row "," context (policy, tyvar_name_map) therow
+
+
+let pol_string_of_presence ?(policy=default_policy) ?(refresh_tyvar_names=true)
+      (f : field_spec) =
   build_tyvar_names ~refresh_tyvar_names FreeTypeVars.free_bound_field_spec_type_vars [f];
   presence empty_context (policy (), tyvar_name_map) f
 
-let string_of_type_arg ?(policy=default_policy) ?(refresh_tyvar_names=true)
-                       (arg : type_arg) =
+let pol_string_of_type_arg ?(policy=default_policy) ?(refresh_tyvar_names=true)
+      (arg : type_arg) =
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names FreeTypeVars.free_bound_type_arg_type_vars [arg];
   let context = context_with_shared_effect policy (fun o -> o#type_arg arg) in
   type_arg context (policy, tyvar_name_map) arg
 
-let string_of_row_var ?(policy=default_policy) ?(refresh_tyvar_names=true) the_row_var =
+let pol_string_of_row_var ?(policy=default_policy) ?(refresh_tyvar_names=true) the_row_var =
   build_tyvar_names ~refresh_tyvar_names FreeTypeVars.free_bound_row_var_vars [the_row_var];
   match row_var name_of_type "," empty_context (policy (), tyvar_name_map) the_row_var
   with | None -> ""
        | Some s -> s
 
-let string_of_tycon_spec ?(policy=default_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
+let pol_string_of_tycon_spec ?(policy=default_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
   build_tyvar_names ~refresh_tyvar_names FreeTypeVars.free_bound_tycon_type_vars [tycon];
   tycon_spec empty_context (policy (), tyvar_name_map) tycon
 
-let string_of_quantifier ?(policy=default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
+let pol_string_of_quantifier ?(policy=default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
   build_tyvar_names ~refresh_tyvar_names FreeTypeVars.free_bound_quantifier_vars [quant];
   quantifier (policy (), tyvar_name_map) quant
+
+
+
+
+let string_of_datatype t = pol_string_of_datatype t
+let string_of_row r = pol_string_of_row r
+let string_of_field_spec p = pol_string_of_presence p
+let string_of_type_arg ta = pol_string_of_type_arg ta
+let string_of_quantifier q = pol_string_of_quantifier q
+let string_of_tycon_spec ts = pol_string_of_tycon_spec ts
+
+
+let mk_pp_fn fmt string_of_fn =
+  fun t -> Format.pp_print_string fmt (string_of_fn t)
+
+let pp_datatype : Format.formatter -> datatype -> unit =
+  fun fmt -> mk_pp_fn fmt string_of_datatype
+
+let pp_row : Format.formatter -> row -> unit =
+  fun fmt -> mk_pp_fn fmt string_of_row
+
+let pp_quantifier : Format.formatter -> quantifier -> unit =
+  fun fmt -> mk_pp_fn fmt string_of_quantifier
+
+let pp_type_arg : Format.formatter -> type_arg -> unit =
+  fun fmt -> mk_pp_fn fmt string_of_type_arg
+
+
+end
+
+
+module PrettyWithPolicy =
+struct
+
+type policy = Pretty.policy =
+  {quantifiers:bool;
+   flavours:bool;
+   hide_fresh:bool;
+   kinds:string;
+   effect_sugar:bool}
+
+let default_policy = Pretty.default_policy
+
+let build_tyvar_names = Pretty.build_tyvar_names
+let add_tyvar_names = Pretty.add_tyvar_names
+
+let string_of_datatype = Pretty.pol_string_of_datatype
+let string_of_row  = Pretty.pol_string_of_row
+let string_of_field_spec  = Pretty.pol_string_of_presence
+let string_of_type_arg = Pretty.pol_string_of_type_arg
+let string_of_quantifier = Pretty.pol_string_of_quantifier
+let string_of_tycon_spec = Pretty.pol_string_of_tycon_spec
+let string_of_row_var = Pretty.pol_string_of_row_var
+
+end
+
+
+
+
+
+
+module BySetting =
+(val
+   (if Settings.get_value Basicsettings.print_types_pretty then
+     (module Pretty : TYPE_PRINTER_T)
+   else
+     (module Raw : TYPE_PRINTER_T)))
+
+
+
+
+module RawPrintableTypes =
+struct
+
+include Types
+include Raw
+
+end
+
+
+
+module PrettyPrintableTypes =
+struct
+
+include Types
+include Pretty
+
+end
+
+
+
+module BySettingPrintableTypes =
+struct
+
+include Types
+include BySetting
+
+end

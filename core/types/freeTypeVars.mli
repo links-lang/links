@@ -1,7 +1,7 @@
 (* Detection of free variables in types *)
-(* Do not use this module directly, but its export via Types.Vars *)
+(* Do not use this module directly, but its export via FreeTypeVars.*)
 
-open TypesBase
+open Types
 open CommonTypes
 
 

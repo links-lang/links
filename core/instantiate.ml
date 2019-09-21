@@ -4,6 +4,9 @@ open Types
 
 exception ArityMismatch of (int * int)
 
+module TP = TypePrinter.Pretty
+
+
 let internal_error message =
   Errors.internal_error ~filename:"instantiate.ml" ~message
 
@@ -207,7 +210,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
     | `ForAll (quantifiers, t) as dtype ->
         let () =
           Debug.if_set (show_instantiation)
-            (fun () -> "Instantiating datatype: " ^ TypePrinter.string_of_datatype dtype) in
+            (fun () -> "Instantiating datatype: " ^ TP.string_of_datatype dtype) in
 
         let wrap var subkind =
           if rigid then `Var (var, subkind, `Rigid)
@@ -243,7 +246,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
         let tys = List.rev tys in
         (* let qs = List.rev qs in *)
         let body = instantiate_datatype (tenv, renv, penv) t in
-        Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> TypePrinter.string_of_type_arg t) tys);
+        Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> TP.string_of_type_arg t) tys);
         tys, body
     | t -> [], t
 
@@ -340,7 +343,7 @@ let populate_instantiation_maps ~name qs tyargs =
              raise (internal_error
                ("Kind mismatch in type application: " ^
                 name ^ " applied to type arguments: " ^
-                mapstrcat ", " (fun t -> TypePrinter.string_of_type_arg t) tyargs)))
+                mapstrcat ", " (fun t -> TP.string_of_type_arg t) tyargs)))
     qs tyargs (IntMap.empty, IntMap.empty, IntMap.empty)
 
 let instantiation_maps_of_type_arguments :
@@ -357,10 +360,10 @@ let instantiation_maps_of_type_arguments :
 
     if (not arities_okay) then
       (Debug.print (Printf.sprintf "# Type variables (total %d)" vars_length);
-       let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Types.show_quantifier t) vars in
+       let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ TP.string_of_quantifier t) vars in
        Debug.print tyvars;
        Debug.print (Printf.sprintf "\n# Type arguments (total %d)" tyargs_length);
-       let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ TypePrinter.string_of_type_arg arg) tyargs in
+       let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ TP.string_of_type_arg arg) tyargs in
        Debug.print tyargs';
        (* We don't have position information at this point. Any code invoking this
         * should either have done this check already, or does not have the position
@@ -372,7 +375,7 @@ let instantiation_maps_of_type_arguments :
         vars, []
       else
         (take tyargs_length vars, drop tyargs_length vars) in
-    let tenv, renv, penv = populate_instantiation_maps ~name:(TypePrinter.string_of_datatype pt) vars tyargs in
+    let tenv, renv, penv = populate_instantiation_maps ~name:(TP.string_of_datatype pt) vars tyargs in
     match remaining_quantifiers with
       | [] -> t, (tenv, renv, penv)
       | _ -> `ForAll (remaining_quantifiers, t),  (tenv, renv, penv)

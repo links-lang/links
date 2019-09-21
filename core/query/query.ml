@@ -2,6 +2,13 @@ open Utility
 open CommonTypes
 open Var
 
+
+(* This module is equivalent to Types, but provides additional pretty
+   printing functions. It is only here so that types from the Types
+   module can be used in type definitions in this module that provide
+   pretty printing functions *)
+module PTypes = TypePrinter.BySettingPrintableTypes
+
 let internal_error message =
   Errors.internal_error ~filename:"query/query.ml" ~message
 
@@ -34,7 +41,7 @@ struct
       | Apply     of string * t list
       | Closure   of (Ir.var list * Ir.computation) * env
       | Primitive of string
-      | Var       of Var.var * Types.datatype StringMap.t
+      | Var       of Var.var * PTypes.datatype StringMap.t
       | Constant  of Constant.t
   and env = Value.env * t Env.Int.t
       [@@deriving show]
@@ -112,6 +119,8 @@ let used_database v : Value.database option =
 module S =
 struct
 
+
+
   (** [pt]: A printable version of [t] *)
   type pt =
     | For       of (Var.var * pt) list * pt list * pt
@@ -127,7 +136,7 @@ struct
     | Apply     of string * pt list
     | Lam       of Ir.var list * Ir.computation
     | Primitive of string
-    | Var       of (Var.var * Types.datatype StringMap.t)
+    | Var       of (Var.var * PTypes.datatype StringMap.t)
     | Constant  of Constant.t
       [@@deriving show]
 

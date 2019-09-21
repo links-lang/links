@@ -3,6 +3,8 @@ open CommonTypes
 open Ir
 open Var
 
+module TP = TypePrinter.BySetting
+
 let internal_error message =
   Errors.internal_error ~filename:"irTraversals.ml" ~message
 
@@ -216,8 +218,8 @@ struct
                     (Printf.sprintf
                        "Arity mismatch in type application (Ir.Transform). Expression: %s\n type: %s\n args: %s\n"
                        (show_value (TApp (v, ts)))
-                       (Types.Print.string_of_datatype t)
-                       (String.concat "," (List.map (fun t -> Types.Print.string_of_type_arg t) ts))))
+                       (TP.string_of_datatype t)
+                       (String.concat "," (List.map (fun t -> TP.string_of_type_arg t) ts))))
               end
         | XmlNode (tag, attributes, children) ->
             let (attributes, _, o) = o#name_map (fun o -> o#value) attributes in

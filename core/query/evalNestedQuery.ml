@@ -2,6 +2,7 @@ open Utility
 open CommonTypes
 module Q = Query
 module QL = Query.Lang
+module TP = TypePrinter.BySetting
 
 (* generate a unique tag for each comprehension in
    a normalised query
@@ -91,7 +92,7 @@ struct
     | `Application (l, [`Type t]) when l = Types.list ->
        `List (nested_type_of_type t)
     | t ->
-       Debug.print ("Can't convert to nested_type: " ^ Types.Print.string_of_datatype t);
+       Debug.print ("Can't convert to nested_type: " ^ TP.string_of_datatype t);
        assert false
 
   (* erase annotations from a package to obtain the underlying type *)

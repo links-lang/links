@@ -3,6 +3,7 @@ open Webserver
 open Performance
 open Utility
 
+module TP = TypePrinter.BySetting
 module BS = Basicsettings
 module Eval = Evalir.Eval(Webserver)
 module Webif = Webif.WebIf(Webserver)
@@ -125,7 +126,7 @@ struct
     (if Settings.get_value Basicsettings.Ir.show_lib_function_env then
       (Debug.print "lib.ml mappings:";
       Env.String.iter (fun name var -> Debug.print (string_of_int var ^ " -> " ^ name ^ " :: " ^
-        Types.Print.string_of_datatype (Env.String.lookup Lib.typing_env.Types.var_env name ) )) Lib.nenv));
+        TP.string_of_datatype (Env.String.lookup Lib.typing_env.Types.var_env name ) )) Lib.nenv));
 
     let load_prelude_inner () =
       let open Loader in
