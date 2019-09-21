@@ -1,7 +1,7 @@
 
 open Types
 
-module type TYPE_PRINTER_T =
+module type TYPE_PRINTER =
 sig
 
   val pp_datatype : Format.formatter -> datatype -> unit
@@ -20,15 +20,21 @@ end
 
 
 
+(* A type printer that uses auto-generated functions *)
+module Raw       : TYPE_PRINTER
 
-module Raw       : TYPE_PRINTER_T
-module Pretty    : TYPE_PRINTER_T
-module BySetting : TYPE_PRINTER_T
+(* A type printer that uses our own, hand-crafted printing functions *)
+module Pretty    : TYPE_PRINTER
+
+(* A printer behaving like one of the two above,
+   based on the setting print_types_pretty *)
+module BySetting : TYPE_PRINTER
 
 
 
 
-
+(* A printer similar to Pretty, but exposes more fine-grained control
+   over its behavior *)
 module PrettyWithPolicy :
 sig
 
@@ -63,11 +69,19 @@ end
 
 
 
+(* The modules below provide modules equivalent to the vanilla
+  Types module, but with added printing functions.
+  You can use them if you want to define a dataype that uses
+  types from Types and you want printing functions derived for
+  your new types.
+  Just shadow Types with one of the following modules then.
+*)
+
 module type PRINTABLE_TYPES =
 sig
 
 include (module type of Types)
-include TYPE_PRINTER_T
+include TYPE_PRINTER
 
 end
 

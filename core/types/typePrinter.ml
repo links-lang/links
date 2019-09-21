@@ -1,8 +1,9 @@
 open Types
 open CommonTypes
 
+open Utility
 
-module type TYPE_PRINTER_T =
+module type TYPE_PRINTER =
 sig
 
   val pp_datatype : Format.formatter -> datatype -> unit
@@ -41,7 +42,7 @@ module type PRINTABLE_TYPES =
 sig
 
   include (module type of Types)
-  include TYPE_PRINTER_T
+  include TYPE_PRINTER
 
 end
 
@@ -50,18 +51,22 @@ end
 
 
 
-module Raw : TYPE_PRINTER_T =
+module Raw : TYPE_PRINTER =
 struct
 
   type 'a point = 'a Unionfind.point [@@deriving show]
 
 
-  (* Workaround *)
+  (* Workaround for an issue where %import would replace the normal
+     ref type by Stdlib.ref *)
   module Stdlib =
   struct
     type 'a ref = 'a Pervasives.ref [@@deriving show]
   end
 
+
+
+  (* These types are not exported by Types *)
   type 't meta_type_var_non_rec_basis =
     [ `Var of (int * subkind * freedom)
     | `Body of 't ]
@@ -77,33 +82,32 @@ struct
       [@@deriving show]
 
   type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
-                                      [@@deriving show]
+       [@@deriving show]
 
 
 
 
 
-(* type ('a, 'b) session_type_basis   = [%import: (a', 'b) Types.session_type_basis ]
- * [@@deriving show] *)
-
-
-  type  rec_id            = [%import: Types.rec_id]
+ (* This has the following effect:
+    Using ppx_import, re-state the types from the Types module
+    and generate pretty printers for them *)
+  type  rec_id           = [%import: Types.rec_id]
   and  tygroup           = [%import: Types.tygroup]
   and  rec_appl          = [%import: Types.rec_appl]
-  and  typ               =  [%import: Types.typ]
-  and  field_spec        =  [%import: Types.field_spec]
-  and  field_spec_map    =  [%import: Types.field_spec_map]
-  and  row_var           =  [%import: Types.row_var]
-  and  row               =  [%import: Types.row]
-  and  meta_type_var     =  [%import: Types.meta_type_var]
-  and  meta_row_var      =  [%import: Types.meta_row_var]
-  and  meta_presence_var =  [%import: Types.meta_presence_var]
-  and  meta_var          =  [%import: Types.meta_var]
-  and  quantifier        =  [%import: Types.quantifier]
-  and  type_arg          =  [%import: Types.type_arg]
+  and  typ               = [%import: Types.typ]
+  and  field_spec        = [%import: Types.field_spec]
+  and  field_spec_map    = [%import: Types.field_spec_map]
+  and  row_var           = [%import: Types.row_var]
+  and  row               = [%import: Types.row]
+  and  meta_type_var     = [%import: Types.meta_type_var]
+  and  meta_row_var      = [%import: Types.meta_row_var]
+  and  meta_presence_var = [%import: Types.meta_presence_var]
+  and  meta_var          = [%import: Types.meta_var]
+  and  quantifier        = [%import: Types.quantifier]
+  and  type_arg          = [%import: Types.type_arg]
   and  tycon_spec        = [%import: Types.tycon_spec]
   and  alias_type        = [%import: Types.alias_type]
-  and session_type =  [%import: Types.session_type ]
+  and session_type       = [%import: Types.session_type ]
   [@@deriving show]
 
 
@@ -114,12 +118,8 @@ struct
 
 
   (* We replace some of the generated printing functions here such that
-   they may use our own printing functions instead. If the generated functions are
-   to be used, we remove potential cycles arising from recursive types/rows first.
-   They are here because they are needed
-   by the generated code for printing the IR, do not call them yourself.
-   Use string_of_* instead *)
-
+     we remove potential cycles arising from recursive types/rows first.
+   *)
 
 
   let mk_decycled_pp pp_fun decycle_fun fmt scrutinee =
@@ -182,12 +182,10 @@ module Pretty  =
 struct
 
 (** Type printers *)
-(* Do not use this module directly, but its export via TP.*)
 
-open Types
 
-open Utility
-open CommonTypes
+
+
 
 module FieldEnv = Utility.StringMap
 module Vars = FreeTypeVars
@@ -844,6 +842,9 @@ let pp_type_arg : Format.formatter -> type_arg -> unit =
 end
 
 
+
+
+
 module PrettyWithPolicy =
 struct
 
@@ -877,9 +878,9 @@ end
 module BySetting =
 (val
    (if Settings.get_value Basicsettings.print_types_pretty then
-     (module Pretty : TYPE_PRINTER_T)
+     (module Pretty : TYPE_PRINTER)
    else
-     (module Raw : TYPE_PRINTER_T)))
+     (module Raw : TYPE_PRINTER)))
 
 
 

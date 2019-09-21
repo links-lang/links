@@ -4,9 +4,10 @@ open Var
 
 
 (* This module is equivalent to Types, but provides additional pretty
-   printing functions. It is only here so that types from the Types
-   module can be used in type definitions in this module that provide
-   pretty printing functions *)
+   printing functions. We use there types from PTypes rather than
+   Types in those type definitions in this module that provide
+   pretty-printing
+ *)
 module PTypes = TypePrinter.BySettingPrintableTypes
 
 let internal_error message =

@@ -3,6 +3,10 @@
 open CommonTypes
 
 
+(* This module is equivalent to Types, but provides additional pretty
+   printing functions. We use it so that the pretty printers used for
+   the IR can access the printers for the types
+ *)
 module Types = TypePrinter.BySettingPrintableTypes
 
 
