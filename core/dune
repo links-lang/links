@@ -18,7 +18,7 @@
              conduit-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
              findlib menhirLib links.lens)
-  (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
+  (preprocess (staged_pps ppx_import ppx_deriving.std ppx_deriving_yojson)))
 
 ;; Make Query modules available.
 (copy_files# query/*.ml)
