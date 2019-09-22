@@ -1,8 +1,9 @@
 open Types
+open CommonTypes
 
 module type TYPE_PRINTER = sig
   val pp_datatype : Format.formatter -> datatype -> unit
-  val pp_quantifier : Format.formatter -> quantifier -> unit
+  val pp_quantifier : Format.formatter -> Quantifier.t -> unit
   val pp_type_arg : Format.formatter -> type_arg -> unit
   val pp_row : Format.formatter -> row -> unit
 
@@ -10,7 +11,7 @@ module type TYPE_PRINTER = sig
   val string_of_field_spec : Types.field_spec -> string
   val string_of_type_arg : Types.type_arg -> string
   val string_of_row : Types.row -> string
-  val string_of_quantifier : Types.quantifier -> string
+  val string_of_quantifier : Quantifier.t -> string
   val string_of_tycon_spec : Types.tycon_spec -> string
 end
 

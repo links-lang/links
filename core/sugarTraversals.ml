@@ -70,11 +70,11 @@ class map =
       | Project _x -> let _x = o#name _x in Project _x
       | Name _x -> let _x = o#name _x in Name _x
 
-    method subkind : subkind -> subkind = fun x -> x
+    method subkind : Subkind.t -> Subkind.t = fun x -> x
 
     method kind : kind -> kind = fun x -> x
 
-    method freedom : freedom -> freedom = fun x -> x
+    method freedom : Freedom.t -> Freedom.t = fun x -> x
 
     method type_variable : type_variable -> type_variable =
       fun (_x, _x_i1, _x_i2) ->
@@ -527,7 +527,7 @@ class map =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#patternnode p
 
-    method name : name -> name = o#string
+    method name : Name.t -> Name.t = o#string
 
     method location : Location.t -> Location.t = o#unknown
 
@@ -687,19 +687,9 @@ class map =
       | Open _xs ->
           let _xs = o#list (fun o -> o#name) _xs in
           Open _xs
-      | Typenames (ts) ->
-          let ts = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let _x = o#name _x in
-            let _x_i1 =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let _x = _x (*o#quantifier _x*) in
-                   let _x_i1 = o#unknown _x_i1
-                   in (_x, _x_i1))
-                _x_i1
-            in let _x_i2 = o#datatype' _x_i2 in (_x, _x_i1, _x_i2, _x_i3)
-          ) ts in
-          Typenames ts
+      | Typenames ts ->
+          let _x = o#list (fun o -> o#typename) ts in
+          Typenames _x
       | Infix -> Infix
       | Exp _x -> let _x = o#phrase _x in Exp _x
       | Module { binder; members } ->
@@ -718,6 +708,19 @@ class map =
     method binding : binding -> binding =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
+
+    method typenamenode : typenamenode -> typenamenode =
+      fun (_x, _x_i1, _x_i2) ->
+      let _x = o#name _x in
+      let _x_i1 = o#list (fun o (_x, _x_i1) ->
+                      let _x_i1 = o#unknown _x_i1 in (_x, _x_i1))
+                    _x_i1 in
+      let _x_i2 = o#datatype' _x_i2 in
+      (_x, _x_i1, _x_i2)
+
+    method typename : typename -> typename =
+      fun p ->
+        WithPos.map2 ~f_pos:o#position ~f_node:o#typenamenode p
 
     method function_definition : function_definition -> function_definition
       = fun { fun_binder;
@@ -740,30 +743,31 @@ class map =
         fun_frozen;
         fun_unsafe_signature; }
 
-    method recursive_function  : recursive_function -> recursive_function
+    method recursive_functionnode : recursive_functionnode -> recursive_functionnode
       = fun { rec_binder;
               rec_linearity;
               rec_definition = ((tyvar, ty), lit);
               rec_location;
               rec_signature;
               rec_unsafe_signature;
-              rec_frozen;
-              rec_pos } ->
+              rec_frozen } ->
       let rec_binder = o#binder rec_binder in
       let tyvar = o#list (fun o -> o#tyvar) tyvar in
       let ty = o#option (fun o (t, x)-> o#typ t, x) ty in
       let lit = o#funlit lit in
       let rec_location = o#location rec_location in
       let rec_signature = o#option (fun o -> o#datatype') rec_signature in
-      let rec_pos = o#position rec_pos in
       { rec_binder;
         rec_linearity;
         rec_definition = ((tyvar, ty), lit);
         rec_location;
         rec_signature;
         rec_unsafe_signature;
-        rec_frozen;
-        rec_pos; }
+        rec_frozen}
+
+    method recursive_function  : recursive_function -> recursive_function
+      = fun p ->
+        WithPos.map2 ~f_pos:o#position ~f_node:o#recursive_functionnode p
 
     method program : program -> program =
       fun (bindings, phrase) ->
@@ -833,11 +837,11 @@ class fold =
       | Project _x -> let o = o#name _x in o
       | Name _x -> let o = o#name _x in o
 
-    method subkind : subkind -> 'self_type = fun _ -> o
+    method subkind : Subkind.t -> 'self_type = fun _ -> o
 
     method kind : kind -> 'self_type = fun _ -> o
 
-    method freedom : freedom -> 'self_type = fun _ -> o
+    method freedom : Freedom.t -> 'self_type = fun _ -> o
 
     method type_variable : type_variable -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
@@ -1231,7 +1235,7 @@ class fold =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method name : name -> 'self_type = o#string
+    method name : Name.t -> 'self_type = o#string
 
     method location : Location.t -> 'self_type = o#unknown
 
@@ -1379,16 +1383,8 @@ class fold =
       | Open _xs ->
           let o = o#list (fun o -> o#name) _xs in
           o
-      | Typenames (ts) ->
-          let o = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let o = o#name _x in
-            let o =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let o = o (* #quantifier _x*) in
-                   let o = o#option (fun o -> o#tyvar) _x_i1
-                   in o) _x_i1
-            in let o = o#datatype' _x_i2 in o) ts in
+      | Typenames ts ->
+          let o = o#list (fun o -> o#typename) ts in
           o
       | Infix -> o
       | Exp _x -> let o = o#phrase _x in o
@@ -1409,6 +1405,23 @@ class fold =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
 
+    method typenamenode : typenamenode -> 'self_type =
+      fun (_x, _x_i1, _x_i2) ->
+      let o = o#name _x in
+      let o =
+        o#list
+          (fun o (_x, _x_i1) ->
+            let o = o#option (fun o -> o#tyvar) _x_i1
+            in o) _x_i1 in
+      let o = o#datatype' _x_i2 in
+      o
+
+    method typename : typename -> 'self_type =
+      WithPos.traverse
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#typenamenode v)
+
     method function_definition : function_definition -> 'self
       = fun { fun_binder;
               fun_linearity = _;
@@ -1424,22 +1437,26 @@ class fold =
           let o = o#option (fun o -> o#datatype') fun_signature in
           o
 
-    method recursive_function  : recursive_function -> 'self
+    method recursive_functionnode : recursive_functionnode -> 'self
       = fun { rec_binder;
               rec_linearity = _;
               rec_definition = ((tyvar, _), lit);
               rec_location;
               rec_signature;
               rec_unsafe_signature = _;
-              rec_frozen = _;
-              rec_pos } ->
+              rec_frozen = _} ->
       let o = o#binder rec_binder in
       let o = o#list (fun o -> o#tyvar) tyvar in
       let o = o#funlit lit in
       let o = o#location rec_location in
       let o = o#option (fun o -> o#datatype') rec_signature in
-      let o = o#position rec_pos
-      in o
+      o
+
+    method recursive_function : recursive_function -> 'self =
+      WithPos.traverse
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#recursive_functionnode v)
 
     method program : program -> 'self_type =
       fun (bindings, phrase) ->
@@ -1514,11 +1531,11 @@ class fold_map =
       | Project _x -> let (o, _x) = o#name _x in (o, Project _x)
       | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
-    method subkind : subkind -> ('self_type * subkind) = fun k -> (o, k)
+    method subkind : Subkind.t -> ('self_type * Subkind.t) = fun k -> (o, k)
 
     method kind : kind -> ('self_type * kind) = fun k -> (o, k)
 
-    method freedom : freedom -> ('self_type * freedom) = fun k -> (o, k)
+    method freedom : Freedom.t -> ('self_type * Freedom.t) = fun k -> (o, k)
 
     method type_variable : type_variable -> ('self_type * type_variable) =
       fun (_x, _x_i1, _x_i2) ->
@@ -1999,7 +2016,7 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method name : name -> ('self_type * name) = o#string
+    method name : Name.t -> ('self_type * Name.t) = o#string
 
     method location : Location.t -> ('self_type * Location.t) = o#unknown
 
@@ -2178,18 +2195,9 @@ class fold_map =
       | Open _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, Open _xs)
-      | Typenames (ts) ->
-          let (o, ts) = o#list (fun o (_x, _x_i1, _x_i2, _x_i3) ->
-            let (o, _x) = o#name _x in
-            let (o, _x_i1) =
-              o#list
-                (fun o (_x, _x_i1) ->
-                   let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
-                   in (o, (_x, _x_i1)))
-                _x_i1 in
-            let (o, _x_i2) = o#datatype' _x_i2
-            in (o, (_x, _x_i1, _x_i2, _x_i3))) ts
-          in (o, Typenames ts)
+      | Typenames ts ->
+          let (o, _x) = o#list (fun o -> o#typename) ts in
+          (o, (Typenames _x))
       | Infix -> (o, Infix)
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
       | Module { binder; members } ->
@@ -2212,6 +2220,24 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
 
+    method typenamenode : typenamenode -> ('self_type * typenamenode) =
+      fun (_x, _x_i1, _x_i2) ->
+      let (o, _x) = o#name _x in
+      let (o, _x_i1) =
+        o#list
+          (fun o (_x, _x_i1) ->
+            let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
+            in (o, (_x, _x_i1)))
+          _x_i1 in
+      let (o, _x_i2) = o#datatype' _x_i2
+      in (o, (_x, _x_i1, _x_i2))
+
+    method typename : typename -> ('self_type * typename) =
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#typenamenode v)
+
     method function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;
               fun_linearity;
@@ -2232,28 +2258,31 @@ class fold_map =
             fun_frozen;
             fun_unsafe_signature; })
 
-    method recursive_function  : recursive_function -> 'self * recursive_function
+    method recursive_functionnode  : recursive_functionnode -> 'self * recursive_functionnode
       = fun { rec_binder;
               rec_linearity;
               rec_definition = (ty, lit);
               rec_location;
               rec_signature;
               rec_unsafe_signature;
-              rec_frozen;
-              rec_pos } ->
+              rec_frozen } ->
       let o, rec_binder = o#binder rec_binder in
       let o, lit = o#funlit lit in
       let o, rec_location = o#location rec_location in
       let o, rec_signature = o#option (fun o -> o#datatype') rec_signature in
-      let o, rec_pos = o#position rec_pos in
       (o, { rec_binder;
             rec_linearity;
             rec_definition = (ty, lit);
             rec_location;
             rec_signature;
             rec_unsafe_signature;
-            rec_frozen;
-            rec_pos })
+            rec_frozen})
+
+    method recursive_function  : recursive_function -> 'self * recursive_function =
+      WithPos.traverse_map
+        ~o
+        ~f_pos:(fun o v -> o#position v)
+        ~f_node:(fun o v -> o#recursive_functionnode v)
 
     method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       Binder.traverse_map

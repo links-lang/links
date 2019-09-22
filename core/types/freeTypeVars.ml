@@ -19,8 +19,8 @@ type names  = (int, string * spec) Hashtbl.t
 
 
 
-let varspec_of_tyvar q =
-  var_of_quantifier q, (`Rigid, primary_kind_of_quantifier q, `Bound)
+  let varspec_of_tyvar q =
+    Quantifier.to_var q, (`Rigid, Quantifier.to_primary_kind q, `Bound)
 
 (* find all free and bound type variables *)
 let rec free_bound_type_vars : TypeVarSet.t -> datatype -> vars_list = fun bound_vars t ->
@@ -160,7 +160,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
       | `RecursiveApplication { r_args; _ } ->
           S.union_all (List.map (free_tyarg_vars' rec_vars) r_args)
       | `ForAll (tvars, body)    -> S.diff (free_type_vars' rec_vars body)
-                                           (List.fold_right (S.add -<- type_var_number) tvars S.empty)
+                                           (TypeVarSet.add_quantifiers tvars S.empty)
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with

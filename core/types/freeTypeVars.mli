@@ -27,4 +27,4 @@ val free_bound_type_arg_type_vars : type_arg -> vars_list
 val free_bound_field_spec_type_vars : field_spec -> vars_list
 val free_bound_row_var_vars         : row_var -> vars_list
 val free_bound_tycon_type_vars      : tycon_spec -> vars_list
-val free_bound_quantifier_vars      : quantifier -> vars_list
+val free_bound_quantifier_vars      : Quantifier.t -> vars_list

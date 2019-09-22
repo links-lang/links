@@ -10,9 +10,17 @@ module TP = TypePrinter.Pretty
 let internal_error message =
   Errors.internal_error ~filename:"instantiate.ml" ~message
 
-let show_recursion = Basicsettings.Instantiate.show_recursion
-let show_instantiation = Basicsettings.Instantiate.show_instantiation
+let show_recursion
+  = Settings.(flag "show_recursion"
+              |> depends Debug.enabled
+              |> convert parse_bool
+              |> sync)
 
+let show_instantiation
+  = Settings.(flag "show_instantiation"
+              |> depends Debug.enabled
+              |> convert parse_bool
+              |> sync)
 (*
   instantiation environment:
     for stopping cycles during instantiation
@@ -71,9 +79,9 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
         | `Table (f, d, r) -> `Table (inst f, inst d, inst r)
         | `ForAll (qs, t) ->
            let remove_shadowed_quantifier (tmap,rmap,pmap) q =
-             let var = Types.var_of_quantifier q in
+             let var = Quantifier.to_var q in
              let open CommonTypes.PrimaryKind in
-             match Types.primary_kind_of_quantifier q with
+             match Quantifier.to_primary_kind q with
                | Type ->
                   (IntMap.remove var tmap, rmap, pmap)
                | Row ->
@@ -360,7 +368,7 @@ let instantiation_maps_of_type_arguments :
 
     if (not arities_okay) then
       (Debug.print (Printf.sprintf "# Type variables (total %d)" vars_length);
-       let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ TP.string_of_quantifier t) vars in
+       let tyvars = String.concat "\n" @@ List.mapi (fun i t -> (string_of_int @@ i+1) ^ ". " ^ Quantifier.to_string t) vars in
        Debug.print tyvars;
        Debug.print (Printf.sprintf "\n# Type arguments (total %d)" tyargs_length);
        let tyargs' = String.concat "\n" @@ List.mapi (fun i arg -> (string_of_int @@ i+1) ^ ". " ^ TP.string_of_type_arg arg) tyargs in
@@ -425,7 +433,7 @@ let replace_quantifiers t qs' =
         let tyargs =
           List.map2
             (fun q q' ->
-              assert (primary_kind_of_quantifier q = primary_kind_of_quantifier q');
+              assert (Quantifier.to_primary_kind q = Quantifier.to_primary_kind q');
               type_arg_of_quantifier q')
             qs
             qs'

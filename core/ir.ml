@@ -5,7 +5,8 @@ open CommonTypes
 
 (* This module is equivalent to Types, but provides additional pretty
    printing functions. We use it so that the pretty printers used for
-   the IR can access the printers for the types
+   the IR can access the printers for the types,
+   wihtout having to specify the custom printers each time.
  *)
 module Types = TypePrinter.BySettingPrintableTypes
 
@@ -21,12 +22,9 @@ type binder = Var.binder
   [@@deriving show]
 
 (* type variables *)
-type tyvar = Types.quantifier
+type tyvar = Quantifier.t
   [@@deriving show]
 type tyarg = Types.type_arg
-  [@@deriving show]
-
-type name = string
   [@@deriving show]
 
 type name_set = Utility.stringset
@@ -47,14 +45,14 @@ type value =
   | Constant   of Constant.t
   | Variable   of var
   | Extend     of value name_map * value option
-  | Project    of name * value
+  | Project    of Name.t * value
   | Erase      of name_set * value
-  | Inject     of name * value * Types.datatype
+  | Inject     of Name.t * value * Types.datatype
 
   | TAbs       of tyvar list * value
   | TApp       of value * tyarg list
 
-  | XmlNode    of name * value name_map * value list
+  | XmlNode    of Name.t * value name_map * value list
   | ApplyPure  of value * value list
 
   | Closure    of var * tyarg list * value
@@ -73,7 +71,7 @@ and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
   | Rec        of fun_def list
-  | Alien      of binder * name * language
+  | Alien      of binder * Name.t * language
   | Module     of string * binding list option
 and special =
   | Wrong      of Types.datatype
@@ -92,10 +90,10 @@ and special =
   | Update     of (binder * value) * computation option * computation
   | Delete     of (binder * value) * computation option
   | CallCC     of value
-  | Select     of name * value
+  | Select     of Name.t * value
   | Choice     of value * (binder * computation) name_map
   | Handle     of handler
-  | DoOperation of name * value list * Types.datatype
+  | DoOperation of Name.t * value list * Types.datatype
 and computation = binding list * tail_computation
 and effect_case = binder * binder * computation
 and handler = {

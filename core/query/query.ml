@@ -19,6 +19,12 @@ let runtime_type_error error =
      "This should not happen if the type system / checker is correct. " ^
      "Please file a bug report.")
 
+let use_keys_in_shredding
+  = Settings.(flag ~default:true "use_keys_in_shredding"
+              |> synopsis "Use keys in query shredding"
+              |> convert parse_bool
+              |> sync)
+
 module Lang =
 struct
 
@@ -1098,7 +1104,7 @@ let gens_index (gs : (Var.var * Q.t) list)   =
            labels
            [])
   in
-  let get_fields = if Settings.get_value Basicsettings.use_keys_in_shredding
+  let get_fields = if Settings.get use_keys_in_shredding
                    then key_fields
                    else all_fields
   in concat_map (table_index get_fields) gs

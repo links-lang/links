@@ -1,8 +1,8 @@
 (ocamllex
-  (modules jsonlex lexer xmlLexer))
+  (modules lexer xmlLexer))
 
 (menhir
-  (modules parser jsonparse xmlParser)
+  (modules parser xmlParser)
   (flags "--table") ;; slower parser, but compilation *much* faster
 )
 

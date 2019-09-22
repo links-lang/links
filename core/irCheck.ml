@@ -4,10 +4,20 @@ open Ir
 
 module TP = TypePrinter.BySetting
 
-(* ERROR HANDLING*)
+let typecheck
+  = Settings.(flag "typecheck_ir"
+              |> synopsis "Type check the IR (development)"
+              |> convert parse_bool
+              |> sync)
 
-let fail_on_ir_type_error =
-  Settings.get_value Basicsettings.Ir.fail_on_ir_type_error
+
+(* ERROR HANDLING*)
+let fail_on_ir_type_error
+  = Settings.(flag "fail_on_ir_type_error"
+              |> synopsis "Abort compilation if an IR type error occurs (experimental)"
+              |> convert parse_bool
+              |> sync)
+
 
 let internal_error message =
   raise (Errors.internal_error ~filename:"irCheck.ml" ~message)
@@ -63,7 +73,7 @@ let raise_ir_type_error msg occurrence =
    If we are supposed to continue after IR type errors, we print a debug
    message and return the alternative value in case of an exception. *)
 let handle_ir_type_error lazy_val alternative occurrence =
-  if fail_on_ir_type_error then
+  if Settings.get fail_on_ir_type_error then
     (* All exceptions are left unhandled, leaving them for the error handling
        facilities outside of the IR type checker *)
     Lazy.force lazy_val
@@ -126,7 +136,7 @@ module Env = Env.Int
 
 type type_eq_context = {
   typevar_subst : Var.var IntMap.t; (* equivalences of typevars *)
-  tyenv: Types.kind Env.t (* track kinds of bound typevars *)
+  tyenv: Kind.t Env.t (* track kinds of bound typevars *)
 }
 
 
@@ -306,8 +316,8 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
               List.fold_left2 (fun (context, prev_eq) lqvar rqvar ->
                   let lid, _ = lqvar in
                   let rid, _ = rqvar in
-                  let l_kind = Types.kind_of_quantifier lqvar in
-                  let r_kind = Types.kind_of_quantifier rqvar in
+                  let l_kind = Quantifier.to_kind lqvar in
+                  let r_kind = Quantifier.to_kind rqvar in
                   let ctx' = { typevar_subst = IntMap.add lid rid context.typevar_subst;
                                tyenv = Env.bind context.tyenv (rid, r_kind)
                              } in
@@ -526,13 +536,13 @@ struct
         | TAbs (tyvars, v) ->
             let o = List.fold_left
               (fun o quant ->
-                let var = var_of_quantifier quant in
-                let kind = kind_of_quantifier quant in
+                let var  = Quantifier.to_var  quant in
+                let kind = Quantifier.to_kind quant in
                 o#add_typevar_to_context var kind) o tyvars in
             let v, t, o = o#value v in
             let o = List.fold_left
               (fun o quant ->
-                let var = var_of_quantifier quant in
+                let var = Quantifier.to_var quant in
                 o#remove_typevar_to_context var) o tyvars in
             let t = Types.for_all (tyvars, t) in
               TAbs (tyvars, v), t, o
@@ -586,8 +596,8 @@ struct
 
                 let outer_to_inner_type_var_map  =
                   List.fold_left2 (fun map iq oq  ->
-                      let iv = Types.var_of_quantifier iq in
-                      let ov = Types.var_of_quantifier oq in
+                      let iv = Quantifier.to_var iq in
+                      let ov = Quantifier.to_var oq in
                       IntMap.add ov iv map
                     )  IntMap.empty inner_quantifiers outer_quantifiers  in
 
@@ -764,7 +774,7 @@ struct
             (* The type of the body must match the type the query is annotated with *)
             o#check_eq_types original_t t (SSpec special);
 
-            (if Settings.get_value Basicsettings.Shredding.relax_query_type_constraint then
+            (if Settings.get Database.relax_query_type_constraint then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in
@@ -1057,7 +1067,7 @@ struct
       (if it exists), must be added to the environment before calling *)
     method handle_funbinding
              (expected_overall_funtype : datatype)
-             (tyvars : Types.quantifier list)
+             (tyvars : Quantifier.t list)
              (parameter_types : datatype list)
              (body : computation)
              (is_recursive : bool)
@@ -1084,8 +1094,8 @@ struct
         (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type occurrence);
         let o = List.fold_left
               (fun o quant ->
-                let var = var_of_quantifier quant in
-                let kind = kind_of_quantifier quant in
+                let var  = Quantifier.to_var  quant in
+                let kind = Quantifier.to_kind quant in
                 o#add_typevar_to_context var kind) o tyvars in
 
         (* determine body type, using translated version of expected effects in context *)
@@ -1094,7 +1104,7 @@ struct
 
         let o = List.fold_left
               (fun o quant ->
-                let var = var_of_quantifier quant in
+                let var = Quantifier.to_var quant in
                 o#remove_typevar_to_context var) o tyvars in
         let o, _ = o#set_allowed_effects previously_allowed_effects in
 
@@ -1122,13 +1132,13 @@ struct
             lazy (
               let o = List.fold_left
                 (fun o quant ->
-                  let var = var_of_quantifier quant in
-                  let kind = kind_of_quantifier quant in
+                  let var  = Quantifier.to_var  quant in
+                  let kind = Quantifier.to_kind quant in
                   o#add_typevar_to_context var kind) o tyvars in
               let tc, act, o = o#tail_computation tc in
               let o = List.fold_left
                 (fun o quant ->
-                  let var = var_of_quantifier quant in
+                  let var = Quantifier.to_var quant in
                   o#remove_typevar_to_context var) o tyvars in
               let exp = Var.type_of_binder x in
               let act_foralled = Types.for_all (tyvars, act) in

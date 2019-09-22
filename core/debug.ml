@@ -1,18 +1,25 @@
 (*** Debugging ***)
-let debugging_enabled = Basicsettings.debugging_enabled
+(** Whether to turn on debug printing *)
+let enabled =
+  Settings.(flag "debug"
+            |> synopsis "Prints internal debugging information (development)"
+            |> convert parse_bool
+            |> CLI.(add (short 'd' <&> long "debug"))
+            |> sync)
+
 
 (** print a debug message if debugging is enabled *)
 let print message =
-  (if Settings.get_value(debugging_enabled) then prerr_endline message; flush stderr)
+  (if Settings.get enabled then prerr_endline message; flush stderr)
 
 (** print a debug message if debugging is enabled *)
 let print_no_lf message =
-  (if Settings.get_value(debugging_enabled) then prerr_string message)
+  (if Settings.get enabled then prerr_string message)
 
 (** print a debug message if debugging is enabled; [message] is a lazy expr. *)
 let print_l message =
-  (if Settings.get_value(debugging_enabled) then
-     prerr_endline(Lazy.force message); flush stderr)
+  (if Settings.get enabled then
+     prerr_endline (Lazy.force message); flush stderr)
 
 (** Print a formatted debugging message if debugging is enabled *)
 let f fmt = Printf.kprintf print fmt
@@ -21,17 +28,17 @@ let f fmt = Printf.kprintf print fmt
     [message] is a thunk returning the string to print.
 *)
 let if_set setting message =
-  (if Settings.get_value(setting) then print (message ()))
+  (if Settings.get setting then print (message ()))
 
 (* Print [message] if debugging is enabled and setting is on;
    [message] is a lazy expression *)
 let if_set_l setting message =
-  (if Settings.get_value(setting) then print (Lazy.force message))
+  (if Settings.get setting then print (Lazy.force message))
 
 
 (* Print [message] with time taken by evaluating f *)
 let debug_time msg f =
-  if Settings.get_value(debugging_enabled)
+  if Settings.get enabled
   then
     let start_time = Utility.time_milliseconds() in
     let raw_result = f () in

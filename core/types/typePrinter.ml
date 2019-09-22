@@ -3,9 +3,45 @@ open CommonTypes
 
 open Utility
 
+  (* Pretty print types or use generated printer? *)
+  let print_types_pretty
+    = Settings.(flag ~default:true "print_types_pretty"
+              |> synopsis "Toggles whether to use the pretty printer or derived printer for printing types"
+              |> convert parse_bool
+              |> sync)
+
+  let show_raw_type_vars
+    = Settings.(flag "show_raw_type_vars"
+              |> synopsis "Print type variables as raw numbers rather than letters"
+              |> convert parse_bool
+              |> sync)
+
+  let show_quantifiers
+    = Settings.(flag "show_quantifiers"
+                |> convert parse_bool
+                |> sync)
+
+  let show_flavours
+    = Settings.(flag "show_flavours"
+                |> convert parse_bool
+                |> sync)
+
+  let show_kinds
+    = Settings.(option ~default:(Some "default") "show_kinds"
+                |> to_string from_string_option
+                |> convert Utility.some
+                |> sync)
+
+  let hide_fresh_type_vars
+    = Settings.(flag ~default:true "hide_fresh_type_vars"
+                |> convert parse_bool
+                |> sync)
+
+
+
 module type TYPE_PRINTER = sig
   val pp_datatype : Format.formatter -> datatype -> unit
-  val pp_quantifier : Format.formatter -> quantifier -> unit
+  val pp_quantifier : Format.formatter -> Quantifier.t -> unit
   val pp_type_arg : Format.formatter -> type_arg -> unit
   val pp_row : Format.formatter -> row -> unit
 
@@ -13,7 +49,7 @@ module type TYPE_PRINTER = sig
   val string_of_field_spec : Types.field_spec -> string
   val string_of_type_arg : Types.type_arg -> string
   val string_of_row : Types.row -> string
-  val string_of_quantifier : Types.quantifier -> string
+  val string_of_quantifier : Quantifier.t -> string
   val string_of_tycon_spec : Types.tycon_spec -> string
 end
 
@@ -45,7 +81,7 @@ module Raw : TYPE_PRINTER = struct
 
   (* These types are not exported by Types *)
   type 't meta_type_var_non_rec_basis =
-    [`Var of int * subkind * freedom | `Body of 't]
+    [`Var of (int * Subkind.t * Freedom.t)| `Body of 't]
   [@@deriving show]
 
   type 't meta_type_var_basis =
@@ -73,7 +109,6 @@ module Raw : TYPE_PRINTER = struct
   and meta_row_var      = [%import: Types.meta_row_var]
   and meta_presence_var = [%import: Types.meta_presence_var]
   and meta_var          = [%import: Types.meta_var]
-  and quantifier        = [%import: Types.quantifier]
   and type_arg          = [%import: Types.type_arg]
   and tycon_spec        = [%import: Types.tycon_spec]
   and alias_type        = [%import: Types.alias_type]
@@ -90,8 +125,8 @@ module Raw : TYPE_PRINTER = struct
   let pp_datatype : Format.formatter -> datatype -> unit =
     mk_decycled_pp pp_typ DecycleTypes.datatype
 
-  let pp_quantifier : Format.formatter -> quantifier -> unit =
-    mk_decycled_pp pp_quantifier DecycleTypes.quantifier
+  let pp_quantifier : Format.formatter -> Quantifier.t -> unit =
+    mk_decycled_pp Quantifier.pp DecycleTypes.quantifier
 
   let pp_row : Format.formatter -> row -> unit =
     mk_decycled_pp pp_row DecycleTypes.row
@@ -110,7 +145,7 @@ module Raw : TYPE_PRINTER = struct
 
   let mk_string_of_fn fn x = Format.asprintf "%a" fn x
 
-  let string_of_quantifier : quantifier -> string =
+  let string_of_quantifier : Quantifier.t -> string =
     mk_string_of_fn pp_quantifier
 
   let string_of_datatype : datatype -> string = mk_string_of_fn pp_datatype
@@ -132,7 +167,6 @@ module Pretty = struct
   module FieldEnv = Utility.StringMap
   module Vars = FreeTypeVars
 
-  let show_raw_type_vars = Basicsettings.Types.show_raw_type_vars
 
   (* See Note [Variable names in error messages] *)
   (* We don't really care much about size of the hash table.  20 should be a
@@ -176,7 +210,7 @@ module Pretty = struct
    variables.  Both folds work by side-effecting on the hash table, which is
    then returned to be used freely outside of this module. *)
   let make_names (vars : Vars.vars_list) =
-    if Settings.get_value show_raw_type_vars then
+    if Settings.get show_raw_type_vars then
       let _ =
         List.fold_left
           (fun _ (var, spec) ->
@@ -201,12 +235,6 @@ module Pretty = struct
       in
       tyvar_name_map
 
-  module BS = Basicsettings
-  let show_quantifiers = BS.Types.Print.show_quantifiers
-  let show_flavours = BS.Types.Print.show_flavours
-  let show_kinds = BS.Types.Print.show_kinds
-  let hide_fresh_type_vars = BS.Types.Print.hide_fresh_type_vars
-  let effect_sugar = BS.Types.effect_sugar
 
   (* Set the quantifiers to be true to display any outer quantifiers.
    Set flavours to be true to distinguish flexible type variables
@@ -222,11 +250,11 @@ module Pretty = struct
   type context = {bound_vars: TypeVarSet.t; shared_effect: int option}
 
   let default_policy () =
-    { quantifiers= Settings.get_value show_quantifiers
-    ; flavours= Settings.get_value show_flavours
-    ; hide_fresh= Settings.get_value hide_fresh_type_vars
-    ; kinds= Settings.get_value show_kinds
-    ; effect_sugar= Settings.get_value effect_sugar }
+    {quantifiers=Settings.get show_quantifiers;
+     flavours=Settings.get show_flavours;
+     hide_fresh=Settings.get hide_fresh_type_vars;
+     kinds=val_of (Settings.get show_kinds);
+     effect_sugar=Settings.get effect_sugar}
 
   let empty_context = {bound_vars= TypeVarSet.empty; shared_effect= None}
 
@@ -302,7 +330,7 @@ module Pretty = struct
       {empty_context with shared_effect= obj#var}
     else empty_context
 
-  let subkind : policy * names -> subkind -> string =
+  let subkind : (policy * names) -> Subkind.t -> string =
     let full (l, r) =
       "(" ^ Linearity.to_string l ^ "," ^ Restriction.to_string r ^ ")"
     in
@@ -319,7 +347,7 @@ module Pretty = struct
         | Linearity.Unl, Restriction.Effect -> Restriction.to_string res_effect
         | l, r -> full (l, r)
 
-  let kind : policy * names -> kind -> string =
+  let kind : (policy * names) -> Kind.t -> string =
     let full (policy, _vars) (k, sk) =
       PrimaryKind.to_string k ^ subkind (policy, _vars) sk
     in
@@ -345,10 +373,10 @@ module Pretty = struct
          |PrimaryKind.Presence, _ ->
             full ({policy with kinds= "full"}, _vars) (k, sk)
 
-  let quantifier : policy * names -> quantifier -> string =
+  let quantifier : policy * names -> Quantifier.t -> string =
    fun (policy, vars) q ->
-    let k = kind_of_quantifier q in
-    Vars.find (var_of_quantifier q) vars ^ has_kind (kind (policy, vars) k)
+    let k = Quantifier.to_kind q in
+    Vars.find (Quantifier.to_var q) vars ^ has_kind (kind (policy, vars) k)
 
   (** If type variable names are hidden return a generic name n1. Otherwise
    pass name of type variable to n2 so that it can construct a name. *)
@@ -515,7 +543,7 @@ module Pretty = struct
         let bound_vars =
           List.fold_left
             (fun bound_vars tyvar ->
-              TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
+              TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
             bound_vars tyvars
         in
         if not policy.flavours then
@@ -674,7 +702,7 @@ module Pretty = struct
     let bound_vars tyvars =
       List.fold_left
         (fun bound_vars tyvar ->
-          TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
+          TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
         bound_vars tyvars
     in
     function
@@ -786,7 +814,7 @@ See Note [Variable names in error messages].
     tycon_spec empty_context (policy (), tyvar_name_map) tycon
 
   let pol_string_of_quantifier ?(policy = default_policy)
-      ?(refresh_tyvar_names = true) (quant : quantifier) =
+      ?(refresh_tyvar_names = true) (quant : Quantifier.t) =
     build_tyvar_names ~refresh_tyvar_names
       FreeTypeVars.free_bound_quantifier_vars [quant] ;
     quantifier (policy (), tyvar_name_map) quant
@@ -806,7 +834,7 @@ See Note [Variable names in error messages].
   let pp_row : Format.formatter -> row -> unit =
    fun fmt -> mk_pp_fn fmt string_of_row
 
-  let pp_quantifier : Format.formatter -> quantifier -> unit =
+  let pp_quantifier : Format.formatter -> Quantifier.t -> unit =
    fun fmt -> mk_pp_fn fmt string_of_quantifier
 
   let pp_type_arg : Format.formatter -> type_arg -> unit =
@@ -836,7 +864,7 @@ module PrettyWithPolicy = struct
 end
 
 module BySetting =
-( val if Settings.get_value Basicsettings.print_types_pretty then
+( val if Settings.get print_types_pretty then
         (module Pretty : TYPE_PRINTER)
       else (module Raw : TYPE_PRINTER) )
 

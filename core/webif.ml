@@ -102,9 +102,9 @@ struct
 
 
   let get_websocket_url () =
-    if Webs.is_accepting_websocket_requests () then
-      Some (Settings.get_value Basicsettings.websocket_url)
-      else None
+    if Webs.is_accepting_websocket_requests ()
+    then Some (Webs.get_websocket_url ())
+    else None
 
   let generate_json_state req_data v =
     let client_id = RequestData.get_client_id req_data in
@@ -131,7 +131,8 @@ struct
         Proc.resolve_external_processes arg;
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
         let json_state = generate_json_state req_data result in
-        let result_json = Json.jsonize_value_with_state result json_state in
+        let result_json =
+          Json.jsonize_value_with_state result json_state |> Json.json_to_string in
         Lwt.return ("text/plain", Utility.base64encode result_json)
       | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
@@ -150,9 +151,12 @@ struct
            assert(false));
            *)
         let json_state = generate_json_state req_data r in
+        let jsonized_val =
+          Json.jsonize_value_with_state r json_state
+            |> Json.json_to_string in
         Lwt.return
           ("text/plain",
-            Utility.base64encode (Json.jsonize_value_with_state r json_state))
+            Utility.base64encode jsonized_val)
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()
@@ -167,13 +171,10 @@ struct
     let handle_ajax_error = function
       | Aborted r -> Lwt.return r
       | e ->
-         let formatted_exn =
-           Errors.format_exception e
-           |> Json.js_dq_escape_string in
-         let error_json =
-           "{ \"error\": \"" ^ formatted_exn ^ "\"}" in
+          let json =
+            `Assoc [("error", `String (Errors.format_exception e))] in
          Lwt.return
-           ("text/plain", Utility.base64encode (error_json)) in
+           ("text/plain", Utility.base64encode (Yojson.Basic.to_string json)) in
 
     let handle_html_error e =
       let mime_type = "text/html; charset=utf-8" in

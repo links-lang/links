@@ -38,38 +38,6 @@ let reader_of_string ?pp string =
         current_pos := !current_pos + nchars;
         nchars
 
-let reader_of_readline ps1 =
-  let current_pos = ref 0 in
-  let buf = Buffer.create 30 in
-  let dots = String.make (String.length ps1 - 1) '.' ^ " " in
-  let history_path = Basicsettings.Readline.readline_history_path () in
-
-  (* Gets an input from the command line, with a newline at the end, *)
-  let get_input prompt =
-    match LNoise.linenoise prompt with
-      | None -> ""
-      | Some inp ->
-          ignore (LNoise.history_add inp);
-          ignore (LNoise.history_save ~filename:history_path);
-          inp ^ "\n" in
-
-  let initial_string = get_input ps1 in
-  Buffer.add_string buf initial_string;
-  (* Function to access the buffer (passed to Lexing.from_function) *)
-  let accessor_fun =
-    fun dst_buf nchars ->
-      let nchars = min nchars (Buffer.length buf - !current_pos) in
-      Buffer.blit buf !current_pos dst_buf 0 nchars;
-      current_pos := !current_pos + nchars;
-      nchars in
-  (* Function to populate the buffer (passed as newline callback) *)
-  let populate_fun =
-    fun _ ->
-      let input_str = get_input dots in
-      Buffer.add_string buf input_str in
-  (accessor_fun, populate_fun)
-
-
 let interactive : Sugartypes.sentence LinksLexer.grammar =
   Parser.interactive
 let program : (Sugartypes.binding list * Sugartypes.phrase option) LinksLexer.grammar =
@@ -86,7 +54,14 @@ let normalize_pp = function
    respect to which any parse-time resolution takes place.
 *)
 
-let default_preprocessor () = (Settings.get_value Basicsettings.pp)
+(** Installed preprocessor *)
+let pp = Settings.(option "preprocessor"
+                   |> privilege `System
+                   |> to_string from_string_option
+                   |> convert Utility.some
+                   |> sync)
+
+let default_preprocessor () = from_option "" (Settings.get pp)
 
 (** Public functions: parse some data source containing Links source
     code and return a list of ASTs.
@@ -107,13 +82,6 @@ let parse_channel ?interactive ?in_context:context grammar (channel, name) =
     LinksParser.read ?nlhook:interactive ~parse:grammar
       ~infun:(reader_of_channel channel) ~name:name ~context
 
-(* Reads lines in and parses them, given an initial prompt *)
-let parse_readline ps1 ?in_context:context grammar =
-  let context = LinksParser.normalize_context context in
-  let (accessor_fun, populate_fun) = reader_of_readline ps1 in
-  LinksParser.read ?nlhook:(Some populate_fun) ~parse:grammar
-    ~infun:accessor_fun ~name:"<stdin>" ~context
-
 let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
   match normalize_pp pp with
     | None -> parse_channel ?in_context:context grammar (open_in filename, filename)
@@ -126,3 +94,91 @@ let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filenam
                ~infun:(reader_of_string ~pp (String.concat "\n" (lines channel)))
                ~name:filename
                ~context)
+
+module Readline = struct
+  (** Readline settings. **)
+  (* Path for readline history file *)
+  let readline_history_path
+    = Settings.(option "readline_history_path"
+                |> to_string from_string_option
+                |> convert Utility.(Sys.expand ->- some)
+                |> sync)
+
+  let readline_history_path () =
+    match Settings.get readline_history_path with
+    | None -> Filename.concat (Unix.getenv "HOME") ".links_history"
+    | Some settings_path -> settings_path
+
+  (* Enable native readline? *)
+  let history_loaded = ref false
+  let load_history on =
+    if on then
+      (* Ensure we retain history *)
+      let _ = LNoise.history_load ~filename:(readline_history_path ()) in
+      let _ = LNoise.history_set ~max_length:100 in
+      history_loaded := true
+    else history_loaded := false
+
+  let native_readline
+    = Settings.(flag ~default:true "native_readline"
+                |> synopsis "Selects whether to use the native readline support in REPL mode"
+                |> convert parse_bool
+                |> action load_history
+                |> CLI.(add (short 'r' <&> long "rlwrap"))
+                |> sync)
+
+
+  let reader_of_readline ps1 =
+    let current_pos = ref 0 in
+    let buf = Buffer.create 30 in
+    let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+    (* Gets an input from the command line, with a newline at the end, *)
+    let get_input prompt =
+      match LNoise.linenoise prompt with
+      | None -> ""
+      | Some inp ->
+         ignore (LNoise.history_add inp);
+         ignore (LNoise.history_save ~filename:(readline_history_path ())); (* FIXME todo: probably sub-optimal to save the history on every time. *)
+         inp ^ "\n" in
+
+    let initial_string = get_input ps1 in
+    Buffer.add_string buf initial_string;
+    (* Function to access the buffer (passed to Lexing.from_function) *)
+    let accessor_fun =
+      fun dst_buf nchars ->
+      let nchars = min nchars (Buffer.length buf - !current_pos) in
+      Buffer.blit buf !current_pos dst_buf 0 nchars;
+      current_pos := !current_pos + nchars;
+      nchars in
+    (* Function to populate the buffer (passed as newline callback) *)
+    let populate_fun =
+      fun _ ->
+      let input_str = get_input dots in
+      Buffer.add_string buf input_str in
+    (accessor_fun, populate_fun)
+
+  (* Reads lines in and parses them, given an initial prompt *)
+  let parse_readline ps1 ?in_context:context grammar =
+    let context = LinksParser.normalize_context context in
+    let (accessor_fun, populate_fun) = reader_of_readline ps1 in
+    LinksParser.read ?nlhook:(Some populate_fun) ~parse:grammar
+      ~infun:accessor_fun ~name:"<stdin>" ~context
+
+  let prepare_prompt : string -> unit
+    = fun ps1 ->
+    if not (Settings.get native_readline)
+    then (print_string ps1; flush stdout)
+
+  let parse : string -> (Sugartypes.sentence * position_context)
+    = fun ps1 ->
+    if Settings.get native_readline
+    then let () =
+           if not !history_loaded
+           then load_history true
+         in parse_readline ps1 interactive
+    else let make_dotter ps1 =
+           let dots = String.make (String.length ps1 - 1) '.' ^ " " in
+           fun _ -> print_string dots; flush stdout
+         in
+         parse_channel ~interactive:(make_dotter ps1) interactive (stdin, "<stdin>")
+end

@@ -4,7 +4,6 @@ open Performance
 open Utility
 
 module TP = TypePrinter.BySetting
-module BS = Basicsettings
 module Eval = Evalir.Eval(Webserver)
 module Webif = Webif.WebIf(Webserver)
 
@@ -19,6 +18,25 @@ type evaluation_result =
     result_type : Types.datatype
   }
 
+(** Name of the file containing the prelude code. *)
+let prelude_file =
+  let prelude_dir =
+    match Utility.getenv "LINKS_LIB" with
+    (* If user defined LINKS_LIB then it takes the highest priority *)
+    | Some path -> path
+    | None -> locate_file "prelude.links" in
+  Settings.(option ~default:(Some (Filename.concat prelude_dir "prelude.links")) "prelude"
+            |> synopsis "The Links prelude source file"
+            |> to_string from_string_option
+            |> convert (Sys.expand ->- some)
+            |> sync)
+
+let typecheck_only
+  = Settings.(flag "typecheck_only"
+              |> synopsis "Only type check Links modules (development)"
+              |> convert parse_bool
+              |> sync)
+
 (** optimise and evaluate a program *)
 let process_program
       (interacting : bool)
@@ -29,13 +47,13 @@ let process_program
   let (valenv, nenv, tyenv) = envs in
   let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
 
-  let perform_optimisations = Settings.get_value BS.optimise && not interacting in
+  let perform_optimisations = Settings.get Backend.optimise && not interacting in
 
   let (globals, _main) as post_backend_pipeline_program =
     Backend.transform_program perform_optimisations tenv program in
 
 
-  (if Settings.get_value BS.typecheck_only then exit 0);
+  (if Settings.get typecheck_only then exit 0);
 
   Webserver.init (valenv, nenv, tyenv) globals external_files;
 
@@ -86,6 +104,11 @@ let evaluate
 module NonInteractive =
 struct
 
+  let show_lib_function_env
+    = Settings.(flag "show_lib_function_env"
+                |> synopsis "Print the lib.ml functions and their types. In particular, map their integer identifiers to their original names"
+                |> convert parse_bool
+                |> sync)
 
   let run_file prelude envs filename : evaluation_result =
     Webserver.set_prelude prelude;
@@ -109,7 +132,7 @@ struct
 
   let evaluate_string_in envs  v =
     let parse_and_desugar (nenv, tyenv) s =
-      let sugar, pos_context = Parse.parse_string ~pp:(Settings.get_value BS.pp) Parse.program s in
+      let sugar, pos_context = Parse.parse_string ~pp:(from_option "" (Settings.get Parse.pp)) Parse.program s in
       let (program, t, _), _ = Frontend.Pipeline.program tyenv pos_context sugar in
 
       let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
@@ -123,7 +146,7 @@ struct
 
   (* TODO: Remove special handling of prelude once module processing is in place *)
   let load_prelude () =
-    (if Settings.get_value Basicsettings.Ir.show_lib_function_env then
+    (if Settings.get show_lib_function_env then
       (Debug.print "lib.ml mappings:";
       Env.String.iter (fun name var -> Debug.print (string_of_int var ^ " -> " ^ name ^ " :: " ^
         TP.string_of_datatype (Env.String.lookup Lib.typing_env.Types.var_env name ) )) Lib.nenv));
@@ -132,7 +155,7 @@ struct
       let open Loader in
       let source =
         (die_on_exception_unless_interacting false
-          (Loader.load_file (Lib.nenv, Lib.typing_env)) (Settings.get_value BS.prelude_file))
+          (Loader.load_file (Lib.nenv, Lib.typing_env)) (val_of (Settings.get prelude_file)))
       in
       let (nenv, tyenv) = source.envs in
       let (globals, _, _) = source.program in

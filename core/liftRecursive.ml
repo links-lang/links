@@ -24,15 +24,15 @@ object ((self : 'self_type))
           let fnlit = self#funlit fnlit in
           let node =
             if is_recursive fn.fun_binder fnlit then
-              Funs [{ rec_binder = fn.fun_binder;
-                      rec_linearity = fn.fun_linearity;
-                      rec_definition = ((tvs, None), fnlit);
-                      rec_location = fn.fun_location;
-                      rec_signature = fn.fun_signature;
-                      rec_unsafe_signature = fn.fun_unsafe_signature;
-                      rec_frozen = fn.fun_frozen;
-                      rec_pos = pos;
-                    }]
+              Funs [WithPos.make ~pos
+                      { rec_binder           = fn.fun_binder
+                      ; rec_linearity        = fn.fun_linearity
+                      ; rec_definition       = ((tvs, None), fnlit)
+                      ; rec_location         = fn.fun_location
+                      ; rec_signature        = fn.fun_signature
+                      ; rec_unsafe_signature = fn.fun_unsafe_signature
+                      ; rec_frozen           = fn.fun_frozen
+                      } ]
             else
               Fun { fn with fun_definition = (tvs, fnlit) } in
           WithPos.make ~pos node

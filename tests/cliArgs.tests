@@ -1,0 +1,33 @@
+Empty argument list [1]
+getArgs()
+stdout : [] : [String]
+
+Empty argument list [2]
+getArgs()
+stdout : [] : [String]
+args : --
+
+Singleton argument list [1]
+getArgs()
+stdout : ["42"] : [String]
+args : -- 42
+
+Singleton argument list [2]
+getArgs()
+stdout : ["Hello World!"] : [String]
+args : -- "Hello World!"
+
+Multiple arguments [1]
+getArgs()
+stdout : ["foo", "bar", "42"] : [String]
+args : -- foo bar 42
+
+Multiple arguments [2]
+getArgs()
+stdout : ["foo bar", "42", "quux quasi"] : [String]
+args : -- "foo bar" 42 "quux quasi"
+
+Multiple arguments [3]
+getArgs()
+stdout : ["-1", "-42", "-5 foobars", "+6 quuxes"] : [String]
+args : -- -1 -42 "-5 foobars" "+6 quuxes"

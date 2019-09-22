@@ -45,6 +45,7 @@
    "delta" in both the "visible" and "delta" contexts. *)
 
 
+open CommonTypes
 open Utility
 open Sugartypes
 open SourceCode.WithPos
@@ -104,14 +105,14 @@ module BasicScope = struct
       terms = StringMap.empty }
 
   module Resolve = struct
-    let rec module' : name list -> t -> t
+    let rec module' : Name.t list -> t -> t
       = fun names scope ->
       match names with
       | [] -> assert false
       | [name] -> StringMap.find name scope.modules
       | prefix :: names -> module' names (StringMap.find prefix scope.modules)
 
-    let rec var : name list -> t -> name
+    let rec var : Name.t list -> t -> Name.t
       = fun names scope ->
       match names with
       | [] -> assert false
@@ -119,7 +120,7 @@ module BasicScope = struct
       | prefix :: names ->
          var names (StringMap.find prefix scope.modules)
 
-    let rec typename : name list -> t -> name
+    let rec typename : Name.t list -> t -> Name.t
       = fun names scope ->
       match names with
       | [] -> assert false
@@ -180,51 +181,51 @@ module Scope = struct
        happens if a variable is unbound. We defer error handling to the
        type checker. We produce a "best guess" of its name, which is
        simply its qualified form. *)
-    let best_guess : name list -> name
+    let best_guess : Name.t list -> Name.t
       = String.concat "."
 
-    let generic_name_resolve : (name list -> scope -> name) -> name list -> t -> name
+    let generic_name_resolve : (Name.t list -> scope -> Name.t) -> Name.t list -> t -> Name.t
       = fun resolver prefix scopes ->
       try resolver prefix scopes.visible
       with Notfound.NotFound _ -> best_guess prefix
 
-    let module' : name list -> t -> scope
+    let module' : Name.t list -> t -> scope
       = fun names scopes ->
       S.Resolve.module' names scopes.visible (* Allow any errors to propagate. *)
 
-    let qualified_var : name list -> t -> name
+    let qualified_var : Name.t list -> t -> Name.t
       = generic_name_resolve S.Resolve.var
 
-    let qualified_typename : name list -> t -> name
+    let qualified_typename : Name.t list -> t -> Name.t
       = generic_name_resolve S.Resolve.typename
 
-    let var : name -> t -> name
+    let var : Name.t -> t -> Name.t
       = fun name scopes -> qualified_var [name] scopes
 
-    let typename : name -> t -> name
+    let typename : Name.t -> t -> Name.t
       = fun name scopes -> qualified_typename [name] scopes
   end
 
   module Extend = struct
-    let module' : name -> t -> t -> t
+    let module' : Name.t -> t -> t -> t
       = fun module_name module_scope scopes ->
       let delta = S.Extend.module' module_name module_scope.delta scopes.delta in
       let visible = S.Extend.module' module_name module_scope.delta scopes.visible in
       { visible; delta }
 
-    let var : name -> string -> t -> t
+    let var : Name.t -> string -> t -> t
       = fun term_name prefixed_name scopes ->
       let delta = S.Extend.var term_name prefixed_name scopes.delta in
       let visible = S.Extend.var term_name prefixed_name scopes.visible in
       { visible; delta }
 
-    let typename : name -> string -> t -> t
+    let typename : Name.t -> string -> t -> t
       = fun typename prefixed_name scopes ->
       let delta = S.Extend.typename typename prefixed_name scopes.delta in
       let visible = S.Extend.typename typename prefixed_name scopes.visible in
       { visible; delta }
 
-    let synthetic_module : name list -> scope -> t -> t
+    let synthetic_module : Name.t list -> scope -> t -> t
       = fun path module_scope scopes ->
       let visible = S.Extend.synthetic_module path module_scope scopes.visible in
       { scopes with visible }
@@ -263,7 +264,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
     method clone =
       desugar ~toplevel:false renamer scope
 
-    method type_binder : name -> name
+    method type_binder : Name.t -> Name.t
       = fun name ->
       (* Construct a prefixed name for [name]. *)
       let name' =
@@ -424,15 +425,15 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
            2) Process the function bodies. *)
         let (fs' : recursive_function list) =
           List.fold_right
-            (fun fn fs -> { fn with rec_binder = self#binder fn.rec_binder } :: fs)
+            (fun {node;pos} fs -> make ~pos { node with rec_binder = self#binder node.rec_binder } :: fs)
             fs []
         in
         let fs'' =
           List.fold_right
-            (fun ({ rec_definition = (tvs, funlit); rec_signature = dt; _ } as fn) fs ->
+            (fun {node={ rec_definition = (tvs, funlit); rec_signature = dt; _ } as fn; pos} fs ->
               let dt' = self#option (fun o -> o#datatype') dt in
               let funlit' = self#funlit funlit in
-              { fn with rec_definition = (tvs, funlit'); rec_signature = dt' } :: fs)
+              make ~pos { fn with rec_definition = (tvs, funlit'); rec_signature = dt' } :: fs)
             fs' []
         in
         Funs fs''
@@ -442,7 +443,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
        (* Same procedure as above. *)
          let ts' =
            List.fold_right
-             (fun (name, tyvars, dt, pos) ts ->
+             (fun {node=(name, tyvars, dt); pos} ts ->
                (self#type_binder name, tyvars, dt, pos) :: ts)
                ts []
          in
@@ -450,7 +451,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
            List.fold_right
              (fun (name, tyvars, dt, pos) ts ->
                  let dt' = self#datatype' dt in
-                 (name, tyvars, dt', pos) :: ts)
+                 SourceCode.WithPos.make ~pos (name, tyvars, dt') :: ts)
              ts' []
            in
            Typenames ts''
@@ -516,7 +517,7 @@ let renamer : Epithet.t ref = ref Epithet.empty
 
 let desugar_program : Sugartypes.program -> Sugartypes.program
   = fun program ->
-  let interacting = Settings.get_value Basicsettings.interactive_mode in
+  let interacting = Settings.get Basicsettings.interactive_mode in
   (* TODO move to this logic to the loader. *)
   let program = Chaser.add_dependencies program in
   let program = DesugarAlienBlocks.transform_alien_blocks program in
