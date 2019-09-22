@@ -1,4 +1,3 @@
-(* Do not use this file directly, but use the Types module instead *)
 
 
 (** Core types *)
