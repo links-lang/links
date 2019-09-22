@@ -1116,7 +1116,7 @@ let rec dual_type : var_map -> datatype -> datatype =
       (* Still, we might hope to find a way of preserving 'dual
          aliases' in order to simplify the pretty-printing of types... *)
       | `Alias (_, t) -> dt t
-      | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " (*^  show_datatype t *)))
+      | _t -> raise (Invalid_argument ("Attempt to dualise non-session type: " (*^  show_datatype t *)))
 and dual_row : var_map -> row -> row =
   fun rec_points row ->
     let (fields, row_var, dual) = fst (unwrap_row row) in
@@ -1442,11 +1442,7 @@ let extract_tuple (field_env, _, _) =
                         | `Absent
                         | `Var _ -> assert false) field_env
 
-let show_raw_type_vars
-  = Settings.(flag "show_raw_type_vars"
-              |> synopsis "Print type variables as raw numbers rather than letters"
-              |> convert parse_bool
-              |> sync)
+
 
 
 

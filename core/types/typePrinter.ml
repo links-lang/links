@@ -10,32 +10,7 @@ open Utility
               |> convert parse_bool
               |> sync)
 
-  let show_raw_type_vars
-    = Settings.(flag "show_raw_type_vars"
-              |> synopsis "Print type variables as raw numbers rather than letters"
-              |> convert parse_bool
-              |> sync)
 
-  let show_quantifiers
-    = Settings.(flag "show_quantifiers"
-                |> convert parse_bool
-                |> sync)
-
-  let show_flavours
-    = Settings.(flag "show_flavours"
-                |> convert parse_bool
-                |> sync)
-
-  let show_kinds
-    = Settings.(option ~default:(Some "default") "show_kinds"
-                |> to_string from_string_option
-                |> convert Utility.some
-                |> sync)
-
-  let hide_fresh_type_vars
-    = Settings.(flag ~default:true "hide_fresh_type_vars"
-                |> convert parse_bool
-                |> sync)
 
 
 
@@ -72,6 +47,9 @@ end
 
 module Raw : TYPE_PRINTER = struct
   type 'a point = 'a Unionfind.point [@@deriving show]
+
+  (* Suppress warning if we generate functions we don't actually need *)
+  [@@@warning "-32"]
 
   (* Workaround for an issue where %import would replace the normal
      ref type by Stdlib.ref *)
@@ -134,6 +112,12 @@ module Raw : TYPE_PRINTER = struct
   let pp_type_arg : Format.formatter -> type_arg -> unit =
     mk_decycled_pp pp_type_arg DecycleTypes.type_arg
 
+  let pp_field_spec : Format.formatter -> field_spec -> unit =
+    mk_decycled_pp pp_field_spec DecycleTypes.field_spec
+
+  let pp_row_var : Format.formatter -> row_var -> unit =
+    mk_decycled_pp pp_row_var DecycleTypes.row_var
+
   let pp_tycon_spec : Format.formatter -> tycon_spec -> unit =
     let decycle_tycon_spec = function
       | `Alias (qlist, ty) ->
@@ -163,6 +147,34 @@ end
 
 module Pretty = struct
   (** Type printers *)
+
+  let show_raw_type_vars
+    = Settings.(flag "show_raw_type_vars"
+              |> synopsis "Print type variables as raw numbers rather than letters"
+              |> convert parse_bool
+              |> sync)
+
+  let show_quantifiers
+    = Settings.(flag "show_quantifiers"
+                |> convert parse_bool
+                |> sync)
+
+  let show_flavours
+    = Settings.(flag "show_flavours"
+                |> convert parse_bool
+                |> sync)
+
+  let show_kinds
+    = Settings.(option ~default:(Some "default") "show_kinds"
+                |> to_string from_string_option
+                |> convert Utility.some
+                |> sync)
+
+  let hide_fresh_type_vars
+    = Settings.(flag ~default:true "hide_fresh_type_vars"
+                |> convert parse_bool
+                |> sync)
+
 
   module FieldEnv = Utility.StringMap
   module Vars = FreeTypeVars
@@ -858,7 +870,6 @@ module PrettyWithPolicy = struct
   let string_of_row = Pretty.pol_string_of_row
   let string_of_field_spec = Pretty.pol_string_of_presence
   let string_of_type_arg = Pretty.pol_string_of_type_arg
-  let string_of_quantifier = Pretty.pol_string_of_quantifier
   let string_of_tycon_spec = Pretty.pol_string_of_tycon_spec
   let string_of_row_var = Pretty.pol_string_of_row_var
 end
