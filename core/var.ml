@@ -2,7 +2,6 @@
 
 open Utility
 
-(* module Types = TypePrinter.BySettingPrintableTypes *)
 
 module Scope = struct
   type t = Local | Global
