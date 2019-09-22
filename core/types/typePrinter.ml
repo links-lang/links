@@ -875,9 +875,42 @@ module PrettyWithPolicy = struct
 end
 
 module BySetting =
-( val if Settings.get print_types_pretty then
-        (module Pretty : TYPE_PRINTER)
-      else (module Raw : TYPE_PRINTER) )
+struct
+
+  let choose_pp pretty_fn raw_fn fmt =
+    if Settings.get print_types_pretty then
+      pretty_fn fmt
+    else
+      raw_fn fmt
+
+  let pp_datatype fmt = choose_pp Pretty.pp_datatype Raw.pp_datatype fmt
+  let pp_row fmt = choose_pp Pretty.pp_row Raw.pp_row fmt
+  let pp_quantifier fmt = choose_pp Pretty.pp_quantifier Raw.pp_quantifier fmt
+  let pp_type_arg fmt = choose_pp Pretty.pp_type_arg Raw.pp_type_arg fmt
+
+
+  let choose_string_of pretty_fn raw_fn x =
+    if Settings.get print_types_pretty then
+      pretty_fn x
+    else
+      raw_fn x
+
+  let string_of_datatype t =
+    choose_string_of Pretty.string_of_datatype Raw.string_of_datatype t
+  let string_of_row r =
+    choose_string_of Pretty.string_of_row Raw.string_of_row r
+  let string_of_field_spec fs =
+    choose_string_of Pretty.string_of_field_spec Raw.string_of_field_spec fs
+  let string_of_type_arg ta =
+    choose_string_of Pretty.string_of_type_arg Raw.string_of_type_arg ta
+  let string_of_tycon_spec ts =
+    choose_string_of Pretty.string_of_tycon_spec Raw.string_of_tycon_spec ts
+  let string_of_quantifier q =
+    choose_string_of Pretty.string_of_quantifier Raw.string_of_quantifier q
+
+end
+
+
 
 module RawPrintableTypes = struct
   include Types
