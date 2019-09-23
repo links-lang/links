@@ -752,7 +752,7 @@ struct
                From an implementation perspective, we should check the consistency of the read, write, needed info here *)
               Table (db, table_name, keys, tt), `Table tt, o
 
-        | Query (range, e, original_t) ->
+        | Query (range, policy, e, original_t) ->
             let range, o =
               o#optionu
                 (fun o (limit, offset) ->
@@ -780,7 +780,7 @@ struct
               let row = TypeUtils.extract_row list_content_type in
               ensure (Types.Base.row_satisfies row) "Only base types allowed in query result record" (SSpec special));
 
-              Query (range, e, t), t, o
+              Query (range, policy, e, t), t, o
 
         | InsertRows (source, rows)
 	| InsertReturning (source, rows, _) ->

@@ -302,7 +302,7 @@ class transform (env : Types.typing_environment) =
       | CP p ->
          let (o, p, t) = o#cp_phrase p in
          (o, CP p, t)
-      | Query (range, body, Some t) ->
+      | Query (range, policy, body, Some t) ->
           let (o, range) =
             optionu o
               (fun o (limit, offset) ->
@@ -313,7 +313,7 @@ class transform (env : Types.typing_environment) =
           let (o, body, _) = on_effects o (Types.make_empty_closed_row ()) (fun o -> o#phrase) body in
           let (o, body, _) = o#phrase body in
           let (o, t) = o#datatype t in
-            (o, Query (range, body, Some t), t)
+            (o, Query (range, policy, body, Some t), t)
       | ListLit (es, Some t) ->
           let (o, es, _) = list o (fun o -> o#phrase) es in
           let (o, t) = o#datatype t in

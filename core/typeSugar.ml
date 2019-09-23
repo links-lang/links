@@ -2943,7 +2943,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               DBUpdate (erase_pat pat, erase from, opt_map erase where, List.map (fun (n,(p,_,_)) -> n, p) set),
               Types.unit_type,
               merge_usages (usages from :: hide (from_option StringMap.empty (opt_map usages where)) :: List.map hide (List.map (usages -<- snd) set))
-        | Query (range, p, _) ->
+        | Query (range, policy, p, _) ->
+            let open QueryPolicy in
             let range, outer_effects, range_usages =
               match range with
                 | None -> None, Types.make_empty_open_row default_effect_subkind, StringMap.empty
@@ -2960,10 +2961,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            let () = if Settings.get  Database.shredding then ()
-                     else let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable (lin_any, res_base), false)) in
-                          unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
-            Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
+            let evaluator =
+              match policy with
+                | Nested -> `Nested
+                | Flat -> `Flat
+                | Default -> if (Settings.get Database.shredding) then `Nested else `Flat in
+            let () =
+              match evaluator with
+                | `Nested -> ()
+                | `Flat  ->
+                     let shape =
+                       Types.make_list_type
+                         (`Record (StringMap.empty,
+                            Types.fresh_row_variable (lin_any, res_base), false)) in
+                     unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
+            Query (range, policy, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
         | Spawn (Wait, l, p, old_inner) ->
             assert (l = NoSpawnLocation);
@@ -3372,7 +3384,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                (List.map (StringMap.filter (fun v _ -> not (StringSet.mem v vs)))
                                                          [usages body; from_option StringMap.empty (opt_map usages where); from_option StringMap.empty (opt_map usages orderby)])) in
               if is_query then
-                Query (None, with_pos pos e, Some (typ body)), typ body, us
+                Query (None, QueryPolicy.Default, with_pos pos e, Some (typ body)), typ body, us
               else
                 e, typ body, us
         | Escape (bndr, e) ->

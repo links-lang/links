@@ -224,7 +224,7 @@ and phrasenode =
       spawn block, row opt *)
   | Spawn            of spawn_kind * given_spawn_location * phrase *
                           Types.row option
-  | Query            of (phrase * phrase) option * phrase *
+  | Query            of (phrase * phrase) option * QueryPolicy.t * phrase *
                           Types.datatype option
   | RangeLit         of phrase * phrase
   | ListLit          of phrase list * Types.datatype option
@@ -458,8 +458,8 @@ struct
     | LensGetLit (l, _) -> phrase l
     | LensPutLit (l, data, _) -> union_all [phrase l; phrase data]
 
-    | Query (None, p, _) -> phrase p
-    | Query (Some (limit, offset), p, _) ->
+    | Query (None, _, p, _) -> phrase p
+    | Query (Some (limit, offset), _, p, _) ->
        union_all [phrase limit; phrase offset; phrase p]
 
     | Escape (v, p) -> diff (phrase p) (singleton (Binder.to_name v))
