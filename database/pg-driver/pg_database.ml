@@ -1,8 +1,8 @@
 
+open Links_core
 open Links_runtime
 
 open Postgresql
-open Links_core
 open Utility
 
 (* Pg_database

@@ -3,7 +3,7 @@
   (public_name links-sqlite3)
   (synopsis "SQLite 3 database backend for Links")
   (optional)
-  (libraries sqlite3 links.core))
+  (libraries sqlite3 links.core links.runtime))
 
 
 (install
