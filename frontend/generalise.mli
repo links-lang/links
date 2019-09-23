@@ -1,3 +1,5 @@
+open Links_core
+
 open CommonTypes
 
 val generalise : ?unwrap:bool -> Types.environment -> Types.datatype
