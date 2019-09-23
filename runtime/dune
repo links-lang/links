@@ -13,7 +13,7 @@
   (public_name links.runtime)
   (synopsis "Links runtime library")
   (modes native)
-  (libraries str linenoise base64 safepass unix result
+  (libraries str safepass result
              yojson ppx_deriving_yojson.runtime
              lwt lwt.unix
              cohttp cohttp-lwt-unix cohttp-lwt
