@@ -2967,7 +2967,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               match policy with
                 | Nested -> `Nested
                 | Flat -> `Flat
-                | Default -> if (Settings.get CoreDatabase.shredding) then `Nested else `Flat in
+                | Default -> if (Settings.get DatabaseSettings.shredding) then `Nested else `Flat in
             let () =
               match evaluator with
                 | `Nested -> ()
@@ -3377,7 +3377,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    unify ~handle:Gripers.iteration_base_order
                      (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row (lin_unl, res_base))))) orderby in
             let () =
-              if is_query && not (Settings.get CoreDatabase.relax_query_type_constraint) then
+              if is_query && not (Settings.get DatabaseSettings.relax_query_type_constraint) then
                 unify ~handle:Gripers.iteration_base_body
                   (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row (lin_unl, res_base))))) in
             let e = Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in

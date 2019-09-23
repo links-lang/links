@@ -4,11 +4,11 @@ open List
 open CommonTypes
 open Utility
 
-let connection_info = CoreDatabase.connection_info
+let connection_info = DatabaseSettings.connection_info
 
-let relax_query_type_constraint = CoreDatabase.relax_query_type_constraint
+let relax_query_type_constraint = DatabaseSettings.relax_query_type_constraint
 
-let shredding = CoreDatabase.shredding
+let shredding = DatabaseSettings.shredding
 
 (* Hacky database query result manipulation settings. *)
 let coerce_null_integers

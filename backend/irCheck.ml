@@ -777,7 +777,7 @@ struct
             (* The type of the body must match the type the query is annotated with *)
             o#check_eq_types original_t t (SSpec special);
 
-            (if Settings.get CoreDatabase.relax_query_type_constraint then
+            (if Settings.get DatabaseSettings.relax_query_type_constraint then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in
