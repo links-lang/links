@@ -1,4 +1,6 @@
 (** Data structures/utilities for process management *)
+open Links_core
+
 open Lwt
 open ProcessTypes
 open Utility

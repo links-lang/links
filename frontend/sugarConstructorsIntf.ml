@@ -1,5 +1,6 @@
 (* This module contains module signatures used by SugarConstructors module.
    Putting them here allows to avoid repetition. *)
+open Links_core
 
 open CommonTypes
 open Operators

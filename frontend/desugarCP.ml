@@ -1,3 +1,5 @@
+open Links_core
+
 open Utility
 open Sugartypes
 open SugarConstructors.DummyPositions
@@ -113,7 +115,7 @@ object (o : 'self_type)
             let eff_fields = StringMap.remove wild_str eff_fields in
             let eff_fields =
               if Settings.get Basicsettings.Sessions.exceptions_enabled then
-                StringMap.remove Value.session_exception_operation eff_fields
+                StringMap.remove FrontendValue.session_exception_operation eff_fields
               else
                 eff_fields
             in

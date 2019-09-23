@@ -1,3 +1,6 @@
+open Links_core
+open Links_backend
+
 val affected_channels :
   Value.env -> (* Environment upon raising of exception *)
   Ir.computation list -> (* Pure frames in remainder of try-block *)
@@ -6,4 +9,3 @@ val affected_channels :
 val variables_in_computation :
   Ir.computation ->
   Var.var list (* List of values in the computation *)
-

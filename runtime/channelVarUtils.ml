@@ -1,3 +1,7 @@
+open Links_core
+open Links_backend
+
+
 open Value
 open Utility
 
@@ -164,4 +168,3 @@ let affected_channels raise_env frames =
       fun acc c ->
         (affected_in_context raise_env c) @ acc) [] frames in
   unduplicate (fun v1 v2 -> v1 = v2) (affected_context_chans)
-

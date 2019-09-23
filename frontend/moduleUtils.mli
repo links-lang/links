@@ -1,3 +1,5 @@
+open Links_core
+
 open Utility
 
 type module_info = {

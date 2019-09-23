@@ -1,4 +1,6 @@
 (** Interface to the parser.*)
+open Links_core
+
 open Scanner
 
 module LinksLexer : (LexerSig with type token         = Parser.token and

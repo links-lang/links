@@ -42,6 +42,8 @@
           - When visiting an effect row, we insert presence variables according
             to the previously determined operation map. *)
 
+open Links_core
+
 open CommonTypes
 open Types
 open SourceCode

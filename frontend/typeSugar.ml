@@ -1,3 +1,5 @@
+open Links_core
+
 open CommonTypes
 open Utility
 open Operators
@@ -2965,7 +2967,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               match policy with
                 | Nested -> `Nested
                 | Flat -> `Flat
-                | Default -> if (Settings.get Database.shredding) then `Nested else `Flat in
+                | Default -> if (Settings.get CoreDatabase.shredding) then `Nested else `Flat in
             let () =
               match evaluator with
                 | `Nested -> ()
@@ -3023,7 +3025,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let inner_effects =
               if Settings.get  Basicsettings.Sessions.exceptions_enabled then
                 let ty = Types.make_pure_function_type [] (Types.empty_type) in
-                Types.row_with (Value.session_exception_operation, `Present ty) inner_effects
+                Types.row_with (FrontendValue.session_exception_operation, `Present ty) inner_effects
               else
                 inner_effects in
             let pid_type = `Application (Types.process, [`Row pid_effects]) in
@@ -3375,7 +3377,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    unify ~handle:Gripers.iteration_base_order
                      (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row (lin_unl, res_base))))) orderby in
             let () =
-              if is_query && not (Settings.get Database.relax_query_type_constraint) then
+              if is_query && not (Settings.get CoreDatabase.relax_query_type_constraint) then
                 unify ~handle:Gripers.iteration_base_body
                   (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row (lin_unl, res_base))))) in
             let e = Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
@@ -3881,7 +3883,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            *)
            if String.compare opname "Return" = 0 then
              Gripers.die pos "The implicit effect Return is not invocable"
-           else if String.compare opname Value.session_exception_operation = 0 && not context.desugared then
+           else if String.compare opname FrontendValue.session_exception_operation = 0 && not context.desugared then
              Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
            else
            let (row, return_type, args) =
@@ -3909,11 +3911,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let rho = Types.fresh_row_variable default_effect_subkind in
             let outer_effects =
               Types.row_with
-                (Value.session_exception_operation, Types.fresh_presence_variable default_subkind)
+                (FrontendValue.session_exception_operation, Types.fresh_presence_variable default_subkind)
                 (StringMap.empty, rho, false) in
             let try_effects =
               Types.row_with
-                (Value.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
+                (FrontendValue.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
                 (StringMap.empty, rho, false) in
 
             unify ~handle:Gripers.try_effect
@@ -3990,7 +3992,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | QualifiedVar _ -> assert false
         | Raise ->
             let effects = Types.make_singleton_open_row
-                            (Value.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
+                            (FrontendValue.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
                             default_effect_subkind
             in
             unify ~handle:Gripers.raise_effect

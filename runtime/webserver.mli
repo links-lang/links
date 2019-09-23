@@ -1,3 +1,5 @@
+open Links_core
+
 open Webserver_types
 
 val jslib_dir : string option Settings.setting

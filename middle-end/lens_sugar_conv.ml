@@ -1,4 +1,5 @@
 open Links_core
+open Links_frontend
 
 
 open Lens.Operators
@@ -6,8 +7,8 @@ open Operators
 open SourceCode
 open Lens.Utility
 module LPS = Lens.Phrase.Sugar
-module LPV = Lens.Phrase.Value
 module S = Sugartypes
+module LPV = Lens.Phrase.Value
 
 let unary_of_sugartype_op v =
   let open Unary in
@@ -51,16 +52,6 @@ module Error = struct
   let internal_error_res msg = Result.error (Internal_error msg)
 end
 
-let lens_phrase_value_of_constant c =
-  let open CommonTypes in
-  match c with
-  | Constant.Bool b -> LPV.Bool b
-  | Constant.Int i -> LPV.Int i
-  | Constant.Char c -> LPV.Char c
-  | Constant.Float f -> LPV.Float f
-  | Constant.String s -> LPV.String s
-
-
 let is_static _typ p =
   let rec no_ext_deps v p =
     match p |> WithPos.node with
@@ -81,6 +72,16 @@ let is_static _typ p =
       | S.Pattern.Variable x -> no_ext_deps x body
       | _ -> false )
   | _ -> false
+
+let lens_phrase_value_of_constant c =
+  let open CommonTypes in
+  match c with
+  | Constant.Bool b -> LPV.Bool b
+  | Constant.Int i -> LPV.Int i
+  | Constant.Char c -> LPV.Char c
+  | Constant.Float f -> LPV.Float f
+  | Constant.String s -> LPV.String s
+
 
 let rec lens_sugar_phrase_of_body v p =
   let open Result.O in

@@ -1,3 +1,5 @@
+open Links_core
+
 open Proc
 open Json
 open Utility
@@ -110,4 +112,3 @@ let add_channel_information client_id json_state =
       | Some (buf) -> JsonState.add_buffer local buf state_acc
       | None -> JsonState.add_buffer local [] state_acc
   ) json_state (JsonState.get_carried_channels json_state)
-

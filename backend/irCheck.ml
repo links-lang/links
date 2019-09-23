@@ -1,3 +1,5 @@
+open Links_core
+
 open CommonTypes
 open Utility
 open Ir
@@ -464,7 +466,8 @@ struct
     val type_var_env = Env.empty
 
     (* initialize to the default row of allowed toplevel effects*)
-    val allowed_effects = Lib.typing_env.effect_row
+    (* This should be identical to Lib.typing_env.effect_row *)
+    val allowed_effects = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)
 
     (* TODO: closure handling needs to be reworked properly *)
     method lookup_closure_def_for_fun fid = Env.find closure_def_env fid
@@ -559,10 +562,11 @@ struct
               XmlNode (tag, attributes, children), Types.xml_type, o
 
         | ApplyPure (f, args) ->
+           let open LibTyping in
             let rec is_pure_function = function
               | TApp (v, _)
               | TAbs (_, v) -> is_pure_function v
-              | Variable var when Lib.is_primitive_var var -> Lib.is_pure_primitive (Lib.primitive_name var)
+              | Variable var when is_primitive_var var -> is_pure_primitive (primitive_name var)
               | _ -> false in
 
             let (f, ft, o) = o#value f in
@@ -773,7 +777,7 @@ struct
             (* The type of the body must match the type the query is annotated with *)
             o#check_eq_types original_t t (SSpec special);
 
-            (if Settings.get Database.relax_query_type_constraint then
+            (if Settings.get CoreDatabase.relax_query_type_constraint then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in

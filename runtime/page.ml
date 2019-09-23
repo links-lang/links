@@ -1,5 +1,10 @@
 (* Page generation *)
 
+open Links_frontend
+open Links_core
+open Links_backend
+
+
 
 open Irtojs
 module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
@@ -117,7 +122,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   let page : ?cgi_env:(string * string) list ->
              wsconn_url:(Webserver_types.websocket_url option) ->
              (Var.var Env.String.t * Types.typing_environment) ->
-             Ir.binding list -> (Value.env * Value.t) -> Loader.ext_dep list -> string
+             Ir.binding list -> (Value.env * Value.t) -> string list -> string
     = fun ?(cgi_env=[]) ~wsconn_url (nenv, tyenv) defs (valenv, v) deps ->
     let open Json in
     let req_data = Value.Env.request_data valenv in

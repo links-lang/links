@@ -1,4 +1,6 @@
 (** Monadic IR *)
+open Links_core
+
 open CommonTypes
 
 type scope = Var.Scope.t

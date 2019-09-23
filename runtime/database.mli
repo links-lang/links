@@ -1,4 +1,5 @@
 (** A generic interface for SQL-style databases. Vendor-specific implementations are elsewhere *)
+open Links_core
 
 val connection_info : string option Settings.setting
 val relax_query_type_constraint : bool Settings.setting
@@ -29,4 +30,3 @@ val execute_untyped_select : string -> Value.database -> Value.t
 val execute_insert : (string * string list * string list list) ->  Value.database -> Value.t
 
 val execute_insert_returning : (string * string list * string list list * string) ->  Value.database -> Value.t
-

@@ -1,4 +1,6 @@
 (* Side-effect-free JSON operations. *)
+open Links_core
+
 open ProcessTypes
 open CommonTypes
 open Utility

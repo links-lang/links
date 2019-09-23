@@ -1,5 +1,7 @@
 (** Monadic IR *)
 
+open Links_core
+
 open CommonTypes
 
 

@@ -1,3 +1,5 @@
+open Links_core
+
 open SourceCode
 
 (* Import module signatures. *)

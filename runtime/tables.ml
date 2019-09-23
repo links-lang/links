@@ -1,3 +1,6 @@
+open Links_core
+open Links_backend
+
 open Utility
 
 let init_size = 10000

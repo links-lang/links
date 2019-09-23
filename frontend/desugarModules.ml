@@ -44,6 +44,7 @@
    the previous context, and bind the name of module to the computed
    "delta" in both the "visible" and "delta" contexts. *)
 
+open Links_core
 
 open CommonTypes
 open Utility

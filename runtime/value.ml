@@ -1,3 +1,8 @@
+
+open Links_core
+open Links_frontend
+open Links_backend
+
 open CommonTypes
 open Utility
 open Notfound
@@ -26,7 +31,7 @@ let printing_functions
               |> convert parse_bool
               |> sync)
 
-let session_exception_operation = "SessionFail"
+let session_exception_operation = FrontendValue.session_exception_operation
 
 class type otherfield =
 object
@@ -1565,4 +1570,3 @@ let rec from_json (json: Yojson.Basic.t) : t =
           | Some v -> v
           | None -> parse_record xs
       end
-

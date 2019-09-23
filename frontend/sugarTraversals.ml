@@ -8,6 +8,8 @@
    generate all this automatically instead of maintaining this file.
 *)
 
+open Links_core
+
 open Operators
 open CommonTypes
 open SourceCode

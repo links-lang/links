@@ -1,3 +1,5 @@
+open Links_core
+
 open Utility
 open CommonTypes
 open Ir

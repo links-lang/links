@@ -1,3 +1,5 @@
+open Links_core
+
 val read : aliases:Types.tycon_environment -> string -> Types.datatype
 
 val sentence :

@@ -1,3 +1,5 @@
+open Links_core
+
 open CommonTypes
 open Utility
 open SourceCode.WithPos
@@ -19,7 +21,7 @@ open SugarConstructors.DummyPositions
 
 module TyEnv = Env.String
 
-let failure_op_name = Value.session_exception_operation
+let failure_op_name = FrontendValue.session_exception_operation
 
 class insert_toplevel_handlers env =
 object (o: 'self_type)

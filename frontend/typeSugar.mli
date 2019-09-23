@@ -1,3 +1,5 @@
+open Links_core
+
 module Check :
   sig
     open Sugartypes

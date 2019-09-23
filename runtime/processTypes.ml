@@ -1,3 +1,5 @@
+open Links_core
+
 open Utility
 
 (* Should be safe to not have an explicit lock due to the co-operative

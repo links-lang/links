@@ -1,3 +1,5 @@
+open Links_core
+
 type position_context = SourceCode.source_code
 
 module type LexerSig = sig

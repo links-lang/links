@@ -9,6 +9,8 @@
  * alien javascript "test.js" setTitle : (String) ~> ()
  * alien javascript "test.js" alertBox : (String) ~> ()
  *)
+open Links_core
+
 
 open Utility
 open SourceCode.WithPos
@@ -67,4 +69,3 @@ let sentence = function
      let o = (flatten_bindings ())#sentence sentence in
      Definitions (o#get_bindings)
   | sentence -> sentence
-

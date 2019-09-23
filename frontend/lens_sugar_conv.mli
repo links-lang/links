@@ -1,5 +1,6 @@
 (** This is the module for converting / handling links surface syntax to ensure compatability with
     the relational lenses module. *)
+open Links_core
 
 open SourceCode
 

@@ -1,3 +1,6 @@
+open Links_core
+open Links_backend
+
 type envs = Var.var Env.String.t * Types.typing_environment
 
 type program = Ir.binding list * Ir.computation * Types.datatype

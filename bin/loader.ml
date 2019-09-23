@@ -1,3 +1,8 @@
+open Links_core
+open Links_frontend
+open Links_backend
+open Links_middleend
+
 open Utility
 open Performance
 
@@ -60,10 +65,7 @@ let read_file_source (nenv, tyenv) (filename:string) =
 (** Loads a named file and prints it as syntax *)
 let print filename =
    let _envs, (globals, (locals, main), _t) = read_program filename in
-     print_string (Ir.show_program (globals @ locals, main))
+     print_string (Ir.string_of_program (globals @ locals, main))
 
 
 let load_file = read_file_source
-
-
-

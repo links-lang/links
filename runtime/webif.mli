@@ -1,5 +1,9 @@
 (** Web interface *)
 
+open Links_core
+open Links_backend
+
+
 open Webserver_types
 
 module WebIf : functor (Webs : WEBSERVER) ->

@@ -23,6 +23,8 @@ Once done with debugging remember to disable the flags!
 *)
 
 %{
+open Links_core
+
 
 open CommonTypes
 open Utility
@@ -279,7 +281,7 @@ end
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
-%token <Operators.Associativity.t -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
+%token <Links_core.Operators.Associativity.t -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
 %token TYPENAME
 %token TYPE ROW PRESENCE
 %token TRY OTHERWISE RAISE

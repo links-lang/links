@@ -1,3 +1,5 @@
+open Links_core
+
 open SourceCode
 open SourceCode.WithPos
 open Sugartypes

@@ -1,4 +1,7 @@
 (* JavaScript code generation *)
+open Links_core
+open Links_backend
+
 open Utility
 
 (** IR variable environment *)

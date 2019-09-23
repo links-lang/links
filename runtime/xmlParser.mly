@@ -1,6 +1,10 @@
 (* See Note [Debugging grammar conflicts] in parser.mly *)
 
 %{
+open Links_core
+open Links_frontend
+
+
 open Utility
 open Value
 

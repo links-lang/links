@@ -1,3 +1,5 @@
+open Links_core
+
 
 module type NAME = sig
   type t

@@ -1,3 +1,7 @@
+
+open Links_core
+open Links_frontend
+
 open Scanner
 
 module XmlLexer : (LexerSig with type token         = XmlParser.token and

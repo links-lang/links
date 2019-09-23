@@ -7,6 +7,10 @@
   guarantee no duplication of continuations), we would probably need
   to adjust our intermediate language.
 *)
+open Links_core
+open Links_frontend
+open Links_backend
+
 
 open CommonTypes
 open SourceCode
@@ -1124,4 +1128,3 @@ let compile_choices
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled choices: "^(string_of_computation result));
       result
-

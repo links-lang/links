@@ -1,3 +1,5 @@
+open Links_core
+
 open Ir
 
 val typecheck : bool Settings.setting

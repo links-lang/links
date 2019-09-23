@@ -1,3 +1,5 @@
+open Links_core
+
 open Utility
 
 (* Shall we re-run the frontend type-checker after each TransformSugar transformation? *)

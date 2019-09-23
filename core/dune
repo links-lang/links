@@ -1,10 +1,4 @@
-(ocamllex
-  (modules xmlLexer))
 
-(menhir
-  (modules xmlParser)
-  (flags "--table") ;; slower parser, but compilation *much* faster
-)
 
 
 

@@ -32,6 +32,7 @@
 *)
 
 {
+open Links_core
 
 open Lexing
 open Utility

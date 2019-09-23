@@ -1,24 +1,14 @@
+open Links_core
+
 open List
 open CommonTypes
 open Utility
 
-let connection_info
-  = Settings.(option "database_args"
-              |> synopsis "Database host, name, user, and password"
-              |> to_string from_string_option
-              |> convert Utility.some
-              |> sync)
+let connection_info = CoreDatabase.connection_info
 
-let relax_query_type_constraint =
-  Settings.(flag "relax_query_type_constraint"
-            |> convert parse_bool
-            |> sync)
+let relax_query_type_constraint = CoreDatabase.relax_query_type_constraint
 
-let shredding =
-  Settings.(flag "shredding"
-            |> synopsis "Enables database query shredding"
-            |> convert parse_bool
-            |> sync)
+let shredding = CoreDatabase.shredding
 
 (* Hacky database query result manipulation settings. *)
 let coerce_null_integers
