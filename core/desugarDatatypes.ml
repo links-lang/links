@@ -135,7 +135,7 @@ let typevars =
 object (self)
   inherit SugarTraversals.fold as super
 
-  val tyvar_list : name list = []
+  val tyvar_list : Name.t list = []
   val tyvars : type_variable StringMap.t = StringMap.empty
 
   (* fill in subkind with the default *)
@@ -371,12 +371,12 @@ module Desugar = struct
          self#row (fields, var)
      end)#datatype
 
-  (** Desugars quantifiers into Types.quantifiers, returning the updated
+  (** Desugars quantifiers into Quantifier.ts, returning the updated
      variable environment.
 
      This is used within the `typename` and `Forall` desugaring. *)
   let desugar_quantifiers (var_env: var_env) (qs: Sugartypes.quantifier list) body pos :
-      (Types.quantifier list * var_env) =
+      (Quantifier.t list * var_env) =
     (* Bind all quantified variables, and then do a naive {!typevars} pass over this set to infer
        any unannotated kinds, and verify existing kinds/subkinds match up.
 
@@ -583,7 +583,7 @@ module Desugar = struct
             let _ = Unionfind.change point (`Recursive (var, datatype { var_env with tyvars; row_operations } t)) in
               `MetaTypeVar point
         | Forall (qs, t) ->
-            let (qs: Types.quantifier list), var_env = desugar_quantifiers var_env qs t pos in
+            let (qs: Quantifier.t list), var_env = desugar_quantifiers var_env qs t pos in
             let t = datatype var_env t in
               `ForAll (qs, t)
         | Unit -> Types.unit_type
@@ -601,7 +601,7 @@ module Desugar = struct
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
-            let match_quantifiers : type a. (a -> Types.kind) -> a list -> Types.type_arg list = fun proj qs ->
+            let match_quantifiers : type a. (a -> Kind.t) -> a list -> Types.type_arg list = fun proj qs ->
               let match_kinds i (q, t) =
                 let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
                   | Type _ -> PrimaryKind.Type
@@ -758,7 +758,7 @@ module Desugar = struct
     | Presence f -> `Presence (fieldspec var_env alias_env f node)
 
   (* pre condition: all subkinds have been filled in *)
-  let generate_var_mapping (vars : type_variable list) : Types.quantifier list * var_env =
+  let generate_var_mapping (vars : type_variable list) : Quantifier.t list * var_env =
     let addt x t envs = { envs with tyvars = StringMap.add x (`Type t) envs.tyvars } in
     let addr x r envs = { envs with tyvars = StringMap.add x (`Row r) envs.tyvars } in
     let addf x f envs = { envs with tyvars = StringMap.add x (`Presence f) envs.tyvars } in

@@ -49,12 +49,12 @@ let generalise_toplevel
 module Env = Env.String
 
 module Utils : sig
-  val dummy_source_name : unit -> name
+  val dummy_source_name : unit -> Name.t
   val unify : Types.datatype * Types.datatype -> unit
   val instantiate : Types.environment -> string ->
                     (Types.type_arg list * Types.datatype)
   val generalise : ?unwrap:bool -> Types.environment -> Types.datatype ->
-                   ((Types.quantifier list*Types.type_arg list) * Types.datatype)
+                   ((Quantifier.t list*Types.type_arg list) * Types.datatype)
 
   (* val is_pure : phrase -> bool *)
   val is_pure_binding : binding -> bool
@@ -290,6 +290,7 @@ sig
   val update_outer : griper
 
   val range_bound : griper
+  val range_wild : griper
 
   val spawn_outer : griper
   val spawn_wait_outer : griper
@@ -906,6 +907,15 @@ end
 
     let range_bound ~pos ~t1:_l ~t2:(_, _t) ~error:_ =
       die pos "Range bounds must be integers."
+
+    let range_wild ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Ranges are wild"                       ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let spawn_location ~pos ~t1:l ~t2:(_, t) ~error:_ =
       fixed_type pos "Spawn locations" t l
@@ -3097,10 +3107,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               InfixAppl ((tyargs, op), erase l, erase r), rettyp, merge_usages [usages l; usages r; op_usages]
         | RangeLit (l, r) ->
             let l, r = tc l, tc r in
+	    let outer_effects =
+              Types.make_singleton_open_row ("wild", `Present Types.unit_type)
+                                            default_effect_subkind in
             let () = unify ~handle:Gripers.range_bound  (pos_and_typ l,
                                                          no_pos Types.int_type)
             and () = unify ~handle:Gripers.range_bound  (pos_and_typ r,
                                                          no_pos Types.int_type)
+            and () = unify ~handle:Gripers.range_wild   (no_pos (`Record context.effect_row),
+                                                         no_pos (`Record outer_effects))
             in RangeLit (erase l, erase r),
                Types.make_list_type Types.int_type,
                merge_usages [usages l; usages r]
@@ -3148,7 +3163,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           (* the free type variables in the arguments (and effects) *)
                           let arg_vars = Types.TypeVarSet.union (Types.free_type_vars fps) (Types.free_row_type_vars fe) in
                           (* return true if this quantifier appears free in the arguments (or effects) *)
-                          let free_in_arg q = Types.TypeVarSet.mem (Types.var_of_quantifier q) arg_vars in
+                          let free_in_arg q = Types.TypeVarSet.mem (Quantifier.to_var q) arg_vars in
 
                           (* quantifiers for the return type *)
                           let rqs =
@@ -3469,7 +3484,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
                           (* return true if this quantifier appears
                              free in the projected type *)
-                          let free_in_body q = Types.TypeVarSet.mem (Types.var_of_quantifier q) vars in
+                          let free_in_body q = Types.TypeVarSet.mem (Quantifier.to_var q) vars in
 
                           (* quantifiers for the projected type *)
                           let pta, pqs =
@@ -4171,7 +4186,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                  | t_tyvars ->
                    if not (List.for_all
                              (fun q ->
-                               List.exists (Types.eq_quantifiers q) t_tyvars) tyvars)
+                               List.exists (Quantifier.eq q) t_tyvars) tyvars)
                    then
                      Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
                    t_tyvars, t
@@ -4349,7 +4364,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                            if not
                                 (List.for_all
                                    (fun q ->
-                                     List.exists (Types.eq_quantifiers q) outer_tyvars) body_tyvars) then
+                                     List.exists (Quantifier.eq q) outer_tyvars) body_tyvars) then
                              Gripers.inconsistent_quantifiers ~pos ~t1:outer ~t2:gen;
 
                            (* We could check that inner_tyvars is
@@ -4375,7 +4390,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                              let rec find p i =
                                function
                                | [] -> None
-                               | q :: _ when Types.eq_quantifiers p q -> Some i
+                               | q :: _ when Quantifier.eq p q -> Some i
                                | _ :: qs -> find p (i+1) qs in
                              let find p = find p 0 inner_tyvars in
                              List.map find outer_tyvars

@@ -70,11 +70,11 @@ class map =
       | Project _x -> let _x = o#name _x in Project _x
       | Name _x -> let _x = o#name _x in Name _x
 
-    method subkind : subkind -> subkind = fun x -> x
+    method subkind : Subkind.t -> Subkind.t = fun x -> x
 
     method kind : kind -> kind = fun x -> x
 
-    method freedom : freedom -> freedom = fun x -> x
+    method freedom : Freedom.t -> Freedom.t = fun x -> x
 
     method type_variable : type_variable -> type_variable =
       fun (_x, _x_i1, _x_i2) ->
@@ -527,7 +527,7 @@ class map =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#patternnode p
 
-    method name : name -> name = o#string
+    method name : Name.t -> Name.t = o#string
 
     method location : Location.t -> Location.t = o#unknown
 
@@ -837,11 +837,11 @@ class fold =
       | Project _x -> let o = o#name _x in o
       | Name _x -> let o = o#name _x in o
 
-    method subkind : subkind -> 'self_type = fun _ -> o
+    method subkind : Subkind.t -> 'self_type = fun _ -> o
 
     method kind : kind -> 'self_type = fun _ -> o
 
-    method freedom : freedom -> 'self_type = fun _ -> o
+    method freedom : Freedom.t -> 'self_type = fun _ -> o
 
     method type_variable : type_variable -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
@@ -1235,7 +1235,7 @@ class fold =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method name : name -> 'self_type = o#string
+    method name : Name.t -> 'self_type = o#string
 
     method location : Location.t -> 'self_type = o#unknown
 
@@ -1531,11 +1531,11 @@ class fold_map =
       | Project _x -> let (o, _x) = o#name _x in (o, Project _x)
       | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
-    method subkind : subkind -> ('self_type * subkind) = fun k -> (o, k)
+    method subkind : Subkind.t -> ('self_type * Subkind.t) = fun k -> (o, k)
 
     method kind : kind -> ('self_type * kind) = fun k -> (o, k)
 
-    method freedom : freedom -> ('self_type * freedom) = fun k -> (o, k)
+    method freedom : Freedom.t -> ('self_type * Freedom.t) = fun k -> (o, k)
 
     method type_variable : type_variable -> ('self_type * type_variable) =
       fun (_x, _x_i1, _x_i2) ->
@@ -2016,7 +2016,7 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method name : name -> ('self_type * name) = o#string
+    method name : Name.t -> ('self_type * Name.t) = o#string
 
     method location : Location.t -> ('self_type * Location.t) = o#unknown
 

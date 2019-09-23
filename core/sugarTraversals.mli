@@ -30,9 +30,9 @@ class map :
     method binder          : Binder.with_pos -> Binder.with_pos
     method sentence        : sentence -> sentence
     method section         : Section.t -> Section.t
-    method subkind         : subkind -> subkind
+    method subkind         : Subkind.t -> Subkind.t
     method kind            : kind -> kind
-    method freedom         : freedom -> freedom
+    method freedom         : Freedom.t -> Freedom.t
     method type_variable   : type_variable -> type_variable
     method known_type_variable   : known_type_variable -> known_type_variable
     method row_var         : Datatype.row_var -> Datatype.row_var
@@ -48,7 +48,7 @@ class map :
     method cp_phrase       : cp_phrase -> cp_phrase
     method patternnode     : Pattern.t -> Pattern.t
     method pattern         : Pattern.with_pos -> Pattern.with_pos
-    method name            : name -> name
+    method name            : Name.t -> Name.t
     method location        : Location.t -> Location.t
     method iterpatt        : iterpatt -> iterpatt
     method funlit          : funlit -> funlit
@@ -109,9 +109,9 @@ class fold :
     method binder          : Binder.with_pos -> 'self
     method sentence        : sentence -> 'self
     method section         : Section.t -> 'self
-    method subkind         : subkind -> 'self
+    method subkind         : Subkind.t -> 'self
     method kind            : kind -> 'self
-    method freedom         : freedom -> 'self
+    method freedom         : Freedom.t -> 'self
     method type_variable   : type_variable -> 'self
     method known_type_variable : known_type_variable -> 'self
     method row_var         : Datatype.row_var -> 'self
@@ -127,7 +127,7 @@ class fold :
     method cp_phrase       : cp_phrase -> 'self
     method patternnode     : Pattern.t -> 'self
     method pattern         : Pattern.with_pos -> 'self
-    method name            : name -> 'self
+    method name            : Name.t -> 'self
     method location        : Location.t -> 'self
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
@@ -193,7 +193,7 @@ object ('self)
   method iterpatt        : iterpatt -> 'self * iterpatt
   method list            : 'a . ('self -> 'a -> 'self * 'a) -> 'a list -> 'self * 'a list
   method location        : Location.t -> 'self * Location.t
-  method name            : name -> 'self * name
+  method name            : Name.t -> 'self * Name.t
   method option          : 'a . ('self -> 'a -> 'self * 'a) -> 'a option -> 'self * 'a option
   method patternnode     : Pattern.t -> 'self * Pattern.t
   method pattern         : Pattern.with_pos -> 'self * Pattern.with_pos
@@ -212,10 +212,10 @@ object ('self)
   method row_var         : Datatype.row_var -> 'self * Datatype.row_var
   method section         : Section.t -> 'self * Section.t
   method sentence        : sentence -> 'self * sentence
-  method string          : name -> 'self * name
-  method subkind         : subkind -> 'self * subkind
+  method string          : Name.t -> 'self * Name.t
+  method subkind         : Subkind.t -> 'self * Subkind.t
   method kind            : kind -> 'self * kind
-  method freedom         : freedom -> 'self * freedom
+  method freedom         : Freedom.t -> 'self * Freedom.t
   method type_variable   : type_variable -> 'self * type_variable
   method known_type_variable : known_type_variable -> 'self * known_type_variable
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg

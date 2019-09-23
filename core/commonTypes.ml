@@ -102,16 +102,14 @@ let res_mono    = Restriction.Mono
 let res_session = Restriction.Session
 let res_effect  = Restriction.Effect
 
-type subkind = Linearity.t * Restriction.t
+module Subkind = struct
+  type t = Linearity.t * Restriction.t
     [@@deriving eq,show]
 
-let min_subkind (ll, lr) (rl, rr) =
-  match Restriction.min lr rr with
-  | Some r -> Some (Linearity.min ll rl, r)
-  | None -> None
-
-let string_of_subkind (lin, res) =
-  Printf.sprintf "(%s,%s)" (Linearity.to_string lin) (Restriction.to_string res)
+  let to_string (lin, res) =
+    Printf.sprintf "(%s,%s)" (Linearity.to_string   lin)
+                             (Restriction.to_string res)
+end
 
 module PrimaryKind = struct
   type t =
@@ -130,6 +128,33 @@ end
 let pk_type     = PrimaryKind.Type
 let pk_row      = PrimaryKind.Row
 let pk_presence = PrimaryKind.Presence
+
+module Kind = struct
+  type t = PrimaryKind.t * Subkind.t
+    [@@deriving eq,show]
+end
+
+module Quantifier = struct
+  type t = int * Kind.t
+    [@@deriving show]
+
+  let to_var = function
+    | (var, _) -> var
+
+  let to_kind : t -> Kind.t = function
+    | (_, k) -> k
+
+  let to_primary_kind : t -> PrimaryKind.t = function
+    | (_, (pk, _)) -> pk
+
+  let to_subkind : t -> Subkind.t = function
+    | (_, (_, sk)) -> sk
+
+  let to_string = Format.asprintf "%a" pp
+
+  let eq : t -> t -> bool = fun lvar rvar ->
+    to_var lvar = to_var rvar
+end
 
 module Location = struct
   type t = Client | Server | Native | Unknown
@@ -164,8 +189,15 @@ let loc_server  = Location.Server
 let loc_native  = Location.Native
 let loc_unknown = Location.Unknown
 
-type freedom = [`Flexible | `Rigid]
+module Freedom = struct
+  type t = [`Flexible | `Rigid]
     [@@deriving show]
+end
+
+module Name = struct
+  type t = string
+    [@@deriving show]
+end
 
 module Primitive = struct
   type t = Bool | Int | Char | Float | XmlItem | DB | String
