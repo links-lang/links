@@ -21,7 +21,7 @@ open SugarConstructors.DummyPositions
 
 module TyEnv = Env.String
 
-let failure_op_name = FrontendValue.session_exception_operation
+let failure_op_name = SessionExceptions.session_exception_operation
 
 class insert_toplevel_handlers env =
 object (o: 'self_type)

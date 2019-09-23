@@ -3025,7 +3025,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let inner_effects =
               if Settings.get  Basicsettings.Sessions.exceptions_enabled then
                 let ty = Types.make_pure_function_type [] (Types.empty_type) in
-                Types.row_with (FrontendValue.session_exception_operation, `Present ty) inner_effects
+                Types.row_with (SessionExceptions.session_exception_operation, `Present ty) inner_effects
               else
                 inner_effects in
             let pid_type = `Application (Types.process, [`Row pid_effects]) in
@@ -3883,7 +3883,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            *)
            if String.compare opname "Return" = 0 then
              Gripers.die pos "The implicit effect Return is not invocable"
-           else if String.compare opname FrontendValue.session_exception_operation = 0 && not context.desugared then
+           else if String.compare opname SessionExceptions.session_exception_operation = 0 && not context.desugared then
              Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
            else
            let (row, return_type, args) =
@@ -3911,11 +3911,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let rho = Types.fresh_row_variable default_effect_subkind in
             let outer_effects =
               Types.row_with
-                (FrontendValue.session_exception_operation, Types.fresh_presence_variable default_subkind)
+                (SessionExceptions.session_exception_operation, Types.fresh_presence_variable default_subkind)
                 (StringMap.empty, rho, false) in
             let try_effects =
               Types.row_with
-                (FrontendValue.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
+                (SessionExceptions.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
                 (StringMap.empty, rho, false) in
 
             unify ~handle:Gripers.try_effect
@@ -3992,7 +3992,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | QualifiedVar _ -> assert false
         | Raise ->
             let effects = Types.make_singleton_open_row
-                            (FrontendValue.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
+                            (SessionExceptions.session_exception_operation, `Present (Types.make_pure_function_type [] Types.empty_type))
                             default_effect_subkind
             in
             unify ~handle:Gripers.raise_effect

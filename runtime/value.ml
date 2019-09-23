@@ -31,7 +31,7 @@ let printing_functions
               |> convert parse_bool
               |> sync)
 
-let session_exception_operation = FrontendValue.session_exception_operation
+let session_exception_operation = SessionExceptions.session_exception_operation
 
 class type otherfield =
 object
