@@ -293,6 +293,7 @@ sig
   val update_outer : griper
 
   val range_bound : griper
+  val range_wild : griper
 
   val spawn_outer : griper
   val spawn_wait_outer : griper
@@ -909,6 +910,15 @@ end
 
     let range_bound ~pos ~t1:_l ~t2:(_, _t) ~error:_ =
       die pos "Range bounds must be integers."
+
+    let range_wild ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Ranges are wild"                       ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
 
     let spawn_location ~pos ~t1:l ~t2:(_, t) ~error:_ =
       fixed_type pos "Spawn locations" t l
@@ -2936,7 +2946,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               DBUpdate (erase_pat pat, erase from, opt_map erase where, List.map (fun (n,(p,_,_)) -> n, p) set),
               Types.unit_type,
               merge_usages (usages from :: hide (from_option StringMap.empty (opt_map usages where)) :: List.map hide (List.map (usages -<- snd) set))
-        | Query (range, p, _) ->
+        | Query (range, policy, p, _) ->
+            let open QueryPolicy in
             let range, outer_effects, range_usages =
               match range with
                 | None -> None, Types.make_empty_open_row default_effect_subkind, StringMap.empty
@@ -2953,10 +2964,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            let () = if Settings.get  Database.shredding then ()
-                     else let shape = Types.make_list_type (`Record (StringMap.empty, Types.fresh_row_variable (lin_any, res_base), false)) in
-                          unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
-            Query (range, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
+            let evaluator =
+              match policy with
+                | Nested -> `Nested
+                | Flat -> `Flat
+                | Default -> if (Settings.get Database.shredding) then `Nested else `Flat in
+            let () =
+              match evaluator with
+                | `Nested -> ()
+                | `Flat  ->
+                     let shape =
+                       Types.make_list_type
+                         (`Record (StringMap.empty,
+                            Types.fresh_row_variable (lin_any, res_base), false)) in
+                     unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
+            Query (range, policy, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
         (* mailbox-based concurrency *)
         | Spawn (Wait, l, p, old_inner) ->
             assert (l = NoSpawnLocation);
@@ -3088,10 +3110,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               InfixAppl ((tyargs, op), erase l, erase r), rettyp, merge_usages [usages l; usages r; op_usages]
         | RangeLit (l, r) ->
             let l, r = tc l, tc r in
+	    let outer_effects =
+              Types.make_singleton_open_row ("wild", `Present Types.unit_type)
+                                            default_effect_subkind in
             let () = unify ~handle:Gripers.range_bound  (pos_and_typ l,
                                                          no_pos Types.int_type)
             and () = unify ~handle:Gripers.range_bound  (pos_and_typ r,
                                                          no_pos Types.int_type)
+            and () = unify ~handle:Gripers.range_wild   (no_pos (`Record context.effect_row),
+                                                         no_pos (`Record outer_effects))
             in RangeLit (erase l, erase r),
                Types.make_list_type Types.int_type,
                merge_usages [usages l; usages r]
@@ -3360,7 +3387,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                (List.map (StringMap.filter (fun v _ -> not (StringSet.mem v vs)))
                                                          [usages body; from_option StringMap.empty (opt_map usages where); from_option StringMap.empty (opt_map usages orderby)])) in
               if is_query then
-                Query (None, with_pos pos e, Some (typ body)), typ body, us
+                Query (None, QueryPolicy.Default, with_pos pos e, Some (typ body)), typ body, us
               else
                 e, typ body, us
         | Escape (bndr, e) ->

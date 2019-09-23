@@ -693,15 +693,41 @@ struct
             in apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
           | _ -> eval_error "Error evaluating table handle"
       end
-    | Query (range, e, _t) ->
+    | Query (range, policy, e, _t) ->
        let range =
          match range with
          | None -> None
          | Some (limit, offset) ->
             Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
-       if Settings.get Database.shredding then
-         begin
-           if range != None then eval_error "Range is not supported for nested queries";
+       let evaluator =
+         let open QueryPolicy in
+         match policy with
+           | Flat -> `Flat
+           | Nested -> `Nested
+           | Default ->
+               if Settings.get Database.shredding then `Nested else `Flat in
+
+       let evaluate_standard () =
+         match EvalQuery.compile env (range, e) with
+           | None -> computation env cont e
+           | Some (db, q, t) ->
+               let q = Sql.string_of_query db range q in
+               let (fieldMap, _, _), _ =
+               Types.unwrap_row(TypeUtils.extract_row t) in
+               let fields =
+               StringMap.fold
+                   (fun name t fields ->
+                     match t with
+                     | `Present t -> (name, t)::fields
+                     | `Absent -> assert false
+                     | `Var _ -> assert false)
+                   fieldMap
+                   []
+               in
+               apply_cont cont env (Database.execute_select fields q db) in
+
+       let evaluate_nested () =
+         if range != None then eval_error "Range is not supported for nested queries";
            match EvalNestedQuery.compile_shredded env e with
            | None -> computation env cont e
            | Some (db, p) ->
@@ -727,28 +753,13 @@ struct
                     "The database driver '%s' does not support shredding."
                     (db#driver_name ())
                 in
-                raise (Errors.runtime_error error_msg)
-           end
-       else (* shredding disabled *)
-         begin
-           match EvalQuery.compile env (range, e) with
-           | None -> computation env cont e
-           | Some (db, q, t) ->
-               let q = Sql.string_of_query db range q in
-               let (fieldMap, _, _), _ =
-               Types.unwrap_row(TypeUtils.extract_row t) in
-               let fields =
-               StringMap.fold
-                   (fun name t fields ->
-                     match t with
-                     | `Present t -> (name, t)::fields
-                     | `Absent -> assert false
-                     | `Var _ -> assert false)
-                   fieldMap
-                   []
-               in
-               apply_cont cont env (Database.execute_select fields q db)
-         end
+                raise (Errors.runtime_error error_msg) in
+
+       begin
+         match evaluator with
+           | `Flat -> evaluate_standard ()
+           | `Nested -> evaluate_nested ()
+       end
     | InsertRows (source, rows) ->
         begin
           match value env source, value env rows with
