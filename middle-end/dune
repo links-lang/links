@@ -5,11 +5,7 @@
   (public_name links.middleend)
   (synopsis "Links middle-end library")
   (modes native)
-  (libraries str linenoise base64 safepass unix result
+  (libraries str
              yojson ppx_deriving_yojson.runtime
-             lwt lwt.unix
-             cohttp cohttp-lwt-unix cohttp-lwt
-             conduit-lwt-unix uri
-             websocket websocket-lwt-unix.cohttp
-             findlib menhirLib links.lens links.core links.frontend links.backend)
+             links.lens links.core links.frontend links.backend)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
