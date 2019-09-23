@@ -3,7 +3,7 @@ open Links_postgresql.Pg_database
 module Debug = Links_core.Debug
 module Settings = Links_core.Settings
 module Basicsettings = Links_core.Basicsettings
-module Links_value = Links_core.Value
+module Links_value = Links_runtime.Value
 open Lens
 open Lens.Utility
 open Lens.Utility.O
@@ -16,8 +16,8 @@ let leave_tables_opt =
   Conf.make_bool "leave_tables" false "Do not delete tables after run."
 
 let database_args_opt =
-  let module Database = Links_core.Database in
-  let connection_args = Settings.get Database.connection_info in
+  let module DS = Links_core.DatabaseSettings in
+  let connection_args = Settings.get DS.connection_info in
   Conf.make_string "database_args"
     ("links:" ^ Links_core.Utility.from_option "" connection_args)
     "Database connection args."
@@ -38,7 +38,7 @@ module LensTestHelpers = struct
   let get_db test_ctx =
     (* host port dbname user pw *)
     let conn, _ = get_pg_database_by_string (database_args_opt test_ctx) in
-    Links_core.Lens_database_conv.lens_db_of_db conn
+    Links_runtime.Lens_database_conv.lens_db_of_db conn
 
   (** Only print when **)
   let fmt_std_v test_ctx (fn : Format.formatter -> unit) =
