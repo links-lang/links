@@ -1,7 +1,6 @@
 open Links_core
 open Links_frontend
 open Links_backend
-open Links_runtime
 
 open CommonTypes
 open Operators
@@ -787,7 +786,7 @@ struct
         match WithPos.node e with
           | TAbstr (_, e)
           | TAppl (e, _) -> is_pure_primitive e
-          | Var f when Lib.is_pure_primitive f -> true
+          | Var f when LibTyping.is_pure_primitive f -> true
           | _ -> false in
 
       let eff = lookup_effects env in
@@ -824,7 +823,7 @@ struct
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name "!"), e1, e2) ->
               I.apply (instantiate "Send" tyargs, [ev e1; ev e2])
-          | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when Lib.is_pure_primitive n ->
+          | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when LibTyping.is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) ->
               I.apply (instantiate n tyargs, [ev e1; ev e2])
@@ -845,14 +844,14 @@ struct
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
           | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
-          | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->
+          | UnaryAppl ((tyargs, UnaryOp.Name n), e) when LibTyping.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
-          | FnAppl ({node=Var f; _}, es) when Lib.is_pure_primitive f ->
+          | FnAppl ({node=Var f; _}, es) when LibTyping.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
           | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
-               when Lib.is_pure_primitive f ->
+               when LibTyping.is_pure_primitive f ->
               cofv (I.apply_pure (instantiate f (List.map (snd ->- val_of) tyargs), evs es))
           | FnAppl (e, es) when is_pure_primitive e ->
               cofv (I.apply_pure (ev e, evs es))

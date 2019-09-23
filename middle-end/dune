@@ -11,5 +11,5 @@
              cohttp cohttp-lwt-unix cohttp-lwt
              conduit-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
-             findlib menhirLib links.lens links.core links.frontend links.backend links.runtime)
+             findlib menhirLib links.lens links.core links.frontend links.backend)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
