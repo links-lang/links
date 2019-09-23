@@ -1,17 +1,17 @@
+
 (ocamllex
-  (modules xmlLexer))
+  (modules lexer))
 
 (menhir
-  (modules xmlParser)
+  (modules parser)
   (flags "--table") ;; slower parser, but compilation *much* faster
 )
 
 
-
 (library
-  (name links_core)
-  (public_name links.core)
-  (synopsis "Links compiler library")
+  (name links_frontend)
+  (public_name links.frontend)
+  (synopsis "Links frontend library")
   (modes native)
   (libraries str linenoise base64 safepass unix result
              yojson ppx_deriving_yojson.runtime
@@ -19,9 +19,5 @@
              cohttp cohttp-lwt-unix cohttp-lwt
              conduit-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
-             findlib menhirLib links.lens)
+             findlib menhirLib links.lens links.core)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
-
-;; Make Query modules available.
-(copy_files# query/*.ml)
-(copy_files# query/*.mli)

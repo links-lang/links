@@ -1,5 +1,6 @@
 (** Converts the tree returned by the parser into our internal
     representation *)
+open Links_core
 
 val show_compiled_ir : bool Settings.setting
 
