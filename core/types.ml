@@ -11,7 +11,12 @@ type 'a stringmap = 'a Utility.stringmap [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
 
 (* type var sets *)
-module TypeVarSet = Utility.IntSet
+module TypeVarSet = struct
+  include Utility.IntSet
+
+  let add_quantifiers : Quantifier.t list -> t -> t = fun qs vars ->
+    List.fold_right IntSet.add (List.map Quantifier.to_var qs) vars
+end
 
 (* type var sets *)
 module TypeVarMap = Utility.IntMap
@@ -19,11 +24,8 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point [@@deriving show]
 
-type kind = PrimaryKind.t * subkind
-    [@@deriving eq,show]
-
 type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * subkind * freedom)
+    [ `Var of (int * Subkind.t * Freedom.t)
     | `Body of 't ]
       [@@deriving show]
 
@@ -48,7 +50,7 @@ module Abstype =
 struct
   type t = { id    : istring ;
              name  : istring ;
-             arity : kind list }
+             arity : Kind.t list }
       [@@deriving eq,show]
   let make name arity =
     let id = Utility.gensym ~prefix:"abstype:" () in
@@ -128,10 +130,9 @@ module RecIdMap = Map.Make(RecId)
 module type RECIDSET = Utility.Set with type elt = rec_id
 module RecIdSet : RECIDSET = Set.Make(RecId)
 
-
 type tygroup = {
   id: int;
-  type_map: ((quantifier list * typ) Utility.StringMap.t);
+  type_map: ((Quantifier.t list * typ) Utility.StringMap.t);
   linearity_map: bool Utility.StringMap.t
 }
 
@@ -140,7 +141,7 @@ and rec_appl = {
   r_name: string;
   r_dual: bool;
   r_unique_name: string;
-  r_quantifiers : kind list;
+  r_quantifiers : Kind.t list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
@@ -155,11 +156,11 @@ and typ =
     | `Effect of row
     | `Table of typ * typ * typ
     | `Lens of Lens.Type.t
-    | `Alias of ((string * kind list * type_arg list) * typ)
+    | `Alias of ((string * Kind.t list * type_arg list) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var
-    | `ForAll of (quantifier list * typ)
+    | `ForAll of (Quantifier.t list * typ)
     | (typ, row) session_type_basis ]
 and field_spec     = [ `Present of typ | `Absent | `Var of meta_presence_var ]
 and field_spec_map = field_spec field_env
@@ -169,7 +170,6 @@ and meta_type_var  = (typ meta_type_var_basis) point
 and meta_row_var   = (row meta_row_var_basis) point
 and meta_presence_var = (field_spec meta_presence_var_basis) point
 and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
-and quantifier = int * kind
 and type_arg =
     [ `Type of typ | `Row of row | `Presence of field_spec ]
       [@@deriving show]
@@ -184,12 +184,12 @@ let is_present =
   | `Present _           -> true
   | (`Absent | `Var _) -> false
 
-type alias_type = quantifier list * typ [@@deriving show]
+type alias_type = Quantifier.t list * typ [@@deriving show]
 
 type tycon_spec = [
   | `Alias of alias_type
   | `Abstract of Abstype.t
-  | `Mutual of (quantifier list * tygroup ref) (* Type in same recursive group *)
+  | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
 ] [@@deriving show]
 
 
@@ -217,7 +217,7 @@ sig
     method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
     method field_spec : field_spec -> (field_spec * 'self_type)
     method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
-    method quantifier : quantifier -> (quantifier * 'self_type)
+    method quantifier : Quantifier.t -> (Quantifier.t * 'self_type)
     method type_arg : type_arg -> (type_arg * 'self_type)
   end
 end
@@ -474,32 +474,11 @@ let check_rec : int -> var_set -> 'a -> (var_set -> 'a) -> 'a =
     else
       k (IntSet.add var rec_vars)
 
-let var_of_quantifier : quantifier -> int =
-  function
-    | var, _ -> var
-
-let kind_of_quantifier : quantifier -> kind =
-  fun (_, k) -> k
-
-let primary_kind_of_quantifier : quantifier -> PrimaryKind.t =
-  fun (_, (pk, _)) -> pk
-
-let subkind_of_quantifier : quantifier -> subkind
-  = fun q ->
-    snd (kind_of_quantifier q)
-
 let primary_kind_of_type_arg : type_arg -> PrimaryKind.t =
   function
   | `Type _     -> pk_type
   | `Row _      -> pk_row
   | `Presence _ -> pk_presence
-
-let eq_quantifiers : quantifier -> quantifier -> bool =
-  fun p q -> var_of_quantifier p = var_of_quantifier q
-
-let add_quantified_vars : quantifier list -> TypeVarSet.t -> TypeVarSet.t =
-  fun qs vars -> List.fold_right IntSet.add (List.map var_of_quantifier qs) vars
-
 
 (** A constraint provides a way of ensuring a type (or row) satisfies the
    requirements of some subkind. *)
@@ -539,7 +518,7 @@ type visit_context = StringSet.t * var_set * var_set
    By default, this visits the entire type, and returns true iff all child nodes
    of the type satisfy the predicate. *)
 class virtual type_predicate = object(self)
-  method var_satisfies : (int * subkind * freedom) -> bool = fun _ -> true
+  method var_satisfies : (int * Subkind.t * Freedom.t) -> bool = fun _ -> true
 
   method point_satisfies : 'a 'c . (visit_context -> 'a -> bool) -> visit_context -> ([< 'a meta_max_basis] as 'c) point -> bool
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
@@ -558,7 +537,7 @@ class virtual type_predicate = object(self)
     | `Lens _ -> true
     | `Alias (_, t) -> self#type_satisfies vars t
     | `MetaTypeVar point -> self#point_satisfies self#type_satisfies vars point
-    | `ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, add_quantified_vars qs quant_vars) t
+    | `ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     | `Application (_, ts) ->
        (* This does assume that all abstract types satisfy the predicate. *)
        List.for_all (self#type_satisfies_arg vars) ts
@@ -599,7 +578,7 @@ end
     By default this does nothing. However, it can be extended by {!Constraint}s
     to mutate various flexible type variables. *)
 class virtual type_iter = object(self)
-  method visit_var : 'a 'c. ([< 'a meta_max_basis > `Var] as 'c) point -> (int * subkind * freedom) -> unit = fun _ _ -> ()
+  method visit_var : 'a 'c. ([< 'a meta_max_basis > `Var] as 'c) point -> (int * Subkind.t * Freedom.t) -> unit = fun _ _ -> ()
 
   method visit_point : 'a 'c . (visit_context -> 'a -> unit) -> visit_context -> ([< 'a meta_max_basis > `Var] as 'c) point -> unit
     = fun f ((rec_appl, rec_vars, quant_vars) as vars) point ->
@@ -618,7 +597,7 @@ class virtual type_iter = object(self)
     | `Lens _ -> ()
     | `Alias (_, t) -> self#visit_type vars t
     | `MetaTypeVar point -> self#visit_point self#visit_type vars point
-    | `ForAll (qs, t) -> self#visit_type (rec_appl, rec_vars, add_quantified_vars qs quant_vars) t
+    | `ForAll (qs, t) -> self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     | `Application (_, ts) -> List.iter (self#visit_type_arg vars) ts
     | `RecursiveApplication { r_args; _ } -> List.iter (self#visit_type_arg vars) r_args
     | `Select r | `Choice r -> self#visit_row vars r
@@ -885,7 +864,7 @@ module Env = Env.String
   let make_presence_variable var subkind = `Var (build_type_variable `Flexible var subkind)
   let make_rigid_presence_variable var subkind = `Var (build_type_variable `Rigid var subkind)
 
-  let type_arg_of_quantifier : quantifier -> type_arg =
+  let type_arg_of_quantifier : Quantifier.t -> type_arg =
     fun (var, (pk, sk)) ->
     let open PrimaryKind in
     match pk with
@@ -933,17 +912,17 @@ module Env = Env.String
   let fresh_presence_variable subkind = make_presence_variable (fresh_raw_variable ()) subkind
   let fresh_rigid_presence_variable subkind = make_rigid_presence_variable (fresh_raw_variable ()) subkind
 
-  let fresh_type_quantifier subkind : quantifier * datatype =
+  let fresh_type_quantifier subkind : Quantifier.t * datatype =
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
       (var, (PrimaryKind.Type, subkind)), `MetaTypeVar point
 
-  let fresh_row_quantifier subkind : quantifier * row =
+  let fresh_row_quantifier subkind : Quantifier.t * row =
     let var = fresh_raw_variable () in
     let point = make_rigid_row_variable var subkind in
       (var, (PrimaryKind.Row, subkind)), (FieldEnv.empty, point, false)
 
-  let fresh_presence_quantifier subkind : quantifier * field_spec =
+  let fresh_presence_quantifier subkind : Quantifier.t * field_spec =
     let var = fresh_raw_variable () in
     let point = Unionfind.fresh (`Var (var, subkind, `Rigid)) in
       (var, (PrimaryKind.Presence, subkind)), `Var point
@@ -1053,7 +1032,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
       | `RecursiveApplication { r_args; _ } ->
           S.union_all (List.map (free_tyarg_vars' rec_vars) r_args)
       | `ForAll (tvars, body)    -> S.diff (free_type_vars' rec_vars body)
-                                           (add_quantified_vars tvars S.empty)
+                                           (TypeVarSet.add_quantifiers tvars S.empty)
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
@@ -1508,7 +1487,7 @@ let quantifier_of_type_arg =
 
 let quantifiers_of_type_args = List.map quantifier_of_type_arg
 
-let for_all : quantifier list * datatype -> datatype = fun (qs, t) ->
+let for_all : Quantifier.t list * datatype -> datatype = fun (qs, t) ->
   concrete_type (`ForAll (qs, t))
 
 (* useful types *)
@@ -1581,7 +1560,7 @@ struct
   let tyvar_name_counter = ref 0
 
   let varspec_of_tyvar q =
-    var_of_quantifier q, (`Rigid, primary_kind_of_quantifier q, `Bound)
+    Quantifier.to_var q, (`Rigid, Quantifier.to_primary_kind q, `Bound)
 
   (* find all free and bound type variables *)
   let rec free_bound_type_vars : TypeVarSet.t -> datatype -> vars_list = fun bound_vars t ->
@@ -1863,7 +1842,7 @@ struct
     else
       empty_context
 
-  let subkind : (policy * names) -> subkind -> string =
+  let subkind : (policy * names) -> Subkind.t -> string =
     let full (l, r) = "(" ^ Linearity.to_string l ^ "," ^
                         Restriction.to_string r ^ ")" in
 
@@ -1881,7 +1860,7 @@ struct
       | (Linearity.Unl, Restriction.Effect)  -> Restriction.to_string res_effect
       | (l, r) -> full (l, r)
 
-  let kind : (policy * names) -> kind -> string =
+  let kind : (policy * names) -> Kind.t -> string =
     let full (policy, _vars) (k, sk) =
       PrimaryKind.to_string k ^ subkind (policy, _vars) sk in
     fun (policy, _vars) (k, sk) ->
@@ -1907,10 +1886,10 @@ struct
       | PrimaryKind.Row, _ | PrimaryKind.Presence, _ ->
          full ({policy with kinds="full"}, _vars) (k, sk)
 
-  let quantifier : (policy * names) -> quantifier -> string =
+  let quantifier : (policy * names) -> Quantifier.t -> string =
     fun (policy, vars) q ->
-      let k = kind_of_quantifier q in
-      Vars.find (var_of_quantifier q) vars ^ has_kind (kind (policy, vars) k)
+      let k = Quantifier.to_kind q in
+      Vars.find (Quantifier.to_var q) vars ^ has_kind (kind (policy, vars) k)
 
   (** If type variable names are hidden return a generic name n1. Otherwise
      pass name of type variable to n2 so that it can construct a name. *)
@@ -2071,7 +2050,7 @@ struct
               let bound_vars =
                 List.fold_left
                   (fun bound_vars tyvar ->
-                     TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
+                     TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
                   bound_vars tyvars
               in
                 if not (policy.flavours) then
@@ -2217,7 +2196,7 @@ struct
     let bound_vars tyvars =
       List.fold_left
         (fun bound_vars tyvar ->
-           TypeVarSet.add (var_of_quantifier tyvar) bound_vars)
+           TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
         bound_vars tyvars in
 
     function
@@ -2332,7 +2311,7 @@ let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=tr
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
-let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : quantifier) =
+let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
   build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
@@ -2397,7 +2376,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
       | `RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
       | `ForAll (qs, t)          ->
-          make_env (add_quantified_vars qs boundvars) t
+          make_env (TypeVarSet.add_quantifiers qs boundvars) t
       | `MetaTypeVar point       ->
           begin
             match Unionfind.find point with
@@ -2658,12 +2637,11 @@ let pp_datatype : Format.formatter -> datatype -> unit = fun fmt t ->
     Format.pp_print_string fmt (string_of_datatype t)
   else
     pp_datatype fmt (DecycleTypes.datatype t)
-let pp_quantifier : Format.formatter -> quantifier -> unit = fun fmt t ->
+let pp_quantifier : Format.formatter -> Quantifier.t -> unit = fun fmt t ->
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_quantifier t)
   else
-    pp_quantifier fmt (DecycleTypes.quantifier t)
-let show_quantifier : quantifier -> string = (fun x -> Format.asprintf "%a" pp_quantifier x)
+    Quantifier.pp fmt (DecycleTypes.quantifier t)
 let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_type_arg t)

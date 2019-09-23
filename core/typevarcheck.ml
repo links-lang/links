@@ -45,7 +45,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isg f && isgr m && isg t
         | `ForAll (qs, t) ->
             is_guarded
-              (Types.add_quantified_vars qs bound_vars)
+              (TypeVarSet.add_quantifiers qs bound_vars)
               expanded_apps var t
         | `Record row ->
             begin
@@ -141,7 +141,7 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isp f || isnr m || isn t
         | `ForAll (qs, t) ->
             is_negative
-              (Types.add_quantified_vars qs bound_vars)
+              (TypeVarSet.add_quantifiers qs bound_vars)
               expanded_apps var t
         | `Record row -> isnr row
         | `Effect row
@@ -227,7 +227,7 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isn f || ispr m || isp t
         | `ForAll (qs, t) ->
             is_positive
-              (Types.add_quantified_vars qs bound_vars)
+              (TypeVarSet.add_quantifiers qs bound_vars)
               expanded_apps var t
         | `Record row -> ispr row
         | `Effect row

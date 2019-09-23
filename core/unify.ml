@@ -145,7 +145,7 @@ let rec eq_types : (datatype * datatype) -> bool =
       | `ForAll (qs, t) ->
           begin match unalias t2 with
             | `ForAll (qs', t') ->
-                List.for_all2 (fun q q' -> eq_quantifier (q, q')) qs qs' &&
+                List.for_all2 Quantifier.eq qs qs' &&
                   eq_types (t, t')
             | _ -> false
           end
@@ -174,9 +174,6 @@ and eq_sessions : (datatype * datatype) -> bool =
     eq_types (l, r)
   | `End, `End -> true
   | _, _ -> false
-and eq_quantifier : (quantifier * quantifier) -> bool =
-  function
-    | (lvar, _), (rvar, _) -> lvar = rvar
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual
@@ -593,7 +590,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        unify_rec (RecAppl appl) t1
     | `ForAll l, `ForAll r ->
        let check_quantifier_kinds l r =
-         if Types.kind_of_quantifier l <> Types.kind_of_quantifier r then
+         if Quantifier.to_kind l <> Quantifier.to_kind r then
            raise (Failure (`Msg ("incompatible quantifier kinds")))
          else
            () in
@@ -624,8 +621,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          List.fold_left2
            (fun (lenv, rs) l r ->
              check_quantifier_kinds l r;
-             (IntMap.add (Types.var_of_quantifier l) (Types.var_of_quantifier r) lenv,
-              IntSet.add (Types.var_of_quantifier r) rs))
+             (IntMap.add (Quantifier.to_var l) (Quantifier.to_var r) lenv,
+              IntSet.add (Quantifier.to_var r) rs))
            qenv
            ls
            rs in
@@ -722,7 +719,7 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
        | `Body f' -> unify_presence' rec_env (f, f')
      end
 
-and unify_rows' : ?var_sk:subkind -> unify_env -> ((row * row) -> unit) =
+and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row * row) -> unit) =
   let unwrap_row r =
     let r', rvar = unwrap_row r in
     (* Debug.print (Printf.sprintf "Unwrapped row %s giving %s\n" (string_of_row r) (string_of_row r')); *)

@@ -34,10 +34,10 @@ module SugarConstructors (Position : Pos)
 
   (* Stores either a name of variable to be used in a binding pattern or the
      pattern itself.  Used for passing an argument to val_binding. *)
-  type name_or_pat = PatName of name | Pat of Pattern.with_pos
+  type name_or_pat = PatName of Name.t | Pat of Pattern.with_pos
 
   (* Optionally stores a datatype signature.  Isomporphic to Option. *)
-  type signature = (name WithPos.t * datatype') WithPos.t option
+  type signature = (Name.t WithPos.t * datatype') WithPos.t option
 
   (* Produces a datatype if a name is accompanied by a signature.  Raises an
      exception if name does not match a name in a signature. *)
