@@ -6,6 +6,9 @@ open Links_middleend
 open Utility
 open Performance
 
+module STIR = Sugartoir.Desugar(Links_runtime.Lib)
+
+
 type envs = Var.var Env.String.t * Types.typing_environment
 type program = Ir.binding list * Ir.computation * Types.datatype
 
@@ -49,7 +52,7 @@ let read_file_source (nenv, tyenv) (filename:string) =
   (* printf "AST: \n %s \n" (Sugartypes.show_program sugar); *)
   let ((program, t, tenv), ffi_files) = Frontend.Pipeline.program tyenv pos_context sugar in
   let globals, main, nenv =
-    Sugartoir.desugar_program
+    STIR.desugar_program
       (nenv,
        Var.varify_env (nenv, tyenv.Types.var_env),
        tyenv.Types.effect_row) program

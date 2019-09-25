@@ -447,7 +447,7 @@ let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurr
 
 
 
-module Typecheck =
+module Typecheck(LibTy : LibTyping.LIB_TYPING_INFO) =
 struct
   open Types
   open TypeUtils
@@ -562,7 +562,7 @@ struct
               XmlNode (tag, attributes, children), Types.xml_type, o
 
         | ApplyPure (f, args) ->
-           let open LibTyping in
+           let open LibTy in
             let rec is_pure_function = function
               | TApp (v, _)
               | TAbs (_, v) -> is_pure_function v

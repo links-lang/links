@@ -75,6 +75,8 @@ let perform_for_side_effects side_effecting_transformer tyenv p =
 module Pipelines =
 struct
 
+    module IRTC = IrCheck.Typecheck(Lib)
+
     let optimisation_pipeline () = [
         debug_tell "optimising IR";
         IrTraversals.ElimDeadDefs.program;
@@ -104,13 +106,13 @@ struct
 
     let typechecking_pipeline () = [
         debug_tell "typechecking IR";
-        IrCheck.Typecheck.program;
+        IRTC.program;
         debug_tell "typechecked IR"
       ]
 
     let prelude_typechecking_pipeline () = [
         debug_tell "typechecking prelude IR";
-        IrCheck.Typecheck.bindings;
+        IRTC.bindings;
         debug_tell "typechecked prelude IR";
       ]
 

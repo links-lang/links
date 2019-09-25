@@ -1747,12 +1747,3 @@ let print_http_response headers body req_data =
       (fun (name, value) -> print_endline(name ^ ": " ^ value));
     print_endline "";
     print_string body
-
-
-
-(* Must initialize the functions in LibTyping! *)
-
-let _ =
-  LibTyping.set_fun_primitive_name primitive_name;
-  LibTyping.set_fun_is_primitive_var is_primitive_var;
-  LibTyping.set_fun_is_pure_primitive is_pure_primitive

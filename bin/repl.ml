@@ -10,6 +10,9 @@ open List
 open Sugartypes
 open CommonTypes
 
+module STIR = Sugartoir.Desugar(Lib)
+
+
 (** Set this to [true] to print types when printing results. *)
 let printing_types =
   Settings.(flag ~default:true "printing_types"
@@ -345,11 +348,11 @@ let interact envs =
       let sentence' = match sentence with
         | Definitions defs ->
            let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-           let defs, nenv' = Sugartoir.desugar_definitions (nenv, tenv, tyenv.Types.effect_row) defs in
+           let defs, nenv' = STIR.desugar_definitions (nenv, tenv, tyenv.Types.effect_row) defs in
            `Definitions (defs, nenv')
         | Expression e     ->
            let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-           let e = Sugartoir.desugar_expression (nenv, tenv, tyenv.Types.effect_row) e in
+           let e = STIR.desugar_expression (nenv, tenv, tyenv.Types.effect_row) e in
            `Expression (e, t)
         | Directive d      -> `Directive d
       in

@@ -1,20 +1,13 @@
-(* This file is a workaround for the fact that the module Lib
-   needs to be part of the runtime library, but its typing information
-   must be accessible in the backend library *)
+module type LIB_TYPING_INFO =
+sig
 
+(* The semantics of these functions is equivalent
+   to their counterpart in the Lib module *)
 
-let dummy _x = assert false
+  val primitive_name : Var.var -> string
 
+  val is_primitive_var : Var.var -> bool
 
-let ref_primitive_name : (Var.var -> string) ref = ref dummy
-let ref_is_primitive_var : (Var.var-> bool) ref = ref dummy
-let ref_is_pure_primitive : (string -> bool) ref = ref dummy
+  val is_pure_primitive : string -> bool
 
-let set_fun_primitive_name f = ref_primitive_name := f
-let set_fun_is_primitive_var f = ref_is_primitive_var := f
-let set_fun_is_pure_primitive f = ref_is_pure_primitive := f
-
-
-let primitive_name (x : Var.var) : string = (!ref_primitive_name) x
-let is_primitive_var (x : Var.var) : bool = (!ref_is_primitive_var) x
-let is_pure_primitive (x : string) : bool = (!ref_is_pure_primitive) x
+end

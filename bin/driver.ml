@@ -11,6 +11,9 @@ open Utility
 
 module Eval = Evalir.Eval(Webserver)
 module Webif = Webif.WebIf(Webserver)
+module STIR = Sugartoir.Desugar(Lib)
+
+
 
 type evaluation_env =   Value.env (* maps int identifiers to their values *)
                       * Ir.var Env.String.t (* map string identifiers to int identifiers *)
@@ -142,7 +145,7 @@ struct
 
       let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
 
-      let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
+      let globals, (locals, main), _nenv = STIR.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
       ((globals @ locals, main), t), (nenv, tyenv), []
     in
       evaluate false parse_and_desugar envs v

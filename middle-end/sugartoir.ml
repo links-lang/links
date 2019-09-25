@@ -753,7 +753,7 @@ struct
 end
 
 
-module Eval(I : INTERPRETATION) =
+module Eval(I : INTERPRETATION)(LibTy : LibTyping.LIB_TYPING_INFO) =
 struct
   let extend xs vs (nenv, tenv, eff) =
     List.fold_left2
@@ -786,7 +786,7 @@ struct
         match WithPos.node e with
           | TAbstr (_, e)
           | TAppl (e, _) -> is_pure_primitive e
-          | Var f when LibTyping.is_pure_primitive f -> true
+          | Var f when LibTy.is_pure_primitive f -> true
           | _ -> false in
 
       let eff = lookup_effects env in
@@ -823,7 +823,7 @@ struct
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name "!"), e1, e2) ->
               I.apply (instantiate "Send" tyargs, [ev e1; ev e2])
-          | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when LibTyping.is_pure_primitive n ->
+          | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when LibTy.is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) ->
               I.apply (instantiate n tyargs, [ev e1; ev e2])
@@ -844,14 +844,14 @@ struct
               cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
           | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
-          | UnaryAppl ((tyargs, UnaryOp.Name n), e) when LibTyping.is_pure_primitive n ->
+          | UnaryAppl ((tyargs, UnaryOp.Name n), e) when LibTy.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
-          | FnAppl ({node=Var f; _}, es) when LibTyping.is_pure_primitive f ->
+          | FnAppl ({node=Var f; _}, es) when LibTy.is_pure_primitive f ->
               cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
           | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
-               when LibTyping.is_pure_primitive f ->
+               when LibTy.is_pure_primitive f ->
               cofv (I.apply_pure (instantiate f (List.map (snd ->- val_of) tyargs), evs es))
           | FnAppl (e, es) when is_pure_primitive e ->
               cofv (I.apply_pure (ev e, evs es))
@@ -1265,17 +1265,24 @@ end
 
 module C = Eval(Interpretation(BindingListMonad))
 
-let desugar_expression : env -> Sugartypes.phrase -> Ir.computation =
-  fun env e ->
-    let (bs, body), _ = C.compile env ([], Some e) in
-      (bs, body)
+module Desugar(LibTy : LibTyping.LIB_TYPING_INFO) =
+struct
 
-let desugar_program : env -> Sugartypes.program -> Ir.binding list * Ir.computation * nenv =
-  fun env p ->
-    let (bs, body), _ = C.compile env p in
-      C.partition_program (bs, body)
+  module C = Eval(Interpretation(BindingListMonad))(LibTy)
 
-let desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * nenv =
-  fun env bs ->
-    let globals, _, nenv = desugar_program env (bs, None) in
-      globals, nenv
+  let desugar_expression : env -> Sugartypes.phrase -> Ir.computation =
+    fun env e ->
+      let (bs, body), _ = C.compile env ([], Some e) in
+        (bs, body)
+
+  let desugar_program : env -> Sugartypes.program -> Ir.binding list * Ir.computation * nenv =
+    fun env p ->
+      let (bs, body), _ = C.compile env p in
+        C.partition_program (bs, body)
+
+  let desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * nenv =
+    fun env bs ->
+      let globals, _, nenv = desugar_program env (bs, None) in
+        globals, nenv
+
+end
