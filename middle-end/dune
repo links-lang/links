@@ -1,8 +1,8 @@
 
 
 (library
-  (name links_middleend)
-  (public_name links.middleend)
+  (name links_middle_end)
+  (public_name links.middle-end)
   (synopsis "Links middle-end library")
   (modes native)
   (libraries str

@@ -4,4 +4,4 @@
   (package links)
   (modes native)
   (libraries threads.posix dynlink ANSITerminal linenoise
-   links.core links.frontend links.middleend links.backend links.runtime))
+   links.core links.frontend links.middle-end links.backend links.runtime))

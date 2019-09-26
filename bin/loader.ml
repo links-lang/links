@@ -1,7 +1,7 @@
 open Links_core
 open Links_frontend
 open Links_backend
-open Links_middleend
+open Links_middle_end
 
 open Utility
 open Performance
