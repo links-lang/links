@@ -1,5 +1,3 @@
-
-
 (library
   (name links_backend)
   (public_name links.backend)

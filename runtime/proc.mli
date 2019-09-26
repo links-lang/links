@@ -1,6 +1,4 @@
 (** Process management *)
-
-
 open ProcessTypes
 
 type abort_type = string * string

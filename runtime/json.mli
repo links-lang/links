@@ -1,6 +1,3 @@
-
-
-
 open ProcessTypes
 
 (* Type synonyms *)

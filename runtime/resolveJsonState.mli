@@ -1,6 +1,4 @@
 (** Utilities for resolving process-based state into a JSON state *)
-
-
 open ProcessTypes
 open Json
 
