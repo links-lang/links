@@ -2665,3 +2665,7 @@ let pp_row : Format.formatter -> row -> unit = fun fmt t ->
 let unwrap_list_type = function
   | `Application ({Abstype.id = "List"; _}, [`Type t]) -> t
   | _ -> assert false
+
+
+let toplevel_effect_row =
+  make_singleton_closed_row ("wild", `Present unit_type);

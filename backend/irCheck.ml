@@ -465,9 +465,8 @@ struct
     val closure_def_env = Env.empty
     val type_var_env = Env.empty
 
-    (* initialize to the default row of allowed toplevel effects*)
-    (* This should be identical to Lib.typing_env.effect_row *)
-    val allowed_effects = Types.make_singleton_closed_row ("wild", `Present Types.unit_type)
+
+    val allowed_effects = Types.toplevel_effect_row
 
     (* TODO: closure handling needs to be reworked properly *)
     method lookup_closure_def_for_fun fid = Env.find closure_def_env fid

@@ -367,6 +367,8 @@ val make_thunk_type : row -> datatype -> datatype
 val pp_datatype : Format.formatter -> datatype -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
 
+val toplevel_effect_row : row
+
 module type TYPE_VISITOR =
 sig
   class visitor :
