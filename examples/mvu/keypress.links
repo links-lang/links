@@ -3,6 +3,7 @@ open import MvuHTML;
 open import MvuAttrs;
 open import MvuEvents;
 open import MvuSubscriptions;
+import MvuCommands;
 
 typename Model = Maybe(KeyboardEvent);
 typename Msg = [| UpdateEvent: KeyboardEvent |];
@@ -49,7 +50,9 @@ fun subscriptions(_) {
 }
 
 fun mainPage(_) {
-  run("placeholder", Nothing, view, updt, subscriptions);
+  run("placeholder", Nothing, view,
+      fun (msg, model) { (updt(msg, model), MvuCommands.empty) }, subscriptions,
+      MvuCommands.empty);
   page
   <html>
     <head>
