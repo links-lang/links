@@ -3,6 +3,7 @@ open import MvuAttrs;
 open import MvuEvents;
 open import MvuHTML;
 open import MvuSubscriptions;
+open import MvuCommands;
 
 # Needed to ensure that virtual-dom is open
 module VirtualDom {
@@ -28,13 +29,14 @@ sig evtLoop :
   (AP(?msg.End),
    model,
    (model) ~e~> HTML(msg),
-   (msg, model) ~e~> model,
+   (msg, model) ~e~> (model, Command(msg)),
    (model) ~e~> Sub(msg),
    Sub(msg)) ~e~> ()
 fun evtLoop(ap, model, view, updt, subscriptionsFn, prevSubscriptions) {
   var (message, s) = receive(accept(ap));
   close(s);
-  var model = updt(message, model);
+  var (model, cmd) = updt(message, model);
+  processCommand(cmd, ap);
   # Get new subscriptions
   var newSubscriptions = subscriptionsFn(model);
   # Update DOM
@@ -49,15 +51,27 @@ sig run:
   (String,
     model,
     (model) ~e~> HTML(msg),
-    (msg, model) ~e~> (model),
-    (model) ~e~> Sub(msg)) ~f~> ()
-fun run(placeholder, model, view, updt, subscriptions) {
+    (msg, model) ~e~> (model, Command(msg)),
+    (model) ~e~> Sub(msg),
+    Command(msg)) ~f~> ()
+fun run(placeholder, model, view, updt, subscriptions, cmd) {
   var evtHandler = spawnClient {
     var ap = new();
+    processCommand(cmd, ap);
     VDom.runDom(placeholder, view(model), ap, subscriptions(model));
     evtLoop(ap, model, view, updt, subscriptions, subscriptions(model))
   };
   ()
+}
+
+sig runCmd: forall msg, model, e :: Row, f :: Row.
+  (String,
+    model,
+    (model) ~e~> HTML(msg),
+    (msg, model) ~e~> (model, Command(msg)),
+    Command(msg)) ~f~> ()
+fun runCmd(placeholder, model, view, updt, cmd) {
+  run(placeholder, model, view, updt, fun(_) { SubEmpty }, cmd )
 }
 
 sig runSimple : forall msg, model, e :: Row, f :: Row.
@@ -66,7 +80,9 @@ sig runSimple : forall msg, model, e :: Row, f :: Row.
     (model) ~e~> HTML(msg),
     (msg, model) ~e~> model) ~f~> ()
 fun runSimple(placeholder, model, view, updt) {
-  run(placeholder, model, view, updt, fun(_) { SubEmpty } )
+  run(placeholder, model, view,
+      fun(msg, model) { (updt(msg, model), MvuCommands.empty) },
+      fun(_) { SubEmpty }, MvuCommands.empty )
 }
 
 sig runStatic :

@@ -897,3 +897,8 @@ Typecheck example file examples/examplesPage.links
 examples/examplesPage.links
 filemode : true
 args : --config=tests/examples_default.config
+
+Typecheck example file examples/mvu/commands.links
+examples/mvu/commands.links
+filemode : true
+args : --config=tests/examples_default.config

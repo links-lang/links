@@ -3,6 +3,7 @@ open import MvuAttrs;
 open import MvuEvents;
 open import MvuSubscriptions;
 import Mvu;
+import MvuCommands;
 
 typename Ball = (x : Float, y: Float, vx : Float, vy : Float);
 
@@ -211,7 +212,9 @@ fun subscriptions(model) {
 
 
 fun mainPage(_) {
-  Mvu.run("placeholder", defaultGame, view, updt, subscriptions);
+  Mvu.run("placeholder", defaultGame, view,
+      fun(msg, model) { (updt(msg, model), MvuCommands.empty) },
+      subscriptions, MvuCommands.empty);
   page
   <html>
     <head>
