@@ -123,6 +123,6 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      ./opam2_local install -y oUnit
+      ./opam2_local install -y ounit2
       ./run-tests unit
     displayName: 'Unit tests'

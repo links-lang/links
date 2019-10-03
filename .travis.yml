@@ -11,7 +11,7 @@ before_install:
   - ./install_local_opam2.sh
   - ./opam2_local switch create ocaml-base-compiler.4.06.0
   - eval `./opam2_local config env`
-  - ./opam2_local install -y postgresql oUnit ocamlformat
+  - ./opam2_local install -y postgresql ounit2 ocamlformat
   - make rule-check
   - psql -c 'create database links;' -U postgres
 script:
