@@ -1,6 +1,8 @@
 
 open Utility
 
+let internal_error message =
+  Errors.internal_error ~filename:"refreshTypeVariables.ml" ~message
 
 type instantiation_maps =
   (Types.meta_type_var IntMap.t *
@@ -47,6 +49,29 @@ let freshen_quantifiers
 
 
 
+let replace_quantifiers
+  (qs_old : Types.quantifier list)
+  (instantiation_maps : instantiation_maps)
+  (qs_new : Types.quantifier list) : instantiation_maps =
+  List.fold_right2
+    (fun q_old q_new imaps ->
+      let (var_old, (pk_old, sk_old)) = q_old in
+      let (var_new, (pk_new, sk_new)) = q_new in
+      (if pk_old <> pk_new || sk_old <> sk_new then
+        raise (internal_error "replace_quantifiers: Kind missmatch"));
+      let open CommonTypes.PrimaryKind in
+      match pk_old with
+      | Type ->
+         let t = Types.make_rigid_type_variable var_new sk_new in
+         add_type var_old (unwrap_type_point t) imaps
+      | Row ->
+         let r = Types.make_rigid_row_variable var_new sk_new in
+         add_row var_old r imaps
+      | Presence ->
+         let f = Types.make_rigid_presence_variable var_new sk_new in
+         add_presence var_old (unwrap_presence_point f) imaps)
+    qs_old qs_new instantiation_maps
+
 let refreshing_type_visitor instantiation_map =
   let open Types in
   object ((o : 'self_type))
@@ -68,7 +93,6 @@ let refreshing_type_visitor instantiation_map =
          let o' = substed_o#set_maps old_maps in
 
          `ForAll (qs', substed_t), o'
-
       | t -> super#typ t
 
 
@@ -108,33 +132,84 @@ let refreshing_type_visitor instantiation_map =
 
 
 
-(* let refresher program =
- *   object(self : 'self_type)
- *     inherit SugarTraversals.fold_map as super
- *
- *     val maps : Instantiate.instantiation_maps =
- *       (IntMap.empty, IntMap.empty, IntMap.empty)
- *
- *
- *     method bindingnode : bindingnode -> ('self_type * bindingnode) =
- *       function
- *       | Val (pat, (tyvars, phrase), loc, typ) ->
- *           let (o, pat   ) = o#pattern pat in
- *
- *
- *
- *           let (o, _x_i2) = o#phrase _x_i2 in
- *           let (o, _x_i3) = o#location _x_i3 in
- *           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
- *           in (o, (Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
- *       | other -> o#bindingnode other
- *
- *
- *     method handle_scoped_phrase =
- *       fun tyvars typ signature phrase -> (tyvars, typ, signature, phrase)
- *
- *
- *
- *
- *
- *     end *)
+let refresher program sync_quantifiers_tyvars =
+  let open Sugartypes in
+  object(o : 'self_type)
+    inherit SugarTraversals.fold_map as super
+
+    val maps : instantiation_maps =
+      (IntMap.empty, IntMap.empty, IntMap.empty)
+
+    method set_maps new_inst_maps =
+      {< maps = new_inst_maps >}
+
+
+    (* method! bindingnode : Sugartypes.bindingnode -> ('self_type * Sugartypes.bindingnode) =
+     *   function
+     *   | Val (pat, (tyvars, phrase), loc, typ) ->
+     *       let (o, pat   ) = o#pattern pat in
+     *
+     *
+     *
+     *       let (o, _x_i2) = o#phrase _x_i2 in
+     *       let (o, _x_i3) = o#location _x_i3 in
+     *       let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
+     *       in (o, (Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
+     *   | other -> o#bindingnode other *)
+
+
+
+
+   method! function_definition : Sugartypes.function_definition -> 'self * Sugartypes.function_definition =
+     fun { fun_binder;
+           fun_linearity;
+           fun_definition = (tyvars, lit);
+           fun_location;
+           fun_signature;
+           fun_frozen;
+           fun_unsafe_signature; } ->
+     let (pats, body) = lit in
+     let (tyvars', typ', signature', phrase') =
+       o#handle_function tyvars (Binder.to_type fun_binder) fun_signature body in
+     o, { fun_binder = Binder.set_type fun_binder typ';
+       fun_linearity;
+       fun_definition = (tyvars', (pats, phrase'));
+       fun_location;
+       fun_signature = signature';
+       fun_frozen;
+       fun_unsafe_signature; }
+
+
+
+
+
+    method handle_function =
+      fun tyvars typ signature phrase ->
+      (* let typ', _ = (refreshing_type_visitor maps)#typ typ in
+       *
+       * (\* In the body, replace the old tyvars with either a) the new quantifiers
+       *    used in the type or b) fresh variables *\)
+       * let tyvars', new_maps =
+       *   if sync_quantifiers_tyvars then
+       *     let tyvars_typ', _ = TypeUtils.split_quantified_type typ' in
+       *     tyvars_typ', replace_quantifiers tyvars maps tyvars_typ'
+       *   else
+       *     freshen_quantifiers tyvars maps
+       * in
+       *
+       * let o = o#set_maps new_maps in
+       * let o , body' = o#phrase phrase in
+       * let o = o#set_maps maps
+       *
+       *
+       *
+       *
+       * (tyvars', typ', signature, phrase) *)
+
+      failwith "implement me"
+
+
+
+
+
+    end
