@@ -84,7 +84,7 @@ object ('self)
   method program         : program -> 'self * program * Types.datatype option
   method regex           : regex -> 'self * regex
   method section         : Section.t -> 'self * Section.t * Types.datatype
-  method sentence        : sentence -> 'self * sentence
+  method sentence        : sentence -> 'self * sentence * Types.datatype option
 (*
   method sentence'       : sentence' -> 'self * sentence'
   method directive       : directive -> 'self * directive

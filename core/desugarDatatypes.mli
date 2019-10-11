@@ -11,3 +11,5 @@ val program :
     Sugartypes.program
 
 val all_datatypes_desugared : SugarTraversals.predicate
+
+include Transform.Untyped.S

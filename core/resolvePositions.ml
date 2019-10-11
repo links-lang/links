@@ -11,3 +11,17 @@ object
       | _ -> assert false
     )
 end
+
+module Untyped = struct
+  open Transform.Untyped
+
+  let program state program =
+    let pos_context = Context.source_code (context state) in
+    let program' = (resolve_positions pos_context)#program program in
+    return state program'
+
+  let sentence state sentence =
+    let pos_context = Context.source_code (context state) in
+    let sentence' = (resolve_positions pos_context)#sentence sentence in
+    return state sentence'
+end

@@ -203,13 +203,17 @@ class transform (env : Types.typing_environment) =
       fun section ->
         (o, section, type_section var_env section)
 
-    method sentence : sentence -> ('self_type * sentence) =
+    method sentence : sentence -> ('self_type * sentence * Types.datatype option) =
       function
       | Definitions defs ->
-          let (o, defs) = listu o (fun o -> o#binding) defs
-          in (o, Definitions defs)
-      | Expression e -> let (o, e, _) = o#phrase e in (o, Expression e)
-      | Directive d -> (o, Directive d)
+         let (o, defs) =
+           listu o (fun o -> o#binding) defs
+         in (o, Definitions defs, Some Types.unit_type)
+      | Expression e ->
+         let (o, e, t) = o#phrase e in
+         (o, Expression e, Some t)
+      | Directive d ->
+         (o, Directive d, None)
 
     method regex : regex -> ('self_type * regex) =
       function
@@ -237,7 +241,7 @@ class transform (env : Types.typing_environment) =
       fun (bs, e) ->
         let (o, bs) = listu o (fun o -> o#binding) bs in
         let (o, e, t) = option o (fun o -> o#phrase) e
-        in (o, (bs, e), t)
+        in (o, (bs, e), opt_map Types.normalise_datatype t)
 
     method given_spawn_location :
       given_spawn_location ->
