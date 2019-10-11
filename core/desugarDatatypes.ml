@@ -42,6 +42,10 @@
           - When visiting an effect row, we insert presence variables according
             to the previously determined operation map. *)
 
+module Transform' = Transform (* One of the modules below defines a
+                                 module named 'Transform' which
+                                 shadows the compilation unit
+                                 'Transform'. *)
 open CommonTypes
 open Types
 open SourceCode
@@ -1092,3 +1096,17 @@ let read ~aliases s =
   let _, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
   let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype var_env aliases dt) in
   ty
+
+module Untyped = struct
+  open Transform'.Untyped
+
+  let program state program' =
+    let tyenv = Context.typing_environment (context state) in
+    let program'' = program tyenv program' in
+    return state program''
+
+  let sentence state sentence' =
+    let tyenv = Context.typing_environment (context state) in
+    let sentence'' = sentence tyenv sentence' in
+    return state sentence''
+end

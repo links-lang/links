@@ -537,3 +537,15 @@ let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in
   scope := visitor#get_scope; renamer := visitor#get_renamer; result
+
+module Untyped = struct
+  open Transform.Untyped
+
+  let program state program =
+    let program' = desugar_program program in
+    return state program'
+
+  let sentence state sentence =
+    let sentence' = desugar_sentence sentence in
+    return state sentence'
+end

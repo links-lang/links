@@ -165,31 +165,9 @@ let desugar_program : TransformSugar.program_transformer =
   fun env program -> snd3 ((desugar_funs env)#program program)
 
 let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd ((desugar_funs env)#sentence sentence)
+  fun env sentence -> snd3 ((desugar_funs env)#sentence sentence)
 
-let has_no_funs =
-object
-  inherit SugarTraversals.predicate as super
-
-  val has_no_funs = true
-  method satisfied = has_no_funs
-
-  method! phrasenode = function
-    | FunLit _ -> {< has_no_funs = false >}
-    | e -> super#phrasenode e
-
-  method! bindingnode = function
-    | Fun { fun_definition = (_, ([_], _)); _ } as b -> super#bindingnode b
-    | Fun _ -> {< has_no_funs = false >}
-    | Funs defs as b ->
-        if
-          List.exists
-            (function
-               | {WithPos.node={ rec_definition = (_, ([_], _)); _ }; _ } -> false
-               | _ -> true) defs
-        then
-          {< has_no_funs = false >}
-        else
-          super#bindingnode b
-    | b -> super#bindingnode b
-end
+module Typeable
+  = Transform.Typeable.Make(struct
+        let obj env = (desugar_funs env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
+      end)
