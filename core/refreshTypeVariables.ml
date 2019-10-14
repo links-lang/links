@@ -132,10 +132,10 @@ let refreshing_type_visitor instantiation_map =
 
 
 
-let refresher program sync_quantifiers_tyvars =
+let refresher (* sync_quantifiers_tyvars *) =
   let open Sugartypes in
   object(o : 'self_type)
-    inherit SugarTraversals.fold_map as super
+    inherit SugarTraversals.fold_map as _super
 
     val maps : instantiation_maps =
       (IntMap.empty, IntMap.empty, IntMap.empty)
@@ -144,18 +144,20 @@ let refresher program sync_quantifiers_tyvars =
       {< maps = new_inst_maps >}
 
 
-    (* method! bindingnode : Sugartypes.bindingnode -> ('self_type * Sugartypes.bindingnode) =
-     *   function
-     *   | Val (pat, (tyvars, phrase), loc, typ) ->
-     *       let (o, pat   ) = o#pattern pat in
-     *
-     *
-     *
-     *       let (o, _x_i2) = o#phrase _x_i2 in
-     *       let (o, _x_i3) = o#location _x_i3 in
-     *       let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4
-     *       in (o, (Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4))))
-     *   | other -> o#bindingnode other *)
+    method! bindingnode : Sugartypes.bindingnode -> ('self_type * Sugartypes.bindingnode) =
+      function
+      | Val (pat, (tyvars, phrase), loc, signature) ->
+          let (o, pat') = o#pattern pat in
+
+          let tyvars', new_maps = freshen_quantifiers tyvars maps in
+          let o = o#set_maps new_maps in
+          let o, phrase' = o#phrase phrase in
+          let o = o#set_maps maps in
+
+          let (o, loc') = o#location loc in
+          let (o, signature') = o#option (fun o -> o#datatype') signature in
+          (o, (Val ((pat', (tyvars', phrase'), loc', signature'))))
+      | other -> o#bindingnode other
 
 
 
@@ -169,44 +171,75 @@ let refresher program sync_quantifiers_tyvars =
            fun_frozen;
            fun_unsafe_signature; } ->
      let (pats, body) = lit in
-     let (tyvars', typ', signature', phrase') =
-       o#handle_function tyvars (Binder.to_type fun_binder) fun_signature body in
-     o, { fun_binder = Binder.set_type fun_binder typ';
-       fun_linearity;
-       fun_definition = (tyvars', (pats, phrase'));
-       fun_location;
-       fun_signature = signature';
-       fun_frozen;
-       fun_unsafe_signature; }
+     let o, (pats', tyvars', typ', signature', phrase') =
+       o#handle_function pats tyvars (Binder.to_type fun_binder) fun_signature body in
+     let function_definition' =
+       { fun_binder = Binder.set_type fun_binder typ';
+         fun_linearity;
+         fun_definition = (tyvars', (pats', phrase'));
+         fun_location;
+         fun_signature = signature';
+         fun_frozen;
+         fun_unsafe_signature; }
+     in
+     o,function_definition'
+
+
+     method! recursive_function : recursive_function -> 'self * recursive_function
+         = fun { rec_binder;
+              rec_linearity;
+              rec_definition = ((tyvars, ty), lit);
+              rec_location;
+              rec_signature;
+              rec_unsafe_signature;
+              rec_frozen;
+              rec_pos } ->
+       let (pats, body) = lit in
+       let o, (pats', tyvars', typ', signature', phrase') =
+         o#handle_function pats tyvars (Binder.to_type rec_binder) rec_signature body in
+       let recursive_definition' =
+         { rec_binder = Binder.set_type rec_binder typ';
+           rec_linearity;
+           rec_definition = ((tyvars', ty), (pats', phrase'));
+           rec_location;
+           rec_signature = signature';
+           rec_unsafe_signature;
+           rec_frozen;
+           rec_pos }
+       in
+       o, recursive_definition'
 
 
 
 
 
     method handle_function =
-      fun tyvars typ signature phrase ->
-      (* let typ', _ = (refreshing_type_visitor maps)#typ typ in
-       *
-       * (\* In the body, replace the old tyvars with either a) the new quantifiers
-       *    used in the type or b) fresh variables *\)
-       * let tyvars', new_maps =
-       *   if sync_quantifiers_tyvars then
-       *     let tyvars_typ', _ = TypeUtils.split_quantified_type typ' in
-       *     tyvars_typ', replace_quantifiers tyvars maps tyvars_typ'
-       *   else
-       *     freshen_quantifiers tyvars maps
-       * in
-       *
-       * let o = o#set_maps new_maps in
-       * let o , body' = o#phrase phrase in
-       * let o = o#set_maps maps
-       *
-       *
-       *
-       *
-       * (tyvars', typ', signature, phrase) *)
+      fun param_pats tyvars typ signature phrase ->
+      let typ', _ = (refreshing_type_visitor maps)#typ typ in
 
-      failwith "implement me"
+
+      let tyvars', new_maps =
+        (* TODO: Implement this once we agreed on how to handle
+         quantifiers in signatures *)
+        (* if sync_quantifiers_tyvars then
+          let tyvars_typ', _ = TypeUtils.split_quantified_type typ' in
+          tyvars_typ', replace_quantifiers tyvars maps tyvars_typ'
+        else *)
+          freshen_quantifiers tyvars maps
+      in
+
+      let o = o#set_maps new_maps in
+      let o, phrase' = o#phrase phrase in
+      let o = o#set_maps maps in
+
+
+      (* For the time being, just visit the type in the signature *)
+      let o, signature' = o#option (fun o -> o#datatype') signature in
+
+      (* TODO: What to do with the patterns? *)
+
+      o, (param_pats, tyvars', typ', signature', phrase')
+
 
 
 
