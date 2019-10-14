@@ -42,7 +42,7 @@ let from_json json : incoming_websocket_message =
 
     let get_field_value field =
       match get_field field with
-        | Some x -> Value.from_json x
+        | Some x -> Serialisation.UnsafeJsonSerialiser.Value.load x
         | None -> raise (runtime_error ("Field " ^ field ^ " not found")) in
 
     let parse_srv_ap_msg () =
