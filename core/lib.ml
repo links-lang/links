@@ -1035,25 +1035,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Should this function really return?
      I think not --ez*)
 
-  (* REDUNDANT *)
-
-  (* (\** reifyK: I choose an obscure name, for an obscure function, until *)
-  (*     a better one can be thought up. It just turns a continuation into its *)
-  (*     string representation *\) *)
-  (* "reifyK", *)
-  (* (p1 (function *)
-  (*         `Continuation (k,hs) -> (\* Todo: Marshal handlers *\) *)
-  (*            let s = marshal_continuation k in *)
-  (*              Value.box_string s *)
-  (*        | _ -> failwith "argument to reifyK was not a continuation" *)
-  (*     ), *)
-  (*  datatype "((a) -> b) ~> String", *)
-  (* IMPURE); *)
-  (* (\* arg type should actually be limited *)
-  (*    to continuations, but we don't have *)
-  (*    any way of specifying that in the *)
-  (*    type system. *\) *)
-
   "sleep",
   (p1 (fun _ ->
          (* FIXME: This isn't right : it freezes all threads *)
@@ -1321,22 +1302,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      but the Page type is defined in the prelude, so pickleCont is also defined
      in the prelude and is just a wrapper for this function.
    *)
-   (`Server (p1 (Value.marshal_value ->- Value.box_string)),
+   (`Server (p1 (Serialisation.MarshalSerialiser.Value.save ->- Value.box_string)),
     datatype "(() { |e}-> a) ~> String",
     IMPURE));
-
-  (* REDUNDANT *)
-
-  (* (\* Serialize values to DB *\) *)
-  (* ("pickle_value", *)
-  (*  (`Server (p1 (fun v -> (Value.box_string (marshal_value v)))), *)
-  (*   datatype "(a) ~> String", *)
-  (*   IMPURE)); *)
-
-  (* ("unpickle_value", *)
-  (*  (`Server (p1 (fun v -> assert false (\*broken_unmarshal_value (Value.unbox_string v)*\))), *)
-  (*   datatype "(String) ~> a", *)
-  (* IMPURE)); *)
 
   (* HACK *)
   ("unsafe_cast",
