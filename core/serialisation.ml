@@ -3,7 +3,7 @@ module E = Env
 open Value
 
 let internal_error message =
-  Errors.internal_error ~filename:"value.ml" ~message
+  Errors.internal_error ~filename:"serialisation.ml" ~message
 
 module type COMPRESSION_INTERFACE = sig
   type 'v t
