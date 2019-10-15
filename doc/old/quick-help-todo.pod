@@ -1,0 +1,1877 @@
+=pod
+
+=head2 Forms
+
+Links provides two special attributes for programming with HTML forms:
+C<l:name>, which binds the value of an input field to a variable, and
+C<l:onsubmit>, with which you can supply an expression to be evaluated
+when the form is submitted.
+
+   <form l:onsubmit="{say_hello(personName)}">
+      What is your name? 
+      <input l:name="{personName}"/>
+   </form>
+
+The C<personName> variable bound by the C<l:name> attribute is in scope in
+the C<l:onsubmit> expression, which may also contain references to
+other variables in the enclosing scope.  The values of these variables
+are passed from form to form automatically.
+
+Unfortunately, the C<l:> mechanism does not support any abstraction in
+building forms.  For a more abstraction-friendly construct, see
+L</"Formlets">, describing a mechanism for abstracting form fragments.
+
+=head2 Comparisons and Boolean Expressions
+
+Comparisons are binary operations that yield a true/false value. 
+
+=over 4
+
+=item * ==
+
+True iff the operands evaluate to the same value.
+
+=item * <>
+
+True iff the operands evaluate to different values.
+
+=item * <
+
+True iff the left operand's value is less than the right operand's
+
+=item * >
+
+True iff the right operand's value is less than the left operand's
+
+=item * <=
+
+True iff the left operand's value is less than or equal to the right
+operand's
+
+=item * >=
+
+True iff the right operand's value is less than or equal to the left
+operand's
+
+=back
+
+Boolean expressions can be combined using the boolean operators:
+
+=over 4
+
+=item * &&
+
+=item * ||
+
+=item * not
+
+=back
+
+=head2 Database access
+
+To access the database, use I<database> and I<table expressions>,
+which produce first-class values representing, respectively, database
+connections and tables within such connected databases.
+
+To connect to a given database instance using a particular database
+driver, use a C<database> expression.
+
+  database <database-name> <driver-name> <parameter-string>;
+
+The C<E<lt>parameter stringE<gt>> is a colon-separated string whose
+interpretation is driver-dependent, but which usually includes the
+hostname, port, username and password. For example, to connect to the
+database C<ice_cream> using the C<mysql> driver, using the default
+host name and the port 3306, and bind the resulting connection to the
+variable C<db>, use
+
+  var db = database "ice_cream" "mysql" ":3306:web:";
+
+The driver and parameter string default to the configuration values
+C<database_driver> and C<database_args>, so at a minimum you need only
+give the instance name:
+
+  var db = database "ice_cream";
+
+Supported drivers include C<postgres>, C<mysql> and C<sqlite>. The
+C<E<lt>parameter-stringE<gt>> field is presently only used by the
+postgres and mysql drivers and has the form:
+
+  host:port:user:password
+
+When a database expression is evaluated on the server a connection is
+automatically opened if one is not already open.
+
+Table-handles are created using C<table> expressions, which need the
+table's name, its type, as a record, and the database connection (a
+value produced by a C<database> expression as above):
+
+  table <table-name> with <row-type> from <database-connection>;
+
+For example, to create a handle to the table C<ice_cream> with fields
+C<i> and C<f> both of type C<Int> associated with the database C<db>,
+and bind it to the variable C<fac_table>, use:
+
+  var parlors = table "ice_cream_parlors" 
+                with (name : String, fans : Int) from db;
+
+The variable C<parlors> then has type C<TableHandle((name : String,
+fans : Int), (name : String, fans : Int), (name : String, fans :
+Int))>.  The three arguments to the C<TableHandle> type constructor
+together identify the type of a row and its constraints (See L<Table
+constraints>).
+
+=head3 Using tables
+
+To iterate over the items of a table--or just to fetch one row--use
+C<for> comprehensions. 
+
+Since a table-handle in Links is different from a list, we cannot
+simply draw elements directly from a table as we draw them from a
+list. But a special form of generator accepts a table-handle as its
+source:
+
+  var parlors = table "ice_cream_parlors" 
+                with (name : String, fans : Int) from db;
+  for (p <-- parlors)
+  where (p.flavors > 1)
+    [x]
+
+This comprehension selects all the elements from the
+C<ice_cream_parlors> table that serve more than one flavor.
+
+The special I<long-arrow generator> C<E<lt>--> accepts a table-handle,
+and not a list, as its right-hand side.
+
+The long-arrow generator also specifies that the comprehension in
+which it participates I<must> be executed by a single SQL query at run
+time. When an expression is executed as a query, it should be
+relatively efficient because, for example, any comprehension filtering
+should be performed by the database, before involving the Links
+runtime system. The database system may be able to do this efficiently
+by using its indexes.
+
+When you don't want to specify that an expression becomes a query, you
+can extract all the rows of a table directly using the special
+function C<asList>. The C<asList> function takes a single argument, a
+table handle, and produces a list of all the rows in the table at the
+time when the function is applied.
+
+For example, you may write
+
+  for (p <-- parlors)
+   where (p.flavors <= 20)
+    [(name = p.name)]
+
+to extract from the C<parlors> table the names of those with
+fewer than 20 flavors. This might be compiled into an SQL query such
+as
+
+  select p.name as name from parlors as p
+  where p.flavors <= 20
+
+The C<asList> function extracts an entire table at once:
+
+  sig asList : (TableHandle((|a::Base),_,_)) -> [(|a::Base)]
+  fun asList(t) {for (z <-- t) [z]}
+
+Thus the following expression gives the same result as the previous
+query for selecting shops with fewer than 20 flavors, but it does more
+work outside the database system:
+
+  for (p <- asList(parlors))
+   where (p.flavors <= 20)
+    [(name = p.name)]
+
+It would use the following simple SQL to get its raw data:
+
+  select * from parlors
+
+and the Links runtime system would filter the data itself.
+
+=head3 Database modifications
+
+Links can also modify database tables using insert, update and delete
+operations, which work similarly to the corresponding SQL statements.
+
+For example, the Links expression
+
+  insert t values (f1, ..., fk) rs
+
+inserts the list of rows C<rs> into the table C<t> where C<rs> must
+be a list of records with fields C<f1, ... fk>.
+
+The Links expression
+
+  update (var r <-- t)
+   where condition
+   set (f1 = v1, ..., fn = vn)
+
+updates the rows of table C<t> that satisfy C<condition> by setting each
+field C<fi> to C<vi>.
+
+The Links expression
+
+  delete (var r <-- t)
+   where condition
+
+deletes the rows of table C<t> that satisfy C<condition>.
+
+=head3 Table constraints
+
+Database fields can be given two kinds of special features: they can
+be made I<read-only> and they can be I<defaulted> or given default
+values when inserting.
+
+A read-only field must not be included in an insert or an update. A
+defaulted field need not, and cannot, be included in an insert or
+update command.
+
+To enable these special features on a table field, add a C<where>
+clause to the table expression that lists field names with the
+corresponding keyword. For example:
+
+  table "people" with (id:Int, name:String, nationality:String) 
+                 where id readonly, nationality default from db
+
+This returns a table handle for the table C<people> with fields C<id>
+and C<nationality>, where the C<id> field cannot be modified through
+this handle, and C<nationality> has a default value so 
+giving a value is optional when modifying the table.
+
+The type assigned by Links to a table handle has three fields,
+indicating the I<readable> fields, the I<writeable> fields and the
+I<needed> fields, in that order:
+
+  links>
+    var t = table "people" with (id:Int, name:String, nationality:String) 
+                           where id readonly, nationality default from db;
+  t = (table people) : 
+    TableHandle((id:Int,name:String,nationality:String),
+                (name:String,nationality:String),
+                (name:String))
+
+Only C<name> and C<nationality> are I<writeable>, as C<id> is
+read-only. Only C<name> is I<needed> when inserting, as C<nationality>
+has a default and C<id> is read-only.
+
+=head3 Database abstraction
+
+Links supports a powerful mode of abstraction over query fragments.
+
+A simple example occurs when you want to filter a table, but using
+some abstract predicate given by another piece of code. For example,
+you are writing an API to access some database tables, and you want
+the API caller to be able to choose how to filter the rows.
+
+A natural way to do this in Links is to represent the filter using a
+predicate function (one mapping table rows to booleans):
+
+  fun selectedShops(pred) {
+    for (p <-- parlors) where (pred(p)) e
+  }
+
+In this situation, since the long-arrow generator is used, the
+programmer demands that the entire comprehension be executed as a single
+SQL query--even though the predicate on which to filter is not known
+until runtime.
+
+Still, Links guarantees at compile time that this is achievable--or
+gives a compile-time error if not. This involves analyzing the program
+to ensure that callers of C<selectedShops> never pass a function that
+Links cannot translate to SQL in the context of the above query. If
+so, an error is generated, usually at the call site, explaining that
+the function passed was "wild"--the Links term for a function that
+doesn't translate to SQL.
+
+How to determine at a glance whether your function will translate to
+SQL? In brief, the only sorts of functions that should fail to
+translate are those that use "wild" primitives, and recursive
+functions.
+
+To recognize wild and tame functions in the compiler's output, look at
+the function arrows. A straight arrow C<->> indicates a tame function,
+which can be translated to the database. A squiggly arrow C<~>>
+indicates a wild function, which cannot be compiled to the database.
+You can also use these arrow forms in the source, in type annoations,
+to constrain functions to the way you think they should act (or force
+the compiler to produce an error message if not).
+
+A comprehension with a long-arrow generator (See L<Using tables>)
+implicitly requires the entire comprehension to be translatable to a
+single SQL query, and this effectively requires every function it
+calls to be I<tame>. To assert this requirement explicitly, or to make
+it elsewhere than a comprehension, use the C<query> block form (See
+L<Query blocks>).
+
+Besides the issue of wildness, a query expression is not considered
+SQL-translatable if its result type is not the type of a flat
+relation--a list of records with fields of base type (C<Int>,
+C<String>, C<Float>, and so on).
+
+=head3 Query blocks
+
+To assert explicitly that an expression--which need not be a
+comprehension--translates to a query, wrap it in a query block:
+
+  query {
+    e
+  }
+
+As with long-arrow comprehensions, the expression C<e> must be "tame"
+and must have relation type: a list of records with fields of base
+type, or the compiler will give an error.
+
+Use C<query> assertions to offload parts of your computation to the
+database system, taking advantage of its efficient query-planning
+facilities.
+
+=head2 Structural pattern matching
+
+As well as lists and variants, pattern matching can also be performed
+on constants.
+
+  switch (name) {
+    case "Ezra" -> "Cooper"
+    case "Jeremy" -> "Yallop"
+    case "Phil" -> "Wadler"
+    case "Sam" -> "Lindley"
+  }
+
+In common with other strongly-typed functional programming languages
+such as ML and Haskell, Links supports deep pattern matching.
+
+  fun firstChildId(tree) {
+    switch (tree:mu a.[|Node:(a, b, a) | Leaf|]) {
+      case Node(Node(_, id, _), _, _) -> Some(id)
+      case Node(Leaf, _, Node(_, id, _)) -> Some(id)
+      case _ -> None
+    }
+  }
+
+This function takes a labelled binary tree, and returns the id of the
+first child of the root, if it exists. The wildcard pattern C<_>
+matches any value. The type annotation is necessary if you want to
+constrain the function to only operate on labelled binary trees.
+
+Using C<switch> it is possible to dispatch according to the structure
+of a value. If the structure of a value is already known, then
+patterns can also be used in other contexts. Patterns can be used to
+bind function arguments.
+
+  fun foo((x=a, y=b)) {a+b}
+  foo((x=2,y=3))
+
+This example returns C<5>. Patterns can also be used to bind
+local variables.
+
+  {
+    var language = Language("Links");
+    var Language(name) = language;
+    name
+  }
+
+This example returns C<"Links">.
+
+=head2 Regular expressions
+
+Rudimentary regular-expression (regex) handling is provided for
+matching string against regex patterns.
+
+A regular expression is written between slashes, as
+C</this.is.a.regex/>.
+
+The operator C<=~> tests the string on its left-hand side against the
+regular expression on its right-hand side. For example:
+
+    if ("haystack" =~ /ne+dle/)
+      print("Found needle in haystack.")
+    else
+      print("No needle found in haystack.")
+
+Presently the regex support is somewhat limited; only the following
+constructions are supported (C<e> standing for any regex):
+
+    a         (an unadorned character) match exactly that character
+    [a-z0-9-] match any single character in the given range
+    .         match any single characer
+    e*        match e zero or more times
+    e+        match e one or more times
+    e?        match an empty string, or e exactly once.
+    (e)       matches whatever e matches
+
+Any of the special characters, C<*> C<+> C<?> C<(> C<)> C<[> and C<]>,
+can be escaped with a backslash, in which case they match precisely
+that character, instead of having a special meaning.
+
+Unlike most other regex systems, Links regexes are anchored on both
+ends. So, to match a substring, you need to add C<.*> at both ends.
+For example:
+
+    links> "Portobello" =~ /bell/
+    false : Bool
+
+    links> "Portobello" =~ /.*bell.*/
+    true : Bool
+
+=head3 Special feature: regexes and the database
+
+Certain uses of regular expressions can be translated to an SQL
+expression involving the C<LIKE> operator. For example, the expression
+
+    for (uni <-- universities)
+    where (uni.city =~ /.*edinburgh.*/)
+      [uni]
+
+should translate to an SQL query that selects all those unis from the
+C<universities> table having C<edinburgh> as a substring of their
+C<name> column. The query might look like this:
+
+    select id from t where t.name like '%edinburgh%'
+
+=head3 Limitations
+
+Currently, a regex in Links cannot be treated as a first-class value:
+a regex can only appear I<lexically> as the right-hand side of a use
+of the C<~> operator. The left-hand side may be any expression of
+C<String> type.
+
+There is presently no way to perform regex-based substitutions or to
+capture parts of a regex match for later use.
+
+=head1 Typing
+
+=head2 Types in Links
+
+Links is a strongly-typed, statically-typed programming
+language.
+
+This means that every value has a type, and every operation admits
+just certain types as arguments. The compiler will check that a
+program uses every value in a way consistent with a type. This way,
+for example, you can concatenate two lists but you can't concatenate
+two integers--it wouldn't make sense, and if you try to do it, the
+compiler will report an error up front. If a program passes the
+compiler, you can be certain that it doesn't have any type errors
+(modulo any bugs in the compiler!)
+
+When you use Links through the interactive shell, it tells you the
+type of every result value. You can use this shell to get familiar
+with the types of various values. For example:
+
+    links> 1 + 1;
+    2 : Int
+
+    links> { var name = "Gallileo"; "Hi, " ++ name };
+    "Hi, Gallileo" : String
+
+    links> (42, "The answer");
+    (42, "The answer") : (Int, String)
+
+    links> [2, 4, 6, 8];
+    [2, 4, 6, 8] : [Int]
+
+    links> (  price = 1.95, drinkName = "Latte" );
+    (price=1.95,drinkName="Latte") : (drinkName:String,price:Float)
+
+    links> Red(7);
+    Red(7) : [|Red:Int | a|]
+
+    links> Blue(7);
+    Blue(7) : [|Blue:Int | a|]
+
+    links> [(42, "The answer"),
+            (7, "The number of wonders of the world")];
+    [(42, "The answer"), (7, "The number of wonders of the world")] 
+      : [(Int, String)]
+
+Note that the type of an integer is Int, and the type of a string is
+String. The I<pair> C<(42, "The answer")> has a type that indicates
+the first part of the pair is an C<Int> and the second part is a
+C<String>; this type is written C<(Int, String)>.
+
+A list type is written with square brackets around the type of its
+elements. Note that I<all elements of a list must be of the same
+type>. This allows you to apply an operation to an arbitary element of
+the list and to know what type it is. If you need to mix different
+types within a list, you can do so by assigning variant tags to
+each.
+
+By constrast, elements of a tuple can be of the same or of different
+types, but the number of elements of a tuple is fixed.
+
+The type of a record indicates exactly which fields should be present,
+and what their types are. The type of a variant tells you what its
+label is, and what type is contained in that label. (Note that, when
+you have a function, it may yield a variant type that allows more than
+one label. Each label has a specific type for its content.)
+
+When you try to evaluate an ill-typed expression, the system will give
+you a type error:
+
+    links> [2, 4, 6, 8, "Who do we appreciate?"];
+    <stdin>:1: Type error: Cannot unify abstract type 'List' with type 'Int'
+    In expression: [2, 4, 6, 8, "Who do we appreciate?"].
+
+=head2 Base types
+
+The base types offered by Links are
+
+  Bool  Int  Char  Float  Xml  Database
+
+The type C<String> is not really a base type, but rather an alias for
+C<[Char]> (the type for lists of characters). This means that any
+general list operation will work on a C<String>.
+
+=head2 Type annotations
+
+Links can infer type information for any program you give it. This
+means that you typically don't have to declare any types. But if you
+get a type error, it may not point to the part of the code where you
+really made the mistake.
+
+To help the interpreter understand what you intend, and to help it pin
+down the error to the right place, you can give an optional type
+annotation on any expression. This is done using the colon as the type
+ascription operator, as follows:
+
+    2 + 2 : Int            # OK
+    "two plus two" : Int   # ERROR
+
+When dealing with constants, as above, the type is always
+obvious. Type annotation is more useful when dealing with functions,
+whose type may be inferred in a way that's not obvious. Suppose for
+example that you have a function h that you know should always return
+a list of Ints. You can tell the compiler this, and it will check that
+it is the case:
+
+  fun h(x, y) {
+    f(x) ++ g(y) : [Int]
+  }
+
+This can be useful because f and g may in fact return
+types that are compatible (such as C<[String]>), but are not what you
+expect. Since they are compatible, the function C<h> will be
+type-correct; but elsewhere in the program, you may get a confusing
+type error involving C<h>. Providing an annotation for C<h>, like
+this, will force the compiler to tell you if C<h> does not have the
+type you expect.
+
+=head2 Type aliases
+
+Sometimes it is convenient to define an alias for a type in order to
+avoid having to write out the whole type every time it is used. For
+instance, suppose you want a type for representing colours:
+
+  [|Red | Orange | Yellow | Green | Blue | Indigo | Violet|]
+
+Then you can write:
+
+  typename Colour = [|Red | Orange | Yellow | Green | Blue | Indigo | Violet|];
+
+and following this declaration you can use C<Colour> in place of
+C<[|Red | Orange | Yellow | Green | Blue | Indigo | Violet|]>. For
+instance, you can now define functions with the following signatures:
+
+  sig showColour : (Colour) -> String
+  sig invertColour : (Colour) -> Colour
+  sig combineColours : (Colour, Colour) -> Colour
+
+It is also possible to define parameterised type aliases.
+
+  links> typename Pair(a, b) = (a, b)
+  Pair = a,b.(a,b)
+  links> (1, true) : Pair (?, ?)
+  (1, true) : Pair (Int, Bool)
+
+It is even possible to parameterise type aliases over row variables.
+
+  links> typename R(r::Row) = (x:Int|r);
+  R = a.(x:Int|a)
+  links> (x=1, y=true) : R({x:Int, y:Bool});
+  (x=1,y=true) : R ({ x:Int,y:Bool })
+
+Curly braces indicate that an argument to a type alias is a row rather
+than a type.
+
+Currently type aliases are only allowed at the top-level.
+
+=head2 Type variables
+
+Type variables in Links are written as lower case names.
+
+  sig id : (a) -> a
+  fun id(x) {x}
+
+We distinguish between I<rigid> type variables and I<flexible> type
+variables. A I<rigid> type variable (like the C<a> in the C<id>
+function above) is a proper polymorphic object-level type variable
+that can be instantiated to any type when its binding function is
+applied. A I<flexible> type variable (also called a I<weak> type
+variable or I<unification> type variable) is a monomorphic meta-level
+variable that will be instantiated to a object-level type by the type
+inference algorithm. A flexible type variable is indicated by
+prefixing a type variable with a percent sign C<%>. Flexible type
+variables are useful if you want to assert the shape of the type of an
+expression, but you want type inference to fill in some of the type
+for you.
+
+  links> (1, (2, ((3, fun (x) {x}), "a")), true) : (Int, %a, Bool);
+  (1, (2, ((3, fun), "a")), true) : (Int, (Int, ((Int, (a) -> a), String)), Bool)
+
+If you only want to use a flexible type variable once, then you don't
+need to name it.
+
+  links> (1, (2, ((3, fun (x) {x}), "a")), true) : (Int, %, Bool);
+  (1, (2, ((3, fun), "a")), true) : (Int, (Int, ((Int, (a) -> a), String)), Bool
+
+A rigid type variable that is only used once is written as C<_>. This
+notation is also used by the pretty-printer.
+
+  links> fun (x) {0};
+  fun : (_) -> Int
+
+=head2 Function types and effects
+
+Function typess in Links are annotated with effects. The primitive
+form of a function type is:
+
+  (A1, ..., An) {E}-> B
+
+This is the type of a function that takes n arguments of types C<A1>,
+..., C<An>, has effects C<E> and returns values of type C<B>.
+
+The effects C<E> are represented as a I<row> type (as used in record
+and variant types). If an effect is present then that indicates that
+it might happen at run-time. If an effects absent then that indicates
+that it will definitely not happen at run-time.
+
+Currently the only two effects that are tracked in Links are C<wild>,
+which corresponds to code that cannot be run in the database, and
+C<hear:A> which corresponds to code that can 'hear' messages of type
+C<A>. In the future we plan to experiment with tracking other effects.
+
+In an effort to make function types more readable, syntactic sugar is
+provided for a number of common classes of function arrow. As well as
+being available to the programmer, the syntactic sugar is also used by
+the pretty-printer. The meta-variable C<X> stands for a rigid (C< a> or
+C<_>) or flexible (C<?a> or C<?>) row variable.
+
+  -X->           {|X}->
+  ->             {|_}->
+  {E}~>          {wild,E}~>
+  ~X~>           {|X}~>
+  ~>             {|_}~>
+
+  {:A}~>         {hear:A}~>
+  {:A,E}~>       {hear:A,E}~>
+  {:A|X}~>       {hear:A|X}~>
+
+=head2 Kinds and subkinding
+
+The Links type system has three I<kinds> for classifying types and
+type variables: standard types and type variables have kind C<Type>,
+rows and row variables have kind C<Row>, and presence flags and
+presence variables have kind C<Presence>.
+
+In order to allow the type system to enforce the constraint that
+queries can only return lists of records of base type, Links also
+supports a very basic form of I<subkinding>. Type variables and row
+variables can be annotated with a subkind. Type variables either have
+subkind C<Any>, which means they can be instantiated to any type, or
+subkind C<Base> which means they can only be instantiated to base
+types. The subkind C<Base> is a subkind of C<Any>. Similarly, row
+variables either have subkind C<Any> or subkind C<Base>. A row
+variable of subkind C<Base> can only be instantiated with a row if all
+the field in the row are base types. Type inference introduces subkind
+annotations when inferring the type of a query.
+
+  links> fun (e) {query {e}};
+  fun : ([(|a::Base)]) -> [(|a::Base)]
+
+The base types are: C<Int>, C<Bool>, C<Float>, C<Char> and C<String>.
+
+(In fact C<String> is an alias for C<[Char]>. This leads to a hole in
+our SQL compilation scheme, as it fails to disallow string
+manipulation code that cannot be compiled to SQL, such as the
+following:
+
+  fun (t) {for (r <-- t) [(name=(for (c <- r.name) where (c <> 'a') [c]):String)]}
+
+This problem will be fixed in a future version of Links by changing
+C<String> to be a distinct base type.)
+
+=head1 Features
+
+=head2 Formlets
+
+Links allows the I<abstraction> of small fragments of an HTML form,
+called I<formlets>, so that the submitted data can be packaged into
+more meaningful components, and the submitted data can be abstracted
+from its HTML-level representation.
+
+As an example, you may wish to create a I<formlet> to abstract the
+notion of a "date entry field." Concretely, in HTML, this might take a
+variety of forms; it might use just one input field, or a field for
+each component (day, month, and year), or it might present a graphical
+control for the user to select a date.
+
+The I<client code> of the formlet wants to receive the date value in
+one lump, not as individual fields; furthermore the format of the data
+received by the client need not be the same as the format sent by the
+browser. As a result, the designer of the date formlet may change the
+HTML representation without changing the date representation that is
+returned to the client code. We say that the formlet is I<abstracted>
+from the HTML representation of a form.
+
+This abstraction is achieved in Links using a syntactic construct
+known as C<formlet>/C<yields>. An example date formlet might look like
+this:
+
+  fun dateFormlet(msg) {
+    formlet <#>
+      {stringToXml(msg)} <br />
+      Day:   {inputInt -> day}
+      Month: {inputInt -> month}
+      Year:  {inputInt -> year}
+    </#>
+    yields {
+      Date(day, month, year)
+    }
+  }
+
+This function takes a string C<msg> from the caller (a bit of text to
+include before the input fields) and constructs an XML value including
+three input fields with the C<msg> above them. The inputs are
+introduced using the I<formlet binding> construct, which looks like this:
+
+   { body -> x }
+
+The expresion C<body> (in the above example, C<inputInt>) is itself a
+formlet; it has a concrete realization (C<inputInt> is realized
+simply as an HTML C<E<lt>inputE<gt>> field) but will later (when the
+web user submits the form) produce a value, which will be bound to
+C<x>. C<x> is in scope throughout the C<yields> expression.
+
+The C<yields> expression is where the data is packaged for the
+client. It is evaluated only when the form is submitted. The value
+emitted by the yields expression can further be bound by yet another
+formlet binding. 
+
+Thus, to continue the example, another piece of code can make use of
+the dateFormlet as follows:
+
+  formlet
+    <table>
+    <tr><td>
+      {dateFormlet("Arrival") -> arrival}
+    </td><td>
+      {dateFormlet("Departure") -> departure}
+    </td></tr>
+    </table>
+  yields
+    Itinerary(arrival, departure)
+
+Here the values bound to C<arrival> and C<departure> are the values
+emitted by the respective C<yields> bodies of the formlets returned by
+calls to C<dateFormlet>; in this case they will be C<Date>-tagged
+values such as C<Date(28, 2, 2007)>.
+
+The type of a C<formlet>/C<yields> expression is C<Formlet(>I<a>C<)>,
+where I<a> is the type returned by the C<yields> body. The function
+C<dateFormlet> thus has type C<String -E<gt> Formlet([|Date:(Int, Int,
+Int)|])>.
+
+A C<Formlet(>I<a>C<)> value cannot be embedded in HTML until it has been
+"rendered". To render such a value, use the render function:
+
+    render(formlet <#> {input -> x} </#> yields { x }, handler)
+
+C<render> has type C<(Formlet (a), (a -E<gt> XML)) -E<gt> XML>.
+
+Having C<render>ed a formlet as a form, the resulting XML can be
+returned to the top-level, and thence served to the browser. When the
+user submits the form, all the submitted data will be processed by all
+the intermediate C<yields> bodies, and finally the function C<handler>
+will be called.
+
+=head2 Concurrency
+
+A Links program begins as a single thread of control but can fork into
+many processes by executing the C<spawn> primitive:
+
+  var newProcID = spawn { expression };
+
+This starts a new process which begins by evaluating
+C<expression>. The value of the expression is discarded if evaluation
+ever completes.  C<spawn> returns an identifier of the new process to
+the calling process. This identifier can be used to address messages
+to the new process, with the C<!> primitive (pronounced "send"):
+
+   procId ! msg
+
+This appends the value C<msg> to the mailbox for the process
+identified by C<procID>. The return value is just C<()>. The mailbox
+is FIFO, so if you know that some message is sent before some other
+message, you know they will be received in that order.
+
+Each process's mailbox is given a static type according to the
+messages it expects to receive. Typically, a process will use variants
+to tag the various messages it can receive; for example, a process
+that can expects to be informed of passing comets and celebrity
+sightings might expect to receive either a value
+C<CelebritySighting(celebName, atVenue)> or a value
+C<PassingComet(cometID, zenith, azimuth)>. This process's mailbox
+would be given the type 
+C<[|CelebritySighting:(String, String) | PassingComet:(Int, Float, Float)|]>
+
+A process can receive messages using the C<recv> function, which
+returns the next message in the current process's mailbox.
+
+  var nextMsg = recv()
+
+More commonly, however, you will want to dispatch on the received
+message's variant tag immediately. The C<receive> construct makes this
+easy to do.
+
+  receive {
+    case CelebritySighting(celebName, atVenue) -> e1
+    case PassingComet(cometID, zenith, azimuth) -> e2
+  }
+
+This removes the next message from the mailbox and does a C<switch> on
+it. (See L<Polymorphic variants>).
+
+=head2 Located code and remote procedure calls
+
+A client-side Links program can make seamless remote procedure calls
+to the server, and the server can in turn make remote procedure calls
+to the client. The server stores no state while the computation is
+proceeding at the client.
+
+To use this feature, simply annotate functions with the keyword
+"client" or "server". For example:
+
+  fun lookupUserID(username) server {
+    for (user <- users)
+    where (user.name = username)
+      [user.id]
+  }
+
+  fun setPageBackground(color) client {
+    doc = domGetDocumentRef();
+    domSetAttributeRef(doc, "style", "background-color: " ++ color);
+  }
+
+A function annotated with "server" will always run on the server, even
+if it is called from code running on the client. Likewise for "client"
+functions.
+
+A server call is implemented as a distinguished HTTP request. A client
+call is implemented as a special HTTP response body which the
+client-side code recognizes as a remote call.
+
+Programs that neither contain client-annotated definitions nor make
+use of client primitives (such as the DOM functions described below)
+are processed differently by Links.  In such cases plain HTML, not
+JavaScript, is sent to the browser, and all interaction takes place
+via standard HTML form submission.
+
+=head2 Handling User Actions
+
+A Links program usually runs on a client (browser) and a server. The
+client code can be notified when certain user events take place, such
+as pressing a key on the keyboard or clicking on a hyperlink. The code
+that responds to such events is associated with particular nodes in
+the DOM tree and is expressed through special XML attributes, called
+l-event attributes, attached to the relevant XHTML tags. This section
+defines the attributes and their use.
+
+An l-event attribute begins with the prefix C<l:> and corresponds to
+an event type as defined by the browser. The event type is determined
+by the attribute name simply by stripping off the C<l:>
+prefix. Widely-supported l-event attributes include:
+
+=over 4 
+
+=item * C<l:onmousedown>
+
+=item * C<l:onmouseup>
+
+=item * C<l:onmousemove>
+
+=item * C<l:onmouseout>
+
+=item * C<l:onmouseenter>
+
+=item * C<l:onkeyup>
+
+=item * C<l:onkeydown>
+
+=item * C<l:onclick>
+
+=item * C<l:onfocus>
+
+=item * C<l:onchange>
+
+=item * C<l:onload>
+
+=back
+
+When an element containing one of these attributes is installed in the
+current DOM document (see L<Modifying the Web Page>), the associated
+code is registered as a handler for the corresponding event type. If
+the element is removed from the DOM, its event handlers become
+inactive.
+
+The content of one of these attributes should be a Links expression
+enclosed in curly braces, an expression of type C<()> which may
+perform side-effects in response to the event. For example:
+
+    <input type="button" value="Add Photo"
+           l:onclick="{domAppendChild(container,
+                                         <img src="icon.jpeg"/>)}" />
+
+=head3 Interpreting the Event
+
+In an l-event handler, there is a special variable in scope called
+C<event>.  This variable contains an object of type C<Event> which can
+be accessed using the following API. This API corresponds to the
+Yahoo! Web UI library (L<http://developer.yahoo.com/yui/>). These
+methods are implemented in a browser-independent way. These functions
+constitute the sole interface to the C<Event> object: the object is
+not a record and has no directly-accessible fields.
+
+=over 4
+
+=item C<getTarget>
+
+An event generally has a I<target>, a DomNode at which the event has 
+occurred (for example, a mouse-down event will have as its target the leaf 
+node upon which the mouse was clicked). This method returns the target.
+
+=item C<getTargetElement>
+
+This function behaves like C<getTarget>, except that if the node is
+a text node (rather than an element node), it returns the node's
+parent (which must be an element node).
+
+=item C<getFromElement>
+
+=item C<getToElement>
+
+Mouse-out and mouse-over events have two targets. The function
+C<getFromElement> returns the element the mouse came from.
+C<getToElement> returns the element from which the mouse came.
+
+=item C<getPageX>
+
+=item C<getPageY>
+
+Some events refer to a particular point on the page. These methods return 
+the x and y coordinates of that point, relative to the top-left corner of the 
+page (I<right> and I<down> are the positive directions).
+
+=item C<getTime>
+
+=back
+
+=head2 Modifying the Web Page
+
+L<XML Quasiquote|"XML Quasiquotes"> expressions construct XML values, but these 
+values are not rendered by a browser immediately. XML values can be used to 
+create DOM nodes, which in turn can be installed in the I<active document>.
+
+There are two ways to install nodes in the active document:
+
+=over 4
+
+=item 1.
+An XML value returned by the final expression of a Links program is
+converted to a DOM node and installed as the (initial) active
+document. This is true in client context as well as server context.
+
+=item 2.
+A set of primitives (beginning with C<dom>-) are provided for making
+modifications to particular parts of the document. These operations
+only work in client context.
+
+=back
+
+Elements that are not installed are not visible, nor do events occur
+on them, so their event handlers cannot fire. (See L<Handling User
+Actions>.)
+
+Links makes a distinction between XML trees, which are immutable,
+and DOM nodes, which are mutable objects. DOM nodes are owned by a DOM
+manager module, and all interaction with DOM nodes is through calls to
+that module, using objects call C<DomNode>s. You can create DOM
+nodes by passing an XML tree: the XML constitutes a model for the DOM
+node, which is a rough copy of the XML. Likewise, from a DomNode,
+you can extract an XML image of the DOM node and its DOM subtree. The
+browser may have special semantics associated with DOM nodes, and may
+add or remove attributes and children without warning; XML values,
+however, are completely within the control of the Links program.
+
+=head3 DOM operations
+
+The operations for DOM interaction are as follows.
+
+Operations ending with C<Ref>
+work on DOM nodes; operations ending with C<Xml> take an XML value and convert
+it to a DOM node before working with it.
+
+=over 4
+
+=item C<insertBefore(xml, beforeNode)>
+
+Creates a sequence of nodes using C<xml> as the image, and adds them
+as the previous sibling of the node C<beforeNode>.
+
+=item C<appendChildren(xml, parentNode)>
+
+Creates a sequence of nodes using C<xml> as the image, and adds them as
+the after the last child of the node C<parentNode>.
+
+=item C<replaceNode(xml, node)>
+
+Replaces C<node> with xml.
+
+=item C<replaceDocument(xmlVal)>
+
+Replaces the entire document with xmlVal.
+
+=item C<domInsertBeforeRef(moveRef, beforeRef)>
+
+Moves the node C<moveRef> to become the previous sibling of the node
+C<beforeRef>.
+
+=item C<domAppendChildRef(newChildRef, parentRef)>
+
+Moves the node C<newChildRef> to become the last child of the node
+C<parentRef>.
+
+=item C<removeNode(node)>
+
+Removes C<node> from its current position, leaving it with no
+parent. This makes it an orphan.
+
+=item C<domReplaceChildren(xml, node)>
+
+Replaces the children of C<node> with xml.
+
+=item C<swapNodes(node1, node2)>
+
+Swap node1 with node2.
+
+=item C<getDocumentNode()>
+
+Return a reference to the I<document element>, that is, the top-level
+of the installed document.
+
+=item C<getNodeById(id)>
+
+Given a string ID value, finds the DOM node with that ID and returns
+it. If more than one node has that ID, the behavior is undefined.
+
+=item C<getValue(node)>
+
+Translates the given DOM node into an XML value and returns that.
+
+=item C<isNull(node)>
+
+Returns true if C<node> is null.
+
+=item C<isElementNode(node)>
+
+Returns true if C<node> is not null and is an element node.
+
+=back 
+
+Note: when manipulating the DOM, care should be taken to ensure that a given 
+ID value appears only once amongst the installed DOM nodes. Some operations 
+may behave unreliably when IDs are duplicated. Orphaned DOM nodes may reuse 
+ID values.
+
+You can also access attributes of DOM nodes, and navigate the DOM
+tree, in a read-only fashion using the following operations:
+
+=over 4 
+
+=item domGetTagNameFromRef(ref)
+
+Returns the tag name of C<ref> as a string. For example, a C<div> node would 
+return the string C<"div">.
+
+=item C<domGetAttributeFromRef(ref, attrName)>
+
+Returns the value of the attribute C<attrName> on the node C<ref>. For
+example, on a node pointed to by C<ref> with the XML representation
+
+  <a href="more_info.html">More info</a>,
+
+the call C<domGetAttributeFromRef(ref, "href")> would return the string 
+C<"more_info.html">.
+
+=item domGetParentFromRef(ref)
+
+If the node pointed to by C<ref> has a parent, this call returns a reference to 
+that parent node.
+
+=item domGetFirstChildFromRef(ref)
+
+If the node pointed to by C<ref> has children, this call returns a reference to 
+the first child (in document order).
+
+=item domGetNextSibingFromRef(ref)
+
+If the node pointed to by C<ref> has siblings occurring after it, this
+call returns a reference to the next sibling.
+
+=item domGetChildrenFromRef(ref)
+
+Returns a list of references to the child nodes of the node ref. NOT
+YET IMPLEMENTED
+
+=item getInputValue(id)
+
+Gets the current value of an input element with identity C<id>.
+
+=back
+
+=head2 XML operations
+
+For inspecting pure XML values, the following functions are provided:
+
+=over 4
+
+=item getTagName(xml)
+
+Returns the tag name of the given XML node, as a string. For example:
+
+    getTagName(<h1>Dog Bites Man</h1>)
+
+returns the string C<"h1">. It is an error to apply this to an XML
+text node.
+
+=item getTextContent(xml)
+
+Given an XML text node C<xml>, returns the text as a string. It is an
+error to apply this to an element node.
+
+=item getAttributes(xml)
+
+Fetches a list the list of attributes associated with the given XML
+value.
+
+    getAttributes(<div class="sidebar" />)
+
+returns C<[("class", "sidebar")]>. It is an error to apply this to an XML
+text node.
+
+=item hasAttribute(xml,attrName)
+
+Returns true if the given XML value has the named attribute and false
+otherwise. For example
+
+    hasAttribute(<div class="sidebar" />, "class")
+
+returns C<true>. It is an error to apply this to an XML
+text node.
+
+=item getAttribute(xml,attrName)
+
+Fetches the named attribute of the given XML value, as a string. For
+example
+
+    getAttribute(<div class="sidebar" />, "class")
+
+returns C<"sidebar">. It is an error to apply this to an XML
+text node.
+
+=item getChildNodes(xml)
+
+Returns a list of the child nodes of this xml node.
+
+=back
+
+=head2 Cookies
+
+When in the context of an HTTP request, cookies can be manipulated
+using these library functions:
+
+    getCookie : (String) ~> String
+    setCookie : (String, String) ~> unit
+
+Each takes the cookie name as its first parameter. C<getCookie>
+returns the current value of the cookie, as it was passed with the
+HTTP request. C<setCookie> takes,
+as its second parameter, the new value for that cookie. There is
+currently no way to control the path/domain restrictions of the cookie
+or the expiration date. All cookies set by these utilities are session
+cookies and expire when the browser is closed. More flexible support
+for cookies is planned for future work.
+
+=head1 Library functions
+
+Links has various built-in library functions. A full list of these,
+along with their types, can be obtained by typing C<@builtins;> in the
+interactive shell.
+
+=head2 Explicit type conversions
+
+ stringToInt      : (String) -> Int
+ intToFloat       : (Int) -> Float
+ intToString      : (Int) -> String
+ floatToString    : (Float) -> String
+ stringToXml      : (String) ~> Xml
+ intToXml         : (Int) ~> Xml
+ floatToXml       : (Int) ~> Xml
+
+These function convert between values of different types.
+
+ ord              : (Char) -> Int
+ chr              : (Int) -> Char
+
+The C<ord> and C<chr> functions converts between a character and its
+ASCII value as an integer.
+
+=head2 Negation
+
+ not              : (Bool) -> Bool
+ negate           : (Int) -> Int
+ negatef          : (Float) -> Float
+
+=head2 Character classification
+
+ isAlpha          : (Char) ~> Bool
+ isAlnum          : (Char) ~> Bool
+ isLower          : (Char) ~> Bool
+ isUpper          : (Char) ~> Bool
+ isDigit          : (Char) ~> Bool
+ isXDigit         : (Char) ~> Bool
+ isBlank          : (Char) ~> Bool
+
+(C<isXDigit> returns true for hexadecimal digits)
+
+=head2 Case conversion
+
+ toUpper          : (Char) -> Char
+ toLower          : (Char) -> Char
+
+=head2 Floating point functions
+
+ floor            : (Float) -> Float
+ ceiling          : (Float) -> Float
+ cos              : (Float) -> Float
+ sin              : (Float) -> Float
+ tan              : (Float) -> Float
+ log              : (Float) -> Float
+ sqrt             : (Float) -> Float
+
+=head2 Miscellaneous
+
+ print            : (String) ~> ()
+
+Print a string to the standard output. (This function has undefined behaviour when Links is running as a CGI script.)
+
+ error            : (String) ~> a
+ 
+Raise a fatal error.
+
+ debug            : (String) ~> ()
+
+Output a string to stderr. When running a client function this will
+output to a special window only if links is run with the -d flag. When
+running a server function stderr is typically forwarded to the web
+server's error log.
+
+ sleep            : (Int) ~> ()
+
+Wait for the specified number of seconds.
+
+ exit             : (a) ~> b
+
+Exits the program, using the argument to exit as the program's return value.
+
+(FIXME: this can be ill-typed.)
+
+ serverTime             : () ~> Int
+ serverTimeMilliseconds : () ~> Int
+ clientTime             : () ~> Int
+ clientTimeMilliseconds : () ~> Int
+
+Get the time on the server (resp. client) in seconds or milliseconds since January 1, 1970.
+
+=head1 Standard library (prelude)
+
+A set of standard Links functions is defined in the file
+C<prelude.links>. This file is loaded automatically whenever Links
+runs a program. The functions it defines are explained below.
+
+=head2 List utilities
+
+=over 4
+
+=item *
+length : ([_]) ~> Int
+
+Returns the number of elements in the given list.
+
+=item *
+all : (a b~> Bool, [a]) b~> Bool
+
+Returns C<true> if all elements of the list satisfy the predicate,
+C<false> otherwise. (All elements of the empty list satisfy any
+predicate).
+
+=item *
+and : ([Bool]) ~> Bool
+
+Returns C<true> if all elements of the list are C<true>.
+
+=item *
+any : ((a) b~> Bool, [a]) b~> Bool
+
+Returns C<true> if any element of the list satisfies the predicate,
+C<false> otherwise. (No element of the empty list satisfies any
+predicate).
+
+=item *
+or : ([Bool]) ~> Bool
+
+Returns C<true> if any element of the list is C<true>.
+
+=item *
+odd : (Int) -> Bool
+even : (Int) -> Bool
+
+Returns C<true> if the argument is, respectively, odd or even.
+
+=item *
+selectElem : ([a], Int) ~> a
+
+C<selectElem(list, i)> returns the C<i>th element of the list, the first
+element being 0 (and throws an error if the list has fewer than C<i>+1
+elements).
+
+=item *
+swap : ([a], a, a) -> [a]
+
+C<swap(xs, a, b)> takes each instance of C<a> in C<xs> and replaces it
+with C<b>, and vice-versa, performing the two substitutions simultaneously.
+
+=item*
+fold_left : ((a, b) c~> a, a, [b]) c~> a
+
+=item *
+fold_right : ((a, b) c~> b, b, [a]) c~> b
+
+=item *
+fold_left1 : ((a, a) b~> a, [a]) b~> a
+
+=item *
+fold_right1 : ((a, a) b~> a, [a]) b~> a
+
+The fold functions support arbitrary manipulation on lists in an
+"algebraic" way. In general, the caller gives a "combining" operation,
+an initial value, and a list. The fold combines each element of the
+list successively with the initial value to produce eventually a final
+value, which is the result of the fold. TBD
+
+The expression C<fold_left(f, init, list)> applies C<f> successively
+to: the value C<init> and the first element of the list, the result of
+that application and the second element of the list, the result of
+that next application and the third element of the list, and so on.
+
+For example,
+
+   C<fold_left(f, init, ['a','b','c','d'])>
+
+is equal to 
+
+   C<f(f(f(f(init, 'a'), 'b'), 'c'), 'd')>
+
+The C<fold_right> function is similar but begins by applying C<f> to
+the I<last> element and C<init>:
+
+   C<fold_right(f, init, ['a','b','c','d'])>
+
+is equal to 
+
+   C<f('a',f('b',f('c',f('d', init))))>
+
+You can think of a fold as traversing a list with an "accumulator"
+whose value begins with the C<init> value and is updated to the value
+produced by C<f> working on the accumulator and the next element of
+the list as we traverse the input list.
+
+The C<fold_left1> (resp. C<fold_right1>) function behaves like its
+counterpart but uses the first (resp. last) element of the list as the
+initial value. This requires that the list be nonempty and the type of
+the initial value, result, and elements all be the same.
+
+=item *
+unzip : ([(a, b)]) -> ([a], [b])
+
+Split apart a list of paired elements into two parallel lists.
+
+=item *
+zip : ([a], [b]) -> ([(a, b)])
+
+Given two parallel lists, combine them into a single list of pairs,
+pairing the I<i>the element of the first list with the I<i>th element
+of the second list.
+
+=item *
+replicate : (Int, a) ~> [a]
+
+C<replicate(n, item)> returns a list containing just C<n> copies of C<item>.
+
+=item *
+filter : (a b-> Bool, [a]) b-> [a]
+
+Returns just those elements from the list that satisfy the given predicate.
+
+=item *
+compose : ((a) b-> c, (d) b-> a) -> (d) b-> c
+
+Given a function C<f> and a function C<g>, returns a function that
+applies C<g> to its argument and C<f> to the result of that.
+
+=item *
+id : (a) -> a
+
+Returns its argument.
+
+=item *
+map : ((a) b-> c, [a]) b-> [c]
+
+Transforms a list by applying the function to each element of the list.
+
+More precisely, it returns a list whose I<i>th element is the result
+of applying the given function to the I<i>th element of the given
+list.
+
+=item *
+concatMap : (a b-> [c], [a]) b-> [c]
+
+Applies the function to each element of the list, and concatenates the
+resulting lists, thus returning a "flat" list. Works much like a
+C<for> loop in Links.
+
+=item *
+first, second, third, fourth, fifth, sixth, sevent, eighth, ninth, tenth
+
+These functions each take a tuple of any (sufficiently large) size and
+return the first, second, etc. element of that tuple. For example:
+
+    links> third(4, 5, 6, 7, 8, 9)
+    6
+
+An attempt to apply one of these functions to a tuple that doesn't
+have enough elements will result in a type error.
+
+=item *
+sum : ([Int]) ~> Int
+
+Returns the numerical sum of a list of integers.
+
+=item *
+product : ([Int]) ~> Int
+
+Returns the numerical produce of a list of integers.
+
+=item *
+reverse : ([a]) ~> [a]
+
+C<reverse(list)> returns a list of the elements in C<list>, but in the
+reverse order.
+
+=item *
+concat : ([[a]]) ~> [a]
+
+Given a list of lists, this concatenates all of those lists together. E.g.:
+
+    links> concat([1], [2, 3, 4], [], [5, 6])
+    [1, 2, 3, 4, 5, 6]
+
+=item *
+join : ([a], [[a]]) ~> [a]
+
+C<join(glue, list)> returns a list formed by interspersing the "glue"
+in between each element of C<list> and concatenating them. E.g.:
+
+    links> join("/", ["milk", "butter", "eggs", "bread"])
+    "milk/butter/eggs/bread"
+
+(Note the use of an ordinary C<String> as a list of C<Char>s.)
+
+=item *
+takeWhile : ((a) b-> Bool, [a]) b-> [a]
+
+Returns the initial segment of the given list which satisfies the
+given predicate.
+
+=item *
+dropWhile : ((a) -> Bool, [a]) b-> [a]
+
+Returns all of the given list I<but> the initial segment satisfying
+the given predicate. C<takeWhile(p,l) ++ dropWhile(p,l)> is equal to
+C<l> for any predicate C<p>.
+
+=item *
+ignore : (_) -> ()
+
+Throws away its argument and returns unit, the empty tuple C<()>.
+
+=item *
+isJust : Maybe (_) -> Bool
+
+Returns C<true> if its argument is C<Just >I<x> for some I<x>, that
+is, if it is not C<Nothing>.
+
+=item *
+search : ((a) b~> Bool, [a]) b~> Maybe (a)
+
+=item *
+find : ((a) b~> Bool, [a]) b~> a
+
+=item *
+fromJust : Maybe (a) ~> a
+
+Given an argument C<Just >I<x>, returns I<x>. Otherwise, raises an
+error.
+
+=item *
+memassoc : (a,[(a, _)]) ~> Bool
+
+Given a key and an association list, returns C<true> if the key is 
+in the domain of the association list.
+
+=item *
+lookup : (a, [(a, b)]) ~> Maybe (b)
+
+=item *
+assoc : (String, [(String, b)]) ~> b
+
+=item *
+assocAll : (String, [(String, b)]) ~> [b]
+
+=item *
+sortBy : ((a) b-> c, [a]) b-> [a]
+
+=back
+
+=head2 Web-related features
+
+These functions only make sense in the context of web programs.
+
+=over 4
+
+=item *
+freshResource : () ~> ()
+
+Redirects the client to a new page and continues from the call-point.
+
+The effect is that, after a call to C<freshResource>, if the user hits
+reload in the browser, she will only cause the program to re-execute
+code from the call to freshResource onward.
+
+This can be used after doing a destructive action (such as updating
+the database) which should not be automatically repeated on a
+subsequent reload.
+
+Currently only works for server-only Links programs.
+
+=item *
+sendSuspend : (((a) -> Page) d~> Page) d~> a
+
+C<sendSuspend(f)> calls the function C<f> to generate an
+page and exits the program using that page as the output.
+
+C<sendSuspend> captures the current continuation when it is called and
+passes this as the argument to C<f>. Thus, C<f> can use its argument
+to resume computation at the point where C<sendSuspend> was called.
+
+See C<examples/login-flow.links> for an example of the use of
+C<sendSuspend>.
+
+=back
+
+=head2 Formlet library
+
+These routines can be used with the C<formlet>/C<yields> syntax
+described in L</"Formlets">. Familiarize yourself with that mechanism
+before trying to read about these functions.
+
+=over 4
+
+=item *
+xml : (Xml) -> Formlet (())
+
+Given some XML, returns the formlet which displays that XML and
+yields the unit value.
+
+=item *
+text : String -> Formlet (())
+
+Given a string, makes an XML text node out of it, and returns the
+formlet which displays that XML and yields the unit value.
+
+=item *
+plug : (XmlContext, Formlet (a)) -> Formlet (a)
+
+Transforms the visible (XML) part of a formlet by applying the given
+XML function.
+
+=item *
+input : Formlet (String)
+
+Constructs a formlet containing just a simple C<input> field, yielding
+the value entered as a C<String>.
+
+=item *
+inputValue : (String) ~> Formlet (String)
+
+Constructs a formlet containing just a simple C<inpute> field; its
+initial text contents are given by the argument.
+
+=item *
+inputFile : Formlet (String)
+
+Constructs a formlet containing a simple C<input> field of file-upload type.
+
+=item *
+inputInt : Formlet(Int)
+
+Constructs a formlet containing a simple inut field whose submission will
+be treated as an C<Int>.
+
+=item *
+inputIntValue : (Int) ~> Formlet(Int)
+
+Constructs a formlet containing a simple input field whose submission
+will be treated as an C<Int> and whose default value is given in the
+argument.
+
+=item *
+inputFloat : Formlet(Float)
+
+Constructs a formlet containing a simple input field whose submission
+will be treated as a C<Float>.
+
+=item *
+textarea : (String) ~> Formlet (String)
+
+Constructs a formlet containing a simple textarea (multi-line text
+input) field whose contents default to the argument.
+
+=item *
+submitButton : (String) ~> Formlet (Bool)
+
+=item *
+resetButton : (String) ~> Formlet (Bool)
+
+=item *
+pushButton : (String) ~> Formlet (Bool)
+
+=item *
+button : (String, [|Submit|Reset|Button|]) ~> Formlet (Bool)
+
+C<button("Text", behavior)> constructs a simple button element that
+will yield C<true> if this button is the one that submits the form and
+C<false> otherwise. C<behavior> choose whether the button is an HTML
+submit button, a reset button, or an undistinguished button (see the
+HTML spec).
+
+The other forms are shortcuts for corresponding choices of C<behavior>.
+
+=item *
+checkbox : Formlet (Bool)
+
+Constructs a formlet containing a simple checkbox field; yields
+C<true> if the checkbox is checked at submit time, and C<false> if
+not.
+
+=item *
+checkboxDefault : (Bool) ~> Formlet (Bool)
+
+Similar to C<checkbox>, but allows setting the initial value (checked 
+or unchecked).
+
+=item *
+inputRadiogroup : ([a], a, ([(Xml, a)]) {}~> Xml) -> Formlet (a)
+
+Constructs a formlet composed of a set of radio buttons, only one of
+which can be selected at a time--a I<radio group>.
+
+The first argument gives a list of items identified simply by their keys.
+
+The second argument chooses the initially selected button by its key.
+
+The third argument is a "layout" function. To this is passed a list of
+the keys paired up with the HTML representations of the corresponding
+buttons. The layout function should return some HTML which uses all of
+these buttons, each precisely once. It could for example associate
+each button with some text, or arrange them in some sort of table
+pattern. The HTML of the formlet will consist of the HTML returned by
+the layout function.
+
+=item *
+choice : ([(a, String)]) ~> Formlet (a)
+
+Constructs a formlet that contains a pop-up menu (C<select> element)
+whose options are given by the list. The argument is a list of pairs,
+whose second element is the human-readable text of the option, and
+whose first element is the unique key that will be used to identify
+the choice on submission. The value yielded by the formlet will be 
+one of these keys.
+
+=item *
+choiceDefault : ([(a,String)], a) ~> Formlet (a)
+
+Like C<choice>, this constructs a formlet containing a pop-up menu
+(C<select> element). The second parameter is the key of a choice that
+should be selected by default.
+
+(FIXME: This function currently doesn't work.)
+
+=item *
+choices : ([(a, String, Bool)]) ~> Formlet ([a])
+
+Constructs a formlet containing a multi-select scrollbox containing
+the options listed in the argument, as per C<choice> above.
+
+=back
+
+=head1 Running links
+
+Links can be run either as a CGI script through a web server such as
+Apache, as a stand-alone Web application server, or from the command line.
+
+[TODO: Document AppServer usage]
+
+When run as a CGI script Links must be passed a filename as an
+argument:
+
+  links filename
+
+The source code to evaluate can be specified in several ways:
+
+  links                # run interactively
+  links -e exp         # evaluate exp, print its result
+  links filename       # run filename
+
+Command line flags can be used to enable/disable some features:
+
+  -O                   enable optimisation
+  -n                   don't print types
+  -d                   debug mode (for hacking on links itself)
+
+A configuration file can be chosen using this command-line option:
+
+  --config=<filename>  set a configuration file
+
+These other options can be fun, too:
+
+  --pp=<command>          run all input through UNIX <command> before parsing
+  --precompile=<filename> precompile and store a cached version of <filename>
+  --dump=<filename>       find and print out the cached version of <filename>
+
+=head2 The interactive shell
+
+The interactive shell allows server-side code to be entered
+dynamically. In order to evaluate an expression it must be terminated
+with a semi-colon followed by a new line:
+
+  ./links
+  links> 1+2;
+  3 : Int
+  links>
+
+The interpreter outputs the resulting value and its type.
+
+=head3 Directives
+
+The interpreter supports a number of directives. Typing one of these
+at the interactive loop has an immediate effect.
+
+=over 4
+
+=item C<@directives>
+
+list available directives
+
+=item C<@settings>
+
+print available settings (see L<Configuration settings>)
+
+=item C<@set>
+
+change the value of a setting (see L<Configuration settings>)
+
+=item C<@builtins>
+
+list builtin functions and values
+
+=item C<@quit>
+
+exit the interpreter  
+
+=item C<@typeenv>
+
+display the current type environment
+
+=item C<@env>
+
+display the current value environment
+
+=item C<@load>
+
+load in a Links source file, replacing the current environment
+
+=item C<@withtype>
+
+search for functions that match the given type
+
+=back
+
+
+=head2 Configuration settings
+
+Links offers a number of settings which can affect the behavior of the
+interactive loop or the web interface.
+
+The available settings can be discovered in the interactive loop using
+the C<@settings> directive:
+
+    links> @settings;
+    
+    User settings
+     show_unification          false
+     show_typechecking         false
+    ...
+
+A setting can be modified during an interactive session using the
+C<@set> directive:
+
+    links> @set show_typechecking true;
+
+Settings can also be configured using a configuration file. To select
+a configuration file, use the command-line option C<--config>:
+
+    $ links --config=<filename>
+
+A configuration file is just a set of lines, each of which contains a
+setting formatted as 
+I<E<lt>setting-nameE<gt>>C<=>I<E<lt>setting-valueE<gt>>. 
+For example:
+
+    debug=on
+    database_driver=postgresql
+
+This is particularly useful for configuring settings for a web
+application, where directives cannot otherwise be given.
+
+=cut

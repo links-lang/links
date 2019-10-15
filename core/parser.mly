@@ -74,6 +74,15 @@ let restriction_of_string p =
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
 
+let query_policy_of_string p =
+  function
+  | "flat" -> QueryPolicy.Flat
+  | "nested" -> QueryPolicy.Nested
+  | rest      ->
+     raise (ConcreteSyntaxError (pos p, "Invalid query policy: " ^ rest ^ ", expected 'flat' or 'nested'"))
+
+
+
 let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string    pos lin  in
@@ -192,7 +201,8 @@ module MutualBindings = struct
   let fun_name fn = Binder.to_name fn.fun_binder in
   let ty_name (n, _, _, _) = n in
   let tys_with_pos =
-      List.map (fun (n, qs, dt, pos) -> ((n, qs, dt, pos), pos)) tys in
+      List.map (fun {WithPos.node=(n, qs, dt); pos} -> ((n, qs, dt, pos), pos))
+        tys in
   check fun_name funs; check ty_name tys_with_pos
 
 
@@ -206,14 +216,14 @@ module MutualBindings = struct
       | fs ->
           let fs =
             List.rev_map (fun (({ fun_definition = (tvs, fl); _ } as fn), pos) ->
-                { rec_binder = fn.fun_binder;
-                  rec_linearity = fn.fun_linearity;
-                  rec_definition = ((tvs, None), fl);
-                  rec_location = fn.fun_location;
-                  rec_signature = fn.fun_signature;
-                  rec_unsafe_signature = fn.fun_unsafe_signature;
-                  rec_frozen = fn.fun_frozen;
-                  rec_pos = pos; }) fs in
+                WithPos.make ~pos
+                  { rec_binder           = fn.fun_binder
+                  ; rec_linearity        = fn.fun_linearity
+                  ; rec_definition       = ((tvs, None), fl)
+                  ; rec_location         = fn.fun_location
+                  ; rec_signature        = fn.fun_signature
+                  ; rec_unsafe_signature = fn.fun_unsafe_signature
+                  ; rec_frozen           = fn.fun_frozen}) fs in
           [WithPos.make ~pos:mut_pos (Funs fs)] in
 
     let type_binding = function
@@ -297,7 +307,7 @@ end
 %type <Sugartypes.regex> regex_pattern
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.Pattern.with_pos> pattern
-%type <(DeclaredLinearity.t * bool) * Sugartypes.name *
+%type <(DeclaredLinearity.t * bool) * Name.t *
        Sugartypes.Pattern.with_pos list list * Location.t *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
@@ -425,7 +435,7 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [($2, $3, datatype $5, (pos $loc))]) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [with_pos $loc ($2, $3, datatype $5)]) }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -568,13 +578,17 @@ spawn_expression:
 | SPAWNCLIENT block                                            { spawn ~ppos:$loc Demon  SpawnClient               $2 }
 | SPAWNWAIT   block                                            { spawn ~ppos:$loc Wait   NoSpawnLocation           $2 }
 
+query_policy:
+| VARIABLE                                                     { query_policy_of_string $loc $1 }
+| /* empty */                                                  { QueryPolicy.Default }
+
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
 | primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 }
 | block                                                        { $1 }
-| QUERY block                                                  { query ~ppos:$loc None $2 }
-| QUERY LBRACKET exp RBRACKET block                            { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 }
-| QUERY LBRACKET exp COMMA exp RBRACKET block                  { query ~ppos:$loc (Some ($3, $5)) $7 }
+| QUERY query_policy block                                     { query ~ppos:$loc None $2 $3 }
+| QUERY LBRACKET exp RBRACKET query_policy block               { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 $6 }
+| QUERY LBRACKET exp COMMA exp RBRACKET query_policy block     { query ~ppos:$loc (Some ($3, $5)) $7 $8 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
 | postfix_expression targ_spec                                 { with_pos $loc (TAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }

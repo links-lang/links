@@ -11,7 +11,7 @@
    longer exists this module can be merged back into Sugartypes.
 *)
 
-type name = string [@@deriving show]
+open CommonTypes
 
 type regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
     [@@deriving show]
@@ -25,7 +25,7 @@ module UnaryOp = struct
   type t =
     | Minus
     | FloatMinus
-    | Name of name
+    | Name of Name.t
     [@@deriving show]
 
   let to_string = function
@@ -42,7 +42,7 @@ module BinaryOp = struct
     | And
     | Or
     | Cons
-    | Name of name
+    | Name of Name.t
     [@@deriving show]
 
   let to_string = function
@@ -57,6 +57,6 @@ end
 
 (* Operator section *)
 module Section = struct
-  type t = Minus | FloatMinus | Project of name | Name of name
+  type t = Minus | FloatMinus | Project of Name.t | Name of Name.t
     [@@deriving show]
 end

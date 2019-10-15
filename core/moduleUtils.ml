@@ -205,7 +205,7 @@ let create_module_info_map program =
       | { node = Fun fn; _ } :: bs ->
          Binder.to_name fn.fun_binder :: (get_binding_names bs)
       | { node = Funs fs ; _ } :: bs ->
-          (List.map (fun fn -> Binder.to_name fn.rec_binder) fs)
+          (List.map (fun fn -> Binder.to_name fn.node.rec_binder) fs)
           @ get_binding_names bs
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 
@@ -215,7 +215,7 @@ let create_module_info_map program =
       | b :: bs ->
           match node b with
             | Typenames ts ->
-                let ns = ListUtils.concat_map (fun (n, _, _, _) -> [n]) ts in
+                let ns = ListUtils.concat_map (fun {node=(n, _, _); _} -> [n]) ts in
                 ns @ (get_type_names bs)
             | _ -> get_type_names bs in
 

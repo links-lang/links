@@ -164,7 +164,7 @@ class transform (env : Types.typing_environment) =
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
 
-    method lookup_type : name -> Types.datatype = fun var ->
+    method lookup_type : Name.t -> Types.datatype = fun var ->
       TyEnv.lookup var_env var
 
     method lookup_effects : Types.row = effect_row
@@ -302,7 +302,7 @@ class transform (env : Types.typing_environment) =
       | CP p ->
          let (o, p, t) = o#cp_phrase p in
          (o, CP p, t)
-      | Query (range, body, Some t) ->
+      | Query (range, policy, body, Some t) ->
           let (o, range) =
             optionu o
               (fun o (limit, offset) ->
@@ -313,7 +313,7 @@ class transform (env : Types.typing_environment) =
           let (o, body, _) = on_effects o (Types.make_empty_closed_row ()) (fun o -> o#phrase) body in
           let (o, body, _) = o#phrase body in
           let (o, t) = o#datatype t in
-            (o, Query (range, body, Some t), t)
+            (o, Query (range, policy, body, Some t), t)
       | ListLit (es, Some t) ->
           let (o, es, _) = list o (fun o -> o#phrase) es in
           let (o, t) = o#datatype t in
@@ -721,7 +721,7 @@ class transform (env : Types.typing_environment) =
         | Constant.Bool v   -> (o, Constant.Bool v  , Types.bool_type  )
         | Constant.Char v   -> (o, Constant.Char v  , Types.char_type  )
 
-    method quantifiers : Types.quantifier list -> ('self_type * Types.quantifier list) =
+    method quantifiers : Quantifier.t list -> ('self_type * Quantifier.t list) =
       fun qs -> (o, qs)
     method backup_quantifiers : IntSet.t = IntSet.empty
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
@@ -731,14 +731,14 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> (o, [])
-          | { rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn :: defs ->
+          | {node={ rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn; pos} :: defs ->
               let (o, tyvars) = o#quantifiers tyvars in
               let (o, inner) = o#datatype inner in
               let inner_effects = fun_effects inner (fst lam) in
               let (o, lam, _) = o#funlit inner_effects lam in
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
-              (o, { fn with rec_definition = ((tyvars, Some (inner, extras)), lam) } :: defs)
+              (o, make ~pos { fn with rec_definition = ((tyvars, Some (inner, extras)), lam) } :: defs)
           | _ :: _ -> assert false
       in
         list o
@@ -747,11 +747,11 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> o, []
-          | { rec_binder; rec_signature;  _ } as fn :: defs ->
+          | {node={ rec_binder; rec_signature;  _ } as fn; pos} :: defs ->
               let (o, rec_binder) = o#binder rec_binder in
               let (o, defs) = list o defs in
               let (o, rec_signature) = optionu o (fun o -> o#datatype') rec_signature in
-              (o, { fn with rec_binder; rec_signature } :: defs)
+              (o, make ~pos { fn with rec_binder; rec_signature } :: defs)
       in
         list o
 
@@ -759,7 +759,7 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> o
-          | { rec_binder = f; rec_definition = ((_tyvars, Some (inner, _extras)), _lam); _ } :: defs ->
+          | {node={ rec_binder = f; rec_definition = ((_tyvars, Some (inner, _extras)), _lam); _ }; _} :: defs ->
               let (o, _) = o#binder (Binder.set_type f inner) in
               list o defs
           | _ :: _ -> assert false
@@ -803,12 +803,12 @@ class transform (env : Types.typing_environment) =
          let (o, f) = o#binder f in
          (o, Foreign (f, raw_name, language, file, t))
       | Typenames ts ->
-          let (o, _) = listu o (fun o (name, vars, (x, dt'), pos) ->
+          let (o, _) = listu o (fun o {node=(name, vars, (x, dt')); pos} ->
               match dt' with
                 | Some dt ->
                    let o = o#bind_tycon name
                      (`Alias (List.map (snd ->- val_of) vars, dt)) in
-                   (o, (name, vars, (x, dt'), pos))
+                   (o, WithPos.make ~pos (name, vars, (x, dt')))
                 | None -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Typenames ts)

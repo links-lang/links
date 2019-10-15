@@ -3,7 +3,7 @@ open CommonTypes
 open Ir
 open Var
 
-type freevars = {termvars: (Ir.binder list) ; typevars: Types.quantifier list} [@@deriving show]
+type freevars = {termvars: (Ir.binder list) ; typevars: Quantifier.t list} [@@deriving show]
 type fenv = freevars IntMap.t [@@deriving show]
 
 module ClosureVars =
@@ -55,7 +55,7 @@ struct
               zs in
             List.fold_left
               (fun o q ->
-                let tv = Types.var_of_quantifier q in
+                let tv = Quantifier.to_var q in
                 o#register_type_var tv
               )
               o
@@ -132,7 +132,7 @@ struct
             let o1 = o#typ (`Type t1) in
             let o2 = o1#typ (`Type t2) in
             o2#typ (`Type t3)
-          | Query (_, _, t)
+          | Query (_, _, _, t)
           | DoOperation (_, _, t) ->
             o#typ (`Type t)
           | _ -> o in
@@ -147,11 +147,11 @@ struct
 
 
       method quantifier q =
-        let var = Types.var_of_quantifier q in
+        let var = Quantifier.to_var q in
         o#bound_typevar var q
 
       method quantifier_remove q =
-        let var = Types.var_of_quantifier q in
+        let var = Quantifier.to_var q in
         {< bound_type_vars = Types.TypeVarMap.remove var bound_type_vars >}
 
 
@@ -583,11 +583,11 @@ struct
       (** Given a list of free variables, return a tuple containing the following:
         - a list of fresh quantifiers, each corresponding to one free variable
         - Three maps mapping the old free variables to fresh ones (to be used with Instantiate)  **)
-      method create_substitutions_replacing_free_variables (free_type_vars : Types.quantifier list) =
+      method create_substitutions_replacing_free_variables (free_type_vars : Quantifier.t list) =
         List.fold_right (fun oldq (qs, (type_map, row_map, presence_map) ) ->
-          let typevar = Types.var_of_quantifier oldq in
-          let primary_kind = Types.primary_kind_of_quantifier oldq in
-          let subkind = Types.subkind_of_quantifier oldq in
+          let typevar = Quantifier.to_var oldq in
+          let primary_kind = Quantifier.to_primary_kind oldq in
+          let subkind = Quantifier.to_subkind oldq in
           let newvar = Types.fresh_raw_variable () in
           let make_new_type_variable () = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
           let updated_maps = match primary_kind with
