@@ -54,12 +54,19 @@ let print_simple datatype value =
          (Types.string_of_datatype datatype)
   else Printf.fprintf oc "%s\n%!" (Value.string_of_value value)
 
+let handle_errors comp =
+  Errors.display ~default:(fun _ -> exit 1) comp
+
 let process_file context file =
-  let (context', datatype, value) = Driver.Phases.whole_program context file in
+  let (context', datatype, value) =
+    handle_errors (lazy (Driver.Phases.whole_program context file))
+  in
   print_simple datatype value; context'
 
 let process_expr context expr_string =
-  let (context', datatype, value) = Driver.Phases.evaluate_string context expr_string in
+  let (context', datatype, value) =
+    handle_errors (lazy (Driver.Phases.evaluate_string context expr_string))
+  in
   print_simple datatype value; context'
 
 let isolate
