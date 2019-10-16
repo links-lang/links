@@ -21,6 +21,8 @@ sig
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val filter : (name -> 'a -> bool) -> 'a t -> 'a t
   val filter_map : (name -> 'a -> 'b option) -> 'a t -> 'b t
+
+  val complement : 'a t -> 'a t -> 'a t
 end
 
 module Make (Ord : Utility.OrderedShow) :
@@ -50,6 +52,13 @@ struct
   let show = M.show
   let filter = M.filter
   let filter_map = M.filter_map
+  let complement env env' =
+    fold
+      (fun key value env'' ->
+        if has env key
+        then env''
+        else bind env'' (key, value))
+    env' empty
 end
 
 module String

@@ -1291,10 +1291,19 @@ struct
     method! get_type_environment : environment = tyenv
   end
 
-  let program tyenv p =
-    let lazy_check =
-      lazy (let p, _, _ = (checker tyenv)#computation p in p) in
-   handle_ir_type_error lazy_check p (SProg p)
+  (* let program tyenv p =
+   *   let lazy_check =
+   *     lazy (let p, _, _ = (checker tyenv)#computation p in p) in
+   *  handle_ir_type_error lazy_check p (SProg p) *)
+
+  let program state program =
+    let open IrTransform in
+    let tenv = Context.variable_environment (context state) in
+    let check =
+      lazy (let program', _, _ = (checker tenv)#program program in program')
+    in
+    let program'' = handle_ir_type_error check program (SProg program) in
+    return state program''
 
   let bindings tyenv b =
     let lazy_check =
