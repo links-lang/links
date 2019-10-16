@@ -541,6 +541,8 @@ let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
 module Untyped = struct
   open Transform.Untyped
 
+  let name = "modules"
+
   let program state program =
     let program' = desugar_program program in
     return state program'

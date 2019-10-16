@@ -39,4 +39,8 @@ object ((self : 'self_type))
       | _ -> super#binding b
 end
 
-module Untyped = Transform.Untyped.Make.Transformer(struct let obj = lift_funs end)
+module Untyped
+  = Transform.Untyped.Make.Transformer(struct
+        let name = "lift_recursive"
+        let obj = lift_funs
+      end)

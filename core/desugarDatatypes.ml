@@ -1100,6 +1100,8 @@ let read ~aliases s =
 module Untyped = struct
   open Transform'.Untyped
 
+  let name = "datatypes"
+
   let program state program' =
     let tyenv = Context.typing_environment (context state) in
     let program'' = program tyenv program' in

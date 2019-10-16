@@ -15,6 +15,8 @@ end
 module Untyped = struct
   open Transform.Untyped
 
+  let name = "resolve_positions"
+
   let program state program =
     let pos_context = Context.source_code (context state) in
     let program' = (resolve_positions pos_context)#program program in

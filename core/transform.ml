@@ -2,6 +2,8 @@ module type INTERFACE = sig
   type state
   type 'a result
 
+  val name : string
+
   val program : state ->
                 Sugartypes.program ->
                 Sugartypes.program result
@@ -27,7 +29,10 @@ module type UNTYPED = sig
   end
 
   module Make: sig
-    module Transformer(T : sig val obj : SugarTraversals.map end): sig
+    module Transformer(T : sig
+                 val name : string
+                 val obj : SugarTraversals.map
+               end): sig
       include INTERFACE with type state := state and type 'a result := 'a result
     end
   end
@@ -46,13 +51,7 @@ module Untyped : UNTYPED = struct
   (* Interface for untyped transformations. *)
   module type S = sig
     module Untyped: sig
-      val program : state ->
-                    Sugartypes.program ->
-                    Sugartypes.program result
-
-      val sentence : state ->
-                     Sugartypes.sentence ->
-                     Sugartypes.sentence result
+      include INTERFACE with type state := state and type 'a result := 'a result
     end
   end
 
@@ -61,7 +60,13 @@ module Untyped : UNTYPED = struct
     return state (transform program)
 
   module Make = struct
-    module Transformer(T : sig val obj : SugarTraversals.map end) = struct
+    module Transformer(T : sig
+                 val name : string
+                 val obj : SugarTraversals.map
+               end) = struct
+
+      let name = T.name
+
       let program state program =
         apply_transformer state T.obj#program program
 
@@ -100,7 +105,10 @@ module type TYPEABLE = sig
     method virtual sentence : Sugartypes.sentence -> ('self * Sugartypes.sentence * Types.datatype option)
   end
 
-  module Make(T : sig val obj : Types.typing_environment -> sugar_transformer end): sig
+  module Make(T : sig
+               val name : string
+               val obj : Types.typing_environment -> sugar_transformer
+             end): sig
     include INTERFACE with type state := state and type 'a result := 'a result
   end
 
@@ -142,17 +150,17 @@ module Typeable : TYPEABLE = struct
   (* Interface for typeability preserving transformations. *)
   module type S = sig
     module Typeable: sig
-      val program : state ->
-                    Sugartypes.program ->
-                    Sugartypes.program result
-
-      val sentence : state ->
-                     Sugartypes.sentence ->
-                     Sugartypes.sentence result
+      include INTERFACE with type state := state and type 'a result := 'a result
     end
   end
 
-  module Make(T : sig val obj : Types.typing_environment -> sugar_transformer end) = struct
+  module Make(T : sig
+               val name : string
+               val obj : Types.typing_environment -> sugar_transformer
+             end) = struct
+
+    let name = T.name
+
     let program state program =
       let open Context in
       apply state (T.obj (typing_environment state.context))#program program
@@ -166,6 +174,8 @@ end
 (* Identity transformer. *)
 module Identity = struct
   module Untyped = struct
+    let name = "identity"
+
     let identity state program =
       Untyped.return state program
 
@@ -174,6 +184,8 @@ module Identity = struct
   end
 
   module Typeable = struct
+    let name = "identity"
+
     let identity state program =
       Typeable.return state program
 

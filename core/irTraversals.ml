@@ -60,11 +60,6 @@ module type IR_VISITOR = sig
   end
 end
 
-module type PROGRAM_TRANSFORM =
-sig
-  val program : IrTransform.state -> program -> IrTransform.result
-end
-
 module Transform : IR_VISITOR =
 struct
   open Types
@@ -514,8 +509,7 @@ end
 
 
 
-module Inline =
-struct
+module Inline = struct
   let rec is_inlineable_value =
     function
       | v when is_atom v -> true
@@ -559,6 +553,8 @@ struct
               end
         | [] -> [], o
   end
+
+  let name = "inline"
 
   let program state program =
     let open IrTransform in
@@ -791,6 +787,8 @@ module ElimDeadDefs = struct
         | [] -> [], o
   end
 
+  let name = "elim_dead_defs"
+
   let program state program =
     let open IrTransform in
     let tenv = Context.variable_environment (context state) in
@@ -849,8 +847,7 @@ let ir_type_mod_visitor tyenv type_visitor =
 
 
 (* Debugging traversal that checks if we have eliminated all cyclic recursive types *)
-module CheckForCycles =
-  struct
+module CheckForCycles = struct
 
     let check_cycles =
       object (o: 'self_type)
@@ -889,10 +886,7 @@ module CheckForCycles =
 
       end
 
-
-    (* let program tyenv p =
-     *   let p, _, _ = (ir_type_mod_visitor tyenv check_cycles)#program p in
-     *   p *)
+    let name = "check_for_cycles"
     let program state program =
       let open IrTransform in
       let tenv = Context.variable_environment (context state) in
@@ -920,9 +914,7 @@ module ElimBodiesFromMetaTypeVars = struct
       end
 
 
-    (* let program tyenv p =
-     *   let p, _, _ = (ir_type_mod_visitor tyenv elim_bodies)#program p in
-     *   p *)
+    let name = "elim_bodies_from_meta_type_vars"
 
     let program state program =
       let open IrTransform in
@@ -941,6 +933,7 @@ module ElimTypeAliases = struct
           | other -> super#typ other
       end
 
+    let name = "elim_type_aliases"
     let program state program =
       let open IrTransform in
       let tenv = Context.variable_environment (context state) in

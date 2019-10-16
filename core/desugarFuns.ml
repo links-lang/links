@@ -190,5 +190,6 @@ end
 
 module Typeable
   = Transform.Typeable.Make(struct
+        let name = "funs"
         let obj env = (desugar_funs env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
       end)

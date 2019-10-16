@@ -27,7 +27,6 @@ type ir_snippet =
   | SVal   of value
   | SSpec  of special
   | SBind  of binding
-  | SBinds of binding list
   | SProg  of program
   | SNone
 
@@ -49,10 +48,6 @@ let string_of_occurrence : ir_snippet -> string =
     "occurring in IR binding:" ^
     nl ^
     Ir.string_of_binding b
-  | SBinds bs ->
-    "occurring in IR binding list:" ^
-    nl ^
-    String.concat nl (List.map Ir.string_of_binding bs)
   | SProg p ->
     "occurring in IR program:" ^
     nl ^
@@ -1291,10 +1286,7 @@ struct
     method! get_type_environment : environment = tyenv
   end
 
-  (* let program tyenv p =
-   *   let lazy_check =
-   *     lazy (let p, _, _ = (checker tyenv)#computation p in p) in
-   *  handle_ir_type_error lazy_check p (SProg p) *)
+  let name = "ir_typechecker"
 
   let program state program =
     let open IrTransform in
@@ -1304,9 +1296,4 @@ struct
     in
     let program'' = handle_ir_type_error check program (SProg program) in
     return state program''
-
-  let bindings tyenv b =
-    let lazy_check =
-      lazy (let b, _ = (checker tyenv)#bindings b in b) in
-    handle_ir_type_error lazy_check b (SBinds b)
 end

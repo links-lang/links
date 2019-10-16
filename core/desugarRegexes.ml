@@ -108,5 +108,6 @@ end
 
 module Typeable
   = Transform.Typeable.Make(struct
+        let name = "regexes"
         let obj env = (desugar_regexes env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
       end)

@@ -142,6 +142,7 @@ let desugar_cp env = ((new desugar_cp env) : desugar_cp :> TransformSugar.transf
 
 module Typeable
   = Transform.Typeable.Make(struct
+        let name = "cp"
         let obj env = (desugar_cp env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
       end)
 
