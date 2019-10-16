@@ -181,12 +181,6 @@ module Phases = struct
     Webserver.init (valenv, nenv, tenv) globals ffi_files;
     Evaluate.run result
 
-  (* Error handling wrapper for [whole_program] above. *)
-  let whole_program context filename =
-    Errors.display
-      ~default:(fun _ -> exit 1)
-      (lazy (whole_program context filename))
-
   let evaluate_string : Context.t -> string -> (Context.t * Types.datatype * Value.t)
     = fun initial_context source_code ->
     Parse.string initial_context source_code
@@ -195,10 +189,4 @@ module Phases = struct
     |> Compile.IR.run
     |> Transform.run
     |> Evaluate.run
-
-  (* Error handling wrapper for [evaluate_string] above. *)
-  let evaluate_string context source_code =
-    Errors.display
-      ~default:(fun _ -> exit 1)
-      (lazy (evaluate_string context source_code))
 end

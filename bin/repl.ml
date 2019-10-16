@@ -315,22 +315,27 @@ let handle previous_context current_context = function
      print_value datatype value;
      current_context
   | `Directive directive ->
-     try execute_directive current_context directive
-     with _ -> current_context
+     execute_directive current_context directive
 
 let interact : Context.t -> unit
   = fun context ->
   let module I = Driver.Phases.Interactive in
+  let print_error exn =
+    Printf.fprintf stderr "%s\n%!" (Errors.format_exception exn)
+  in
   Settings.set BS.interactive_mode true;
   Printf.printf "%s%!" (val_of (Settings.get welcome_note));
   let rec loop context =
     Parse.Readline.prepare_prompt ps1;
     match I.readline ps1 context with
-    | I.({ sentence; context = context' }) ->
-       loop (handle context context' sentence)
     | exception exn ->
-       Printf.fprintf stderr "%s\n%!" (Errors.format_exception exn);
-       loop context
+       print_error exn; loop context
+    | I.({ sentence; context = context' }) ->
+       let context'' =
+         try handle context context' sentence
+         with exn -> print_error exn; context'
+       in
+       loop context''
   in
   Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
   loop context
