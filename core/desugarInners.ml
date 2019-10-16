@@ -212,11 +212,27 @@ end
 
 let desugar_inners env = ((new desugar_inners env) : desugar_inners :> TransformSugar.transform)
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_inners env)#program program)
+let has_no_inners =
+object
+  inherit SugarTraversals.predicate as super
 
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd3 ((desugar_inners env)#sentence sentence)
+  val has_no_inners = true
+  method satisfied = has_no_inners
+
+  method! bindingnode = function
+    | Funs defs ->
+        {< has_no_inners =
+            List.for_all
+              (fun {node={ rec_definition = ((_, dt_opt), _); _ }; _ } ->
+                 match dt_opt with
+                    | None -> assert false
+                    | Some (_inner, extras) ->
+                         List.for_all (function
+                                         | None -> true
+                                         | Some _ -> false) extras)
+              defs >}
+    | b -> super#bindingnode b
+end
 
 module Typeable
   = Transform.Typeable.Make(struct

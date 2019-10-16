@@ -91,11 +91,18 @@ end
 
 let desugar_processes env = ((new desugar_processes env) : desugar_processes :> TransformSugar.transform)
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_processes env)#program program)
+let has_no_processes =
+object
+  inherit SugarTraversals.predicate as super
 
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd3 ((desugar_processes env)#sentence sentence)
+  val has_no_processes = true
+  method satisfied = has_no_processes
+
+  method! phrasenode = function
+    | Spawn _
+    | Receive _ -> {< has_no_processes = false >}
+    | e -> super#phrasenode e
+end
 
 module Typeable
   = Transform.Typeable.Make(struct
