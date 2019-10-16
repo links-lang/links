@@ -79,11 +79,17 @@ object
     | e -> super#phrasenode e
 end
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_pages env)#program program)
+let is_pageless =
+object
+  inherit SugarTraversals.predicate as super
 
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd3 ((desugar_pages env)#sentence sentence)
+  val pageless = true
+  method satisfied = pageless
+
+  method! phrasenode = function
+    | Page _ -> {< pageless = false >}
+    | e -> super#phrasenode e
+end
 
 module Typeable
   = Transform.Typeable.Make(struct

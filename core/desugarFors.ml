@@ -192,11 +192,17 @@ end
 let desugar_fors env = ((new desugar_fors env)
                           : desugar_fors :> TransformSugar.transform)
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_fors env)#program program)
+let has_no_fors =
+object
+  inherit SugarTraversals.predicate as super
 
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd3 ((desugar_fors env)#sentence sentence)
+  val has_no_fors = true
+  method satisfied = has_no_fors
+
+  method! phrasenode = function
+    | Iteration _ -> {< has_no_fors = false >}
+    | e -> super#phrasenode e
+end
 
 module Typeable
   = Transform.Typeable.Make(struct

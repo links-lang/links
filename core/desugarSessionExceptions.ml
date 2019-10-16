@@ -199,16 +199,13 @@ let wrap_linear_handlers =
       | p -> super#phrase p
   end
 
-let insert_toplevel_handlers env =
+let _insert_toplevel_handlers env =
   ((new insert_toplevel_handlers env) :
     insert_toplevel_handlers :> TransformSugar.transform)
 
 let desugar_session_exceptions env =
   ((new desugar_session_exceptions env) :
     desugar_session_exceptions :> TransformSugar.transform)
-
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_session_exceptions env)#program program)
 
 module Typeable
   = Transform.Typeable.Make(struct

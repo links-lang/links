@@ -222,6 +222,7 @@ module Typeability_preserving = struct
            ignore (TypeSugar.Check.program
                      { tyenv with Types.desugared = true }
                      payload.program)
+                  (* TODO(dhil): Verify post-transformation invariants. *)
          with exn ->
            let stacktrace = Printexc.get_raw_backtrace () in
            trace_type_error name Sugartypes.pp_program program payload.program stacktrace exn);
@@ -259,6 +260,7 @@ module Typeability_preserving = struct
            ignore (TypeSugar.Check.sentence
                      { tyenv with Types.desugared = true }
                      payload.program)
+                  (* TODO(dhil): Verify post-transformation invariants. *)
          with exn ->
            let stacktrace = Printexc.get_raw_backtrace () in
            trace_type_error name Sugartypes.pp_sentence program payload.program stacktrace exn);
