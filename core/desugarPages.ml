@@ -93,5 +93,6 @@ end
 
 module Typeable
   = Transform.Typeable.Make(struct
+        let name = "pages"
         let obj env = (desugar_pages env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
       end)

@@ -51,18 +51,13 @@ sig
   end
 end
 
-module type PROGRAM_TRANSFORM =
-sig
-  val program : IrTransform.state -> program -> IrTransform.result
-end
-
 module Transform : IR_VISITOR
 
-module Inline : PROGRAM_TRANSFORM
-module ElimDeadDefs : PROGRAM_TRANSFORM
-module ElimBodiesFromMetaTypeVars : PROGRAM_TRANSFORM
-module CheckForCycles : PROGRAM_TRANSFORM
-module ElimTypeAliases : PROGRAM_TRANSFORM
+module Inline : IrTransform.S
+module ElimDeadDefs : IrTransform.S
+module ElimBodiesFromMetaTypeVars : IrTransform.S
+module CheckForCycles : IrTransform.S
+module ElimTypeAliases : IrTransform.S
 module InstantiateTypes :
 sig
   val computation : Types.datatype Env.Int.t -> (Types.datatype IntMap.t * Types.row IntMap.t * Types.field_spec IntMap.t) -> computation -> computation

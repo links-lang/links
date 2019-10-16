@@ -86,6 +86,8 @@ module Untyped = struct
              end) = struct
 
     module Untyped = struct
+      let name = Printf.sprintf "Conditional(%s)" T.Untyped.name
+
       let program state program =
         if T.condition ()
         then T.Untyped.program state program
@@ -105,6 +107,8 @@ module Untyped = struct
   module Collect_FFI_Files : Untyped.S = struct
     open Untyped
     module Untyped = struct
+      let name = "collect_ffi_files"
+
       let program state program =
         let ffi_files' = ModuleUtils.get_ffi_files program in
         let context'  = context state in
@@ -168,6 +172,8 @@ module Typeability_preserving = struct
              end) = struct
 
     module Typeable = struct
+      let name = Printf.sprintf "Conditional(%s)" T.Typeable.name
+
       let program state program =
         if T.condition ()
         then T.Typeable.program state program
@@ -182,21 +188,23 @@ module Typeability_preserving = struct
 
   let only_if : bool Settings.setting -> (module Typeable.S) -> transformer
     = fun setting (module T) ->
-    (module Conditional(struct include T let condition () = Settings.get setting end))
+    (module Conditional(struct
+                include T
+                let condition () = Settings.get setting end))
 
   (* Collection of transformers. *)
-  let transformers : (string * transformer) array
-    = [| "cp", (module DesugarCP)
-       ; "inners", (module DesugarInners)
-       ; "session_execeptions", only_if
-                                  Basicsettings.Sessions.exceptions_enabled
-                                  (module DesugarSessionExceptions)
-       ; "processes", (module DesugarProcesses)
-       ; "fors", (module DesugarFors)
-       ; "regexes", (module DesugarRegexes)
-       ; "formlets", (module DesugarFormlets)
-       ; "pages", (module DesugarPages)
-       ; "funs", (module DesugarFuns) |]
+  let transformers : transformer array
+    = [| (module DesugarCP)
+       ; (module DesugarInners)
+       ; only_if
+           Basicsettings.Sessions.exceptions_enabled
+           (module DesugarSessionExceptions)
+       ; (module DesugarProcesses)
+       ; (module DesugarFors)
+       ; (module DesugarRegexes)
+       ; (module DesugarFormlets)
+       ; (module DesugarPages)
+       ; (module DesugarFuns) |]
 
   (* Run program transformers. *)
   let run_program : Context.t ->
@@ -204,12 +212,12 @@ module Typeability_preserving = struct
                     Sugartypes.program ->
                     Sugartypes.program result
     = fun context' datatype program ->
-    let apply : Sugartypes.program Transform.Typeable.result -> (string * transformer) -> Sugartypes.program Transform.Typeable.result
-      = fun (Transform.Typeable.Result { state; program }) (name, (module T)) ->
+    let apply : Sugartypes.program Transform.Typeable.result -> transformer -> Sugartypes.program Transform.Typeable.result
+      = fun (Transform.Typeable.Result { state; program }) (module T) ->
       let (Transform.Typeable.Result payload) as result =
         T.Typeable.program state program
       in
-      (if verify_transformation name then
+      (if verify_transformation T.Typeable.name then
          let tyenv =
            Context.typing_environment payload.state.Transform.Typeable.context
          in
@@ -225,7 +233,7 @@ module Typeability_preserving = struct
                   (* TODO(dhil): Verify post-transformation invariants. *)
          with exn ->
            let stacktrace = Printexc.get_raw_backtrace () in
-           trace_type_error name Sugartypes.pp_program program payload.program stacktrace exn);
+           trace_type_error T.Typeable.name Sugartypes.pp_program program payload.program stacktrace exn);
       result
     in
     let (Transform.Typeable.Result { state; program }) =
@@ -242,12 +250,12 @@ module Typeability_preserving = struct
                      Sugartypes.sentence ->
                      Sugartypes.sentence result
     = fun context' datatype program ->
-    let apply : Sugartypes.sentence Transform.Typeable.result -> (string * transformer) -> Sugartypes.sentence Transform.Typeable.result
-      = fun (Transform.Typeable.Result { state; program }) (name, (module T)) ->
+    let apply : Sugartypes.sentence Transform.Typeable.result -> transformer -> Sugartypes.sentence Transform.Typeable.result
+      = fun (Transform.Typeable.Result { state; program }) (module T) ->
       let (Transform.Typeable.Result payload) as result =
         T.Typeable.sentence state program
       in
-      (if verify_transformation name then
+      (if verify_transformation T.Typeable.name then
          let tyenv =
            Context.typing_environment payload.state.Transform.Typeable.context
          in
@@ -263,7 +271,7 @@ module Typeability_preserving = struct
                   (* TODO(dhil): Verify post-transformation invariants. *)
          with exn ->
            let stacktrace = Printexc.get_raw_backtrace () in
-           trace_type_error name Sugartypes.pp_sentence program payload.program stacktrace exn);
+           trace_type_error T.Typeable.name Sugartypes.pp_sentence program payload.program stacktrace exn);
       result
     in
     let (Transform.Typeable.Result { state; program }) =

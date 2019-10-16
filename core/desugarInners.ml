@@ -236,5 +236,6 @@ end
 
 module Typeable
   = Transform.Typeable.Make(struct
+        let name = "inners"
         let obj env = (desugar_inners env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
       end)

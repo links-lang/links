@@ -2,6 +2,8 @@ module type INTERFACE = sig
   type state
   type 'a result
 
+  val name : string
+
   val program : state ->
                 Sugartypes.program ->
                 Sugartypes.program result
@@ -27,7 +29,9 @@ module type UNTYPED = sig
   end
 
   module Make: sig
-    module Transformer(T : sig val obj : SugarTraversals.map end): sig
+    module Transformer(T : sig
+                 val name : string
+                 val obj : SugarTraversals.map end): sig
       include INTERFACE with type state := state and type 'a result := 'a result
     end
   end
@@ -65,7 +69,9 @@ module type TYPEABLE = sig
                     method virtual sentence : Sugartypes.sentence -> ('self * Sugartypes.sentence * Types.datatype option)
                   end
 
-  module Make(T : sig val obj : Types.typing_environment -> sugar_transformer end): sig
+  module Make(T : sig
+               val name : string
+               val obj : Types.typing_environment -> sugar_transformer end): sig
     include INTERFACE with type state := state and type 'a result := 'a result
   end
 end

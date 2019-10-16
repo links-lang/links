@@ -106,5 +106,6 @@ end
 
 module Typeable
   = Transform.Typeable.Make(struct
+        let name = "processes"
         let obj env = (desugar_processes env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
       end)

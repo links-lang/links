@@ -677,6 +677,8 @@ struct
     e
 end
 
+let name = "closure_conversion"
+
 let program state program =
   let open IrTransform in
   let globals = state.primitive_vars in

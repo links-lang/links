@@ -41,25 +41,28 @@ type result = { program: Ir.program;
                 context: Context.t }
 
 type transformer = (module IrTransform.S)
-type transforms = (string * transformer) array
+type transforms = transformer array
 
 (* This functor collapses an array of [transformers] into a single
    [transformer]. *)
 module Collapse(T : sig
+             val name : string
              val transforms : transforms
            end) : IrTransform.S = struct
+  let name = T.name
   let program state program =
-    let apply : IrTransform.result -> (string * transformer) -> IrTransform.result
-      = fun (IrTransform.Result { state; program }) (_, (module T)) ->
+    let apply : IrTransform.result -> transformer -> IrTransform.result
+      = fun (IrTransform.Result { state; program }) (module T) ->
       T.program state program
     in
     Array.fold_left
       apply (IrTransform.return state program) T.transforms
 end
 
-let collapse : transforms -> transformer
-  = fun transforms ->
-  (module Collapse(struct let transforms = transforms end))
+let collapse : string -> transforms -> transformer
+  = fun name transforms ->
+  (module Collapse(struct let name = name
+                          let transforms = transforms end))
 
 (* This functor constructs a transformer that is only run if
    [condition] evaluates to `true`. *)
@@ -67,6 +70,7 @@ module Conditional(T : sig
              include IrTransform.S
              val condition : unit -> bool
            end) : IrTransform.S = struct
+  let name = Printf.sprintf "Conditional(%s)" T.name
   let program state program =
     if T.condition ()
     then T.program state program
@@ -85,7 +89,12 @@ let only_if_any : bool Settings.setting list -> (module IrTransform.S) -> transf
    leaves its given [program] unaltered. *)
 (* TODO(dhil): Maybe [perform] should return an updated state such
    that we can alter the transformation state. *)
-module PerformEffect(T : sig val perform : IrTransform.state -> Ir.program -> unit end) : IrTransform.S = struct
+module PerformEffect(T : sig
+             val name : string
+             val perform : IrTransform.state -> Ir.program -> unit end) : IrTransform.S
+  = struct
+  let name = T.name
+
   let program state program =
     T.perform state program;
     IrTransform.return state program
@@ -95,46 +104,52 @@ let debug_tell : string -> transformer
   = fun msg ->
   only_if
     Debug.enabled
-    (module PerformEffect(struct let perform _ _ = Debug.print msg end))
+    (module PerformEffect(struct
+                let name = "debug"
+                let perform _ _ = Debug.print msg end))
 
 let print_program : transformer
-  = (module PerformEffect(struct let perform _ program = Debug.print (Ir.string_of_program program) end))
+  = (module PerformEffect(struct
+                let name = "print_program"
+                let perform _ program = Debug.print (Ir.string_of_program program) end))
 
 (* This functor instruments a transformer with performance measuring
    capabilities. *)
-module Measure(T : sig include IrTransform.S val name : string end) = struct
+module Measure(T : sig include IrTransform.S end) = struct
+  let name = Printf.sprintf "Measure(%s)" T.name
   let program state program =
     Performance.measure_l T.name (lazy (T.program state program))
 end
 
-let measure : string -> transformer -> transformer
-  = fun name (module T) ->
-  (module Measure(struct include T let name = name end))
+let measure : transformer -> transformer
+  = fun (module T) -> (module Measure(T))
 
 (* Pipelines. *)
 let optimisations : transforms
-  = [| "debug", debug_tell "optimising IR"
-     ; "ElimDeadDefs", (module IrTraversals.ElimDeadDefs)
-     ; "inline", (module IrTraversals.Inline)
-     ; "debug", debug_tell "optimised IR" |]
+  = [| debug_tell "optimising IR"
+     ; (module IrTraversals.ElimDeadDefs)
+     ; (module IrTraversals.Inline)
+     ; debug_tell "optimised IR" |]
 
 let typechecking : transforms
-  = [| "debug", debug_tell "typechecking IR"
-     ; "Typecheck", (module IrCheck.Typecheck) (* TODO FIXME check against the carried datatype. *)
-     ; "debug", debug_tell "typechecked IR" |]
+  = [| debug_tell "typechecking IR"
+     ; (module IrCheck.Typecheck) (* TODO FIXME check against the carried datatype. *)
+     ; debug_tell "typechecked IR" |]
 
 let simplify_type_structure : transforms
-  = [| "debug", debug_tell "simplifying types"
-     ; "ElimBodiesFromMetaTypeVars", (module IrTraversals.ElimBodiesFromMetaTypeVars)
-     ; "debug", debug_tell "simplified types" |]
+  = [| debug_tell "simplifying types"
+     ; (module IrTraversals.ElimBodiesFromMetaTypeVars)
+     ; debug_tell "simplified types" |]
 
 (* A collection of the above pipelines. *)
 let pipeline : transformer array
-  = [| only_if optimise (measure "optimise" (collapse optimisations))
+  = [| only_if optimise (measure (collapse "optimisations" optimisations))
      ; (module Closures)
-     ; (module PerformEffect(struct let perform = BuildTables.program end))
-     ; only_if_any [IrCheck.typecheck; simplify_types] (collapse simplify_type_structure)
-     ; only_if IrCheck.typecheck (collapse typechecking)
+     ; (module PerformEffect(struct
+                   let name = "build_tables"
+                   let perform = BuildTables.program end))
+     ; only_if_any [IrCheck.typecheck; simplify_types] (collapse "type_structure" simplify_type_structure)
+     ; only_if IrCheck.typecheck (collapse "typechecking" typechecking)
      ; only_if show_compiled_ir_after_backend_transformations print_program |]
 
 let program context' datatype program =

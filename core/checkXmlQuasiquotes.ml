@@ -100,6 +100,8 @@ end
 module Untyped = struct
   open Transform.Untyped
 
+  let name = "check_xml_quasi_quotes"
+
   let program state program =
     ignore (checker#program program);
     return state program

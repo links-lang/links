@@ -17,6 +17,7 @@ let with_type : Types.datatype -> state -> state
   = fun datatype state -> { state with datatype }
 
 module type S = sig
+  val name : string
   val program : state -> Ir.program -> result
 end
 
@@ -25,7 +26,10 @@ class virtual ir_transformer =
           method virtual program : Ir.program -> Ir.program * Types.datatype * 'self
         end
 
-module Make(T : sig val obj : Types.typing_environment -> ir_transformer end) = struct
+module Make(T : sig
+             val name : string
+             val obj : Types.typing_environment -> ir_transformer end) = struct
+  let name = T.name
   let program : state -> Ir.program -> result
     = fun state program ->
     let tyenv = Context.typing_environment state.context in

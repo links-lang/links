@@ -209,11 +209,12 @@ let desugar_session_exceptions env =
 
 module Typeable
   = Transform.Typeable.Make(struct
+        let name = "session_exceptions (typeable)"
         let obj env = (desugar_session_exceptions env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
       end)
 module Untyped = struct
   open Transform.Untyped
-
+  let name = "session_exceptions (untyped)"
   let program state program =
     let program' = wrap_linear_handlers#program program in
     return state program'
