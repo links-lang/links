@@ -1275,3 +1275,28 @@ let desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * ne
   fun env bs ->
     let globals, _, nenv = desugar_program env (bs, None) in
       globals, nenv
+
+type result =
+  { globals: Ir.binding list;
+    program: Ir.program;
+    datatype: Types.datatype;
+    context: Context.t }
+
+let program : Context.t -> Types.datatype -> Sugartypes.program -> result
+  = fun context datatype program ->
+  let (nenv, _, _) as env =
+    let nenv = Context.name_environment context in
+    let tenv = Context.typing_environment context in
+    let venv = Context.variable_environment context in
+    (nenv, venv, tenv.Types.effect_row)
+  in
+  let program', _ = C.compile env program in
+  let globals, program'', nenv' = C.partition_program program' in
+  let nenv'' = Env.String.extend nenv nenv' in
+  let venv =
+    let tenv = Context.typing_environment context in
+    Var.varify_env (nenv'', tenv.Types.var_env)
+  in
+  { globals; datatype; program = program'';
+    context = Context.({ context with name_environment = nenv'';
+                                      variable_environment = venv }) }

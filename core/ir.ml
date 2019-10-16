@@ -135,6 +135,9 @@ let rec is_atom =
 
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
 
+let unit = Extend (Utility.StringMap.empty, None)
+let unit_comp = ([], Return unit)
+
 type program = computation
   [@@deriving show]
 

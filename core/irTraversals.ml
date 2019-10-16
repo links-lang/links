@@ -12,8 +12,7 @@ let internal_error message =
     that also constructs the type as it goes along (using type
     annotations on binders).
 *)
-module type IR_VISITOR =
-sig
+module type IR_VISITOR = sig
   type environment = Types.datatype Env.Int.t
 
   class visitor : environment ->
@@ -61,10 +60,9 @@ sig
   end
 end
 
-module type PROGTRANSFORM =
+module type PROGRAM_TRANSFORM =
 sig
-   val program : Types.datatype Env.Int.t -> program -> program
-   val bindings : Types.datatype Env.Int.t -> binding list -> binding list
+  val program : IrTransform.state -> program -> IrTransform.result
 end
 
 module Transform : IR_VISITOR =
@@ -562,11 +560,11 @@ struct
         | [] -> [], o
   end
 
-  let program typing_env p =
-    fst3 ((inliner typing_env IntMap.empty)#computation p)
-
-  let bindings typing_env p =
-    fst ((inliner typing_env IntMap.empty)#bindings p)
+  let program state program =
+    let open IrTransform in
+    let tenv = Context.variable_environment (context state) in
+    let program', _, _ = (inliner tenv IntMap.empty)#program program in
+    return state program'
 end
 
 (*
@@ -616,8 +614,7 @@ end
   pass. Unfortunately our terms are represented as trees, so we cannot
   use this algorithm here.
 *)
-module ElimDeadDefs =
-struct
+module ElimDeadDefs = struct
   let show_rec_uses
     = Settings.(flag "show_rec_uses"
                 |> convert parse_bool
@@ -794,17 +791,13 @@ struct
         | [] -> [], o
   end
 
-  let program tyenv p =
-    let _, _, o = (counter tyenv)#computation p in
+  let program state program =
+    let open IrTransform in
+    let tenv = Context.variable_environment (context state) in
+    let _, _, o = (counter tenv)#program program in
     let envs = o#get_envs () in
-    let p, _, _ = (eliminator tyenv envs)#computation p in
-      p
-
-  let bindings tyenv bs =
-    let _, o = (counter tyenv)#bindings bs in
-    let envs = o#get_envs () in
-    let bs, _ = (eliminator tyenv envs)#bindings bs in
-      bs
+    let program', _, _ = (eliminator tenv envs)#program program in
+    return state program'
 end
 
 (** Applies a type visitor to all types occuring in an IR program**)
@@ -897,19 +890,19 @@ module CheckForCycles =
       end
 
 
-    let program tyenv p =
-      let p, _, _ = (ir_type_mod_visitor tyenv check_cycles)#program p in
-      p
-
-    let bindings tyenv bs =
-      let bs, _ = (ir_type_mod_visitor tyenv check_cycles)#bindings bs in
-      bs
+    (* let program tyenv p =
+     *   let p, _, _ = (ir_type_mod_visitor tyenv check_cycles)#program p in
+     *   p *)
+    let program state program =
+      let open IrTransform in
+      let tenv = Context.variable_environment (context state) in
+      let program', _, _ = (ir_type_mod_visitor tenv check_cycles)#program program in
+      return state program'
 
   end
 
 
-module ElimBodiesFromMetaTypeVars =
-  struct
+module ElimBodiesFromMetaTypeVars = struct
 
     let elim_bodies =
       object (o)
@@ -927,19 +920,18 @@ module ElimBodiesFromMetaTypeVars =
       end
 
 
-    let program tyenv p =
-      let p, _, _ = (ir_type_mod_visitor tyenv elim_bodies)#program p in
-      p
+    (* let program tyenv p =
+     *   let p, _, _ = (ir_type_mod_visitor tyenv elim_bodies)#program p in
+     *   p *)
 
-    let bindings tyenv bs =
-      let bs, _ = (ir_type_mod_visitor tyenv elim_bodies)#bindings bs in
-      bs
+    let program state program =
+      let open IrTransform in
+      let tenv = Context.variable_environment (context state) in
+      let program', _, _ = (ir_type_mod_visitor tenv elim_bodies)#program program in
+      return state program'
+end
 
-  end
-
-module ElimTypeAliases =
-  struct
-
+module ElimTypeAliases = struct
     let elim_type_aliases =
       object (o)
         inherit Types.Transform.visitor as super
@@ -949,21 +941,17 @@ module ElimTypeAliases =
           | other -> super#typ other
       end
 
+    let program state program =
+      let open IrTransform in
+      let tenv = Context.variable_environment (context state) in
+      let program', _, _ = (ir_type_mod_visitor tenv elim_type_aliases)#program program in
+      return state program'
 
-    let program tyenv p =
-      let p, _, _ = (ir_type_mod_visitor tyenv elim_type_aliases)#program p in
-      p
-
-    let bindings tyenv bs =
-      let bs, _ = (ir_type_mod_visitor tyenv elim_type_aliases)#bindings bs in
-      bs
-
-  end
+end
 
 
 (* Call Instantiate.datatype on all types occuring in a program *)
-module InstantiateTypes =
-  struct
+module InstantiateTypes = struct
 
     let instantiate instantiation_maps =
       object (o)
@@ -980,5 +968,4 @@ module InstantiateTypes =
     let computation tyenv instantiation_maps c  =
       let p, _, _ = (ir_type_mod_visitor tyenv (instantiate instantiation_maps))#computation c in
       p
-
 end
